@@ -1,0 +1,11 @@
+{
+  "revolute": "#3366FF",
+  "continuous": "#4D00FF",
+  "prismatic": "#FFB800",
+  "fixed": "#2B2B2B",
+  "floating": "#00CC66",
+  "planar": "#FF3333",
+  "mimic": "#FF7A00",
+  "light_gray": "#D6D6D6"
+}
+
