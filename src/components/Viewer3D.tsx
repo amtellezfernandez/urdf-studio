@@ -962,7 +962,8 @@ const URDFModel = ({
       ref={groupRef}
       onPointerDown={handlePointerDown}
     >
-      {rotationPlaneVisible && selectedJoint && jointAxes?.[selectedJoint] && (
+      {rotationPlaneVisible && selectedJoint && jointAxes?.[selectedJoint] && jointLimits?.[selectedJoint] && 
+       (jointLimits[selectedJoint].type === "revolute" || jointLimits[selectedJoint].type === "continuous") && (
         <RotationPlane
           robot={robotRef.current}
           jointName={selectedJoint}
@@ -993,31 +994,37 @@ const RotationPlane = ({
   const [position, setPosition] = useState<THREE.Vector3>(new THREE.Vector3());
   const [rotation, setRotation] = useState<THREE.Euler>(new THREE.Euler());
 
-  // Calculate axis vector and color once
-  const axisVec = new THREE.Vector3(axis[0], axis[1], axis[2]).normalize();
+  // Calculate axis vector and color reactively when axis changes
+  const axisVec = useMemo(() => {
+    return new THREE.Vector3(axis[0], axis[1], axis[2]).normalize();
+  }, [axis[0], axis[1], axis[2]]);
   
-  // Determine color based on axis direction (X=red, Y=green, Z=blue)
-  let planeColor: number;
-  let isNegative = false;
-  
-  // Find which axis the joint rotates around (dominant component)
-  const absX = Math.abs(axisVec.x);
-  const absY = Math.abs(axisVec.y);
-  const absZ = Math.abs(axisVec.z);
-  
-  if (absX >= absY && absX >= absZ) {
-    // X-axis dominant - Red
-    isNegative = axisVec.x < 0;
-    planeColor = axisVec.x > 0 ? 0xff0000 : 0xcc0000; // Bright red for +X, darker for -X
-  } else if (absY >= absX && absY >= absZ) {
-    // Y-axis dominant - Green
-    isNegative = axisVec.y < 0;
-    planeColor = axisVec.y > 0 ? 0x00ff00 : 0x00cc00; // Bright green for +Y, darker for -Y
-  } else {
-    // Z-axis dominant - Blue
-    isNegative = axisVec.z < 0;
-    planeColor = axisVec.z > 0 ? 0x0000ff : 0x0000cc; // Bright blue for +Z, darker for -Z
-  }
+  // Determine color based on axis direction (X=red, Y=green, Z=blue) - reactive to axis changes
+  const { planeColor, isNegative } = useMemo(() => {
+    // Find which axis the joint rotates around (dominant component)
+    const absX = Math.abs(axisVec.x);
+    const absY = Math.abs(axisVec.y);
+    const absZ = Math.abs(axisVec.z);
+    
+    let color: number;
+    let negative = false;
+    
+    if (absX >= absY && absX >= absZ) {
+      // X-axis dominant - Red
+      negative = axisVec.x < 0;
+      color = axisVec.x > 0 ? 0xff0000 : 0xcc0000; // Bright red for +X, darker for -X
+    } else if (absY >= absX && absY >= absZ) {
+      // Y-axis dominant - Green
+      negative = axisVec.y < 0;
+      color = axisVec.y > 0 ? 0x00ff00 : 0x00cc00; // Bright green for +Y, darker for -Y
+    } else {
+      // Z-axis dominant - Blue
+      negative = axisVec.z < 0;
+      color = axisVec.z > 0 ? 0x0000ff : 0x0000cc; // Bright blue for +Z, darker for -Z
+    }
+    
+    return { planeColor: color, isNegative: negative };
+  }, [axisVec]);
 
   // Create striped texture for negative axes (memoized to avoid recreation)
   const stripedTexture = useMemo(() => {

@@ -409,14 +409,25 @@ const Index = () => {
       return;
     }
 
+    // Update the URDF content immediately
     const updatedContent = updateJointTypeInURDF(vizUrdfContent, jointName, newType, lowerLimit, upperLimit);
+    
+    // Immediately update all state synchronously for instant visual feedback (same pattern as handleJointNameChange)
+    setVizUrdfContent(updatedContent);
+    const limits = parseJointLimitsFromURDF(updatedContent);
+    setJointLimits(limits);
+    const axes = parseJointAxesFromURDF(updatedContent);
+    setJointAxes(axes);
+    setUrdfFile(createUrdfFile(updatedContent));
+    
+    // Then update everything else (which may be deferred, but state is already updated)
     updateUrdfFile(updatedContent);
 
     const limitMsg = lowerLimit !== undefined && upperLimit !== undefined 
       ? ` with limits [${lowerLimit.toFixed(2)}, ${upperLimit.toFixed(2)}]`
       : "";
     toast.success(`Updated joint "${jointName}" type to ${newType}${limitMsg}`);
-  }, [vizUrdfContent, updateUrdfFile]);
+  }, [vizUrdfContent, updateUrdfFile, createUrdfFile]);
 
   const handleVizUrdfChange = useCallback((newContent: string): void => {
     updateUrdfFile(newContent);

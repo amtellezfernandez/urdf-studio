@@ -381,11 +381,27 @@ export const JointControl = ({
     }
   };
 
-  // Update local limits when jointInfo changes
+  // Update local limits when jointInfo changes (including type changes)
   useEffect(() => {
-    setLocalLowerLimit(jointInfo?.lower !== null ? String(jointInfo.lower) : "");
-    setLocalUpperLimit(jointInfo?.upper !== null ? String(jointInfo.upper) : "");
-  }, [jointInfo?.lower, jointInfo?.upper]);
+    const newType = jointInfo?.type || "continuous";
+    const needsLimits = newType === "revolute" || newType === "prismatic";
+    
+    if (needsLimits) {
+      // For joints that need limits, sync from jointInfo
+      const lower = jointInfo?.lower !== null && jointInfo?.lower !== undefined 
+        ? String(jointInfo.lower) 
+        : "";
+      const upper = jointInfo?.upper !== null && jointInfo?.upper !== undefined 
+        ? String(jointInfo.upper) 
+        : "";
+      setLocalLowerLimit(lower);
+      setLocalUpperLimit(upper);
+    } else {
+      // For fixed/continuous joints, clear the local limit state
+      setLocalLowerLimit("");
+      setLocalUpperLimit("");
+    }
+  }, [jointInfo?.lower, jointInfo?.upper, jointInfo?.type]);
 
   const valueColor = getJointValueColor(currentValue, min, max, hasBothLimits);
   const valueDisplayRef = useRef<HTMLSpanElement>(null);
@@ -767,9 +783,34 @@ export const JointControl = ({
               value={currentType}
               onValueChange={(newType) => {
                 const newTypeNeedsLimits = newType === "revolute" || newType === "prismatic";
-                const lower = newTypeNeedsLimits && localLowerLimit ? parseFloat(localLowerLimit) : undefined;
-                const upper = newTypeNeedsLimits && localUpperLimit ? parseFloat(localUpperLimit) : undefined;
-                onTypeChange(newType, lower, upper);
+                const currentNeedsLimits = currentType === "revolute" || currentType === "prismatic";
+                
+                // If switching to a type that needs limits
+                if (newTypeNeedsLimits) {
+                  // Try to preserve existing limits if available
+                  let lower: number | undefined;
+                  let upper: number | undefined;
+                  
+                  if (localLowerLimit && !isNaN(parseFloat(localLowerLimit))) {
+                    lower = parseFloat(localLowerLimit);
+                  } else if (currentNeedsLimits && jointInfo?.lower !== null && jointInfo?.lower !== undefined) {
+                    // Fall back to jointInfo if local state is empty but jointInfo has limits
+                    lower = jointInfo.lower;
+                  }
+                  
+                  if (localUpperLimit && !isNaN(parseFloat(localUpperLimit))) {
+                    upper = parseFloat(localUpperLimit);
+                  } else if (currentNeedsLimits && jointInfo?.upper !== null && jointInfo?.upper !== undefined) {
+                    // Fall back to jointInfo if local state is empty but jointInfo has limits
+                    upper = jointInfo.upper;
+                  }
+                  
+                  // If no limits found, let the backend use defaults (pass undefined)
+                  onTypeChange(newType, lower, upper);
+                } else {
+                  // Fixed or continuous - no limits needed
+                  onTypeChange(newType, undefined, undefined);
+                }
               }}
             >
               <SelectTrigger className="h-7 text-xs">

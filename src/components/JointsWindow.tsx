@@ -148,11 +148,13 @@ export const JointsWindow = ({
     
     // Get all joints in URDF order, filtered
     return jointHierarchy.orderedJoints.filter(joint => {
-      const matchesType = typeFilter === "all" || joint.type === typeFilter;
+      // Use type from jointLimits if available (updates immediately), fallback to hierarchy type
+      const jointType = jointLimits[joint.jointName]?.type || joint.type;
+      const matchesType = typeFilter === "all" || jointType === typeFilter;
       const matchesSearch = !searchQuery.trim() || joint.jointName.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesType && matchesSearch;
     });
-  }, [jointHierarchy, typeFilter, searchQuery]);
+  }, [jointHierarchy, typeFilter, searchQuery, jointLimits]);
 
   // Render folder-style flat hierarchy
   const renderFlatHierarchy = (): React.ReactNode => {
