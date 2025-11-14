@@ -41,6 +41,7 @@ interface Viewer3DProps {
   onAnimationFramesChange?: (hasFrames: boolean) => void;
   onFrameChange?: (currentFrame: number, totalFrames: number) => void;
   collisionVisibility?: CollisionVisibility;
+  rotationPlaneVisible?: boolean;
 }
 
 interface MeshFiles {
@@ -128,12 +129,15 @@ const CollisionGeometries = ({
       const isLowGPU = gpuMode === "low";
 
       // Create translucent grey material
+      // Use same rendering settings as rotation plane to ensure visibility
       const collisionMaterial = isLowGPU
         ? new THREE.MeshBasicMaterial({
             color: 0x808080,
             opacity: 0.3,
             transparent: true,
             side: THREE.DoubleSide,
+            depthWrite: false,
+            depthTest: false,
           })
         : new THREE.MeshStandardMaterial({
             color: 0x808080,
@@ -142,6 +146,8 @@ const CollisionGeometries = ({
             metalness: 0.1,
             roughness: 0.9,
             side: THREE.DoubleSide,
+            depthWrite: false,
+            depthTest: false,
           });
 
       // Helper function to apply link transformation to mesh
@@ -211,15 +217,18 @@ const CollisionGeometries = ({
             const size = sizeStr?.split(" ").map(parseFloat) || [1, 1, 1];
             const boxGeometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
             mesh = new THREE.Mesh(boxGeometry, collisionMaterial.clone());
+            mesh.renderOrder = 999;
           } else if (sphere) {
             const radius = parseFloat(sphere.getAttribute("radius") || "1");
             const sphereGeometry = new THREE.SphereGeometry(radius, 32, 32);
             mesh = new THREE.Mesh(sphereGeometry, collisionMaterial.clone());
+            mesh.renderOrder = 999;
           } else if (cylinder) {
             const radius = parseFloat(cylinder.getAttribute("radius") || "1");
             const length = parseFloat(cylinder.getAttribute("length") || "1");
             const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, length, 32);
             mesh = new THREE.Mesh(cylinderGeometry, collisionMaterial.clone());
+            mesh.renderOrder = 999;
           } else if (meshEl) {
             // For mesh collision geometries, load the mesh file
             const filename = meshEl.getAttribute("filename");
@@ -240,6 +249,7 @@ const CollisionGeometries = ({
                   (geometry) => {
                     geometry.scale(scale[0], scale[1], scale[2]);
                     const loadedMesh = new THREE.Mesh(geometry, collisionMaterial.clone());
+                    loadedMesh.renderOrder = 999;
                     applyLinkTransform(loadedMesh, linkName, xyz, rpy);
                     (loadedMesh as any).userData.isCollisionGeometry = true;
                     (loadedMesh as any).userData.linkName = linkName;
@@ -261,6 +271,7 @@ const CollisionGeometries = ({
           }
 
           if (mesh) {
+            mesh.renderOrder = 999;
             applyLinkTransform(mesh, linkName, xyz, rpy);
             (mesh as any).userData.isCollisionGeometry = true;
             (mesh as any).userData.linkName = linkName;
@@ -313,7 +324,7 @@ const CollisionGeometries = ({
     });
   });
 
-  return <group ref={collisionGroupRef} />;
+  return <group ref={collisionGroupRef} renderOrder={999} />;
 };
 
 const URDFModel = ({
@@ -331,6 +342,7 @@ const URDFModel = ({
   jointAxes,
   gpuMode = "high",
   playbackSpeed = 1.0,
+  rotationPlaneVisible = false,
 }: {
   file: File;
   meshFiles: MeshFiles;
@@ -349,6 +361,7 @@ const URDFModel = ({
   jointAxes?: JointAxisMap;
   gpuMode?: GPUMode;
   playbackSpeed?: number;
+  rotationPlaneVisible?: boolean;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<any>(null);
@@ -949,7 +962,7 @@ const URDFModel = ({
       ref={groupRef}
       onPointerDown={handlePointerDown}
     >
-      {selectedJoint && jointAxes?.[selectedJoint] && (
+      {rotationPlaneVisible && selectedJoint && jointAxes?.[selectedJoint] && (
         <RotationPlane
           robot={robotRef.current}
           jointName={selectedJoint}
@@ -1077,7 +1090,7 @@ const RotationPlane = ({
       ref={planeRef}
       position={position}
       rotation={rotation}
-      renderOrder={-1}
+      renderOrder={1000}
     >
       <planeGeometry args={[planeSize, planeSize]} />
       {gpuMode === "low" ? (
@@ -1086,6 +1099,8 @@ const RotationPlane = ({
           opacity={0.2}
           transparent
           side={THREE.DoubleSide}
+          depthWrite={false}
+          depthTest={false}
           map={stripedTexture || undefined}
         />
       ) : (
@@ -1096,6 +1111,8 @@ const RotationPlane = ({
           side={THREE.DoubleSide}
           emissive={planeColor}
           emissiveIntensity={0.1}
+          depthWrite={false}
+          depthTest={false}
           map={stripedTexture || undefined}
         />
       )}
@@ -1162,6 +1179,7 @@ export const Viewer3D = ({
   onAnimationFramesChange,
   onFrameChange,
   collisionVisibility = {},
+  rotationPlaneVisible = false,
 }: Viewer3DProps) => {
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
   const [animationFrames, setAnimationFrames] = useState<
@@ -2016,6 +2034,7 @@ export const Viewer3D = ({
                 jointAxes={jointAxes}
                 gpuMode={gpuMode}
                 playbackSpeed={playbackSpeed}
+                rotationPlaneVisible={rotationPlaneVisible}
                 onSelectPart={({ jointName }) =>
                   onJointSelect?.(jointName ?? null)
                 }

@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { BlenderPanel } from "@/components/ui/blender-panel";
 import { JointControl } from "@/components/JointControl";
-import { Search, X, ChevronDown, ChevronRight, Network, RotateCw } from "lucide-react";
+import { Search, X, ChevronDown, ChevronRight, Network, RotateCw, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
@@ -47,6 +47,8 @@ interface JointsWindowProps {
   onResetRotation?: () => void;
   hasRotationChanges?: boolean;
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
+  rotationPlaneVisible?: boolean;
+  onRotationPlaneVisibilityChange?: (visible: boolean) => void;
 }
 
 export const JointsWindow = ({
@@ -83,6 +85,8 @@ export const JointsWindow = ({
   onResetRotation,
   hasRotationChanges = false,
   onJointLinkChange,
+  rotationPlaneVisible = false,
+  onRotationPlaneVisibilityChange,
 }: JointsWindowProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -249,40 +253,63 @@ export const JointsWindow = ({
       )}
 
       {/* Global Motion Limits - Compact single line */}
-      {onVelocityLimitEnabledChange && (
-        <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-border/30 bg-muted/10">
-          <span className="text-xs font-semibold text-foreground flex-shrink-0">Motion Limits</span>
-          <Switch
-            checked={velocityLimitEnabled}
-            onCheckedChange={onVelocityLimitEnabledChange}
-            className="h-5 w-9 flex-shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
-          />
-          {velocityLimitEnabled && fromDisplayVelocity && onGlobalMaxJointVelocityChange && (
-            <>
-              <div className="flex-1 min-w-0 px-2">
-                <Slider
-                  value={[sliderValue]}
-                  min={sliderMin}
-                  max={sliderMax}
-                  step={sliderStep}
-                  onValueChange={([value]) => onGlobalMaxJointVelocityChange(fromDisplayVelocity(value))}
-                  className="h-2"
-                />
-              </div>
-              <span className="text-[10px] text-muted-foreground min-w-[55px] text-right flex-shrink-0">
-                {sliderValue.toFixed(angleUnit === "deg" ? 1 : 2)} {angleUnit === "deg" ? "°/s" : "rad/s"}
-              </span>
-              {applyGlobalVelocityToAll && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] flex-shrink-0"
-                  onClick={applyGlobalVelocityToAll}
-                >
-                  Apply All
-                </Button>
-              )}
-            </>
+      {(onVelocityLimitEnabledChange || onRotationPlaneVisibilityChange) && (
+        <div className="flex flex-col gap-1.5 px-3 py-2 text-xs border-b border-border/30 bg-muted/10">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-foreground flex-shrink-0">Motion Limits</span>
+            {onVelocityLimitEnabledChange && (
+              <Switch
+                checked={velocityLimitEnabled}
+                onCheckedChange={onVelocityLimitEnabledChange}
+                className="h-5 w-9 flex-shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
+              />
+            )}
+            {velocityLimitEnabled && fromDisplayVelocity && onGlobalMaxJointVelocityChange && (
+              <>
+                <div className="flex-1 min-w-0 px-2">
+                  <Slider
+                    value={[sliderValue]}
+                    min={sliderMin}
+                    max={sliderMax}
+                    step={sliderStep}
+                    onValueChange={([value]) => onGlobalMaxJointVelocityChange(fromDisplayVelocity(value))}
+                    className="h-2"
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground min-w-[55px] text-right flex-shrink-0">
+                  {sliderValue.toFixed(angleUnit === "deg" ? 1 : 2)} {angleUnit === "deg" ? "°/s" : "rad/s"}
+                </span>
+                {applyGlobalVelocityToAll && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px] flex-shrink-0"
+                    onClick={applyGlobalVelocityToAll}
+                  >
+                    Apply All
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+          {/* Rotation Planes Toggle */}
+          {onRotationPlaneVisibilityChange && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground flex-shrink-0">Rotation Planes</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 flex-shrink-0"
+                onClick={() => onRotationPlaneVisibilityChange(!rotationPlaneVisible)}
+                title={rotationPlaneVisible ? "Hide rotation planes" : "Show rotation planes"}
+              >
+                {rotationPlaneVisible ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           )}
         </div>
       )}

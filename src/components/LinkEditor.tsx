@@ -650,11 +650,17 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
     };
   }, [linkData.visuals]);
 
+  // Track collision data changes to reload form when collision changes
+  const collisionKey = useMemo(() => {
+    return `${linkName}-${index}-${collision.geometry.type}-${JSON.stringify(collision.geometry.params)}-${JSON.stringify(collision.origin)}`;
+  }, [linkName, index, collision.geometry.type, collision.geometry.params, collision.origin]);
+
   useEffect(() => {
+    // Reload form when collision data changes
     setGeometryType(collision.geometry.type || "box");
     setGeometryParams(collision.geometry.params || {});
     setOrigin(collision.origin);
-  }, [collision]);
+  }, [collisionKey]);
 
   const updateURDF = () => {
     if (!urdfContent || !onUrdfChange) return;
@@ -670,31 +676,45 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
   };
 
   const handleGeometryTypeChange = async (newType: "box" | "sphere" | "cylinder" | "mesh") => {
-    setGeometryType(newType);
+    // Clear previous params and set new defaults based on type
+    let newParams: Record<string, string> = {};
+    let newOrigin = { xyz: [0, 0, 0] as [number, number, number], rpy: [0, 0, 0] as [number, number, number] };
     
     // If mesh type, copy from visual
     if (newType === "mesh" && visualMeshInfo) {
-      setGeometryParams({
+      newParams = {
         filename: visualMeshInfo.filename,
         scale: visualMeshInfo.scale,
-      });
-      setOrigin(linkData.visuals[0].origin);
-      setTimeout(updateURDF, 0);
-      return;
+      };
+      newOrigin = linkData.visuals[0].origin;
+    } else if (newType === "box") {
+      // For box, keep existing size if valid, otherwise default
+      newParams = { size: (geometryType === "box" && geometryParams.size) ? geometryParams.size : "1 1 1" };
+    } else if (newType === "sphere") {
+      newParams = { radius: (geometryType === "sphere" && geometryParams.radius) ? geometryParams.radius : "1" };
+    } else if (newType === "cylinder") {
+      newParams = { 
+        radius: (geometryType === "cylinder" && geometryParams.radius) ? geometryParams.radius : "1",
+        length: (geometryType === "cylinder" && geometryParams.length) ? geometryParams.length : "1"
+      };
     }
     
-    // For primitives, set defaults
-    if (newType === "box") {
-      setGeometryParams({ size: geometryParams.size || "1 1 1" });
-    } else if (newType === "sphere") {
-      setGeometryParams({ radius: geometryParams.radius || "1" });
-    } else if (newType === "cylinder") {
-      setGeometryParams({ 
-        radius: geometryParams.radius || "1",
-        length: geometryParams.length || "1"
-      });
-    }
-    setTimeout(updateURDF, 0);
+    // Update state
+    setGeometryType(newType);
+    setGeometryParams(newParams);
+    setOrigin(newOrigin);
+    
+    // Update URDF immediately with new values (don't rely on state which is async)
+    if (!urdfContent || !onUrdfChange) return;
+    const newContent = updateCollisionInLink(
+      urdfContent,
+      linkName,
+      index,
+      newType,
+      newParams,
+      newOrigin
+    );
+    onUrdfChange(newContent);
   };
 
   const handleAutoFill = async (type: "box" | "sphere" | "cylinder" | "capsule") => {
@@ -894,6 +914,60 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
           </Select>
         </BlenderPropertyRow>
 
+        {/* Always show calculate buttons for current geometry type when visual mesh is available */}
+        {visualMeshInfo && geometryType === "box" && (
+          <div className="mb-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] w-full"
+              onClick={() => handleAutoFill("box")}
+              disabled={isComputing}
+            >
+              <Calculator className="w-3 h-3 mr-1" />
+              Calculate from Mesh
+            </Button>
+          </div>
+        )}
+        {visualMeshInfo && geometryType === "sphere" && (
+          <div className="mb-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] w-full"
+              onClick={() => handleAutoFill("sphere")}
+              disabled={isComputing}
+            >
+              <Calculator className="w-3 h-3 mr-1" />
+              Calculate from Mesh
+            </Button>
+          </div>
+        )}
+        {visualMeshInfo && geometryType === "cylinder" && (
+          <div className="mb-1 space-y-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] w-full"
+              onClick={() => handleAutoFill("cylinder")}
+              disabled={isComputing}
+            >
+              <Calculator className="w-3 h-3 mr-1" />
+              Calculate from Mesh (Cylinder)
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] w-full"
+              onClick={() => handleAutoFill("capsule")}
+              disabled={isComputing}
+            >
+              <Calculator className="w-3 h-3 mr-1" />
+              Calculate from Mesh (Capsule)
+            </Button>
+          </div>
+        )}
+
         {geometryType === "box" && (
           <BlenderPropertyRow label="Size">
             <div className="flex items-center gap-1">
@@ -917,60 +991,20 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
         )}
 
         {geometryType === "sphere" && (
-          <>
-            {visualMeshInfo && (
-              <div className="mb-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] w-full"
-                  onClick={() => handleAutoFill("sphere")}
-                  disabled={isComputing}
-                >
-                  <Calculator className="w-3 h-3 mr-1" />
-                  Auto-fill from Mesh
-                </Button>
-              </div>
-            )}
-            <BlenderPropertyRow label="Radius">
-              <NumberInput
-                value={parseFloat(geometryParams.radius || "1")}
-                onValueChange={(val) => handleParamChange("radius", String(val))}
-                step={0.01}
-                min={0.001}
-                compact
-                className="w-20"
-              />
-            </BlenderPropertyRow>
-          </>
+          <BlenderPropertyRow label="Radius">
+            <NumberInput
+              value={parseFloat(geometryParams.radius || "1")}
+              onValueChange={(val) => handleParamChange("radius", String(val))}
+              step={0.01}
+              min={0.001}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
         )}
 
         {geometryType === "cylinder" && (
           <>
-            {visualMeshInfo && (
-              <div className="mb-1 space-y-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] w-full"
-                  onClick={() => handleAutoFill("cylinder")}
-                  disabled={isComputing}
-                >
-                  <Calculator className="w-3 h-3 mr-1" />
-                  Auto-fill Cylinder
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] w-full"
-                  onClick={() => handleAutoFill("capsule")}
-                  disabled={isComputing}
-                >
-                  <Calculator className="w-3 h-3 mr-1" />
-                  Auto-fill Capsule
-                </Button>
-              </div>
-            )}
             <BlenderPropertyRow label="Radius">
               <NumberInput
                 value={parseFloat(geometryParams.radius || "1")}

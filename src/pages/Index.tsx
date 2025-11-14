@@ -74,6 +74,7 @@ const Index = () => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
+  const [rotationPlaneVisible, setRotationPlaneVisible] = useState<boolean>(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
@@ -722,6 +723,8 @@ const Index = () => {
             onToggleCollapse={handleSidebarToggle}
             meshFiles={meshFiles}
             onCollisionVisibilityChange={setCollisionVisibility}
+            rotationPlaneVisible={rotationPlaneVisible}
+            onRotationPlaneVisibilityChange={setRotationPlaneVisible}
           />
 
           {!isSidebarCollapsed && (
@@ -772,6 +775,7 @@ const Index = () => {
                 onAnimationFramesChange={setHasAnimationFrames}
                 onFrameChange={handleFrameChange}
                 collisionVisibility={collisionVisibility}
+                rotationPlaneVisible={rotationPlaneVisible}
               />
             </div>
           </main>
