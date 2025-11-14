@@ -16,7 +16,16 @@ import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
 import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
-import { ChevronsRight } from "lucide-react";
+import { ChevronsRight, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface MeshFiles {
   [key: string]: Blob;
@@ -65,6 +74,15 @@ const Index = () => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
+  const [showDebugDialog, setShowDebugDialog] = useState(false);
+  const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
+    filename: string;
+    webkitRelativePath: string;
+    found: boolean;
+    urdfReference?: string;
+    registeredPaths: string[];
+  }>>([]);
+  const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
 
   const createUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME): File => {
     const vizFilename = createVizFilename(filename);
@@ -83,6 +101,31 @@ const Index = () => {
     });
   }, [createUrdfFile]);
 
+  // Extract all mesh file references from URDF
+  const extractMeshReferencesFromURDF = useCallback((urdfContent: string): string[] => {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+    const meshReferences = new Set<string>();
+    
+    // Find all mesh elements in visual and collision geometries
+    const meshElements = xmlDoc.querySelectorAll("mesh");
+    meshElements.forEach((mesh) => {
+      const filename = mesh.getAttribute("filename");
+      if (filename) {
+        // Remove any package:// prefix and normalize
+        const normalizedFilename = filename
+          .replace(/^package:\/\/[^/]+\//, "")
+          .replace(/^file:\/\//, "")
+          .trim();
+        if (normalizedFilename) {
+          meshReferences.add(normalizedFilename);
+        }
+      }
+    });
+    
+    return Array.from(meshReferences);
+  }, []);
+
   const loadFilesFromFolder = async (fileList: FileList) => {
     try {
       setIsLoading(true);
@@ -93,6 +136,11 @@ const Index = () => {
 
       if (urdfFiles.length === 0) {
         throw new Error("No URDF file found in selected folder");
+      }
+
+      // Ensure only one URDF file is used - if multiple found, use the first and warn
+      if (urdfFiles.length > 1) {
+        console.warn(`Multiple URDF files found (${urdfFiles.length}), using only the first one: ${urdfFiles[0].name}`);
       }
 
       const urdfFile = urdfFiles[0];
@@ -132,18 +180,85 @@ const Index = () => {
               blobCache.set(filename, blob);
             }
             
-            const pathParts = relativePath.split('/');
-            const folderName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : '';
+            // Normalize path (remove leading/trailing slashes)
+            const normalizedPath = relativePath.replace(/^\/+|\/+$/g, '');
+            const pathParts = normalizedPath.split('/').filter(Boolean); // Filter out empty parts
             
+            // Store blob with multiple path variations to match URDF references
+            // This ensures compatibility with different path formats in URDF files
+            // The URDF loader will try: exact path, filename, path without first folder, etc.
+            
+            // 1. Just filename (always store)
             meshes[filename] = blob;
-            if (folderName) {
-              meshes[`${folderName}/${filename}`] = blob;
-              meshes[`/${folderName}/${filename}`] = blob;
+            
+            // 2. Full relative path (normalized) - this is the primary key
+            // Example: "assets/base_motor_holder_so101_v1.stl"
+            meshes[normalizedPath] = blob;
+            
+            // 3. Relative path with leading slash
+            // Example: "/assets/base_motor_holder_so101_v1.stl"
+            meshes[`/${normalizedPath}`] = blob;
+            
+            // 4. Store original relativePath if different from normalized
+            if (relativePath !== normalizedPath) {
+              meshes[relativePath] = blob;
+              // Also store without leading slash
+              const noLeadingSlash = relativePath.replace(/^\/+/, '');
+              if (noLeadingSlash !== relativePath && noLeadingSlash !== normalizedPath) {
+                meshes[noLeadingSlash] = blob;
+              }
             }
-            meshes[relativePath] = blob;
-            const relativePathNoSlash = relativePath.replace(/^\//, '');
-            if (relativePathNoSlash !== relativePath) {
-              meshes[relativePathNoSlash] = blob;
+            
+            // 5. For paths with folders, create variations
+            if (pathParts.length > 1) {
+              // Last folder + filename (e.g., "assets/base_motor_holder_so101_v1.stl" -> "assets/base_motor_holder_so101_v1.stl")
+              // This is already stored as normalizedPath, but ensure it's there
+              const lastFolderAndFile = `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
+              if (lastFolderAndFile !== normalizedPath) {
+                meshes[lastFolderAndFile] = blob;
+                meshes[`/${lastFolderAndFile}`] = blob;
+              }
+              
+              // All suffixes starting from each folder level
+              // For "robot/assets/base_motor_holder_so101_v1.stl":
+              // - "robot/assets/base_motor_holder_so101_v1.stl"
+              // - "assets/base_motor_holder_so101_v1.stl"
+              // - "base_motor_holder_so101_v1.stl"
+              for (let i = 0; i < pathParts.length; i++) {
+                const suffixPath = pathParts.slice(i).join('/');
+                meshes[suffixPath] = blob;
+                meshes[`/${suffixPath}`] = blob;
+              }
+              
+              // Also try without the first folder (common pattern in URDF files)
+              // For "robot/assets/base_motor_holder_so101_v1.stl" -> "assets/base_motor_holder_so101_v1.stl"
+              if (pathParts.length > 1) {
+                const withoutFirst = pathParts.slice(1).join('/');
+                meshes[withoutFirst] = blob;
+                meshes[`/${withoutFirst}`] = blob;
+              }
+            }
+            
+            // 6. URL decoded variations (in case URDF has encoded paths)
+            try {
+              const decodedPath = decodeURIComponent(normalizedPath);
+              if (decodedPath !== normalizedPath) {
+                meshes[decodedPath] = blob;
+                meshes[`/${decodedPath}`] = blob;
+              }
+            } catch {
+              // Ignore decode errors
+            }
+            
+            // 7. Try common mesh folder patterns (meshes/, mesh/, assets/, models/)
+            const commonFolders = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'];
+            for (const folder of commonFolders) {
+              meshes[`${folder}/${filename}`] = blob;
+              meshes[`/${folder}/${filename}`] = blob;
+            }
+            
+            if (import.meta.env.DEV) {
+              console.log(`Mesh ${filename} registered with webkitRelativePath: "${relativePath}" (normalized: "${normalizedPath}")`);
             }
           } catch (err) {
             if (import.meta.env.DEV) {
@@ -155,6 +270,119 @@ const Index = () => {
       
       setMeshFiles(meshes);
       setHasLoadedFiles(true);
+      
+      // Extract mesh references from URDF and check matches
+      const urdfMeshReferences = extractMeshReferencesFromURDF(originalContent);
+      
+      // Check which STL files match URDF references
+      const debugInfo: Array<{
+        filename: string;
+        webkitRelativePath: string;
+        found: boolean;
+        urdfReference?: string;
+        registeredPaths: string[];
+      }> = [];
+      
+      for (const file of stlFiles) {
+        const fileWithPath = file as FileWithPath;
+        const relativePath = fileWithPath.webkitRelativePath || file.name;
+        const filename = file.name;
+        
+        // Get all registered paths for this file
+        const fileBlob = meshes[filename];
+        const registeredPaths = Object.keys(meshes).filter(key => meshes[key] === fileBlob);
+        
+        // Check if any URDF reference matches this file
+        let found = false;
+        let matchedReference: string | undefined;
+        
+        for (const urdfRef of urdfMeshReferences) {
+          // Try to match URDF reference with registered paths
+          // The URDF loader tries multiple variations, so we should check all of them
+          const refFilename = urdfRef.split("/").pop() || urdfRef;
+          const pathVariations = [
+            urdfRef, // Full path as-is
+            refFilename, // Just filename
+            urdfRef.replace(/^.*?\//, ""), // Remove first folder
+            urdfRef.replace(/^package:\/\/[^/]+\//, ""), // Remove ROS package prefix
+          ];
+          
+          // Add URL decoded variations (handle errors)
+          try {
+            pathVariations.push(decodeURIComponent(urdfRef));
+            pathVariations.push(decodeURIComponent(refFilename));
+          } catch {
+            // Ignore decode errors
+          }
+          
+          // Normalize variations (remove leading/trailing slashes for comparison)
+          const normalizedVariations = pathVariations
+            .filter(Boolean)
+            .map(v => v.replace(/^\/+|\/+$/g, ''));
+          
+          // Check if any registered path matches any variation
+          const matchingPath = registeredPaths.find(p => {
+            const normalizedPath = p.replace(/^\/+|\/+$/g, '');
+            return normalizedVariations.some(v => 
+              normalizedPath === v || 
+              normalizedPath.endsWith('/' + v) || 
+              normalizedPath === v.replace(/^\//, '')
+            );
+          });
+          
+          if (matchingPath) {
+            found = true;
+            matchedReference = urdfRef;
+            break;
+          }
+        }
+        
+        debugInfo.push({
+          filename,
+          webkitRelativePath: relativePath,
+          found,
+          urdfReference: matchedReference,
+          registeredPaths: registeredPaths.slice(0, 20), // Limit to first 20 paths
+        });
+      }
+      
+      // Check for URDF references that don't match any file
+      const unmatchedRefs = urdfMeshReferences.filter(ref => {
+        return !debugInfo.some(info => info.urdfReference === ref);
+      });
+      
+      setDebugMeshInfo(debugInfo);
+      setUnmatchedURDFRefs(unmatchedRefs);
+      setShowDebugDialog(true);
+      
+      // Log mesh paths in development mode for debugging
+      if (import.meta.env.DEV) {
+        console.log(`Loaded ${stlFiles.length} mesh files with ${Object.keys(meshes).length} total path variations`);
+        console.log(`URDF references: ${urdfMeshReferences.length} total, ${debugInfo.filter(m => m.found).length} matched, ${unmatchedRefs.length} unmatched`);
+        if (unmatchedRefs.length > 0) {
+          console.warn('Unmatched URDF references:', unmatchedRefs);
+        }
+        // Group paths by filename for clearer logging
+        const pathsByFile = new Map<string, string[]>();
+        for (const file of stlFiles) {
+          const fileWithPath = file as FileWithPath;
+          const relativePath = fileWithPath.webkitRelativePath || file.name;
+          const pathsForFile = Object.keys(meshes).filter(key => {
+            // Find all keys that point to this file's blob
+            const fileBlob = meshes[file.name];
+            return meshes[key] === fileBlob;
+          });
+          pathsByFile.set(file.name, pathsForFile);
+        }
+        pathsByFile.forEach((paths, filename) => {
+          console.log(`  ${filename}: ${paths.length} path variations`);
+          console.log(`    Primary: ${paths[0] || 'N/A'}`);
+          if (paths.length > 1) {
+            console.log(`    Others: ${paths.slice(1, 10).join(', ')}${paths.length > 10 ? '...' : ''}`);
+          }
+        });
+      }
+      
       toast.success(`Loaded ${urdfFilename} with ${stlFiles.length} mesh files`);
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -549,6 +777,129 @@ const Index = () => {
           </main>
         </>
       )}
+      
+      {/* Debug Dialog for Mesh Files */}
+      <Dialog open={showDebugDialog} onOpenChange={setShowDebugDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Mesh Files Status</DialogTitle>
+            <DialogDescription>
+              List of all .STL files and whether they were found correctly in the URDF.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground border-b pb-2 flex items-center justify-between">
+              <div>
+                Total STL files: {debugMeshInfo.length} | 
+                Found: <span className="text-green-600 font-medium">{debugMeshInfo.filter(m => m.found).length}</span> | 
+                Not Found: <span className="text-red-600 font-medium">{debugMeshInfo.filter(m => !m.found).length}</span>
+              </div>
+              {unmatchedURDFRefs.length > 0 && (
+                <span className="text-red-500 text-sm font-medium">
+                  Unmatched URDF refs: {unmatchedURDFRefs.length}
+                </span>
+              )}
+            </div>
+            
+            {unmatchedURDFRefs.length > 0 && (
+              <div className="border border-red-500/50 bg-red-500/10 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                  <span className="font-medium text-red-500">Unmatched URDF References</span>
+                </div>
+                <div className="text-sm space-y-1 ml-7">
+                  <p className="text-muted-foreground">
+                    These mesh files are referenced in the URDF but were not found:
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {unmatchedURDFRefs.map((ref, idx) => (
+                      <code
+                        key={idx}
+                        className="text-xs bg-muted/50 px-1 py-0.5 rounded text-red-600"
+                      >
+                        {ref}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+              {debugMeshInfo.map((info, index) => (
+                <div
+                  key={index}
+                  className={`border rounded-lg p-3 ${
+                    info.found
+                      ? "border-green-500/50 bg-green-500/10"
+                      : "border-red-500/50 bg-red-500/10"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {info.found ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm mb-1">{info.filename}</div>
+                      <div className="text-xs space-y-1 text-muted-foreground">
+                        <div>
+                          <span className="font-medium">webkitRelativePath:</span>{" "}
+                          <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                            {info.webkitRelativePath}
+                          </code>
+                        </div>
+                        {info.found && info.urdfReference && (
+                          <div>
+                            <span className="font-medium">URDF Reference:</span>{" "}
+                            <code className="text-xs bg-muted px-1 py-0.5 rounded text-green-600">
+                              {info.urdfReference}
+                            </code>
+                          </div>
+                        )}
+                        {!info.found && (
+                          <div className="text-red-500 text-xs mt-1">
+                            ⚠️ This file is not referenced in the URDF or path mismatch
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {info.registeredPaths.length > 0 && (
+                    <details className="mt-3 ml-8">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        {info.registeredPaths.length} registered path variations
+                      </summary>
+                      <div className="mt-2 max-h-32 overflow-y-auto">
+                        <div className="flex flex-wrap gap-1">
+                          {info.registeredPaths.map((path, idx) => (
+                            <code
+                              key={idx}
+                              className="text-xs bg-muted/50 px-1 py-0.5 rounded"
+                            >
+                              {path}
+                            </code>
+                          ))}
+                          {info.registeredPaths.length >= 20 && (
+                            <span className="text-xs text-muted-foreground">...</span>
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={() => setShowDebugDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

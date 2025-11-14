@@ -1959,6 +1959,10 @@ export const Viewer3D = ({
             if (gpuMode === "high") {
               gl.shadowMap.type = THREE.PCFSoftShadowMap;
             }
+            // Disable face culling at the WebGL renderer level
+            const renderer = gl as THREE.WebGLRenderer;
+            const context = renderer.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
+            context.disable(context.CULL_FACE);
           }}
         >
           {gpuMode === "low" ? (

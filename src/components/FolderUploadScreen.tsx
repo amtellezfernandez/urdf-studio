@@ -11,16 +11,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FolderOpen, Github, AlertTriangle, Loader2 } from "lucide-react";
+import { FolderOpen, Github, AlertTriangle, Loader2, X, Clock } from "lucide-react";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
+import { useRecentGitHubRepos } from "@/hooks/use-recent-github-repos";
 import { toast } from "sonner";
 import {
   parseGitHubUrl,
   fetchRepoContents,
   checkRepoVisibility,
   findURDFCandidates,
+  checkCandidatesForUnsupportedFormats,
   convertGitHubFilesToFileList,
   type URDFCandidate,
+  type GitHubFile,
 } from "@/utils/github-repo";
 
 interface FolderUploadScreenProps {
@@ -29,9 +32,8 @@ interface FolderUploadScreenProps {
 
 export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreenProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
   const { gpuMode, setGPUMode } = useGPUMode();
-  const [isDragging, setIsDragging] = useState(false);
+  const { recentRepos, addRecentRepo, removeRecentRepo } = useRecentGitHubRepos();
   const [githubUrl, setGithubUrl] = useState("");
   const [githubToken, setGithubToken] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -45,6 +47,8 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
   const [urdfCandidates, setUrdfCandidates] = useState<URDFCandidate[]>([]);
   const [showUrdfDialog, setShowUrdfDialog] = useState(false);
   const [repoWarning, setRepoWarning] = useState<string | null>(null);
+  const [fetchedFiles, setFetchedFiles] = useState<GitHubFile[]>([]);
+  const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string; path?: string; token: string } | null>(null);
 
   const handleFolderSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = e.target.files;
@@ -56,103 +60,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
   const handleButtonClick = useCallback((): void => {
     fileInputRef.current?.click();
   }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only set dragging to false if we're leaving the drop zone
-    if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>): Promise<void> => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-
-      const items = e.dataTransfer.items;
-      if (!items || items.length === 0) return;
-
-      // Recursively get all files from the directory tree
-      const getAllFiles = async (entry: FileSystemEntry | null, path = ""): Promise<File[]> => {
-        if (!entry) return [];
-
-        if (entry.isFile) {
-          return new Promise<File[]>((resolve, reject) => {
-            (entry as FileSystemFileEntry).file(
-              (file) => {
-                const fileWithPath = Object.assign(file, {
-                  webkitRelativePath: path + file.name,
-                });
-                resolve([fileWithPath]);
-              },
-              reject
-            );
-          });
-        } else if (entry.isDirectory) {
-          const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-          const files: File[] = [];
-          const dirName = entry.name;
-
-          const readDir = (): Promise<File[]> => {
-            return new Promise((resolve, reject) => {
-              dirReader.readEntries(async (entries) => {
-                if (entries.length === 0) {
-                  resolve(files);
-                } else {
-                  for (const subEntry of entries) {
-                    const subPath = path + dirName + "/";
-                    const subFiles = await getAllFiles(subEntry, subPath);
-                    files.push(...subFiles);
-                  }
-                  const moreFiles = await readDir();
-                  files.push(...moreFiles);
-                  resolve(files);
-                }
-              }, reject);
-            });
-          };
-
-          return readDir();
-        }
-        return [];
-      };
-
-      try {
-        const allFiles: File[] = [];
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          if (item.kind === "file") {
-            const entry = item.webkitGetAsEntry();
-            if (entry) {
-              const files = await getAllFiles(entry);
-              allFiles.push(...files);
-            }
-          }
-        }
-
-        if (allFiles.length > 0) {
-          // Create a FileList-like object
-          const dataTransfer = new DataTransfer();
-          allFiles.forEach((file) => dataTransfer.items.add(file));
-          const fileList = dataTransfer.files;
-
-          onFolderSelected(fileList);
-        }
-      } catch (error) {
-        console.error("Error processing dropped folder:", error);
-      }
-    },
-    [onFolderSelected]
-  );
 
   const handleGPUModeToggle = useCallback((checked: boolean): void => {
     setGPUMode(checked ? "high" : "low");
@@ -201,10 +108,23 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
       }
 
       // Fetch repository contents
+      console.log(`[GitHub] Fetching repository contents: ${repoInfo.owner}/${repoInfo.repo}${repoInfo.path ? ` (path: ${repoInfo.path})` : ''}`);
       const files = await fetchRepoContents(repoInfo.owner, repoInfo.repo, repoInfo.path, token);
+      
+      // Store fetched files and repo info for reuse
+      setFetchedFiles(files);
+      setRepoInfo({ owner: repoInfo.owner, repo: repoInfo.repo, path: repoInfo.path, token });
+      
+      console.log(`[GitHub] Fetched ${files.length} total files/directories from repository`);
+      const fileCount = files.filter(f => f.type === "file").length;
+      const dirCount = files.filter(f => f.type === "dir").length;
+      const stlCount = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith('.stl')).length;
+      const urdfCount = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith('.urdf')).length;
+      console.log(`[GitHub] Files breakdown: ${fileCount} files, ${dirCount} directories, ${stlCount} .stl files, ${urdfCount} .urdf files`);
 
       // Find URDF candidates
-      const candidates = findURDFCandidates(files);
+      let candidates = findURDFCandidates(files);
+      console.log(`[GitHub] Found ${candidates.length} URDF candidate(s):`, candidates.map(c => ({ path: c.path, hasMeshes: c.hasMeshesFolder })));
 
       if (candidates.length === 0) {
         toast.error("No .urdf file found in the repository");
@@ -212,13 +132,48 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
         return;
       }
 
+      // Check for unsupported formats
+      candidates = await checkCandidatesForUnsupportedFormats(candidates, files, repoInfo.owner, repoInfo.repo, token);
+      
+      // Warn if any candidates have unsupported formats
+      const unsupportedCandidates = candidates.filter(c => c.hasUnsupportedFormats === true);
+      if (unsupportedCandidates.length > 0) {
+        const formats = new Set(unsupportedCandidates.flatMap(c => c.unsupportedFormats || []));
+        console.warn(`[GitHub] Found ${unsupportedCandidates.length} URDF candidate(s) with unsupported formats:`, Array.from(formats));
+      }
+
       if (candidates.length === 1) {
+        // Single URDF found - check if it has unsupported formats
+        if (candidates[0].hasUnsupportedFormats === true) {
+          const formats = candidates[0].unsupportedFormats?.join(", ") || "unknown";
+          toast.error(`URDF uses unsupported mesh formats (${formats}). Only .stl files are supported.`, { duration: 6000 });
+          setIsLoadingGithub(false);
+          return;
+        }
+        
+        // Warn about unmatched mesh references but still allow loading
+        if (candidates[0].unmatchedMeshReferences && candidates[0].unmatchedMeshReferences.length > 0) {
+          const unmatchedCount = candidates[0].unmatchedMeshReferences.length;
+          const unmatchedList = candidates[0].unmatchedMeshReferences.slice(0, 3).join(", ");
+          const moreText = unmatchedCount > 3 ? ` and ${unmatchedCount - 3} more` : "";
+          toast.warning(
+            `Warning: ${unmatchedCount} mesh file(s) referenced in URDF but not found in repository: ${unmatchedList}${moreText}`,
+            { duration: 8000 }
+          );
+        }
+        
         // Single URDF found, load it directly
+        console.log(`[GitHub] Single URDF found, loading directly: ${candidates[0].path}`);
         const fileList = await convertGitHubFilesToFileList(files, candidates[0].path, repoInfo.owner, repoInfo.repo, token);
+        
+        // Add to recent repos
+        addRecentRepo(repoInfo.owner, repoInfo.repo, repoInfo.path, githubUrl.trim());
+        
         onFolderSelected(fileList);
         toast.success(`Loaded ${candidates[0].name} from GitHub`);
       } else {
         // Multiple URDF files found, show selection dialog
+        console.log(`[GitHub] Multiple URDF files found (${candidates.length}), showing selection dialog`);
         setUrdfCandidates(candidates);
         setShowUrdfDialog(true);
       }
@@ -243,7 +198,96 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
 
   const handleUrdfSelect = useCallback(
     async (candidate: URDFCandidate): Promise<void> => {
+      // Block access to unsupported URDFs
+      if (candidate.hasUnsupportedFormats === true) {
+        const formats = candidate.unsupportedFormats?.join(", ") || "unknown";
+        toast.error(`This URDF uses unsupported mesh formats (${formats}). Only .stl files are supported.`, { duration: 6000 });
+        return;
+      }
+      
       setShowUrdfDialog(false);
+      
+      // Use stored repo info and files if available (avoid re-fetching)
+      if (!repoInfo || fetchedFiles.length === 0) {
+        // Fallback: re-fetch if we don't have stored data
+        const token = githubToken?.trim() || undefined;
+        if (!token) {
+          toast.error(
+            "GitHub token required. Please run 'urdf-studio setup' and launch the app again to configure your GitHub token.",
+            { duration: 6000 }
+          );
+          return;
+        }
+
+        setIsLoadingGithub(true);
+        try {
+          const parsedRepoInfo = parseGitHubUrl(githubUrl.trim());
+          if (!parsedRepoInfo) {
+            toast.error("Invalid repository information");
+            setIsLoadingGithub(false);
+            return;
+          }
+
+          console.log(`[GitHub] Re-fetching repository contents for URDF selection`);
+          const files = await fetchRepoContents(parsedRepoInfo.owner, parsedRepoInfo.repo, parsedRepoInfo.path, token);
+          setFetchedFiles(files);
+          setRepoInfo({ owner: parsedRepoInfo.owner, repo: parsedRepoInfo.repo, path: parsedRepoInfo.path, token });
+          
+          console.log(`[GitHub] Loading URDF: ${candidate.path}`);
+          const fileList = await convertGitHubFilesToFileList(files, candidate.path, parsedRepoInfo.owner, parsedRepoInfo.repo, token);
+          
+          // Add to recent repos
+          addRecentRepo(parsedRepoInfo.owner, parsedRepoInfo.repo, parsedRepoInfo.path, githubUrl.trim());
+          
+          onFolderSelected(fileList);
+          toast.success(`Loaded ${candidate.name} from GitHub`);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Failed to load selected URDF";
+          console.error("[GitHub] URDF load error:", error);
+          
+          // Check for specific error types
+          if (errorMessage.includes("403") || errorMessage.includes("access denied")) {
+            toast.error("Token has no access to this repository. Please check your token permissions.");
+          } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+            toast.error("Repository not found or token has no access.");
+          } else {
+            toast.error(errorMessage);
+          }
+        } finally {
+          setIsLoadingGithub(false);
+        }
+      } else {
+        // Use stored files (no re-fetch needed)
+        setIsLoadingGithub(true);
+        try {
+          console.log(`[GitHub] Using cached files (${fetchedFiles.length} files) to load URDF: ${candidate.path}`);
+          const fileList = await convertGitHubFilesToFileList(fetchedFiles, candidate.path, repoInfo.owner, repoInfo.repo, repoInfo.token);
+          
+          // Add to recent repos (use repoInfo for consistency, fallback to githubUrl if needed)
+          const repoUrl = githubUrl.trim() || `${repoInfo.owner}/${repoInfo.repo}${repoInfo.path ? `/${repoInfo.path}` : ''}`;
+          addRecentRepo(repoInfo.owner, repoInfo.repo, repoInfo.path, repoUrl);
+          
+          onFolderSelected(fileList);
+          toast.success(`Loaded ${candidate.name} from GitHub`);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Failed to load selected URDF";
+          console.error("[GitHub] URDF load error:", error);
+          toast.error(errorMessage);
+        } finally {
+          setIsLoadingGithub(false);
+        }
+      }
+    },
+    [githubUrl, githubToken, onFolderSelected, repoInfo, fetchedFiles, addRecentRepo]
+  );
+
+  /**
+   * Load a repository from recent repos
+   */
+  const loadRecentRepo = useCallback(
+    async (recentRepo: { owner: string; repo: string; path?: string; url: string }): Promise<void> => {
+      // Set the URL in the input field
+      setGithubUrl(recentRepo.url);
       
       // Check if token is provided
       const token = githubToken?.trim() || undefined;
@@ -256,35 +300,119 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
       }
 
       setIsLoadingGithub(true);
+      setRepoWarning(null);
 
       try {
-        const repoInfo = parseGitHubUrl(githubUrl.trim());
-        if (!repoInfo) {
-          toast.error("Invalid repository information");
+        // Check if repository is accessible with token
+        const visibilityCheck = await checkRepoVisibility(recentRepo.owner, recentRepo.repo, token);
+        if (visibilityCheck.error) {
+          if (visibilityCheck.error.includes("no access") || visibilityCheck.error.includes("not found") || visibilityCheck.error.includes("403")) {
+            toast.error("Token has no access to this repository. Please check your token permissions.");
+            setIsLoadingGithub(false);
+            return;
+          }
+          if (visibilityCheck.error.includes("rate limit")) {
+            toast.error(visibilityCheck.error);
+            setIsLoadingGithub(false);
+            return;
+          }
+        }
+
+        // Fetch repository contents
+        console.log(`[GitHub] Loading recent repo: ${recentRepo.owner}/${recentRepo.repo}${recentRepo.path ? ` (path: ${recentRepo.path})` : ''}`);
+        const files = await fetchRepoContents(recentRepo.owner, recentRepo.repo, recentRepo.path, token);
+        
+        // Store fetched files and repo info for reuse
+        setFetchedFiles(files);
+        setRepoInfo({ owner: recentRepo.owner, repo: recentRepo.repo, path: recentRepo.path, token });
+        
+        console.log(`[GitHub] Fetched ${files.length} total files/directories from repository`);
+
+        // Find URDF candidates
+        let candidates = findURDFCandidates(files);
+        console.log(`[GitHub] Found ${candidates.length} URDF candidate(s):`, candidates.map(c => ({ path: c.path, hasMeshes: c.hasMeshesFolder })));
+
+        if (candidates.length === 0) {
+          toast.error("No .urdf file found in the repository");
+          setIsLoadingGithub(false);
           return;
         }
 
-        const files = await fetchRepoContents(repoInfo.owner, repoInfo.repo, repoInfo.path, token);
-        const fileList = await convertGitHubFilesToFileList(files, candidate.path, repoInfo.owner, repoInfo.repo, token);
-        onFolderSelected(fileList);
-        toast.success(`Loaded ${candidate.name} from GitHub`);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to load selected URDF";
+        // Check for unsupported formats (same validation as handleGithubLoad)
+        candidates = await checkCandidatesForUnsupportedFormats(candidates, files, recentRepo.owner, recentRepo.repo, token);
         
-        // Check for specific error types
+        // Warn if any candidates have unsupported formats
+        const unsupportedCandidates = candidates.filter(c => c.hasUnsupportedFormats === true);
+        if (unsupportedCandidates.length > 0) {
+          const formats = new Set(unsupportedCandidates.flatMap(c => c.unsupportedFormats || []));
+          console.warn(`[GitHub] Found ${unsupportedCandidates.length} URDF candidate(s) with unsupported formats:`, Array.from(formats));
+        }
+
+        if (candidates.length === 1) {
+          // Single URDF found - check if it has unsupported formats
+          if (candidates[0].hasUnsupportedFormats === true) {
+            const formats = candidates[0].unsupportedFormats?.join(", ") || "unknown";
+            toast.error(`URDF uses unsupported mesh formats (${formats}). Only .stl files are supported.`, { duration: 6000 });
+            setIsLoadingGithub(false);
+            return;
+          }
+          
+          // Warn about unmatched mesh references but still allow loading
+          if (candidates[0].unmatchedMeshReferences && candidates[0].unmatchedMeshReferences.length > 0) {
+            const unmatchedCount = candidates[0].unmatchedMeshReferences.length;
+            const unmatchedList = candidates[0].unmatchedMeshReferences.slice(0, 3).join(", ");
+            const moreText = unmatchedCount > 3 ? ` and ${unmatchedCount - 3} more` : "";
+            toast.warning(
+              `Warning: ${unmatchedCount} mesh file(s) referenced in URDF but not found in repository: ${unmatchedList}${moreText}`,
+              { duration: 8000 }
+            );
+          }
+          
+          // Single URDF found, load it directly
+          console.log(`[GitHub] Single URDF found, loading directly: ${candidates[0].path}`);
+          const fileList = await convertGitHubFilesToFileList(files, candidates[0].path, recentRepo.owner, recentRepo.repo, token);
+          
+          // Update recent repo (will update lastAccessed timestamp)
+          addRecentRepo(recentRepo.owner, recentRepo.repo, recentRepo.path, recentRepo.url);
+          
+          onFolderSelected(fileList);
+          toast.success(`Loaded ${candidates[0].name} from GitHub`);
+        } else {
+          // Multiple URDF files found, show selection dialog
+          console.log(`[GitHub] Multiple URDF files found (${candidates.length}), showing selection dialog`);
+          setUrdfCandidates(candidates);
+          setShowUrdfDialog(true);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to load repository";
+        
         if (errorMessage.includes("403") || errorMessage.includes("access denied")) {
           toast.error("Token has no access to this repository. Please check your token permissions.");
         } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
           toast.error("Repository not found or token has no access.");
+        } else if (errorMessage.includes("rate limit")) {
+          toast.error(errorMessage);
         } else {
           toast.error(errorMessage);
         }
-        console.error("URDF load error:", error);
+        console.error("GitHub repo load error:", error);
       } finally {
         setIsLoadingGithub(false);
       }
     },
-    [githubUrl, githubToken, onFolderSelected]
+    [githubToken, onFolderSelected, addRecentRepo]
+  );
+
+  /**
+   * Handle removing a recent repo (with event stopPropagation to prevent loading)
+   */
+  const handleRemoveRecentRepo = useCallback(
+    (e: React.MouseEvent, recentRepo: { owner: string; repo: string; path?: string }): void => {
+      e.stopPropagation();
+      removeRecentRepo(recentRepo.owner, recentRepo.repo, recentRepo.path);
+      toast.success("Removed from recent repositories");
+    },
+    [removeRecentRepo]
   );
 
   return (
@@ -344,6 +472,38 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
           {/* GitHub Repo Section */}
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground">🐙 Load from GitHub Repository</label>
+            
+            {/* Recent Repositories */}
+            {recentRepos.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="w-3 h-3" />
+                  <span>Recent Repositories</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {recentRepos.map((repo) => (
+                    <div
+                      key={`${repo.owner}/${repo.repo}${repo.path ? `/${repo.path}` : ''}`}
+                      className="group relative flex items-center gap-2 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-md cursor-pointer transition-colors"
+                      onClick={() => loadRecentRepo(repo)}
+                    >
+                      <Github className="w-3 h-3 flex-shrink-0" />
+                      <span className="text-xs font-medium text-foreground truncate max-w-[200px]">
+                        {repo.displayName}
+                      </span>
+                      <button
+                        onClick={(e) => handleRemoveRecentRepo(e, repo)}
+                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-0.5 hover:bg-destructive/20 rounded transition-opacity"
+                        aria-label="Remove from recent"
+                      >
+                        <X className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Input
                 type="text"
@@ -412,32 +572,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
             aria-label="Select robot simulation files folder"
           />
           
-          {/* Drag & Drop Zone */}
-          <div
-            ref={dropZoneRef}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`
-              w-full border-2 border-dashed rounded-md p-6 transition-all
-              ${isDragging 
-                ? "border-primary bg-primary/10" 
-                : "border-border hover:border-primary/50"
-              }
-            `}
-          >
-            <div className="flex flex-col items-center gap-2">
-              <FolderOpen 
-                className={`w-8 h-8 transition-colors ${
-                  isDragging ? "text-primary" : "text-muted-foreground"
-                }`} 
-              />
-              <p className="text-sm font-medium text-foreground">
-                {isDragging ? "Drop folder here" : "Drag & drop folder"}
-              </p>
-            </div>
-          </div>
-
           {/* Browse Button */}
           <div className="flex justify-center">
             <Button
@@ -461,26 +595,79 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {urdfCandidates.map((candidate, index) => (
-                <Button
-                  key={candidate.path}
-                  variant={index === 0 ? "default" : "outline"}
-                  className="w-full justify-start text-left h-auto py-3"
-                  onClick={() => handleUrdfSelect(candidate)}
-                >
-                  <div className="flex flex-col items-start gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{candidate.name}</span>
-                      {candidate.hasMeshesFolder && (
-                        <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
-                          Has Meshes
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-muted-foreground">{candidate.path}</span>
+              {urdfCandidates.map((candidate, index) => {
+                const isUnsupported = candidate.hasUnsupportedFormats === true;
+                const hasUnmatched = (candidate.unmatchedMeshReferences?.length ?? 0) > 0;
+                const formats = candidate.unsupportedFormats?.join(", ") || "";
+                const unmatchedRefs = candidate.unmatchedMeshReferences || [];
+                
+                return (
+                  <div key={candidate.path} className="space-y-2">
+                    <Button
+                      variant="secondary"
+                      className={`w-full justify-start text-left h-auto py-3 ${
+                        isUnsupported 
+                          ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground" 
+                          : index === 0 ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""
+                      }`}
+                      onClick={() => {
+                        if (isUnsupported) {
+                          toast.error(`This URDF uses unsupported mesh formats (${formats}). Only .stl files are supported.`, { duration: 6000 });
+                          return;
+                        }
+                        handleUrdfSelect(candidate);
+                      }}
+                      disabled={isUnsupported}
+                    >
+                      <div className="flex flex-col items-start gap-1 w-full">
+                        <div className="flex items-center gap-2 w-full">
+                          <span className={`font-medium ${isUnsupported ? "text-muted-foreground" : ""}`}>
+                            {candidate.name}
+                          </span>
+                          {!isUnsupported && candidate.hasMeshesFolder && (
+                            <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                              Has Meshes
+                            </span>
+                          )}
+                          {isUnsupported && (
+                            <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              Unsupported Formats
+                            </span>
+                          )}
+                          {!isUnsupported && hasUnmatched && (
+                            <span className="text-xs bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 px-2 py-0.5 rounded flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              Missing Meshes
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{candidate.path}</span>
+                        {isUnsupported && (
+                          <span className="text-xs text-muted-foreground font-medium mt-1">
+                            ⚠️ Uses unsupported formats: {formats}. Only .stl files are supported.
+                          </span>
+                        )}
+                      </div>
+                    </Button>
+                    {!isUnsupported && hasUnmatched && (
+                      <div className="ml-4 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                        <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">
+                          Unmatched URDF References
+                        </div>
+                        <div className="text-xs text-yellow-600 dark:text-yellow-500 mb-1">
+                          These mesh files are referenced in the URDF but were not found:
+                        </div>
+                        <ul className="text-xs text-yellow-600 dark:text-yellow-500 list-disc list-inside space-y-0.5">
+                          {unmatchedRefs.map((ref, idx) => (
+                            <li key={idx}>{ref}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                </Button>
-              ))}
+                );
+              })}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowUrdfDialog(false)}>
