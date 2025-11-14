@@ -9,11 +9,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { GitCompare, Copy, Download, Edit2, Save, X, CheckCircle2, AlertCircle, Info } from "lucide-react";
+import { GitCompare, Copy, Download, Edit2, Save, X, CheckCircle2, AlertCircle, Info, Github } from "lucide-react";
 import { toast } from "sonner";
 import { URDFSyntaxHighlighter } from "./URDFSyntaxHighlighter";
 import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { cn } from "@/lib/utils";
+import { SaveToGitHubDialog } from "@/components/SaveToGitHubDialog";
 
 interface URDFComparisonProps {
   originalUrdf: string;
@@ -22,6 +23,8 @@ interface URDFComparisonProps {
   onClose: () => void;
   onVizUrdfChange?: (newContent: string) => void;
   getExportUrdf?: () => string;
+  meshFiles?: Record<string, Blob>;
+  githubToken?: string | null;
 }
 
 export const URDFComparison = ({
@@ -31,11 +34,14 @@ export const URDFComparison = ({
   onClose,
   onVizUrdfChange,
   getExportUrdf,
+  meshFiles = {},
+  githubToken,
 }: URDFComparisonProps) => {
   const [selectedView, setSelectedView] = useState<"original" | "viz" | "split">("split");
   const [isEditing, setIsEditing] = useState(false);
   const [editedVizUrdf, setEditedVizUrdf] = useState(vizUrdf);
   const [showParseInfo, setShowParseInfo] = useState(true);
+  const [showSaveToGitHub, setShowSaveToGitHub] = useState(false);
 
   // Parse URDF content in real-time
   const parseInfo = useMemo(() => {
@@ -384,6 +390,17 @@ export const URDFComparison = ({
                         >
                           <Download className="w-3 h-3" />
                         </Button>
+                        {githubToken && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => setShowSaveToGitHub(true)}
+                            title="Save to GitHub"
+                          >
+                            <Github className="w-3 h-3" />
+                          </Button>
+                        )}
                       </>
                     ) : (
                       <>
@@ -446,6 +463,20 @@ export const URDFComparison = ({
             )}
           </div>
         </div>
+
+        {/* Save to GitHub Dialog */}
+        {githubToken && (
+          <SaveToGitHubDialog
+            isOpen={showSaveToGitHub}
+            onClose={() => setShowSaveToGitHub(false)}
+            urdfContent={getExportUrdf ? getExportUrdf() : (isEditing ? editedVizUrdf : vizUrdf)}
+            meshFiles={meshFiles}
+            accessToken={githubToken}
+            onSuccess={(repoUrl) => {
+              toast.success(`Saved to GitHub! Repository: ${repoUrl}`);
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

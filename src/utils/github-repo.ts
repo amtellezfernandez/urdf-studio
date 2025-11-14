@@ -740,7 +740,7 @@ const SUPPORTED_MESH_EXTENSIONS = ['.stl'];
 /**
  * Extract mesh references from URDF content
  */
-function extractMeshReferencesFromURDF(urdfContent: string): string[] {
+export function extractMeshReferencesFromURDF(urdfContent: string): string[] {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
   const meshReferences = new Set<string>();
@@ -1162,5 +1162,219 @@ export async function convertGitHubFilesToFileList(
   }
 
   return dataTransfer.files;
+}
+
+/**
+ * Create a new GitHub repository
+ */
+export async function createGitHubRepository(
+  name: string,
+  description: string,
+  isPrivate: boolean,
+  accessToken: string
+): Promise<{ owner: string; repo: string }> {
+  const headers: HeadersInit = {
+    Accept: "application/vnd.github.v3+json",
+    Authorization: `token ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  // First, get the authenticated user
+  const userResponse = await fetch("https://api.github.com/user", { headers });
+  if (!userResponse.ok) {
+    throw new Error("Failed to get authenticated user. Please check your token permissions.");
+  }
+  const user = await userResponse.json();
+  const owner = user.login;
+
+  // Create the repository
+  const createRepoUrl = "https://api.github.com/user/repos";
+  const response = await fetch(createRepoUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name,
+      description,
+      private: isPrivate,
+      auto_init: false, // Don't create README, we'll add files
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    if (response.status === 422) {
+      throw new Error(`Repository name "${name}" is invalid or already exists.`);
+    }
+    if (response.status === 403) {
+      throw new Error("Token doesn't have permission to create repositories. Please check your token permissions.");
+    }
+    throw new Error(`Failed to create repository: ${response.statusText}${errorText ? ` - ${errorText.substring(0, 200)}` : ''}`);
+  }
+
+  const repo = await response.json();
+  return { owner, repo: repo.name };
+}
+
+/**
+ * Check if a file exists in GitHub repository
+ */
+export async function checkFileExists(
+  owner: string,
+  repo: string,
+  path: string,
+  accessToken: string
+): Promise<{ exists: boolean; sha?: string }> {
+  const headers: HeadersInit = {
+    Accept: "application/vnd.github.v3+json",
+    Authorization: `token ${accessToken}`,
+  };
+
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const response = await fetch(url, { headers });
+
+  if (response.status === 404) {
+    return { exists: false };
+  }
+
+  if (!response.ok) {
+    // If it's not 404, it might be a different error, but we'll assume it doesn't exist
+    return { exists: false };
+  }
+
+  const data = await response.json();
+  // If it's an array, it means it's a directory, not a file
+  if (Array.isArray(data)) {
+    return { exists: false };
+  }
+
+  return { exists: true, sha: data.sha };
+}
+
+/**
+ * Check if assets folder exists (by checking if any file in assets/ exists)
+ */
+export async function checkAssetsFolderExists(
+  owner: string,
+  repo: string,
+  accessToken: string
+): Promise<boolean> {
+  try {
+    const headers: HeadersInit = {
+      Accept: "application/vnd.github.v3+json",
+      Authorization: `token ${accessToken}`,
+    };
+
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/assets`;
+    const response = await fetch(url, { headers });
+
+    if (response.status === 404) {
+      return false;
+    }
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+    // If it's an array, it's a directory with files
+    return Array.isArray(data) && data.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Generate commit message with urdf-studio prefix and timestamp
+ */
+export function generateCommitMessage(customMessage?: string): string {
+  const timestamp = new Date().toISOString();
+  const baseMessage = customMessage || "Update URDF and mesh files";
+  return `urdf-studio: ${baseMessage} (${timestamp})`;
+}
+
+/**
+ * Upload a file to GitHub repository using Contents API
+ * If sha is provided, it will overwrite the existing file
+ */
+export async function uploadFileToGitHub(
+  owner: string,
+  repo: string,
+  path: string,
+  content: string | ArrayBuffer,
+  message: string,
+  accessToken: string,
+  existingSha?: string
+): Promise<void> {
+  const headers: HeadersInit = {
+    Accept: "application/vnd.github.v3+json",
+    Authorization: `token ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  // Convert content to base64 if it's not already
+  let base64Content: string;
+  if (typeof content === "string") {
+    base64Content = btoa(unescape(encodeURIComponent(content)));
+  } else {
+    const bytes = new Uint8Array(content);
+    const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join("");
+    base64Content = btoa(binary);
+  }
+
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const body: any = {
+    message,
+    content: base64Content,
+  };
+
+  // Include SHA if provided (for overwriting existing files)
+  if (existingSha) {
+    body.sha = existingSha;
+  }
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    if (response.status === 409) {
+      throw new Error(`File already exists at ${path}. Please delete it first or use a different path.`);
+    }
+    throw new Error(`Failed to upload file ${path}: ${response.statusText}${errorText ? ` - ${errorText.substring(0, 200)}` : ''}`);
+  }
+}
+
+/**
+ * Update URDF mesh paths to point to assets/ folder
+ * Preserves the original file extension
+ */
+export function updateURDFMeshPathsToAssets(urdfContent: string): string {
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+  
+  // Find all mesh elements
+  const meshElements = xmlDoc.querySelectorAll("mesh");
+  meshElements.forEach((mesh) => {
+    const filename = mesh.getAttribute("filename");
+    if (filename) {
+      // Normalize the path
+      const normalized = filename
+        .replace(/^package:\/\/[^/]+\//, "")
+        .replace(/^file:\/\//, "")
+        .trim();
+      
+      // Get just the filename (last part of path) - preserves extension
+      const fileName = normalized.split("/").pop() || normalized;
+      
+      // Update to assets/filename (preserving extension)
+      mesh.setAttribute("filename", `assets/${fileName}`);
+    }
+  });
+  
+  const serializer = new XMLSerializer();
+  return serializer.serializeToString(xmlDoc);
 }
 

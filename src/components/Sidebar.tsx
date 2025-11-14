@@ -2423,6 +2423,8 @@ export const Sidebar = ({
                     onClose={() => setShowComparison(false)}
                     onVizUrdfChange={onVizUrdfChange}
                     getExportUrdf={getExportUrdf}
+                    meshFiles={meshFiles}
+                    githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
                   />
                 </div>
               )}
