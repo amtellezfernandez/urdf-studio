@@ -1,4 +1,4 @@
-import { useRef, useCallback, memo, useState } from "react";
+import { useRef, useCallback, memo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FolderOpen, Github, AlertTriangle, Loader2, X, Clock } from "lucide-react";
+import { FolderOpen, Github, AlertTriangle, Loader2, X, Clock, Folder } from "lucide-react";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
 import { useRecentGitHubRepos } from "@/hooks/use-recent-github-repos";
 import { toast } from "sonner";
@@ -50,9 +50,42 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
   const [fetchedFiles, setFetchedFiles] = useState<GitHubFile[]>([]);
   const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string; path?: string; token: string } | null>(null);
 
+  // Last uploaded local folder
+  const [lastLocalFolder, setLastLocalFolder] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return localStorage.getItem("urdfstudio:lastLocalFolder");
+    } catch {
+      return null;
+    }
+  });
+
+  // Save last folder to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined" && lastLocalFolder) {
+      localStorage.setItem("urdfstudio:lastLocalFolder", lastLocalFolder);
+    }
+  }, [lastLocalFolder]);
+
+  const clearLastLocalFolder = useCallback(() => {
+    setLastLocalFolder(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("urdfstudio:lastLocalFolder");
+    }
+  }, []);
+
   const handleFolderSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = e.target.files;
     if (files && files.length > 0) {
+      // Extract folder name from the first file's webkitRelativePath
+      const firstFile = files[0] as File & { webkitRelativePath?: string };
+      if (firstFile.webkitRelativePath) {
+        const pathParts = firstFile.webkitRelativePath.split("/");
+        if (pathParts.length > 0) {
+          const folderName = pathParts[0];
+          setLastLocalFolder(folderName);
+        }
+      }
       onFolderSelected(files);
     }
   }, [onFolderSelected]);
@@ -571,7 +604,43 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
             className="hidden"
             aria-label="Select robot simulation files folder"
           />
-          
+
+          {/* Last Uploaded Folder */}
+          {lastLocalFolder && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>Last Uploaded Folder</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div
+                  className="group relative flex items-center gap-2 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-md cursor-pointer transition-colors"
+                  onClick={handleButtonClick}
+                  title={`Click to browse and select "${lastLocalFolder}" folder again`}
+                >
+                  <Folder className="w-3 h-3 flex-shrink-0" />
+                  <span className="text-xs font-medium text-foreground truncate max-w-[200px]">
+                    {lastLocalFolder}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearLastLocalFolder();
+                      toast.success("Cleared last folder");
+                    }}
+                    className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-0.5 hover:bg-destructive/20 rounded transition-opacity"
+                    aria-label="Clear last folder"
+                  >
+                    <X className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground/80">
+                Due to browser security, you need to re-select the folder. Click to open the file browser.
+              </p>
+            </div>
+          )}
+
           {/* Browse Button */}
           <div className="flex justify-center">
             <Button
