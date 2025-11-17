@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { createVizFilename } from "@/urdf_corrections/addJointColors";
 import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
 import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/parseJointAxis";
-import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
 import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
 import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
 import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
@@ -66,6 +65,7 @@ const Index = () => {
   const [originalVizUrdfContent, setOriginalVizUrdfContent] = useState<string>("");
   const [jointNameMapping, setJointNameMapping] = useState<Map<string, string>>(new Map());
   const [deletedJoints, setDeletedJoints] = useState<Set<string>>(new Set());
+  const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasAnimationFrames, setHasAnimationFrames] = useState(false);
@@ -403,31 +403,6 @@ const Index = () => {
     });
   }, [setStoreJointValue]);
 
-  const handleJointTypeChange = useCallback((jointName: string, newType: string, lowerLimit?: number, upperLimit?: number): void => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-
-    // Update the URDF content immediately
-    const updatedContent = updateJointTypeInURDF(vizUrdfContent, jointName, newType, lowerLimit, upperLimit);
-    
-    // Immediately update all state synchronously for instant visual feedback (same pattern as handleJointNameChange)
-    setVizUrdfContent(updatedContent);
-    const limits = parseJointLimitsFromURDF(updatedContent);
-    setJointLimits(limits);
-    const axes = parseJointAxesFromURDF(updatedContent);
-    setJointAxes(axes);
-    setUrdfFile(createUrdfFile(updatedContent));
-    
-    // Then update everything else (which may be deferred, but state is already updated)
-    updateUrdfFile(updatedContent);
-
-    const limitMsg = lowerLimit !== undefined && upperLimit !== undefined 
-      ? ` with limits [${lowerLimit.toFixed(2)}, ${upperLimit.toFixed(2)}]`
-      : "";
-    toast.success(`Updated joint "${jointName}" type to ${newType}${limitMsg}`);
-  }, [vizUrdfContent, updateUrdfFile, createUrdfFile]);
 
   const handleVizUrdfChange = useCallback((newContent: string): void => {
     updateUrdfFile(newContent);
@@ -495,11 +470,18 @@ const Index = () => {
       useJointStore.getState().setJointMaxVelocity(oldName, null);
     }
 
-    // Update URDF file (this will re-parse limits and axes with new names)
-    updateUrdfFile(updatedContent);
+    // Immediately update all URDF-related state synchronously (same pattern as handleJointTypeChange)
+    // This ensures immediate UI updates without deferred transitions that could cause conflicts
+    setVizUrdfContent(updatedContent);
+    const limits = parseJointLimitsFromURDF(updatedContent);
+    setJointLimits(limits);
+    const axes = parseJointAxesFromURDF(updatedContent);
+    setJointAxes(axes);
+    setUrdfFile(createUrdfFile(updatedContent));
+    setUrdfContentVersion(prev => prev + 1); // Force reload of 3D viewer and sidebar
 
     toast.success(`Joint "${oldName}" renamed to "${newName}"`);
-  }, [availableJoints, vizUrdfContent, jointLimits, selectedJoint, updateUrdfFile]);
+  }, [availableJoints, vizUrdfContent, jointLimits, selectedJoint, createUrdfFile]);
 
   const handleJointAxisChange = useCallback((jointName: string, axis: [number, number, number]): void => {
     if (!vizUrdfContent) {
@@ -507,10 +489,21 @@ const Index = () => {
       return;
     }
 
+    // Update the URDF content immediately
     const updatedContent = updateJointAxisInURDF(vizUrdfContent, jointName, axis);
-    updateUrdfFile(updatedContent);
+    
+    // Immediately update all state synchronously for consistency with other handlers
+    // This ensures immediate UI updates without deferred transitions that could cause conflicts
+    setVizUrdfContent(updatedContent);
+    const limits = parseJointLimitsFromURDF(updatedContent);
+    setJointLimits(limits);
+    const axes = parseJointAxesFromURDF(updatedContent);
+    setJointAxes(axes);
+    setUrdfFile(createUrdfFile(updatedContent));
+    setUrdfContentVersion(prev => prev + 1); // Force reload of 3D viewer and sidebar
+    
     toast.success(`Updated axis for joint "${jointName}"`);
-  }, [vizUrdfContent, updateUrdfFile]);
+  }, [vizUrdfContent, createUrdfFile]);
 
   const handleResetAxis = useCallback((jointName: string): void => {
     if (!originalJointAxes[jointName]) {
@@ -711,7 +704,6 @@ const Index = () => {
             onJointChange={handleJointChange}
             onJointSelect={setSelectedJoint}
             selectedJoint={selectedJoint}
-            onJointTypeChange={handleJointTypeChange}
             onVizUrdfChange={handleVizUrdfChange}
             onJointNameChange={handleJointNameChange}
             onJointAxisChange={handleJointAxisChange}
@@ -771,6 +763,7 @@ const Index = () => {
           >
             <div className="flex-1 min-h-0">
               <Viewer3D
+                key={`urdf-${urdfContentVersion}`}
                 urdfFile={urdfFile}
                 initialMeshFiles={meshFiles}
                 selectedJoint={selectedJoint}

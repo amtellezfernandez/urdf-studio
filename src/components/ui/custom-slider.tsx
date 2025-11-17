@@ -27,27 +27,33 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
     const sliderRef = React.useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = React.useState(false);
     const [localValue, setLocalValue] = React.useState(value[0]);
+    const lastValueRef = React.useRef(value[0]);
+    const rafIdRef = React.useRef<number | null>(null);
+    const pendingValueRef = React.useRef<number | null>(null);
 
-    // Sync local value with prop value when not dragging
-    React.useEffect(() => {
+    // Sync local value with prop value immediately when not dragging
+    // Use useLayoutEffect for immediate sync before paint to prevent visual lag
+    React.useLayoutEffect(() => {
       if (!isDragging) {
-        setLocalValue(value[0]);
+        const newValue = value[0];
+        // Always sync when not dragging to prevent lag when number input changes
+        if (newValue !== lastValueRef.current) {
+          setLocalValue(newValue);
+          lastValueRef.current = newValue;
+        }
       }
     }, [value, isDragging]);
 
     const percentage = ((localValue - min) / (max - min)) * 100;
     const clampedPercentage = Math.max(0, Math.min(100, percentage));
 
-    // Get color for joint type
-    const getJointColor = () => {
+    // Get color for joint type (memoized)
+    const jointColor = React.useMemo(() => {
       if (jointType) {
-        const color = (jointColors as Record<string, string>)[jointType] || jointColors.light_gray;
-        return color;
+        return (jointColors as Record<string, string>)[jointType] || jointColors.light_gray;
       }
       return jointColors.light_gray;
-    };
-
-    const jointColor = getJointColor();
+    }, [jointType]);
 
     const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       if (disabled) return;
@@ -55,6 +61,21 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
       setIsDragging(true);
       handleMouseMove(e);
     };
+
+    // Throttle parent updates using requestAnimationFrame for smooth dragging
+    const updateParentValue = React.useCallback((newValue: number) => {
+      pendingValueRef.current = newValue;
+      
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          if (pendingValueRef.current !== null) {
+            onValueChange([pendingValueRef.current]);
+            pendingValueRef.current = null;
+          }
+          rafIdRef.current = null;
+        });
+      }
+    }, [onValueChange]);
 
     const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
       if (disabled || !sliderRef.current) return;
@@ -66,15 +87,24 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
       const steppedValue = Math.round(newValue / step) * step;
       const clampedValue = Math.max(min, Math.min(max, steppedValue));
       
-      // Update local value immediately for instant visual feedback
+      // Update local value immediately for instant visual feedback (smooth UI)
       setLocalValue(clampedValue);
-      // Update parent component
-      onValueChange([clampedValue]);
-    }, [disabled, min, max, step, onValueChange]);
+      // Throttle parent updates via requestAnimationFrame for performance
+      updateParentValue(clampedValue);
+    }, [disabled, min, max, step, updateParentValue]);
 
     const handleMouseUp = React.useCallback(() => {
       setIsDragging(false);
-    }, []);
+      // Flush any pending value updates when dragging ends
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      if (pendingValueRef.current !== null) {
+        onValueChange([pendingValueRef.current]);
+        pendingValueRef.current = null;
+      }
+    }, [onValueChange]);
 
     React.useEffect(() => {
       if (isDragging) {
@@ -119,11 +149,12 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
         <div
           className={cn(
             "absolute h-1.5 rounded-full",
-            !isDragging && "transition-all duration-75"
+            !isDragging && "transition-all duration-100 ease-out"
           )}
           style={{ 
             width: `${clampedPercentage}%`,
-            backgroundColor: jointColor
+            backgroundColor: jointColor,
+            willChange: isDragging ? 'width' : 'auto'
           }}
         />
         
@@ -131,14 +162,16 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
         <div
           className={cn(
             "absolute w-4 h-4 rounded-full border-2 shadow-sm",
-            !isDragging && "transition-all duration-75",
+            !isDragging && "transition-all duration-100 ease-out",
             isDragging && "scale-110",
             "group-hover:scale-105"
           )}
           style={{
             left: `calc(${clampedPercentage}% - 8px)`,
             backgroundColor: jointColor,
-            borderColor: jointColor
+            borderColor: jointColor,
+            willChange: isDragging ? 'left, transform' : 'auto',
+            transform: isDragging ? 'translateZ(0)' : undefined // Force GPU acceleration
           }}
         />
       </div>

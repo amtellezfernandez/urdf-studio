@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type React from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,7 +22,6 @@ interface JointsWindowProps {
   onJointChange: (jointName: string, value: number) => void;
   onJointSelect?: (jointName: string | null) => void;
   selectedJoint?: string | null;
-  onJointTypeChange?: (jointName: string, jointType: string, lowerLimit?: number, upperLimit?: number) => void;
   onJointNameChange?: (oldName: string, newName: string) => void;
   onJointAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
@@ -60,7 +59,6 @@ export const JointsWindow = ({
   onJointChange,
   onJointSelect,
   selectedJoint,
-  onJointTypeChange,
   onJointNameChange,
   onJointAxisChange,
   onResetAxis,
@@ -92,6 +90,7 @@ export const JointsWindow = ({
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["revolute", "continuous"]));
   const [viewMode, setViewMode] = useState<"type" | "hierarchy">("type");
+  const lastJointTypesRef = useRef<Record<string, string>>({});
 
   // Get all unique joint types
   const jointTypes = useMemo(() => {
@@ -101,6 +100,34 @@ export const JointsWindow = ({
     });
     return Array.from(types).sort();
   }, [jointLimits]);
+
+  // Initialize ref with current joint types on mount and when jointLimits changes
+  useEffect(() => {
+    const currentJointTypes: Record<string, string> = {};
+    Object.entries(jointLimits).forEach(([jointName, jointInfo]) => {
+      if (jointInfo?.type) {
+        currentJointTypes[jointName] = jointInfo.type;
+      }
+    });
+
+    // Find joints that changed type (compare with previous ref value)
+    Object.entries(currentJointTypes).forEach(([jointName, newType]) => {
+      const oldType = lastJointTypesRef.current[jointName];
+      if (oldType !== undefined && oldType !== newType) {
+        // Joint changed type - expand the new type group so it's visible
+        if (viewMode === "type") {
+          setExpandedTypes(prev => {
+            const next = new Set(prev);
+            next.add(newType);
+            return next;
+          });
+        }
+      }
+    });
+
+    // Update the ref with current types AFTER detecting changes
+    lastJointTypesRef.current = currentJointTypes;
+  }, [jointLimits, viewMode]);
 
   // Filter joints by search and type
   const filteredJoints = useMemo(() => {
@@ -178,9 +205,6 @@ export const JointsWindow = ({
             onValueChange={(value) => {
               onJointChange(joint.jointName, value);
               onJointSelect?.(joint.jointName);
-            }}
-            onTypeChange={(newType, lowerLimit, upperLimit) => {
-              onJointTypeChange?.(joint.jointName, newType, lowerLimit, upperLimit);
             }}
             onNameChange={onJointNameChange}
             onAxisChange={onJointAxisChange}
@@ -453,9 +477,6 @@ export const JointsWindow = ({
                             onValueChange={(value) => {
                               onJointChange(jointName, value);
                               onJointSelect?.(jointName);
-                            }}
-                            onTypeChange={(newType, lowerLimit, upperLimit) => {
-                              onJointTypeChange?.(jointName, newType, lowerLimit, upperLimit);
                             }}
                             onNameChange={onJointNameChange}
                             onAxisChange={onJointAxisChange}

@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, LogIn, Send, Eye, EyeOff } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, LogIn, Send } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -50,7 +50,6 @@ interface SidebarProps {
   onJointChange?: (jointName: string, value: number) => void;
   onJointSelect?: (jointName: string | null) => void;
   selectedJoint?: string | null;
-  onJointTypeChange?: (jointName: string, jointType: string, lowerLimit?: number, upperLimit?: number) => void;
   onVizUrdfChange?: (newContent: string) => void;
   onJointNameChange?: (oldName: string, newName: string) => void;
   onJointAxisChange?: (jointName: string, axis: [number, number, number]) => void;
@@ -74,8 +73,6 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
   meshFiles?: Record<string, Blob>;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
-  rotationPlaneVisible?: boolean;
-  onRotationPlaneVisibilityChange?: (visible: boolean) => void;
 }
 
 interface RecordedFrame {
@@ -765,7 +762,6 @@ export const Sidebar = ({
   onJointChange,
   onJointSelect,
   selectedJoint,
-  onJointTypeChange,
   onVizUrdfChange,
   onJointNameChange,
   onJointAxisChange,
@@ -788,8 +784,6 @@ export const Sidebar = ({
   onToggleCollapse,
   meshFiles = {},
   onCollisionVisibilityChange,
-  rotationPlaneVisible = false,
-  onRotationPlaneVisibilityChange,
 }: SidebarProps) => {
   const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
@@ -2406,6 +2400,8 @@ export const Sidebar = ({
           {/* Joints Tab */}
           <TabsContent value="joints" className="flex-1 overflow-hidden mt-0 h-full">
             <div className="flex flex-col h-full overflow-hidden">
+              <div className="px-3 py-2 space-y-2 flex-shrink-0">
+              </div>
               {/* View & Edit URDF Button */}
               {originalUrdf && vizUrdf && (
                 <div className="px-3 py-2 flex-shrink-0 border-t border-border/30">
@@ -2442,7 +2438,6 @@ export const Sidebar = ({
                     onJointChange={handleJointChange}
                     onJointSelect={onJointSelect}
                     selectedJoint={selectedJoint}
-                    onJointTypeChange={onJointTypeChange}
                     onJointNameChange={onJointNameChange}
                     onJointAxisChange={onJointAxisChange}
                     onResetAxis={onResetAxis}
@@ -2467,8 +2462,6 @@ export const Sidebar = ({
                     onResetRotation={onResetRotation}
                     hasRotationChanges={hasRotationChanges}
                     onJointLinkChange={handleJointLinkChange}
-                    rotationPlaneVisible={rotationPlaneVisible}
-                    onRotationPlaneVisibilityChange={onRotationPlaneVisibilityChange}
                   />
                 </BlenderPanel>
                 {/* Link Editor Section */}

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
-import { Search, X, Plus, Trash2, Calculator, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { Search, X, Plus, Trash2, Calculator, AlertTriangle, Eye, EyeOff, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";
 import { 
@@ -20,9 +20,14 @@ import {
 } from "@/urdf_corrections/updateLinkData";
 import { 
   computeMeshBounds, 
+  combineMeshBounds,
   computePCA, 
   computeRotationToAxis,
-  findMeshFile 
+  findMeshFile,
+  computeCylinderDiagnostics,
+  computeSphereDiagnostics,
+  type CylinderDiagnostics,
+  type SphereDiagnostics
 } from "@/urdf_corrections/computeMeshGeometry";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -638,16 +643,28 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
   const [geometryParams, setGeometryParams] = useState(collision.geometry.params || {});
   const [origin, setOrigin] = useState(collision.origin);
   const [isComputing, setIsComputing] = useState(false);
+  const [selectedVisualMeshIndex, setSelectedVisualMeshIndex] = useState<number>(0);
+  const [calculationInfo, setCalculationInfo] = useState<{
+    meshIndex: number;
+    meshFilename: string;
+    method: string;
+    formula?: string;
+  } | null>(null);
 
-  // Get visual mesh info for auto-filling
+  // Get visual mesh info for auto-filling - handle multiple meshes
   const visualMeshInfo = useMemo(() => {
     if (linkData.visuals.length === 0) return null;
-    const visual = linkData.visuals[0];
-    if (visual.geometry.type !== "mesh") return null;
-    return {
+    
+    // Find all visual meshes (not just the first one)
+    const visualMeshes = linkData.visuals.filter(v => v.geometry.type === "mesh");
+    if (visualMeshes.length === 0) return null;
+    
+    // Return info about all meshes, not just the first
+    return visualMeshes.map(visual => ({
       filename: visual.geometry.params.filename || "",
       scale: visual.geometry.params.scale || "1 1 1",
-    };
+      origin: visual.origin,
+    }));
   }, [linkData.visuals]);
 
   // Track collision data changes to reload form when collision changes
@@ -660,7 +677,19 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
     setGeometryType(collision.geometry.type || "box");
     setGeometryParams(collision.geometry.params || {});
     setOrigin(collision.origin);
-  }, [collisionKey]);
+    
+    // Try to match current collision mesh filename to a visual mesh to set the correct index
+    if (visualMeshInfo && visualMeshInfo.length > 1 && collision.geometry.type === "mesh") {
+      const currentFilename = collision.geometry.params?.filename || "";
+      const matchingIndex = visualMeshInfo.findIndex(
+        mesh => mesh.filename === currentFilename || 
+        mesh.filename.split("/").pop() === currentFilename.split("/").pop()
+      );
+      if (matchingIndex >= 0) {
+        setSelectedVisualMeshIndex(matchingIndex);
+      }
+    }
+  }, [collisionKey, visualMeshInfo]);
 
   const updateURDF = () => {
     if (!urdfContent || !onUrdfChange) return;
@@ -676,27 +705,41 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
   };
 
   const handleGeometryTypeChange = async (newType: "box" | "sphere" | "cylinder" | "mesh") => {
+    // Clear calculation info when changing type
+    setCalculationInfo(null);
+    
     // Clear previous params and set new defaults based on type
     let newParams: Record<string, string> = {};
     let newOrigin = { xyz: [0, 0, 0] as [number, number, number], rpy: [0, 0, 0] as [number, number, number] };
     
-    // If mesh type, copy from visual
-    if (newType === "mesh" && visualMeshInfo) {
+    // If mesh type, copy from visual (use selected mesh index)
+    if (newType === "mesh" && visualMeshInfo && visualMeshInfo.length > 0) {
+      const meshIndex = Math.min(selectedVisualMeshIndex, visualMeshInfo.length - 1);
+      const selectedMesh = visualMeshInfo[meshIndex];
       newParams = {
-        filename: visualMeshInfo.filename,
-        scale: visualMeshInfo.scale,
+        filename: selectedMesh.filename,
+        scale: selectedMesh.scale,
       };
-      newOrigin = linkData.visuals[0].origin;
-    } else if (newType === "box") {
-      // For box, keep existing size if valid, otherwise default
-      newParams = { size: (geometryType === "box" && geometryParams.size) ? geometryParams.size : "1 1 1" };
-    } else if (newType === "sphere") {
-      newParams = { radius: (geometryType === "sphere" && geometryParams.radius) ? geometryParams.radius : "1" };
-    } else if (newType === "cylinder") {
-      newParams = { 
-        radius: (geometryType === "cylinder" && geometryParams.radius) ? geometryParams.radius : "1",
-        length: (geometryType === "cylinder" && geometryParams.length) ? geometryParams.length : "1"
-      };
+      newOrigin = selectedMesh.origin;
+    } else if (newType === "box" || newType === "sphere" || newType === "cylinder") {
+      // Auto-calculate from mesh if visual mesh is available
+      if (visualMeshInfo && visualMeshInfo.length > 0) {
+        // Automatically calculate from mesh
+        await handleAutoFill(newType);
+        return; // handleAutoFill will update everything
+      } else {
+        // No mesh available, use defaults
+        if (newType === "box") {
+          newParams = { size: (geometryType === "box" && geometryParams.size) ? geometryParams.size : "1 1 1" };
+        } else if (newType === "sphere") {
+          newParams = { radius: (geometryType === "sphere" && geometryParams.radius) ? geometryParams.radius : "1" };
+        } else if (newType === "cylinder") {
+          newParams = { 
+            radius: (geometryType === "cylinder" && geometryParams.radius) ? geometryParams.radius : "1",
+            length: (geometryType === "cylinder" && geometryParams.length) ? geometryParams.length : "1"
+          };
+        }
+      }
     }
     
     // Update state
@@ -718,110 +761,455 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
   };
 
   const handleAutoFill = async (type: "box" | "sphere" | "cylinder" | "capsule") => {
-    if (!visualMeshInfo || !onUrdfChange) {
+    if (!visualMeshInfo || visualMeshInfo.length === 0 || !onUrdfChange) {
       toast.error("No visual mesh found");
       return;
     }
 
     setIsComputing(true);
     try {
-      const meshFile = findMeshFile(visualMeshInfo.filename, meshFiles);
+      // Use only the SELECTED visual mesh, not all of them
+      const meshIndex = Math.min(selectedVisualMeshIndex, visualMeshInfo.length - 1);
+      const selectedMeshInfo = visualMeshInfo[meshIndex];
+      
+      const meshFile = findMeshFile(selectedMeshInfo.filename, meshFiles);
       if (!meshFile) {
-        toast.error("Mesh file not found");
+        toast.error(`Mesh file not found: ${selectedMeshInfo.filename}`);
         setIsComputing(false);
         return;
       }
 
-      const bounds = await computeMeshBounds(meshFile, visualMeshInfo.scale);
+      const bounds = await computeMeshBounds(meshFile, selectedMeshInfo.scale);
       if (!bounds) {
         toast.error("Failed to compute mesh bounds");
         setIsComputing(false);
         return;
       }
-
+      
       let newGeometryType: "box" | "sphere" | "cylinder" | "mesh";
       let newGeometryParams: Record<string, string> = {};
       let newOrigin: { xyz: [number, number, number]; rpy: [number, number, number] } = { xyz: [0, 0, 0], rpy: [0, 0, 0] };
+      let calculationMethod = "";
+      let calculationFormula = "";
 
       if (type === "box") {
-        // Axis-aligned bounding box
+        // Axis-aligned bounding box in link coordinate frame
+        // Transform all mesh vertices by visual mesh origin (xyz + rpy)
+        // Then compute AABB in link space
+        const visualMeshOrigin = selectedMeshInfo.origin;
+        const [rx, ry, rz] = visualMeshOrigin.rpy;
+        const [tx, ty, tz] = visualMeshOrigin.xyz;
+        
+        // Create rotation matrix from RPY (ZYX order: roll around Z, pitch around Y, yaw around X)
+        // URDF uses fixed-axis rotations: R = R_z(roll) * R_y(pitch) * R_x(yaw)
+        const cosRx = Math.cos(rx), sinRx = Math.sin(rx);
+        const cosRy = Math.cos(ry), sinRy = Math.sin(ry);
+        const cosRz = Math.cos(rz), sinRz = Math.sin(rz);
+        
+        // Rotation matrix (ZYX order)
+        const R = [
+          [cosRz * cosRy, cosRz * sinRy * sinRx - sinRz * cosRx, cosRz * sinRy * cosRx + sinRz * sinRx],
+          [sinRz * cosRy, sinRz * sinRy * sinRx + cosRz * cosRx, sinRz * sinRy * cosRx - cosRz * sinRx],
+          [-sinRy, cosRy * sinRx, cosRy * cosRx]
+        ];
+        
+        // Transform all vertices to link space and compute AABB
+        const vertexCount = bounds.vertices.length / 3;
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        
+        for (let i = 0; i < vertexCount; i++) {
+          const x = bounds.vertices[i * 3];
+          const y = bounds.vertices[i * 3 + 1];
+          const z = bounds.vertices[i * 3 + 2];
+          
+          // Apply rotation
+          const xRot = R[0][0] * x + R[0][1] * y + R[0][2] * z;
+          const yRot = R[1][0] * x + R[1][1] * y + R[1][2] * z;
+          const zRot = R[2][0] * x + R[2][1] * y + R[2][2] * z;
+          
+          // Apply translation
+          const xLink = xRot + tx;
+          const yLink = yRot + ty;
+          const zLink = zRot + tz;
+          
+          minX = Math.min(minX, xLink);
+          minY = Math.min(minY, yLink);
+          minZ = Math.min(minZ, zLink);
+          maxX = Math.max(maxX, xLink);
+          maxY = Math.max(maxY, yLink);
+          maxZ = Math.max(maxZ, zLink);
+        }
+        
+        const boxSize = [maxX - minX, maxY - minY, maxZ - minZ];
+        const boxCenter = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
+        
         newGeometryType = "box";
         newGeometryParams = {
-          size: `${bounds.size[0]} ${bounds.size[1]} ${bounds.size[2]}`,
+          size: `${boxSize[0]} ${boxSize[1]} ${boxSize[2]}`,
         };
         newOrigin = {
-          xyz: bounds.center,
-          rpy: [0, 0, 0],
+          xyz: boxCenter,
+          rpy: [0, 0, 0], // Box is axis-aligned in link frame
         };
+        calculationMethod = "Axis-Aligned Bounding Box (AABB) in Link Frame";
+        calculationFormula = `1. Transform mesh vertices by visual origin (xyz + rpy)\n2. Compute AABB in link coordinate frame\n3. size = [max_x - min_x, max_y - min_y, max_z - min_z]\n4. center = [(min_x + max_x)/2, (min_y + max_y)/2, (min_z + max_z)/2]`;
       } else if (type === "sphere") {
-        // Minimum bounding sphere (centroid-based)
-        const centroid = bounds.center;
-        let maxDist = 0;
+        // Robust sphere fitting with automatic suitability check
+        // Step 1: Transform vertices to link space
+        const visualMeshOrigin = selectedMeshInfo.origin;
+        const [rx, ry, rz] = visualMeshOrigin.rpy;
+        const [tx, ty, tz] = visualMeshOrigin.xyz;
+        
+        // Create rotation matrix from RPY (ZYX order)
+        const cosRx = Math.cos(rx), sinRx = Math.sin(rx);
+        const cosRy = Math.cos(ry), sinRy = Math.sin(ry);
+        const cosRz = Math.cos(rz), sinRz = Math.sin(rz);
+        
+        const R = [
+          [cosRz * cosRy, cosRz * sinRy * sinRx - sinRz * cosRx, cosRz * sinRy * cosRx + sinRz * sinRx],
+          [sinRz * cosRy, sinRz * sinRy * sinRx + cosRz * cosRx, sinRz * sinRy * cosRx - cosRz * sinRx],
+          [-sinRy, cosRy * sinRx, cosRy * cosRx]
+        ];
+        
+        // Transform vertices to link space
         const vertexCount = bounds.vertices.length / 3;
+        const transformedVertices: number[] = [];
+        
         for (let i = 0; i < vertexCount; i++) {
-          const dx = bounds.vertices[i * 3] - centroid[0];
-          const dy = bounds.vertices[i * 3 + 1] - centroid[1];
-          const dz = bounds.vertices[i * 3 + 2] - centroid[2];
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          maxDist = Math.max(maxDist, dist);
+          const x = bounds.vertices[i * 3];
+          const y = bounds.vertices[i * 3 + 1];
+          const z = bounds.vertices[i * 3 + 2];
+          
+          // Apply rotation
+          const xRot = R[0][0] * x + R[0][1] * y + R[0][2] * z;
+          const yRot = R[1][0] * x + R[1][1] * y + R[1][2] * z;
+          const zRot = R[2][0] * x + R[2][1] * y + R[2][2] * z;
+          
+          // Apply translation
+          transformedVertices.push(xRot + tx, yRot + ty, zRot + tz);
         }
-        newGeometryType = "sphere";
-        newGeometryParams = {
-          radius: String(maxDist),
-        };
-        newOrigin = {
-          xyz: centroid,
-          rpy: [0, 0, 0],
-        };
-      } else if (type === "cylinder" || type === "capsule") {
-        // PCA-based cylinder fitting
-        const pca = computePCA(bounds.vertices);
+        
+        const transformedVerticesArray = new Float32Array(transformedVertices);
+        
+        // Step 2: Compute PCA and diagnostics
+        const pca = computePCA(transformedVerticesArray);
         if (!pca) {
           toast.error("Failed to compute PCA");
           setIsComputing(false);
           return;
         }
-
-        const axis = pca.axis;
-        const centroid = pca.centroid;
         
-        // Project vertices onto principal axis
-        const vertexCount = bounds.vertices.length / 3;
-        let minT = Infinity;
-        let maxT = -Infinity;
-        let maxRadius = 0;
-
-        for (let i = 0; i < vertexCount; i++) {
-          const x = bounds.vertices[i * 3] - centroid[0];
-          const y = bounds.vertices[i * 3 + 1] - centroid[1];
-          const z = bounds.vertices[i * 3 + 2] - centroid[2];
+        const diagnostics = computeSphereDiagnostics(transformedVerticesArray, pca);
+        
+        // Step 3: Decide on sphere fitting method based on diagnostics
+        let centerX: number, centerY: number, centerZ: number;
+        let radius: number;
+        let methodName: string;
+        let formula: string;
+        let warning: string | null = null;
+        
+        if (diagnostics.isIsotropic) {
+          // Good fit for sphere - use robust percentile radius
+          centerX = pca.centroid[0];
+          centerY = pca.centroid[1];
+          centerZ = pca.centroid[2];
+          radius = diagnostics.radialP95; // Use 95th percentile (robust to small protrusions)
           
-          // Project onto axis
-          const t = x * axis[0] + y * axis[1] + z * axis[2];
-          minT = Math.min(minT, t);
-          maxT = Math.max(maxT, t);
+          methodName = "Robust Sphere (Isotropic)";
+          formula = `1. Transform vertices by visual origin\n2. elongation=${diagnostics.elongation.toFixed(2)} < 2, flatness=${diagnostics.flatness.toFixed(2)} < 2\n3. Shape is isotropic → sphere is appropriate\n4. Use 95th percentile radius (robust to outliers)`;
+        } else if (diagnostics.isElongated) {
+          // Elongated shape - sphere not ideal, but compute anyway with warning
+          centerX = pca.centroid[0];
+          centerY = pca.centroid[1];
+          centerZ = pca.centroid[2];
+          radius = diagnostics.radialP95; // Use 95th percentile
           
-          // Compute orthogonal distance
-          const projX = t * axis[0];
-          const projY = t * axis[1];
-          const projZ = t * axis[2];
-          const orthoX = x - projX;
-          const orthoY = y - projY;
-          const orthoZ = z - projZ;
-          const radius = Math.sqrt(orthoX * orthoX + orthoY * orthoY + orthoZ * orthoZ);
-          maxRadius = Math.max(maxRadius, radius);
+          methodName = "Robust Sphere (Elongated - Not Ideal)";
+          warning = `Shape is elongated (elongation=${diagnostics.elongation.toFixed(2)}). Consider using cylinder/capsule instead.`;
+          formula = `1. Transform vertices by visual origin\n2. elongation=${diagnostics.elongation.toFixed(2)} > 3 (elongated)\n3. Sphere may not be optimal - consider cylinder\n4. Use 95th percentile radius`;
+        } else if (diagnostics.isFlat) {
+          // Flat/slab-like - sphere not ideal
+          centerX = pca.centroid[0];
+          centerY = pca.centroid[1];
+          centerZ = pca.centroid[2];
+          radius = diagnostics.radialP95;
+          
+          methodName = "Robust Sphere (Flat - Not Ideal)";
+          warning = `Shape is flat (flatness=${diagnostics.flatness.toFixed(2)}). Consider using box instead.`;
+          formula = `1. Transform vertices by visual origin\n2. flatness=${diagnostics.flatness.toFixed(2)} > 3 (slab-like)\n3. Sphere may not be optimal - consider box\n4. Use 95th percentile radius`;
+        } else {
+          // Moderate anisotropy - use robust radius
+          centerX = pca.centroid[0];
+          centerY = pca.centroid[1];
+          centerZ = pca.centroid[2];
+          radius = diagnostics.radialP95;
+          
+          methodName = "Robust Sphere (Moderate Anisotropy)";
+          formula = `1. Transform vertices by visual origin\n2. elongation=${diagnostics.elongation.toFixed(2)}, flatness=${diagnostics.flatness.toFixed(2)}\n3. Moderate anisotropy - sphere acceptable\n4. Use 95th percentile radius (robust)`;
         }
-
-        const height = maxT - minT;
-        const rotation = computeRotationToAxis(axis);
+        
+        // If outlier ratio is high, show additional info
+        if (diagnostics.outlierRatio > 1.3) {
+          if (warning) {
+            warning += ` High outlier ratio (${diagnostics.outlierRatio.toFixed(2)}) - may have protrusions.`;
+          } else {
+            warning = `High outlier ratio (${diagnostics.outlierRatio.toFixed(2)}) - using robust radius to ignore protrusions.`;
+          }
+        }
+        
+        if (warning) {
+          toast.warning(warning, { duration: 5000 });
+        }
+        
+        newGeometryType = "sphere";
+        newGeometryParams = {
+          radius: String(radius),
+        };
+        newOrigin = {
+          xyz: [centerX, centerY, centerZ],
+          rpy: [0, 0, 0],
+        };
+        calculationMethod = methodName;
+        calculationFormula = formula;
+      } else if (type === "cylinder" || type === "capsule") {
+        // Robust cylinder fitting with automatic method selection
+        // Step 1: Transform vertices to link space
+        const visualMeshOrigin = selectedMeshInfo.origin;
+        const [rx, ry, rz] = visualMeshOrigin.rpy;
+        const [tx, ty, tz] = visualMeshOrigin.xyz;
+        
+        // Create rotation matrix from RPY (ZYX order)
+        const cosRx = Math.cos(rx), sinRx = Math.sin(rx);
+        const cosRy = Math.cos(ry), sinRy = Math.sin(ry);
+        const cosRz = Math.cos(rz), sinRz = Math.sin(rz);
+        
+        const R = [
+          [cosRz * cosRy, cosRz * sinRy * sinRx - sinRz * cosRx, cosRz * sinRy * cosRx + sinRz * sinRx],
+          [sinRz * cosRy, sinRz * sinRy * sinRx + cosRz * cosRx, sinRz * sinRy * cosRx - cosRz * sinRx],
+          [-sinRy, cosRy * sinRx, cosRy * cosRx]
+        ];
+        
+        // Transform vertices to link space and compute AABB
+        const vertexCount = bounds.vertices.length / 3;
+        const transformedVertices: number[] = [];
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        
+        for (let i = 0; i < vertexCount; i++) {
+          const x = bounds.vertices[i * 3];
+          const y = bounds.vertices[i * 3 + 1];
+          const z = bounds.vertices[i * 3 + 2];
+          
+          // Apply rotation
+          const xRot = R[0][0] * x + R[0][1] * y + R[0][2] * z;
+          const yRot = R[1][0] * x + R[1][1] * y + R[1][2] * z;
+          const zRot = R[2][0] * x + R[2][1] * y + R[2][2] * z;
+          
+          // Apply translation
+          const xLink = xRot + tx;
+          const yLink = yRot + ty;
+          const zLink = zRot + tz;
+          
+          transformedVertices.push(xLink, yLink, zLink);
+          
+          minX = Math.min(minX, xLink);
+          minY = Math.min(minY, yLink);
+          minZ = Math.min(minZ, zLink);
+          maxX = Math.max(maxX, xLink);
+          maxY = Math.max(maxY, yLink);
+          maxZ = Math.max(maxZ, zLink);
+        }
+        
+        const transformedVerticesArray = new Float32Array(transformedVertices);
+        
+        // Step 2: Compute PCA and diagnostics
+        const pca = computePCA(transformedVerticesArray);
+        if (!pca) {
+          toast.error("Failed to compute PCA");
+          setIsComputing(false);
+          return;
+        }
+        
+        const diagnostics = computeCylinderDiagnostics(transformedVerticesArray, pca);
+        
+        // Step 3: Automatic method selection based on diagnostics
+        let fitResult: { radius: number; height: number; center: [number, number, number]; axis: [number, number, number] };
+        let methodName: string;
+        let formula: string;
+        
+        if (diagnostics.elongation > 5) {
+          // Long shape - check if clean cylinder
+          if (diagnostics.roundness < 1.2 && diagnostics.outlierRatio < 1.2) {
+            // Case 1: Clean cylinder - use percentile-based PCA
+            const vertexCount = transformedVerticesArray.length / 3;
+            const axis = pca.axis;
+            const centroid = pca.centroid;
+            
+            // Project vertices onto axis
+            const tValues: number[] = [];
+            for (let i = 0; i < vertexCount; i++) {
+              const x = transformedVerticesArray[i * 3] - centroid[0];
+              const y = transformedVerticesArray[i * 3 + 1] - centroid[1];
+              const z = transformedVerticesArray[i * 3 + 2] - centroid[2];
+              const t = x * axis[0] + y * axis[1] + z * axis[2];
+              tValues.push(t);
+            }
+            
+            tValues.sort((a, b) => a - b);
+            const height = tValues[tValues.length - 1] - tValues[0];
+            const radius = diagnostics.radialP95;
+            
+            const centerX = centroid[0] + (tValues[0] + tValues[tValues.length - 1]) / 2 * axis[0];
+            const centerY = centroid[1] + (tValues[0] + tValues[tValues.length - 1]) / 2 * axis[1];
+            const centerZ = centroid[2] + (tValues[0] + tValues[tValues.length - 1]) / 2 * axis[2];
+            
+            fitResult = { radius, height, center: [centerX, centerY, centerZ], axis };
+            methodName = "Percentile-based PCA Cylinder";
+            formula = `1. Transform vertices by visual origin\n2. Compute PCA diagnostics\n3. elongation=${diagnostics.elongation.toFixed(2)}, roundness=${diagnostics.roundness.toFixed(2)}\n4. Use 95th percentile radius (robust)\n5. height = max(t) - min(t) along PCA axis`;
+          } else if (diagnostics.roundness > 1.5) {
+            // Case 3: Non-circular cross-section - use constrained axis
+            const sizeX = maxX - minX;
+            const sizeY = maxY - minY;
+            const sizeZ = maxZ - minZ;
+            
+            let axis: [number, number, number];
+            let height: number;
+            let centerX: number, centerY: number, centerZ: number;
+            
+            if (sizeX >= sizeY && sizeX >= sizeZ) {
+              axis = [1, 0, 0];
+              height = sizeX;
+            } else if (sizeY >= sizeX && sizeY >= sizeZ) {
+              axis = [0, 1, 0];
+              height = sizeY;
+            } else {
+              axis = [0, 0, 1];
+              height = sizeZ;
+            }
+            
+            centerX = (minX + maxX) / 2;
+            centerY = (minY + maxY) / 2;
+            centerZ = (minZ + maxZ) / 2;
+            
+            // Compute radius using 95th percentile
+            const radialDistances: number[] = [];
+            for (let i = 0; i < vertexCount; i++) {
+              const x = transformedVertices[i * 3] - centerX;
+              const y = transformedVertices[i * 3 + 1] - centerY;
+              const z = transformedVertices[i * 3 + 2] - centerZ;
+              
+              const t = x * axis[0] + y * axis[1] + z * axis[2];
+              const projX = t * axis[0];
+              const projY = t * axis[1];
+              const projZ = t * axis[2];
+              
+              const orthoX = x - projX;
+              const orthoY = y - projY;
+              const orthoZ = z - projZ;
+              const radius = Math.sqrt(orthoX * orthoX + orthoY * orthoY + orthoZ * orthoZ);
+              radialDistances.push(radius);
+            }
+            
+            radialDistances.sort((a, b) => a - b);
+            const radius = radialDistances[Math.floor(vertexCount * 0.95)];
+            
+            fitResult = { radius, height, center: [centerX, centerY, centerZ], axis };
+            methodName = "Constrained Axis Fit (Non-circular)";
+            const axisName = axis[0] === 1 ? "X" : axis[1] === 1 ? "Y" : "Z";
+            formula = `1. Transform vertices by visual origin\n2. roundness=${diagnostics.roundness.toFixed(2)} > 1.5 (non-circular)\n3. Use longest AABB dimension: ${axisName}-axis\n4. radius = 95th percentile distance to axis`;
+          } else {
+            // Case 2: Long with outliers - use percentile PCA (simplified, RANSAC would be better but complex)
+            const vertexCount = transformedVerticesArray.length / 3;
+            const axis = pca.axis;
+            const centroid = pca.centroid;
+            
+            const tValues: number[] = [];
+            for (let i = 0; i < vertexCount; i++) {
+              const x = transformedVerticesArray[i * 3] - centroid[0];
+              const y = transformedVerticesArray[i * 3 + 1] - centroid[1];
+              const z = transformedVerticesArray[i * 3 + 2] - centroid[2];
+              const t = x * axis[0] + y * axis[1] + z * axis[2];
+              tValues.push(t);
+            }
+            
+            tValues.sort((a, b) => a - b);
+            const height = tValues[tValues.length - 1] - tValues[0];
+            const radius = diagnostics.radialP95; // Use 95th percentile to ignore outliers
+            
+            const centerX = centroid[0] + (tValues[0] + tValues[tValues.length - 1]) / 2 * axis[0];
+            const centerY = centroid[1] + (tValues[0] + tValues[tValues.length - 1]) / 2 * axis[1];
+            const centerZ = centroid[2] + (tValues[0] + tValues[tValues.length - 1]) / 2 * axis[2];
+            
+            fitResult = { radius, height, center: [centerX, centerY, centerZ], axis };
+            methodName = "Percentile PCA (with Outliers)";
+            formula = `1. Transform vertices by visual origin\n2. elongation=${diagnostics.elongation.toFixed(2)} > 5, outlier_ratio=${diagnostics.outlierRatio.toFixed(2)}\n3. Use 95th percentile radius (robust to outliers)\n4. PCA axis with percentile filtering`;
+          }
+        } else {
+          // Case 4: Not strongly cylindrical - use constrained axis (longest dimension)
+          const sizeX = maxX - minX;
+          const sizeY = maxY - minY;
+          const sizeZ = maxZ - minZ;
+          
+          let axis: [number, number, number];
+          let height: number;
+          let centerX: number, centerY: number, centerZ: number;
+          
+          if (sizeX >= sizeY && sizeX >= sizeZ) {
+            axis = [1, 0, 0];
+            height = sizeX;
+          } else if (sizeY >= sizeX && sizeY >= sizeZ) {
+            axis = [0, 1, 0];
+            height = sizeY;
+          } else {
+            axis = [0, 0, 1];
+            height = sizeZ;
+          }
+          
+          centerX = (minX + maxX) / 2;
+          centerY = (minY + maxY) / 2;
+          centerZ = (minZ + maxZ) / 2;
+          
+          // Compute radius using 95th percentile
+          const radialDistances: number[] = [];
+          for (let i = 0; i < vertexCount; i++) {
+            const x = transformedVertices[i * 3] - centerX;
+            const y = transformedVertices[i * 3 + 1] - centerY;
+            const z = transformedVertices[i * 3 + 2] - centerZ;
+            
+            const t = x * axis[0] + y * axis[1] + z * axis[2];
+            const projX = t * axis[0];
+            const projY = t * axis[1];
+            const projZ = t * axis[2];
+            
+            const orthoX = x - projX;
+            const orthoY = y - projY;
+            const orthoZ = z - projZ;
+            const radius = Math.sqrt(orthoX * orthoX + orthoY * orthoY + orthoZ * orthoZ);
+            radialDistances.push(radius);
+          }
+          
+          radialDistances.sort((a, b) => a - b);
+          const radius = radialDistances[Math.floor(vertexCount * 0.95)];
+          
+          fitResult = { radius, height, center: [centerX, centerY, centerZ], axis };
+          methodName = "Constrained Axis (Low Elongation)";
+          const axisName = axis[0] === 1 ? "X" : axis[1] === 1 ? "Y" : "Z";
+          formula = `1. Transform vertices by visual origin\n2. elongation=${diagnostics.elongation.toFixed(2)} < 5 (not strongly cylindrical)\n3. Use longest AABB dimension: ${axisName}-axis\n4. radius = 95th percentile distance to axis`;
+        }
+        
+        // Compute rotation to align URDF Z-axis with chosen axis
+        const rotation = computeRotationToAxis(fitResult.axis);
 
         newGeometryType = "cylinder";
         newGeometryParams = {
-          radius: String(maxRadius),
-          length: String(height),
+          radius: String(fitResult.radius),
+          length: String(fitResult.height),
         };
+        calculationMethod = methodName;
+        calculationFormula = formula;
         newOrigin = {
-          xyz: centroid,
+          xyz: fitResult.center,
           rpy: rotation.rpy,
         };
 
@@ -834,6 +1222,15 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
       setGeometryParams(newGeometryParams);
       setOrigin(newOrigin);
       
+      // Store calculation info for display
+      const meshFilename = selectedMeshInfo.filename.split("/").pop() || selectedMeshInfo.filename;
+      setCalculationInfo({
+        meshIndex: meshIndex,
+        meshFilename: meshFilename,
+        method: calculationMethod,
+        formula: calculationFormula,
+      });
+      
       const newContent = updateCollisionInLink(
         urdfContent!,
         linkName,
@@ -843,7 +1240,10 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
         newOrigin
       );
       onUrdfChange(newContent);
-      toast.success(`${type === "capsule" ? "Capsule" : type.charAt(0).toUpperCase() + type.slice(1)} auto-filled from mesh`);
+      
+      setIsComputing(false);
+      const meshLabel = visualMeshInfo.length > 1 ? ` (from Visual Mesh ${meshIndex + 1})` : "";
+      toast.success(`Computed ${type} collision geometry${meshLabel}`);
     } catch (error) {
       console.error("Error auto-filling collision:", error);
       toast.error("Failed to auto-fill collision");
@@ -854,6 +1254,8 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
 
   const handleParamChange = (key: string, value: string) => {
     setGeometryParams({ ...geometryParams, [key]: value });
+    // Clear calculation info when manually changing parameters
+    setCalculationInfo(null);
     setTimeout(updateURDF, 0);
   };
 
@@ -861,6 +1263,8 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
     const newOrigin = { ...origin };
     newOrigin[field][index] = value;
     setOrigin(newOrigin);
+    // Clear calculation info when manually changing origin
+    setCalculationInfo(null);
     setTimeout(updateURDF, 0);
   };
 
@@ -914,59 +1318,35 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
           </Select>
         </BlenderPropertyRow>
 
-        {/* Always show calculate buttons for current geometry type when visual mesh is available */}
-        {visualMeshInfo && geometryType === "box" && (
-          <div className="mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-[10px] w-full"
-              onClick={() => handleAutoFill("box")}
-              disabled={isComputing}
-            >
-              <Calculator className="w-3 h-3 mr-1" />
-              Calculate from Mesh
-            </Button>
+        {/* Calculation Info - Blender style transparency */}
+        {calculationInfo && (
+          <div className="px-1 py-1.5 bg-muted/30 rounded-sm border border-border/50">
+            <div className="flex items-start gap-1.5 mb-1">
+              <Info className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-semibold text-foreground mb-0.5">
+                  Calculated from Mesh
+                </div>
+                <div className="text-[9px] text-muted-foreground">
+                  {visualMeshInfo && visualMeshInfo.length > 1 
+                    ? `Visual Mesh ${calculationInfo.meshIndex + 1}: ${calculationInfo.meshFilename}`
+                    : calculationInfo.meshFilename}
+                </div>
+              </div>
+            </div>
+            <div className="px-3.5 space-y-0.5">
+              <div className="text-[9px] font-medium text-foreground/90">
+                Method: {calculationInfo.method}
+              </div>
+              {calculationInfo.formula && (
+                <div className="text-[8px] text-muted-foreground font-mono bg-background/50 px-1.5 py-1 rounded border border-border/30 whitespace-pre-wrap">
+                  {calculationInfo.formula}
+                </div>
+              )}
+            </div>
           </div>
         )}
-        {visualMeshInfo && geometryType === "sphere" && (
-          <div className="mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-[10px] w-full"
-              onClick={() => handleAutoFill("sphere")}
-              disabled={isComputing}
-            >
-              <Calculator className="w-3 h-3 mr-1" />
-              Calculate from Mesh
-            </Button>
-          </div>
-        )}
-        {visualMeshInfo && geometryType === "cylinder" && (
-          <div className="mb-1 space-y-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-[10px] w-full"
-              onClick={() => handleAutoFill("cylinder")}
-              disabled={isComputing}
-            >
-              <Calculator className="w-3 h-3 mr-1" />
-              Calculate from Mesh (Cylinder)
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-[10px] w-full"
-              onClick={() => handleAutoFill("capsule")}
-              disabled={isComputing}
-            >
-              <Calculator className="w-3 h-3 mr-1" />
-              Calculate from Mesh (Capsule)
-            </Button>
-          </div>
-        )}
+
 
         {geometryType === "box" && (
           <BlenderPropertyRow label="Size">
@@ -1030,6 +1410,35 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
 
         {geometryType === "mesh" && (
           <>
+            {/* Visual Mesh Selector - only show if multiple visual meshes exist */}
+            {visualMeshInfo && visualMeshInfo.length > 1 && (
+              <BlenderPropertyRow label="Visual Mesh">
+                <Select
+                  value={String(selectedVisualMeshIndex)}
+                  onValueChange={(value) => {
+                    const newIndex = parseInt(value, 10);
+                    setSelectedVisualMeshIndex(newIndex);
+                    // Update collision mesh to use the selected visual mesh
+                    const selectedMesh = visualMeshInfo[newIndex];
+                    handleParamChange("filename", selectedMesh.filename);
+                    handleParamChange("scale", selectedMesh.scale);
+                    setOrigin(selectedMesh.origin);
+                    updateURDF();
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visualMeshInfo.map((mesh, idx) => (
+                      <SelectItem key={idx} value={String(idx)} className="text-xs">
+                        Visual Mesh {idx + 1} {mesh.filename ? `(${mesh.filename.split("/").pop()})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </BlenderPropertyRow>
+            )}
             <BlenderPropertyRow label="Filename">
               <Input
                 value={geometryParams.filename || ""}

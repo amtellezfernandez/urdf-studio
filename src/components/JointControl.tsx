@@ -33,7 +33,6 @@ interface JointControlProps {
   jointAxis?: JointAxisInfo;
   currentValue: number;
   onValueChange: (value: number) => void;
-  onTypeChange: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
   onNameChange?: (oldName: string, newName: string) => void;
   onAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
@@ -46,15 +45,6 @@ interface JointControlProps {
   isHighlighted?: boolean;
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
 }
-
-const JOINT_TYPES = [
-  "continuous",
-  "revolute",
-  "prismatic",
-  "fixed",
-  "planar",
-  "floating",
-] as const;
 
 // Helper function to create axis preset icon
 const createAxisIcon = (axis: [number, number, number]) => {
@@ -175,7 +165,6 @@ export const JointControl = ({
   jointAxis,
   currentValue,
   onValueChange,
-  onTypeChange,
   onNameChange,
   onAxisChange,
   onResetAxis,
@@ -777,55 +766,6 @@ export const JointControl = ({
             </div>
           </BlenderPropertyRow>
 
-          {/* Joint Type */}
-          <BlenderPropertyRow label="Type">
-            <Select
-              value={currentType}
-              onValueChange={(newType) => {
-                const newTypeNeedsLimits = newType === "revolute" || newType === "prismatic";
-                const currentNeedsLimits = currentType === "revolute" || currentType === "prismatic";
-                
-                // If switching to a type that needs limits
-                if (newTypeNeedsLimits) {
-                  // Try to preserve existing limits if available
-                  let lower: number | undefined;
-                  let upper: number | undefined;
-                  
-                  if (localLowerLimit && !isNaN(parseFloat(localLowerLimit))) {
-                    lower = parseFloat(localLowerLimit);
-                  } else if (currentNeedsLimits && jointInfo?.lower !== null && jointInfo?.lower !== undefined) {
-                    // Fall back to jointInfo if local state is empty but jointInfo has limits
-                    lower = jointInfo.lower;
-                  }
-                  
-                  if (localUpperLimit && !isNaN(parseFloat(localUpperLimit))) {
-                    upper = parseFloat(localUpperLimit);
-                  } else if (currentNeedsLimits && jointInfo?.upper !== null && jointInfo?.upper !== undefined) {
-                    // Fall back to jointInfo if local state is empty but jointInfo has limits
-                    upper = jointInfo.upper;
-                  }
-                  
-                  // If no limits found, let the backend use defaults (pass undefined)
-                  onTypeChange(newType, lower, upper);
-                } else {
-                  // Fixed or continuous - no limits needed
-                  onTypeChange(newType, undefined, undefined);
-                }
-              }}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border">
-                {JOINT_TYPES.map((type) => (
-                  <SelectItem key={type} value={type} className="text-xs">
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </BlenderPropertyRow>
-          
           {/* Limits for Revolute/Prismatic - Single line */}
           {needsLimits && (
             <BlenderPropertyRow label={`Angle limits (${angleUnit === "deg" ? "deg" : "rad"})`}>
@@ -839,9 +779,6 @@ export const JointControl = ({
                     onValueChange={(val) => {
                       const radValue = angleUnit === "deg" ? val * (Math.PI / 180) : val;
                       setLocalLowerLimit(String(radValue));
-                      const lower = radValue;
-                      const upper = localUpperLimit ? parseFloat(localUpperLimit) : undefined;
-                      onTypeChange(currentType, lower, upper);
                     }}
                     step={angleUnit === "deg" ? 1 : 0.01}
                     compact
@@ -858,9 +795,6 @@ export const JointControl = ({
                     onValueChange={(val) => {
                       const radValue = angleUnit === "deg" ? val * (Math.PI / 180) : val;
                       setLocalUpperLimit(String(radValue));
-                      const lower = localLowerLimit ? parseFloat(localLowerLimit) : undefined;
-                      const upper = radValue;
-                      onTypeChange(currentType, lower, upper);
                     }}
                     step={angleUnit === "deg" ? 1 : 0.01}
                     compact

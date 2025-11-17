@@ -79,6 +79,296 @@ export async function computeMeshBounds(meshFile: Blob, scale: string = "1 1 1")
 }
 
 /**
+ * Combines multiple mesh bounds into a single bounding box
+ * This handles links with multiple visual meshes
+ */
+export function combineMeshBounds(boundsArray: MeshBounds[]): MeshBounds | null {
+  if (boundsArray.length === 0) return null;
+  if (boundsArray.length === 1) return boundsArray[0];
+
+  // Find overall min/max across all meshes
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  const allVertices: number[] = [];
+
+  for (const bounds of boundsArray) {
+    minX = Math.min(minX, bounds.min[0]);
+    minY = Math.min(minY, bounds.min[1]);
+    minZ = Math.min(minZ, bounds.min[2]);
+    maxX = Math.max(maxX, bounds.max[0]);
+    maxY = Math.max(maxY, bounds.max[1]);
+    maxZ = Math.max(maxZ, bounds.max[2]);
+    
+    // Collect all vertices for PCA calculation
+    for (let i = 0; i < bounds.vertices.length; i++) {
+      allVertices.push(bounds.vertices[i]);
+    }
+  }
+
+  return {
+    min: [minX, minY, minZ],
+    max: [maxX, maxY, maxZ],
+    size: [maxX - minX, maxY - minY, maxZ - minZ],
+    center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
+    vertices: new Float32Array(allVertices),
+  };
+}
+
+/**
+ * Compute cylinder diagnostics from mesh vertices
+ */
+export interface CylinderDiagnostics {
+  elongation: number;      // λ₁ / λ₂
+  roundness: number;        // λ₂ / λ₃
+  outlierRatio: number;     // r_max / r_p95
+  radialP50: number;        // median radial distance
+  radialP95: number;        // 95th percentile radial distance
+  radialMax: number;        // max radial distance
+  crossSectionVariation: number; // r_p95 / r_p50
+  eigenvalues: [number, number, number];
+}
+
+/**
+ * Compute sphere diagnostics from mesh vertices
+ */
+export interface SphereDiagnostics {
+  elongation: number;      // λ₁ / λ₂
+  flatness: number;        // λ₂ / λ₃
+  isIsotropic: boolean;     // elongation < 2 and flatness < 2
+  isElongated: boolean;    // elongation >> 1
+  isFlat: boolean;         // flatness >> 1
+  radialP50: number;       // median radial distance
+  radialP95: number;       // 95th percentile radial distance
+  radialMax: number;       // max radial distance
+  outlierRatio: number;    // r_max / r_p95
+  eigenvalues: [number, number, number];
+}
+
+/**
+ * Compute cylinder diagnostics for automatic method selection
+ */
+export function computeCylinderDiagnostics(
+  vertices: Float32Array,
+  pca: PCAResult
+): CylinderDiagnostics {
+  const vertexCount = vertices.length / 3;
+  const axis = pca.axis;
+  const centroid = pca.centroid;
+  const eigenvalues = pca.eigenvalues;
+  
+  // Compute elongation and roundness
+  const lambda1 = eigenvalues[0];
+  const lambda2 = eigenvalues[1];
+  const lambda3 = eigenvalues[2];
+  const elongation = lambda1 / Math.max(lambda2, 1e-10);
+  const roundness = lambda2 / Math.max(lambda3, 1e-10);
+  
+  // Compute radial distances to PCA axis
+  const radialDistances: number[] = [];
+  
+  for (let i = 0; i < vertexCount; i++) {
+    const x = vertices[i * 3] - centroid[0];
+    const y = vertices[i * 3 + 1] - centroid[1];
+    const z = vertices[i * 3 + 2] - centroid[2];
+    
+    // Project onto axis
+    const t = x * axis[0] + y * axis[1] + z * axis[2];
+    const projX = t * axis[0];
+    const projY = t * axis[1];
+    const projZ = t * axis[2];
+    
+    // Orthogonal distance
+    const orthoX = x - projX;
+    const orthoY = y - projY;
+    const orthoZ = z - projZ;
+    const radius = Math.sqrt(orthoX * orthoX + orthoY * orthoY + orthoZ * orthoZ);
+    radialDistances.push(radius);
+  }
+  
+  // Sort for percentiles
+  radialDistances.sort((a, b) => a - b);
+  const radialP50 = radialDistances[Math.floor(vertexCount * 0.5)];
+  const radialP95 = radialDistances[Math.floor(vertexCount * 0.95)];
+  const radialMax = radialDistances[vertexCount - 1];
+  const outlierRatio = radialMax / Math.max(radialP95, 1e-10);
+  const crossSectionVariation = radialP95 / Math.max(radialP50, 1e-10);
+  
+  return {
+    elongation,
+    roundness,
+    outlierRatio,
+    radialP50,
+    radialP95,
+    radialMax,
+    crossSectionVariation,
+    eigenvalues: [lambda1, lambda2, lambda3],
+  };
+}
+
+/**
+ * Compute sphere diagnostics for automatic method selection
+ */
+export function computeSphereDiagnostics(
+  vertices: Float32Array,
+  pca: PCAResult
+): SphereDiagnostics {
+  const vertexCount = vertices.length / 3;
+  const centroid = pca.centroid;
+  const eigenvalues = pca.eigenvalues;
+  
+  // Compute elongation and flatness
+  const lambda1 = eigenvalues[0];
+  const lambda2 = eigenvalues[1];
+  const lambda3 = eigenvalues[2];
+  const elongation = lambda1 / Math.max(lambda2, 1e-10);
+  const flatness = lambda2 / Math.max(lambda3, 1e-10);
+  
+  // Decision rules
+  const isIsotropic = elongation < 2 && flatness < 2;
+  const isElongated = elongation > 3; // Significantly elongated
+  const isFlat = flatness > 3; // Significantly flat/slab-like
+  
+  // Compute radial distances from centroid
+  const radialDistances: number[] = [];
+  
+  for (let i = 0; i < vertexCount; i++) {
+    const x = vertices[i * 3] - centroid[0];
+    const y = vertices[i * 3 + 1] - centroid[1];
+    const z = vertices[i * 3 + 2] - centroid[2];
+    const radius = Math.sqrt(x * x + y * y + z * z);
+    radialDistances.push(radius);
+  }
+  
+  // Sort for percentiles
+  radialDistances.sort((a, b) => a - b);
+  const radialP50 = radialDistances[Math.floor(vertexCount * 0.5)];
+  const radialP95 = radialDistances[Math.floor(vertexCount * 0.95)];
+  const radialMax = radialDistances[vertexCount - 1];
+  const outlierRatio = radialMax / Math.max(radialP95, 1e-10);
+  
+  return {
+    elongation,
+    flatness,
+    isIsotropic,
+    isElongated,
+    isFlat,
+    radialP50,
+    radialP95,
+    radialMax,
+    outlierRatio,
+    eigenvalues: [lambda1, lambda2, lambda3],
+  };
+}
+
+/**
+ * Fit cylinder using percentile-based PCA (for clean cylinders)
+ */
+export function fitCylinderPercentilePCA(
+  vertices: Float32Array,
+  pca: PCAResult,
+  diagnostics: CylinderDiagnostics
+): { radius: number; height: number; center: [number, number, number]; axis: [number, number, number] } {
+  const vertexCount = vertices.length / 3;
+  const axis = pca.axis;
+  const centroid = pca.centroid;
+  
+  // Project vertices onto axis
+  const tValues: number[] = [];
+  for (let i = 0; i < vertexCount; i++) {
+    const x = vertices[i * 3] - centroid[0];
+    const y = vertices[i * 3 + 1] - centroid[1];
+    const z = vertices[i * 3 + 2] - centroid[2];
+    const t = x * axis[0] + y * axis[1] + z * axis[2];
+    tValues.push(t);
+  }
+  
+  tValues.sort((a, b) => a - b);
+  const minT = tValues[0];
+  const maxT = tValues[vertexCount - 1];
+  const height = maxT - minT;
+  
+  // Use 95th percentile for radius (robust to outliers)
+  const radius = diagnostics.radialP95;
+  
+  // Center at midpoint along axis
+  const centerX = centroid[0] + (minT + maxT) / 2 * axis[0];
+  const centerY = centroid[1] + (minT + maxT) / 2 * axis[1];
+  const centerZ = centroid[2] + (minT + maxT) / 2 * axis[2];
+  
+  return {
+    radius,
+    height,
+    center: [centerX, centerY, centerZ],
+    axis,
+  };
+}
+
+/**
+ * Fit cylinder using constrained axis (for non-circular cross-sections)
+ * Uses longest AABB dimension as axis
+ */
+export function fitCylinderConstrainedAxis(
+  vertices: Float32Array,
+  minX: number, maxX: number,
+  minY: number, maxY: number,
+  minZ: number, maxZ: number
+): { radius: number; height: number; center: [number, number, number]; axis: [number, number, number] } {
+  const sizeX = maxX - minX;
+  const sizeY = maxY - minY;
+  const sizeZ = maxZ - minZ;
+  
+  let axis: [number, number, number];
+  let height: number;
+  let centerX: number, centerY: number, centerZ: number;
+  
+  if (sizeX >= sizeY && sizeX >= sizeZ) {
+    axis = [1, 0, 0];
+    height = sizeX;
+    centerX = (minX + maxX) / 2;
+    centerY = (minY + maxY) / 2;
+    centerZ = (minZ + maxZ) / 2;
+  } else if (sizeY >= sizeX && sizeY >= sizeZ) {
+    axis = [0, 1, 0];
+    height = sizeY;
+    centerX = (minX + maxX) / 2;
+    centerY = (minY + maxY) / 2;
+    centerZ = (minZ + maxZ) / 2;
+  } else {
+    axis = [0, 0, 1];
+    height = sizeZ;
+    centerX = (minX + maxX) / 2;
+    centerY = (minY + maxY) / 2;
+    centerZ = (minZ + maxZ) / 2;
+  }
+  
+  // Compute radius using 95th percentile
+  const vertexCount = vertices.length / 3;
+  const radialDistances: number[] = [];
+  
+  for (let i = 0; i < vertexCount; i++) {
+    const x = vertices[i * 3] - centerX;
+    const y = vertices[i * 3 + 1] - centerY;
+    const z = vertices[i * 3 + 2] - centerZ;
+    
+    const t = x * axis[0] + y * axis[1] + z * axis[2];
+    const projX = t * axis[0];
+    const projY = t * axis[1];
+    const projZ = t * axis[2];
+    
+    const orthoX = x - projX;
+    const orthoY = y - projY;
+    const orthoZ = z - projZ;
+    const radius = Math.sqrt(orthoX * orthoX + orthoY * orthoY + orthoZ * orthoZ);
+    radialDistances.push(radius);
+  }
+  
+  radialDistances.sort((a, b) => a - b);
+  const radius = radialDistances[Math.floor(vertexCount * 0.95)];
+  
+  return { radius, height, center: [centerX, centerY, centerZ], axis };
+}
+
+/**
  * Computes PCA (Principal Component Analysis) for mesh vertices
  */
 export function computePCA(vertices: Float32Array): PCAResult | null {
