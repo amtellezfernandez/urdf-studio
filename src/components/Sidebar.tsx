@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 
 export const DEFAULT_SIDEBAR_WIDTH = 420;
 export const SIDEBAR_MIN_WIDTH = 320;
@@ -980,6 +981,22 @@ export const Sidebar = ({
   const playbackTimeoutRef = useRef<number | null>(null);
   const isPlayingAllRef = useRef<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
+  const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
+  const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
+
+  // Dispatch custom event when frame changes to sync with EpisodeViewer3DModal
+  useEffect(() => {
+    if (currentFrame !== undefined && currentPlayingEpisodeIndex !== null) {
+      const event = new CustomEvent('viewer3d:frameUpdate', {
+        detail: {
+          frame: currentFrame,
+          episodeIndex: currentPlayingEpisodeIndex,
+          totalFrames: totalFrames,
+        },
+      });
+      window.dispatchEvent(event);
+    }
+  }, [currentFrame, currentPlayingEpisodeIndex, totalFrames]);
 
   const handleJointChange = (jointName: string, value: number) => {
     const limited = previewJointValue(jointName, value);
@@ -3742,6 +3759,18 @@ export const Sidebar = ({
                                 size="sm"
                                 variant="ghost"
                                 className="h-5 w-5 p-0"
+                                onClick={() => {
+                                  setViewerModalEpisode(episode);
+                                  setIsViewerModalOpen(true);
+                                }}
+                                title="View Joint Movements"
+                              >
+                                <Eye className="w-2.5 h-2.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0"
                                 onClick={() => exportEpisodeToDataFile(episode)}
                                 title="Export"
                               >
@@ -3804,6 +3833,15 @@ export const Sidebar = ({
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Episode Viewer Modal */}
+      <EpisodeViewer3DModal
+        episode={viewerModalEpisode}
+        open={isViewerModalOpen}
+        onOpenChange={setIsViewerModalOpen}
+        currentEpisodeIndex={currentPlayingEpisodeIndex}
+        allEpisodes={episodes}
+      />
     </div>
   );
 };
