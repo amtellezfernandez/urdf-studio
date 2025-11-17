@@ -9,12 +9,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { GitCompare, Copy, Download, Edit2, Save, X, CheckCircle2, AlertCircle, Info, Github } from "lucide-react";
+import { GitCompare, Copy, Download, Edit2, Save, X, CheckCircle2, AlertCircle, Info, Github, ListOrdered, Code2, Compass, FolderSync, Package } from "lucide-react";
 import { toast } from "sonner";
 import { URDFSyntaxHighlighter } from "./URDFSyntaxHighlighter";
 import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { cn } from "@/lib/utils";
 import { SaveToGitHubDialog } from "@/components/SaveToGitHubDialog";
+import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
+import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
+import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
+import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
+import { ExportDialog } from "@/components/ExportDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface URDFComparisonProps {
   originalUrdf: string;
@@ -42,6 +52,7 @@ export const URDFComparison = ({
   const [editedVizUrdf, setEditedVizUrdf] = useState(vizUrdf);
   const [showParseInfo, setShowParseInfo] = useState(true);
   const [showSaveToGitHub, setShowSaveToGitHub] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Parse URDF content in real-time
   const parseInfo = useMemo(() => {
@@ -198,6 +209,81 @@ export const URDFComparison = ({
     setIsEditing(false);
   };
 
+  // URDF Utility Handlers
+  const handleCanonicalOrder = () => {
+    const currentContent = isEditing ? editedVizUrdf : vizUrdf;
+    const result = canonicalOrderURDF(currentContent);
+    if (isEditing) {
+      setEditedVizUrdf(result);
+    } else {
+      onVizUrdfChange?.(result);
+    }
+    toast.success("URDF elements reordered to canonical format");
+  };
+
+  const handlePrettyPrint = () => {
+    const currentContent = isEditing ? editedVizUrdf : vizUrdf;
+    const result = prettyPrintURDF(currentContent);
+    if (isEditing) {
+      setEditedVizUrdf(result);
+    } else {
+      onVizUrdfChange?.(result);
+    }
+    toast.success("URDF formatted with consistent indentation");
+  };
+
+  const handleNormalizeAxes = () => {
+    const currentContent = isEditing ? editedVizUrdf : vizUrdf;
+    const result = normalizeJointAxes(currentContent);
+    if (isEditing) {
+      setEditedVizUrdf(result.urdfContent);
+    } else {
+      onVizUrdfChange?.(result.urdfContent);
+    }
+
+    if (result.errors.length > 0) {
+      toast.warning(`Normalized axes with ${result.errors.length} error(s) fixed`);
+      result.errors.forEach(err => {
+        console.warn(`Joint "${err.jointName}" (${err.jointType}): ${err.issue}`);
+      });
+    } else if (result.corrections.length > 0) {
+      toast.success(`Normalized ${result.corrections.length} joint axis(es)`);
+      result.corrections.forEach(correction => {
+        console.info(`Joint "${correction.jointName}": ${correction.reason}`);
+      });
+    } else {
+      toast.info("All joint axes are already normalized");
+    }
+  };
+
+  const handleFixMeshPaths = () => {
+    const currentContent = isEditing ? editedVizUrdf : vizUrdf;
+    const result = fixMeshPaths(currentContent);
+    if (isEditing) {
+      setEditedVizUrdf(result.urdfContent);
+    } else {
+      onVizUrdfChange?.(result.urdfContent);
+    }
+
+    if (result.corrections.length > 0) {
+      toast.success(`Fixed ${result.corrections.length} mesh path(s) using package "${result.packageName}"`);
+      result.corrections.forEach(correction => {
+        console.info(`${correction.linkName} (${correction.element}): ${correction.reason}`);
+        console.info(`  ${correction.original} → ${correction.corrected}`);
+      });
+    } else {
+      toast.info("All mesh paths are already correct");
+    }
+  };
+
+  // Extract robot name from URDF for export
+  const robotName = useMemo(() => {
+    const parsed = parseURDF(vizUrdf);
+    if (!parsed.isValid) return "robot";
+    const robot = parsed.document.querySelector("robot");
+    return robot?.getAttribute("name") || "robot";
+  }, [vizUrdf]);
+
   const formattedOriginal = formatXML(originalUrdf);
   const formattedViz = formatXML(isEditing ? editedVizUrdf : vizUrdf);
 
@@ -213,6 +299,123 @@ export const URDFComparison = ({
             View and edit the URDF files. Compare original with modified visualization URDF.
           </DialogDescription>
         </DialogHeader>
+
+        {/* URDF Utilities Toolbar */}
+        <div className="flex items-center gap-2 p-2 bg-muted/20 rounded-md border border-border/30">
+          <span className="text-xs font-medium text-muted-foreground mr-2">Utilities:</span>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleCanonicalOrder}
+              >
+                <ListOrdered className="w-3 h-3 mr-1.5" />
+                Canonical Order
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="font-medium">Reorder URDF Tags</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Reorders elements to standard ROS format: link → joint → transmission.
+                Within links: visual → collision → inertial.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handlePrettyPrint}
+              >
+                <Code2 className="w-3 h-3 mr-1.5" />
+                Pretty Print
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="font-medium">Format Indentation</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Cleans up XML formatting with consistent 2-space indentation for better readability.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleNormalizeAxes}
+              >
+                <Compass className="w-3 h-3 mr-1.5" />
+                Normalize Axes
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="font-medium">Fix Joint Axis Vectors</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Normalizes non-unit vectors, fixes zero vectors, and cleans up floating-point precision issues.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleFixMeshPaths}
+              >
+                <FolderSync className="w-3 h-3 mr-1.5" />
+                Fix Mesh Paths
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="font-medium">Normalize Mesh Paths</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Fixes absolute paths, Windows backslashes, and normalizes to package:// format.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <div className="border-l border-border/50 h-5 mx-1" />
+
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setShowExportDialog(true)}
+              >
+                <Package className="w-3 h-3 mr-1.5" />
+                Export
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="font-medium">Export to Xacro / MJCF</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Convert URDF to Xacro or MuJoCo MJCF format. Download or push to GitHub.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Export Dialog */}
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          urdfContent={isEditing ? editedVizUrdf : vizUrdf}
+          meshFiles={meshFiles}
+          githubToken={githubToken}
+          robotName={robotName}
+        />
 
         {/* Parsing Status */}
         {showParseInfo && (

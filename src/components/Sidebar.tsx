@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, LogIn, Send } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -818,6 +818,7 @@ export const Sidebar = ({
   });
   const [isUploadingToHF, setIsUploadingToHF] = useState(false);
   const [isImportingFromHF, setIsImportingFromHF] = useState(false);
+  const [isImportingFromHFDataset, setIsImportingFromHFDataset] = useState(false);
   const [isExportingDataset, setIsExportingDataset] = useState(false);
 
   useEffect(() => {
@@ -2175,6 +2176,632 @@ export const Sidebar = ({
     robotBaseName,
   ]);
 
+  const loadEpisodesFromHuggingFaceDataset = useCallback(async () => {
+    if (isImportingFromHFDataset) return;
+
+    setIsImportingFromHFDataset(true);
+    try {
+      // Prompt for dataset path
+      const datasetPath = window
+        .prompt(
+          "Enter the Hugging Face dataset path (e.g., amtellezfernandez/robot-learning-tutorial-data).\nYou can paste a full URL.",
+          ""
+        )
+        ?.trim();
+
+      if (!datasetPath) {
+        toast.info("Cancelled loading from Hugging Face dataset");
+        return;
+      }
+
+      // Parse the dataset path (handle full URLs)
+      let parsedPath = datasetPath;
+      if (datasetPath.includes("huggingface.co/datasets/")) {
+        const match = datasetPath.match(/huggingface\.co\/datasets\/([^/]+\/[^/\s?#]+)/);
+        if (match) {
+          parsedPath = match[1];
+        }
+      }
+
+      // Validate format
+      if (!parsedPath.includes("/") || parsedPath.split("/").length !== 2) {
+        toast.error("Dataset path must be in format: owner/dataset-name");
+        return;
+      }
+
+      toast.info(`Fetching dataset info from ${parsedPath}...`);
+
+      const headers: Record<string, string> = { Accept: "application/json" };
+      if (hfToken) {
+        headers.Authorization = `Bearer ${hfToken}`;
+      }
+
+      // Fetch the repository file tree to find parquet files
+      const treeUrl = `https://huggingface.co/api/datasets/${parsedPath}/tree/main`;
+      const treeResponse = await fetch(treeUrl, { headers });
+
+      if (!treeResponse.ok) {
+        if (treeResponse.status === 404) {
+          toast.error(`Dataset ${parsedPath} not found or not accessible`);
+        } else if (treeResponse.status === 401 || treeResponse.status === 403) {
+          toast.error("Dataset requires authentication. Please set your HF token first.");
+        } else {
+          const errorText = await treeResponse.text();
+          toast.error(errorText || "Failed to fetch dataset info");
+        }
+        return;
+      }
+
+      const treeItems = await treeResponse.json();
+
+      // Find all parquet files in data/ directory and URDF/mesh files in the dataset
+      // We need to recursively explore the entire dataset structure
+      const parquetUrls: string[] = [];
+      const urdfUrls: Array<{ url: string; path: string }> = [];
+      const meshUrls: Array<{ url: string; path: string }> = [];
+      const foldersToExplore: string[] = [];
+      const exploredPaths = new Set<string>();
+
+      // Start by exploring root level for URDF/mesh files
+      foldersToExplore.push("");
+
+      // First pass: find data folder for parquet files
+      for (const item of treeItems) {
+        if (item.type === "directory" && item.path === "data") {
+          foldersToExplore.push("data");
+        }
+      }
+
+      // Recursively explore all folders
+      while (foldersToExplore.length > 0) {
+        const folder = foldersToExplore.shift()!;
+        if (exploredPaths.has(folder)) continue;
+        exploredPaths.add(folder);
+
+        const folderUrl = folder 
+          ? `https://huggingface.co/api/datasets/${parsedPath}/tree/main/${folder}`
+          : `https://huggingface.co/api/datasets/${parsedPath}/tree/main`;
+        const folderResponse = await fetch(folderUrl, { headers });
+
+        if (!folderResponse.ok) {
+          console.warn(`Failed to fetch folder ${folder}: ${folderResponse.status} ${folderResponse.statusText}`);
+          continue;
+        }
+
+        const folderItems = await folderResponse.json();
+        // Check if we're currently exploring within the data folder
+        const isInDataFolder = folder === "data" || folder.startsWith("data/");
+        
+        for (const item of folderItems) {
+          // HuggingFace API returns absolute paths from root, but handle both cases
+          // If path doesn't contain "/" and we're in a folder, construct full path
+          const fullPath = (!item.path.includes("/") && folder) 
+            ? `${folder}/${item.path}`
+            : item.path;
+          
+          if (item.type === "directory") {
+            foldersToExplore.push(fullPath);
+          } else if (item.type === "file") {
+            const itemPath = fullPath.toLowerCase();
+            if (itemPath.endsWith(".parquet")) {
+              // Build the download URL for the parquet file (only from data/ folder)
+              // Check if file is in data folder by checking current folder or file path
+              if (isInDataFolder || fullPath.startsWith("data/")) {
+                const downloadUrl = `https://huggingface.co/datasets/${parsedPath}/resolve/main/${fullPath}`;
+                parquetUrls.push(downloadUrl);
+                console.log(`Found parquet file: ${fullPath}`);
+              }
+            } else if (itemPath.endsWith(".urdf")) {
+              // Found URDF file
+              const downloadUrl = `https://huggingface.co/datasets/${parsedPath}/resolve/main/${fullPath}`;
+              urdfUrls.push({ url: downloadUrl, path: fullPath });
+            } else if (itemPath.endsWith(".stl")) {
+              // Found STL mesh file
+              const downloadUrl = `https://huggingface.co/datasets/${parsedPath}/resolve/main/${fullPath}`;
+              meshUrls.push({ url: downloadUrl, path: fullPath });
+            }
+          }
+        }
+      }
+
+      // Load URDF and mesh files if found
+      if (urdfUrls.length > 0) {
+        toast.info(`Found ${urdfUrls.length} URDF file(s). Loading...`);
+        
+        // Use the first URDF file found (prioritize root level or common locations)
+        const urdfToLoad = urdfUrls.sort((a, b) => {
+          // Prioritize files in root or common locations
+          const aDepth = a.path.split("/").length;
+          const bDepth = b.path.split("/").length;
+          if (aDepth !== bDepth) return aDepth - bDepth;
+          // Prefer files named "robot.urdf" or similar
+          const aIsRobot = a.path.toLowerCase().includes("robot");
+          const bIsRobot = b.path.toLowerCase().includes("robot");
+          if (aIsRobot && !bIsRobot) return -1;
+          if (!aIsRobot && bIsRobot) return 1;
+          return 0;
+        })[0];
+
+        try {
+          const urdfResponse = await fetch(urdfToLoad.url, { headers });
+          if (urdfResponse.ok) {
+            const urdfContent = await urdfResponse.text();
+            
+            // Update URDF content
+            if (onVizUrdfChange) {
+              onVizUrdfChange(urdfContent);
+            }
+
+            // Extract mesh references from URDF
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+            const meshReferences = new Set<string>();
+            const meshElements = xmlDoc.querySelectorAll("mesh");
+            meshElements.forEach((mesh) => {
+              const filename = mesh.getAttribute("filename");
+              if (filename) {
+                // Normalize mesh reference
+                const normalized = filename
+                  .replace(/^package:\/\/[^/]+\//, "")
+                  .replace(/^file:\/\//, "")
+                  .trim();
+                if (normalized) {
+                  meshReferences.add(normalized);
+                }
+              }
+            });
+
+            // Load mesh files that match URDF references
+            if (meshReferences.size > 0 && meshUrls.length > 0) {
+              const urdfDir = urdfToLoad.path.substring(0, urdfToLoad.path.lastIndexOf("/")) || "";
+              const loadedMeshes: Record<string, Blob> = {};
+
+              // Helper to normalize path
+              const normalizePath = (path: string): string => {
+                return path.replace(/^\/+|\/+$/g, "").replace(/\\/g, "/");
+              };
+
+              // Helper to resolve mesh path relative to URDF
+              const resolveMeshPath = (urdfDir: string, meshRef: string): string => {
+                let path = meshRef
+                  .replace(/^package:\/\/[^/]+\//, "")
+                  .replace(/^file:\/\//, "")
+                  .trim()
+                  .replace(/\\/g, "/")
+                  .replace(/^\/+/, "");
+
+                if (!path) return "";
+
+                if (!urdfDir) return normalizePath(path);
+
+                const urdfParts = urdfDir.split("/").filter(Boolean);
+                const meshParts = path.split("/").filter(Boolean);
+                const resolvedParts = [...urdfParts];
+
+                for (const part of meshParts) {
+                  if (part === "..") {
+                    if (resolvedParts.length > 0) resolvedParts.pop();
+                  } else if (part !== "." && part !== "") {
+                    resolvedParts.push(part);
+                  }
+                }
+
+                return normalizePath(resolvedParts.join("/"));
+              };
+
+              // Match mesh files to URDF references
+              for (const meshRef of meshReferences) {
+                const resolvedPath = resolveMeshPath(urdfDir, meshRef);
+                const filename = meshRef.split("/").pop() || meshRef;
+
+                // Try to find matching mesh file
+                for (const meshUrl of meshUrls) {
+                  const meshPath = normalizePath(meshUrl.path);
+                  const meshFilename = meshUrl.path.split("/").pop() || "";
+
+                  // Check various path matches
+                  if (
+                    meshPath === resolvedPath ||
+                    meshPath.endsWith("/" + resolvedPath) ||
+                    meshFilename.toLowerCase() === filename.toLowerCase() ||
+                    meshPath.toLowerCase().endsWith("/" + filename.toLowerCase())
+                  ) {
+                    try {
+                      const meshResponse = await fetch(meshUrl.url, { headers });
+                      if (meshResponse.ok) {
+                        const meshBlob = await meshResponse.blob();
+                        // Store with multiple path variations for compatibility
+                        loadedMeshes[filename] = meshBlob;
+                        loadedMeshes[meshPath] = meshBlob;
+                        loadedMeshes[`/${meshPath}`] = meshBlob;
+                        loadedMeshes[resolvedPath] = meshBlob;
+                        loadedMeshes[`/${resolvedPath}`] = meshBlob;
+                        if (meshRef !== filename) {
+                          loadedMeshes[meshRef] = meshBlob;
+                        }
+                      }
+                    } catch (error) {
+                      console.warn(`Failed to load mesh ${meshUrl.path}:`, error);
+                    }
+                    break;
+                  }
+                }
+              }
+
+              // Note: We can't directly update meshFiles from Sidebar, but we've loaded them
+              // The URDF will be updated and can reference these meshes if they're available
+              if (Object.keys(loadedMeshes).length > 0) {
+                console.log(`Loaded ${Object.keys(loadedMeshes).length} mesh file(s) for URDF`);
+              }
+            }
+
+            toast.success(`Loaded URDF file: ${urdfToLoad.path.split("/").pop()}`);
+          }
+        } catch (error) {
+          console.warn("Failed to load URDF file:", error);
+          toast.warning("Found URDF file but failed to load it");
+        }
+      }
+
+      // Continue with parquet file loading (don't return early if parquet files are missing but URDF was found)
+      console.log(`Found ${parquetUrls.length} parquet files, ${urdfUrls.length} URDF files, ${meshUrls.length} mesh files`);
+      if (parquetUrls.length === 0 && urdfUrls.length === 0) {
+        toast.error("No parquet files or URDF files found in dataset");
+        return;
+      }
+
+      // Only process parquet files if they exist
+      if (parquetUrls.length > 0) {
+        toast.info(`Found ${parquetUrls.length} parquet file(s). Fetching data via HF Dataset Server API...`);
+
+        // Use HF Dataset Server API to fetch data as JSON (avoids parquet parsing)
+        const allRows: Array<Record<string, unknown>> = [];
+        const batchSize = 100; // HF API max is 100 rows per request
+        let offset = 0;
+        let totalRows = 0;
+        let hasMore = true;
+
+        // First, get total row count
+        const infoUrl = `https://datasets-server.huggingface.co/info?dataset=${encodeURIComponent(parsedPath)}`;
+        try {
+          const infoResponse = await fetch(infoUrl, { headers });
+          if (infoResponse.ok) {
+            const infoData = await infoResponse.json();
+            // Extract total rows from dataset info
+            const datasetInfo = infoData.dataset_info;
+            if (datasetInfo) {
+              const firstConfig = Object.keys(datasetInfo)[0];
+              if (firstConfig && datasetInfo[firstConfig]?.splits?.train) {
+                totalRows = datasetInfo[firstConfig].splits.train.num_examples || 0;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("Could not fetch dataset info:", error);
+        }
+
+        if (totalRows > 0) {
+          toast.info(`Dataset has ${totalRows} rows. Fetching...`);
+        }
+
+        // Fetch data in batches
+        while (hasMore) {
+          try {
+            const rowsUrl = `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(parsedPath)}&config=default&split=train&offset=${offset}&length=${batchSize}`;
+            console.log(`Fetching rows ${offset} to ${offset + batchSize}...`);
+
+            const response = await fetch(rowsUrl, { headers });
+            if (!response.ok) {
+              console.warn(`Failed to fetch rows at offset ${offset}: ${response.status} ${response.statusText}`);
+              break;
+            }
+
+            const data = await response.json();
+            const rows = data.rows || [];
+
+            if (rows.length === 0) {
+              hasMore = false;
+              break;
+            }
+
+            // Extract row data from the response
+            for (const rowWrapper of rows) {
+              const row = rowWrapper.row || rowWrapper;
+              allRows.push(row);
+            }
+
+            console.log(`Loaded ${rows.length} rows (total: ${allRows.length})`);
+
+            // Update progress
+            if (totalRows > 0 && allRows.length % 500 === 0) {
+              toast.info(`Loading... ${allRows.length}/${totalRows} rows`);
+            }
+
+            offset += batchSize;
+            hasMore = rows.length === batchSize;
+          } catch (error) {
+            console.error(`Error fetching rows at offset ${offset}:`, error);
+            break;
+          }
+        }
+
+        console.log(`Total rows loaded: ${allRows.length}`);
+        if (allRows.length === 0) {
+          console.error("No rows were loaded from parquet files. Check console for details.");
+          toast.error("No data found in parquet files. Check console for details.");
+          return;
+        }
+
+        toast.info(`Loaded ${allRows.length} rows. Processing episodes...`);
+
+        // Group rows by episode_index
+        const episodesMap = new Map<number, Array<Record<string, unknown>>>();
+        for (const row of allRows) {
+          const episodeIndex = (row.episode_index as number) ?? 0;
+          if (!episodesMap.has(episodeIndex)) {
+            episodesMap.set(episodeIndex, []);
+          }
+          episodesMap.get(episodeIndex)!.push(row);
+        }
+
+        // Try to fetch info.json for joint names using Dataset Server API (avoids CORS)
+        let jointNames: string[] = [];
+        try {
+          // Use Dataset Server API which has proper CORS headers
+          const infoApiUrl = `https://datasets-server.huggingface.co/info?dataset=${encodeURIComponent(parsedPath)}`;
+          const infoResponse = await fetch(infoApiUrl, { headers });
+          if (infoResponse.ok) {
+            const infoData = await infoResponse.json();
+            // Extract joint names from dataset info
+            const datasetInfo = infoData.dataset_info;
+            if (datasetInfo) {
+              const firstConfig = Object.keys(datasetInfo)[0];
+              if (firstConfig && datasetInfo[firstConfig]?.features) {
+                const features = datasetInfo[firstConfig].features;
+                // Look for action or observation.state feature
+                const actionFeature = features.action || features["action"];
+                const observationFeature = features["observation.state"];
+
+                // Extract names from feature (structure varies by dataset)
+                let rawJointNames: string[] = [];
+
+                // Try different property paths for joint names
+                if (actionFeature?.feature?.names) {
+                  rawJointNames = actionFeature.feature.names;
+                } else if (actionFeature?.names) {
+                  rawJointNames = actionFeature.names;
+                } else if (observationFeature?.feature?.names) {
+                  rawJointNames = observationFeature.feature.names;
+                } else if (observationFeature?.names) {
+                  rawJointNames = observationFeature.names;
+                }
+
+                // Strip .pos suffix from joint names if present
+                jointNames = rawJointNames.map((name: string) => {
+                  if (typeof name === "string" && name.endsWith(".pos")) {
+                    return name.slice(0, -4);
+                  }
+                  return name;
+                });
+                console.log("Joint names from Dataset Server API:", jointNames);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("Could not fetch info from Dataset Server API:", error);
+        }
+
+        // Fallback: Try direct fetch with /raw/ endpoint (less likely to have CORS issues)
+        if (jointNames.length === 0) {
+          try {
+            const infoUrl = `https://huggingface.co/datasets/${parsedPath}/raw/main/meta/info.json`;
+            const infoResponse = await fetch(infoUrl, { headers });
+            if (infoResponse.ok) {
+              const infoJson = await infoResponse.json();
+              const rawJointNames =
+                infoJson.features?.action?.names ??
+                infoJson.features?.action?.fieldNames ??
+                infoJson.features?.["observation.state"]?.names ??
+                infoJson.features?.["observation.state"]?.fieldNames ??
+                [];
+
+              // Strip .pos suffix from joint names if present
+              jointNames = rawJointNames.map((name: string) => {
+                if (typeof name === "string" && name.endsWith(".pos")) {
+                  return name.slice(0, -4);
+                }
+                return name;
+              });
+              console.log("Joint names from raw info.json:", jointNames);
+            }
+          } catch (error) {
+            console.warn("Could not fetch info.json directly:", error);
+          }
+        }
+
+        console.log("Available joints in URDF:", availableJointsStore);
+
+        // Always show mapping dialog to allow user to configure mapping and unit conversion
+        let jointMapping: Record<string, string> = {};
+        let convertDegreesToRadians = false;
+
+        if (jointNames.length > 0 || availableJointsStore.length > 0) {
+          // Check if values look like degrees (absolute values > π ≈ 3.14)
+          const firstRow = allRows[0];
+          const sampleValues = (firstRow?.action as number[]) ?? (firstRow?.["observation.state"] as number[]) ?? [];
+          const maxAbsValue = Math.max(...sampleValues.map(Math.abs));
+          const likelyDegrees = maxAbsValue > 10; // If max value > 10, probably degrees
+
+          // Build detailed mapping showing index, name, and value for each
+          const datasetJointsInfo = jointNames.length > 0
+            ? jointNames.map((name, idx) => `[${idx}] ${name} = ${sampleValues[idx]?.toFixed(2) ?? "?"}`).join("\n")
+            : sampleValues.map((val, idx) => `[${idx}] joint_${idx} = ${val.toFixed(2)}`).join("\n");
+
+          const urdfJointsInfo = availableJointsStore.map((name, idx) => `[${idx}] ${name}`).join("\n");
+
+          // Build default mapping - map by index position
+          const defaultMapping = jointNames.length > 0
+            ? jointNames.map((name) => `${name}=${availableJointsStore.includes(name) ? name : "?"}`).join(",")
+            : sampleValues.map((_, idx) => `joint_${idx}=${availableJointsStore[idx] ?? "?"}`).join(",");
+
+          const mappingPrompt = `JOINT MAPPING CONFIGURATION\n\n` +
+            `Dataset joints (index, name, sample value):\n${datasetJointsInfo}\n\n` +
+            `URDF joints (index, name):\n${urdfJointsInfo}\n\n` +
+            `${likelyDegrees ? "⚠️ Values appear to be in DEGREES" : "✓ Values appear to be in RADIANS"}\n\n` +
+            `Edit mapping below (format: dataset_name=urdf_name,...):\n` +
+            `Use "?" for joints to skip, reorder as needed:`;
+
+          const mappingInput = window.prompt(mappingPrompt, defaultMapping)?.trim();
+
+          if (mappingInput === null) {
+            toast.info("Cancelled loading from Hugging Face dataset");
+            return;
+          }
+
+          if (mappingInput) {
+            // Parse mapping string
+            const mappingPairs = mappingInput.split(",").map((pair) => pair.trim());
+            for (const pair of mappingPairs) {
+              const [datasetJoint, urdfJoint] = pair.split("=").map((s) => s.trim());
+              if (datasetJoint && urdfJoint && urdfJoint !== "?") {
+                jointMapping[datasetJoint] = urdfJoint;
+              }
+            }
+            console.log("Joint mapping:", jointMapping);
+          }
+
+          // Ask about unit conversion
+          if (likelyDegrees) {
+            convertDegreesToRadians = window.confirm(
+              `Values appear to be in DEGREES (max: ${maxAbsValue.toFixed(2)})\n\nConvert to radians?\n\nClick OK to convert degrees → radians\nClick Cancel to keep original values`
+            );
+          }
+        }
+
+        console.log("Convert degrees to radians:", convertDegreesToRadians);
+        console.log("Final joint mapping:", jointMapping);
+
+        // Convert to episodes
+        const newEpisodes: Episode[] = [];
+        let totalFramesLoaded = 0;
+
+        const degToRad = Math.PI / 180;
+
+        for (const [episodeIndex, episodeRows] of episodesMap.entries()) {
+          // Sort rows by frame_index
+          episodeRows.sort((a, b) => {
+            const aIdx = (a.frame_index as number) ?? 0;
+            const bIdx = (b.frame_index as number) ?? 0;
+            return aIdx - bIdx;
+          });
+
+          // Extract frames
+          const frames: RecordedFrame[] = episodeRows.map((row) => {
+            const action = row.action as number[] | undefined;
+            const observationState = row["observation.state"] as number[] | undefined;
+            const dataArray = action ?? observationState ?? [];
+            const timestamp = ((row.timestamp as number) ?? 0) * 1000; // Convert to milliseconds
+
+            // Convert action array to joint positions object
+            const actualJointNames =
+              jointNames.length > 0
+                ? jointNames
+                : dataArray.map((_, i) => `joint_${i}`);
+
+            const jointPositions: Record<string, number> = {};
+            // Store joints with optional mapping to URDF names
+            actualJointNames.forEach((name: string, idx: number) => {
+              // Apply mapping if available, otherwise use original name
+              const mappedName = jointMapping[name] || name;
+              let value = dataArray[idx] ?? 0;
+
+              // Convert degrees to radians if needed
+              if (convertDegreesToRadians) {
+                value = value * degToRad;
+              }
+
+              jointPositions[mappedName] = value;
+            });
+
+            return {
+              timestamp,
+              jointPositions,
+            };
+          });
+
+          if (frames.length === 0) continue;
+
+          totalFramesLoaded += frames.length;
+
+          // Calculate FPS from timestamps
+          let fps = 30; // default
+          if (frames.length > 1) {
+            const totalDuration = frames[frames.length - 1].timestamp - frames[0].timestamp;
+            if (totalDuration > 0) {
+              fps = Math.round(((frames.length - 1) / totalDuration) * 1000);
+            }
+          }
+
+          const episodeMetadata: EpisodeMetadata = {
+            episode_index: episodeIndex,
+            fps,
+            joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
+            num_frames: frames.length,
+            robot_type: "unknown",
+          };
+
+          const episode: Episode = {
+            id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
+            number: episodes.length + newEpisodes.length + 1,
+            frames,
+            createdAt: Date.now(),
+            metadata: episodeMetadata,
+          };
+
+          newEpisodes.push(episode);
+        }
+
+        if (newEpisodes.length === 0) {
+          toast.error("No episodes found in dataset");
+          return;
+        }
+
+        setEpisodes((prev) => [...prev, ...newEpisodes]);
+
+        // Log first episode first frame for debugging
+        if (newEpisodes.length > 0 && newEpisodes[0].frames.length > 0) {
+          console.log("First episode, first frame joint positions:", newEpisodes[0].frames[0].jointPositions);
+          console.log("Sample values (first 3 frames):", newEpisodes[0].frames.slice(0, 3).map(f => ({
+            timestamp: f.timestamp,
+            joints: f.jointPositions
+          })));
+        }
+
+        toast.success(
+          `Loaded ${newEpisodes.length} episode(s) with ${totalFramesLoaded} total frames from ${parsedPath}`
+        );
+      } else if (urdfUrls.length > 0) {
+        // Only URDF was found, no parquet files
+        toast.success(`Loaded URDF from ${parsedPath} (no parquet files found)`);
+      }
+    } catch (error) {
+      console.error("Failed to load from Hugging Face dataset:", error);
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to load from Hugging Face dataset"
+      );
+    } finally {
+      setIsImportingFromHFDataset(false);
+    }
+  }, [
+    availableJointsStore,
+    episodes.length,
+    hfToken,
+    isImportingFromHFDataset,
+    setEpisodes,
+  ]);
+
   const deleteEpisode = useCallback((episodeId: string) => {
     // Check if the episode being deleted is currently playing
     const episodeToDelete = episodes.find((ep) => ep.id === episodeId);
@@ -2442,6 +3069,7 @@ export const Sidebar = ({
                   />
                 </div>
               )}
+
               <div className="flex-1 min-h-0 overflow-y-auto blender-scrollbar">
                 {/* Joint Editor Section */}
                 <BlenderPanel title="Joint Editor" defaultOpen={true}>
@@ -2688,16 +3316,16 @@ export const Sidebar = ({
                       variant="outline"
                       className="flex-1 h-7 text-xs"
                       onClick={() => {
-                        void loadEpisodesFromHuggingFace();
+                        void loadEpisodesFromHuggingFaceDataset();
                       }}
-                      disabled={isImportingFromHF}
+                      disabled={isImportingFromHFDataset}
                     >
-                      <LogIn className="w-3 h-3 mr-1 text-muted-foreground" />
-                      {isImportingFromHF ? "Loading..." : "Hugging Face"}
+                      <Download className="w-3 h-3 mr-1 text-muted-foreground" />
+                      {isImportingFromHFDataset ? "Loading..." : "HF Dataset"}
                     </Button>
                   </div>
                 </div>
-                
+
                 {/* Upload dataset to: Local Folder or Hugging Face */}
                 {episodes.length > 0 && (
                   <div className="space-y-1">
