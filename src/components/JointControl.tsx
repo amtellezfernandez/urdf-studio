@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { CustomSlider } from "@/components/ui/custom-slider";
-import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,13 +26,21 @@ import type { JointAxisInfo } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks } from "@/urdf_corrections/getJointLinks";
 
+const JOINT_TYPES = [
+  "continuous",
+  "revolute",
+  "prismatic",
+  "fixed",
+  "planar",
+  "floating",
+] as const;
+
 interface JointControlProps {
   jointName: string;
   jointInfo?: JointLimitInfo;
   jointAxis?: JointAxisInfo;
   currentValue: number;
   onValueChange: (value: number) => void;
-  onNameChange?: (oldName: string, newName: string) => void;
   onAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
   originalAxis?: JointAxisInfo;
@@ -44,6 +51,8 @@ interface JointControlProps {
   urdfContent?: string;
   isHighlighted?: boolean;
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
+  onTypeChange?: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
+  onNameChange?: (oldName: string, newName: string) => void;
 }
 
 // Helper function to create axis preset icon
@@ -165,7 +174,6 @@ export const JointControl = ({
   jointAxis,
   currentValue,
   onValueChange,
-  onNameChange,
   onAxisChange,
   onResetAxis,
   originalAxis,
@@ -176,7 +184,16 @@ export const JointControl = ({
   urdfContent,
   isHighlighted = false,
   onLinkChange,
+  onTypeChange,
+  onNameChange,
 }: JointControlProps) => {
+  // Debug: Log if onTypeChange is available
+  useEffect(() => {
+    if (onTypeChange) {
+      console.log(`[JointControl] onTypeChange available for joint: ${jointName}`);
+    }
+  }, [onTypeChange, jointName]);
+  
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
   const hasUpperLimit = jointInfo?.upper !== null && jointInfo?.upper !== undefined;
@@ -224,7 +241,17 @@ export const JointControl = ({
   
   // Delete confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  
+
+  // Name editing state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(jointName);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync editedName when jointName prop changes (e.g., after successful rename)
+  useEffect(() => {
+    setEditedName(jointName);
+  }, [jointName]);
+
   // Axis state
   const [localAxisX, setLocalAxisX] = useState<string>(
     jointAxis?.xyz ? String(jointAxis.xyz[0]) : "0"
@@ -316,26 +343,37 @@ export const JointControl = ({
     const z = parseFloat(localAxisZ) || 0;
     onAxisChange?.(jointName, [x, y, z]);
   };
-  
-  const [localLowerLimit, setLocalLowerLimit] = useState<string>(
-    jointInfo?.lower !== null ? String(jointInfo.lower) : ""
-  );
-  const [localUpperLimit, setLocalUpperLimit] = useState<string>(
-    jointInfo?.upper !== null ? String(jointInfo.upper) : ""
-  );
 
-  // Editing state for joint name
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState(jointName);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  
-  // State for showing/hiding advanced options
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  // Update edited name when jointName prop changes
-  useEffect(() => {
+  // Name editing handlers
+  const handleNameDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (!onNameChange) return;
+    e.stopPropagation();
     setEditedName(jointName);
+    setIsEditingName(true);
+  }, [onNameChange, jointName]);
+
+  const handleNameSubmit = useCallback(() => {
+    const trimmedName = editedName.trim();
+    if (trimmedName && trimmedName !== jointName && onNameChange) {
+      onNameChange(jointName, trimmedName);
+    }
+    setIsEditingName(false);
+  }, [editedName, jointName, onNameChange]);
+
+  const handleNameCancel = useCallback(() => {
+    setEditedName(jointName);
+    setIsEditingName(false);
   }, [jointName]);
+
+  const handleNameKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleNameSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleNameCancel();
+    }
+  }, [handleNameSubmit, handleNameCancel]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -345,30 +383,15 @@ export const JointControl = ({
     }
   }, [isEditingName]);
 
-  const handleNameDoubleClick = () => {
-    if (onNameChange) {
-      setIsEditingName(true);
-    }
-  };
+  const [localLowerLimit, setLocalLowerLimit] = useState<string>(
+    jointInfo?.lower !== null ? String(jointInfo.lower) : ""
+  );
+  const [localUpperLimit, setLocalUpperLimit] = useState<string>(
+    jointInfo?.upper !== null ? String(jointInfo.upper) : ""
+  );
 
-  const handleNameBlur = () => {
-    if (editedName.trim() && editedName !== jointName) {
-      onNameChange?.(jointName, editedName.trim());
-      // Keep the display name as the original for UI stability
-      // The rename will only be applied when exporting
-    }
-    setEditedName(jointName); // Always reset to original name for display
-    setIsEditingName(false);
-  };
-
-  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    } else if (e.key === "Escape") {
-      setEditedName(jointName);
-      setIsEditingName(false);
-    }
-  };
+  // State for showing/hiding advanced options
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Update local limits when jointInfo changes (including type changes)
   useEffect(() => {
@@ -636,31 +659,36 @@ export const JointControl = ({
               )} 
             />
             {isEditingName ? (
-              <Input
+              <input
                 ref={nameInputRef}
+                type="text"
                 value={editedName}
                 onChange={(e) => setEditedName(e.target.value)}
-                onBlur={handleNameBlur}
+                onBlur={handleNameSubmit}
                 onKeyDown={handleNameKeyDown}
                 onClick={(e) => e.stopPropagation()}
-                className="h-6 text-xs px-2 bg-input border-border text-foreground flex-1 max-w-[200px]"
-                placeholder="Joint name"
-              />
-            ) : (
-              <label
                 className={cn(
-                  "text-xs font-semibold cursor-text hover:text-primary transition-colors truncate flex-1 min-w-0 text-left",
+                  "text-xs font-semibold flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
                   isDeleted
                     ? "text-muted-foreground/50"
                     : isHighlighted
                       ? "text-primary"
                       : "text-foreground"
                 )}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  handleNameDoubleClick();
-                }}
-                title={onNameChange ? "Double-click to rename" : isDeleted ? "Will be deleted in exported URDF" : undefined}
+              />
+            ) : (
+              <label
+                className={cn(
+                  "text-xs font-semibold truncate flex-1 min-w-0 text-left cursor-text",
+                  isDeleted
+                    ? "text-muted-foreground/50"
+                    : isHighlighted
+                      ? "text-primary"
+                      : "text-foreground",
+                  onNameChange && "hover:text-primary/80"
+                )}
+                title={isDeleted ? "Will be deleted in exported URDF" : onNameChange ? "Double-click to rename" : undefined}
+                onDoubleClick={handleNameDoubleClick}
               >
                 {jointName}
                 {isDeleted && (
@@ -802,6 +830,50 @@ export const JointControl = ({
                   />
                 </div>
               </div>
+            </BlenderPropertyRow>
+          )}
+
+          {/* Joint Type */}
+          {onTypeChange && (
+            <BlenderPropertyRow label="Type">
+              <Select
+                value={currentType}
+                onValueChange={(newType) => {
+                  const newTypeNeedsLimits = newType === "revolute" || newType === "prismatic";
+                  let lower: number | undefined = undefined;
+                  let upper: number | undefined = undefined;
+                  
+                  if (newTypeNeedsLimits) {
+                    // Try to get limits from local state first, then fall back to jointInfo
+                    if (localLowerLimit && localLowerLimit.trim() !== "") {
+                      const parsed = parseFloat(localLowerLimit);
+                      if (!isNaN(parsed)) lower = parsed;
+                    } else if (jointInfo?.lower !== null && jointInfo?.lower !== undefined) {
+                      lower = jointInfo.lower;
+                    }
+                    
+                    if (localUpperLimit && localUpperLimit.trim() !== "") {
+                      const parsed = parseFloat(localUpperLimit);
+                      if (!isNaN(parsed)) upper = parsed;
+                    } else if (jointInfo?.upper !== null && jointInfo?.upper !== undefined) {
+                      upper = jointInfo.upper;
+                    }
+                  }
+                  
+                  onTypeChange(newType, lower, upper);
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {JOINT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type} className="text-xs">
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </BlenderPropertyRow>
           )}
 

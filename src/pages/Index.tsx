@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useCallback, useMemo, startTransition } from "react";
+import { useState, useCallback, useMemo, startTransition, flushSync } from "react";
 import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
 import { Viewer3D } from "@/components/Viewer3D";
 import type { CollisionVisibility } from "@/components/LinkEditor";
@@ -9,8 +9,9 @@ import { toast } from "sonner";
 import { createVizFilename } from "@/urdf_corrections/addJointColors";
 import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
 import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/parseJointAxis";
-import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
 import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
+import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
+import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
 import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
 import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
@@ -63,7 +64,6 @@ const Index = () => {
   const [vizUrdfContent, setVizUrdfContent] = useState<string>("");
   const [originalJointAxes, setOriginalJointAxes] = useState<JointAxisMap>({});
   const [originalVizUrdfContent, setOriginalVizUrdfContent] = useState<string>("");
-  const [jointNameMapping, setJointNameMapping] = useState<Map<string, string>>(new Map());
   const [deletedJoints, setDeletedJoints] = useState<Set<string>>(new Set());
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
@@ -85,21 +85,23 @@ const Index = () => {
   }>>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
 
-  const createUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME): File => {
+  const createUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
+    // Add timestamp to filename to ensure uniqueness and force reload
+    const uniqueFilename = timestamp 
+      ? `${vizFilename.replace('.urdf', '')}_${timestamp}.urdf`
+      : vizFilename;
     const blob = new Blob([content], { type: "application/xml" });
-    return new File([blob], vizFilename, { type: "application/xml" });
+    return new File([blob], uniqueFilename, { type: "application/xml" });
   }, []);
 
   const updateUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME): void => {
-    startTransition(() => {
-      setVizUrdfContent(content);
-      const limits = parseJointLimitsFromURDF(content);
-      const axes = parseJointAxesFromURDF(content);
-      setJointLimits(limits);
-      setJointAxes(axes);
-      setUrdfFile(createUrdfFile(content, filename));
-    });
+    setVizUrdfContent(content);
+    const limits = parseJointLimitsFromURDF(content);
+    const axes = parseJointAxesFromURDF(content);
+    setJointLimits(limits);
+    setJointAxes(axes);
+    setUrdfFile(createUrdfFile(content, filename));
   }, [createUrdfFile]);
 
   // Extract all mesh file references from URDF
@@ -150,16 +152,17 @@ const Index = () => {
       
       const parsedLimits = parseJointLimitsFromURDF(originalContent);
       const parsedAxes = parseJointAxesFromURDF(originalContent);
-      
-      startTransition(() => {
-        setOriginalUrdfContent(originalContent);
-        setJointLimits(parsedLimits);
-        setJointAxes(parsedAxes);
-        setOriginalJointAxes(parsedAxes);
-        setVizUrdfContent(originalContent);
-        setOriginalVizUrdfContent(originalContent);
-        setUrdfFile(createUrdfFile(originalContent, urdfFilename));
-      });
+
+      // Debug: log parsed limits
+      console.log("[loadFilesFromFolder] Parsed joint limits:", parsedLimits);
+
+      setOriginalUrdfContent(originalContent);
+      setJointLimits(parsedLimits);
+      setJointAxes(parsedAxes);
+      setOriginalJointAxes(parsedAxes);
+      setVizUrdfContent(originalContent);
+      setOriginalVizUrdfContent(originalContent);
+      setUrdfFile(createUrdfFile(originalContent, urdfFilename));
 
       const stlFiles = Array.from(fileList).filter(file => 
         file.name.toLowerCase().endsWith('.stl')
@@ -409,80 +412,6 @@ const Index = () => {
     toast.success("Viz URDF updated from manual edit");
   }, [updateUrdfFile]);
 
-  const handleJointNameChange = useCallback((oldName: string, newName: string): void => {
-    if (newName === oldName) return;
-
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-
-    // Check if new name already exists in current joints
-    const currentJointNames = Object.keys(jointLimits);
-    if (currentJointNames.includes(newName)) {
-      toast.error(`Joint "${newName}" already exists`);
-      return;
-    }
-
-    // Update the URDF content immediately
-    const updatedContent = updateJointNameInURDF(vizUrdfContent, oldName, newName);
-    if (updatedContent === vizUrdfContent) {
-      toast.error(`Failed to rename joint "${oldName}"`);
-      return;
-    }
-
-    // Update joint name mapping for export
-    setJointNameMapping((prev) => {
-      const newMapping = new Map(prev);
-      newMapping.set(oldName, newName);
-      return newMapping;
-    });
-
-    // Update availableJoints array
-    setAvailableJoints((prev) => {
-      const index = prev.indexOf(oldName);
-      if (index === -1) return prev;
-      const updated = [...prev];
-      updated[index] = newName;
-      return updated;
-    });
-
-    // Update selected joint if it was the renamed one
-    if (selectedJoint === oldName) {
-      setSelectedJoint(newName);
-    }
-
-    // Update joint values in store
-    const storeJointValues = useJointStore.getState().jointValues;
-    if (storeJointValues[oldName] !== undefined) {
-      const newValues = { ...storeJointValues };
-      newValues[newName] = newValues[oldName];
-      delete newValues[oldName];
-      useJointStore.getState().setJointValues(newValues);
-    }
-
-    const velocityOverrides = useJointStore.getState().jointVelocityLimits;
-    if (velocityOverrides[oldName] !== undefined) {
-      const overrideValue = velocityOverrides[oldName];
-      if (overrideValue !== undefined && overrideValue !== null) {
-        useJointStore.getState().setJointMaxVelocity(newName, overrideValue);
-      }
-      useJointStore.getState().setJointMaxVelocity(oldName, null);
-    }
-
-    // Immediately update all URDF-related state synchronously (same pattern as handleJointTypeChange)
-    // This ensures immediate UI updates without deferred transitions that could cause conflicts
-    setVizUrdfContent(updatedContent);
-    const limits = parseJointLimitsFromURDF(updatedContent);
-    setJointLimits(limits);
-    const axes = parseJointAxesFromURDF(updatedContent);
-    setJointAxes(axes);
-    setUrdfFile(createUrdfFile(updatedContent));
-    setUrdfContentVersion(prev => prev + 1); // Force reload of 3D viewer and sidebar
-
-    toast.success(`Joint "${oldName}" renamed to "${newName}"`);
-  }, [availableJoints, vizUrdfContent, jointLimits, selectedJoint, createUrdfFile]);
-
   const handleJointAxisChange = useCallback((jointName: string, axis: [number, number, number]): void => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
@@ -515,6 +444,42 @@ const Index = () => {
     handleJointAxisChange(jointName, originalAxis);
   }, [originalJointAxes, handleJointAxisChange]);
 
+  const handleJointTypeChange = useCallback((jointName: string, newType: string, lowerLimit?: number, upperLimit?: number): void => {
+    if (!vizUrdfContent) {
+      toast.error("No URDF content available");
+      return;
+    }
+    const updatedContent = updateJointTypeInURDF(vizUrdfContent, jointName, newType, lowerLimit, upperLimit);
+    updateUrdfFile(updatedContent);
+    const limitMsg = lowerLimit !== undefined && upperLimit !== undefined
+      ? ` with limits [${lowerLimit.toFixed(2)}, ${upperLimit.toFixed(2)}]`
+      : "";
+    toast.success(`Updated joint "${jointName}" type to ${newType}${limitMsg}`);
+  }, [vizUrdfContent, updateUrdfFile]);
+
+  const handleJointNameChange = useCallback((oldName: string, newName: string): void => {
+    if (!vizUrdfContent) {
+      toast.error("No URDF content available");
+      return;
+    }
+    const updatedContent = updateJointNameInURDF(vizUrdfContent, oldName, newName);
+    if (updatedContent === vizUrdfContent) {
+      toast.error(`Failed to rename joint "${oldName}" to "${newName}". The name may already exist or be invalid.`);
+      return;
+    }
+    updateUrdfFile(updatedContent);
+
+    // Update availableJoints to reflect the new name
+    setAvailableJoints(prev => prev.map(name => name === oldName ? newName : name));
+
+    // Update selected joint if it was the one renamed
+    if (selectedJoint === oldName) {
+      setSelectedJoint(newName);
+    }
+
+    toast.success(`Renamed joint "${oldName}" to "${newName}"`);
+  }, [vizUrdfContent, updateUrdfFile, selectedJoint]);
+
   const handleResetRotation = useCallback((): void => {
     if (!originalVizUrdfContent) {
       toast.error("No original URDF content found");
@@ -524,15 +489,6 @@ const Index = () => {
     updateUrdfFile(originalVizUrdfContent);
     toast.success("Reset robot rotation to original position");
   }, [originalVizUrdfContent, updateUrdfFile]);
-
-  const applyJointNameMappings = useCallback((urdfContent: string): string => {
-    return Array.from(jointNameMapping.entries())
-      .reverse()
-      .reduce((content, [oldName, newName]) => 
-        updateJointNameInURDF(content, oldName, newName),
-        urdfContent
-      );
-  }, [jointNameMapping]);
 
   const deleteJointsFromURDF = useCallback((urdfContent: string, jointsToDelete: Set<string>): string => {
     if (jointsToDelete.size === 0) return urdfContent;
@@ -564,11 +520,8 @@ const Index = () => {
 
   const getExportUrdfContent = useCallback((): string => {
     if (!vizUrdfContent) return "";
-    return deleteJointsFromURDF(
-      applyJointNameMappings(vizUrdfContent),
-      deletedJoints
-    );
-  }, [vizUrdfContent, applyJointNameMappings, deleteJointsFromURDF, deletedJoints]);
+    return deleteJointsFromURDF(vizUrdfContent, deletedJoints);
+  }, [vizUrdfContent, deleteJointsFromURDF, deletedJoints]);
 
   const handleDeleteJoint = useCallback((jointName: string): void => {
     setDeletedJoints((prev) => {
@@ -693,8 +646,8 @@ const Index = () => {
         </div>
       ) : (
         <>
-          <Sidebar 
-            isLoading={isLoading} 
+          <Sidebar
+            isLoading={isLoading}
             availableJoints={availableJoints}
             jointLimits={jointLimits}
             jointAxes={jointAxes}
@@ -705,9 +658,10 @@ const Index = () => {
             onJointSelect={setSelectedJoint}
             selectedJoint={selectedJoint}
             onVizUrdfChange={handleVizUrdfChange}
-            onJointNameChange={handleJointNameChange}
             onJointAxisChange={handleJointAxisChange}
             onResetAxis={handleResetAxis}
+            onJointTypeChange={handleJointTypeChange}
+            onJointNameChange={handleJointNameChange}
             onDeleteJoint={handleDeleteJoint}
             deletedJoints={deletedJoints}
             getExportUrdf={getExportUrdfContent}

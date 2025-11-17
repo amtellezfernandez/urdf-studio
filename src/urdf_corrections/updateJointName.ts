@@ -6,21 +6,29 @@ export function updateJointNameInURDF(
   oldJointName: string,
   newJointName: string
 ): string {
-  if (oldJointName === newJointName) {
+  // Validate new name
+  if (!newJointName || newJointName.trim() === "") {
+    console.warn("New joint name cannot be empty");
+    return urdfContent;
+  }
+
+  const trimmedNewName = newJointName.trim();
+
+  // Don't do anything if names are the same
+  if (oldJointName === trimmedNewName) {
     return urdfContent;
   }
 
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
 
-  // Check for parser errors
   const parserError = xmlDoc.querySelector("parsererror");
   if (parserError) {
     const errorText = parserError.textContent || "Unknown XML parsing error";
     console.warn("URDF parsing error:", errorText);
     return urdfContent;
   }
-  
+
   // Validate robot element exists
   const robot = xmlDoc.querySelector("robot");
   if (!robot) {
@@ -28,25 +36,29 @@ export function updateJointNameInURDF(
     return urdfContent;
   }
 
-  // Find the joint element
+  // Check if new name already exists
+  const existingJoint = xmlDoc.querySelector(`joint[name="${trimmedNewName}"]`);
+  if (existingJoint) {
+    console.warn(`Joint with name "${trimmedNewName}" already exists in URDF`);
+    return urdfContent;
+  }
+
+  // Find the joint to rename
   const joint = xmlDoc.querySelector(`joint[name="${oldJointName}"]`);
   if (!joint) {
     console.warn(`Joint "${oldJointName}" not found in URDF.`);
     return urdfContent;
   }
 
-  // Check if new name already exists
-  const existingJoint = xmlDoc.querySelector(`joint[name="${newJointName}"]`);
-  if (existingJoint) {
-    console.warn(`Joint "${newJointName}" already exists in URDF.`);
-    return urdfContent;
-  }
+  // Update the joint name
+  joint.setAttribute("name", trimmedNewName);
 
-  // Update the joint name attribute
-  joint.setAttribute("name", newJointName);
+  // Also update any mimic joints that reference this joint
+  const mimicElements = xmlDoc.querySelectorAll(`mimic[joint="${oldJointName}"]`);
+  mimicElements.forEach((mimic) => {
+    mimic.setAttribute("joint", trimmedNewName);
+  });
 
-  // Serialize back to string
   const serializer = new XMLSerializer();
   return serializer.serializeToString(xmlDoc);
 }
-

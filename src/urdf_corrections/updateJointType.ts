@@ -46,8 +46,16 @@ export function updateJointTypeInURDF(
     return urdfContent;
   }
 
+  // Preserve the joint name - it must remain fixed
+  const preservedName = joint.getAttribute("name");
+
   // Update joint type
   joint.setAttribute("type", jointType);
+  
+  // Explicitly restore the name attribute to ensure it's not lost
+  if (preservedName) {
+    joint.setAttribute("name", preservedName);
+  }
 
   // Handle limits based on joint type
   if (jointType === "fixed") {

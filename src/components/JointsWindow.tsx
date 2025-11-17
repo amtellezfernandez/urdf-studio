@@ -22,7 +22,6 @@ interface JointsWindowProps {
   onJointChange: (jointName: string, value: number) => void;
   onJointSelect?: (jointName: string | null) => void;
   selectedJoint?: string | null;
-  onJointNameChange?: (oldName: string, newName: string) => void;
   onJointAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
   onDeleteJoint?: (jointName: string) => void;
@@ -48,6 +47,8 @@ interface JointsWindowProps {
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   rotationPlaneVisible?: boolean;
   onRotationPlaneVisibilityChange?: (visible: boolean) => void;
+  onJointTypeChange?: (jointName: string, jointType: string, lowerLimit?: number, upperLimit?: number) => void;
+  onJointNameChange?: (oldName: string, newName: string) => void;
 }
 
 export const JointsWindow = ({
@@ -59,7 +60,6 @@ export const JointsWindow = ({
   onJointChange,
   onJointSelect,
   selectedJoint,
-  onJointNameChange,
   onJointAxisChange,
   onResetAxis,
   onDeleteJoint,
@@ -85,6 +85,8 @@ export const JointsWindow = ({
   onJointLinkChange,
   rotationPlaneVisible = false,
   onRotationPlaneVisibilityChange,
+  onJointTypeChange,
+  onJointNameChange,
 }: JointsWindowProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -111,22 +113,26 @@ export const JointsWindow = ({
     });
 
     // Find joints that changed type (compare with previous ref value)
+    const typeChanges: string[] = [];
     Object.entries(currentJointTypes).forEach(([jointName, newType]) => {
       const oldType = lastJointTypesRef.current[jointName];
       if (oldType !== undefined && oldType !== newType) {
         // Joint changed type - expand the new type group so it's visible
-        if (viewMode === "type") {
-          setExpandedTypes(prev => {
-            const next = new Set(prev);
-            next.add(newType);
-            return next;
-          });
-        }
+        typeChanges.push(newType);
       }
     });
 
     // Update the ref with current types AFTER detecting changes
     lastJointTypesRef.current = currentJointTypes;
+
+    // Expand new type categories if any joints changed type
+    if (typeChanges.length > 0 && viewMode === "type") {
+      setExpandedTypes(prev => {
+        const next = new Set(prev);
+        typeChanges.forEach(type => next.add(type));
+        return next;
+      });
+    }
   }, [jointLimits, viewMode]);
 
   // Filter joints by search and type
@@ -192,7 +198,7 @@ export const JointsWindow = ({
       
       return (
         <div 
-          key={joint.jointName} 
+          key={`${joint.jointName}-${jointLimits[joint.jointName]?.type || 'unknown'}`}
           className="mb-1"
           style={{ paddingLeft: `${depth * 16}px` }}
         >
@@ -206,7 +212,6 @@ export const JointsWindow = ({
               onJointChange(joint.jointName, value);
               onJointSelect?.(joint.jointName);
             }}
-            onNameChange={onJointNameChange}
             onAxisChange={onJointAxisChange}
             onResetAxis={onResetAxis}
             onDeleteJoint={onDeleteJoint}
@@ -216,6 +221,10 @@ export const JointsWindow = ({
             urdfContent={urdfContent}
             isHighlighted={selectedJoint === joint.jointName}
             onLinkChange={onJointLinkChange}
+            onTypeChange={onJointTypeChange ? (newType, lowerLimit, upperLimit) => {
+              onJointTypeChange(joint.jointName, newType, lowerLimit, upperLimit);
+            } : undefined}
+            onNameChange={onJointNameChange}
           />
         </div>
       );
@@ -464,7 +473,7 @@ export const JointsWindow = ({
                   {isExpanded && (
                     <div className="border-t border-border/20 divide-y divide-border/10">
                       {joints.map((jointName, index) => (
-                        <div key={jointName} className={cn(
+                        <div key={`${jointName}-${jointLimits[jointName]?.type || 'unknown'}`} className={cn(
                           "bg-background/50",
                           index === 0 && "border-t-0"
                         )}>
@@ -478,7 +487,6 @@ export const JointsWindow = ({
                               onJointChange(jointName, value);
                               onJointSelect?.(jointName);
                             }}
-                            onNameChange={onJointNameChange}
                             onAxisChange={onJointAxisChange}
                             onResetAxis={onResetAxis}
                             onDeleteJoint={onDeleteJoint}
@@ -488,6 +496,10 @@ export const JointsWindow = ({
                             urdfContent={urdfContent}
                             isHighlighted={selectedJoint === jointName}
                             onLinkChange={onJointLinkChange}
+                            onTypeChange={onJointTypeChange ? (newType, lowerLimit, upperLimit) => {
+                              onJointTypeChange(jointName, newType, lowerLimit, upperLimit);
+                            } : undefined}
+                            onNameChange={onJointNameChange}
                           />
                         </div>
                       ))}

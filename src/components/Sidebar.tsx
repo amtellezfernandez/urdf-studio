@@ -51,9 +51,10 @@ interface SidebarProps {
   onJointSelect?: (jointName: string | null) => void;
   selectedJoint?: string | null;
   onVizUrdfChange?: (newContent: string) => void;
-  onJointNameChange?: (oldName: string, newName: string) => void;
   onJointAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
+  onJointTypeChange?: (jointName: string, jointType: string, lowerLimit?: number, upperLimit?: number) => void;
+  onJointNameChange?: (oldName: string, newName: string) => void;
   onDeleteJoint?: (jointName: string) => void;
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   deletedJoints?: Set<string>;
@@ -73,6 +74,8 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
   meshFiles?: Record<string, Blob>;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
+  rotationPlaneVisible?: boolean;
+  onRotationPlaneVisibilityChange?: (visible: boolean) => void;
 }
 
 interface RecordedFrame {
@@ -752,8 +755,8 @@ const parseSpaceInput = (input: string, defaultOwner?: string) => {
 };
 
 export const Sidebar = ({
-  isLoading = false, 
-  availableJoints = [], 
+  isLoading = false,
+  availableJoints = [],
   jointLimits = {},
   jointAxes = {},
   originalJointAxes = {},
@@ -763,9 +766,10 @@ export const Sidebar = ({
   onJointSelect,
   selectedJoint,
   onVizUrdfChange,
-  onJointNameChange,
   onJointAxisChange,
   onResetAxis,
+  onJointTypeChange,
+  onJointNameChange,
   onDeleteJoint,
   deletedJoints = new Set(),
   getExportUrdf,
@@ -1160,6 +1164,10 @@ export const Sidebar = ({
         return;
       }
 
+      // Preserve joint attributes - they must remain fixed
+      const preservedName = joint.getAttribute("name");
+      const preservedType = joint.getAttribute("type");
+
       // Update or create parent element
       let parentElement = joint.querySelector("parent");
       if (!parentElement) {
@@ -1179,6 +1187,14 @@ export const Sidebar = ({
         }
       }
       childElement.setAttribute("link", childLink);
+
+      // Explicitly restore preserved attributes to ensure they're not lost
+      if (preservedName) {
+        joint.setAttribute("name", preservedName);
+      }
+      if (preservedType) {
+        joint.setAttribute("type", preservedType);
+      }
 
       // Serialize back
       const serializer = new XMLSerializer();
@@ -2438,9 +2454,10 @@ export const Sidebar = ({
                     onJointChange={handleJointChange}
                     onJointSelect={onJointSelect}
                     selectedJoint={selectedJoint}
-                    onJointNameChange={onJointNameChange}
                     onJointAxisChange={onJointAxisChange}
                     onResetAxis={onResetAxis}
+                    onJointTypeChange={onJointTypeChange}
+                    onJointNameChange={onJointNameChange}
                     onDeleteJoint={onDeleteJoint}
                     deletedJoints={deletedJoints}
                     angleUnit={angleUnit}

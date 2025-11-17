@@ -29,6 +29,10 @@ export function updateJointAxisInURDF(
     return urdfContent;
   }
 
+  // Preserve joint attributes - they must remain fixed
+  const preservedName = joint.getAttribute("name");
+  const preservedType = joint.getAttribute("type");
+
   // Normalize the axis vector
   const length = Math.sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
   if (length < 1e-10) {
@@ -59,6 +63,14 @@ export function updateJointAxisInURDF(
 
   // Set axis value
   axisElement.setAttribute("xyz", `${normalized[0]} ${normalized[1]} ${normalized[2]}`);
+
+  // Explicitly restore preserved attributes to ensure they're not lost
+  if (preservedName) {
+    joint.setAttribute("name", preservedName);
+  }
+  if (preservedType) {
+    joint.setAttribute("type", preservedType);
+  }
 
   const serializer = new XMLSerializer();
   return serializer.serializeToString(xmlDoc);

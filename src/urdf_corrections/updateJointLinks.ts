@@ -30,6 +30,10 @@ export function updateJointLinksInURDF(
     return urdfContent;
   }
 
+  // Preserve joint attributes - they must remain fixed
+  const preservedName = joint.getAttribute("name");
+  const preservedType = joint.getAttribute("type");
+
   // Update or create parent element
   let parentElement = joint.querySelector("parent");
   if (!parentElement) {
@@ -51,6 +55,14 @@ export function updateJointLinksInURDF(
     }
   }
   childElement.setAttribute("link", childLink);
+
+  // Explicitly restore preserved attributes to ensure they're not lost
+  if (preservedName) {
+    joint.setAttribute("name", preservedName);
+  }
+  if (preservedType) {
+    joint.setAttribute("type", preservedType);
+  }
 
   const serializer = new XMLSerializer();
   return serializer.serializeToString(xmlDoc);
