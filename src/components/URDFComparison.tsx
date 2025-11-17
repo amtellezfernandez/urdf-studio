@@ -329,7 +329,7 @@ export const URDFComparison = ({
           }}>
             {/* Original URDF */}
             {(selectedView === "original" || selectedView === "split") && (
-              <div className="flex flex-col gap-2 min-h-0">
+              <div className="flex flex-col gap-2 min-h-0 min-w-0">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">Original URDF</h3>
                   <div className="flex gap-2">
@@ -351,15 +351,17 @@ export const URDFComparison = ({
                     </Button>
                   </div>
                 </div>
-                <ScrollArea className="flex-1 border rounded-md p-4 bg-muted/30">
-                  <URDFSyntaxHighlighter xml={formattedOriginal} className="text-xs" />
+                <ScrollArea className="flex-1 border rounded-md overflow-hidden">
+                  <div className="min-w-0 p-5 bg-muted/40">
+                    <URDFSyntaxHighlighter xml={formattedOriginal} className="text-sm leading-relaxed" />
+                  </div>
                 </ScrollArea>
               </div>
             )}
 
             {/* Viz URDF */}
             {(selectedView === "viz" || selectedView === "split") && (
-              <div className="flex flex-col gap-2 min-h-0">
+              <div className="flex flex-col gap-2 min-h-0 min-w-0">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">Viz URDF</h3>
                   <div className="flex gap-2">
@@ -455,8 +457,10 @@ export const URDFComparison = ({
                     />
                   </div>
                 ) : (
-                  <ScrollArea className="flex-1 border rounded-md p-4 bg-muted/30">
-                    <URDFSyntaxHighlighter xml={formattedViz} className="text-xs" />
+                  <ScrollArea className="flex-1 border rounded-md overflow-hidden">
+                    <div className="min-w-0 p-5 bg-muted/40">
+                      <URDFSyntaxHighlighter xml={formattedViz} className="text-sm leading-relaxed" />
+                    </div>
                   </ScrollArea>
                 )}
               </div>

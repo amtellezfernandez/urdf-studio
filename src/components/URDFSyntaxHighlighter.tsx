@@ -36,7 +36,7 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
         }
         // Comment
         lineParts.push(
-          <span key={`comment-${lineIndex}`} className="text-muted-foreground/50 italic">
+          <span key={`comment-${lineIndex}`} className="text-muted-foreground/70 italic">
             {commentMatch[0]}
           </span>
         );
@@ -91,14 +91,14 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
         const rest = tagMatch.content.substring(2);
         parts.push(
           <span key={`tag-${tagMatch.start + offset}`}>
-            <span className="text-muted-foreground/40">{closingPart}</span>
-            <span className="text-blue-400">{rest}</span>
+            <span className="text-muted-foreground/60">{closingPart}</span>
+            <span className="text-blue-500 dark:text-blue-400">{rest}</span>
           </span>
         );
       } else if (tagMatch.content.startsWith('<?')) {
         // XML declaration
         parts.push(
-          <span key={`tag-${tagMatch.start + offset}`} className="text-cyan-400">
+          <span key={`tag-${tagMatch.start + offset}`} className="text-cyan-600 dark:text-cyan-400">
             {tagMatch.content}
           </span>
         );
@@ -126,16 +126,16 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
     // Match: <tagname attributes>
     const tagMatch = tag.match(/^<([\w:]+)([^>]*)(\/?)>$/);
     if (!tagMatch) {
-      return [<span key={`tag-${keyOffset}`} className="text-blue-400">{tag}</span>];
+      return [<span key={`tag-${keyOffset}`} className="text-blue-500 dark:text-blue-400">{tag}</span>];
     }
-    
+
     const tagName = tagMatch[1];
     const attributes = tagMatch[2];
     const selfClosing = tagMatch[3];
-    
+
     // Opening bracket and tag name
     parts.push(
-      <span key={`tag-open-${keyOffset}`} className="text-blue-400">{`<${tagName}`}</span>
+      <span key={`tag-open-${keyOffset}`} className="text-blue-500 dark:text-blue-400">{`<${tagName}`}</span>
     );
     
     // Attributes
@@ -147,11 +147,11 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
     // Self-closing or closing bracket
     if (selfClosing) {
       parts.push(
-        <span key={`tag-close-${keyOffset}`} className="text-blue-400">{`${selfClosing}>`}</span>
+        <span key={`tag-close-${keyOffset}`} className="text-blue-500 dark:text-blue-400">{`${selfClosing}>`}</span>
       );
     } else {
       parts.push(
-        <span key={`tag-close-${keyOffset}`} className="text-blue-400">{`>`}</span>
+        <span key={`tag-close-${keyOffset}`} className="text-blue-500 dark:text-blue-400">{`>`}</span>
       );
     }
     
@@ -180,9 +180,9 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
       // Attribute name and value
       parts.push(
         <span key={`attr-${keyOffset + match.index}`}>
-          <span className="text-yellow-400">{match[1]}</span>
+          <span className="text-yellow-600 dark:text-yellow-400">{match[1]}</span>
           <span className="text-foreground">=</span>
-          <span className="text-green-400">{match[2]}</span>
+          <span className="text-green-600 dark:text-green-400">{match[2]}</span>
         </span>
       );
       
@@ -227,7 +227,7 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
       
       // Number in green
       parts.push(
-        <span key={`num-${keyOffset + match.index}`} className="text-green-300">
+        <span key={`num-${keyOffset + match.index}`} className="text-green-600 dark:text-green-400">
           {match[0]}
         </span>
       );
@@ -249,7 +249,7 @@ export const URDFSyntaxHighlighter: React.FC<URDFSyntaxHighlighterProps> = ({ xm
   };
   
   return (
-    <pre className={`font-mono whitespace-pre-wrap break-words ${className}`}>
+    <pre className={`font-mono whitespace-pre-wrap break-words overflow-wrap-anywhere max-w-full ${className}`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: '1.6' }}>
       {highlightXML(xml)}
     </pre>
   );
