@@ -22,45 +22,30 @@ export interface JointLimits {
 export function parseJointLimitsFromURDF(urdfContent: string): JointLimits {
   const limits: JointLimits = {};
 
-  console.log("[parseJointLimits] Starting to parse URDF content, length:", urdfContent.length);
-
-  // Parse the URDF XML using robust parser
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
 
-  // Check for parsing errors
   const parserError = xmlDoc.querySelector("parsererror");
   if (parserError) {
-    const errorText = parserError.textContent || "Unknown XML parsing error";
-    console.error("URDF parsing error:", errorText);
+    console.error("URDF parsing error:", parserError.textContent || "Unknown XML parsing error");
     return limits;
   }
 
-  // Validate robot element exists
   const robot = xmlDoc.querySelector("robot");
   if (!robot) {
     console.error("No <robot> element found in URDF");
     return limits;
   }
 
-  // Find all joints
   const joints = xmlDoc.querySelectorAll("joint");
-  console.log(`[parseJointLimits] Found ${joints.length} joints in URDF`);
 
   joints.forEach((joint) => {
     const jointName = joint.getAttribute("name");
     if (!jointName) return;
 
-    // Get joint type - skip if no type attribute (these are hardware interface definitions, not actual joints)
-    const jointTypeAttr = joint.getAttribute("type");
-    if (!jointTypeAttr) {
-      console.log(`[parseJointLimits] Skipping joint "${jointName}" - no type attribute (likely hardware interface definition)`);
-      return;
-    }
-    const jointType = jointTypeAttr;
-
-    // Debug: log what we're parsing
-    console.log(`[parseJointLimits] Joint "${jointName}" has type="${jointType}"`);
+    // Skip joints without type attribute (hardware interface definitions)
+    const jointType = joint.getAttribute("type");
+    if (!jointType) return;
 
     // Initialize with defaults based on joint type
     let lower: number | null = null;

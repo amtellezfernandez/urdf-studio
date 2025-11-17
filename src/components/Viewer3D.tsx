@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Upload, Play, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -393,10 +391,6 @@ const URDFModel = ({
       manager: THREE.LoadingManager,
       onComplete: (mesh: THREE.Object3D | null, err?: Error) => void
     ) => {
-      if (import.meta.env.DEV) {
-        console.log("Looking for mesh:", path);
-      }
-
       // Try multiple path variations
       const filename = path.split("/").pop() || path;
       const pathVariations = [
@@ -412,18 +406,11 @@ const URDFModel = ({
       for (const variant of pathVariations) {
         if (meshFiles[variant]) {
           meshBlob = meshFiles[variant];
-          if (import.meta.env.DEV) {
-            console.log(`Found mesh with variant: ${variant}`);
-          }
           break;
         }
       }
 
       if (!meshBlob) {
-        if (import.meta.env.DEV) {
-          console.warn(`Mesh file not found. Tried:`, pathVariations);
-          console.warn("Available meshes:", Object.keys(meshFiles));
-        }
         // Don't fail - just skip this mesh
         onComplete(null);
         return;
@@ -436,12 +423,6 @@ const URDFModel = ({
       stlLoader.load(
         blobUrl,
         (geometry) => {
-          if (import.meta.env.DEV) {
-            console.log(`Loaded geometry for ${filename}:`, {
-              vertices: geometry.attributes.position.count,
-            });
-          }
-
           // Choose material based on GPU mode
           const isLowGPU = gpuMode === "low";
           
@@ -515,10 +496,6 @@ const URDFModel = ({
           }
           groupRef.current.add(robot);
 
-          if (import.meta.env.DEV) {
-            console.log("Robot added to scene, children count:", robot.children.length);
-          }
-
           // Keep URDF Z-up to match imported animation data axes; no rotation
 
           // Scale to fit within a reasonable view size, but don't fix position
@@ -527,10 +504,6 @@ const URDFModel = ({
           const center = box.getCenter(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
 
-          if (import.meta.env.DEV) {
-            console.log("Robot bounding box (pre-scale):", { size, center, maxDim });
-          }
-
           if (maxDim > 0 && isFinite(maxDim)) {
             const scale = 2 / maxDim;
             robot.scale.setScalar(scale);
@@ -538,9 +511,6 @@ const URDFModel = ({
             box.setFromObject(robot);
             box.getCenter(center);
           } else {
-            if (import.meta.env.DEV) {
-              console.warn("Invalid bounding box, default scale=1");
-            }
             robot.scale.setScalar(1);
           }
 
@@ -551,11 +521,6 @@ const URDFModel = ({
 
           robotRef.current = robot;
           onRobotLoaded(robot);
-
-          const jointNames = Object.keys(robot.joints || {});
-          if (import.meta.env.DEV) {
-            console.log("Available joints:", jointNames);
-          }
         }
       } catch (err) {
         console.error("Error loading URDF:", err);
@@ -1544,15 +1509,6 @@ export const Viewer3D = ({
       }
 
       const jointNames = Object.keys(frames[0]?.joints || {});
-      if (import.meta.env.DEV) {
-        console.log(
-          "Loaded animation:",
-          frames.length,
-          "frames,",
-          jointNames.length,
-          "joints"
-        );
-      }
 
       toast.success(
         `Loaded ${frames.length} frames with ${jointNames.length} joints`

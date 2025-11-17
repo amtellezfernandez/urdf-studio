@@ -132,18 +132,13 @@ async function getDefaultBranch(
 
     const data = await response.json();
     const branch = data.default_branch || "main";
-    
-    if (import.meta.env.DEV) {
-      console.log(`[GitHub] Default branch: ${branch}`);
-    }
-    
+
     return branch;
   } catch (error) {
     if (error instanceof Error && (error.message.includes("rate limit") || error.message.includes("403") || error.message.includes("404"))) {
       throw error;
     }
     // Fallback to "main" if we can't determine the branch
-    console.warn(`[GitHub] Could not determine default branch, using "main" as fallback:`, error);
     return "main";
   }
 }
@@ -177,23 +172,11 @@ export async function fetchRepoContents(
     const treeRef = path ? `${defaultBranch}:${path}` : defaultBranch;
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${treeRef}?recursive=1`;
 
-    if (import.meta.env.DEV) {
-      console.log(`[GitHub] Fetching ALL files using Trees API (recursive):`);
-      console.log(`[GitHub]   Owner: ${owner}`);
-      console.log(`[GitHub]   Repo: ${repo}`);
-      console.log(`[GitHub]   Branch: ${defaultBranch}`);
-      console.log(`[GitHub]   Path: ${path || '(root)'}`);
-      console.log(`[GitHub]   URL: ${url}`);
-    }
-
     const response = await fetch(url, { headers });
 
     if (response.status === 404) {
       // If path was provided and tree not found, try root and filter
       if (path) {
-        if (import.meta.env.DEV) {
-          console.warn(`[GitHub] Tree not found for path "${path}", trying root...`);
-        }
         // Fallback to root if path doesn't exist
         const rootUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
         const rootResponse = await fetch(rootUrl, { headers });
@@ -233,12 +216,7 @@ export async function fetchRepoContents(
 
     // Trees API returns a tree object with a tree array
     if (!data.tree || !Array.isArray(data.tree)) {
-      console.error(`[GitHub] Invalid tree response:`, data);
       throw new Error("Invalid tree response from GitHub API - missing tree array");
-    }
-
-    if (import.meta.env.DEV) {
-      console.log(`[GitHub] Successfully fetched tree with ${data.tree.length} entries`);
     }
 
     // Convert tree entries to GitHubFile format
@@ -296,24 +274,6 @@ function convertTreeToFiles(treeEntries: any[], pathPrefix: string = ""): GitHub
       download_url: null,
       size: 0,
     });
-  }
-
-  if (import.meta.env.DEV) {
-    const fileCount = files.filter(f => f.type === "file").length;
-    const dirCount = files.filter(f => f.type === "dir").length;
-    console.log(`[GitHub] Converted tree to ${fileCount} files and ${dirCount} directories`);
-    
-    // Log file count by extension
-    const stlCount = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith('.stl')).length;
-    const urdfCount = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith('.urdf')).length;
-    console.log(`[GitHub]   - ${stlCount} .stl files`);
-    console.log(`[GitHub]   - ${urdfCount} .urdf files`);
-    
-    // Log first few file paths for debugging
-    if (fileCount > 0) {
-      const sampleFiles = files.filter(f => f.type === "file").slice(0, 10);
-      console.log(`[GitHub] Sample files:`, sampleFiles.map(f => f.path));
-    }
   }
 
   return files;
@@ -595,13 +555,6 @@ export function findRobotDescriptionStructures(files: GitHubFile[]): RobotDescri
         meshesPath: meshesFolder?.path,
         assetsPath: assetsFolder?.path,
       });
-      
-      if (import.meta.env.DEV) {
-        console.log(`[GitHub] Found robot description structure: ${rootPath}`);
-        console.log(`[GitHub]   URDF files: ${candidates.length}`);
-        console.log(`[GitHub]   Meshes folder: ${meshesFolder?.path || 'none'}`);
-        console.log(`[GitHub]   Assets folder: ${assetsFolder?.path || 'none'}`);
-      }
     }
   }
   
@@ -624,16 +577,9 @@ export function findRobotDescriptionStructures(files: GitHubFile[]): RobotDescri
         meshesPath: rootMeshes?.path,
         assetsPath: rootAssets?.path,
       });
-      
-      if (import.meta.env.DEV) {
-        console.log(`[GitHub] Found robot description structure at root`);
-        console.log(`[GitHub]   URDF files: ${candidates.length}`);
-        console.log(`[GitHub]   Meshes folder: ${rootMeshes?.path || 'none'}`);
-        console.log(`[GitHub]   Assets folder: ${rootAssets?.path || 'none'}`);
-      }
     }
   }
-  
+
   return structures;
 }
 
@@ -869,9 +815,6 @@ function tryResolveFromParent(
     if (resolved) {
       const file = lowerCaseFileMap.get(resolved.toLowerCase());
       if (file) {
-        if (import.meta.env.DEV) {
-          console.log(`[GitHub] ✓ Resolved mesh (from parent): "${meshRef}" -> "${resolved}" (URDF in ${urdfDir})`);
-        }
         return file;
       }
     }
@@ -883,9 +826,6 @@ function tryResolveFromParent(
       if (resolved) {
         const file = lowerCaseFileMap.get(resolved.toLowerCase());
         if (file) {
-          if (import.meta.env.DEV) {
-            console.log(`[GitHub] ✓ Resolved mesh (with ${folderName}/ prefix): "${meshRef}" -> "${resolved}"`);
-          }
           return file;
         }
       }
@@ -908,33 +848,24 @@ function resolveMeshPathGeneric(
 ): GitHubFile | null {
   const urdfDir = dirname(urdfPath);
   const resolved = resolveMeshPath(urdfDir, meshRef);
-  
+
   if (!resolved) {
-    if (import.meta.env.DEV) {
-      console.warn(`[GitHub] ✗ Failed to resolve mesh path: "${meshRef}"`);
-    }
     return null;
   }
-  
+
   // Try direct lookup first
   let file = lowerCaseFileMap.get(resolved.toLowerCase());
   if (file) {
-    if (import.meta.env.DEV) {
-      console.log(`[GitHub] ✓ Resolved mesh: "${meshRef}" -> "${resolved}"`);
-    }
     return file;
   }
-  
+
   // Try resolving from parent directory if URDF is in urdf/ subdirectory
   if (urdfDir) {
     file = tryResolveFromParent(urdfDir, meshRef, lowerCaseFileMap);
     if (file) return file;
   }
-  
+
   // Not found
-  if (import.meta.env.DEV) {
-    console.warn(`[GitHub] ✗ Mesh not found: "${meshRef}" -> resolved to "${resolved}" (not in repository)`);
-  }
   return null;
 }
 
@@ -976,10 +907,6 @@ export async function convertGitHubFilesToFileList(
   }
 
   // Fetch URDF content first to extract mesh references
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] Fetching URDF file to extract mesh references: ${urdfFile.path}${urdfFile.sha ? ` (SHA: ${urdfFile.sha.substring(0, 7)}...)` : ''}`);
-  }
-  
   const blobSha = urdfFile.sha || (urdfFile.encoding === "sha" ? urdfFile.content : undefined);
   const { content: urdfContent, mimeType: urdfMimeType } = await getGitHubFileContent(
     owner, 
@@ -994,66 +921,36 @@ export async function convertGitHubFilesToFileList(
   
   // Extract mesh references from URDF
   const meshReferences = extractMeshReferencesFromURDF(urdfText);
-  
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] Found ${meshReferences.length} mesh references in URDF:`, meshReferences);
-  }
-  
+
   // Create case-insensitive path map for efficient lookup
   // Only need one map since we always do case-insensitive lookups
   const pathMap = new Map<string, GitHubFile>();
   const seenPaths = new Set<string>(); // Track unique file paths to avoid duplicates
-  
+
   for (const file of files) {
     if (file.type === "file") {
       const normalized = normalizePath(file.path);
       pathMap.set(normalized.toLowerCase(), file);
     }
   }
-  
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] Created path map with ${pathMap.size} entries`);
-    const stlFiles = Array.from(pathMap.values()).filter(f => {
-      const name = f.name.toLowerCase();
-      return name.endsWith('.stl') || name.endsWith('.dae');
-    });
-    console.log(`[GitHub] Total mesh files in repository: ${stlFiles.length}`);
-  }
-  
+
   // Resolve each mesh reference using simple path resolution
   // NO filtering by folder/basePath - searches entire repository tree
   const matchedFiles: GitHubFile[] = [];
-  const unmatchedRefs: string[] = [];
-  
+
   for (const meshRef of meshReferences) {
     const file = resolveMeshPathGeneric(urdfPath, meshRef, pathMap, pathMap, "");
-    
+
     if (file && !seenPaths.has(file.path)) {
       matchedFiles.push(file);
       seenPaths.add(file.path);
-    } else if (!file) {
-      unmatchedRefs.push(meshRef);
     }
   }
-  
-  // Log summary
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] ===== Mesh Resolution Results =====`);
-    console.log(`[GitHub] URDF path: ${urdfPath}`);
-    console.log(`[GitHub] URDF directory: ${dirname(urdfPath) || '(root)'}`);
-    console.log(`[GitHub] Mesh references in URDF: ${meshReferences.length}`);
-    console.log(`[GitHub] Matched files: ${matchedFiles.length}`);
-    console.log(`[GitHub] Unmatched references: ${unmatchedRefs.length}`);
-    if (unmatchedRefs.length > 0) {
-      console.warn(`[GitHub] Unmatched mesh references:`, unmatchedRefs);
-    }
-    console.log(`[GitHub] ===================================`);
-  }
-  
+
   // Add URDF file to FileList
   // Use full repository path as webkitRelativePath for consistency
   const urdfRelativePath = urdfPath;
-  
+
   const urdfFileObj = new File([urdfContent], urdfFile.name, { type: urdfMimeType });
   Object.defineProperty(urdfFileObj, "webkitRelativePath", {
     value: urdfRelativePath,
@@ -1062,28 +959,13 @@ export async function convertGitHubFilesToFileList(
     configurable: false,
   });
   dataTransfer.items.add(urdfFileObj);
-  
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] URDF file added: ${urdfFile.name} (webkitRelativePath: ${urdfRelativePath})`);
-  }
-  
-  // Process matched mesh files
-  const successfulFiles: string[] = [];
-  const failedFiles: Array<{ path: string; error: string }> = [];
-  
-  // Process files in batches to avoid overwhelming the API
+
+  // Process matched mesh files in batches to avoid overwhelming the API
   const BATCH_SIZE = 15;
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] Processing ${matchedFiles.length} matched mesh files in batches of ${BATCH_SIZE} using Blob API`);
-  }
-  
+
   for (let i = 0; i < matchedFiles.length; i += BATCH_SIZE) {
     const batch = matchedFiles.slice(i, i + BATCH_SIZE);
-    
-    if (import.meta.env.DEV) {
-      console.log(`[GitHub] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(matchedFiles.length / BATCH_SIZE)}: ${batch.map(f => f.name).join(', ')}`);
-    }
-    
+
     // Process batch in parallel
     await Promise.all(
       batch.map(async (file) => {
@@ -1093,17 +975,17 @@ export async function convertGitHubFilesToFileList(
           // Use blob SHA if available (from Trees API), otherwise fall back to file path
           const blobSha = file.sha || (file.encoding === "sha" ? file.content : undefined);
           const { content, mimeType } = await getGitHubFileContent(
-            owner, 
-            repo, 
-            file.path, 
+            owner,
+            repo,
+            file.path,
             accessToken,
             blobSha
           );
-          
+
           // Use the full repository path as webkitRelativePath
           // This allows the mesh loader to match it with URDF references
           const relativePath = file.path;
-          
+
           // Create File object with correct MIME type
           const fileObj = new File([content], file.name, { type: mimeType });
           Object.defineProperty(fileObj, "webkitRelativePath", {
@@ -1112,53 +994,18 @@ export async function convertGitHubFilesToFileList(
             enumerable: true,
             configurable: false,
           });
-          
-          if (import.meta.env.DEV) {
-            console.log(`[GitHub] File: ${file.name} | Full: ${file.path} | Relative: ${relativePath} | SHA: ${file.sha ? 'yes' : 'no'}`);
-          }
-          
+
           dataTransfer.items.add(fileObj);
-          successfulFiles.push(file.path);
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          console.error(`[GitHub] Failed to get content for ${file.path}:`, errorMsg);
-          failedFiles.push({ path: file.path, error: errorMsg });
-          // Don't throw - continue processing other files
+        } catch {
+          // Continue processing other files even if one fails
         }
       })
     );
-    
+
     // Small delay between batches
     if (i + BATCH_SIZE < matchedFiles.length) {
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-  }
-  
-  // Log summary in development mode
-  if (import.meta.env.DEV) {
-    console.log(`[GitHub] File conversion summary:`);
-    console.log(`[GitHub]   URDF: 1`);
-    console.log(`[GitHub]   Matched mesh files: ${matchedFiles.length}`);
-    console.log(`[GitHub]   Successfully loaded: ${successfulFiles.length}`);
-    console.log(`[GitHub]   Failed to load: ${failedFiles.length}`);
-    console.log(`[GitHub]   Final FileList length: ${dataTransfer.files.length}`);
-    
-    if (failedFiles.length > 0) {
-      console.error(`[GitHub] Failed files:`, failedFiles);
-    }
-    
-    if (unmatchedRefs.length > 0) {
-      console.warn(`[GitHub] Unmatched mesh references (${unmatchedRefs.length}):`, unmatchedRefs);
-    }
-  }
-  
-  // Show warning if files failed to load
-  if (failedFiles.length > 0) {
-    console.warn(`[GitHub] Warning: ${failedFiles.length} file(s) failed to load. This may cause missing meshes.`);
-  }
-  
-  if (unmatchedRefs.length > 0) {
-    console.warn(`[GitHub] Warning: ${unmatchedRefs.length} mesh reference(s) could not be resolved to files in the repository.`);
   }
 
   return dataTransfer.files;

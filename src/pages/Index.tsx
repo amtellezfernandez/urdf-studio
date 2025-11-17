@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useCallback, useMemo, startTransition, flushSync } from "react";
+import { useState, useCallback, useMemo, startTransition } from "react";
 import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
 import { Viewer3D } from "@/components/Viewer3D";
 import type { CollisionVisibility } from "@/components/LinkEditor";
@@ -152,9 +152,6 @@ const Index = () => {
       
       const parsedLimits = parseJointLimitsFromURDF(originalContent);
       const parsedAxes = parseJointAxesFromURDF(originalContent);
-
-      // Debug: log parsed limits
-      console.log("[loadFilesFromFolder] Parsed joint limits:", parsedLimits);
 
       setOriginalUrdfContent(originalContent);
       setJointLimits(parsedLimits);

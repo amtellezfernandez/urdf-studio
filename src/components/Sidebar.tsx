@@ -1756,7 +1756,7 @@ export const Sidebar = ({
                     joint_names: actualJointNamesForMetadata,
                     codebase_version: infoJson.codebase_version ?? "v3-compatible",
                     num_frames: frames.length,
-                    episode_length_sec: frames[frames.length - 1]?.timestamp / 1000 ?? 0,
+                    episode_length_sec: (frames[frames.length - 1]?.timestamp ?? 0) / 1000,
                   };
 
                   const newEpisode = createEpisode(

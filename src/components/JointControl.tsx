@@ -187,13 +187,6 @@ export const JointControl = ({
   onTypeChange,
   onNameChange,
 }: JointControlProps) => {
-  // Debug: Log if onTypeChange is available
-  useEffect(() => {
-    if (onTypeChange) {
-      console.log(`[JointControl] onTypeChange available for joint: ${jointName}`);
-    }
-  }, [onTypeChange, jointName]);
-  
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
   const hasUpperLimit = jointInfo?.upper !== null && jointInfo?.upper !== undefined;

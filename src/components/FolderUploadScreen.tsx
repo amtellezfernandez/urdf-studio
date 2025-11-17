@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FolderOpen, Github, AlertTriangle, Loader2, X, Clock, Folder } from "lucide-react";
-import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
+import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { useRecentGitHubRepos } from "@/hooks/use-recent-github-repos";
 import { toast } from "sonner";
 import {
@@ -141,23 +141,14 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
       }
 
       // Fetch repository contents
-      console.log(`[GitHub] Fetching repository contents: ${repoInfo.owner}/${repoInfo.repo}${repoInfo.path ? ` (path: ${repoInfo.path})` : ''}`);
       const files = await fetchRepoContents(repoInfo.owner, repoInfo.repo, repoInfo.path, token);
-      
+
       // Store fetched files and repo info for reuse
       setFetchedFiles(files);
       setRepoInfo({ owner: repoInfo.owner, repo: repoInfo.repo, path: repoInfo.path, token });
-      
-      console.log(`[GitHub] Fetched ${files.length} total files/directories from repository`);
-      const fileCount = files.filter(f => f.type === "file").length;
-      const dirCount = files.filter(f => f.type === "dir").length;
-      const stlCount = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith('.stl')).length;
-      const urdfCount = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith('.urdf')).length;
-      console.log(`[GitHub] Files breakdown: ${fileCount} files, ${dirCount} directories, ${stlCount} .stl files, ${urdfCount} .urdf files`);
 
       // Find URDF candidates
       let candidates = findURDFCandidates(files);
-      console.log(`[GitHub] Found ${candidates.length} URDF candidate(s):`, candidates.map(c => ({ path: c.path, hasMeshes: c.hasMeshesFolder })));
 
       if (candidates.length === 0) {
         toast.error("No .urdf file found in the repository");
@@ -168,13 +159,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
       // Check for unsupported formats
       candidates = await checkCandidatesForUnsupportedFormats(candidates, files, repoInfo.owner, repoInfo.repo, token);
       
-      // Warn if any candidates have unsupported formats
-      const unsupportedCandidates = candidates.filter(c => c.hasUnsupportedFormats === true);
-      if (unsupportedCandidates.length > 0) {
-        const formats = new Set(unsupportedCandidates.flatMap(c => c.unsupportedFormats || []));
-        console.warn(`[GitHub] Found ${unsupportedCandidates.length} URDF candidate(s) with unsupported formats:`, Array.from(formats));
-      }
-
       if (candidates.length === 1) {
         // Single URDF found - check if it has unsupported formats
         if (candidates[0].hasUnsupportedFormats === true) {
@@ -194,9 +178,8 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
             { duration: 8000 }
           );
         }
-        
+
         // Single URDF found, load it directly
-        console.log(`[GitHub] Single URDF found, loading directly: ${candidates[0].path}`);
         const fileList = await convertGitHubFilesToFileList(files, candidates[0].path, repoInfo.owner, repoInfo.repo, token);
         
         // Add to recent repos
@@ -206,7 +189,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
         toast.success(`Loaded ${candidates[0].name} from GitHub`);
       } else {
         // Multiple URDF files found, show selection dialog
-        console.log(`[GitHub] Multiple URDF files found (${candidates.length}), showing selection dialog`);
         setUrdfCandidates(candidates);
         setShowUrdfDialog(true);
       }
@@ -261,12 +243,10 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
             return;
           }
 
-          console.log(`[GitHub] Re-fetching repository contents for URDF selection`);
           const files = await fetchRepoContents(parsedRepoInfo.owner, parsedRepoInfo.repo, parsedRepoInfo.path, token);
           setFetchedFiles(files);
           setRepoInfo({ owner: parsedRepoInfo.owner, repo: parsedRepoInfo.repo, path: parsedRepoInfo.path, token });
-          
-          console.log(`[GitHub] Loading URDF: ${candidate.path}`);
+
           const fileList = await convertGitHubFilesToFileList(files, candidate.path, parsedRepoInfo.owner, parsedRepoInfo.repo, token);
           
           // Add to recent repos
@@ -293,7 +273,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
         // Use stored files (no re-fetch needed)
         setIsLoadingGithub(true);
         try {
-          console.log(`[GitHub] Using cached files (${fetchedFiles.length} files) to load URDF: ${candidate.path}`);
           const fileList = await convertGitHubFilesToFileList(fetchedFiles, candidate.path, repoInfo.owner, repoInfo.repo, repoInfo.token);
           
           // Add to recent repos (use repoInfo for consistency, fallback to githubUrl if needed)
@@ -352,18 +331,14 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
         }
 
         // Fetch repository contents
-        console.log(`[GitHub] Loading recent repo: ${recentRepo.owner}/${recentRepo.repo}${recentRepo.path ? ` (path: ${recentRepo.path})` : ''}`);
         const files = await fetchRepoContents(recentRepo.owner, recentRepo.repo, recentRepo.path, token);
-        
+
         // Store fetched files and repo info for reuse
         setFetchedFiles(files);
         setRepoInfo({ owner: recentRepo.owner, repo: recentRepo.repo, path: recentRepo.path, token });
-        
-        console.log(`[GitHub] Fetched ${files.length} total files/directories from repository`);
 
         // Find URDF candidates
         let candidates = findURDFCandidates(files);
-        console.log(`[GitHub] Found ${candidates.length} URDF candidate(s):`, candidates.map(c => ({ path: c.path, hasMeshes: c.hasMeshesFolder })));
 
         if (candidates.length === 0) {
           toast.error("No .urdf file found in the repository");
@@ -374,13 +349,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
         // Check for unsupported formats (same validation as handleGithubLoad)
         candidates = await checkCandidatesForUnsupportedFormats(candidates, files, recentRepo.owner, recentRepo.repo, token);
         
-        // Warn if any candidates have unsupported formats
-        const unsupportedCandidates = candidates.filter(c => c.hasUnsupportedFormats === true);
-        if (unsupportedCandidates.length > 0) {
-          const formats = new Set(unsupportedCandidates.flatMap(c => c.unsupportedFormats || []));
-          console.warn(`[GitHub] Found ${unsupportedCandidates.length} URDF candidate(s) with unsupported formats:`, Array.from(formats));
-        }
-
         if (candidates.length === 1) {
           // Single URDF found - check if it has unsupported formats
           if (candidates[0].hasUnsupportedFormats === true) {
@@ -400,9 +368,8 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
               { duration: 8000 }
             );
           }
-          
+
           // Single URDF found, load it directly
-          console.log(`[GitHub] Single URDF found, loading directly: ${candidates[0].path}`);
           const fileList = await convertGitHubFilesToFileList(files, candidates[0].path, recentRepo.owner, recentRepo.repo, token);
           
           // Update recent repo (will update lastAccessed timestamp)
@@ -412,7 +379,6 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
           toast.success(`Loaded ${candidates[0].name} from GitHub`);
         } else {
           // Multiple URDF files found, show selection dialog
-          console.log(`[GitHub] Multiple URDF files found (${candidates.length}), showing selection dialog`);
           setUrdfCandidates(candidates);
           setShowUrdfDialog(true);
         }
