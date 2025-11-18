@@ -998,6 +998,16 @@ export const Sidebar = ({
     }
   }, [currentFrame, currentPlayingEpisodeIndex, totalFrames]);
 
+  // Auto-update viewer episode when currentPlayingEpisodeIndex changes
+  useEffect(() => {
+    if (isViewerModalOpen && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+      const currentEpisode = episodes[currentPlayingEpisodeIndex];
+      if (currentEpisode && currentEpisode.id !== viewerModalEpisode?.id) {
+        setViewerModalEpisode(currentEpisode);
+      }
+    }
+  }, [currentPlayingEpisodeIndex, isViewerModalOpen, episodes, viewerModalEpisode?.id]);
+
   const handleJointChange = (jointName: string, value: number) => {
     const limited = previewJointValue(jointName, value);
     if (!onJointChange) {
@@ -2826,8 +2836,8 @@ export const Sidebar = ({
       currentPlayingEpisodeIndex !== null && 
       episodes[currentPlayingEpisodeIndex]?.id === episodeId;
 
-    // If currently playing, stop playback
-    if (isCurrentlyPlaying) {
+    // If currently playing OR if we're in the middle of sequential playback, stop everything
+    if (isCurrentlyPlaying || isPlayingAllRef.current) {
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
       setCurrentPlayingEpisodeIndex(null);
@@ -2837,20 +2847,18 @@ export const Sidebar = ({
       }
       (window as any).viewer3dStopAnimation?.();
       (window as any).viewer3dPlayAnimation?.(false);
-      toast.info("Stopped playback - episode deleted");
+      if (isCurrentlyPlaying) {
+        toast.info("Stopped playback - episode deleted");
+      }
     }
 
     setEpisodes((prev) => {
       const filtered = prev.filter((episode) => episode.id !== episodeId);
       const renumbered = renumberEpisodes(filtered);
       
-      // If we deleted the currently playing episode, update the index
-      if (isCurrentlyPlaying && currentPlayingEpisodeIndex !== null) {
-        // Find the next playable episode after deletion
-        const newIndex = currentPlayingEpisodeIndex < renumbered.length 
-          ? currentPlayingEpisodeIndex 
-          : renumbered.length > 0 ? 0 : null;
-        setCurrentPlayingEpisodeIndex(newIndex);
+      // If we deleted the currently playing episode, clear the index
+      if (isCurrentlyPlaying) {
+        setCurrentPlayingEpisodeIndex(null);
       }
       
       return renumbered;
@@ -2894,21 +2902,107 @@ export const Sidebar = ({
     });
   }, []);
 
-  const playEpisode = useCallback((episode: Episode) => {
-    if (episode.frames.length === 0) {
-      toast.error("Episode has no frames");
+  // Play a single episode in loop (not all episodes)
+  const playSingleEpisodeLoop = useCallback((episodeIndex: number) => {
+    if (!isPlayingAllRef.current || episodes.length === 0) {
+      isPlayingAllRef.current = false;
+      setIsPlayingAll(false);
+      setCurrentPlayingEpisodeIndex(null);
       return;
     }
 
-    // Find the episode index
-    const episodeIndex = episodes.findIndex((ep) => ep.id === episode.id);
-    if (episodeIndex !== -1) {
-      setCurrentPlayingEpisodeIndex(episodeIndex);
+    const episode = episodes[episodeIndex];
+    if (!episode || !episode.frames || episode.frames.length === 0) {
+      isPlayingAllRef.current = false;
+      setIsPlayingAll(false);
+      setCurrentPlayingEpisodeIndex(null);
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+      return;
     }
 
-    (window as any).viewer3dPlayEpisode?.(toAnimationFrames(episode));
-    toast.success(`Playing Episode ${episode.number}`);
-  }, [episodes]);
+    if (playbackTimeoutRef.current) {
+      clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+
+    setCurrentPlayingEpisodeIndex(episodeIndex);
+    const frames = toAnimationFrames(episode);
+    (window as any).viewer3dPlayEpisode?.(frames);
+    
+    // Check if we need to resume from current frame or start from beginning
+    const isSameEpisode = episodeIndex === currentPlayingEpisodeIndex;
+    if (isSameEpisode && currentFrame !== undefined) {
+      const frameToResume = Math.min(currentFrame, episode.frames.length - 1);
+      (window as any).viewer3dSetFrame?.(frameToResume);
+    } else {
+      (window as any).viewer3dSetFrame?.(0);
+    }
+    
+    (window as any).viewer3dPlayAnimation?.(true);
+
+    const duration = getEpisodeDurationMs(episode) + PLAYBACK_GAP_MS;
+    playbackTimeoutRef.current = window.setTimeout(() => {
+      // Loop the same episode
+      if (isPlayingAllRef.current && episodes.length > 0) {
+        playSingleEpisodeLoop(episodeIndex);
+      } else {
+        isPlayingAllRef.current = false;
+        setIsPlayingAll(false);
+        setCurrentPlayingEpisodeIndex(null);
+      }
+    }, duration);
+  }, [episodes, currentFrame, currentPlayingEpisodeIndex]);
+
+  const playEpisode = useCallback((episode: Episode) => {
+    if (!episode || !episode.frames || episode.frames.length === 0) {
+      toast.error("Episode has no frames or no longer exists");
+      // Stop playback if episode is invalid
+      setIsPlayingAll(false);
+      isPlayingAllRef.current = false;
+      setCurrentPlayingEpisodeIndex(null);
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+      return;
+    }
+
+    // Find the episode index and validate it still exists
+    const episodeIndex = episodes.findIndex((ep) => ep.id === episode.id);
+    if (episodeIndex === -1) {
+      // Episode was deleted, stop playback
+      toast.info("Episode no longer exists - stopping playback");
+      setIsPlayingAll(false);
+      isPlayingAllRef.current = false;
+      setCurrentPlayingEpisodeIndex(null);
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+      return;
+    }
+
+    // Check if this episode is currently playing
+    const isCurrentlyPlaying = currentPlayingEpisodeIndex === episodeIndex && isPlayingAll;
+
+    if (isCurrentlyPlaying) {
+      // Pause playback
+      setIsPlayingAll(false);
+      isPlayingAllRef.current = false;
+      if (playbackTimeoutRef.current) {
+        clearTimeout(playbackTimeoutRef.current);
+        playbackTimeoutRef.current = null;
+      }
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+      toast.info(`Paused Episode ${episode.number}`);
+    } else {
+      // Activate global play when playing individual episode (but loop just this one)
+      setIsPlayingAll(true);
+      isPlayingAllRef.current = true;
+      
+      // Start looping this single episode
+      playSingleEpisodeLoop(episodeIndex);
+      toast.success(`Playing Episode ${episode.number} (looping)`);
+    }
+  }, [episodes, playSingleEpisodeLoop, currentPlayingEpisodeIndex, isPlayingAll]);
 
   const playEpisodeSequentially = useCallback(
     (startIndex: number) => {
@@ -2929,7 +3023,18 @@ export const Sidebar = ({
         return;
       }
 
+      // Validate that the episode still exists before playing
       const episode = episodes[playableIndex];
+      if (!episode || !episode.frames || episode.frames.length === 0) {
+        // Episode was deleted or is invalid, stop playback
+        isPlayingAllRef.current = false;
+        setIsPlayingAll(false);
+        setCurrentPlayingEpisodeIndex(null);
+        (window as any).viewer3dStopAnimation?.();
+        (window as any).viewer3dPlayAnimation?.(false);
+        toast.info("Stopped playback - episode no longer exists");
+        return;
+      }
 
       if (playbackTimeoutRef.current) {
         clearTimeout(playbackTimeoutRef.current);
@@ -2937,16 +3042,33 @@ export const Sidebar = ({
       }
 
       setCurrentPlayingEpisodeIndex(playableIndex);
-      playEpisode(episode);
+      const frames = toAnimationFrames(episode);
+      (window as any).viewer3dPlayEpisode?.(frames);
+      
+      // Only start from beginning if this is a new episode, otherwise continue from current frame
+      const isNewEpisode = playableIndex !== currentPlayingEpisodeIndex;
+      if (isNewEpisode) {
+        (window as any).viewer3dSetFrame?.(0);
+      } else if (currentFrame !== undefined) {
+        const frameToResume = Math.min(currentFrame, episode.frames.length - 1);
+        (window as any).viewer3dSetFrame?.(frameToResume);
+      }
+      
+      (window as any).viewer3dPlayAnimation?.(true);
 
       const duration = getEpisodeDurationMs(episode) + PLAYBACK_GAP_MS;
       playbackTimeoutRef.current = window.setTimeout(() => {
-        if (isPlayingAllRef.current) {
+        // Double-check playback is still active and episodes still exist
+        if (isPlayingAllRef.current && episodes.length > 0) {
           playEpisodeSequentially((playableIndex + 1) % episodes.length);
+        } else {
+          isPlayingAllRef.current = false;
+          setIsPlayingAll(false);
+          setCurrentPlayingEpisodeIndex(null);
         }
       }, duration);
     },
-    [episodes, playEpisode]
+    [episodes, currentFrame, currentPlayingEpisodeIndex]
   );
 
   const playAllEpisodes = useCallback(() => {
@@ -2956,10 +3078,9 @@ export const Sidebar = ({
     }
 
     if (isPlayingAll) {
-      // Stop playback - pause everything
+      // Pause playback but keep current frame and episode
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
-      setCurrentPlayingEpisodeIndex(null);
       if (playbackTimeoutRef.current) {
         clearTimeout(playbackTimeoutRef.current);
         playbackTimeoutRef.current = null;
@@ -2971,15 +3092,36 @@ export const Sidebar = ({
       return;
     }
 
-    // Play all episodes sequentially
+    // Resume or start playback from current position
     setIsPlayingAll(true);
     isPlayingAllRef.current = true;
-    setCurrentPlayingEpisodeIndex(0);
-    // Use setTimeout to ensure state is set before calling
-    setTimeout(() => {
-      playEpisodeSequentially(0);
-    }, 10);
-  }, [episodes, isPlayingAll, playEpisodeSequentially]);
+    
+    // If we have a current episode, resume from there, otherwise start from beginning
+    const startIndex = currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
+    setCurrentPlayingEpisodeIndex(startIndex);
+    
+    // Resume playback from current frame
+    if (currentPlayingEpisodeIndex !== null && episodes[currentPlayingEpisodeIndex]) {
+      const currentEpisode = episodes[currentPlayingEpisodeIndex];
+      const frames = toAnimationFrames(currentEpisode);
+      (window as any).viewer3dPlayEpisode?.(frames);
+      // Resume from current frame
+      if (currentFrame !== undefined) {
+        const frameToResume = Math.min(currentFrame, currentEpisode.frames.length - 1);
+        (window as any).viewer3dSetFrame?.(frameToResume);
+      }
+      (window as any).viewer3dPlayAnimation?.(true);
+      // Continue sequential playback from current episode
+      setTimeout(() => {
+        playEpisodeSequentially(startIndex);
+      }, 10);
+    } else {
+      // Start from beginning
+      setTimeout(() => {
+        playEpisodeSequentially(0);
+      }, 10);
+    }
+  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, currentFrame]);
 
   // Sync playback speed with Viewer3D
   useEffect(() => {
@@ -3680,6 +3822,32 @@ export const Sidebar = ({
                     </span>
                   </div>
                 </BlenderPropertyRow>
+                
+                {/* Graphics Viewer Button */}
+                <div className="px-1">
+                  <Button
+                    size="sm"
+                    variant={isViewerModalOpen ? "default" : "outline"}
+                    className="w-full h-7 text-xs"
+                    onClick={() => {
+                      if (isViewerModalOpen) {
+                        setIsViewerModalOpen(false);
+                      } else {
+                        // Open viewer with current episode
+                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
+                        if (episodes.length > 0 && episodes[activeIndex]) {
+                          setViewerModalEpisode(episodes[activeIndex]);
+                          setIsViewerModalOpen(true);
+                        }
+                      }
+                    }}
+                    disabled={episodes.length === 0}
+                  >
+                    <Eye className="w-3 h-3 mr-1.5" />
+                    {isViewerModalOpen ? "Close Graphics" : "View Graphics"}
+                  </Button>
+                </div>
+                
                 <p className="text-[10px] text-muted-foreground px-1 truncate">
                   {motionDataFileName ? `Motion data file: ${motionDataFileName}` : "No motion data file loaded"}
                 </p>
@@ -3702,70 +3870,55 @@ export const Sidebar = ({
                         : 0;
                       const durationSeconds = (duration / 1000).toFixed(1);
                       const isPlaying = currentPlayingEpisodeIndex === index && isPlayingAll;
-                      
-                      return (
-                        <div
-                          key={episode.id}
-                          className={`group relative border border-border rounded p-1.5 bg-background hover:bg-muted/30 transition-colors ${
-                            isPlaying ? 'ring-1 ring-primary bg-primary/5' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {/* Episode Number */}
-                            <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <span className="text-[10px] font-bold text-primary">
-                                {episode.number}
-                              </span>
-                            </div>
-                            
-                            {/* Episode Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="text-xs font-medium text-foreground">
-                                  {episode.frames.length} frames
+                      // Get current frame for this episode - only show if it's the currently playing episode
+                      const episodeCurrentFrame = isPlaying && currentFrame !== undefined 
+                        ? currentFrame 
+                        : 0;
+                      const totalFrames = episode.frames.length;
+                        
+                        return (
+                          <div
+                            key={episode.id}
+                            className="group relative border border-border rounded p-1.5 bg-background hover:bg-muted/30 transition-colors"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {/* Episode Number */}
+                              <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px] font-bold text-primary">
+                                  {episode.number}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {durationSeconds}s
-                                </span>
-                                {isPlaying && (
-                                  <span className="text-[10px] text-primary font-medium">
-                                    • Playing
+                              </div>
+                              
+                              {/* Episode Info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-xs font-medium text-foreground">
+                                    {episode.frames.length} frames
                                   </span>
-                                )}
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {durationSeconds}s
+                                  </span>
+                                  {/* Frame Counter */}
+                                  <span className="text-[10px] font-mono text-muted-foreground">
+                                    {episodeCurrentFrame}/{totalFrames}
+                                  </span>
+                                </div>
                               </div>
-                              {/* Compact duration bar */}
-                              <div className="h-1 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-primary transition-all"
-                                  style={{ 
-                                    width: `${Math.min(100, (duration / 10000) * 100)}%` 
-                                  }}
-                                />
-                              </div>
-                            </div>
 
                             {/* Quick Actions */}
                             <div className="flex items-center gap-0.5 flex-shrink-0">
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant={isPlaying ? "default" : "ghost"}
                                 className="h-5 w-5 p-0"
                                 onClick={() => playEpisode(episode)}
-                                title="Play"
+                                title={isPlaying ? "Pause" : "Play"}
                               >
-                                <Play className="w-2.5 h-2.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 w-5 p-0"
-                                onClick={() => {
-                                  setViewerModalEpisode(episode);
-                                  setIsViewerModalOpen(true);
-                                }}
-                                title="View Joint Movements"
-                              >
-                                <Eye className="w-2.5 h-2.5" />
+                                {isPlaying ? (
+                                  <Square className="w-2.5 h-2.5 fill-current" />
+                                ) : (
+                                  <Play className="w-2.5 h-2.5" />
+                                )}
                               </Button>
                               <Button
                                 size="sm"
@@ -3841,6 +3994,13 @@ export const Sidebar = ({
         onOpenChange={setIsViewerModalOpen}
         currentEpisodeIndex={currentPlayingEpisodeIndex}
         allEpisodes={episodes}
+        isPlayingAll={isPlayingAll}
+        onPlayAllEpisodes={playAllEpisodes}
+        onSetCurrentEpisodeIndex={setCurrentPlayingEpisodeIndex}
+        globalCurrentFrame={currentFrame}
+        onSetGlobalFrame={(frame: number) => {
+          (window as any).viewer3dSetFrame?.(frame);
+        }}
       />
     </div>
   );

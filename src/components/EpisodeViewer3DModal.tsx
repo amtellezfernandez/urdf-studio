@@ -43,6 +43,11 @@ interface EpisodeViewer3DModalProps {
   onOpenChange: (open: boolean) => void;
   currentEpisodeIndex?: number | null;
   allEpisodes?: Episode[];
+  isPlayingAll?: boolean;
+  onPlayAllEpisodes?: () => void;
+  onSetCurrentEpisodeIndex?: (index: number | null) => void;
+  globalCurrentFrame?: number;
+  onSetGlobalFrame?: (frame: number) => void;
 }
 
 export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
@@ -51,6 +56,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   onOpenChange,
   currentEpisodeIndex,
   allEpisodes = [],
+  isPlayingAll = false,
+  onPlayAllEpisodes,
+  onSetCurrentEpisodeIndex,
+  globalCurrentFrame,
+  onSetGlobalFrame,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -58,6 +68,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
   const [isMinimized, setIsMinimized] = useState(false);
   const [syncWith3DViewer, setSyncWith3DViewer] = useState(true);
+
+  // Helper function to convert episode to animation frames
+  const toAnimationFrames = (ep: Episode) =>
+    ep.frames.map((frame) => ({
+      timestamp: frame.timestamp,
+      joints: frame.jointPositions,
+    }));
 
   // Window position and size
   const [position, setPosition] = useState({ x: 100, y: 100 });
@@ -76,6 +93,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const lastFrameTimeRef = useRef<number>(0);
+  const isDraggingTimelineRef = useRef<boolean>(false);
 
   // Listen to global frame updates from 3D viewer
   useEffect(() => {
@@ -171,6 +189,98 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     };
   }, [isPlaying, episode, playbackSpeed]);
+
+  // Handle timeline scrubbing (Blender-style)
+  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!episode || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const padding = 40;
+    const graphWidth = rect.width - padding * 2;
+    const x = e.clientX - rect.left;
+    
+    // Check if click is within the graph area
+    if (x >= padding && x <= rect.width - padding && episode.frames.length > 0) {
+      isDraggingTimelineRef.current = true;
+      const normalizedX = (x - padding) / graphWidth;
+      const frameIndex = Math.max(0, Math.min(
+        Math.round(normalizedX * (episode.frames.length - 1)),
+        episode.frames.length - 1
+      ));
+      
+      // Update frame
+      const displayFrame = frameIndex;
+
+      // FIRST: Stop all playback immediately before doing anything else
+      setIsPlaying(false); // Stop local modal playback immediately
+      if (isPlayingAll && onPlayAllEpisodes) {
+        onPlayAllEpisodes(); // This will pause global playback
+      }
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+
+      // THEN: Update frames and positions
+      // Update global frame first
+      if (onSetGlobalFrame) {
+        onSetGlobalFrame(displayFrame);
+      }
+
+      // Also set frame directly in 3D viewer
+      if (episode) {
+        const frames = toAnimationFrames(episode);
+        (window as any).viewer3dPlayEpisode?.(frames);
+        (window as any).viewer3dSetFrame?.(displayFrame);
+      }
+
+      // Update local frame for display
+      setCurrentFrame(displayFrame);
+      // Playback will only resume if user explicitly clicks play
+    }
+  };
+
+  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDraggingTimelineRef.current || !episode || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const padding = 40;
+    const graphWidth = rect.width - padding * 2;
+    const x = e.clientX - rect.left;
+    
+    if (x >= padding && x <= rect.width - padding && episode.frames.length > 0) {
+      const normalizedX = (x - padding) / graphWidth;
+      const frameIndex = Math.max(0, Math.min(
+        Math.round(normalizedX * (episode.frames.length - 1)),
+        episode.frames.length - 1
+      ));
+      
+      // Update frame while dragging
+      const displayFrame = frameIndex;
+
+      // Ensure playback stays stopped during dragging
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+
+      // Update global frame first
+      if (onSetGlobalFrame) {
+        onSetGlobalFrame(displayFrame);
+      }
+
+      // Set frame directly in 3D viewer (don't call PlayEpisode - it might restart animation)
+      (window as any).viewer3dSetFrame?.(displayFrame);
+
+      // Update local frame for display
+      setCurrentFrame(displayFrame);
+    }
+  };
+
+  const handleTimelineMouseUp = () => {
+    isDraggingTimelineRef.current = false;
+  };
+
+  // Handle mouse leave to stop dragging
+  const handleTimelineMouseLeave = () => {
+    isDraggingTimelineRef.current = false;
+  };
 
   // Draw graphs on canvas
   useEffect(() => {
@@ -273,7 +383,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const labelY = padding + 15 + index * 20;
       ctx.fillText(jointName, width - padding - 5, labelY);
 
-      const currentValue = episode.frames[currentFrame]?.jointPositions[jointName];
+      const displayFrame = globalCurrentFrame ?? currentFrame;
+      const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
       if (currentValue !== undefined) {
         ctx.fillStyle = "#a1a1aa";
         ctx.font = "10px monospace";
@@ -282,7 +393,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     });
 
     if (episode.frames.length > 0) {
-      const x = padding + (graphWidth * currentFrame) / (episode.frames.length - 1);
+      const displayFrame = globalCurrentFrame ?? currentFrame;
+      const x = padding + (graphWidth * displayFrame) / (episode.frames.length - 1);
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
@@ -295,10 +407,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ctx.fillStyle = "#ffffff";
       ctx.font = "12px monospace";
       ctx.textAlign = "center";
-      const timeSeconds = (episode.frames[currentFrame].timestamp / 1000).toFixed(2);
+      const timeSeconds = (episode.frames[displayFrame]?.timestamp / 1000).toFixed(2);
       ctx.fillText(`${timeSeconds}s`, x, padding - 10);
     }
-  }, [episode, currentFrame, selectedJoints, jointNames, jointRanges, isMinimized, size]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, isMinimized, size]);
 
   // Mouse event handlers for dragging
   const handleMouseDownHeader = (e: React.MouseEvent) => {
@@ -479,8 +591,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           <div className="flex-1 relative bg-background overflow-hidden">
             <canvas
               ref={canvasRef}
-              className="w-full h-full"
+              className="w-full h-full cursor-pointer"
               style={{ background: "#09090b" }}
+              onMouseDown={handleTimelineMouseDown}
+              onMouseMove={handleTimelineMouseMove}
+              onMouseUp={handleTimelineMouseUp}
+              onMouseLeave={handleTimelineMouseLeave}
             />
           </div>
 
@@ -490,12 +606,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             {syncWith3DViewer && (
               <div className="text-xs text-center text-muted-foreground bg-primary/10 border border-primary/30 rounded px-2 py-1">
                 <Link className="w-3 h-3 inline mr-1" />
-                Synced with 3D Viewer - Use main playback controls
+                Synced with 3D Viewer - Controls work globally
               </div>
             )}
 
-            {/* Playback Controls */}
+            {/* Playback Controls - Same as Global Controls */}
             <div className="flex items-center justify-center gap-1">
+              {/* First Frame */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
@@ -503,10 +620,20 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     variant="ghost"
                     className="h-7 w-7 p-0"
                     onClick={() => {
-                      setCurrentFrame(0);
-                      setIsPlaying(false);
+                      if (allEpisodes.length === 0 || !episode) return;
+                      const activeIndex = currentEpisodeIndex ?? 0;
+                      const activeEpisode = allEpisodes[activeIndex];
+                      if (activeEpisode && activeEpisode.frames.length > 0) {
+                        (window as any).viewer3dStopAnimation?.();
+                        (window as any).viewer3dPlayAnimation?.(false);
+                        const frames = toAnimationFrames(activeEpisode);
+                        (window as any).viewer3dPlayEpisode?.(frames);
+                        (window as any).viewer3dSetFrame?.(0);
+                        onSetCurrentEpisodeIndex?.(activeIndex);
+                        onSetGlobalFrame?.(0);
+                      }
                     }}
-                    disabled={totalFrames === 0 || syncWith3DViewer}
+                    disabled={allEpisodes.length === 0 || !episode}
                   >
                     <ChevronsLeft className="w-3.5 h-3.5" />
                   </Button>
@@ -514,6 +641,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 <TooltipContent><p>First frame</p></TooltipContent>
               </Tooltip>
 
+              {/* Previous Episode */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
@@ -521,10 +649,51 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     variant="ghost"
                     className="h-7 w-7 p-0"
                     onClick={() => {
-                      setCurrentFrame((prev) => Math.max(0, prev - 1));
-                      setIsPlaying(false);
+                      if (allEpisodes.length === 0) return;
+                      const currentIndex = currentEpisodeIndex ?? 0;
+                      const prevIndex = currentIndex > 0 ? currentIndex - 1 : allEpisodes.length - 1;
+                      const prevEpisode = allEpisodes[prevIndex];
+                      if (prevEpisode && prevEpisode.frames.length > 0) {
+                        (window as any).viewer3dStopAnimation?.();
+                        (window as any).viewer3dPlayAnimation?.(false);
+                        const frames = toAnimationFrames(prevEpisode);
+                        (window as any).viewer3dPlayEpisode?.(frames);
+                        (window as any).viewer3dSetFrame?.(0);
+                        onSetCurrentEpisodeIndex?.(prevIndex);
+                        onSetGlobalFrame?.(0);
+                      }
                     }}
-                    disabled={currentFrame === 0 || syncWith3DViewer}
+                    disabled={allEpisodes.length === 0}
+                  >
+                    <SkipBack className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Previous episode</p></TooltipContent>
+              </Tooltip>
+
+              {/* Previous Frame */}
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={() => {
+                      if (allEpisodes.length === 0 || !episode) return;
+                      const activeIndex = currentEpisodeIndex ?? 0;
+                      const activeEpisode = allEpisodes[activeIndex];
+                      if (!activeEpisode || activeEpisode.frames.length === 0) return;
+                      const frames = toAnimationFrames(activeEpisode);
+                      (window as any).viewer3dPlayEpisode?.(frames);
+                      const currentFrameValue = globalCurrentFrame ?? currentFrame;
+                      const newFrame = Math.max(0, currentFrameValue - 1);
+                      (window as any).viewer3dSetFrame?.(newFrame);
+                      (window as any).viewer3dStopAnimation?.();
+                      (window as any).viewer3dPlayAnimation?.(false);
+                      onSetCurrentEpisodeIndex?.(activeIndex);
+                      onSetGlobalFrame?.(newFrame);
+                    }}
+                    disabled={allEpisodes.length === 0 || !episode || (globalCurrentFrame ?? currentFrame) === 0}
                   >
                     <StepBack className="w-3.5 h-3.5" />
                   </Button>
@@ -532,31 +701,31 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 <TooltipContent><p>Previous frame</p></TooltipContent>
               </Tooltip>
 
+              {/* Play/Pause All Episodes */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
-                    variant={isPlaying ? "default" : "ghost"}
+                    variant={isPlayingAll ? "default" : "ghost"}
                     className="h-7 w-7 p-0"
                     onClick={() => {
-                      if (currentFrame >= totalFrames - 1) {
-                        setCurrentFrame(0);
+                      if (onPlayAllEpisodes) {
+                        onPlayAllEpisodes();
                       }
-                      setIsPlaying(!isPlaying);
-                      lastFrameTimeRef.current = 0;
                     }}
-                    disabled={totalFrames === 0 || syncWith3DViewer}
+                    disabled={allEpisodes.length === 0}
                   >
-                    {isPlaying ? (
+                    {isPlayingAll ? (
                       <Square className="w-3.5 h-3.5 fill-current" />
                     ) : (
                       <Play className="w-3.5 h-3.5" />
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent>
+                <TooltipContent><p>{isPlayingAll ? "Pause" : "Play all episodes"}</p></TooltipContent>
               </Tooltip>
 
+              {/* Next Frame */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
@@ -564,10 +733,22 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     variant="ghost"
                     className="h-7 w-7 p-0"
                     onClick={() => {
-                      setCurrentFrame((prev) => Math.min(totalFrames - 1, prev + 1));
-                      setIsPlaying(false);
+                      if (allEpisodes.length === 0 || !episode) return;
+                      const activeIndex = currentEpisodeIndex ?? 0;
+                      const activeEpisode = allEpisodes[activeIndex];
+                      if (!activeEpisode || activeEpisode.frames.length === 0) return;
+                      const frames = toAnimationFrames(activeEpisode);
+                      (window as any).viewer3dPlayEpisode?.(frames);
+                      const currentFrameValue = globalCurrentFrame ?? currentFrame;
+                      const maxFrame = activeEpisode.frames.length - 1;
+                      const newFrame = Math.min(maxFrame, currentFrameValue + 1);
+                      (window as any).viewer3dSetFrame?.(newFrame);
+                      (window as any).viewer3dStopAnimation?.();
+                      (window as any).viewer3dPlayAnimation?.(false);
+                      onSetCurrentEpisodeIndex?.(activeIndex);
+                      onSetGlobalFrame?.(newFrame);
                     }}
-                    disabled={currentFrame >= totalFrames - 1 || syncWith3DViewer}
+                    disabled={allEpisodes.length === 0 || !episode || (globalCurrentFrame ?? currentFrame) >= (episode?.frames.length ?? 0) - 1}
                   >
                     <StepForward className="w-3.5 h-3.5" />
                   </Button>
@@ -575,6 +756,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 <TooltipContent><p>Next frame</p></TooltipContent>
               </Tooltip>
 
+              {/* Next Episode */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
@@ -582,10 +764,50 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     variant="ghost"
                     className="h-7 w-7 p-0"
                     onClick={() => {
-                      setCurrentFrame(totalFrames - 1);
-                      setIsPlaying(false);
+                      if (allEpisodes.length === 0) return;
+                      const currentIndex = currentEpisodeIndex ?? 0;
+                      const nextIndex = (currentIndex + 1) % allEpisodes.length;
+                      const nextEpisode = allEpisodes[nextIndex];
+                      if (nextEpisode && nextEpisode.frames.length > 0) {
+                        (window as any).viewer3dStopAnimation?.();
+                        (window as any).viewer3dPlayAnimation?.(false);
+                        const frames = toAnimationFrames(nextEpisode);
+                        (window as any).viewer3dPlayEpisode?.(frames);
+                        (window as any).viewer3dSetFrame?.(0);
+                        onSetCurrentEpisodeIndex?.(nextIndex);
+                        onSetGlobalFrame?.(0);
+                      }
                     }}
-                    disabled={totalFrames === 0 || syncWith3DViewer}
+                    disabled={allEpisodes.length === 0}
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Next episode</p></TooltipContent>
+              </Tooltip>
+
+              {/* Last Frame */}
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={() => {
+                      if (allEpisodes.length === 0 || !episode) return;
+                      const activeIndex = currentEpisodeIndex ?? 0;
+                      const activeEpisode = allEpisodes[activeIndex];
+                      if (activeEpisode && activeEpisode.frames.length > 0) {
+                        (window as any).viewer3dStopAnimation?.();
+                        (window as any).viewer3dPlayAnimation?.(false);
+                        const frames = toAnimationFrames(activeEpisode);
+                        (window as any).viewer3dPlayEpisode?.(frames);
+                        (window as any).viewer3dSetFrame?.(activeEpisode.frames.length - 1);
+                        onSetCurrentEpisodeIndex?.(activeIndex);
+                        onSetGlobalFrame?.(activeEpisode.frames.length - 1);
+                      }
+                    }}
+                    disabled={allEpisodes.length === 0 || !episode}
                   >
                     <ChevronsRight className="w-3.5 h-3.5" />
                   </Button>
@@ -596,7 +818,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <div className="flex items-center gap-1 ml-2 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Frame:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0 ? currentFrame + 1 : 0}
+                  {totalFrames > 0 ? (globalCurrentFrame ?? currentFrame) + 1 : 0}
                 </span>
                 <span className="text-muted-foreground">/</span>
                 <span className="font-mono text-muted-foreground">{totalFrames}</span>
@@ -605,8 +827,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Time:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0
-                    ? (episode.frames[currentFrame].timestamp / 1000).toFixed(2)
+                  {totalFrames > 0 && episode
+                    ? (episode.frames[globalCurrentFrame ?? currentFrame]?.timestamp / 1000).toFixed(2)
                     : "0.00"}s
                 </span>
               </div>
