@@ -550,11 +550,11 @@ const URDFModel = ({
     const firstTimestamp = animationFrames[0].timestamp;
     const lastTimestamp = animationFrames[animationFrames.length - 1].timestamp;
     const animationDuration = lastTimestamp - firstTimestamp;
-    
+
     let currentTime: number;
     let shouldApplyAnimation = false; // Flag to determine if we should apply animation values
-    
-    // Check for manual frame time from window (set by handleSetFrame)
+
+    // Check for manual frame time from window (set by handleSetFrame or timeline scrubbing)
     const manualFrameTime = (window as any).__viewer3dManualFrameTime;
     if (manualFrameTime !== undefined && manualFrameTime !== null) {
       currentTime = manualFrameTime;
@@ -565,26 +565,27 @@ const URDFModel = ({
       delete (window as any).__viewer3dManualFrameTime;
       shouldApplyAnimation = true; // Apply when manually setting frame
     } else if (manualFrameTimeRef.current !== null) {
-      // Use stored manual frame time
+      // Use stored manual frame time (paused at a specific frame)
       currentTime = manualFrameTimeRef.current;
-      // Clear manual frame time if we're playing (let playback take over)
+      // If we start playing from a paused state, update start time and clear manual frame
       if (isPlaying) {
         animationStartTime.current = Date.now() - (currentTime - firstTimestamp) / playbackSpeed;
         manualFrameTimeRef.current = null;
         shouldApplyAnimation = true;
       } else {
-        // Paused with manual frame time - only apply if explicitly set
+        // Paused with manual frame time - stay at this frame
         shouldApplyAnimation = true;
       }
     } else if (isPlaying) {
       // Normal playback - always apply animation values
       shouldApplyAnimation = true;
       if (animationStartTime.current === 0) {
+        // First time playing - start from the beginning
         animationStartTime.current = Date.now();
       }
       const elapsed = Date.now() - animationStartTime.current;
       const speedAdjustedElapsed = elapsed * playbackSpeed;
-      
+
       // Handle looping: if we've passed the end, reset
       if (animationDuration > 0) {
         currentTime = firstTimestamp + (speedAdjustedElapsed % animationDuration);
@@ -592,8 +593,19 @@ const URDFModel = ({
         currentTime = firstTimestamp;
       }
     } else {
-      // Paused and no manual frame time - don't apply animation values
-      // Let user control joints manually
+      // Paused and no manual frame time - preserve current position
+      // Calculate current time from animation start time
+      if (animationStartTime.current !== 0) {
+        const elapsed = Date.now() - animationStartTime.current;
+        const speedAdjustedElapsed = elapsed * playbackSpeed;
+        if (animationDuration > 0) {
+          currentTime = firstTimestamp + (speedAdjustedElapsed % animationDuration);
+        } else {
+          currentTime = firstTimestamp;
+        }
+        // Store this as manual frame time so we stay at this position
+        manualFrameTimeRef.current = currentTime;
+      }
       shouldApplyAnimation = false;
       return; // Exit early when paused to allow manual joint control
     }
@@ -675,11 +687,9 @@ const URDFModel = ({
     }
   });
 
-  useEffect(() => {
-    if (!isPlaying) {
-      animationStartTime.current = 0;
-    }
-  }, [isPlaying]);
+  // Note: We intentionally don't reset animationStartTime when stopping playback
+  // This allows us to resume from where we left off
+  // The animation loop will handle preserving the current position
 
   // ===== Selection & Highlight Helpers =====
   const highlightedMeshesRef = useRef<THREE.Mesh[]>([]);
@@ -1589,7 +1599,6 @@ export const Viewer3D = ({
     const newPlayingState = !isPlaying;
     setIsPlaying(newPlayingState);
     onPlayingChange?.(newPlayingState);
-    toast.success(newPlayingState ? "Animation playing" : "Animation paused");
   };
 
   // Handler to play episode frames directly
@@ -1610,8 +1619,6 @@ export const Viewer3D = ({
       setIsPlaying(true);
       onPlayingChange?.(true);
     }, 10);
-    
-    toast.success(`Playing episode with ${frames.length} frames`);
   }, [onPlayingChange]);
 
   // Handler to stop animation

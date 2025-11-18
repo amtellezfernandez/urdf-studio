@@ -679,6 +679,7 @@ const Index = () => {
             onCollisionVisibilityChange={setCollisionVisibility}
             rotationPlaneVisible={rotationPlaneVisible}
             onRotationPlaneVisibilityChange={setRotationPlaneVisible}
+            onFrameChange={setCurrentFrame}
           />
 
           {!isSidebarCollapsed && (

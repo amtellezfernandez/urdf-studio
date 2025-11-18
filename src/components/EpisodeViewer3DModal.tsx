@@ -94,6 +94,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const animationFrameRef = useRef<number>();
   const lastFrameTimeRef = useRef<number>(0);
   const isDraggingTimelineRef = useRef<boolean>(false);
+  const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   // Listen to global frame updates from 3D viewer
   useEffect(() => {
@@ -114,6 +115,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       window.removeEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
     };
   }, [syncWith3DViewer, open, currentEpisodeIndex]);
+
+  // Sync local currentFrame with globalCurrentFrame when not playing
+  // This ensures the frame counter doesn't reset to 0 when stopping playback
+  useEffect(() => {
+    if (!isPlaying && globalCurrentFrame !== undefined && syncWith3DViewer) {
+      setCurrentFrame(globalCurrentFrame);
+    }
+  }, [isPlaying, globalCurrentFrame, syncWith3DViewer]);
 
   // Reset state when episode changes
   useEffect(() => {
@@ -190,7 +199,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     };
   }, [isPlaying, episode, playbackSpeed]);
 
-  // Handle timeline scrubbing (Blender-style)
+  // Handle timeline scrubbing (Blender-style) - supports both click and drag
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!episode || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -198,37 +207,50 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     const padding = 40;
     const graphWidth = rect.width - padding * 2;
     const x = e.clientX - rect.left;
-    
+
     // Check if click is within the graph area
     if (x >= padding && x <= rect.width - padding && episode.frames.length > 0) {
-      isDraggingTimelineRef.current = true;
+      // Store initial mouse position to detect if it's a click vs drag
+      dragStartPositionRef.current = { x: e.clientX, y: e.clientY };
+      isDraggingTimelineRef.current = false; // Start as false, will be set to true on move
+
       const normalizedX = (x - padding) / graphWidth;
       const frameIndex = Math.max(0, Math.min(
         Math.round(normalizedX * (episode.frames.length - 1)),
         episode.frames.length - 1
       ));
-      
-      // Update frame
+
+      // Update frame immediately on click
       const displayFrame = frameIndex;
 
-      // FIRST: Stop all playback immediately before doing anything else
-      setIsPlaying(false); // Stop local modal playback immediately
+      // Stop playback IMMEDIATELY when clicking/dragging timeline
+      setIsPlaying(false); // Stop local modal playback
       if (isPlayingAll && onPlayAllEpisodes) {
         onPlayAllEpisodes(); // This will pause global playback
       }
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
 
-      // THEN: Update frames and positions
-      // Update global frame first
+      // Stop animation in 3D viewer immediately
+      (window as any).viewer3dStopAnimation?.();
+
+      // Update global frame first (this updates parent's currentFrame state)
       if (onSetGlobalFrame) {
         onSetGlobalFrame(displayFrame);
       }
 
-      // Also set frame directly in 3D viewer
+      // Set the current episode index so playback knows which episode to resume from
+      if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
+        onSetCurrentEpisodeIndex(currentEpisodeIndex);
+      } else if (currentEpisodeIndex === null && allEpisodes.length > 0) {
+        // If no episode index is set, find the episode in allEpisodes and set it
+        const episodeIndex = allEpisodes.findIndex(ep => ep.id === episode.id);
+        if (episodeIndex !== -1 && onSetCurrentEpisodeIndex) {
+          onSetCurrentEpisodeIndex(episodeIndex);
+        }
+      }
+
+      // Set the frame directly (don't use viewer3dPlayEpisode as it auto-starts playback)
+      // The frames should already be loaded from when the episode viewer was opened
       if (episode) {
-        const frames = toAnimationFrames(episode);
-        (window as any).viewer3dPlayEpisode?.(frames);
         (window as any).viewer3dSetFrame?.(displayFrame);
       }
 
@@ -239,7 +261,25 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   };
 
   const handleTimelineMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDraggingTimelineRef.current || !episode || !canvasRef.current) return;
+    if (!episode || !canvasRef.current) return;
+    
+    // Only process if mouse button is down (dragStartPositionRef indicates mouse is down)
+    if (!dragStartPositionRef.current) return;
+    
+    // Check if mouse has moved enough to consider it a drag (not just a click)
+    const moveDistance = Math.sqrt(
+      Math.pow(e.clientX - dragStartPositionRef.current.x, 2) +
+      Math.pow(e.clientY - dragStartPositionRef.current.y, 2)
+    );
+    
+    // If moved more than 3 pixels, consider it a drag
+    if (moveDistance > 3) {
+      isDraggingTimelineRef.current = true;
+    }
+    
+    // Only update frame if we're actually dragging (moved more than threshold)
+    if (!isDraggingTimelineRef.current) return;
+    
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const padding = 40;
@@ -256,30 +296,30 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       // Update frame while dragging
       const displayFrame = frameIndex;
 
-      // Ensure playback stays stopped during dragging
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
-
       // Update global frame first
       if (onSetGlobalFrame) {
         onSetGlobalFrame(displayFrame);
       }
 
-      // Set frame directly in 3D viewer (don't call PlayEpisode - it might restart animation)
+      // Set frame directly in 3D viewer (don't call PlayEpisode as it auto-starts playback)
       (window as any).viewer3dSetFrame?.(displayFrame);
 
       // Update local frame for display
       setCurrentFrame(displayFrame);
+      // Note: Playback is already stopped on mouse down
     }
   };
 
   const handleTimelineMouseUp = () => {
+    // If we never started dragging, it was just a click - frame was already set in mouseDown
     isDraggingTimelineRef.current = false;
+    dragStartPositionRef.current = null;
   };
 
   // Handle mouse leave to stop dragging
   const handleTimelineMouseLeave = () => {
     isDraggingTimelineRef.current = false;
+    dragStartPositionRef.current = null;
   };
 
   // Draw graphs on canvas
