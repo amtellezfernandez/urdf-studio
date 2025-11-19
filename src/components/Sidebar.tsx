@@ -976,6 +976,8 @@ export const Sidebar = ({
   const [currentRecordingEpisodeId, setCurrentRecordingEpisodeId] = useState<string | null>(null);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [currentPlayingEpisodeIndex, setCurrentPlayingEpisodeIndex] = useState<number | null>(null);
+  const [playbackMode, setPlaybackMode] = useState<"loop" | "sequential">("sequential"); // "loop" = play 1 episode in loop, "sequential" = play all episodes one by one
+  const playbackModeRef = useRef<"loop" | "sequential">("sequential"); // Ref to track current playback mode
   const [recordingFps, setRecordingFps] = useState<number>(30); // Default FPS for recording
   const hfIdentityRef = useRef<{ name: string; fullname?: string } | null>(null);
   const recordingStartTime = useRef<number>(0);
@@ -983,9 +985,15 @@ export const Sidebar = ({
   const playbackTimeoutRef = useRef<number | null>(null);
   const isPlayingAllRef = useRef<boolean>(false);
   const currentLoadedEpisodeRef = useRef<number | null>(null); // Track which episode is currently loaded in Viewer3D
+  const episodeTransitionScheduledRef = useRef<boolean>(false); // Track if we've already scheduled transition to next episode
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
   const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
+
+  // Keep playbackModeRef in sync with playbackMode state
+  useEffect(() => {
+    playbackModeRef.current = playbackMode;
+  }, [playbackMode]);
 
   // Dispatch custom event when frame changes to sync with EpisodeViewer3DModal
   useEffect(() => {
@@ -2989,102 +2997,6 @@ export const Sidebar = ({
     setCurrentPlayingEpisodeIndex(episodeIndex);
   }, [episodes, playbackSpeed, onFrameChange]);
 
-  // Play a single episode in loop (not all episodes)
-  const playSingleEpisodeLoop = useCallback((episodeIndex: number) => {
-    if (!isPlayingAllRef.current || episodes.length === 0) {
-      isPlayingAllRef.current = false;
-      setIsPlayingAll(false);
-      setCurrentPlayingEpisodeIndex(null);
-      return;
-    }
-
-    const episode = episodes[episodeIndex];
-    if (!episode || !episode.frames || episode.frames.length === 0) {
-      isPlayingAllRef.current = false;
-      setIsPlayingAll(false);
-      setCurrentPlayingEpisodeIndex(null);
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
-      return;
-    }
-
-    if (playbackTimeoutRef.current) {
-      clearTimeout(playbackTimeoutRef.current);
-      playbackTimeoutRef.current = null;
-    }
-
-    const frameToUse = currentFrame !== undefined && currentFrame >= 0
-      ? Math.max(0, Math.min(currentFrame, episode.frames.length - 1))
-      : 0;
-    
-    // Use consistent helper function
-    setEpisodeAndFrame(episodeIndex, frameToUse);
-    
-    // Start playing
-    (window as any).viewer3dPlayAnimation?.(true);
-
-    const duration = getEpisodeDurationMs(episode) + PLAYBACK_GAP_MS;
-    playbackTimeoutRef.current = window.setTimeout(() => {
-      // Loop the same episode
-      if (isPlayingAllRef.current && episodes.length > 0) {
-        playSingleEpisodeLoop(episodeIndex);
-      } else {
-        isPlayingAllRef.current = false;
-        setIsPlayingAll(false);
-        setCurrentPlayingEpisodeIndex(null);
-      }
-    }, duration);
-  }, [episodes, currentFrame, currentPlayingEpisodeIndex, playbackSpeed, setEpisodeAndFrame]);
-
-  const playEpisode = useCallback((episode: Episode) => {
-    if (!episode || !episode.frames || episode.frames.length === 0) {
-      toast.error("Episode has no frames or no longer exists");
-      // Stop playback if episode is invalid
-      setIsPlayingAll(false);
-      isPlayingAllRef.current = false;
-      setCurrentPlayingEpisodeIndex(null);
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
-      return;
-    }
-
-    // Find the episode index and validate it still exists
-    const episodeIndex = episodes.findIndex((ep) => ep.id === episode.id);
-    if (episodeIndex === -1) {
-      // Episode was deleted, stop playback
-      toast.info("Episode no longer exists - stopping playback");
-      setIsPlayingAll(false);
-      isPlayingAllRef.current = false;
-      setCurrentPlayingEpisodeIndex(null);
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
-      return;
-    }
-
-    // Check if this episode is currently playing
-    const isCurrentlyPlaying = currentPlayingEpisodeIndex === episodeIndex && isPlayingAll;
-
-    if (isCurrentlyPlaying) {
-      // Pause playback but keep current episode and frame so we can resume from where we left off
-      setIsPlayingAll(false);
-      isPlayingAllRef.current = false;
-      if (playbackTimeoutRef.current) {
-        clearTimeout(playbackTimeoutRef.current);
-        playbackTimeoutRef.current = null;
-      }
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
-      // Keep currentPlayingEpisodeIndex and currentFrame so we can resume from the same position
-    } else {
-      // Activate global play when playing individual episode (but loop just this one)
-      setIsPlayingAll(true);
-      isPlayingAllRef.current = true;
-      
-      // Start looping this single episode (will resume from currentFrame if same episode)
-      playSingleEpisodeLoop(episodeIndex);
-    }
-  }, [episodes, playSingleEpisodeLoop, currentPlayingEpisodeIndex, isPlayingAll]);
-
   const playEpisodeSequentially = useCallback(
     (startIndex: number, resumeFrame?: number) => {
       if (!isPlayingAllRef.current || episodes.length === 0) {
@@ -3115,6 +3027,7 @@ export const Sidebar = ({
         return;
       }
 
+      // Clear any existing timeout
       if (playbackTimeoutRef.current) {
         clearTimeout(playbackTimeoutRef.current);
         playbackTimeoutRef.current = null;
@@ -3133,20 +3046,109 @@ export const Sidebar = ({
       
       // Start playing
       (window as any).viewer3dPlayAnimation?.(true);
-
-      const duration = getEpisodeDurationMs(episode) + PLAYBACK_GAP_MS;
-      playbackTimeoutRef.current = window.setTimeout(() => {
-        if (isPlayingAllRef.current && episodes.length > 0) {
-          playEpisodeSequentially((playableIndex + 1) % episodes.length);
-        } else {
-          isPlayingAllRef.current = false;
-          setIsPlayingAll(false);
-          setCurrentPlayingEpisodeIndex(null);
-        }
-      }, duration);
     },
-    [episodes, currentFrame, onFrameChange, playbackSpeed, setEpisodeAndFrame]
+    [episodes, currentFrame, playbackSpeed, setEpisodeAndFrame]
   );
+
+  // Play single episode in loop
+  const playEpisodeLoop = useCallback((episodeIndex: number, resumeFrame?: number) => {
+    if (!isPlayingAllRef.current || episodes.length === 0) {
+      isPlayingAllRef.current = false;
+      setIsPlayingAll(false);
+      setCurrentPlayingEpisodeIndex(null);
+      return;
+    }
+
+    const episode = episodes[episodeIndex];
+    if (!episode || !episode.frames || episode.frames.length === 0) {
+      isPlayingAllRef.current = false;
+      setIsPlayingAll(false);
+      setCurrentPlayingEpisodeIndex(null);
+      (window as any).viewer3dStopAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(false);
+      return;
+    }
+
+    // Clear any existing timeout
+    if (playbackTimeoutRef.current) {
+      clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+
+    // Determine frame to start from
+    const frameToUse = resumeFrame !== undefined 
+      ? Math.max(0, Math.min(resumeFrame, episode.frames.length - 1))
+      : (currentFrame !== undefined && currentFrame >= 0)
+        ? Math.max(0, Math.min(currentFrame, episode.frames.length - 1))
+        : 0;
+    
+    // Use consistent helper function
+    setEpisodeAndFrame(episodeIndex, frameToUse);
+    
+    // Start playing
+    (window as any).viewer3dPlayAnimation?.(true);
+  }, [episodes, currentFrame, playbackSpeed, setEpisodeAndFrame]);
+
+  // Detect when episode finishes and handle based on mode
+  useEffect(() => {
+    // Only check if we're playing and have a current episode - use ref for consistency
+    if (!isPlayingAllRef.current || currentPlayingEpisodeIndex === null || episodes.length === 0) {
+      episodeTransitionScheduledRef.current = false;
+      return;
+    }
+
+    const currentEpisode = episodes[currentPlayingEpisodeIndex];
+    if (!currentEpisode || currentEpisode.frames.length === 0) {
+      episodeTransitionScheduledRef.current = false;
+      return;
+    }
+
+    const lastFrameIndex = currentEpisode.frames.length - 1;
+    
+    // When we reach the last frame of the current episode
+    if (currentFrame !== undefined && currentFrame >= lastFrameIndex && !episodeTransitionScheduledRef.current) {
+      episodeTransitionScheduledRef.current = true;
+      
+      // Capture values at the time of scheduling to avoid stale closures
+      const scheduledEpisodeIndex = currentPlayingEpisodeIndex;
+      const scheduledEpisodeId = currentEpisode.id;
+      const scheduledEpisodes = episodes; // Capture episodes array too
+      
+      // Small delay to ensure the last frame is displayed
+      const timeoutId = setTimeout(() => {
+        // Double-check we're still playing and on the same episode using captured values
+        // Use ref to check if still playing
+        if (isPlayingAllRef.current && 
+            scheduledEpisodeIndex !== null && 
+            scheduledEpisodeIndex < scheduledEpisodes.length &&
+            scheduledEpisodes[scheduledEpisodeIndex]?.id === scheduledEpisodeId) {
+          
+          // Use ref to get current mode to avoid stale closure
+          const currentMode = playbackModeRef.current;
+          if (currentMode === "loop") {
+            // Loop mode: restart the same episode from frame 0
+            episodeTransitionScheduledRef.current = false;
+            playEpisodeLoop(scheduledEpisodeIndex, 0);
+          } else {
+            // Sequential mode: move to next episode
+            const nextIndex = (scheduledEpisodeIndex + 1) % scheduledEpisodes.length;
+            episodeTransitionScheduledRef.current = false;
+            playEpisodeSequentially(nextIndex);
+          }
+        } else {
+          episodeTransitionScheduledRef.current = false;
+        }
+      }, PLAYBACK_GAP_MS);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        episodeTransitionScheduledRef.current = false;
+      };
+    } else if (currentFrame !== undefined && currentFrame < lastFrameIndex) {
+      // Reset the flag if we're not at the last frame anymore (e.g., user scrubbed back)
+      episodeTransitionScheduledRef.current = false;
+    }
+  }, [currentFrame, currentPlayingEpisodeIndex, episodes, playEpisodeSequentially, playEpisodeLoop]);
 
   const playAllEpisodes = useCallback((overrideFrame?: number) => {
     if (episodes.length === 0) {
@@ -3155,19 +3157,37 @@ export const Sidebar = ({
     }
 
     if (isPlayingAll) {
-      // Stop playback but preserve state
+      // Stop playback but preserve current frame position
+      // Get current frame from Viewer3D before stopping to ensure we preserve the exact position
+      const currentFrameFromViewer = (window as any).__viewer3dCurrentFrameIndex;
+      const frameToPreserve = currentFrameFromViewer !== undefined && currentFrameFromViewer !== null
+        ? currentFrameFromViewer
+        : (currentFrame !== undefined ? currentFrame : 0);
+      
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
       if (playbackTimeoutRef.current) {
         clearTimeout(playbackTimeoutRef.current);
         playbackTimeoutRef.current = null;
       }
+      
+      // Stop animation - this will preserve the frame position in Viewer3D
       (window as any).viewer3dStopAnimation?.();
       (window as any).viewer3dPlayAnimation?.(false);
+      
+      // Ensure the frame is preserved in our state and in Viewer3D
+      if (currentPlayingEpisodeIndex !== null && episodes[currentPlayingEpisodeIndex]) {
+        const episode = episodes[currentPlayingEpisodeIndex];
+        const clampedFrame = Math.max(0, Math.min(frameToPreserve, episode.frames.length - 1));
+        // Explicitly set the frame to ensure it stays at the current position
+        (window as any).viewer3dSetFrame?.(clampedFrame);
+        onFrameChange?.(clampedFrame);
+      }
+      
       return;
     }
 
-    // Start or resume playback
+    // Start or resume playback based on mode
     setIsPlayingAll(true);
     isPlayingAllRef.current = true;
     
@@ -3177,9 +3197,13 @@ export const Sidebar = ({
       ? overrideFrame 
       : (currentFrame !== undefined && currentFrame >= 0 ? currentFrame : undefined);
     
-    // Start playback directly - playEpisodeSequentially handles frame setting
-    playEpisodeSequentially(startIndex, resumeFrame);
-  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, currentFrame]);
+    // Start playback based on mode
+    if (playbackMode === "loop") {
+      playEpisodeLoop(startIndex, resumeFrame);
+    } else {
+      playEpisodeSequentially(startIndex, resumeFrame);
+    }
+  }, [episodes, isPlayingAll, playEpisodeSequentially, playEpisodeLoop, currentPlayingEpisodeIndex, currentFrame, onFrameChange, playbackMode]);
 
   // Sync playback speed with Viewer3D
   useEffect(() => {
@@ -3584,41 +3608,8 @@ export const Sidebar = ({
 
             {/* Blender-style Timeline Controls */}
             <BlenderPanel title="Timeline" defaultOpen={true}>
-              {/* Playback Controls Row - Blender style */}
+              {/* Playback Controls Row - Simplified */}
               <div className="flex items-center gap-0.5 mb-2">
-                {/* First Frame (<<) - Jump to frame 0, stop playback */}
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 hover:bg-muted/50"
-                      onClick={() => {
-                        if (episodes.length === 0) return;
-                        // Use current episode or first episode if none selected
-                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                        const episode = episodes[activeIndex];
-                        if (episode && episode.frames.length > 0) {
-                          // Stop playback
-                          setIsPlayingAll(false);
-                          isPlayingAllRef.current = false;
-                          (window as any).viewer3dStopAnimation?.();
-                          (window as any).viewer3dPlayAnimation?.(false);
-                          // Use consistent helper function
-                          setEpisodeAndFrame(activeIndex, 0);
-                        }
-                      }}
-                      disabled={episodes.length === 0}
-                    >
-                      <ChevronsLeft className="w-3 h-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">First Frame</p>
-                    <p className="text-muted-foreground">Jump to frame 0 of current episode</p>
-                  </TooltipContent>
-                </Tooltip>
-                
                 {/* Previous Episode (|<) - Go to previous episode's first frame, stop playback */}
                 <Tooltip delayDuration={0}>
                   <TooltipTrigger asChild>
@@ -3652,42 +3643,6 @@ export const Sidebar = ({
                   </TooltipContent>
                 </Tooltip>
                 
-                {/* Previous Frame (|<) - Step back one frame, stop playback */}
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 hover:bg-muted/50"
-                      onClick={() => {
-                        if (episodes.length === 0) return;
-                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                        const episode = episodes[activeIndex];
-                        if (!episode || episode.frames.length === 0) return;
-                        
-                        // Step back one frame
-                        const newFrame = Math.max(0, (currentFrame ?? 0) - 1);
-                        
-                        // Stop playback
-                        setIsPlayingAll(false);
-                        isPlayingAllRef.current = false;
-                        (window as any).viewer3dStopAnimation?.();
-                        (window as any).viewer3dPlayAnimation?.(false);
-                        
-                        // Use consistent helper function
-                        setEpisodeAndFrame(activeIndex, newFrame);
-                      }}
-                      disabled={episodes.length === 0 || (currentFrame === 0 && currentPlayingEpisodeIndex !== null)}
-                    >
-                      <StepBack className="w-3 h-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">Previous Frame</p>
-                    <p className="text-muted-foreground">Step back one frame (stops playback)</p>
-                  </TooltipContent>
-                </Tooltip>
-                
                 {/* Play/Pause - Toggle playback */}
                 <Tooltip delayDuration={0}>
                   <TooltipTrigger asChild>
@@ -3709,46 +3664,11 @@ export const Sidebar = ({
                     <p className="font-medium">{isPlayingAll ? "Pause" : "Play"}</p>
                     <p className="text-muted-foreground">
                       {isPlayingAll 
-                        ? "Pause playback of all episodes" 
-                        : "Play all episodes sequentially"}
+                        ? "Pause playback" 
+                        : playbackMode === "loop" 
+                          ? "Play current episode in loop"
+                          : "Play all episodes sequentially"}
                     </p>
-                  </TooltipContent>
-                </Tooltip>
-                
-                {/* Next Frame (|>) - Step forward one frame, stop playback */}
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 hover:bg-muted/50"
-                      onClick={() => {
-                        if (episodes.length === 0) return;
-                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                        const episode = episodes[activeIndex];
-                        if (!episode || episode.frames.length === 0) return;
-                        
-                        // Step forward one frame
-                        const maxFrame = episode.frames.length - 1;
-                        const newFrame = Math.min(maxFrame, (currentFrame ?? 0) + 1);
-                        
-                        // Stop playback
-                        setIsPlayingAll(false);
-                        isPlayingAllRef.current = false;
-                        (window as any).viewer3dStopAnimation?.();
-                        (window as any).viewer3dPlayAnimation?.(false);
-                        
-                        // Use consistent helper function
-                        setEpisodeAndFrame(activeIndex, newFrame);
-                      }}
-                      disabled={episodes.length === 0 || (currentPlayingEpisodeIndex !== null && currentFrame >= (episodes[currentPlayingEpisodeIndex]?.frames.length ?? 0) - 1)}
-                    >
-                      <StepForward className="w-3 h-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">Next Frame</p>
-                    <p className="text-muted-foreground">Step forward one frame (stops playback)</p>
                   </TooltipContent>
                 </Tooltip>
                 
@@ -3782,38 +3702,6 @@ export const Sidebar = ({
                   <TooltipContent side="top" className="text-xs">
                     <p className="font-medium">Next Episode</p>
                     <p className="text-muted-foreground">Go to next episode (wraps to first)</p>
-                  </TooltipContent>
-                </Tooltip>
-                
-                {/* Last Frame (>>) - Jump to last frame, stop playback */}
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 hover:bg-muted/50"
-                      onClick={() => {
-                        if (episodes.length === 0) return;
-                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                        const episode = episodes[activeIndex];
-                        if (episode && episode.frames.length > 0) {
-                          // Stop playback
-                          setIsPlayingAll(false);
-                          isPlayingAllRef.current = false;
-                          (window as any).viewer3dStopAnimation?.();
-                          (window as any).viewer3dPlayAnimation?.(false);
-                          // Use consistent helper function
-                          setEpisodeAndFrame(activeIndex, episode.frames.length - 1);
-                        }
-                      }}
-                      disabled={episodes.length === 0}
-                    >
-                      <ChevronsRight className="w-3 h-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">Last Frame</p>
-                    <p className="text-muted-foreground">Jump to last frame of current episode</p>
                   </TooltipContent>
                 </Tooltip>
                 
@@ -3859,6 +3747,48 @@ export const Sidebar = ({
 
               {/* Frame Range and Speed Controls */}
               <div className="space-y-1.5">
+                {/* Playback Mode Selector */}
+                <BlenderPropertyRow label="Mode">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant={playbackMode === "loop" ? "default" : "outline"}
+                      className="flex-1 h-7 text-xs"
+                      onClick={() => {
+                        setPlaybackMode("loop");
+                        playbackModeRef.current = "loop";
+                        // Stop current playback when switching modes
+                        if (isPlayingAll) {
+                          setIsPlayingAll(false);
+                          isPlayingAllRef.current = false;
+                          (window as any).viewer3dStopAnimation?.();
+                          (window as any).viewer3dPlayAnimation?.(false);
+                        }
+                      }}
+                    >
+                      Loop 1
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={playbackMode === "sequential" ? "default" : "outline"}
+                      className="flex-1 h-7 text-xs"
+                      onClick={() => {
+                        setPlaybackMode("sequential");
+                        playbackModeRef.current = "sequential";
+                        // Stop current playback when switching modes
+                        if (isPlayingAll) {
+                          setIsPlayingAll(false);
+                          isPlayingAllRef.current = false;
+                          (window as any).viewer3dStopAnimation?.();
+                          (window as any).viewer3dPlayAnimation?.(false);
+                        }
+                      }}
+                    >
+                      All
+                    </Button>
+                  </div>
+                </BlenderPropertyRow>
+                
                 <BlenderPropertyRow label="Speed">
                   <div className="flex items-center gap-2">
                     <Slider
@@ -3925,7 +3855,6 @@ export const Sidebar = ({
                         ? episode.frames[episode.frames.length - 1].timestamp 
                         : 0;
                       const durationSeconds = (duration / 1000).toFixed(1);
-                      const isPlaying = currentPlayingEpisodeIndex === index && isPlayingAll;
                       // Get current frame for this episode - show currentFrame if it's the currently active episode (regardless of playing state)
                       // Add 1 to match the global counter display format (1-indexed)
                       const episodeCurrentFrame = (currentPlayingEpisodeIndex === index && currentFrame !== undefined) 
@@ -3964,19 +3893,6 @@ export const Sidebar = ({
 
                             {/* Quick Actions */}
                             <div className="flex items-center gap-0.5 flex-shrink-0">
-                              <Button
-                                size="sm"
-                                variant={isPlaying ? "default" : "ghost"}
-                                className="h-5 w-5 p-0"
-                                onClick={() => playEpisode(episode)}
-                                title={isPlaying ? "Pause" : "Play"}
-                              >
-                                {isPlaying ? (
-                                  <Square className="w-2.5 h-2.5 fill-current" />
-                                ) : (
-                                  <Play className="w-2.5 h-2.5" />
-                                )}
-                              </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"

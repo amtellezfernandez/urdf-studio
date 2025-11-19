@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
   Play,
+  Pause,
   Square,
   SkipBack,
   SkipForward,
@@ -16,6 +17,7 @@ import {
   GripHorizontal,
   Link,
   Unlink,
+  Eye,
 } from "lucide-react";
 import {
   Tooltip,
@@ -642,21 +644,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <p>{isMinimized ? "Maximize" : "Minimize"}</p>
             </TooltipContent>
           </Tooltip>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={() => onOpenChange(false)}
-              >
-                <X className="w-3 h-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Close</p>
-            </TooltipContent>
-          </Tooltip>
+          <Button
+            size="sm"
+            variant={open ? "default" : "outline"}
+            className="h-8 text-xs"
+            onClick={() => onOpenChange(!open)}
+          >
+            <Eye className="w-3.5 h-3.5 mr-1.5" />
+            {open ? "Close Viewer" : "Open Viewer"}
+          </Button>
         </div>
       </div>
 
@@ -814,7 +810,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     disabled={allEpisodes.length === 0}
                   >
                     {isPlayingAll ? (
-                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <Pause className="w-3.5 h-3.5" />
                     ) : (
                       <Play className="w-3.5 h-3.5" />
                     )}
