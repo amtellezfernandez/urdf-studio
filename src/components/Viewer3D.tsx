@@ -560,7 +560,7 @@ const URDFModel = ({
     let shouldApplyAnimation = false; // Flag to determine if we should apply animation values
 
     // Check for preserved frame time from stop handler (set when stopping to preserve position)
-    // This MUST be checked first to prevent jumping to frame 0/1 when stopping
+    // This MUST be checked first to prevent jumping to frame 0 when stopping
     const preservedFrameTime = (window as any).__viewer3dPreserveFrameTime;
     if (preservedFrameTime !== undefined && preservedFrameTime !== null) {
       // Use preserved frame time and convert to normalized time
@@ -1761,6 +1761,18 @@ export const Viewer3D = ({
     (window as any).__viewer3dIsPaused = true;
   }, [onPlayingChange, animationFrames, onFrameChange]);
 
+  // Handler to clear animation frames and release robot for manual control
+  const handleClearAnimation = useCallback(() => {
+    setIsPlaying(false);
+    onPlayingChange?.(false);
+    setAnimationFrames(null);
+    // Clear all animation-related flags
+    (window as any).__viewer3dIsPaused = true;
+    delete (window as any).__viewer3dPreserveFrameTime;
+    delete (window as any).__viewer3dManualFrameTime;
+    delete (window as any).__viewer3dCurrentFrameIndex;
+  }, [onPlayingChange]);
+
   // Handler to set a specific frame index (Blender-style frame navigation)
   const handleSetFrame = useCallback((frameIndex: number) => {
     if (!animationFrames || animationFrames.length === 0) {
@@ -1798,6 +1810,7 @@ export const Viewer3D = ({
     (window as any).viewer3dUploadMotionData = handleMotionDataUpload;
     (window as any).viewer3dPlayEpisode = handlePlayEpisode;
     (window as any).viewer3dStopAnimation = handleStopAnimation;
+    (window as any).viewer3dClearAnimation = handleClearAnimation;
     (window as any).viewer3dSetFrame = handleSetFrame;
     (window as any).viewer3dSetPlaybackSpeed = setPlaybackSpeed;
     (window as any).viewer3dGetPlaybackSpeed = () => playbackSpeed;
@@ -1806,12 +1819,13 @@ export const Viewer3D = ({
       delete (window as any).viewer3dUploadMotionData;
       delete (window as any).viewer3dPlayEpisode;
       delete (window as any).viewer3dStopAnimation;
+      delete (window as any).viewer3dClearAnimation;
       delete (window as any).viewer3dSetFrame;
       delete (window as any).viewer3dSetPlaybackSpeed;
       delete (window as any).viewer3dGetPlaybackSpeed;
       delete (window as any).__viewer3dManualFrameTime;
     };
-  }, [handleRun, handleMotionDataUpload, handlePlayEpisode, handleStopAnimation, handleSetFrame, playbackSpeed]);
+  }, [handleRun, handleMotionDataUpload, handlePlayEpisode, handleStopAnimation, handleClearAnimation, handleSetFrame, playbackSpeed]);
 
   // Notify when animation frames change
   useEffect(() => {

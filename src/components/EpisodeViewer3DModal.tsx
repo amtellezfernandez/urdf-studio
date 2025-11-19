@@ -912,7 +912,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <div className="flex items-center gap-1 ml-2 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Frame:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0 ? (globalCurrentFrame ?? currentFrame) + 1 : 0}
+                  {totalFrames > 0 ? (globalCurrentFrame ?? currentFrame) : 0}
                 </span>
                 <span className="text-muted-foreground">/</span>
                 <span className="font-mono text-muted-foreground">{totalFrames}</span>
