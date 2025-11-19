@@ -44,7 +44,7 @@ interface EpisodeViewer3DModalProps {
   currentEpisodeIndex?: number | null;
   allEpisodes?: Episode[];
   isPlayingAll?: boolean;
-  onPlayAllEpisodes?: () => void;
+  onPlayAllEpisodes?: (overrideFrame?: number) => void;
   onSetCurrentEpisodeIndex?: (index: number | null) => void;
   globalCurrentFrame?: number;
   onSetGlobalFrame?: (frame: number) => void;
@@ -96,15 +96,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Listen to global frame updates from 3D viewer
+  // Listen to global frame updates from 3D viewer - only when playing
   useEffect(() => {
-    if (!syncWith3DViewer || !open) return;
+    if (!syncWith3DViewer || !open || !isPlayingAll) return;
 
     const handleFrameUpdate = (event: CustomEvent) => {
       const { frame, episodeIndex } = event.detail;
 
-      // Only update if we're viewing the same episode that's playing
-      if (episodeIndex === currentEpisodeIndex) {
+      // Only update if we're viewing the same episode that's playing AND it's actually playing
+      if (episodeIndex === currentEpisodeIndex && isPlayingAll) {
         setCurrentFrame(frame);
       }
     };
@@ -114,15 +114,16 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     return () => {
       window.removeEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
     };
-  }, [syncWith3DViewer, open, currentEpisodeIndex]);
+  }, [syncWith3DViewer, open, currentEpisodeIndex, isPlayingAll]);
 
-  // Sync local currentFrame with globalCurrentFrame when not playing
-  // This ensures the frame counter doesn't reset to 0 when stopping playback
+  // Sync local currentFrame with globalCurrentFrame when manually set (not playing)
+  // This ensures the frame counter reflects the current position when paused
   useEffect(() => {
-    if (!isPlaying && globalCurrentFrame !== undefined && syncWith3DViewer) {
+    // Only sync when NOT playing to prevent timeline from moving when paused
+    if (!isPlayingAll && !isPlaying && globalCurrentFrame !== undefined && syncWith3DViewer) {
       setCurrentFrame(globalCurrentFrame);
     }
-  }, [isPlaying, globalCurrentFrame, syncWith3DViewer]);
+  }, [isPlayingAll, isPlaying, globalCurrentFrame, syncWith3DViewer]);
 
   // Reset state when episode changes
   useEffect(() => {
@@ -223,14 +224,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       // Update frame immediately on click
       const displayFrame = frameIndex;
 
-      // Stop playback IMMEDIATELY when clicking/dragging timeline
-      setIsPlaying(false); // Stop local modal playback
+      // Only pause playback if it's currently playing (don't do anything if already paused)
+      // isPlayingAll indicates global playback is active, so only pause if it's true
       if (isPlayingAll && onPlayAllEpisodes) {
-        onPlayAllEpisodes(); // This will pause global playback
+        // onPlayAllEpisodes toggles playback - since isPlayingAll is true, this will pause it
+        onPlayAllEpisodes();
+      }
+      
+      // Stop local modal playback only if it's playing
+      if (isPlaying) {
+        setIsPlaying(false);
       }
 
-      // Stop animation in 3D viewer immediately
-      (window as any).viewer3dStopAnimation?.();
+      // Stop animation in 3D viewer only if global playback is active
+      // We check isPlayingAll because that's the source of truth for global playback state
+      if (isPlayingAll) {
+        (window as any).viewer3dStopAnimation?.();
+      }
 
       // Update global frame first (this updates parent's currentFrame state)
       if (onSetGlobalFrame) {
@@ -347,12 +357,25 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.strokeStyle = "#27272a";
     ctx.lineWidth = 1;
 
-    for (let i = 0; i <= 10; i++) {
-      const x = padding + (graphWidth * i) / 10;
+    // Draw grid lines and frame labels
+    const totalFrames = episode.frames.length;
+    const gridDivisions = Math.min(10, totalFrames); // Show up to 10 divisions
+    
+    for (let i = 0; i <= gridDivisions; i++) {
+      const x = padding + (graphWidth * i) / gridDivisions;
       ctx.beginPath();
       ctx.moveTo(x, padding);
       ctx.lineTo(x, height - padding);
       ctx.stroke();
+      
+      // Draw frame number labels
+      if (totalFrames > 0) {
+        const frameNumber = Math.round((i / gridDivisions) * (totalFrames - 1));
+        ctx.fillStyle = "#71717a";
+        ctx.font = "9px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`F${frameNumber}`, x, height - padding + 15);
+      }
     }
 
     for (let i = 0; i <= 5; i++) {
@@ -374,7 +397,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.fillStyle = "#a1a1aa";
     ctx.font = "10px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("Time", width / 2, height - 10);
+    ctx.fillText("Frame", width / 2, height - 10);
 
     ctx.save();
     ctx.translate(15, height / 2);
@@ -447,10 +470,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ctx.fillStyle = "#ffffff";
       ctx.font = "12px monospace";
       ctx.textAlign = "center";
-      const timeSeconds = (episode.frames[displayFrame]?.timestamp / 1000).toFixed(2);
-      ctx.fillText(`${timeSeconds}s`, x, padding - 10);
+      // Show frame number and calculated time based on frame duration
+      const totalFrames = episode.frames.length;
+      const totalDuration = episode.frames.length > 0 
+        ? episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp 
+        : 0;
+      // Get playback speed from viewer if synced, otherwise use local
+      const effectiveSpeed = syncWith3DViewer 
+        ? ((window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0)
+        : playbackSpeed;
+      // Calculate frame duration: total duration / (frames - 1) / playback speed
+      const frameDuration = totalFrames > 1 
+        ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
+        : 0;
+      const calculatedTime = displayFrame * frameDuration;
+      ctx.fillText(`F${displayFrame} (${(calculatedTime / 1000).toFixed(2)}s)`, x, padding - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, isMinimized, size]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, isMinimized, size, syncWith3DViewer, playbackSpeed]);
 
   // Mouse event handlers for dragging
   const handleMouseDownHeader = (e: React.MouseEvent) => {
@@ -750,7 +786,29 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     className="h-7 w-7 p-0"
                     onClick={() => {
                       if (onPlayAllEpisodes) {
-                        onPlayAllEpisodes();
+                        // Get the current frame from the timeline position
+                        const currentFrameValue = globalCurrentFrame ?? currentFrame;
+                        
+                        // Ensure the current episode index is set so playback knows which episode to play
+                        if (episode) {
+                          if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
+                            onSetCurrentEpisodeIndex(currentEpisodeIndex);
+                          } else if (currentEpisodeIndex === null && allEpisodes.length > 0) {
+                            const episodeIndex = allEpisodes.findIndex(ep => ep.id === episode.id);
+                            if (episodeIndex !== -1 && onSetCurrentEpisodeIndex) {
+                              onSetCurrentEpisodeIndex(episodeIndex);
+                            }
+                          }
+                          
+                          // Update the global frame state for consistency
+                          if (onSetGlobalFrame) {
+                            onSetGlobalFrame(currentFrameValue);
+                          }
+                        }
+                        
+                        // Start playback from the timeline position by passing the frame directly
+                        // This prevents the jump to frame 0 that happens when the episode is reloaded
+                        onPlayAllEpisodes(currentFrameValue);
                       }
                     }}
                     disabled={allEpisodes.length === 0}
@@ -867,9 +925,20 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Time:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0 && episode
-                    ? (episode.frames[globalCurrentFrame ?? currentFrame]?.timestamp / 1000).toFixed(2)
-                    : "0.00"}s
+                  {totalFrames > 0 && episode ? (() => {
+                    const currentFrameValue = globalCurrentFrame ?? currentFrame;
+                    const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
+                    // Get playback speed from viewer if synced, otherwise use local
+                    const effectiveSpeed = syncWith3DViewer 
+                      ? ((window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0)
+                      : playbackSpeed;
+                    // Calculate frame duration: total duration / (frames - 1) / playback speed
+                    const frameDuration = totalFrames > 1 
+                      ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
+                      : 0;
+                    const calculatedTime = currentFrameValue * frameDuration;
+                    return `${(calculatedTime / 1000).toFixed(2)}s`;
+                  })() : "0.00s"}
                 </span>
               </div>
             </div>

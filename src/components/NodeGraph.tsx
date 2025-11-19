@@ -289,6 +289,13 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
 
   // Recording functions
   const startRecording = useCallback(() => {
+    // Stop all replay/playback
+    (window as any).viewer3dStopAnimation?.();
+    
+    // Reset frame counters to beginning
+    (window as any).viewer3dSetFrame?.(0);
+    
+    // Start recording
     setIsRecording(true);
     setRecordedFrames([]);
     recordingStartTime.current = Date.now();

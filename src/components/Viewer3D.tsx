@@ -550,17 +550,46 @@ const URDFModel = ({
     const firstTimestamp = animationFrames[0].timestamp;
     const lastTimestamp = animationFrames[animationFrames.length - 1].timestamp;
     const animationDuration = lastTimestamp - firstTimestamp;
+    
+    // Normalize timestamps to be evenly spaced for uniform playback
+    // This prevents lags when frames have uneven timestamp intervals
+    const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
+    const normalizedLastTimestamp = firstTimestamp + (animationFrames.length - 1) * normalizedFrameDuration;
 
     let currentTime: number;
     let shouldApplyAnimation = false; // Flag to determine if we should apply animation values
 
+    // Check for preserved frame time from stop handler (set when stopping to preserve position)
+    const preservedFrameTime = (window as any).__viewer3dPreserveFrameTime;
+    if (preservedFrameTime !== undefined && preservedFrameTime !== null) {
+      // Use preserved frame time and convert to normalized time
+      const frameIndex = Math.floor((preservedFrameTime - firstTimestamp) / normalizedFrameDuration);
+      const normalizedTime = firstTimestamp + Math.max(0, Math.min(frameIndex, animationFrames.length - 1)) * normalizedFrameDuration;
+      currentTime = normalizedTime;
+      manualFrameTimeRef.current = normalizedTime;
+      // Clear the window property after using it
+      delete (window as any).__viewer3dPreserveFrameTime;
+      shouldApplyAnimation = true;
+    }
+    
     // Check for manual frame time from window (set by handleSetFrame or timeline scrubbing)
     const manualFrameTime = (window as any).__viewer3dManualFrameTime;
     if (manualFrameTime !== undefined && manualFrameTime !== null) {
-      currentTime = manualFrameTime;
-      manualFrameTimeRef.current = manualFrameTime;
+      // When manually setting a frame, find the frame index from the timestamp
+      // Then convert to normalized time for uniform playback
+      let targetFrameIndex = animationFrames.length - 1;
+      for (let i = 0; i < animationFrames.length; i++) {
+        if (animationFrames[i].timestamp >= manualFrameTime) {
+          targetFrameIndex = i;
+          break;
+        }
+      }
+      // Convert to normalized time
+      const normalizedTime = firstTimestamp + targetFrameIndex * normalizedFrameDuration;
+      currentTime = normalizedTime;
+      manualFrameTimeRef.current = normalizedTime;
       // Update animation start time to maintain position when playing resumes
-      animationStartTime.current = Date.now() - (currentTime - firstTimestamp) / playbackSpeed;
+      animationStartTime.current = Date.now() - (normalizedTime - firstTimestamp) / playbackSpeed;
       // Clear the window property after using it
       delete (window as any).__viewer3dManualFrameTime;
       shouldApplyAnimation = true; // Apply when manually setting frame
@@ -569,16 +598,21 @@ const URDFModel = ({
       currentTime = manualFrameTimeRef.current;
       // If we start playing from a paused state, update start time and clear manual frame
       if (isPlaying) {
+        // The stored time is already normalized, so use it directly
         animationStartTime.current = Date.now() - (currentTime - firstTimestamp) / playbackSpeed;
         manualFrameTimeRef.current = null;
         shouldApplyAnimation = true;
       } else {
-        // Paused with manual frame time - stay at this frame
+        // Paused with manual frame time - stay at this exact frame (no interpolation)
         shouldApplyAnimation = true;
+        // Store a flag to indicate we're paused so we don't interpolate
+        (window as any).__viewer3dIsPaused = true;
       }
     } else if (isPlaying) {
-      // Normal playback - always apply animation values
+      // Normal playback - use normalized timing for uniform playback
       shouldApplyAnimation = true;
+      // Clear pause flag when playing
+      delete (window as any).__viewer3dIsPaused;
       if (animationStartTime.current === 0) {
         // First time playing - start from the beginning
         animationStartTime.current = Date.now();
@@ -586,57 +620,75 @@ const URDFModel = ({
       const elapsed = Date.now() - animationStartTime.current;
       const speedAdjustedElapsed = elapsed * playbackSpeed;
 
-      // Handle looping: if we've passed the end, reset
-      if (animationDuration > 0) {
-        currentTime = firstTimestamp + (speedAdjustedElapsed % animationDuration);
+      // Use normalized duration for uniform playback
+      const normalizedDuration = normalizedLastTimestamp - firstTimestamp;
+      if (normalizedDuration > 0) {
+        currentTime = firstTimestamp + (speedAdjustedElapsed % normalizedDuration);
       } else {
         currentTime = firstTimestamp;
       }
     } else {
       // Paused and no manual frame time - preserve current position
-      // Calculate current time from animation start time
-      if (animationStartTime.current !== 0) {
+      // If we have a stored manual frame time, use it
+      if (manualFrameTimeRef.current !== null) {
+        currentTime = manualFrameTimeRef.current;
+        shouldApplyAnimation = true;
+      } else if (animationStartTime.current !== 0) {
+        // Calculate current time from animation start time
         const elapsed = Date.now() - animationStartTime.current;
         const speedAdjustedElapsed = elapsed * playbackSpeed;
-        if (animationDuration > 0) {
-          currentTime = firstTimestamp + (speedAdjustedElapsed % animationDuration);
+        const normalizedDuration = normalizedLastTimestamp - firstTimestamp;
+        if (normalizedDuration > 0) {
+          currentTime = firstTimestamp + (speedAdjustedElapsed % normalizedDuration);
         } else {
           currentTime = firstTimestamp;
         }
         // Store this as manual frame time so we stay at this position
         manualFrameTimeRef.current = currentTime;
+        shouldApplyAnimation = true;
+      } else {
+        // No animation start time - use current frame index if available
+        const currentFrameIdx = (window as any).__viewer3dCurrentFrameIndex ?? 0;
+        const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
+        currentTime = normalizedTime;
+        manualFrameTimeRef.current = normalizedTime;
+        shouldApplyAnimation = true;
       }
-      shouldApplyAnimation = false;
-      return; // Exit early when paused to allow manual joint control
+      // Set pause flag
+      (window as any).__viewer3dIsPaused = true;
     }
     
     // Find the appropriate frame or interpolate
+    // Use normalized frame index calculation for uniform playback
     let frameIndex = animationFrames.length - 1; // Default to last frame
     
-    for (let i = 0; i < animationFrames.length - 1; i++) {
-      if (
-        currentTime >= animationFrames[i].timestamp &&
-        currentTime < animationFrames[i + 1].timestamp
-      ) {
-        frameIndex = i;
-        break;
-      }
-    }
-    
-    // If we're at or past the last frame, use the last frame
-    if (currentTime >= lastTimestamp) {
-      frameIndex = animationFrames.length - 1;
+    // Calculate frame index based on normalized time position
+    // This ensures uniform playback even when original timestamps are uneven
+    if (normalizedFrameDuration > 0 && animationFrames.length > 1) {
+      const normalizedTimePosition = currentTime - firstTimestamp;
+      const calculatedIndex = normalizedTimePosition / normalizedFrameDuration;
+      frameIndex = Math.min(
+        Math.max(0, Math.floor(calculatedIndex)),
+        animationFrames.length - 1
+      );
+    } else if (animationFrames.length === 1) {
+      frameIndex = 0;
     }
     
     // Update current frame index for display (update every frame change)
+    // Also store it globally so stop handler can access it
     if (currentFrameIndexRef.current !== frameIndex) {
       currentFrameIndexRef.current = frameIndex;
+      (window as any).__viewer3dCurrentFrameIndex = frameIndex;
       // Use requestAnimationFrame to update state outside useFrame
       requestAnimationFrame(() => {
         if (onFrameChange) {
           onFrameChange(frameIndex);
         }
       });
+    } else {
+      // Always keep the global ref updated
+      (window as any).__viewer3dCurrentFrameIndex = frameIndex;
     }
 
     // Only apply animation values if we should (playing or manual frame set)
@@ -648,11 +700,16 @@ const URDFModel = ({
     const nextFrame =
       animationFrames[Math.min(frameIndex + 1, animationFrames.length - 1)];
 
-    // Interpolate between frames
+    // Interpolate between frames using normalized timing
+    // This ensures smooth interpolation even with uneven original timestamps
+    // When paused, don't interpolate - use exact frame values
+    const isPaused = !isPlaying && (window as any).__viewer3dIsPaused;
     let t = 0;
-    if (nextFrame.timestamp !== currentFrame.timestamp && frameIndex < animationFrames.length - 1) {
-      t = (currentTime - currentFrame.timestamp) /
-          (nextFrame.timestamp - currentFrame.timestamp);
+    if (!isPaused && normalizedFrameDuration > 0 && frameIndex < animationFrames.length - 1) {
+      // Calculate interpolation factor based on normalized time position within the frame interval
+      const normalizedCurrentFrameTime = firstTimestamp + frameIndex * normalizedFrameDuration;
+      const normalizedNextFrameTime = firstTimestamp + (frameIndex + 1) * normalizedFrameDuration;
+      t = (currentTime - normalizedCurrentFrameTime) / normalizedFrameDuration;
       t = Math.max(0, Math.min(1, t)); // Clamp between 0 and 1
     }
 
@@ -1599,6 +1656,13 @@ export const Viewer3D = ({
     const newPlayingState = !isPlaying;
     setIsPlaying(newPlayingState);
     onPlayingChange?.(newPlayingState);
+    // Clear pause flag when starting to play
+    if (newPlayingState) {
+      delete (window as any).__viewer3dIsPaused;
+    } else {
+      // Set pause flag when pausing
+      (window as any).__viewer3dIsPaused = true;
+    }
   };
 
   // Handler to play episode frames directly
@@ -1618,14 +1682,36 @@ export const Viewer3D = ({
     setTimeout(() => {
       setIsPlaying(true);
       onPlayingChange?.(true);
+      // Clear pause flag when starting to play
+      delete (window as any).__viewer3dIsPaused;
     }, 10);
   }, [onPlayingChange]);
 
   // Handler to stop animation
   const handleStopAnimation = useCallback(() => {
+    // Before stopping, preserve the current frame position
+    // This prevents the frame from jumping to 0 when stopped
+    if (animationFrames && animationFrames.length > 0) {
+      const firstTimestamp = animationFrames[0].timestamp;
+      const lastTimestamp = animationFrames[animationFrames.length - 1].timestamp;
+      const animationDuration = lastTimestamp - firstTimestamp;
+      const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
+      
+      // Get current frame index from the ref (set by animation loop)
+      const currentFrameIdx = (window as any).__viewer3dCurrentFrameIndex ?? 0;
+      
+      // Calculate normalized time for current frame
+      const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
+      
+      // Store it in manualFrameTimeRef to preserve position
+      (window as any).__viewer3dPreserveFrameTime = normalizedTime;
+    }
+    
     setIsPlaying(false);
     onPlayingChange?.(false);
-  }, [onPlayingChange]);
+    // Set pause flag to prevent interpolation when stopped
+    (window as any).__viewer3dIsPaused = true;
+  }, [onPlayingChange, animationFrames]);
 
   // Handler to set a specific frame index (Blender-style frame navigation)
   const handleSetFrame = useCallback((frameIndex: number) => {
@@ -1636,6 +1722,9 @@ export const Viewer3D = ({
     // Stop playback when navigating frames
     setIsPlaying(false);
     onPlayingChange?.(false);
+    
+    // Set pause flag to prevent interpolation when frame is manually set
+    (window as any).__viewer3dIsPaused = true;
     
     // Clamp frame index to valid range
     const clampedIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));

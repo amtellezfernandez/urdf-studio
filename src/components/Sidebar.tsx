@@ -1322,9 +1322,26 @@ export const Sidebar = ({
   );
 
   const startRecording = useCallback(() => {
+    // Stop all replay/playback
+    (window as any).viewer3dStopAnimation?.();
+    setIsPlayingAll(false);
+    isPlayingAllRef.current = false;
+    setCurrentPlayingEpisodeIndex(null);
+    
+    // Clear any playback timeout
+    if (playbackTimeoutRef.current) {
+      clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+    
+    // Reset frame counters to beginning
+    (window as any).viewer3dSetFrame?.(0);
+    onFrameChange?.(0);
+    
+    // Start recording
     beginRecording({ fps: recordingFps });
     toast.success(`Started recording episode at ${recordingFps} FPS`);
-  }, [beginRecording, recordingFps]);
+  }, [beginRecording, recordingFps, onFrameChange]);
 
   const stopRecording = useCallback(() => {
     setIsRecording(false);
@@ -2950,6 +2967,12 @@ export const Sidebar = ({
       const frames = toAnimationFrames(episode);
       (window as any).viewer3dPlayEpisode?.(frames);
       currentLoadedEpisodeRef.current = episodeIndex;
+      
+      // Set the frame immediately after loading the episode to prevent jump to frame 0
+      // Use requestAnimationFrame to set it in the next frame, right after the episode loads
+      requestAnimationFrame(() => {
+        (window as any).viewer3dSetFrame?.(clampedFrame);
+      });
     }
     
     // Use double requestAnimationFrame to ensure playback speed state has updated before setting frame
@@ -3125,7 +3148,7 @@ export const Sidebar = ({
     [episodes, currentFrame, onFrameChange, playbackSpeed, setEpisodeAndFrame]
   );
 
-  const playAllEpisodes = useCallback(() => {
+  const playAllEpisodes = useCallback((overrideFrame?: number) => {
     if (episodes.length === 0) {
       toast.error('No episodes to play');
       return;
@@ -3149,7 +3172,10 @@ export const Sidebar = ({
     isPlayingAllRef.current = true;
     
     const startIndex = currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
-    const resumeFrame = currentFrame !== undefined && currentFrame >= 0 ? currentFrame : undefined;
+    // Use overrideFrame if provided, otherwise use currentFrame
+    const resumeFrame = overrideFrame !== undefined 
+      ? overrideFrame 
+      : (currentFrame !== undefined && currentFrame >= 0 ? currentFrame : undefined);
     
     // Start playback directly - playEpisodeSequentially handles frame setting
     playEpisodeSequentially(startIndex, resumeFrame);
@@ -3669,7 +3695,7 @@ export const Sidebar = ({
                       size="sm"
                       variant={isPlayingAll ? "default" : "ghost"}
                       className="h-7 w-7 p-0"
-                      onClick={playAllEpisodes}
+                      onClick={() => playAllEpisodes()}
                       disabled={episodes.length === 0}
                     >
                       {isPlayingAll ? (
