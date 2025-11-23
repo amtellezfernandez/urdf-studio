@@ -811,6 +811,7 @@ export const Sidebar = ({
   const setGlobalMaxJointVelocity = useJointStore((s) => s.setGlobalMaxJointVelocity);
   const applyGlobalVelocityToAll = useJointStore((s) => s.applyGlobalVelocityToAll);
   const previewJointValue = useJointStore((s) => s.previewJointValue);
+  const setIsAnimating = useJointStore((s) => s.setIsAnimating);
 
   const robotName = useMemo(() => parseRobotName(originalUrdf), [originalUrdf]);
   const robotBaseName = useMemo(() => sanitizeFilename(robotName), [robotName]);
@@ -1338,10 +1339,14 @@ export const Sidebar = ({
     (window as any).viewer3dSetFrame?.(0);
     onFrameChange?.(0);
     
+    // Ensure robot movement is enabled when starting recording
+    // This is critical - robot must be movable when recording
+    setIsAnimating(false);
+    
     // Start recording
     beginRecording({ fps: recordingFps });
     toast.success(`Started recording episode at ${recordingFps} FPS`);
-  }, [beginRecording, recordingFps, onFrameChange]);
+  }, [beginRecording, recordingFps, onFrameChange, setIsAnimating]);
 
   const stopRecording = useCallback(() => {
     setIsRecording(false);
@@ -2870,6 +2875,9 @@ export const Sidebar = ({
   ]);
 
   const deleteEpisode = useCallback((episodeId: string) => {
+    // Block robot movement during episode deletion
+    setIsAnimating(true);
+    
     // Check if the episode being deleted is currently playing
     const episodeToDelete = episodes.find((ep) => ep.id === episodeId);
     const isCurrentlyPlaying = 
@@ -2908,13 +2916,22 @@ export const Sidebar = ({
       
       return renumbered;
     });
+    
+    // Re-enable robot movement after deletion is complete
+    setIsAnimating(false);
     toast.success("Episode deleted");
-  }, [episodes, currentPlayingEpisodeIndex]);
+  }, [episodes, currentPlayingEpisodeIndex, setIsAnimating]);
 
   const retakeEpisode = useCallback(
     (episodeId: string) => {
+      // Block robot movement during episode retake
+      setIsAnimating(true);
+      
       const episodeIndex = episodes.findIndex((ep) => ep.id === episodeId);
-      if (episodeIndex === -1) return;
+      if (episodeIndex === -1) {
+        setIsAnimating(false);
+        return;
+      }
 
       const episodeNumber = episodes[episodeIndex].number;
       const existingMetadata = episodes[episodeIndex].metadata;
@@ -2923,6 +2940,9 @@ export const Sidebar = ({
         renumberEpisodes(prev.filter((episode) => episode.id !== episodeId))
       );
 
+      // Re-enable robot movement when starting recording
+      setIsAnimating(false);
+      
       beginRecording({
         episodeNumber,
         insertPosition: episodeIndex,
@@ -2930,22 +2950,35 @@ export const Sidebar = ({
       });
       toast.info(`Recording Episode ${episodeNumber} (retake)`);
     },
-    [beginRecording, episodes, setEpisodes]
+    [beginRecording, episodes, setEpisodes, setIsAnimating]
   );
 
   const moveEpisode = useCallback((episodeId: string, direction: "up" | "down") => {
+    // Block robot movement during episode reordering
+    setIsAnimating(true);
+    
     setEpisodes((prev) => {
       const index = prev.findIndex((episode) => episode.id === episodeId);
-      if (index === -1) return prev;
+      if (index === -1) {
+        setIsAnimating(false);
+        return prev;
+      }
 
       const newIndex = direction === "up" ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= prev.length) return prev;
+      if (newIndex < 0 || newIndex >= prev.length) {
+        setIsAnimating(false);
+        return prev;
+      }
 
       const next = [...prev];
       [next[index], next[newIndex]] = [next[newIndex], next[index]];
+      
+      // Re-enable robot movement after reordering
+      setIsAnimating(false);
+      
       return renumberEpisodes(next);
     });
-  }, []);
+  }, [setIsAnimating]);
 
   // Centralized function to stop all playback
   // This ensures consistent stopping behavior and prevents race conditions
@@ -3337,7 +3370,16 @@ export const Sidebar = ({
       }}
       aria-hidden={isCollapsed}
     >
-      <Tabs defaultValue="joints" className="flex flex-col h-full">
+      <Tabs 
+        defaultValue="joints" 
+        className="flex flex-col h-full"
+        onValueChange={(value) => {
+          // When switching to recording tab, ensure robot movement is enabled
+          if (value === "recording") {
+            setIsAnimating(false);
+          }
+        }}
+      >
         {/* Header with Logo and Tabs */}
         <div className="flex-shrink-0 border-b border-border/30">
           <div className="flex items-center gap-3 p-3">
@@ -4094,19 +4136,6 @@ export const Sidebar = ({
 
                             {/* Quick Actions */}
                             <div className="flex items-center gap-0.5 flex-shrink-0">
-                              <Button
-                                size="sm"
-                                variant={isPlaying ? "default" : "ghost"}
-                                className="h-5 w-5 p-0"
-                                onClick={() => playEpisode(episode)}
-                                title={isPlaying ? "Pause" : "Play"}
-                              >
-                                {isPlaying ? (
-                                  <Pause className="w-2.5 h-2.5" />
-                                ) : (
-                                  <Play className="w-2.5 h-2.5" />
-                                )}
-                              </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
