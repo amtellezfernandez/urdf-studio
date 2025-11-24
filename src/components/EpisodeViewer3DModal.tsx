@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -97,10 +97,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const lastFrameTimeRef = useRef<number>(0);
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const preservedFrameRef = useRef<number | null>(null);
 
   // Listen to global frame updates from 3D viewer - only when playing
   useEffect(() => {
-    if (!syncWith3DViewer || !open || !isPlayingAll) return;
+    if (!syncWith3DViewer || !open || !isPlayingAll) {
+      // Only clear preserved frame when playback is explicitly stopped, not when starting
+      // This prevents the visual jump when play is clicked
+      return;
+    }
 
     const handleFrameUpdate = (event: CustomEvent) => {
       const { frame, episodeIndex } = event.detail;
@@ -108,6 +113,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       // Only update if we're viewing the same episode that's playing AND it's actually playing
       if (episodeIndex === currentEpisodeIndex && isPlayingAll) {
         setCurrentFrame(frame);
+        // Update preserved frame as we receive updates
+        preservedFrameRef.current = frame;
       }
     };
 
@@ -118,24 +125,62 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     };
   }, [syncWith3DViewer, open, currentEpisodeIndex, isPlayingAll]);
 
+  // Keep preserved frame updated when not playing, but protect it during play transitions
+  // This prevents the visual jump when play is clicked
+  useEffect(() => {
+    // Only update preserved frame when not playing to avoid overwriting during transitions
+    if (isPlayingAll) {
+      return; // Don't update preserved frame while playing - let it be updated by frame update events
+    }
+    
+    const currentFrameValue = globalCurrentFrame ?? currentFrame;
+    if (currentFrameValue !== undefined && currentFrameValue !== null) {
+      // Always keep preserved frame updated when not playing
+      preservedFrameRef.current = currentFrameValue;
+    }
+  }, [isPlayingAll, globalCurrentFrame, currentFrame]);
+  
   // Sync local currentFrame with globalCurrentFrame when manually set (not playing)
   // This ensures the frame counter reflects the current position when paused
   useEffect(() => {
     // Only sync when NOT playing to prevent timeline from moving when paused
     if (!isPlayingAll && !isPlaying && globalCurrentFrame !== undefined && syncWith3DViewer) {
       setCurrentFrame(globalCurrentFrame);
+      // Update preserved frame to current position when manually set
+      preservedFrameRef.current = globalCurrentFrame;
     }
   }, [isPlayingAll, isPlaying, globalCurrentFrame, syncWith3DViewer]);
+  
+  // Clear preserved frame when playback stops (isPlayingAll becomes false)
+  useEffect(() => {
+    if (!isPlayingAll) {
+      // When playback stops, update preserved frame to current position
+      const currentFrameValue = globalCurrentFrame ?? currentFrame;
+      if (currentFrameValue !== undefined && currentFrameValue !== null) {
+        preservedFrameRef.current = currentFrameValue;
+      }
+    }
+  }, [isPlayingAll]);
 
   // Reset state when episode changes
   useEffect(() => {
     setCurrentFrame(0);
     setIsPlaying(false);
+    // Initialize preserved frame to 0 on episode change (new episode starts at frame 0)
+    preservedFrameRef.current = 0;
     if (episode) {
       const allJoints = new Set(Object.keys(episode.frames[0]?.jointPositions || {}));
       setSelectedJoints(allJoints);
     }
   }, [episode?.id]);
+  
+  // Initialize preserved frame on mount
+  useEffect(() => {
+    if (preservedFrameRef.current === null) {
+      const initialFrame = globalCurrentFrame ?? currentFrame ?? 0;
+      preservedFrameRef.current = initialFrame;
+    }
+  }, []); // Only run on mount
 
   // Get all joint names from the episode
   const jointNames = useMemo(() => {
@@ -334,8 +379,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     dragStartPositionRef.current = null;
   };
 
-  // Draw graphs on canvas
-  useEffect(() => {
+  // Draw graphs on canvas - use useLayoutEffect to draw synchronously before paint
+  // This prevents visual flicker when frame values change
+  useLayoutEffect(() => {
     if (!episode || !canvasRef.current || isMinimized) return;
 
     const canvas = canvasRef.current;
@@ -412,10 +458,17 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       "#a855f7", "#f97316", "#06b6d4", "#ef4444",
     ];
 
+    // Create stable color mapping based on joint position in sorted jointNames array
+    // This ensures colors don't change when joints are selected/unselected
+    const jointColorMap = new Map<string, string>();
+    jointNames.forEach((jointName, index) => {
+      jointColorMap.set(jointName, colors[index % colors.length]);
+    });
+
     const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
 
     selectedJointNames.forEach((jointName, index) => {
-      const color = colors[index % colors.length];
+      const color = jointColorMap.get(jointName) || colors[index % colors.length];
       const range = jointRanges[jointName];
 
       const rangePadding = (range.max - range.min) * 0.1 || 0.1;
@@ -441,24 +494,21 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       });
 
       ctx.stroke();
-
-      ctx.fillStyle = color;
-      ctx.font = "12px monospace";
-      ctx.textAlign = "right";
-      const labelY = padding + 15 + index * 20;
-      ctx.fillText(jointName, width - padding - 5, labelY);
-
-      const displayFrame = globalCurrentFrame ?? currentFrame;
-      const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
-      if (currentValue !== undefined) {
-        ctx.fillStyle = "#a1a1aa";
-        ctx.font = "10px monospace";
-        ctx.fillText(currentValue.toFixed(2), width - padding - 5, labelY + 10);
-      }
     });
 
     if (episode.frames.length > 0) {
-      const displayFrame = globalCurrentFrame ?? currentFrame;
+      // PRIORITY: Always use preserved frame first to prevent visual jumps
+      // It's set immediately on play click before any state changes
+      // Only fall back to state values if preserved frame is not set
+      let displayFrame: number;
+      if (preservedFrameRef.current !== null && preservedFrameRef.current !== undefined) {
+        displayFrame = preservedFrameRef.current;
+      } else {
+        const rawFrame = globalCurrentFrame ?? currentFrame;
+        displayFrame = rawFrame ?? 0;
+      }
+      // Clamp to valid range
+      displayFrame = Math.max(0, Math.min(displayFrame, episode.frames.length - 1));
       const x = padding + (graphWidth * displayFrame) / (episode.frames.length - 1);
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
@@ -659,17 +709,73 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       {/* Content - Hidden when minimized */}
       {!isMinimized && (
         <>
-          {/* Graph Canvas */}
-          <div className="flex-1 relative bg-background overflow-hidden">
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full cursor-pointer"
-              style={{ background: "#09090b" }}
-              onMouseDown={handleTimelineMouseDown}
-              onMouseMove={handleTimelineMouseMove}
-              onMouseUp={handleTimelineMouseUp}
-              onMouseLeave={handleTimelineMouseLeave}
-            />
+          {/* Graph Canvas and Legend */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Graph Canvas */}
+            <div className="flex-1 relative bg-background overflow-hidden">
+              <canvas
+                ref={canvasRef}
+                className="w-full h-full cursor-pointer"
+                style={{ background: "#09090b" }}
+                onMouseDown={handleTimelineMouseDown}
+                onMouseMove={handleTimelineMouseMove}
+                onMouseUp={handleTimelineMouseUp}
+                onMouseLeave={handleTimelineMouseLeave}
+              />
+            </div>
+            
+            {/* Joints Legend - Right Side */}
+            <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto">
+              {(() => {
+                if (!episode || jointNames.length === 0) {
+                  return (
+                    <div className="text-xs text-muted-foreground">No joints available</div>
+                  );
+                }
+                
+                const colors = [
+                  "#ec4899", "#eab308", "#22c55e", "#3b82f6",
+                  "#a855f7", "#f97316", "#06b6d4", "#ef4444",
+                ];
+                const jointColorMap = new Map<string, string>();
+                jointNames.forEach((jointName, index) => {
+                  jointColorMap.set(jointName, colors[index % colors.length]);
+                });
+                
+                const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
+                
+                if (selectedJointNames.length === 0) {
+                  return (
+                    <div className="text-xs text-muted-foreground">No joints selected</div>
+                  );
+                }
+                
+                // Use preserved frame if available (to prevent visual jump on play start)
+                const displayFrame = preservedFrameRef.current ?? globalCurrentFrame ?? currentFrame;
+                
+                return (
+                  <div className="space-y-0.5">
+                    {selectedJointNames.map((jointName) => {
+                      const color = jointColorMap.get(jointName) || "#ffffff";
+                      const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
+                      
+                      return (
+                        <div key={jointName} className="min-w-0">
+                          <div className="text-xs font-mono truncate leading-tight" style={{ color: color }}>
+                            {jointName}
+                          </div>
+                          {currentValue !== undefined && (
+                            <div className="text-[10px] font-mono text-muted-foreground leading-tight">
+                              {currentValue.toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Controls Panel */}
@@ -782,8 +888,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     className="h-7 w-7 p-0"
                     onClick={() => {
                       if (onPlayAllEpisodes) {
-                        // Get the current frame from the timeline position
-                        const currentFrameValue = globalCurrentFrame ?? currentFrame;
+                        // Get the current frame from the timeline position BEFORE any state changes
+                        // Prioritize preserved frame if it exists (most recent valid position)
+                        const currentFrameValue = preservedFrameRef.current ?? globalCurrentFrame ?? currentFrame ?? 0;
+                        
+                        // CRITICAL: Preserve the frame IMMEDIATELY in a ref before ANY other operations
+                        // This must happen synchronously before any state updates or callbacks
+                        // to prevent the visual jump when the canvas redraws
+                        // Always set it, even if it's 0 (that might be the actual position)
+                        preservedFrameRef.current = currentFrameValue;
+                        
+                        // Also update local state immediately to prevent flicker
+                        setCurrentFrame(currentFrameValue);
                         
                         // Ensure the current episode index is set so playback knows which episode to play
                         if (episode) {
