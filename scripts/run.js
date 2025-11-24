@@ -110,6 +110,15 @@ function main() {
   log('  Press Ctrl+C to stop', colors.gray);
   log('');
   
+  // Start Rerun API server
+  const rerunApiScript = join(__dirname, 'rerun_api_server.js');
+  const rerunApiProcess = spawn('node', [rerunApiScript], {
+    cwd: rootDir,
+    env,
+    shell: true,
+    stdio: 'inherit',
+  });
+  
   // Start the dev server with filtered output
   const viteProcess = spawn('npm', ['run', 'dev'], {
     cwd: rootDir,
@@ -141,6 +150,7 @@ function main() {
     log('');
     log('  Stopping URDF Studio...', colors.gray);
     viteProcess.kill('SIGINT');
+    rerunApiProcess.kill('SIGINT');
     setTimeout(() => {
       process.exit(0);
     }, 500);
@@ -148,6 +158,7 @@ function main() {
   
   process.on('SIGTERM', () => {
     viteProcess.kill('SIGTERM');
+    rerunApiProcess.kill('SIGTERM');
     process.exit(0);
   });
 }

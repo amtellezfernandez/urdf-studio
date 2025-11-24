@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
+import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 
 export const DEFAULT_SIDEBAR_WIDTH = 420;
 export const SIDEBAR_MIN_WIDTH = 320;
@@ -987,6 +988,8 @@ export const Sidebar = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
   const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
+  const [rerunViewerModalEpisode, setRerunViewerModalEpisode] = useState<Episode | null>(null);
+  const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
 
   // Dispatch custom event when frame changes to sync with EpisodeViewer3DModal
   useEffect(() => {
@@ -3825,12 +3828,12 @@ export const Sidebar = ({
                   </div>
                 </BlenderPropertyRow>
                 
-                {/* Graphics Viewer Button */}
-                <div className="px-1">
+                {/* Graphics Viewer Buttons */}
+                <div className="px-1 flex gap-2">
                   <Button
                     size="sm"
                     variant={isViewerModalOpen ? "default" : "outline"}
-                    className="w-full h-8 text-xs"
+                    className="flex-1 h-8 text-xs"
                     onClick={() => {
                       if (isViewerModalOpen) {
                         setIsViewerModalOpen(false);
@@ -3847,6 +3850,27 @@ export const Sidebar = ({
                   >
                     <Eye className="w-3.5 h-3.5 mr-1.5" />
                     {isViewerModalOpen ? "Close Viewer" : "Open Viewer"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={isRerunViewerModalOpen ? "default" : "outline"}
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => {
+                      if (isRerunViewerModalOpen) {
+                        setIsRerunViewerModalOpen(false);
+                      } else {
+                        // Open rerun viewer with current episode
+                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
+                        if (episodes.length > 0 && episodes[activeIndex]) {
+                          setRerunViewerModalEpisode(episodes[activeIndex]);
+                          setIsRerunViewerModalOpen(true);
+                        }
+                      }
+                    }}
+                    disabled={episodes.length === 0}
+                  >
+                    <Box className="w-3.5 h-3.5 mr-1.5" />
+                    {isRerunViewerModalOpen ? "Close Rerun" : "Rerun Viewer"}
                   </Button>
                 </div>
                 
@@ -3993,6 +4017,14 @@ export const Sidebar = ({
           // Update parent's currentFrame state so playback resumes from scrubbed position
           onFrameChange?.(frame);
         }}
+      />
+
+      {/* Rerun Viewer Modal */}
+      <RerunViewer3DModal
+        episode={rerunViewerModalEpisode}
+        open={isRerunViewerModalOpen}
+        onOpenChange={setIsRerunViewerModalOpen}
+        urdfContent={vizUrdf || originalUrdf}
       />
     </div>
   );

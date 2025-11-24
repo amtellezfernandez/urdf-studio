@@ -255,11 +255,102 @@ async function setupGitHub() {
   }
 }
 
+async function checkRerun() {
+  log('');
+  logArrow('🔍 Checking Rerun Installation');
+  log('');
+  
+  try {
+    // Check if rerun command exists
+    execSync('rerun --version', { stdio: 'pipe' });
+    logSuccess('Rerun is installed and ready to use');
+    logInfo('   You can start the Rerun viewer with: rerun --web-viewer');
+    return true;
+  } catch (error) {
+    // Rerun is not installed, try to install automatically
+    log('Rerun is not installed. Attempting automatic installation...', colors.yellow);
+    log('');
+    
+    // Try uv first (fastest, modern)
+    let installer = null;
+    let installerName = '';
+    
+    try {
+      execSync('uv --version', { stdio: 'pipe' });
+      installer = 'uv';
+      installerName = 'uv';
+      logInfo('Found uv, using it to install Rerun...');
+    } catch (e) {
+      // Try pip as fallback
+      try {
+        execSync('pip --version', { stdio: 'pipe' });
+        installer = 'pip';
+        installerName = 'pip';
+        logInfo('Found pip, using it to install Rerun...');
+      } catch (e2) {
+        // Try pip3 as last resort
+        try {
+          execSync('pip3 --version', { stdio: 'pipe' });
+          installer = 'pip3';
+          installerName = 'pip3';
+          logInfo('Found pip3, using it to install Rerun...');
+        } catch (e3) {
+          log('✗ No Python package manager found', colors.yellow);
+          log('');
+          logInfo('To install Rerun manually:');
+          logInfo('  1. Install uv (recommended): curl -LsSf https://astral.sh/uv/install.sh | sh');
+          logInfo('  2. Or install pip: python -m ensurepip --upgrade');
+          logInfo('  3. Then run: pip install rerun-sdk');
+          log('');
+          logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+          return false;
+        }
+      }
+    }
+    
+    // Install rerun-sdk
+    try {
+      if (installer === 'uv') {
+        logInfo('Installing rerun-sdk with uv...');
+        execSync('uv pip install rerun-sdk', { stdio: 'inherit', shell: true });
+      } else {
+        logInfo(`Installing rerun-sdk with ${installerName}...`);
+        execSync(`${installerName} install rerun-sdk`, { stdio: 'inherit', shell: true });
+      }
+      
+      // Verify installation
+      try {
+        execSync('rerun --version', { stdio: 'pipe' });
+        logSuccess('Rerun installed successfully!');
+        logInfo('   You can start the Rerun viewer with: rerun --web-viewer');
+        return true;
+      } catch (verifyError) {
+        log('✗ Installation completed but rerun command not found', colors.yellow);
+        logInfo('   You may need to restart your terminal or add Python scripts to PATH');
+        logInfo('   Try running: rerun --help');
+        return false;
+      }
+    } catch (installError) {
+      log('✗ Failed to install rerun-sdk', colors.yellow);
+      logInfo('   Error during installation. You can try installing manually:');
+      if (installer === 'uv') {
+        logInfo('     uv pip install rerun-sdk');
+      } else {
+        logInfo(`     ${installerName} install rerun-sdk`);
+      }
+      log('');
+      logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+      return false;
+    }
+  }
+}
+
 async function main() {
   console.log(banner);
   
   try {
     await installDependencies();
+    await checkRerun();
     await setupHuggingFace();
     await setupGitHub();
     
