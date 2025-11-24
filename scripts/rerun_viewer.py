@@ -142,8 +142,9 @@ def visualize_episode(
         print(f"Starting Rerun server on web_port={web_port}, grpc_port={ws_port}...")
         rr.init(recording_name, spawn=False)
         # Use the new API: serve_grpc + serve_web_viewer
-        rr.serve_grpc(grpc_port=ws_port)
-        rr.serve_web_viewer(web_port=web_port, open_browser=False)
+        server_uri = rr.serve_grpc(grpc_port=ws_port)
+        print(f"gRPC server running at: {server_uri}")
+        rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=server_uri)
     else:
         print(f"Initializing Rerun with recording: {recording_name}")
         rr.init(recording_name, spawn=spawn)
