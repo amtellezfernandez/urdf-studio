@@ -7,7 +7,8 @@
 import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, writeFileSync, unlinkSync, mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
 import http from 'http';
 import { parse } from 'url';
 
@@ -57,11 +58,20 @@ const server = http.createServer((req, res) => {
           return;
         }
 
+        // Create temporary directory for data files
+        const tempDir = mkdtempSync(join(tmpdir(), 'rerun-'));
+        const episodeFile = join(tempDir, 'episode.json');
+        const urdfFile = join(tempDir, 'urdf.xml');
+
+        // Write data to temporary files to avoid E2BIG error
+        writeFileSync(episodeFile, JSON.stringify(episode));
+        writeFileSync(urdfFile, urdf);
+
         // Prepare arguments for Python script
         const args = [
           pythonScript,
-          '--episode', JSON.stringify(episode),
-          '--urdf', urdf,
+          '--episode-file', episodeFile,
+          '--urdf-file', urdfFile,
           '--recording', recording || `lerobot/episode_${episode.number || 0}`,
         ];
 
@@ -73,23 +83,29 @@ const server = http.createServer((req, res) => {
           args.push('--ws-port', String(ws_port || 9876));
         }
 
-        // Try python3 first, then python
+        // Try venv Python first, then system python3/python
+        const venvPython = join(rootDir, '.venv', 'bin', 'python3');
         let pythonCmd = 'python3';
-        try {
-          execSync('python3 --version', { stdio: 'ignore' });
-        } catch (e) {
+
+        if (existsSync(venvPython)) {
+          pythonCmd = venvPython;
+        } else {
           try {
-            execSync('python --version', { stdio: 'ignore' });
-            pythonCmd = 'python';
-          } catch (e2) {
-            if (!res.headersSent) {
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                error: 'Python not found. Please install Python 3.',
-                hint: 'Install Python 3 or ensure python3/python is in PATH',
-              }));
+            execSync('python3 --version', { stdio: 'ignore' });
+          } catch (e) {
+            try {
+              execSync('python --version', { stdio: 'ignore' });
+              pythonCmd = 'python';
+            } catch (e2) {
+              if (!res.headersSent) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  error: 'Python not found. Please install Python 3.',
+                  hint: 'Install Python 3 or ensure python3/python is in PATH',
+                }));
+              }
+              return;
             }
-            return;
           }
         }
 
@@ -117,9 +133,16 @@ const server = http.createServer((req, res) => {
 
         pythonProcess.on('error', (error) => {
           console.error('[Rerun API] Python process error:', error);
+          // Cleanup temp files
+          try {
+            unlinkSync(episodeFile);
+            unlinkSync(urdfFile);
+          } catch (e) {
+            // Ignore cleanup errors
+          }
           if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
+            res.end(JSON.stringify({
               error: `Failed to start Python process: ${error.message}`,
               hint: `Make sure Python 3 and rerun-sdk are installed. Try: pip install rerun-sdk`,
               command: `${pythonCmd} ${args.join(' ')}`,
@@ -152,9 +175,16 @@ const server = http.createServer((req, res) => {
           pythonProcess.on('error', (error) => {
             hasError = true;
             clearTimeout(errorTimeout);
+            // Cleanup temp files
+            try {
+              unlinkSync(episodeFile);
+              unlinkSync(urdfFile);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
             if (!res.headersSent) {
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
+              res.end(JSON.stringify({
                 error: `Failed to start Python process: ${error.message}`,
                 hint: `Make sure Python 3 and rerun-sdk are installed. Try: pip install rerun-sdk`,
                 command: `${pythonCmd} ${args.join(' ')}`,
@@ -168,9 +198,16 @@ const server = http.createServer((req, res) => {
             if (errorText.includes('ImportError') || errorText.includes('ModuleNotFoundError')) {
               hasError = true;
               clearTimeout(errorTimeout);
+              // Cleanup temp files
+              try {
+                unlinkSync(episodeFile);
+                unlinkSync(urdfFile);
+              } catch (e) {
+                // Ignore cleanup errors
+              }
               if (!res.headersSent) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
+                res.end(JSON.stringify({
                   error: 'Rerun SDK not installed',
                   stderr: errorText,
                   hint: 'Install rerun-sdk with: pip install rerun-sdk',
@@ -181,17 +218,24 @@ const server = http.createServer((req, res) => {
         } else {
           // For spawn mode, wait for process to complete
           pythonProcess.on('close', (code) => {
+            // Cleanup temp files
+            try {
+              unlinkSync(episodeFile);
+              unlinkSync(urdfFile);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
             if (!res.headersSent) {
               if (code === 0) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                  success: true, 
+                res.end(JSON.stringify({
+                  success: true,
                   message: 'Rerun visualization started',
                   mode: 'spawn',
                 }));
               } else {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
+                res.end(JSON.stringify({
                   error: `Python script failed with code ${code}`,
                   stderr: stderr,
                 }));

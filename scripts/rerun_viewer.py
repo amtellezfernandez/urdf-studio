@@ -42,8 +42,8 @@ def parse_urdf(urdf_content: str) -> Tuple[List[Dict], List[Dict]]:
         
         parent_elem = joint.find("parent")
         child_elem = joint.find("child")
-        
-        if not name or not parent_elem or not child_elem:
+
+        if not name or parent_elem is None or child_elem is None:
             continue
         
         parent_link = parent_elem.get("link")
@@ -139,8 +139,11 @@ def visualize_episode(
     
     # Initialize Rerun
     if serve:
-        print(f"Starting Rerun server on web_port={web_port}, ws_port={ws_port}...")
-        rr.serve(open_browser=False, web_port=web_port, ws_port=ws_port)
+        print(f"Starting Rerun server on web_port={web_port}, grpc_port={ws_port}...")
+        rr.init(recording_name, spawn=False)
+        # Use the new API: serve_grpc + serve_web_viewer
+        rr.serve_grpc(grpc_port=ws_port)
+        rr.serve_web_viewer(web_port=web_port, open_browser=False)
     else:
         print(f"Initializing Rerun with recording: {recording_name}")
         rr.init(recording_name, spawn=spawn)
@@ -169,8 +172,8 @@ def visualize_episode(
         timestamp = frame.get("timestamp", frame_idx * 0.033)  # Default 30fps
         joint_positions = frame.get("jointPositions", {})
         
-        # Set time for this frame
-        rr.set_time_seconds("timestamp", timestamp / 1000.0)
+        # Set time for this frame (timestamp is in milliseconds, convert to seconds)
+        rr.set_time("timestamp", timestamp=timestamp / 1000.0)
         
         # Calculate transforms for each link
         link_transforms = {root_link: {"translation": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0]}}
@@ -233,45 +236,66 @@ def visualize_episode(
     if serve:
         print(f"Web viewer: http://127.0.0.1:{web_port}")
         print("Press Ctrl+C to stop the server")
+        # Keep the script running so the servers stay alive
+        try:
+            import time
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down Rerun servers...")
     else:
         print("Rerun viewer should be open. Close it when done.")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize URDF episodes with Rerun")
-    parser.add_argument("--episode", type=str, required=True, help="Episode JSON data (file path or JSON string)")
-    parser.add_argument("--urdf", type=str, required=True, help="URDF content (file path or XML string)")
+    parser.add_argument("--episode", type=str, help="Episode JSON data (file path or JSON string)")
+    parser.add_argument("--episode-file", type=str, help="Episode JSON file path")
+    parser.add_argument("--urdf", type=str, help="URDF content (file path or XML string)")
+    parser.add_argument("--urdf-file", type=str, help="URDF file path")
     parser.add_argument("--recording", type=str, default="lerobot/episode", help="Rerun recording name")
     parser.add_argument("--spawn", action="store_true", default=True, help="Spawn Rerun viewer (default: True)")
     parser.add_argument("--no-spawn", dest="spawn", action="store_false", help="Don't spawn viewer")
     parser.add_argument("--serve", action="store_true", help="Serve Rerun over WebSocket (distant mode)")
     parser.add_argument("--web-port", type=int, default=9090, help="Web port for serve mode")
     parser.add_argument("--ws-port", type=int, default=9876, help="WebSocket port for serve mode")
-    
+
     args = parser.parse_args()
-    
+
+    # Determine episode source
+    episode_arg = args.episode_file if args.episode_file else args.episode
+    if not episode_arg:
+        print("ERROR: Either --episode or --episode-file is required", file=sys.stderr)
+        sys.exit(1)
+
     # Load episode data
     try:
-        if args.episode.startswith("{") or args.episode.startswith("["):
-            # JSON string
-            episode_data = json.loads(args.episode)
-        else:
+        if args.episode_file or not (episode_arg.startswith("{") or episode_arg.startswith("[")):
             # File path
-            with open(args.episode, "r") as f:
+            with open(episode_arg, "r") as f:
                 episode_data = json.load(f)
+        else:
+            # JSON string
+            episode_data = json.loads(episode_arg)
     except Exception as e:
         print(f"ERROR: Failed to load episode data: {e}", file=sys.stderr)
         sys.exit(1)
-    
+
+    # Determine URDF source
+    urdf_arg = args.urdf_file if args.urdf_file else args.urdf
+    if not urdf_arg:
+        print("ERROR: Either --urdf or --urdf-file is required", file=sys.stderr)
+        sys.exit(1)
+
     # Load URDF
     try:
-        if args.urdf.startswith("<"):
-            # XML string
-            urdf_content = args.urdf
-        else:
+        if args.urdf_file or not urdf_arg.startswith("<"):
             # File path
-            with open(args.urdf, "r") as f:
+            with open(urdf_arg, "r") as f:
                 urdf_content = f.read()
+        else:
+            # XML string
+            urdf_content = urdf_arg
     except Exception as e:
         print(f"ERROR: Failed to load URDF: {e}", file=sys.stderr)
         sys.exit(1)

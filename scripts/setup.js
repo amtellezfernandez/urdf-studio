@@ -257,91 +257,82 @@ async function setupGitHub() {
 
 async function checkRerun() {
   log('');
-  logArrow('🔍 Checking Rerun Installation');
+  logArrow('🔍 Setting up Python environment and Rerun');
   log('');
-  
+
+  const venvPath = join(rootDir, '.venv');
+  const venvPython = join(venvPath, 'bin', 'python3');
+
+  // Check if uv is available
   try {
-    // Check if rerun command exists
-    execSync('rerun --version', { stdio: 'pipe' });
-    logSuccess('Rerun is installed and ready to use');
-    logInfo('   You can start the Rerun viewer with: rerun --web-viewer');
-    return true;
-  } catch (error) {
-    // Rerun is not installed, try to install automatically
-    log('Rerun is not installed. Attempting automatic installation...', colors.yellow);
+    execSync('uv --version', { stdio: 'pipe' });
+  } catch (e) {
+    log('✗ uv not found. Please install uv first:', colors.yellow);
     log('');
-    
-    // Try uv first (fastest, modern)
-    let installer = null;
-    let installerName = '';
-    
+    logInfo('Install uv with:');
+    logInfo('  curl -LsSf https://astral.sh/uv/install.sh | sh');
+    log('');
+    logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+    return false;
+  }
+
+  // Create virtual environment if it doesn't exist
+  if (!existsSync(venvPath)) {
+    logInfo('Creating Python virtual environment...');
     try {
-      execSync('uv --version', { stdio: 'pipe' });
-      installer = 'uv';
-      installerName = 'uv';
-      logInfo('Found uv, using it to install Rerun...');
+      // Try to find system Python (non-conda)
+      let pythonPath = '/usr/bin/python3';
+      if (!existsSync(pythonPath)) {
+        // Fallback to any available python3
+        pythonPath = 'python3';
+      }
+      execSync(`uv venv --python ${pythonPath}`, { cwd: rootDir, stdio: 'inherit', shell: true });
+      logSuccess('Virtual environment created');
     } catch (e) {
-      // Try pip as fallback
-      try {
-        execSync('pip --version', { stdio: 'pipe' });
-        installer = 'pip';
-        installerName = 'pip';
-        logInfo('Found pip, using it to install Rerun...');
-      } catch (e2) {
-        // Try pip3 as last resort
-        try {
-          execSync('pip3 --version', { stdio: 'pipe' });
-          installer = 'pip3';
-          installerName = 'pip3';
-          logInfo('Found pip3, using it to install Rerun...');
-        } catch (e3) {
-          log('✗ No Python package manager found', colors.yellow);
-          log('');
-          logInfo('To install Rerun manually:');
-          logInfo('  1. Install uv (recommended): curl -LsSf https://astral.sh/uv/install.sh | sh');
-          logInfo('  2. Or install pip: python -m ensurepip --upgrade');
-          logInfo('  3. Then run: pip install rerun-sdk');
-          log('');
-          logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
-          return false;
-        }
-      }
-    }
-    
-    // Install rerun-sdk
-    try {
-      if (installer === 'uv') {
-        logInfo('Installing rerun-sdk with uv...');
-        execSync('uv pip install rerun-sdk', { stdio: 'inherit', shell: true });
-      } else {
-        logInfo(`Installing rerun-sdk with ${installerName}...`);
-        execSync(`${installerName} install rerun-sdk`, { stdio: 'inherit', shell: true });
-      }
-      
-      // Verify installation
-      try {
-        execSync('rerun --version', { stdio: 'pipe' });
-        logSuccess('Rerun installed successfully!');
-        logInfo('   You can start the Rerun viewer with: rerun --web-viewer');
-        return true;
-      } catch (verifyError) {
-        log('✗ Installation completed but rerun command not found', colors.yellow);
-        logInfo('   You may need to restart your terminal or add Python scripts to PATH');
-        logInfo('   Try running: rerun --help');
-        return false;
-      }
-    } catch (installError) {
-      log('✗ Failed to install rerun-sdk', colors.yellow);
-      logInfo('   Error during installation. You can try installing manually:');
-      if (installer === 'uv') {
-        logInfo('     uv pip install rerun-sdk');
-      } else {
-        logInfo(`     ${installerName} install rerun-sdk`);
-      }
-      log('');
-      logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+      log('✗ Failed to create virtual environment', colors.yellow);
       return false;
     }
+  } else {
+    logInfo('Virtual environment already exists');
+  }
+
+  // Check if rerun-sdk is already installed
+  try {
+    execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, { stdio: 'pipe' });
+    const version = execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, {
+      stdio: 'pipe',
+      encoding: 'utf-8'
+    }).trim();
+    logSuccess(`Rerun SDK already installed (version ${version})`);
+    return true;
+  } catch (e) {
+    // Not installed, proceed with installation
+  }
+
+  // Install rerun-sdk in the virtual environment
+  logInfo('Installing rerun-sdk in virtual environment...');
+  try {
+    execSync(`uv pip install --python ${venvPython} rerun-sdk`, {
+      cwd: rootDir,
+      stdio: 'inherit',
+      shell: true
+    });
+
+    // Verify installation
+    const version = execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, {
+      stdio: 'pipe',
+      encoding: 'utf-8'
+    }).trim();
+    logSuccess(`Rerun SDK installed successfully (version ${version})`);
+    logInfo('   Virtual environment: .venv/');
+    return true;
+  } catch (installError) {
+    log('✗ Failed to install rerun-sdk', colors.yellow);
+    logInfo('   You can try installing manually:');
+    logInfo('     uv pip install --python .venv/bin/python3 rerun-sdk');
+    log('');
+    logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+    return false;
   }
 }
 
