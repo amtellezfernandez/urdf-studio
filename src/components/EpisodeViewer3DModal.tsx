@@ -1,17 +1,11 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
   Play,
   Pause,
-  Square,
   SkipBack,
   SkipForward,
-  StepBack,
-  StepForward,
-  ChevronsLeft,
-  ChevronsRight,
-  X,
   Minimize2,
   Maximize2,
   GripHorizontal,
@@ -25,6 +19,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+// Constants
+const CANVAS_PADDING = 40;
+const MIN_WINDOW_WIDTH = 400;
+const MIN_WINDOW_HEIGHT = 300;
+const DRAG_THRESHOLD = 3;
+const DEFAULT_FRAME_TIME = 33.33;
+const JOINT_COLORS = [
+  "#ec4899", "#eab308", "#22c55e", "#3b82f6",
+  "#a855f7", "#f97316", "#06b6d4", "#ef4444",
+] as const;
 
 interface RecordedFrame {
   timestamp: number;
@@ -52,6 +57,48 @@ interface EpisodeViewer3DModalProps {
   onSetGlobalFrame?: (frame: number) => void;
 }
 
+// Helper function to convert episode to animation frames
+const toAnimationFrames = (ep: Episode) =>
+  ep.frames.map((frame) => ({
+    timestamp: frame.timestamp,
+    joints: frame.jointPositions,
+  }));
+
+// Helper to get current frame value
+const getCurrentFrameValue = (
+  preservedFrame: number | null,
+  globalFrame?: number,
+  localFrame?: number
+): number => {
+  if (preservedFrame !== null && preservedFrame !== undefined) {
+    return preservedFrame;
+  }
+  return globalFrame ?? localFrame ?? 0;
+};
+
+// Helper to calculate frame from mouse position
+const calculateFrameFromMouse = (
+  mouseX: number,
+  canvasWidth: number,
+  totalFrames: number
+): number => {
+  const graphWidth = canvasWidth - CANVAS_PADDING * 2;
+  const normalizedX = (mouseX - CANVAS_PADDING) / graphWidth;
+  return Math.max(0, Math.min(
+    Math.round(normalizedX * (totalFrames - 1)),
+    totalFrames - 1
+  ));
+};
+
+// Helper to update frame in 3D viewer
+const updateViewerFrame = (frame: number, episode: Episode) => {
+  const frames = toAnimationFrames(episode);
+  (window as any).viewer3dPlayEpisode?.(frames);
+  (window as any).viewer3dSetFrame?.(frame);
+  (window as any).viewer3dStopAnimation?.();
+  (window as any).viewer3dPlayAnimation?.(false);
+};
+
 export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   episode,
   open,
@@ -65,122 +112,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   onSetGlobalFrame,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
   const [isMinimized, setIsMinimized] = useState(false);
   const [syncWith3DViewer, setSyncWith3DViewer] = useState(true);
-
-  // Helper function to convert episode to animation frames
-  const toAnimationFrames = (ep: Episode) =>
-    ep.frames.map((frame) => ({
-      timestamp: frame.timestamp,
-      joints: frame.jointPositions,
-    }));
-
-  // Window position and size
   const [position, setPosition] = useState({ x: 100, y: 100 });
   const [size, setSize] = useState({ width: 800, height: 600 });
-
-  // Dragging state
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
-  // Resizing state
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState<string>("");
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
-  const lastFrameTimeRef = useRef<number>(0);
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
   const preservedFrameRef = useRef<number | null>(null);
-
-  // Listen to global frame updates from 3D viewer - only when playing
-  useEffect(() => {
-    if (!syncWith3DViewer || !open || !isPlayingAll) {
-      // Only clear preserved frame when playback is explicitly stopped, not when starting
-      // This prevents the visual jump when play is clicked
-      return;
-    }
-
-    const handleFrameUpdate = (event: CustomEvent) => {
-      const { frame, episodeIndex } = event.detail;
-
-      // Only update if we're viewing the same episode that's playing AND it's actually playing
-      if (episodeIndex === currentEpisodeIndex && isPlayingAll) {
-        setCurrentFrame(frame);
-        // Update preserved frame as we receive updates
-        preservedFrameRef.current = frame;
-      }
-    };
-
-    window.addEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
-
-    return () => {
-      window.removeEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
-    };
-  }, [syncWith3DViewer, open, currentEpisodeIndex, isPlayingAll]);
-
-  // Keep preserved frame updated when not playing, but protect it during play transitions
-  // This prevents the visual jump when play is clicked
-  useEffect(() => {
-    // Only update preserved frame when not playing to avoid overwriting during transitions
-    if (isPlayingAll) {
-      return; // Don't update preserved frame while playing - let it be updated by frame update events
-    }
-    
-    const currentFrameValue = globalCurrentFrame ?? currentFrame;
-    if (currentFrameValue !== undefined && currentFrameValue !== null) {
-      // Always keep preserved frame updated when not playing
-      preservedFrameRef.current = currentFrameValue;
-    }
-  }, [isPlayingAll, globalCurrentFrame, currentFrame]);
-  
-  // Sync local currentFrame with globalCurrentFrame when manually set (not playing)
-  // This ensures the frame counter reflects the current position when paused
-  useEffect(() => {
-    // Only sync when NOT playing to prevent timeline from moving when paused
-    if (!isPlayingAll && !isPlaying && globalCurrentFrame !== undefined && syncWith3DViewer) {
-      setCurrentFrame(globalCurrentFrame);
-      // Update preserved frame to current position when manually set
-      preservedFrameRef.current = globalCurrentFrame;
-    }
-  }, [isPlayingAll, isPlaying, globalCurrentFrame, syncWith3DViewer]);
-  
-  // Clear preserved frame when playback stops (isPlayingAll becomes false)
-  useEffect(() => {
-    if (!isPlayingAll) {
-      // When playback stops, update preserved frame to current position
-      const currentFrameValue = globalCurrentFrame ?? currentFrame;
-      if (currentFrameValue !== undefined && currentFrameValue !== null) {
-        preservedFrameRef.current = currentFrameValue;
-      }
-    }
-  }, [isPlayingAll]);
-
-  // Reset state when episode changes
-  useEffect(() => {
-    setCurrentFrame(0);
-    setIsPlaying(false);
-    // Initialize preserved frame to 0 on episode change (new episode starts at frame 0)
-    preservedFrameRef.current = 0;
-    if (episode) {
-      const allJoints = new Set(Object.keys(episode.frames[0]?.jointPositions || {}));
-      setSelectedJoints(allJoints);
-    }
-  }, [episode?.id]);
-  
-  // Initialize preserved frame on mount
-  useEffect(() => {
-    if (preservedFrameRef.current === null) {
-      const initialFrame = globalCurrentFrame ?? currentFrame ?? 0;
-      preservedFrameRef.current = initialFrame;
-    }
-  }, []); // Only run on mount
 
   // Get all joint names from the episode
   const jointNames = useMemo(() => {
@@ -204,183 +152,215 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     return ranges;
   }, [episode, jointNames]);
 
-  // Playback animation loop
+  // Create stable color mapping for joints
+  const jointColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    jointNames.forEach((jointName, index) => {
+      map.set(jointName, JOINT_COLORS[index % JOINT_COLORS.length]);
+    });
+    return map;
+  }, [jointNames]);
+
+  // Listen to global frame updates from 3D viewer when playing
   useEffect(() => {
-    if (!isPlaying || !episode || episode.frames.length === 0) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+    if (!syncWith3DViewer || !open || !isPlayingAll) return;
+
+    const handleFrameUpdate = (event: CustomEvent) => {
+      const { frame, episodeIndex } = event.detail;
+      if (episodeIndex === currentEpisodeIndex && isPlayingAll) {
+        setCurrentFrame(frame);
+        preservedFrameRef.current = frame;
       }
-      return;
-    }
-
-    const animate = (timestamp: number) => {
-      if (lastFrameTimeRef.current === 0) {
-        lastFrameTimeRef.current = timestamp;
-      }
-
-      const deltaTime = timestamp - lastFrameTimeRef.current;
-      const frameTime = episode.frames.length > 1
-        ? (episode.frames[1].timestamp - episode.frames[0].timestamp) / playbackSpeed
-        : 33.33;
-
-      if (deltaTime >= frameTime) {
-        setCurrentFrame((prev) => {
-          const next = prev + 1;
-          if (next >= episode.frames.length) {
-            setIsPlaying(false);
-            return prev;
-          }
-          return next;
-        });
-        lastFrameTimeRef.current = timestamp;
-      }
-
-      animationFrameRef.current = requestAnimationFrame(animate);
     };
 
-    animationFrameRef.current = requestAnimationFrame(animate);
-
+    window.addEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      window.removeEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
     };
-  }, [isPlaying, episode, playbackSpeed]);
+  }, [syncWith3DViewer, open, currentEpisodeIndex, isPlayingAll]);
 
-  // Handle timeline scrubbing (Blender-style) - supports both click and drag
-  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!episode || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const padding = 40;
-    const graphWidth = rect.width - padding * 2;
-    const x = e.clientX - rect.left;
+  // Update preserved frame when not playing
+  useEffect(() => {
+    if (isPlayingAll) return;
+    const currentFrameValue = globalCurrentFrame ?? currentFrame;
+    if (currentFrameValue !== undefined && currentFrameValue !== null) {
+      preservedFrameRef.current = currentFrameValue;
+    }
+  }, [isPlayingAll, globalCurrentFrame, currentFrame]);
 
-    // Check if click is within the graph area
-    if (x >= padding && x <= rect.width - padding && episode.frames.length > 0) {
-      // Store initial mouse position to detect if it's a click vs drag
-      dragStartPositionRef.current = { x: e.clientX, y: e.clientY };
-      isDraggingTimelineRef.current = false; // Start as false, will be set to true on move
+  // Sync local frame with global when manually set (paused)
+  useEffect(() => {
+    if (!isPlayingAll && globalCurrentFrame !== undefined && syncWith3DViewer) {
+      setCurrentFrame(globalCurrentFrame);
+      preservedFrameRef.current = globalCurrentFrame;
+    }
+  }, [isPlayingAll, globalCurrentFrame, syncWith3DViewer]);
 
-      const normalizedX = (x - padding) / graphWidth;
-      const frameIndex = Math.max(0, Math.min(
-        Math.round(normalizedX * (episode.frames.length - 1)),
-        episode.frames.length - 1
-      ));
+  // Reset state when episode changes
+  useEffect(() => {
+    setCurrentFrame(0);
+    preservedFrameRef.current = 0;
+    if (episode) {
+      const allJoints = new Set(Object.keys(episode.frames[0]?.jointPositions || {}));
+      setSelectedJoints(allJoints);
+    }
+  }, [episode?.id]);
 
-      // Update frame immediately on click
-      const displayFrame = frameIndex;
+  // Initialize preserved frame on mount
+  useEffect(() => {
+    if (preservedFrameRef.current === null) {
+      preservedFrameRef.current = globalCurrentFrame ?? currentFrame ?? 0;
+    }
+  }, []);
 
-      // Only pause playback if it's currently playing (don't do anything if already paused)
-      // isPlayingAll indicates global playback is active, so only pause if it's true
-      if (isPlayingAll && onPlayAllEpisodes) {
-        // onPlayAllEpisodes toggles playback - since isPlayingAll is true, this will pause it
-        onPlayAllEpisodes();
-      }
-      
-      // Stop local modal playback only if it's playing
-      if (isPlaying) {
-        setIsPlaying(false);
-      }
+  // Navigate to episode
+  const navigateToEpisode = useCallback((direction: 'prev' | 'next') => {
+    if (allEpisodes.length === 0) return;
+    const currentIndex = currentEpisodeIndex ?? 0;
+    const newIndex = direction === 'prev'
+      ? (currentIndex > 0 ? currentIndex - 1 : allEpisodes.length - 1)
+      : (currentIndex + 1) % allEpisodes.length;
+    
+    const targetEpisode = allEpisodes[newIndex];
+    if (targetEpisode?.frames.length > 0) {
+      updateViewerFrame(0, targetEpisode);
+      onSetCurrentEpisodeIndex?.(newIndex);
+      onSetGlobalFrame?.(0);
+    }
+  }, [allEpisodes, currentEpisodeIndex, onSetCurrentEpisodeIndex, onSetGlobalFrame]);
 
-      // Stop animation in 3D viewer only if global playback is active
-      // We check isPlayingAll because that's the source of truth for global playback state
-      if (isPlayingAll) {
-        (window as any).viewer3dStopAnimation?.();
-      }
+  // Handle play/pause
+  const handlePlayPause = useCallback(() => {
+    if (!onPlayAllEpisodes || !episode) return;
 
-      // Update global frame first (this updates parent's currentFrame state)
-      if (onSetGlobalFrame) {
-        onSetGlobalFrame(displayFrame);
-      }
+    const currentFrameValue = getCurrentFrameValue(
+      preservedFrameRef.current,
+      globalCurrentFrame,
+      currentFrame
+    );
 
-      // Set the current episode index so playback knows which episode to resume from
+    preservedFrameRef.current = currentFrameValue;
+    setCurrentFrame(currentFrameValue);
+
+    if (episode) {
       if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
         onSetCurrentEpisodeIndex(currentEpisodeIndex);
       } else if (currentEpisodeIndex === null && allEpisodes.length > 0) {
-        // If no episode index is set, find the episode in allEpisodes and set it
         const episodeIndex = allEpisodes.findIndex(ep => ep.id === episode.id);
         if (episodeIndex !== -1 && onSetCurrentEpisodeIndex) {
           onSetCurrentEpisodeIndex(episodeIndex);
         }
       }
 
-      // Set the frame directly (don't use viewer3dPlayEpisode as it auto-starts playback)
-      // The frames should already be loaded from when the episode viewer was opened
-      if (episode) {
-        (window as any).viewer3dSetFrame?.(displayFrame);
+      if (onSetGlobalFrame) {
+        onSetGlobalFrame(currentFrameValue);
       }
-
-      // Update local frame for display
-      setCurrentFrame(displayFrame);
-      // Playback will only resume if user explicitly clicks play
     }
-  };
 
-  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!episode || !canvasRef.current) return;
-    
-    // Only process if mouse button is down (dragStartPositionRef indicates mouse is down)
-    if (!dragStartPositionRef.current) return;
-    
-    // Check if mouse has moved enough to consider it a drag (not just a click)
+    onPlayAllEpisodes(currentFrameValue);
+  }, [onPlayAllEpisodes, episode, globalCurrentFrame, currentFrame, currentEpisodeIndex, allEpisodes, onSetCurrentEpisodeIndex, onSetGlobalFrame]);
+
+  // Handle timeline mouse down
+  const handleTimelineMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!episode || !canvasRef.current || episode.frames.length === 0) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+
+    if (x < CANVAS_PADDING || x > rect.width - CANVAS_PADDING) return;
+
+    dragStartPositionRef.current = { x: e.clientX, y: e.clientY };
+    isDraggingTimelineRef.current = false;
+
+    const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
+
+    if (isPlayingAll && onPlayAllEpisodes) {
+      onPlayAllEpisodes();
+    }
+
+    if (isPlayingAll) {
+      (window as any).viewer3dStopAnimation?.();
+    }
+
+    if (onSetGlobalFrame) {
+      onSetGlobalFrame(frameIndex);
+    }
+
+    if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
+      onSetCurrentEpisodeIndex(currentEpisodeIndex);
+    } else if (currentEpisodeIndex === null && allEpisodes.length > 0) {
+      const episodeIndex = allEpisodes.findIndex(ep => ep.id === episode.id);
+      if (episodeIndex !== -1 && onSetCurrentEpisodeIndex) {
+        onSetCurrentEpisodeIndex(episodeIndex);
+      }
+    }
+
+    if (episode) {
+      (window as any).viewer3dSetFrame?.(frameIndex);
+    }
+
+    setCurrentFrame(frameIndex);
+  }, [episode, isPlayingAll, onPlayAllEpisodes, onSetGlobalFrame, currentEpisodeIndex, allEpisodes, onSetCurrentEpisodeIndex]);
+
+  // Handle timeline mouse move
+  const handleTimelineMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!episode || !canvasRef.current || !dragStartPositionRef.current) return;
+
     const moveDistance = Math.sqrt(
       Math.pow(e.clientX - dragStartPositionRef.current.x, 2) +
       Math.pow(e.clientY - dragStartPositionRef.current.y, 2)
     );
-    
-    // If moved more than 3 pixels, consider it a drag
-    if (moveDistance > 3) {
+
+    if (moveDistance > DRAG_THRESHOLD) {
       isDraggingTimelineRef.current = true;
     }
-    
-    // Only update frame if we're actually dragging (moved more than threshold)
+
     if (!isDraggingTimelineRef.current) return;
-    
+
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const padding = 40;
-    const graphWidth = rect.width - padding * 2;
     const x = e.clientX - rect.left;
-    
-    if (x >= padding && x <= rect.width - padding && episode.frames.length > 0) {
-      const normalizedX = (x - padding) / graphWidth;
-      const frameIndex = Math.max(0, Math.min(
-        Math.round(normalizedX * (episode.frames.length - 1)),
-        episode.frames.length - 1
-      ));
-      
-      // Update frame while dragging
-      const displayFrame = frameIndex;
 
-      // Update global frame first
+    if (x >= CANVAS_PADDING && x <= rect.width - CANVAS_PADDING && episode.frames.length > 0) {
+      const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
+
       if (onSetGlobalFrame) {
-        onSetGlobalFrame(displayFrame);
+        onSetGlobalFrame(frameIndex);
       }
 
-      // Set frame directly in 3D viewer (don't call PlayEpisode as it auto-starts playback)
-      (window as any).viewer3dSetFrame?.(displayFrame);
-
-      // Update local frame for display
-      setCurrentFrame(displayFrame);
-      // Note: Playback is already stopped on mouse down
+      (window as any).viewer3dSetFrame?.(frameIndex);
+      setCurrentFrame(frameIndex);
     }
-  };
+  }, [episode, onSetGlobalFrame]);
 
-  const handleTimelineMouseUp = () => {
-    // If we never started dragging, it was just a click - frame was already set in mouseDown
+  const handleTimelineMouseUp = useCallback(() => {
     isDraggingTimelineRef.current = false;
     dragStartPositionRef.current = null;
-  };
+  }, []);
 
-  // Handle mouse leave to stop dragging
-  const handleTimelineMouseLeave = () => {
+  const handleTimelineMouseLeave = useCallback(() => {
     isDraggingTimelineRef.current = false;
     dragStartPositionRef.current = null;
-  };
+  }, []);
 
-  // Draw graphs on canvas - use useLayoutEffect to draw synchronously before paint
-  // This prevents visual flicker when frame values change
+  // Calculate time display
+  const calculateTime = useCallback((frame: number): string => {
+    if (!episode || episode.frames.length === 0) return "0.00s";
+    
+    const totalFrames = episode.frames.length;
+    const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
+    const effectiveSpeed = syncWith3DViewer 
+      ? ((window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0)
+      : playbackSpeed;
+    const frameDuration = totalFrames > 1 
+      ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
+      : 0;
+    const calculatedTime = frame * frameDuration;
+    return `${(calculatedTime / 1000).toFixed(2)}s`;
+  }, [episode, syncWith3DViewer, playbackSpeed]);
+
+  // Draw canvas
   useLayoutEffect(() => {
     if (!episode || !canvasRef.current || isMinimized) return;
 
@@ -395,53 +375,54 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     const width = rect.width;
     const height = rect.height;
-    const padding = 40;
-    const graphHeight = height - padding * 2;
-    const graphWidth = width - padding * 2;
+    const graphHeight = height - CANVAS_PADDING * 2;
+    const graphWidth = width - CANVAS_PADDING * 2;
 
+    // Clear canvas
     ctx.fillStyle = "#09090b";
     ctx.fillRect(0, 0, width, height);
 
+    // Draw grid
     ctx.strokeStyle = "#27272a";
     ctx.lineWidth = 1;
 
-    // Draw grid lines and frame labels
     const totalFrames = episode.frames.length;
-    const gridDivisions = Math.min(10, totalFrames); // Show up to 10 divisions
-    
+    const gridDivisions = Math.min(10, totalFrames);
+
     for (let i = 0; i <= gridDivisions; i++) {
-      const x = padding + (graphWidth * i) / gridDivisions;
+      const x = CANVAS_PADDING + (graphWidth * i) / gridDivisions;
       ctx.beginPath();
-      ctx.moveTo(x, padding);
-      ctx.lineTo(x, height - padding);
+      ctx.moveTo(x, CANVAS_PADDING);
+      ctx.lineTo(x, height - CANVAS_PADDING);
       ctx.stroke();
-      
-      // Draw frame number labels
+
       if (totalFrames > 0) {
         const frameNumber = Math.round((i / gridDivisions) * (totalFrames - 1));
         ctx.fillStyle = "#71717a";
         ctx.font = "9px monospace";
         ctx.textAlign = "center";
-        ctx.fillText(`F${frameNumber}`, x, height - padding + 15);
+        ctx.fillText(`F${frameNumber}`, x, height - CANVAS_PADDING + 15);
       }
     }
 
     for (let i = 0; i <= 5; i++) {
-      const y = padding + (graphHeight * i) / 5;
+      const y = CANVAS_PADDING + (graphHeight * i) / 5;
       ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
+      ctx.moveTo(CANVAS_PADDING, y);
+      ctx.lineTo(width - CANVAS_PADDING, y);
       ctx.stroke();
     }
 
+    // Draw axes
     ctx.strokeStyle = "#52525b";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, height - padding);
-    ctx.lineTo(width - padding, height - padding);
+    ctx.moveTo(CANVAS_PADDING, CANVAS_PADDING);
+    ctx.lineTo(CANVAS_PADDING, height - CANVAS_PADDING);
+    ctx.lineTo(width - CANVAS_PADDING, height - CANVAS_PADDING);
     ctx.stroke();
 
+    // Draw labels
     ctx.fillStyle = "#a1a1aa";
     ctx.font = "10px monospace";
     ctx.textAlign = "center";
@@ -453,23 +434,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.fillText("Joint Position", 0, 0);
     ctx.restore();
 
-    const colors = [
-      "#ec4899", "#eab308", "#22c55e", "#3b82f6",
-      "#a855f7", "#f97316", "#06b6d4", "#ef4444",
-    ];
-
-    // Create stable color mapping based on joint position in sorted jointNames array
-    // This ensures colors don't change when joints are selected/unselected
-    const jointColorMap = new Map<string, string>();
-    jointNames.forEach((jointName, index) => {
-      jointColorMap.set(jointName, colors[index % colors.length]);
-    });
-
+    // Draw joint curves
     const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
 
-    selectedJointNames.forEach((jointName, index) => {
-      const color = jointColorMap.get(jointName) || colors[index % colors.length];
+    selectedJointNames.forEach((jointName) => {
+      const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
       const range = jointRanges[jointName];
+      if (!range) return;
 
       const rangePadding = (range.max - range.min) * 0.1 || 0.1;
       const minVal = range.min - rangePadding;
@@ -482,9 +453,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
       episode.frames.forEach((frame, frameIndex) => {
         const value = frame.jointPositions[jointName];
-        const x = padding + (graphWidth * frameIndex) / (episode.frames.length - 1);
+        const x = CANVAS_PADDING + (graphWidth * frameIndex) / (episode.frames.length - 1);
         const normalizedValue = (value - minVal) / valueRange;
-        const y = height - padding - graphHeight * normalizedValue;
+        const y = height - CANVAS_PADDING - graphHeight * normalizedValue;
 
         if (frameIndex === 0) {
           ctx.moveTo(x, y);
@@ -496,52 +467,35 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ctx.stroke();
     });
 
+    // Draw current frame indicator
     if (episode.frames.length > 0) {
-      // PRIORITY: Always use preserved frame first to prevent visual jumps
-      // It's set immediately on play click before any state changes
-      // Only fall back to state values if preserved frame is not set
-      let displayFrame: number;
-      if (preservedFrameRef.current !== null && preservedFrameRef.current !== undefined) {
-        displayFrame = preservedFrameRef.current;
-      } else {
-        const rawFrame = globalCurrentFrame ?? currentFrame;
-        displayFrame = rawFrame ?? 0;
-      }
-      // Clamp to valid range
-      displayFrame = Math.max(0, Math.min(displayFrame, episode.frames.length - 1));
-      const x = padding + (graphWidth * displayFrame) / (episode.frames.length - 1);
+      const displayFrame = getCurrentFrameValue(
+        preservedFrameRef.current,
+        globalCurrentFrame,
+        currentFrame
+      );
+      const clampedFrame = Math.max(0, Math.min(displayFrame, episode.frames.length - 1));
+      const x = CANVAS_PADDING + (graphWidth * clampedFrame) / (episode.frames.length - 1);
+
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
-      ctx.moveTo(x, padding);
-      ctx.lineTo(x, height - padding);
+      ctx.moveTo(x, CANVAS_PADDING);
+      ctx.lineTo(x, height - CANVAS_PADDING);
       ctx.stroke();
       ctx.setLineDash([]);
 
       ctx.fillStyle = "#ffffff";
       ctx.font = "12px monospace";
       ctx.textAlign = "center";
-      // Show frame number and calculated time based on frame duration
-      const totalFrames = episode.frames.length;
-      const totalDuration = episode.frames.length > 0 
-        ? episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp 
-        : 0;
-      // Get playback speed from viewer if synced, otherwise use local
-      const effectiveSpeed = syncWith3DViewer 
-        ? ((window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0)
-        : playbackSpeed;
-      // Calculate frame duration: total duration / (frames - 1) / playback speed
-      const frameDuration = totalFrames > 1 
-        ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
-        : 0;
-      const calculatedTime = displayFrame * frameDuration;
-      ctx.fillText(`F${displayFrame} (${(calculatedTime / 1000).toFixed(2)}s)`, x, padding - 10);
+      const timeText = calculateTime(clampedFrame);
+      ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, isMinimized, size, syncWith3DViewer, playbackSpeed]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, isMinimized, size, syncWith3DViewer, playbackSpeed, calculateTime]);
 
-  // Mouse event handlers for dragging
-  const handleMouseDownHeader = (e: React.MouseEvent) => {
+  // Mouse handlers for dragging
+  const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
     if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains('drag-handle')) {
       return;
     }
@@ -550,10 +504,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       x: e.clientX - position.x,
       y: e.clientY - position.y,
     });
-  };
+  }, [position]);
 
-  // Mouse event handlers for resizing
-  const handleMouseDownResize = (e: React.MouseEvent, direction: string) => {
+  const handleMouseDownResize = useCallback((e: React.MouseEvent, direction: string) => {
     e.stopPropagation();
     setIsResizing(true);
     setResizeDirection(direction);
@@ -563,7 +516,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       width: size.width,
       height: size.height,
     });
-  };
+  }, [size]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -582,21 +535,21 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         let newY = position.y;
 
         if (resizeDirection.includes('e')) {
-          newWidth = Math.max(400, resizeStart.width + deltaX);
+          newWidth = Math.max(MIN_WINDOW_WIDTH, resizeStart.width + deltaX);
         }
         if (resizeDirection.includes('s')) {
-          newHeight = Math.max(300, resizeStart.height + deltaY);
+          newHeight = Math.max(MIN_WINDOW_HEIGHT, resizeStart.height + deltaY);
         }
         if (resizeDirection.includes('w')) {
-          const width = Math.max(400, resizeStart.width - deltaX);
-          if (width > 400) {
+          const width = Math.max(MIN_WINDOW_WIDTH, resizeStart.width - deltaX);
+          if (width > MIN_WINDOW_WIDTH) {
             newWidth = width;
             newX = position.x + deltaX;
           }
         }
         if (resizeDirection.includes('n')) {
-          const height = Math.max(300, resizeStart.height - deltaY);
-          if (height > 300) {
+          const height = Math.max(MIN_WINDOW_HEIGHT, resizeStart.height - deltaY);
+          if (height > MIN_WINDOW_HEIGHT) {
             newHeight = height;
             newY = position.y + deltaY;
           }
@@ -627,6 +580,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const totalFrames = episode.frames.length;
   const duration = totalFrames > 0 ? episode.frames[totalFrames - 1].timestamp : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
+  const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
   return (
     <div
@@ -641,7 +595,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         userSelect: isDragging ? 'none' : 'auto',
       }}
     >
-      {/* Header - Draggable */}
+      {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2 bg-muted border-b border-border cursor-move drag-handle"
         onMouseDown={handleMouseDownHeader}
@@ -706,12 +660,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         </div>
       </div>
 
-      {/* Content - Hidden when minimized */}
+      {/* Content */}
       {!isMinimized && (
         <>
           {/* Graph Canvas and Legend */}
           <div className="flex-1 flex overflow-hidden">
-            {/* Graph Canvas */}
             <div className="flex-1 relative bg-background overflow-hidden">
               <canvas
                 ref={canvasRef}
@@ -723,64 +676,49 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 onMouseLeave={handleTimelineMouseLeave}
               />
             </div>
-            
-            {/* Joints Legend - Right Side */}
+
+            {/* Joints Legend */}
             <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto">
-              {(() => {
-                if (!episode || jointNames.length === 0) {
+              {!episode || jointNames.length === 0 ? (
+                <div className="text-xs text-muted-foreground">No joints available</div>
+              ) : (
+                (() => {
+                  const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
+                  
+                  if (selectedJointNames.length === 0) {
+                    return (
+                      <div className="text-xs text-muted-foreground">No joints selected</div>
+                    );
+                  }
+
                   return (
-                    <div className="text-xs text-muted-foreground">No joints available</div>
-                  );
-                }
-                
-                const colors = [
-                  "#ec4899", "#eab308", "#22c55e", "#3b82f6",
-                  "#a855f7", "#f97316", "#06b6d4", "#ef4444",
-                ];
-                const jointColorMap = new Map<string, string>();
-                jointNames.forEach((jointName, index) => {
-                  jointColorMap.set(jointName, colors[index % colors.length]);
-                });
-                
-                const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
-                
-                if (selectedJointNames.length === 0) {
-                  return (
-                    <div className="text-xs text-muted-foreground">No joints selected</div>
-                  );
-                }
-                
-                // Use preserved frame if available (to prevent visual jump on play start)
-                const displayFrame = preservedFrameRef.current ?? globalCurrentFrame ?? currentFrame;
-                
-                return (
-                  <div className="space-y-0.5">
-                    {selectedJointNames.map((jointName) => {
-                      const color = jointColorMap.get(jointName) || "#ffffff";
-                      const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
-                      
-                      return (
-                        <div key={jointName} className="min-w-0">
-                          <div className="text-xs font-mono truncate leading-tight" style={{ color: color }}>
-                            {jointName}
-                          </div>
-                          {currentValue !== undefined && (
-                            <div className="text-[10px] font-mono text-muted-foreground leading-tight">
-                              {currentValue.toFixed(2)}
+                    <div className="space-y-0.5">
+                      {selectedJointNames.map((jointName) => {
+                        const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
+                        const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
+
+                        return (
+                          <div key={jointName} className="min-w-0">
+                            <div className="text-xs font-mono truncate leading-tight" style={{ color }}>
+                              {jointName}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+                            {currentValue !== undefined && (
+                              <div className="text-[10px] font-mono text-muted-foreground leading-tight">
+                                {currentValue.toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           </div>
 
           {/* Controls Panel */}
           <div className="p-3 bg-muted/30 space-y-3 border-t border-border">
-            {/* Sync Status */}
             {syncWith3DViewer && (
               <div className="text-xs text-center text-muted-foreground bg-primary/10 border border-primary/30 rounded px-2 py-1">
                 <Link className="w-3 h-3 inline mr-1" />
@@ -788,59 +726,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               </div>
             )}
 
-            {/* Playback Controls - Same as Global Controls */}
+            {/* Playback Controls */}
             <div className="flex items-center justify-center gap-1">
-              {/* First Frame */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
                     variant="ghost"
                     className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (allEpisodes.length === 0 || !episode) return;
-                      const activeIndex = currentEpisodeIndex ?? 0;
-                      const activeEpisode = allEpisodes[activeIndex];
-                      if (activeEpisode && activeEpisode.frames.length > 0) {
-                        (window as any).viewer3dStopAnimation?.();
-                        (window as any).viewer3dPlayAnimation?.(false);
-                        const frames = toAnimationFrames(activeEpisode);
-                        (window as any).viewer3dPlayEpisode?.(frames);
-                        (window as any).viewer3dSetFrame?.(0);
-                        onSetCurrentEpisodeIndex?.(activeIndex);
-                        onSetGlobalFrame?.(0);
-                      }
-                    }}
-                    disabled={allEpisodes.length === 0 || !episode}
-                  >
-                    <ChevronsLeft className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>First frame</p></TooltipContent>
-              </Tooltip>
-
-              {/* Previous Episode */}
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (allEpisodes.length === 0) return;
-                      const currentIndex = currentEpisodeIndex ?? 0;
-                      const prevIndex = currentIndex > 0 ? currentIndex - 1 : allEpisodes.length - 1;
-                      const prevEpisode = allEpisodes[prevIndex];
-                      if (prevEpisode && prevEpisode.frames.length > 0) {
-                        (window as any).viewer3dStopAnimation?.();
-                        (window as any).viewer3dPlayAnimation?.(false);
-                        const frames = toAnimationFrames(prevEpisode);
-                        (window as any).viewer3dPlayEpisode?.(frames);
-                        (window as any).viewer3dSetFrame?.(0);
-                        onSetCurrentEpisodeIndex?.(prevIndex);
-                        onSetGlobalFrame?.(0);
-                      }
-                    }}
+                    onClick={() => navigateToEpisode('prev')}
                     disabled={allEpisodes.length === 0}
                   >
                     <SkipBack className="w-3.5 h-3.5" />
@@ -849,80 +743,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 <TooltipContent><p>Previous episode</p></TooltipContent>
               </Tooltip>
 
-              {/* Previous Frame */}
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (allEpisodes.length === 0 || !episode) return;
-                      const activeIndex = currentEpisodeIndex ?? 0;
-                      const activeEpisode = allEpisodes[activeIndex];
-                      if (!activeEpisode || activeEpisode.frames.length === 0) return;
-                      const frames = toAnimationFrames(activeEpisode);
-                      (window as any).viewer3dPlayEpisode?.(frames);
-                      const currentFrameValue = globalCurrentFrame ?? currentFrame;
-                      const newFrame = Math.max(0, currentFrameValue - 1);
-                      (window as any).viewer3dSetFrame?.(newFrame);
-                      (window as any).viewer3dStopAnimation?.();
-                      (window as any).viewer3dPlayAnimation?.(false);
-                      onSetCurrentEpisodeIndex?.(activeIndex);
-                      onSetGlobalFrame?.(newFrame);
-                    }}
-                    disabled={allEpisodes.length === 0 || !episode || (globalCurrentFrame ?? currentFrame) === 0}
-                  >
-                    <StepBack className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Previous frame</p></TooltipContent>
-              </Tooltip>
-
-              {/* Play/Pause All Episodes */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
                     variant={isPlayingAll ? "default" : "ghost"}
                     className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (onPlayAllEpisodes) {
-                        // Get the current frame from the timeline position BEFORE any state changes
-                        // Prioritize preserved frame if it exists (most recent valid position)
-                        const currentFrameValue = preservedFrameRef.current ?? globalCurrentFrame ?? currentFrame ?? 0;
-                        
-                        // CRITICAL: Preserve the frame IMMEDIATELY in a ref before ANY other operations
-                        // This must happen synchronously before any state updates or callbacks
-                        // to prevent the visual jump when the canvas redraws
-                        // Always set it, even if it's 0 (that might be the actual position)
-                        preservedFrameRef.current = currentFrameValue;
-                        
-                        // Also update local state immediately to prevent flicker
-                        setCurrentFrame(currentFrameValue);
-                        
-                        // Ensure the current episode index is set so playback knows which episode to play
-                        if (episode) {
-                          if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
-                            onSetCurrentEpisodeIndex(currentEpisodeIndex);
-                          } else if (currentEpisodeIndex === null && allEpisodes.length > 0) {
-                            const episodeIndex = allEpisodes.findIndex(ep => ep.id === episode.id);
-                            if (episodeIndex !== -1 && onSetCurrentEpisodeIndex) {
-                              onSetCurrentEpisodeIndex(episodeIndex);
-                            }
-                          }
-                          
-                          // Update the global frame state for consistency
-                          if (onSetGlobalFrame) {
-                            onSetGlobalFrame(currentFrameValue);
-                          }
-                        }
-                        
-                        // Start playback from the timeline position by passing the frame directly
-                        // This prevents the jump to frame 0 that happens when the episode is reloaded
-                        onPlayAllEpisodes(currentFrameValue);
-                      }
-                    }}
+                    onClick={handlePlayPause}
                     disabled={allEpisodes.length === 0}
                   >
                     {isPlayingAll ? (
@@ -932,62 +759,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent><p>{isPlayingAll ? "Pause" : "Play all episodes"}</p></TooltipContent>
+                <TooltipContent>
+                  <p>{isPlayingAll ? "Pause" : "Play all episodes"}</p>
+                </TooltipContent>
               </Tooltip>
 
-              {/* Next Frame */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
                     variant="ghost"
                     className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (allEpisodes.length === 0 || !episode) return;
-                      const activeIndex = currentEpisodeIndex ?? 0;
-                      const activeEpisode = allEpisodes[activeIndex];
-                      if (!activeEpisode || activeEpisode.frames.length === 0) return;
-                      const frames = toAnimationFrames(activeEpisode);
-                      (window as any).viewer3dPlayEpisode?.(frames);
-                      const currentFrameValue = globalCurrentFrame ?? currentFrame;
-                      const maxFrame = activeEpisode.frames.length - 1;
-                      const newFrame = Math.min(maxFrame, currentFrameValue + 1);
-                      (window as any).viewer3dSetFrame?.(newFrame);
-                      (window as any).viewer3dStopAnimation?.();
-                      (window as any).viewer3dPlayAnimation?.(false);
-                      onSetCurrentEpisodeIndex?.(activeIndex);
-                      onSetGlobalFrame?.(newFrame);
-                    }}
-                    disabled={allEpisodes.length === 0 || !episode || (globalCurrentFrame ?? currentFrame) >= (episode?.frames.length ?? 0) - 1}
-                  >
-                    <StepForward className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Next frame</p></TooltipContent>
-              </Tooltip>
-
-              {/* Next Episode */}
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (allEpisodes.length === 0) return;
-                      const currentIndex = currentEpisodeIndex ?? 0;
-                      const nextIndex = (currentIndex + 1) % allEpisodes.length;
-                      const nextEpisode = allEpisodes[nextIndex];
-                      if (nextEpisode && nextEpisode.frames.length > 0) {
-                        (window as any).viewer3dStopAnimation?.();
-                        (window as any).viewer3dPlayAnimation?.(false);
-                        const frames = toAnimationFrames(nextEpisode);
-                        (window as any).viewer3dPlayEpisode?.(frames);
-                        (window as any).viewer3dSetFrame?.(0);
-                        onSetCurrentEpisodeIndex?.(nextIndex);
-                        onSetGlobalFrame?.(0);
-                      }
-                    }}
+                    onClick={() => navigateToEpisode('next')}
                     disabled={allEpisodes.length === 0}
                   >
                     <SkipForward className="w-3.5 h-3.5" />
@@ -996,39 +779,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 <TooltipContent><p>Next episode</p></TooltipContent>
               </Tooltip>
 
-              {/* Last Frame */}
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => {
-                      if (allEpisodes.length === 0 || !episode) return;
-                      const activeIndex = currentEpisodeIndex ?? 0;
-                      const activeEpisode = allEpisodes[activeIndex];
-                      if (activeEpisode && activeEpisode.frames.length > 0) {
-                        (window as any).viewer3dStopAnimation?.();
-                        (window as any).viewer3dPlayAnimation?.(false);
-                        const frames = toAnimationFrames(activeEpisode);
-                        (window as any).viewer3dPlayEpisode?.(frames);
-                        (window as any).viewer3dSetFrame?.(activeEpisode.frames.length - 1);
-                        onSetCurrentEpisodeIndex?.(activeIndex);
-                        onSetGlobalFrame?.(activeEpisode.frames.length - 1);
-                      }
-                    }}
-                    disabled={allEpisodes.length === 0 || !episode}
-                  >
-                    <ChevronsRight className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Last frame</p></TooltipContent>
-              </Tooltip>
-
               <div className="flex items-center gap-1 ml-2 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Frame:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0 ? (globalCurrentFrame ?? currentFrame) : 0}
+                  {totalFrames > 0 ? displayFrame : 0}
                 </span>
                 <span className="text-muted-foreground">/</span>
                 <span className="font-mono text-muted-foreground">{totalFrames}</span>
@@ -1037,20 +791,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Time:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0 && episode ? (() => {
-                    const currentFrameValue = globalCurrentFrame ?? currentFrame;
-                    const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
-                    // Get playback speed from viewer if synced, otherwise use local
-                    const effectiveSpeed = syncWith3DViewer 
-                      ? ((window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0)
-                      : playbackSpeed;
-                    // Calculate frame duration: total duration / (frames - 1) / playback speed
-                    const frameDuration = totalFrames > 1 
-                      ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
-                      : 0;
-                    const calculatedTime = currentFrameValue * frameDuration;
-                    return `${(calculatedTime / 1000).toFixed(2)}s`;
-                  })() : "0.00s"}
+                  {totalFrames > 0 && episode ? calculateTime(displayFrame) : "0.00s"}
                 </span>
               </div>
             </div>
@@ -1098,11 +839,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               </div>
               <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
                 {jointNames.map((jointName, index) => {
-                  const colors = [
-                    "#ec4899", "#eab308", "#22c55e", "#3b82f6",
-                    "#a855f7", "#f97316", "#06b6d4", "#ef4444",
-                  ];
-                  const color = colors[index % colors.length];
+                  const color = jointColorMap.get(jointName) || JOINT_COLORS[index % JOINT_COLORS.length];
                   const isSelected = selectedJoints.has(jointName);
 
                   return (
@@ -1137,39 +874,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           </div>
 
           {/* Resize Handles */}
-          <div
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'se')}
-            style={{ background: 'transparent' }}
-          />
-          <div
-            className="absolute bottom-0 left-0 right-0 h-1 cursor-s-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 's')}
-          />
-          <div
-            className="absolute top-0 bottom-0 right-0 w-1 cursor-e-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'e')}
-          />
-          <div
-            className="absolute top-0 bottom-0 left-0 w-1 cursor-w-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'w')}
-          />
-          <div
-            className="absolute top-0 left-0 right-0 h-1 cursor-n-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'n')}
-          />
-          <div
-            className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'sw')}
-          />
-          <div
-            className="absolute top-0 right-0 w-4 h-4 cursor-ne-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'ne')}
-          />
-          <div
-            className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize"
-            onMouseDown={(e) => handleMouseDownResize(e, 'nw')}
-          />
+          {['se', 's', 'e', 'w', 'n', 'sw', 'ne', 'nw'].map((direction) => (
+            <div
+              key={direction}
+              className={`absolute ${
+                direction === 'se' ? 'bottom-0 right-0 w-4 h-4 cursor-se-resize' :
+                direction === 's' ? 'bottom-0 left-0 right-0 h-1 cursor-s-resize' :
+                direction === 'e' ? 'top-0 bottom-0 right-0 w-1 cursor-e-resize' :
+                direction === 'w' ? 'top-0 bottom-0 left-0 w-1 cursor-w-resize' :
+                direction === 'n' ? 'top-0 left-0 right-0 h-1 cursor-n-resize' :
+                direction === 'sw' ? 'bottom-0 left-0 w-4 h-4 cursor-sw-resize' :
+                direction === 'ne' ? 'top-0 right-0 w-4 h-4 cursor-ne-resize' :
+                'top-0 left-0 w-4 h-4 cursor-nw-resize'
+              }`}
+              onMouseDown={(e) => handleMouseDownResize(e, direction)}
+              style={{ background: direction.length === 2 ? 'transparent' : undefined }}
+            />
+          ))}
         </>
       )}
     </div>
