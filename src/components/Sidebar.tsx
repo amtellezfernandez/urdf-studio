@@ -2015,6 +2015,99 @@ export const Sidebar = ({
     toast.success(`Exported Episode ${episode.number} to ${filename}`);
   }, [getJointOrderForFrames, robotBaseName]);
 
+  // Handle file upload for dataset loading
+  const handleFileUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files) as FileWithRelativePath[];
+    
+    // Check if this is a v3 dataset folder structure
+    const hasInfoJson = fileArray.some((file) => {
+      const path = file.webkitRelativePath || file.name;
+      return path.includes("meta/info.json") || path.endsWith("info.json");
+    });
+
+    if (hasInfoJson) {
+      // This is a v3 dataset folder - convert to zip and load
+      try {
+        const zip = new JSZip();
+        const infoJsonFile = fileArray.find((file) => {
+          const path = file.webkitRelativePath || file.name;
+          return path.includes("meta/info.json") || path.endsWith("info.json");
+        });
+        
+        if (!infoJsonFile) return;
+
+        // Determine base path
+        const infoPath = infoJsonFile.webkitRelativePath || infoJsonFile.name;
+        let basePath = "";
+        if (infoPath.includes("/")) {
+          const parts = infoPath.split("/");
+          if (parts.length > 2) {
+            basePath = parts.slice(0, -2).join("/") + "/";
+          }
+        }
+        
+        // Add all files to zip preserving folder structure
+        for (const file of fileArray) {
+          const path = file.webkitRelativePath || file.name;
+          let normalizedPath = path;
+          if (basePath && path.startsWith(basePath)) {
+            normalizedPath = path.slice(basePath.length);
+          }
+          if (normalizedPath && !normalizedPath.endsWith("/")) {
+            const content = await file.arrayBuffer();
+            zip.file(normalizedPath, content);
+          }
+        }
+        
+        await loadEpisodesFromArchiveZip(zip);
+      } catch (error) {
+        console.error("Failed to load v3 dataset folder:", error);
+      }
+      return;
+    }
+
+    // Legacy format: individual data files
+    const motionDataFiles = fileArray
+      .filter((file) => {
+        const name = file.name.toLowerCase();
+        return name.endsWith(".json") || name.endsWith(".csv") || name.endsWith(".pos");
+      })
+      .sort((a, b) => {
+        const pathA = a.webkitRelativePath || a.name;
+        const pathB = b.webkitRelativePath || b.name;
+        return pathA.localeCompare(pathB);
+      });
+
+    if (motionDataFiles.length === 0) return;
+
+    const suppressIndividualToasts = motionDataFiles.length > 1;
+    let successfulLoads = 0;
+    const failedFiles: string[] = [];
+
+    for (const file of motionDataFiles) {
+      try {
+        const loaded = await loadEpisodesFromDataFile(file, { suppressToast: suppressIndividualToasts });
+        if (loaded) {
+          successfulLoads += 1;
+        } else {
+          failedFiles.push(file.name);
+        }
+      } catch (error) {
+        console.error(`Failed to load ${file.name}:`, error);
+        failedFiles.push(file.name);
+      }
+    }
+
+    if (suppressIndividualToasts && successfulLoads > 0) {
+      const message = failedFiles.length > 0
+        ? `Loaded ${successfulLoads} episode file${successfulLoads > 1 ? "s" : ""} (${failedFiles.length} failed)`
+        : `Loaded ${successfulLoads} episode file${successfulLoads > 1 ? "s" : ""}`;
+      toast.success(message);
+    }
+  }, [loadEpisodesFromArchiveZip, loadEpisodesFromDataFile]);
+
   const uploadEpisodesToHuggingFace = useCallback(async () => {
     if (isUploadingToHF) return;
     if (episodes.length === 0) {
@@ -3519,7 +3612,7 @@ export const Sidebar = ({
             {/* Recording Controls */}
             <BlenderPanel title="Recording" defaultOpen={true}>
               <div className="space-y-2">
-                {/* Record button - Large and prominent */}
+                {/* Record button and FPS control */}
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
@@ -3572,121 +3665,8 @@ export const Sidebar = ({
                         directory: "",
                         mozdirectory: "",
                       } as React.InputHTMLAttributes<HTMLInputElement>)}
-                      onChange={async (e) => {
-                        const files = e.target.files;
-                        if (!files || files.length === 0) {
-                          return;
-                        }
-
-                        const fileArray = Array.from(files) as FileWithRelativePath[];
-                        
-                        // Check if this is a v3 dataset folder structure
-                        const hasInfoJson = fileArray.some(
-                          (file) => {
-                            const path = file.webkitRelativePath || file.name;
-                            return path.includes("meta/info.json") || path.endsWith("info.json");
-                          }
-                        );
-
-                        if (hasInfoJson) {
-                          // This is a v3 dataset folder - convert to zip and load
-                          try {
-                            const zip = new JSZip();
-                            
-                            // Find the info.json file to determine the base path
-                            const infoJsonFile = fileArray.find(
-                              (file) => {
-                                const path = file.webkitRelativePath || file.name;
-                                return path.includes("meta/info.json") || path.endsWith("info.json");
-                              }
-                            );
-                            
-                            if (!infoJsonFile) {
-                              e.target.value = "";
-                              return;
-                            }
-                            
-                            // Determine base path - if info.json is at "meta/info.json", base is empty
-                            // If it's at "dataset_name/meta/info.json", base is "dataset_name/"
-                            const infoPath = infoJsonFile.webkitRelativePath || infoJsonFile.name;
-                            let basePath = "";
-                            if (infoPath.includes("/")) {
-                              const parts = infoPath.split("/");
-                              if (parts.length > 2) {
-                                // Has dataset folder name
-                                basePath = parts.slice(0, -2).join("/") + "/";
-                              }
-                            }
-                            
-                            // Add all files to zip preserving folder structure
-                            for (const file of fileArray) {
-                              const path = file.webkitRelativePath || file.name;
-                              // Remove base path if present
-                              let normalizedPath = path;
-                              if (basePath && path.startsWith(basePath)) {
-                                normalizedPath = path.slice(basePath.length);
-                              }
-                              if (normalizedPath && !normalizedPath.endsWith("/")) {
-                                const content = await file.arrayBuffer();
-                                zip.file(normalizedPath, content);
-                              }
-                            }
-                            
-                            await loadEpisodesFromArchiveZip(zip);
-                          } catch (error) {
-                            console.error("Failed to load v3 dataset folder:", error);
-                            // Silently fail - don't show error if format doesn't match
-                          }
-                          e.target.value = "";
-                          return;
-                        }
-
-                        // Legacy format: individual data files
-                        const motionDataFiles = fileArray
-                          .filter((file) => {
-                            const name = file.name.toLowerCase();
-                            return (
-                              name.endsWith(".json") ||
-                              name.endsWith(".csv") ||
-                              name.endsWith(".pos")
-                            );
-                          })
-                          .sort((a, b) => {
-                            const pathA = a.webkitRelativePath || a.name;
-                            const pathB = b.webkitRelativePath || b.name;
-                            return pathA.localeCompare(pathB);
-                          });
-
-                        if (motionDataFiles.length === 0) {
-                          e.target.value = "";
-                          return;
-                        }
-
-                       const suppressIndividualToasts = motionDataFiles.length > 1;
-                       let successfulLoads = 0;
-                       const failedFiles: string[] = [];
-
-                       for (const file of motionDataFiles) {
-                         try {
-                           const loaded = await loadEpisodesFromDataFile(file, { suppressToast: suppressIndividualToasts });
-                           if (loaded) {
-                             successfulLoads += 1;
-                           } else {
-                             failedFiles.push(file.name);
-                           }
-                         } catch (error) {
-                           console.error(`Failed to load ${file.name}:`, error);
-                           failedFiles.push(file.name);
-                         }
-                       }
-
-                       if (suppressIndividualToasts && successfulLoads > 0) {
-                         const message = failedFiles.length > 0
-                           ? `Loaded ${successfulLoads} episode file${successfulLoads > 1 ? "s" : ""} (${failedFiles.length} failed)`
-                           : `Loaded ${successfulLoads} episode file${successfulLoads > 1 ? "s" : ""}`;
-                         toast.success(message);
-                       }
-
+                      onChange={(e) => {
+                        void handleFileUpload(e.target.files);
                         e.target.value = "";
                       }}
                       className="hidden"
@@ -3787,7 +3767,6 @@ export const Sidebar = ({
                 
                 {/* Current Frame Display */}
                 {(() => {
-                  // Don't show frame counter if there are no episodes
                   if (episodes.length === 0) {
                     return (
                       <div className="flex items-center gap-1.5 ml-2 px-2.5 py-1 bg-muted/50 rounded border border-border/50 min-w-[100px] justify-end">
@@ -3799,7 +3778,6 @@ export const Sidebar = ({
                     );
                   }
                   
-                  // Calculate total frames from currently playing episode
                   const activeEpisode = currentPlayingEpisodeIndex !== null 
                     ? episodes[currentPlayingEpisodeIndex] 
                     : null;

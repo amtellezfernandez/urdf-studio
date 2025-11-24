@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -582,7 +583,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
-  return (
+  const modalContent = (
     <div
       ref={containerRef}
       className="fixed bg-background border-2 border-border rounded-lg shadow-2xl flex flex-col overflow-hidden"
@@ -591,7 +592,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         top: `${position.y}px`,
         width: isMinimized ? '300px' : `${size.width}px`,
         height: isMinimized ? 'auto' : `${size.height}px`,
-        zIndex: 9999,
+        zIndex: 99999,
         userSelect: isDragging ? 'none' : 'auto',
       }}
     >
@@ -895,4 +896,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       )}
     </div>
   );
+
+  return typeof window !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };
