@@ -632,16 +632,16 @@ export const JointControl = ({
 
   return (
     <div 
-      className="px-2 py-1.5"
+      className="px-1.5 py-1"
       onMouseEnter={() => onHover?.(jointName)}
       onMouseLeave={() => onHover?.(null)}
     >
-      {/* Blender-style collapsible header */}
+      {/* Blender-style collapsible header - Minimalistic */}
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CollapsibleTrigger
           className={cn(
-            "w-full flex items-center gap-2 px-1 py-1.5 hover:bg-muted/30 rounded-sm transition-colors group",
-            isHighlighted && "bg-primary/10 text-primary hover:bg-primary/20"
+            "w-full flex items-center gap-1.5 px-1 py-1 hover:bg-muted/20 rounded-sm transition-colors group",
+            isHighlighted && "bg-primary/8 text-primary hover:bg-primary/15"
           )}
         >
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -661,7 +661,7 @@ export const JointControl = ({
                 onKeyDown={handleNameKeyDown}
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  "text-xs font-semibold flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
+                  "text-xs font-medium flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
                   isDeleted
                     ? "text-muted-foreground/50"
                     : isHighlighted
@@ -672,7 +672,7 @@ export const JointControl = ({
             ) : (
               <label
                 className={cn(
-                  "text-xs font-semibold truncate flex-1 min-w-0 text-left cursor-text",
+                  "text-xs font-medium truncate flex-1 min-w-0 text-left cursor-text",
                   isDeleted
                     ? "text-muted-foreground/50"
                     : isHighlighted
@@ -685,7 +685,7 @@ export const JointControl = ({
               >
                 {jointName}
                 {isDeleted && (
-                  <span className="ml-1.5 text-[10px] text-muted-foreground/70">
+                  <span className="ml-1 text-[9px] text-muted-foreground/70">
                     (deleted)
                   </span>
                 )}
@@ -730,7 +730,7 @@ export const JointControl = ({
           </span>
         </CollapsibleTrigger>
 
-        <CollapsibleContent className="px-1 pt-2 space-y-2">
+        <CollapsibleContent className="px-1 pt-1.5 space-y-1.5">
           {/* Value Slider */}
           <BlenderPropertyRow label="Value">
             <div className="flex items-center gap-2">

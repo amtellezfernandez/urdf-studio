@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,8 +8,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ExternalLink, RefreshCw, Play, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, Play, Eye, Monitor, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+
+// Constants
+const RERUN_SERVER_URL = "http://127.0.0.1:9090";
+const RERUN_WS_PORT = 9876;
+const API_BASE_URL = "http://localhost:3001";
 
 interface Episode {
   id: string;
@@ -29,11 +34,6 @@ interface RerunViewer3DModalProps {
   urdfContent?: string;
 }
 
-// Default Rerun serve mode ports
-const RERUN_WEB_PORT = 9090;
-const RERUN_WS_PORT = 9876;
-const RERUN_SERVER_URL = `http://127.0.0.1:${RERUN_WEB_PORT}`;
-
 export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
   episode,
   open,
@@ -46,31 +46,41 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
   const [isServerRunning, setIsServerRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewerMode, setViewerMode] = useState<"spawn" | "serve">("serve");
+  const [recordingName, setRecordingName] = useState<string>("");
 
-  // Check if Rerun server is running
-  const checkRerunServer = async () => {
+  // Check if server is running
+  const checkServerStatus = async () => {
     try {
-      const response = await fetch(RERUN_SERVER_URL, {
+      const response = await fetch(`${RERUN_SERVER_URL}`, {
         method: "HEAD",
         mode: "no-cors",
       });
-      setIsServerRunning(true);
       return true;
-    } catch (err) {
-      setIsServerRunning(false);
+    } catch (error) {
       return false;
     }
   };
 
-  // Check if API server is running
-  const checkApiServer = async () => {
+  // Stop Rerun visualization
+  const stopRerunVisualization = async () => {
     try {
-      const response = await fetch("http://localhost:3001/api/rerun-visualize", {
-        method: "OPTIONS",
-      });
-      return true;
+      // Try to stop via API if available
+      try {
+        await fetch(`${API_BASE_URL}/api/rerun-visualize`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "stop" }),
+        });
+      } catch (err) {
+        // API might not support stop, that's okay
+        console.log("Stop endpoint not available");
+      }
+      setIsServerRunning(false);
+      pythonProcessRef.current = null;
     } catch (err) {
-      return false;
+      console.error("Error stopping Rerun:", err);
     }
   };
 
@@ -84,14 +94,20 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
     setIsLoading(true);
     setError(null);
 
-    // First check if API server is running
-    const apiRunning = await checkApiServer();
-    if (!apiRunning) {
+    // Check if API is available
+    try {
+      const apiCheck = await fetch(`${API_BASE_URL}/api/rerun-visualize`, {
+        method: "OPTIONS",
+      });
+      if (!apiCheck.ok && apiCheck.status !== 405) {
+        throw new Error("Backend API is not available");
+      }
+    } catch (err) {
       setError(
-        "Rerun API server is not running. Make sure you started URDF Studio with 'urdf-studio start'."
+        "Backend API is not available. Please ensure the API server is running."
       );
       setIsLoading(false);
-      toast.error("API server not running. Restart URDF Studio.");
+      toast.error("API server not available");
       return;
     }
 
@@ -105,15 +121,10 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
         metadata: episode.metadata,
       };
 
-      // Call Python script via API endpoint
-      console.log("Starting Rerun visualization...", {
-        episodeId: episode.id,
-        frameCount: episode.frames.length,
-        mode: viewerMode,
-        urdfLength: urdfContent.length,
-      });
+      const recording = `lerobot/episode_${episode.number}`;
+      setRecordingName(recording);
 
-      const response = await fetch("/api/rerun-visualize", {
+      const response = await fetch(`${API_BASE_URL}/api/rerun-visualize`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,22 +132,19 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
         body: JSON.stringify({
           episode: episodeData,
           urdf: urdfContent,
-          recording: `lerobot/episode_${episode.number}`,
+          recording: recording,
           spawn: viewerMode === "spawn",
           serve: viewerMode === "serve",
-          web_port: RERUN_WEB_PORT,
+          web_port: 9090,
           ws_port: RERUN_WS_PORT,
         }),
       });
-
-      console.log("API response status:", response.status, response.statusText);
 
       if (!response.ok) {
         let errorMessage = "Failed to start Rerun visualization";
         try {
           const errorData = await response.json();
-          console.error("API error response:", errorData);
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorMessage = errorData.error || errorData.detail || errorData.message || errorMessage;
           if (errorData.stderr) {
             errorMessage += `\n\nDetails: ${errorData.stderr}`;
           }
@@ -145,48 +153,41 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
           }
         } catch (e) {
           const text = await response.text().catch(() => "");
-          console.error("Failed to parse error response:", text);
           errorMessage = text || `HTTP ${response.status}: ${response.statusText}`;
         }
         throw new Error(errorMessage);
       }
 
-      let responseData;
-      try {
-        const text = await response.text();
-        if (!text || text.trim() === '') {
-          console.warn("Empty response from API server");
-          responseData = { success: true, message: "Rerun visualization started (empty response)" };
-        } else {
-          responseData = JSON.parse(text);
-        }
-      } catch (e) {
-        console.warn("Failed to parse response as JSON:", e);
-        responseData = { success: true, message: "Rerun visualization started" };
-      }
+      const result = await response.json().catch(() => ({ success: true }));
+      pythonProcessRef.current = result;
 
-      console.log("API response data:", responseData);
-      
-      if (!responseData || (!responseData.success && !responseData.message)) {
-        throw new Error("Invalid response from API server");
+      // Check for errors in the response
+      if (result.stderr && result.stderr.trim()) {
+        console.warn("Rerun stderr:", result.stderr);
+        // Don't fail completely, but log the warning
+        if (result.stderr.includes("ERROR") || result.stderr.includes("ImportError") || result.stderr.includes("ModuleNotFoundError")) {
+          setError(`Rerun error: ${result.stderr.substring(0, 200)}`);
+          setIsLoading(false);
+          return;
+        }
       }
 
       if (viewerMode === "serve") {
         // Wait a bit for server to start, then check
         setTimeout(async () => {
-          const isRunning = await checkRerunServer();
-          if (isRunning) {
+          const running = await checkServerStatus();
+          if (running) {
             setIsServerRunning(true);
             setIsLoading(false);
-            toast.success("Rerun viewer started successfully");
+            toast.success("Rerun web viewer started successfully");
           } else {
             // Retry checking
             setTimeout(async () => {
-              const retryRunning = await checkRerunServer();
+              const retryRunning = await checkServerStatus();
               if (retryRunning) {
                 setIsServerRunning(true);
                 setIsLoading(false);
-                toast.success("Rerun viewer started successfully");
+                toast.success("Rerun web viewer started successfully");
               } else {
                 setError("Rerun server did not start. Check console for errors.");
                 setIsLoading(false);
@@ -196,163 +197,155 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
         }, 2000);
       } else {
         // Spawn mode - desktop viewer should open
+        // Note: We can't verify if the viewer actually opened, so we show a message
+        setIsServerRunning(true);
         setIsLoading(false);
-        toast.success("Rerun desktop viewer should open shortly");
+        
+        // Check if there were any errors in stderr
+        if (result.stderr && result.stderr.trim() && !result.stderr.includes("WARNING")) {
+          // If there are errors (not just warnings), show them
+          const errorPreview = result.stderr.substring(0, 300);
+          setError(`Desktop viewer may not have opened. Error: ${errorPreview}`);
+          toast.warning("Desktop viewer may not have opened. Check the error message.");
+        } else {
+          toast.success("Rerun desktop viewer should open shortly. If it doesn't appear, check that the Rerun viewer application is installed.");
+        }
       }
     } catch (err: any) {
       console.error("Error starting Rerun visualization:", err);
-      const errorMessage = err.message || "Failed to start Rerun visualization";
+      const errorMessage = err.message || "An error occurred while starting Rerun";
       setError(errorMessage);
       setIsLoading(false);
-      
-      // Show detailed error toast
-      toast.error(errorMessage, {
-        duration: 5000,
-      });
+      toast.error(errorMessage);
     }
   };
 
+  // Status polling for web viewer
+  useEffect(() => {
+    if (open && viewerMode === "serve" && isServerRunning) {
+      const interval = setInterval(async () => {
+        const running = await checkServerStatus();
+        if (!running) {
+          setIsServerRunning(false);
+          toast.warning("Rerun server stopped");
+        }
+      }, 3000); // Check every 3 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [open, viewerMode, isServerRunning]);
+
+  // Check server status when dialog opens
   useEffect(() => {
     if (open && viewerMode === "serve") {
-      // Check if server is already running
-      checkRerunServer();
+      checkServerStatus().then((running) => {
+        setIsServerRunning(running);
+      });
     }
-
-    return () => {
-      // Cleanup: stop Python process if needed
-      if (pythonProcessRef.current) {
-        // Process cleanup would be handled by the backend
-        pythonProcessRef.current = null;
-      }
-    };
   }, [open, viewerMode]);
 
-  const handleOpenInNewWindow = () => {
-    window.open(RERUN_SERVER_URL, "_blank");
-  };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pythonProcessRef.current) {
+        stopRerunVisualization();
+      }
+    };
+  }, []);
 
-  const handleModeToggle = () => {
-    setViewerMode(viewerMode === "spawn" ? "serve" : "spawn");
+  // Handle dialog close
+  const handleDialogClose = (open: boolean) => {
+    if (!open && isServerRunning) {
+      stopRerunVisualization();
+    }
+    onOpenChange(open);
   };
 
   if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>Rerun Viewer - Episode {episode?.number || "N/A"}</DialogTitle>
-              <DialogDescription className="mt-1">
-                {episode && (
-                  <>
-                    {episode.frames.length} frames,{" "}
-                    {Object.keys(episode.frames[0]?.jointPositions || {}).length} joints
-                  </>
-                )}
-              </DialogDescription>
+        <DialogHeader className="px-6 py-4 border-b">
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              <span>Rerun Viewer - Episode {episode?.number || "N/A"}</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleModeToggle}
+                onClick={() => setViewerMode("serve")}
+                className={viewerMode === "serve" ? "bg-primary text-primary-foreground" : ""}
                 disabled={isLoading}
               >
-                Mode: {viewerMode === "spawn" ? "Desktop" : "Web"}
+                <Monitor className="w-4 h-4 mr-2" />
+                Web Viewer
               </Button>
-              {viewerMode === "serve" && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={checkRerunServer}
-                    disabled={isLoading}
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Check Server
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleOpenInNewWindow}
-                    disabled={!isServerRunning}
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Open in New Window
-                  </Button>
-                </>
-              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewerMode("spawn")}
+                className={viewerMode === "spawn" ? "bg-primary text-primary-foreground" : ""}
+                disabled={isLoading}
+              >
+                <Monitor className="w-4 h-4 mr-2" />
+                Desktop Viewer
+              </Button>
             </div>
-          </div>
+          </DialogTitle>
+          {episode && (
+            <DialogDescription className="px-6 pb-2">
+              {episode.frames.length} frames,{" "}
+              {Object.keys(episode.frames[0]?.jointPositions || {}).length} joints
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         <div className="flex-1 relative bg-black overflow-hidden">
           {!episode || !urdfContent ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10 p-6">
-              <Alert>
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Missing Data</AlertTitle>
                 <AlertDescription>
-                  Episode data or URDF content is missing. Cannot visualize.
+                  Episode data or URDF content is missing. Please select a valid episode.
                 </AlertDescription>
               </Alert>
             </div>
           ) : !isServerRunning && viewerMode === "serve" && !isLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10 p-6">
-              <div className="max-w-2xl space-y-4">
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="max-w-md text-center space-y-4">
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Start Rerun Visualization</AlertTitle>
+                  <AlertTitle>Start Web Viewer</AlertTitle>
                   <AlertDescription className="mt-2 space-y-3">
                     <p>
-                      Click the button below to start visualizing this episode in Rerun.
+                      Click the button below to start the Rerun web viewer and visualize
+                      Episode {episode.number} in 3D.
                     </p>
-                    <div className="bg-muted p-4 rounded-md">
-                      <p className="text-sm font-mono mb-2">
-                        Mode: <strong>{viewerMode === "spawn" ? "Desktop Viewer" : "Web Viewer"}</strong>
-                      </p>
-                      {viewerMode === "serve" && (
-                        <p className="text-xs text-muted-foreground">
-                          Web viewer will be available at: {RERUN_SERVER_URL}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      onClick={startRerunVisualization}
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Starting Rerun...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4 mr-2" />
-                          Start Rerun Visualization
-                        </>
-                      )}
+                    <Button onClick={startRerunVisualization} className="w-full">
+                      <Play className="w-4 h-4 mr-2" />
+                      Start Visualization
                     </Button>
                   </AlertDescription>
                 </Alert>
               </div>
             </div>
           ) : isLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-              <div className="text-center">
-                <Loader2 className="animate-spin h-8 w-8 text-primary mx-auto mb-4" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
                 <p className="text-sm text-muted-foreground">
-                  {viewerMode === "spawn" 
-                    ? "Starting Rerun desktop viewer..." 
+                  {viewerMode === "spawn"
+                    ? "Starting Rerun desktop viewer..."
                     : "Starting Rerun web server..."}
                 </p>
               </div>
             </div>
           ) : error ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10 p-6">
+            <div className="absolute inset-0 flex items-center justify-center p-6">
               <Alert variant="destructive" className="max-w-md">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
@@ -368,9 +361,11 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
                   </div>
                   <Button
                     variant="outline"
-                    size="sm"
-                    onClick={startRerunVisualization}
-                    className="mt-2"
+                    onClick={() => {
+                      setError(null);
+                      startRerunVisualization();
+                    }}
+                    className="w-full"
                   >
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Retry
@@ -381,11 +376,91 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
           ) : viewerMode === "serve" && isServerRunning ? (
             <iframe
               ref={iframeRef}
-              src={RERUN_SERVER_URL}
+              src={`${RERUN_SERVER_URL}?url=ws://127.0.0.1:${RERUN_WS_PORT}`}
               className="w-full h-full border-0"
               title="Rerun Viewer"
               allow="fullscreen"
+              onLoad={() => {
+                // The web viewer should auto-connect via the URL parameter
+                console.log("Rerun web viewer iframe loaded");
+              }}
             />
+          ) : viewerMode === "spawn" ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-black/80 to-black/60 p-6">
+              <div className="max-w-md text-center space-y-6">
+                <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-white/10">
+                  <Monitor className="w-16 h-16 mx-auto mb-4 text-primary" />
+                  <Alert className="bg-black/60 border-white/20">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle className="text-white">Desktop Viewer Mode</AlertTitle>
+                    <AlertDescription className="mt-3 space-y-4 text-gray-300">
+                      {isServerRunning ? (
+                        <>
+                          <div className="mt-4 p-3 bg-green-500/20 border border-green-500/30 rounded-md">
+                            <p className="text-sm text-green-300 font-medium mb-2">
+                              ✓ Process started successfully
+                            </p>
+                            <p className="text-xs text-green-200/80 mb-3">
+                              The Rerun desktop viewer should open in a <strong>separate application window</strong> (not in this browser).
+                            </p>
+                            <p className="text-xs text-green-200/80">
+                              <strong>If you don't see it:</strong>
+                            </p>
+                            <ul className="text-xs text-green-200/80 text-left list-disc list-inside space-y-1 mt-2">
+                              <li>Check your taskbar/dock for a new window</li>
+                              <li>Look for "Rerun Viewer" in your running applications</li>
+                              <li>The Rerun viewer application must be installed on your system</li>
+                              <li>Try switching to Web Viewer mode if desktop viewer doesn't work</li>
+                            </ul>
+                          </div>
+                          {error && (
+                            <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-md">
+                              <p className="text-xs text-red-300 font-medium mb-1">⚠ Warning:</p>
+                              <p className="text-xs text-red-200/80">{error}</p>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p>
+                            The Rerun desktop viewer will open in a <strong>separate application window</strong> (not in this browser) when you start the visualization.
+                          </p>
+                          <div className="bg-blue-500/20 border border-blue-500/30 rounded-md p-3 mt-3">
+                            <p className="text-xs text-blue-200/80 font-medium mb-2">
+                              ⚠ Important: Desktop Viewer Requirements
+                            </p>
+                            <ul className="text-xs text-blue-200/80 text-left list-disc list-inside space-y-1">
+                              <li>The Rerun viewer application must be installed on your system</li>
+                              <li>Install it from: <code className="bg-black/30 px-1 rounded">https://rerun.io/viewer</code></li>
+                              <li>Your system must allow the application to run</li>
+                              <li>No firewall should block the connection</li>
+                            </ul>
+                          </div>
+                          <Button
+                            onClick={startRerunVisualization}
+                            disabled={isLoading}
+                            className="w-full mt-4"
+                            size="lg"
+                          >
+                            {isLoading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Starting...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-4 h-4 mr-2" />
+                                Start Desktop Visualization
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </DialogContent>

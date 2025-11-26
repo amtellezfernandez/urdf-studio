@@ -3,6 +3,7 @@ import { useState, useCallback, useMemo, startTransition } from "react";
 import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
 import { Viewer3D } from "@/components/Viewer3D";
 import type { CollisionVisibility } from "@/components/LinkEditor";
+import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { toast } from "sonner";
@@ -75,6 +76,8 @@ const Index = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
   const [rotationPlaneVisible, setRotationPlaneVisible] = useState<boolean>(false);
+  const [showUrdfEditor, setShowUrdfEditor] = useState<boolean>(false);
+  const [urdfEditorSplitView, setUrdfEditorSplitView] = useState<boolean>(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
@@ -680,6 +683,8 @@ const Index = () => {
             rotationPlaneVisible={rotationPlaneVisible}
             onRotationPlaneVisibilityChange={setRotationPlaneVisible}
             onFrameChange={setCurrentFrame}
+            onUrdfEditorToggle={setShowUrdfEditor}
+            showUrdfEditor={showUrdfEditor}
           />
 
           {!isSidebarCollapsed && (
@@ -713,26 +718,83 @@ const Index = () => {
             className="flex-1 flex flex-col overflow-hidden bg-background transition-[margin-left] duration-200 ease-out"
             style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth }}
           >
-            <div className="flex-1 min-h-0">
-              <Viewer3D
-                key={`urdf-${urdfContentVersion}`}
-                urdfFile={urdfFile}
-                initialMeshFiles={meshFiles}
-                selectedJoint={selectedJoint}
-                jointValues={jointValues}
-                jointLimits={jointLimits}
-                jointAxes={jointAxes}
-                gpuMode={gpuMode}
-                onJointSelect={setSelectedJoint}
-                onJointChange={handleJointChange}
-                onRobotJointsLoaded={handleRobotJointsLoaded}
-                onMotionFileChange={setMotionDataFile}
-                onPlayingChange={setIsPlaying}
-                onAnimationFramesChange={setHasAnimationFrames}
-                onFrameChange={handleFrameChange}
-                collisionVisibility={collisionVisibility}
-                rotationPlaneVisible={rotationPlaneVisible}
-              />
+            <div className="flex-1 min-h-0 relative">
+              {showUrdfEditor && urdfEditorSplitView ? (
+                <div className="flex flex-col h-full">
+                  {/* Simulation in top half */}
+                  <div className="flex-1 min-h-0 border-b border-border/20">
+                    <Viewer3D
+                      key={`urdf-${urdfContentVersion}`}
+                      urdfFile={urdfFile}
+                      initialMeshFiles={meshFiles}
+                      selectedJoint={selectedJoint}
+                      jointValues={jointValues}
+                      jointLimits={jointLimits}
+                      jointAxes={jointAxes}
+                      gpuMode={gpuMode}
+                      onJointSelect={setSelectedJoint}
+                      onJointChange={handleJointChange}
+                      onRobotJointsLoaded={handleRobotJointsLoaded}
+                      onMotionFileChange={setMotionDataFile}
+                      onPlayingChange={setIsPlaying}
+                      onAnimationFramesChange={setHasAnimationFrames}
+                      onFrameChange={handleFrameChange}
+                      collisionVisibility={collisionVisibility}
+                      rotationPlaneVisible={rotationPlaneVisible}
+                    />
+                  </div>
+                  {/* Editor in bottom half */}
+                  <div className="flex-1 min-h-0">
+                    <URDFComparison
+                      originalUrdf={originalUrdfContent}
+                      vizUrdf={vizUrdfContent}
+                      isOpen={true}
+                      onClose={() => setShowUrdfEditor(false)}
+                      onVizUrdfChange={handleVizUrdfChange}
+                      getExportUrdf={getExportUrdfContent}
+                      meshFiles={meshFiles}
+                      githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+                      inline={true}
+                      splitView={true}
+                      onSplitViewToggle={setUrdfEditorSplitView}
+                    />
+                  </div>
+                </div>
+              ) : showUrdfEditor ? (
+                <URDFComparison
+                  originalUrdf={originalUrdfContent}
+                  vizUrdf={vizUrdfContent}
+                  isOpen={true}
+                  onClose={() => setShowUrdfEditor(false)}
+                  onVizUrdfChange={handleVizUrdfChange}
+                  getExportUrdf={getExportUrdfContent}
+                  meshFiles={meshFiles}
+                  githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+                  inline={true}
+                  splitView={false}
+                  onSplitViewToggle={setUrdfEditorSplitView}
+                />
+              ) : (
+                <Viewer3D
+                  key={`urdf-${urdfContentVersion}`}
+                  urdfFile={urdfFile}
+                  initialMeshFiles={meshFiles}
+                  selectedJoint={selectedJoint}
+                  jointValues={jointValues}
+                  jointLimits={jointLimits}
+                  jointAxes={jointAxes}
+                  gpuMode={gpuMode}
+                  onJointSelect={setSelectedJoint}
+                  onJointChange={handleJointChange}
+                  onRobotJointsLoaded={handleRobotJointsLoaded}
+                  onMotionFileChange={setMotionDataFile}
+                  onPlayingChange={setIsPlaying}
+                  onAnimationFramesChange={setHasAnimationFrames}
+                  onFrameChange={handleFrameChange}
+                  collisionVisibility={collisionVisibility}
+                  rotationPlaneVisible={rotationPlaneVisible}
+                />
+              )}
             </div>
           </main>
         </>

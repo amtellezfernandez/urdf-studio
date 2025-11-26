@@ -386,40 +386,33 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
   return (
     <div className="flex-1 bg-background relative w-full h-full overflow-hidden">
       {/* Recording Controls */}
-      <div className="absolute top-2 right-2 z-10 flex gap-1.5">
-        <div className="flex gap-1.5">
-          <Button
-            size="sm"
-            variant={isRecording ? "destructive" : "outline"}
-            className="text-xs h-7 px-2 shadow-sm"
-            onClick={isRecording ? stopRecording : startRecording}
-          >
-            {isRecording ? (
-              <>
-                <Square className="w-3 h-3 mr-0.5 fill-current" />
-                Stop
-              </>
-            ) : (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1" />
-                Rec
-              </>
-            )}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs h-7 px-2 shadow-sm"
-            onClick={exportToCSV}
-            disabled={recordedFrames.length === 0}
-            title={`Export ${recordedFrames.length} frames`}
-          >
-            <Download className="w-3 h-3" />
-            {recordedFrames.length > 0 && (
-              <span className="ml-0.5 text-[10px]">{recordedFrames.length}</span>
-            )}
-          </Button>
-        </div>
+      <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0 border border-border/50 bg-background/80 backdrop-blur-sm rounded px-0.5 py-0">
+        <button
+          className={`h-4 w-4 p-0 flex items-center justify-center rounded-sm transition-colors ${
+            isRecording 
+              ? "bg-red-500 hover:bg-red-600" 
+              : "hover:bg-muted"
+          }`}
+          onClick={isRecording ? stopRecording : startRecording}
+          title={isRecording ? "Stop recording" : "Start recording"}
+        >
+          {isRecording ? (
+            <Square className="w-2 h-2 fill-white" />
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+          )}
+        </button>
+        {recordedFrames.length > 0 && (
+          <span className="text-[9px] text-muted-foreground px-0.5 min-w-[20px] text-center">{recordedFrames.length}</span>
+        )}
+        <button
+          className="h-4 w-4 p-0 flex items-center justify-center rounded-sm hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          onClick={exportToCSV}
+          disabled={recordedFrames.length === 0}
+          title={recordedFrames.length > 0 ? `Export ${recordedFrames.length} frames` : "No frames recorded"}
+        >
+          <Download className="w-2 h-2" />
+        </button>
       </div>
 
       <ReactFlow

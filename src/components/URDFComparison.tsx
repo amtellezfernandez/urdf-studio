@@ -9,22 +9,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { GitCompare, Copy, Download, Edit2, Save, X, CheckCircle2, AlertCircle, Info, Github, ListOrdered, Code2, Compass, FolderSync, Package } from "lucide-react";
+import { X, ChevronDown, Info, Copy, Download, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { URDFSyntaxHighlighter } from "./URDFSyntaxHighlighter";
 import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { cn } from "@/lib/utils";
 import { SaveToGitHubDialog } from "@/components/SaveToGitHubDialog";
-import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
-import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
-import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
-import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
-import { ExportDialog } from "@/components/ExportDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
+import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
+import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
+import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
+import { ExportDialog } from "@/components/ExportDialog";
+import { convertURDFToXacro } from "@/urdf_corrections/urdfToXacro";
+import { convertURDFToMJCF } from "@/urdf_corrections/urdfToMJCF";
 
 interface URDFComparisonProps {
   originalUrdf: string;
@@ -35,6 +43,9 @@ interface URDFComparisonProps {
   getExportUrdf?: () => string;
   meshFiles?: Record<string, Blob>;
   githubToken?: string | null;
+  inline?: boolean; // If true, render inline instead of as Dialog
+  splitView?: boolean; // If true, render in split view (simulation top, editor bottom)
+  onSplitViewToggle?: (split: boolean) => void;
 }
 
 export const URDFComparison = ({
@@ -46,13 +57,17 @@ export const URDFComparison = ({
   getExportUrdf,
   meshFiles = {},
   githubToken,
+  inline = false,
+  splitView = false,
+  onSplitViewToggle,
 }: URDFComparisonProps) => {
-  const [selectedView, setSelectedView] = useState<"original" | "viz" | "split">("split");
+  const [selectedView, setSelectedView] = useState<"original" | "modified" | "split">("split");
   const [isEditing, setIsEditing] = useState(false);
   const [editedVizUrdf, setEditedVizUrdf] = useState(vizUrdf);
-  const [showParseInfo, setShowParseInfo] = useState(true);
   const [showSaveToGitHub, setShowSaveToGitHub] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [originalFormat, setOriginalFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
+  const [modifiedFormat, setModifiedFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
 
   // Parse URDF content in real-time
   const parseInfo = useMemo(() => {
@@ -287,9 +302,81 @@ export const URDFComparison = ({
   const formattedOriginal = formatXML(originalUrdf);
   const formattedViz = formatXML(isEditing ? editedVizUrdf : vizUrdf);
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+  // Convert to different formats for display
+  const originalXacro = useMemo(() => {
+    try {
+      const result = convertURDFToXacro(originalUrdf);
+      return formatXML(result.xacroContent);
+    } catch {
+      return formattedOriginal;
+    }
+  }, [originalUrdf, formattedOriginal]);
+
+  const originalMJCF = useMemo(() => {
+    try {
+      const result = convertURDFToMJCF(originalUrdf);
+      return formatXML(result.mjcfContent);
+    } catch {
+      return formattedOriginal;
+    }
+  }, [originalUrdf, formattedOriginal]);
+
+  const modifiedXacro = useMemo(() => {
+    try {
+      const urdfContent = isEditing ? editedVizUrdf : (getExportUrdf ? getExportUrdf() : vizUrdf);
+      const result = convertURDFToXacro(urdfContent);
+      return formatXML(result.xacroContent);
+    } catch {
+      return formattedViz;
+    }
+  }, [isEditing, editedVizUrdf, getExportUrdf, vizUrdf, formattedViz]);
+
+  const modifiedMJCF = useMemo(() => {
+    try {
+      const urdfContent = isEditing ? editedVizUrdf : (getExportUrdf ? getExportUrdf() : vizUrdf);
+      const result = convertURDFToMJCF(urdfContent);
+      return formatXML(result.mjcfContent);
+    } catch {
+      return formattedViz;
+    }
+  }, [isEditing, editedVizUrdf, getExportUrdf, vizUrdf, formattedViz]);
+
+  // Get displayed content based on format
+  const getOriginalContent = () => {
+    switch (originalFormat) {
+      case "xacro":
+        return originalXacro;
+      case "mjcf":
+        return originalMJCF;
+      default:
+        return formattedOriginal;
+    }
+  };
+
+  const getModifiedContent = () => {
+    switch (modifiedFormat) {
+      case "xacro":
+        return modifiedXacro;
+      case "mjcf":
+        return modifiedMJCF;
+      default:
+        return formattedViz;
+    }
+  };
+
+  // Reset format to URDF when editing starts
+  useEffect(() => {
+    if (isEditing && modifiedFormat !== "urdf") {
+      setModifiedFormat("urdf");
+    }
+  }, [isEditing, modifiedFormat]);
+
+  const content = (
+    <div className={cn(
+      "flex flex-col",
+      inline ? "w-full h-full absolute inset-0 bg-background z-50" : "h-full"
+    )}>
+      {!inline && (
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitCompare className="w-5 h-5" />
@@ -299,113 +386,96 @@ export const URDFComparison = ({
             View and edit the URDF files. Compare original with modified visualization URDF.
           </DialogDescription>
         </DialogHeader>
+      )}
 
-        {/* URDF Utilities Toolbar */}
-        <div className="flex items-center gap-2 p-2 bg-muted/20 rounded-md border border-border/30">
-          <span className="text-xs font-medium text-muted-foreground mr-2">Utilities:</span>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleCanonicalOrder}
-              >
-                <ListOrdered className="w-3 h-3 mr-1.5" />
-                Canonical Order
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="font-medium">Reorder URDF Tags</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                Reorders elements to standard ROS format: link → joint → transmission.
-                Within links: visual → collision → inertial.
-              </p>
-            </TooltipContent>
-          </Tooltip>
+      {inline && (
+        <div className="flex items-center justify-between px-2 py-1 border-b border-border/20 bg-muted/5 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            {/* Export Button */}
+            <button
+              className="h-6 px-2 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors"
+              onClick={() => setShowExportDialog(true)}
+            >
+              Export
+            </button>
 
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handlePrettyPrint}
-              >
-                <Code2 className="w-3 h-3 mr-1.5" />
-                Pretty Print
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="font-medium">Format Indentation</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                Cleans up XML formatting with consistent 2-space indentation for better readability.
-              </p>
-            </TooltipContent>
-          </Tooltip>
+            {/* Utils Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-6 px-2 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors">
+                  Utils
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem
+                  onClick={handleCanonicalOrder}
+                  className="text-xs cursor-pointer"
+                >
+                  Canonical Order
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handlePrettyPrint}
+                  className="text-xs cursor-pointer"
+                >
+                  Pretty Print
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleNormalizeAxes}
+                  className="text-xs cursor-pointer"
+                >
+                  Normalize Axes
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleFixMeshPaths}
+                  className="text-xs cursor-pointer"
+                >
+                  Fix Mesh Paths
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleNormalizeAxes}
-              >
-                <Compass className="w-3 h-3 mr-1.5" />
-                Normalize Axes
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="font-medium">Fix Joint Axis Vectors</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                Normalizes non-unit vectors, fixes zero vectors, and cleans up floating-point precision issues.
-              </p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleFixMeshPaths}
-              >
-                <FolderSync className="w-3 h-3 mr-1.5" />
-                Fix Mesh Paths
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="font-medium">Normalize Mesh Paths</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                Fixes absolute paths, Windows backslashes, and normalizes to package:// format.
-              </p>
-            </TooltipContent>
-          </Tooltip>
-
-          <div className="border-l border-border/50 h-5 mx-1" />
-
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="default"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setShowExportDialog(true)}
-              >
-                <Package className="w-3 h-3 mr-1.5" />
-                Export
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="font-medium">Export to Xacro / MJCF</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                Convert URDF to Xacro or MuJoCo MJCF format. Download or push to GitHub.
-              </p>
-            </TooltipContent>
-          </Tooltip>
+            {/* View Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-6 px-2 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors">
+                  View
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setSelectedView("original")}
+                  className="text-xs cursor-pointer"
+                >
+                  Original
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSelectedView("modified")}
+                  className="text-xs cursor-pointer"
+                >
+                  Modified
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSelectedView("split")}
+                  className="text-xs cursor-pointer"
+                >
+                  Split View
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <button
+            className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+            onClick={onClose}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
+      )}
+
+      <div className={cn(
+        "flex-1 min-h-0 overflow-y-auto",
+        inline && "p-2"
+      )}>
 
         {/* Export Dialog */}
         <ExportDialog
@@ -417,235 +487,316 @@ export const URDFComparison = ({
           robotName={robotName}
         />
 
-        {/* Parsing Status */}
-        {showParseInfo && (
-          <div className="flex gap-4 p-3 bg-muted/30 rounded-md border border-border/50">
-            {/* Original URDF Parse Info */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                {originalParseInfo.isValid ? (
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                )}
-                <span className="text-xs font-semibold">Original URDF</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 w-5 p-0 ml-auto"
-                  onClick={() => setShowParseInfo(false)}
-                >
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-              {originalParseInfo.isValid ? (
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div>Robot: <span className="font-mono text-foreground">{originalParseInfo.robotName}</span></div>
-                  <div className="flex gap-4">
-                    <span>Links: <span className="font-semibold text-foreground">{originalParseInfo.links}</span></span>
-                    <span>Joints: <span className="font-semibold text-foreground">{originalParseInfo.joints}</span></span>
-                    <span>Materials: <span className="font-semibold text-foreground">{originalParseInfo.materials}</span></span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-red-500">
-                  Parse Error: {originalParseInfo.error}
-                </div>
-              )}
-            </div>
-
-            {/* Viz URDF Parse Info */}
-            <div className="flex-1 border-l border-border/50 pl-4">
-              <div className="flex items-center gap-2 mb-2">
-                {parseInfo.isValid ? (
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                )}
-                <span className="text-xs font-semibold">Viz URDF</span>
-                {isEditing && (
-                  <span className="text-[10px] text-muted-foreground ml-2">(editing)</span>
-                )}
-              </div>
-              {parseInfo.isValid ? (
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div>Robot: <span className="font-mono text-foreground">{parseInfo.robotName}</span></div>
-                  <div className="flex gap-4">
-                    <span>Links: <span className="font-semibold text-foreground">{parseInfo.links}</span></span>
-                    <span>Joints: <span className="font-semibold text-foreground">{parseInfo.joints}</span></span>
-                    <span>Materials: <span className="font-semibold text-foreground">{parseInfo.materials}</span></span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-red-500">
-                  Parse Error: {parseInfo.error}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {!showParseInfo && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full h-7 text-xs"
-            onClick={() => setShowParseInfo(true)}
-          >
-            <Info className="w-3 h-3 mr-1.5" />
-            Show Parse Info
-          </Button>
-        )}
-
-        <div className="flex flex-col gap-4 flex-1 min-h-0">
-          {/* View Toggle */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant={selectedView === "original" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedView("original")}
-              className="text-xs"
-            >
-              Original
-            </Button>
-            <Button
-              variant={selectedView === "viz" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedView("viz")}
-              className="text-xs"
-            >
-              Viz URDF
-            </Button>
-            <Button
-              variant={selectedView === "split" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedView("split")}
-              className="text-xs"
-            >
-              Split View
-            </Button>
-          </div>
+        <div className={cn(
+          "flex flex-col gap-2 flex-1 min-h-0",
+          inline && "overflow-hidden"
+        )}>
 
           {/* Content Area */}
-          <div className="flex-1 grid gap-4 min-h-0" style={{
+          <div className="flex-1 grid gap-2 min-h-0 mt-2" style={{
             gridTemplateColumns: selectedView === "split" ? "1fr 1fr" : "1fr"
           }}>
             {/* Original URDF */}
             {(selectedView === "original" || selectedView === "split") && (
-              <div className="flex flex-col gap-2 min-h-0 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium">Original URDF</h3>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      onClick={() => copyToClipboard(formattedOriginal, "Original URDF")}
-                    >
-                      <Copy className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      onClick={() => downloadURDF(formattedOriginal, "original.urdf")}
-                    >
-                      <Download className="w-3 h-3" />
-                    </Button>
+              <div className="flex flex-col gap-1 min-h-0 min-w-0">
+                <div className="flex items-center justify-between px-1 mb-0.5">
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-xs font-medium">Original</h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors">
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-32">
+                        <DropdownMenuItem
+                          onClick={() => setOriginalFormat("urdf")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            originalFormat === "urdf" && "bg-primary/20 text-primary"
+                          )}
+                        >
+                          URDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setOriginalFormat("xacro")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            originalFormat === "xacro" && "bg-primary/20 text-primary"
+                          )}
+                        >
+                          Xacro
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setOriginalFormat("mjcf")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            originalFormat === "mjcf" && "bg-primary/20 text-primary"
+                          )}
+                        >
+                          MJCF
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <span className="text-[9px] text-muted-foreground ml-1">
+                      ({originalFormat.toUpperCase()})
+                    </span>
                   </div>
+                  {originalParseInfo.isValid ? (
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors">
+                          <Info className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs">
+                        <p className="font-medium">{originalParseInfo.robotName}</p>
+                        <p className="text-muted-foreground">
+                          {originalParseInfo.links} links • {originalParseInfo.joints} joints • {originalParseInfo.materials} materials
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button className="h-4 w-4 flex items-center justify-center text-red-500 hover:bg-red-500/20 rounded-sm transition-colors">
+                          <Info className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs">
+                        <p className="text-red-500">Invalid: {originalParseInfo.error}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
-                <ScrollArea className="flex-1 border rounded-md overflow-hidden">
-                  <div className="min-w-0 p-5 bg-muted/40">
-                    <URDFSyntaxHighlighter xml={formattedOriginal} className="text-sm leading-relaxed" />
+                <div className="flex items-center gap-1 px-1 mb-1 flex-wrap">
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+                        onClick={() => copyToClipboard(getOriginalContent(), `Original ${originalFormat.toUpperCase()}`)}
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      Copy {originalFormat.toUpperCase()}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+                        onClick={() => {
+                          const content = getOriginalContent();
+                          const ext = originalFormat === "urdf" ? "urdf" : originalFormat === "xacro" ? "xacro" : "xml";
+                          const filename = `original.${ext}`;
+                          const blob = new Blob([content], { type: "application/xml" });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.download = filename;
+                          link.click();
+                          URL.revokeObjectURL(url);
+                          toast.success(`Downloaded ${filename}`);
+                        }}
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      Download {originalFormat.toUpperCase()}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden">
+                  <div className="min-w-0 p-3 bg-muted/20">
+                    <URDFSyntaxHighlighter xml={getOriginalContent()} className="text-xs leading-relaxed" />
                   </div>
                 </ScrollArea>
               </div>
             )}
 
-            {/* Viz URDF */}
-            {(selectedView === "viz" || selectedView === "split") && (
-              <div className="flex flex-col gap-2 min-h-0 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium">Viz URDF</h3>
-                  <div className="flex gap-2">
-                    {!isEditing ? (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => setIsEditing(true)}
-                          title="Edit Viz URDF"
+            {/* Modified URDF */}
+            {(selectedView === "modified" || selectedView === "split") && (
+              <div className="flex flex-col gap-1 min-h-0 min-w-0">
+                <div className="flex items-center justify-between px-1 mb-0.5">
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-xs font-medium">Modified</h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button 
+                          className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+                          disabled={isEditing}
                         >
-                          <Edit2 className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => copyToClipboard(formattedViz, "Viz URDF")}
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-32">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setModifiedFormat("urdf");
+                            if (isEditing) setIsEditing(false);
+                          }}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            modifiedFormat === "urdf" && "bg-primary/20 text-primary"
+                          )}
                         >
-                          <Copy className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => downloadURDF(isEditing ? editedVizUrdf : vizUrdf, "viz-robot.urdf", true)}
+                          URDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setModifiedFormat("xacro");
+                            if (isEditing) setIsEditing(false);
+                          }}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            modifiedFormat === "xacro" && "bg-primary/20 text-primary"
+                          )}
                         >
-                          <Download className="w-3 h-3" />
-                        </Button>
-                        {githubToken && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2"
-                            onClick={() => setShowSaveToGitHub(true)}
-                            title="Save to GitHub"
-                          >
-                            <Github className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={handleSave}
+                          Xacro
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setModifiedFormat("mjcf");
+                            if (isEditing) setIsEditing(false);
+                          }}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            modifiedFormat === "mjcf" && "bg-primary/20 text-primary"
+                          )}
                         >
-                          <Save className="w-3 h-3 mr-1" />
-                          Save
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={handleCancel}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </>
-                    )}
+                          MJCF
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <span className="text-[9px] text-muted-foreground ml-1">
+                      ({modifiedFormat.toUpperCase()})
+                    </span>
                   </div>
+                  {parseInfo.isValid ? (
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors">
+                          <Info className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs">
+                        <p className="font-medium">{parseInfo.robotName}</p>
+                        <p className="text-muted-foreground">
+                          {parseInfo.links} links • {parseInfo.joints} joints • {parseInfo.materials} materials
+                          {isEditing && <span className="ml-1 text-orange-500">(editing)</span>}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button className="h-4 w-4 flex items-center justify-center text-red-500 hover:bg-red-500/20 rounded-sm transition-colors">
+                          <Info className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs">
+                        <p className="text-red-500">Invalid: {parseInfo.error}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 px-1 mb-1 flex-wrap">
+                  {!isEditing && modifiedFormat === "urdf" ? (
+                    <>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <button
+                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+                            onClick={() => setIsEditing(true)}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          Edit
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <button
+                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+                            onClick={() => copyToClipboard(getModifiedContent(), `Modified ${modifiedFormat.toUpperCase()}`)}
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          Copy {modifiedFormat.toUpperCase()}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <button
+                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+                            onClick={() => {
+                              const content = getModifiedContent();
+                              const ext = modifiedFormat === "urdf" ? "urdf" : modifiedFormat === "xacro" ? "xacro" : "xml";
+                              const filename = `modified.${ext}`;
+                              const blob = new Blob([content], { type: "application/xml" });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement("a");
+                              link.href = url;
+                              link.download = filename;
+                              link.click();
+                              URL.revokeObjectURL(url);
+                              toast.success(`Downloaded ${filename}`);
+                            }}
+                          >
+                            <Download className="w-3 h-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          Download {modifiedFormat.toUpperCase()}
+                        </TooltipContent>
+                      </Tooltip>
+                      {githubToken && (
+                        <button
+                          className="h-5 w-5 flex items-center justify-center text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/20 px-1 py-0.5 rounded-sm transition-colors"
+                          onClick={() => setShowSaveToGitHub(true)}
+                        >
+                          GitHub
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="text-[10px] bg-primary/20 text-primary px-1 py-0.5 rounded-sm transition-colors hover:bg-primary/30"
+                        onClick={handleSave}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/20 px-1 py-0.5 rounded-sm transition-colors"
+                        onClick={handleCancel}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
                 </div>
                 {isEditing ? (
                   <div className="flex flex-col gap-2 flex-1">
                     {/* Real-time parse status while editing */}
                     {!parseInfo.isValid && (
-                      <div className="flex items-center gap-2 p-2 bg-red-500/10 border border-red-500/50 rounded-md">
-                        <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                        <div className="text-xs text-red-500">
-                          <span className="font-semibold">Invalid XML:</span> {parseInfo.error}
+                      <div className="px-2 py-1 bg-red-500/10 border border-red-500/30 rounded-sm mb-1">
+                        <div className="text-[10px] text-red-500">
+                          Invalid XML: {parseInfo.error}
                         </div>
                       </div>
                     )}
                     {parseInfo.isValid && (
-                      <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/50 rounded-md">
-                        <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                        <div className="text-xs text-green-700 dark:text-green-400">
-                          <span className="font-semibold">Valid URDF:</span> {parseInfo.links} links, {parseInfo.joints} joints
+                      <div className="px-2 py-1 bg-green-500/10 border border-green-500/30 rounded-sm mb-1">
+                        <div className="text-[10px] text-green-700 dark:text-green-400">
+                          Valid URDF: {parseInfo.robotName} • {parseInfo.links} links, {parseInfo.joints} joints, {parseInfo.materials} materials
                         </div>
                       </div>
                     )}
@@ -653,16 +804,16 @@ export const URDFComparison = ({
                       value={editedVizUrdf}
                       onChange={(e) => setEditedVizUrdf(e.target.value)}
                       className={cn(
-                        "flex-1 font-mono text-xs min-h-[400px]",
+                        "flex-1 font-mono text-[10px] min-h-[400px] border-border/20",
                         !parseInfo.isValid && "border-red-500/50 focus-visible:ring-red-500/50"
                       )}
                       placeholder="Edit URDF content..."
                     />
                   </div>
                 ) : (
-                  <ScrollArea className="flex-1 border rounded-md overflow-hidden">
-                    <div className="min-w-0 p-5 bg-muted/40">
-                      <URDFSyntaxHighlighter xml={formattedViz} className="text-sm leading-relaxed" />
+                  <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden">
+                    <div className="min-w-0 p-3 bg-muted/20">
+                      <URDFSyntaxHighlighter xml={getModifiedContent()} className="text-xs leading-relaxed" />
                     </div>
                   </ScrollArea>
                 )}
@@ -684,6 +835,18 @@ export const URDFComparison = ({
             }}
           />
         )}
+      </div>
+    </div>
+  );
+
+  if (inline) {
+    return isOpen ? content : null;
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+        {content}
       </DialogContent>
     </Dialog>
   );

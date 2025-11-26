@@ -14,12 +14,12 @@ export const BlenderPanel = ({ title, defaultOpen = true, children, className }:
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className={cn("mb-1", className)}>
-      <CollapsibleTrigger className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold text-foreground hover:bg-muted/30 transition-colors rounded-sm">
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className={cn("mb-0.5", className)}>
+      <CollapsibleTrigger className="w-full flex items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm">
+        <div className="flex items-center gap-1 min-w-0 flex-1">
           <ChevronRight 
             className={cn(
-              "w-3 h-3 transition-transform duration-200 flex-shrink-0",
+              "w-2.5 h-2.5 transition-transform duration-200 flex-shrink-0",
               isOpen && "rotate-90"
             )} 
           />
@@ -28,7 +28,7 @@ export const BlenderPanel = ({ title, defaultOpen = true, children, className }:
           </div>
         </div>
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-2 pb-2 pt-1">
+      <CollapsibleContent className="px-1.5 pb-1 pt-0.5">
         {children}
       </CollapsibleContent>
     </Collapsible>
@@ -46,11 +46,11 @@ export const BlenderPropertyRow = ({
   label, 
   children, 
   className,
-  labelWidth = "w-24"
+  labelWidth = "w-20"
 }: BlenderPropertyRowProps) => {
   return (
-    <div className={cn("flex items-center gap-2 py-0.5", className)}>
-      <label className={cn("text-xs text-muted-foreground flex-shrink-0", labelWidth)}>
+    <div className={cn("flex items-center gap-1.5 py-0.5", className)}>
+      <label className={cn("text-[10px] text-muted-foreground flex-shrink-0", labelWidth)}>
         {label}
       </label>
       <div className="flex-1 min-w-0">

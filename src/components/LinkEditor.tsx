@@ -111,50 +111,50 @@ export const LinkEditor = ({
 
   return (
     <div className="flex flex-col w-full">
-      {/* Header Controls */}
-      <div className="flex-shrink-0 space-y-2 p-3 border-b border-border/30">
-        {/* Search Bar */}
+      {/* Header Controls - Minimalistic */}
+      <div className="flex-shrink-0 space-y-1 px-1.5 py-1 border-b border-border/15">
+        {/* Search Bar - Minimalistic */}
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Search className="absolute left-1 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search links..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-7 pl-8 pr-8 text-xs bg-input border-border"
+            className="h-6 pl-7 pr-7 text-[10px] bg-input/50 border-border/20"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded"
+              className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center hover:bg-muted/50 rounded"
             >
-              <X className="w-3 h-3 text-muted-foreground" />
+              <X className="w-2.5 h-2.5 text-muted-foreground" />
             </button>
           )}
         </div>
 
-        {/* Stats */}
+        {/* Stats - Minimalistic */}
         {links.length > 0 && (
-          <div className="text-[10px] text-muted-foreground px-1">
-            {filteredLinks.length} of {links.length} links
+          <div className="text-[9px] text-muted-foreground/70 px-0.5">
+            {filteredLinks.length} of {links.length}
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
         )}
       </div>
 
-      {/* Links List */}
-      <div className="flex-1 p-2 px-3">
+      {/* Links List - Minimalistic */}
+      <div className="flex-1 p-1 px-1.5">
         {links.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground/70">
             No links loaded
           </div>
         ) : filteredLinks.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground/70">
             No links found
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {filteredLinks.map((link) => (
                 <LinkControl
                   key={link.name}
@@ -213,6 +213,7 @@ const LinkControl = ({
 }: LinkControlProps) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(linkData.name);
+  const [activeSection, setActiveSection] = useState<"visual" | "collision" | "inertial">("visual");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -302,8 +303,8 @@ const LinkControl = ({
   return (
     <div
       className={cn(
-        "border border-border/20 rounded-sm bg-muted/10 mb-1",
-        isHighlighted && "ring-2 ring-primary/50"
+        "border border-border/10 rounded-sm bg-muted/5 mb-0.5",
+        isHighlighted && "ring-1 ring-primary/30"
       )}
       onMouseEnter={onSelect}
     >
@@ -317,13 +318,13 @@ const LinkControl = ({
               onBlur={handleNameBlur}
               onKeyDown={handleNameKeyDown}
               onClick={(e) => e.stopPropagation()}
-              className="h-5 text-xs px-1 bg-input border-border text-foreground"
+              className="h-5 text-xs px-1 bg-input/50 border-border/20 text-foreground"
               placeholder="Link name"
             />
           ) : (
             <span
               className={cn(
-                "text-xs font-semibold cursor-text hover:text-primary transition-colors truncate text-left block",
+                "text-xs font-medium cursor-text hover:text-primary transition-colors truncate text-left block",
                 isHighlighted ? "text-primary" : "text-foreground"
               )}
               onDoubleClick={handleNameDoubleClick}
@@ -335,11 +336,48 @@ const LinkControl = ({
         }
         defaultOpen={false}
       >
-        {/* Visual Section - Always mesh for mesh-based robots */}
-        <BlenderPanel title="Visual" defaultOpen={true}>
-          <div className="space-y-1">
+        {/* Section Selector */}
+        <div className="flex items-center gap-0.5 px-1 py-0.5 mb-0.5 border-b border-border/15">
+          <button
+            onClick={() => setActiveSection("visual")}
+            className={cn(
+              "px-1 py-0.5 text-[9px] font-medium rounded-sm transition-colors",
+              activeSection === "visual"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+          >
+            Visual
+          </button>
+          <button
+            onClick={() => setActiveSection("collision")}
+            className={cn(
+              "px-1 py-0.5 text-[9px] font-medium rounded-sm transition-colors",
+              activeSection === "collision"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+          >
+            Collision
+          </button>
+          <button
+            onClick={() => setActiveSection("inertial")}
+            className={cn(
+              "px-1 py-0.5 text-[9px] font-medium rounded-sm transition-colors",
+              activeSection === "inertial"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+          >
+            Inertial
+          </button>
+        </div>
+
+        {/* Visual Section */}
+        {activeSection === "visual" && (
+          <div className="space-y-0.5">
             {linkData.visuals.length === 0 ? (
-              <div className="text-[10px] text-muted-foreground/70 pb-2">
+              <div className="text-[9px] text-muted-foreground/70 pb-1">
                 No visual element found
               </div>
             ) : (
@@ -358,23 +396,23 @@ const LinkControl = ({
               ))
             )}
           </div>
-        </BlenderPanel>
+        )}
 
-        {/* Collision Section - Can have mesh or primitives */}
-        <BlenderPanel title="Collision" defaultOpen={true}>
-          <div className="space-y-1">
+        {/* Collision Section */}
+        {activeSection === "collision" && (
+          <div className="space-y-0.5">
             {linkData.collisions.length === 0 ? (
-              <div className="text-[10px] text-muted-foreground/70 pb-2">
+              <div className="text-[9px] text-muted-foreground/70 pb-1">
                 No collision elements
                 {onUrdfChange && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[10px] ml-2"
+                    className="h-5 px-1.5 text-[9px] ml-1.5"
                     onClick={handleAddCollision}
                   >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Add Collision Shape
+                    <Plus className="w-2.5 h-2.5 mr-0.5" />
+                    Add
                   </Button>
                 )}
               </div>
@@ -396,38 +434,38 @@ const LinkControl = ({
                   />
                 ))}
                 {onUrdfChange && (
-                  <div className="pt-1">
+                  <div className="pt-0.5">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-[10px] w-full"
+                      className="h-5 px-1.5 text-[9px] w-full"
                       onClick={handleAddCollision}
                     >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Add Collision Primitive
+                      <Plus className="w-2.5 h-2.5 mr-0.5" />
+                      Add Collision
                     </Button>
                   </div>
                 )}
               </>
             )}
           </div>
-        </BlenderPanel>
+        )}
 
         {/* Inertial Section */}
-        <BlenderPanel title="Inertial (Advanced)" defaultOpen={false}>
-          <div className="space-y-1">
+        {activeSection === "inertial" && (
+          <div className="space-y-0.5">
             {!linkData.inertial ? (
-              <div className="text-[10px] text-muted-foreground/70 pb-2">
+              <div className="text-[9px] text-muted-foreground/70 pb-1">
                 No inertial element
                 {onUrdfChange && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[10px] ml-2"
+                    className="h-5 px-1.5 text-[9px] ml-1.5"
                     onClick={handleAddInertial}
                   >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Add Inertial
+                    <Plus className="w-2.5 h-2.5 mr-0.5" />
+                    Add
                   </Button>
                 )}
               </div>
@@ -440,22 +478,22 @@ const LinkControl = ({
                   onUrdfChange={onUrdfChange}
                 />
                 {onUrdfChange && (
-                  <div className="pt-1">
+                  <div className="pt-0.5">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-[10px] text-destructive w-full"
+                      className="h-5 px-1.5 text-[9px] text-destructive w-full"
                       onClick={handleRemoveInertial}
                     >
-                      <Trash2 className="w-3 h-3 mr-1" />
-                      Remove Inertial
+                      <Trash2 className="w-2.5 h-2.5 mr-0.5" />
+                      Remove
                     </Button>
                   </div>
                 )}
               </>
             )}
           </div>
-        </BlenderPanel>
+        )}
       </BlenderPanel>
     </div>
   );
@@ -532,19 +570,19 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
   const title = linkData.visuals.length === 1 ? "Visual (Mesh)" : `Visual ${index + 1} (Mesh)`;
   
   return (
-    <BlenderPanel title={title} defaultOpen={true} className="mb-1">
-      <div className="space-y-1">
+    <BlenderPanel title={title} defaultOpen={true} className="mb-0.5">
+      <div className="space-y-0.5">
         <BlenderPropertyRow label="Filename">
           <Input
             value={geometryParams.filename || ""}
             onChange={(e) => handleParamChange("filename", e.target.value)}
-            className="h-7 text-xs"
+            className="h-6 text-[10px]"
             placeholder="meshes/model.stl"
           />
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Scale">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             {parseSize(geometryParams.scale || "1 1 1").map((val, i) => (
               <NumberInput
                 key={i}
@@ -557,14 +595,14 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
                 step={0.0001}
                 min={0.0001}
                 compact
-                className="w-16"
+                className="w-14"
               />
             ))}
           </div>
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin XYZ">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             {origin.xyz.map((val, i) => (
               <NumberInput
                 key={i}
@@ -572,14 +610,14 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
                 onValueChange={(newVal) => handleOriginChange("xyz", i, newVal)}
                 step={0.01}
                 compact
-                className="w-16"
+                className="w-14"
               />
             ))}
           </div>
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin RPY">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             {origin.rpy.map((val, i) => (
               <NumberInput
                 key={i}
@@ -587,7 +625,7 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
                 onValueChange={(newVal) => handleOriginChange("rpy", i, newVal)}
                 step={0.01}
                 compact
-                className="w-16"
+                className="w-14"
               />
             ))}
           </div>
@@ -595,12 +633,12 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
 
         {onMaterialChange && (
           <BlenderPropertyRow label="Color">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <input
                 type="color"
                 value={currentColor}
                 onChange={(e) => handleColorChange(e.target.value)}
-                className="h-7 w-16 cursor-pointer rounded border border-border bg-input"
+                className="h-6 w-14 cursor-pointer rounded border border-border/20 bg-input"
               />
               <Input
                 type="text"
@@ -613,7 +651,7 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
                     setCurrentColor(newColor);
                   }
                 }}
-                className="h-7 w-20 text-xs font-mono"
+                className="h-6 w-18 text-[10px] font-mono"
                 placeholder="#cccccc"
               />
             </div>
@@ -1288,25 +1326,25 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
                 e.stopPropagation();
                 onVisibilityChange(!isVisible);
               }}
-              className="h-5 w-5 flex items-center justify-center hover:bg-muted/50 rounded transition-colors flex-shrink-0"
+              className="h-4 w-4 flex items-center justify-center hover:bg-muted/50 rounded transition-colors flex-shrink-0"
               title={isVisible ? "Hide collision in visualizer" : "Show collision in visualizer"}
             >
               {isVisible ? (
-                <Eye className="w-3.5 h-3.5 text-primary" />
+                <Eye className="w-3 h-3 text-primary" />
               ) : (
-                <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                <EyeOff className="w-3 h-3 text-muted-foreground" />
               )}
             </button>
           )}
         </div>
       } 
       defaultOpen={false} 
-      className="mb-1"
+      className="mb-0.5"
     >
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         <BlenderPropertyRow label="Geometry Type">
           <Select value={geometryType} onValueChange={handleGeometryTypeChange}>
-            <SelectTrigger className="h-7 text-xs">
+            <SelectTrigger className="h-6 text-[10px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1320,26 +1358,26 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
 
         {/* Calculation Info - Blender style transparency */}
         {calculationInfo && (
-          <div className="px-1 py-1.5 bg-muted/30 rounded-sm border border-border/50">
-            <div className="flex items-start gap-1.5 mb-1">
-              <Info className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
+          <div className="px-1 py-0.5 bg-muted/10 rounded-sm border border-border/15">
+            <div className="flex items-start gap-1 mb-0.5">
+              <Info className="w-2.5 h-2.5 text-primary mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-foreground mb-0.5">
+                <div className="text-[9px] font-semibold text-foreground mb-0.5">
                   Calculated from Mesh
                 </div>
-                <div className="text-[9px] text-muted-foreground">
+                <div className="text-[8px] text-muted-foreground">
                   {visualMeshInfo && visualMeshInfo.length > 1 
                     ? `Visual Mesh ${calculationInfo.meshIndex + 1}: ${calculationInfo.meshFilename}`
                     : calculationInfo.meshFilename}
                 </div>
               </div>
             </div>
-            <div className="px-3.5 space-y-0.5">
-              <div className="text-[9px] font-medium text-foreground/90">
+            <div className="px-2.5 space-y-0.5">
+              <div className="text-[8px] font-medium text-foreground/90">
                 Method: {calculationInfo.method}
               </div>
               {calculationInfo.formula && (
-                <div className="text-[8px] text-muted-foreground font-mono bg-background/50 px-1.5 py-1 rounded border border-border/30 whitespace-pre-wrap">
+                <div className="text-[7px] text-muted-foreground font-mono bg-background/50 px-1 py-0.5 rounded border border-border/20 whitespace-pre-wrap">
                   {calculationInfo.formula}
                 </div>
               )}
@@ -1426,12 +1464,12 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
                     updateURDF();
                   }}
                 >
-                  <SelectTrigger className="h-7 text-xs">
+                  <SelectTrigger className="h-6 text-[10px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {visualMeshInfo.map((mesh, idx) => (
-                      <SelectItem key={idx} value={String(idx)} className="text-xs">
+                      <SelectItem key={idx} value={String(idx)} className="text-[10px]">
                         Visual Mesh {idx + 1} {mesh.filename ? `(${mesh.filename.split("/").pop()})` : ""}
                       </SelectItem>
                     ))}
@@ -1443,7 +1481,7 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
               <Input
                 value={geometryParams.filename || ""}
                 onChange={(e) => handleParamChange("filename", e.target.value)}
-                className="h-7 text-xs"
+                className="h-6 text-[10px]"
                 placeholder="model.stl"
               />
             </BlenderPropertyRow>
@@ -1504,11 +1542,11 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[10px] text-destructive w-full"
+              className="h-5 px-1.5 text-[9px] text-destructive w-full"
               onClick={onRemove}
             >
-              <Trash2 className="w-3 h-3 mr-1" />
-              Remove Collision
+              <Trash2 className="w-2.5 h-2.5 mr-0.5" />
+              Remove
             </Button>
           </div>
         )}

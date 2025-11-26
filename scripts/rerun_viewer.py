@@ -137,7 +137,7 @@ def visualize_episode(
     if not links or not joints:
         print("WARNING: No links or joints found in URDF", file=sys.stderr)
     
-    # Initialize Rerun
+    # Initialize Rerun for visualization (not recording new data)
     if serve:
         print(f"Starting Rerun server on web_port={web_port}, grpc_port={ws_port}...")
         rr.init(recording_name, spawn=False)
@@ -146,7 +146,8 @@ def visualize_episode(
         print(f"gRPC server running at: {server_uri}")
         rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=server_uri)
     else:
-        print(f"Initializing Rerun with recording: {recording_name}")
+        print(f"Visualizing episode {episode_data.get('number', 'unknown')} (displaying uploaded data, not recording)...")
+        # Initialize Rerun to visualize the episode data
         rr.init(recording_name, spawn=spawn)
     
     # Log robot structure
@@ -233,7 +234,8 @@ def visualize_episode(
             # rr.log(path + "/box", rr.Boxes3D(centers=[[0, 0, 0]], half_sizes=[[0.1, 0.1, 0.1]]))
     
     print("Episode visualization complete!")
-    print(f"Recording: {recording_name}")
+    print(f"Displaying episode data in viewer (not recording new data)")
+    
     if serve:
         print(f"Web viewer: http://127.0.0.1:{web_port}")
         print("Press Ctrl+C to stop the server")
@@ -245,7 +247,18 @@ def visualize_episode(
         except KeyboardInterrupt:
             print("\nShutting down Rerun servers...")
     else:
-        print("Rerun viewer should be open. Close it when done.")
+        # For spawn mode, keep the process alive so the viewer can stay open
+        # The viewer needs the process to stay running to maintain the connection
+        print("Rerun viewer should be open displaying your episode data.")
+        print("Note: This process will stay running while the viewer is open.")
+        print("Close the viewer window or press Ctrl+C to stop.")
+        try:
+            import time
+            # Keep process alive - viewer will close when this process exits
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nClosing Rerun viewer...")
 
 
 def main():

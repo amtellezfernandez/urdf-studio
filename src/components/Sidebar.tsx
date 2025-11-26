@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box, CloudDownload, GitBranch } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import { URDFComparison } from "@/components/URDFComparison";
 import { JointsWindow } from "@/components/JointsWindow";
 import { LinkEditor, type CollisionVisibility } from "@/components/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
+import { cn } from "@/lib/utils";
 import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import {
   parseEpisodeJson,
@@ -34,8 +35,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
+import { Badge } from "@/components/ui/badge";
 
 export const DEFAULT_SIDEBAR_WIDTH = 420;
 export const SIDEBAR_MIN_WIDTH = 320;
@@ -79,6 +88,8 @@ interface SidebarProps {
   rotationPlaneVisible?: boolean;
   onRotationPlaneVisibilityChange?: (visible: boolean) => void;
   onFrameChange?: (frame: number) => void;
+  onUrdfEditorToggle?: (show: boolean) => void;
+  showUrdfEditor?: boolean;
 }
 
 interface RecordedFrame {
@@ -792,11 +803,22 @@ export const Sidebar = ({
   meshFiles = {},
   onCollisionVisibilityChange,
   onFrameChange,
+  onUrdfEditorToggle,
+  showUrdfEditor = false,
 }: SidebarProps) => {
   const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
-  const [showComparison, setShowComparison] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
+  const [activeEditorWindow, setActiveEditorWindow] = useState<"joints" | "links" | "urdf">("joints");
+  
+  // Sync activeEditorWindow with showUrdfEditor prop
+  useEffect(() => {
+    if (showUrdfEditor && activeEditorWindow !== "urdf") {
+      setActiveEditorWindow("urdf");
+    } else if (!showUrdfEditor && activeEditorWindow === "urdf") {
+      setActiveEditorWindow("joints");
+    }
+  }, [showUrdfEditor]);
 
   // Notify parent when collision visibility changes
   useEffect(() => {
@@ -979,6 +1001,7 @@ export const Sidebar = ({
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [currentPlayingEpisodeIndex, setCurrentPlayingEpisodeIndex] = useState<number | null>(null);
   const [recordingFps, setRecordingFps] = useState<number>(30); // Default FPS for recording
+  const [recordingStats, setRecordingStats] = useState<{ frames: number; seconds: number }>({ frames: 0, seconds: 0 });
   const hfIdentityRef = useRef<{ name: string; fullname?: string } | null>(null);
   const recordingStartTime = useRef<number>(0);
   const recordingIntervalRef = useRef<number | null>(null);
@@ -990,6 +1013,8 @@ export const Sidebar = ({
   const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
   const [rerunViewerModalEpisode, setRerunViewerModalEpisode] = useState<Episode | null>(null);
   const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
+  // Track dataset sources for future mixing
+  const [datasetSources, setDatasetSources] = useState<Array<{ type: 'hf' | 'local' | 'github' | 'recorded'; name: string; timestamp: number }>>([]);
 
   // Dispatch custom event when frame changes to sync with EpisodeViewer3DModal
   useEffect(() => {
@@ -1279,6 +1304,12 @@ export const Sidebar = ({
       timestamp,
       jointPositions: { ...currentJointValues },
     });
+    // Update stats
+    const seconds = timestamp / 1000;
+    setRecordingStats({
+      frames: recordingFramesRef.current.length,
+      seconds: seconds,
+    });
   }, [recordingFramesRef, recordingStartTime]);
 
   const clearRecordingInterval = useCallback(() => {
@@ -1313,6 +1344,7 @@ export const Sidebar = ({
       recordingStartTime.current = Date.now();
       setIsRecording(true);
       setCurrentRecordingEpisodeId(episodeId);
+      setRecordingStats({ frames: 0, seconds: 0 });
 
       // Calculate interval from FPS
       const intervalMs = fps > 0 ? 1000 / fps : RECORDING_INTERVAL_MS;
@@ -1354,6 +1386,7 @@ export const Sidebar = ({
   const stopRecording = useCallback(() => {
     setIsRecording(false);
     clearRecordingInterval();
+    setRecordingStats({ frames: 0, seconds: 0 });
 
     const metadata = recordingMetadataRef.current;
     recordingMetadataRef.current = null;
@@ -1435,6 +1468,13 @@ export const Sidebar = ({
           existingMetadata?.codebase_version ?? "v3-compatible",
         createdAt: existingMetadata?.createdAt ?? Date.now(),
         num_frames: framesToPersist.length,
+        // Mark this episode as recorded in the simulator and store source info
+        additional: {
+          ...existingMetadata?.additional,
+          isRecorded: true,
+          sourceType: 'recorded',
+          sourceName: `Recording ${recordedEpisodeNumber}`,
+        },
       };
 
       const next = [...prev];
@@ -1452,13 +1492,17 @@ export const Sidebar = ({
     });
 
     setCurrentRecordingEpisodeId(null);
+    
+    // Track source for recorded episodes
+    setDatasetSources(prev => [...prev, { type: 'recorded', name: `Recording ${recordedEpisodeNumber}`, timestamp: Date.now() }]);
+    
     toast.success(
       `Stopped recording. Episode ${recordedEpisodeNumber} saved with ${framesToPersist.length} frames`
     );
   }, [clearRecordingInterval, currentRecordingEpisodeId, episodes.length, setEpisodes]);
 
   const loadEpisodesFromDataFile = useCallback(
-    async (file: File, options?: { suppressToast?: boolean }) => {
+    async (file: File, options?: { suppressToast?: boolean; sourceName?: string }) => {
       try {
         if (!file || file.size === 0) {
           if (!options?.suppressToast) {
@@ -1572,7 +1616,13 @@ export const Sidebar = ({
                   ? episode.metadata.tasks
                   : [],
               createdAt,
-          num_frames: frames.length,
+              num_frames: frames.length,
+              // Preserve existing source info or add local source if not present
+              additional: {
+                ...episode.metadata?.additional,
+                sourceType: episode.metadata?.additional?.sourceType || 'local',
+                sourceName: episode.metadata?.additional?.sourceName || options?.sourceName || file.name,
+              },
             };
 
             const newEpisode = createEpisode(
@@ -1833,6 +1883,11 @@ export const Sidebar = ({
                     codebase_version: infoJson.codebase_version ?? "v3-compatible",
                     num_frames: frames.length,
                     episode_length_sec: (frames[frames.length - 1]?.timestamp ?? 0) / 1000,
+                    // Preserve existing source info or add local source if not present
+                    additional: {
+                      sourceType: 'local',
+                      sourceName: 'local_dataset',
+                    },
                   };
 
                   const newEpisode = createEpisode(
@@ -2064,7 +2119,32 @@ export const Sidebar = ({
           }
         }
         
+        // Track source name before loading
+        const folderName = fileArray[0]?.webkitRelativePath?.split('/')[0] || fileArray[0]?.name || 'local_dataset';
+        
+        // Load episodes
         await loadEpisodesFromArchiveZip(zip);
+        
+        // Update source info for episodes loaded from this archive
+        setEpisodes(prev => prev.map(ep => {
+          // Only update if source info is missing (newly loaded episodes)
+          if (!ep.metadata?.additional?.sourceType || ep.metadata.additional.sourceName === 'local_dataset') {
+            return {
+              ...ep,
+              metadata: {
+                ...ep.metadata,
+                additional: {
+                  ...ep.metadata?.additional,
+                  sourceType: 'local',
+                  sourceName: folderName,
+                },
+              },
+            };
+          }
+          return ep;
+        }));
+        
+        setDatasetSources(prev => [...prev, { type: 'local', name: folderName, timestamp: Date.now() }]);
       } catch (error) {
         console.error("Failed to load v3 dataset folder:", error);
       }
@@ -2091,7 +2171,10 @@ export const Sidebar = ({
 
     for (const file of motionDataFiles) {
       try {
-        const loaded = await loadEpisodesFromDataFile(file, { suppressToast: suppressIndividualToasts });
+        const loaded = await loadEpisodesFromDataFile(file, { 
+          suppressToast: suppressIndividualToasts,
+          sourceName: file.name,
+        });
         if (loaded) {
           successfulLoads += 1;
         } else {
@@ -2108,6 +2191,14 @@ export const Sidebar = ({
         ? `Loaded ${successfulLoads} episode file${successfulLoads > 1 ? "s" : ""} (${failedFiles.length} failed)`
         : `Loaded ${successfulLoads} episode file${successfulLoads > 1 ? "s" : ""}`;
       toast.success(message);
+    }
+
+    // Track source if files were loaded
+    if (successfulLoads > 0) {
+      const sourceName = motionDataFiles.length === 1 
+        ? motionDataFiles[0].name 
+        : `${motionDataFiles.length} files`;
+      setDatasetSources(prev => [...prev, { type: 'local', name: sourceName, timestamp: Date.now() }]);
     }
   }, [loadEpisodesFromArchiveZip, loadEpisodesFromDataFile]);
 
@@ -2258,6 +2349,27 @@ export const Sidebar = ({
     }
   }, [episodes, robotBaseName, robotName, getJointOrderForFrames, availableJointsStore]);
 
+  // Helper function to export current episodes as blob for dataset mixing
+  const exportCurrentEpisodesAsBlob = useCallback(async (): Promise<Blob> => {
+    if (episodes.length === 0) {
+      throw new Error("No episodes to export");
+    }
+
+    const datasetName = `temp_mix_${Date.now()}`;
+    const zip = new JSZip();
+    await generateV3DatasetArchive(
+      episodes,
+      robotBaseName,
+      zip,
+      datasetName,
+      robotName,
+      availableJointsStore
+    );
+
+    const blob = await zip.generateAsync({ type: "blob" });
+    return blob;
+  }, [episodes, robotBaseName, robotName, availableJointsStore]);
+
   const loadEpisodesFromHuggingFace = useCallback(async () => {
     if (isImportingFromHF) return;
 
@@ -2348,6 +2460,7 @@ export const Sidebar = ({
     if (isImportingFromHFDataset) return;
 
     setIsImportingFromHFDataset(true);
+    let loadingToastId: string | number | undefined;
     try {
       // Prompt for dataset path
       const datasetPath = window
@@ -2358,9 +2471,14 @@ export const Sidebar = ({
         ?.trim();
 
       if (!datasetPath) {
-        toast.info("Cancelled loading from Hugging Face dataset");
+        setIsImportingFromHFDataset(false);
         return;
       }
+
+      // Show persistent loading indicator
+      loadingToastId = toast.loading("Loading dataset...", {
+        duration: Infinity,
+      });
 
       // Parse the dataset path (handle full URLs)
       let parsedPath = datasetPath;
@@ -2373,11 +2491,15 @@ export const Sidebar = ({
 
       // Validate format
       if (!parsedPath.includes("/") || parsedPath.split("/").length !== 2) {
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId);
+        }
         toast.error("Dataset path must be in format: owner/dataset-name");
+        setIsImportingFromHFDataset(false);
         return;
       }
 
-      toast.info(`Fetching dataset info from ${parsedPath}...`);
+      // Silent loading - no toast for initial fetch
 
       const headers: Record<string, string> = { Accept: "application/json" };
       if (hfToken) {
@@ -2389,6 +2511,9 @@ export const Sidebar = ({
       const treeResponse = await fetch(treeUrl, { headers });
 
       if (!treeResponse.ok) {
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId);
+        }
         if (treeResponse.status === 404) {
           toast.error(`Dataset ${parsedPath} not found or not accessible`);
         } else if (treeResponse.status === 401 || treeResponse.status === 403) {
@@ -2397,6 +2522,7 @@ export const Sidebar = ({
           const errorText = await treeResponse.text();
           toast.error(errorText || "Failed to fetch dataset info");
         }
+        setIsImportingFromHFDataset(false);
         return;
       }
 
@@ -2474,7 +2600,7 @@ export const Sidebar = ({
 
       // Load URDF and mesh files if found
       if (urdfUrls.length > 0) {
-        toast.info(`Found ${urdfUrls.length} URDF file(s). Loading...`);
+        // Silent loading - no intermediate toast
         
         // Use the first URDF file found (prioritize root level or common locations)
         const urdfToLoad = urdfUrls.sort((a, b) => {
@@ -2603,11 +2729,11 @@ export const Sidebar = ({
               }
             }
 
-            toast.success(`Loaded URDF file: ${urdfToLoad.path.split("/").pop()}`);
+            // URDF loaded silently
           }
         } catch (error) {
           console.warn("Failed to load URDF file:", error);
-          toast.warning("Found URDF file but failed to load it");
+          console.warn("Found URDF file but failed to load it");
         }
       }
 
@@ -2620,7 +2746,7 @@ export const Sidebar = ({
 
       // Only process parquet files if they exist
       if (parquetUrls.length > 0) {
-        toast.info(`Found ${parquetUrls.length} parquet file(s). Fetching data via HF Dataset Server API...`);
+        // Silent loading - no intermediate toast
 
         // Use HF Dataset Server API to fetch data as JSON (avoids parquet parsing)
         const allRows: Array<Record<string, unknown>> = [];
@@ -2648,9 +2774,7 @@ export const Sidebar = ({
           console.warn("Could not fetch dataset info:", error);
         }
 
-        if (totalRows > 0) {
-          toast.info(`Dataset has ${totalRows} rows. Fetching...`);
-        }
+        // Silent progress - no toast for row count
 
         // Fetch data in batches
         while (hasMore) {
@@ -2680,10 +2804,7 @@ export const Sidebar = ({
 
             console.log(`Loaded ${rows.length} rows (total: ${allRows.length})`);
 
-            // Update progress
-            if (totalRows > 0 && allRows.length % 500 === 0) {
-              toast.info(`Loading... ${allRows.length}/${totalRows} rows`);
-            }
+            // Silent progress - no frequent toasts
 
             offset += batchSize;
             hasMore = rows.length === batchSize;
@@ -2696,11 +2817,15 @@ export const Sidebar = ({
         console.log(`Total rows loaded: ${allRows.length}`);
         if (allRows.length === 0) {
           console.error("No rows were loaded from parquet files. Check console for details.");
+          if (loadingToastId) {
+            toast.dismiss(loadingToastId);
+          }
           toast.error("No data found in parquet files. Check console for details.");
+          setIsImportingFromHFDataset(false);
           return;
         }
 
-        toast.info(`Loaded ${allRows.length} rows. Processing episodes...`);
+        // Silent processing - no intermediate toast
 
         // Group rows by episode_index
         const episodesMap = new Map<number, Array<Record<string, unknown>>>();
@@ -2822,7 +2947,10 @@ export const Sidebar = ({
           const mappingInput = window.prompt(mappingPrompt, defaultMapping)?.trim();
 
           if (mappingInput === null) {
-            toast.info("Cancelled loading from Hugging Face dataset");
+            if (loadingToastId) {
+              toast.dismiss(loadingToastId);
+            }
+            setIsImportingFromHFDataset(false);
             return;
           }
 
@@ -2916,6 +3044,10 @@ export const Sidebar = ({
             joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
             num_frames: frames.length,
             robot_type: "unknown",
+            additional: {
+              sourceType: 'hf',
+              sourceName: parsedPath,
+            },
           };
 
           const episode: Episode = {
@@ -2930,11 +3062,18 @@ export const Sidebar = ({
         }
 
         if (newEpisodes.length === 0) {
+          if (loadingToastId) {
+            toast.dismiss(loadingToastId);
+          }
           toast.error("No episodes found in dataset");
+          setIsImportingFromHFDataset(false);
           return;
         }
 
         setEpisodes((prev) => [...prev, ...newEpisodes]);
+        
+        // Track source
+        setDatasetSources(prev => [...prev, { type: 'hf', name: parsedPath, timestamp: Date.now() }]);
 
         // Log first episode first frame for debugging
         if (newEpisodes.length > 0 && newEpisodes[0].frames.length > 0) {
@@ -2945,15 +3084,27 @@ export const Sidebar = ({
           })));
         }
 
+        // Dismiss loading and show success
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId);
+        }
         toast.success(
-          `Loaded ${newEpisodes.length} episode(s) with ${totalFramesLoaded} total frames from ${parsedPath}`
+          `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
+          { duration: 2000 }
         );
       } else if (urdfUrls.length > 0) {
         // Only URDF was found, no parquet files
-        toast.success(`Loaded URDF from ${parsedPath} (no parquet files found)`);
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId);
+        }
+        toast.success(`Loaded URDF from ${parsedPath}`, { duration: 2000 });
       }
     } catch (error) {
       console.error("Failed to load from Hugging Face dataset:", error);
+      // Dismiss loading and show error
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId);
+      }
       toast.error(
         error instanceof Error && error.message
           ? error.message
@@ -3530,353 +3681,355 @@ export const Sidebar = ({
             <div className="flex flex-col h-full overflow-hidden">
               <div className="px-3 py-2 space-y-2 flex-shrink-0">
               </div>
-              {/* View & Edit URDF Button */}
-              {originalUrdf && vizUrdf && (
-                <div className="px-3 py-2 flex-shrink-0 border-t border-border/30">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-full h-7 text-xs"
-                    onClick={() => setShowComparison(true)}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                {/* Minimalistic Window Selector - Blender Style */}
+                <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border/30 bg-muted/10">
+                  <button
+                    onClick={() => setActiveEditorWindow("joints")}
+                    className={cn(
+                      "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
+                      activeEditorWindow === "joints"
+                        ? "bg-primary/20 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                    )}
                   >
-                    <GitCompare className="w-3 h-3 mr-1.5" />
-                    View & Edit URDF
-                  </Button>
-                  <URDFComparison
-                    originalUrdf={originalUrdf}
-                    vizUrdf={vizUrdf}
-                    isOpen={showComparison}
-                    onClose={() => setShowComparison(false)}
-                    onVizUrdfChange={onVizUrdfChange}
-                    getExportUrdf={getExportUrdf}
-                    meshFiles={meshFiles}
-                    githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
-                  />
+                    Joints
+                  </button>
+                  <button
+                    onClick={() => setActiveEditorWindow("links")}
+                    className={cn(
+                      "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
+                      activeEditorWindow === "links"
+                        ? "bg-primary/20 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                    )}
+                  >
+                    Links
+                  </button>
+                  {originalUrdf && vizUrdf && (
+                    <button
+                      onClick={() => {
+                        const newState = activeEditorWindow === "urdf" ? "joints" : "urdf";
+                        setActiveEditorWindow(newState);
+                        onUrdfEditorToggle?.(newState === "urdf");
+                      }}
+                      className={cn(
+                        "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
+                        activeEditorWindow === "urdf"
+                          ? "bg-primary/20 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                      )}
+                    >
+                      URDF File
+                    </button>
+                  )}
                 </div>
-              )}
-
-              <div className="flex-1 min-h-0 overflow-y-auto blender-scrollbar">
-                {/* Joint Editor Section */}
-                <BlenderPanel title="Joint Editor" defaultOpen={true}>
-                  <JointsWindow
-                    availableJoints={availableJoints}
-                    jointLimits={jointLimits}
-                    jointAxes={jointAxes}
-                    originalJointAxes={originalJointAxes}
-                    storeJointValues={storeJointValues}
-                    onJointChange={handleJointChange}
-                    onJointSelect={onJointSelect}
-                    selectedJoint={selectedJoint}
-                    onJointAxisChange={onJointAxisChange}
-                    onResetAxis={onResetAxis}
-                    onJointTypeChange={onJointTypeChange}
-                    onJointNameChange={onJointNameChange}
-                    onDeleteJoint={onDeleteJoint}
-                    deletedJoints={deletedJoints}
-                    angleUnit={angleUnit}
-                    onAngleUnitChange={setAngleUnit}
-                    urdfContent={vizUrdf}
-                    velocityLimitEnabled={velocityLimitEnabled}
-                    onVelocityLimitEnabledChange={setVelocityLimitEnabled}
-                    globalMaxJointVelocity={globalMaxJointVelocity}
-                    onGlobalMaxJointVelocityChange={setGlobalMaxJointVelocity}
-                    sliderValue={sliderValue}
-                    sliderMin={sliderMin}
-                    sliderMax={sliderMax}
-                    sliderStep={sliderStep}
-                    fromDisplayVelocity={fromDisplayVelocity}
-                    applyGlobalVelocityToAll={applyGlobalVelocityToAll}
-                    onRotateRobot={onRotateRobot}
-                    rotationAxis={rotationAxis}
-                    onRotationAxisChange={setRotationAxis}
-                    onResetRotation={onResetRotation}
-                    hasRotationChanges={hasRotationChanges}
-                    onJointLinkChange={handleJointLinkChange}
-                  />
-                </BlenderPanel>
-                {/* Link Editor Section */}
-                <BlenderPanel title="Link Editor" defaultOpen={true}>
-                  <LinkEditor
-                    urdfContent={vizUrdf}
-                    onMaterialChange={handleMaterialChange}
-                    onLinkNameChange={handleLinkNameChange}
-                    onUrdfChange={onVizUrdfChange}
-                    meshFiles={meshFiles}
-                    collisionVisibility={collisionVisibility}
-                    onCollisionVisibilityChange={setCollisionVisibility}
-                  />
-                </BlenderPanel>
+                
+                {/* Editor Content - Show only active window */}
+                <div className="flex-1 min-h-0 overflow-y-auto blender-scrollbar">
+                  {activeEditorWindow === "joints" ? (
+                    <JointsWindow
+                      availableJoints={availableJoints}
+                      jointLimits={jointLimits}
+                      jointAxes={jointAxes}
+                      originalJointAxes={originalJointAxes}
+                      storeJointValues={storeJointValues}
+                      onJointChange={handleJointChange}
+                      onJointSelect={onJointSelect}
+                      selectedJoint={selectedJoint}
+                      onJointAxisChange={onJointAxisChange}
+                      onResetAxis={onResetAxis}
+                      onJointTypeChange={onJointTypeChange}
+                      onJointNameChange={onJointNameChange}
+                      onDeleteJoint={onDeleteJoint}
+                      deletedJoints={deletedJoints}
+                      angleUnit={angleUnit}
+                      onAngleUnitChange={setAngleUnit}
+                      urdfContent={vizUrdf}
+                      velocityLimitEnabled={velocityLimitEnabled}
+                      onVelocityLimitEnabledChange={setVelocityLimitEnabled}
+                      globalMaxJointVelocity={globalMaxJointVelocity}
+                      onGlobalMaxJointVelocityChange={setGlobalMaxJointVelocity}
+                      sliderValue={sliderValue}
+                      sliderMin={sliderMin}
+                      sliderMax={sliderMax}
+                      sliderStep={sliderStep}
+                      fromDisplayVelocity={fromDisplayVelocity}
+                      applyGlobalVelocityToAll={applyGlobalVelocityToAll}
+                      onRotateRobot={onRotateRobot}
+                      rotationAxis={rotationAxis}
+                      onRotationAxisChange={setRotationAxis}
+                      onResetRotation={onResetRotation}
+                      hasRotationChanges={hasRotationChanges}
+                      onJointLinkChange={handleJointLinkChange}
+                    />
+                  ) : activeEditorWindow === "links" ? (
+                    <LinkEditor
+                      urdfContent={vizUrdf}
+                      onMaterialChange={handleMaterialChange}
+                      onLinkNameChange={handleLinkNameChange}
+                      onUrdfChange={onVizUrdfChange}
+                      meshFiles={meshFiles}
+                      collisionVisibility={collisionVisibility}
+                      onCollisionVisibilityChange={setCollisionVisibility}
+                    />
+                  ) : (
+                    <div className="p-3 text-xs text-muted-foreground text-center">
+                      URDF Editor is displayed in the main view. Click "URDF File" again to return to visualization.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </TabsContent>
 
           {/* Recording Tab - Blender Style */}
           <TabsContent value="recording" className="flex-1 overflow-hidden flex flex-col p-2 mt-0 h-full blender-scrollbar">
-            {/* Recording Controls */}
-            <BlenderPanel title="Recording" defaultOpen={true}>
-              <div className="space-y-2">
-                {/* Record button and FPS control */}
-                <div className="flex items-center gap-2">
+            {/* Blender-style Menu Bar */}
+            <div className="flex items-center gap-2 border-b border-border/50 pb-1.5 mb-2">
+              {/* Record Button - Always Visible */}
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
                   <Button
                     size="sm"
-                    variant={isRecording ? "destructive" : "default"}
-                    className={`h-10 text-xs px-5 flex-shrink-0 font-semibold ${
-                      isRecording 
-                        ? "bg-red-600 hover:bg-red-700 text-white" 
-                        : "bg-red-500 hover:bg-red-600 text-white"
-                    }`}
+                    variant="outline"
+                    className="h-7 px-2.5 text-xs flex-shrink-0 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:border-red-500"
                     onClick={isRecording ? stopRecording : startRecording}
                   >
-                    {isRecording ? (
-                      <>
-                        <Square className="w-3.5 h-3.5 mr-1.5 fill-current" />
-                        Stop Recording
-                      </>
-                    ) : (
-                      <>
-                        <Circle className="w-3.5 h-3.5 mr-1.5 fill-current" />
-                        Record
-                      </>
-                    )}
-                  </Button>
-                  <div className="flex items-center gap-1.5 flex-1">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">FPS:</label>
-                    <NumberInput
-                      value={recordingFps}
-                      onValueChange={setRecordingFps}
-                      min={1}
-                      max={120}
-                      step={1}
-                      compact={true}
-                      disabled={isRecording}
-                      className="w-16"
-                    />
-                  </div>
-                </div>
-                
-                {/* Load dataset from: Local Folder or Hugging Face */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">Load Dataset</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="file"
-                      id="motion-upload-episodes"
-                      accept=".json,.csv,.pos"
-                      multiple
-                      {...({
-                        webkitdirectory: "",
-                        directory: "",
-                        mozdirectory: "",
-                      } as React.InputHTMLAttributes<HTMLInputElement>)}
-                      onChange={(e) => {
-                        void handleFileUpload(e.target.files);
-                        e.target.value = "";
-                      }}
-                      className="hidden"
-                    />
-                    <label htmlFor="motion-upload-episodes" className="flex-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full h-8 text-xs"
-                        asChild
-                      >
-                        <span className="cursor-pointer flex items-center justify-center gap-1.5">
-                          <FolderOpen className="w-3.5 h-3.5" />
-                          Local Folder
-                        </span>
-                      </Button>
-                    </label>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 h-8 text-xs"
-                      onClick={() => {
-                        void loadEpisodesFromHuggingFaceDataset();
-                      }}
-                      disabled={isImportingFromHFDataset}
-                    >
-                      <Download className="w-3.5 h-3.5 mr-1.5" />
-                      {isImportingFromHFDataset ? "Loading..." : "Hugging Face"}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Export dataset to: Local Folder or Hugging Face */}
-                {episodes.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-foreground">Export Dataset</label>
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 h-8 text-xs"
-                        onClick={() => {
-                          void exportDatasetToLeRobotFormat();
-                        }}
-                        disabled={isExportingDataset}
-                      >
-                        <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
-                        {isExportingDataset ? "Building..." : "Local Folder"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 h-8 text-xs"
-                        onClick={() => {
-                          void uploadEpisodesToHuggingFace();
-                        }}
-                        disabled={isUploadingToHF}
-                      >
-                        <Send className="w-3.5 h-3.5 mr-1.5" />
-                        {isUploadingToHF ? "Uploading..." : "Hugging Face"}
-                      </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Circle className={`w-3 h-3 fill-current ${isRecording ? 'animate-pulse' : ''}`} />
+                      <span>{isRecording ? "Stop" : "Record"}</span>
                     </div>
-                  </div>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  <p className="font-medium">{isRecording ? "Stop Recording" : "Start Recording"}</p>
+                  <p className="text-muted-foreground">
+                    {isRecording 
+                      ? "Stop recording the current episode" 
+                      : "Record a new episode by moving the robot"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Recording Stats - Always Reserved Space */}
+              <div className="flex items-center gap-1.5 text-[10px] font-mono min-w-[60px]">
+                {isRecording ? (
+                  <>
+                    <span className="text-muted-foreground">{recordingStats.frames}</span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-muted-foreground">{recordingStats.seconds.toFixed(1)}s</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-muted-foreground/40">0</span>
+                    <span className="text-muted-foreground/40">/</span>
+                    <span className="text-muted-foreground/40">0.0s</span>
+                  </>
                 )}
               </div>
-            </BlenderPanel>
+
+              {/* FPS Input */}
+              <div className="flex items-center gap-1">
+                <label className="text-[10px] text-muted-foreground whitespace-nowrap">FPS:</label>
+                <NumberInput
+                  value={recordingFps}
+                  onValueChange={setRecordingFps}
+                  min={1}
+                  max={120}
+                  step={1}
+                  compact={true}
+                  disabled={isRecording}
+                  className="w-14"
+                />
+              </div>
+
+              {/* Add Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="px-2 py-1 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors">
+                    Add
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <input
+                    type="file"
+                    id="motion-upload-episodes"
+                    accept=".json,.csv,.pos"
+                    multiple
+                    {...({
+                      webkitdirectory: "",
+                      directory: "",
+                      mozdirectory: "",
+                    } as React.InputHTMLAttributes<HTMLInputElement>)}
+                    onChange={(e) => {
+                      void handleFileUpload(e.target.files);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      document.getElementById("motion-upload-episodes")?.click();
+                    }}
+                    className="text-xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <FolderOpen className="w-3 h-3" />
+                      <span>Local Files...</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      void loadEpisodesFromHuggingFaceDataset();
+                    }}
+                    disabled={isImportingFromHFDataset}
+                    className="text-xs"
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <CloudDownload className="w-3 h-3" />
+                      <span>{isImportingFromHFDataset ? "Loading..." : "Hugging Face..."}</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Export Menu - Always Visible */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button 
+                    className="px-2 py-1 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={episodes.length === 0 || isExportingDataset || isUploadingToHF}
+                  >
+                    Export
+                  </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        void exportDatasetToLeRobotFormat();
+                      }}
+                      disabled={episodes.length === 0 || isExportingDataset}
+                      className="text-xs"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <FolderOpen className="w-3 h-3" />
+                        <span>{isExportingDataset ? "Building..." : "Local Folder..."}</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        void uploadEpisodesToHuggingFace();
+                      }}
+                      disabled={episodes.length === 0 || isUploadingToHF}
+                      className="text-xs"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <Send className="w-3 h-3" />
+                        <span>{isUploadingToHF ? "Uploading..." : "Hugging Face..."}</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled
+                      className="text-xs"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <GitBranch className="w-3 h-3" />
+                        <span>GitHub... (Coming Soon)</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
 
             {/* Blender-style Timeline Controls */}
             <BlenderPanel title="Timeline" defaultOpen={true}>
-              {/* Playback Controls Row - Blender style */}
-              <div className="flex items-center gap-0.5 mb-2">
-                {/* Play/Pause - Toggle playback */}
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={isPlayingAll ? "default" : "ghost"}
-                      className="h-7 w-7 p-0"
-                      onClick={() => playAllEpisodes()}
-                      disabled={episodes.length === 0}
-                    >
-                      {isPlayingAll ? (
-                        <Pause className="w-3.5 h-3.5" />
-                      ) : (
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">{isPlayingAll ? "Pause" : "Play"}</p>
-                    <p className="text-muted-foreground">
-                      {isPlayingAll 
-                        ? "Pause playback of all episodes" 
-                        : "Play all episodes sequentially"}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-                
-                {/* Current Frame Display */}
-                {(() => {
-                  if (episodes.length === 0) {
-                    return (
-                      <div className="flex items-center gap-1.5 ml-2 px-2.5 py-1 bg-muted/50 rounded border border-border/50 min-w-[100px] justify-end">
-                        <span className="text-xs text-muted-foreground">Frame:</span>
-                        <span className="text-xs font-mono font-semibold text-foreground blender-number tabular-nums">
-                          0
-                        </span>
-                      </div>
-                    );
-                  }
-                  
-                  const activeEpisode = currentPlayingEpisodeIndex !== null 
-                    ? episodes[currentPlayingEpisodeIndex] 
-                    : null;
-                  const episodeTotalFrames = activeEpisode?.frames.length || totalFrames;
-                  const displayFrame = episodeTotalFrames > 0 ? currentFrame : 0;
-                  
-                  return (
-                    <div className="flex items-center gap-1.5 ml-2 px-2.5 py-1 bg-muted/50 rounded border border-border/50 min-w-[100px] justify-end">
-                      <span className="text-xs text-muted-foreground">Frame:</span>
-                      <span className="text-xs font-mono font-semibold text-foreground blender-number tabular-nums">
-                        {displayFrame}
-                      </span>
-                      {episodeTotalFrames > 0 && (
-                        <>
-                          <span className="text-xs text-muted-foreground">/</span>
-                          <span className="text-xs font-mono text-muted-foreground blender-number tabular-nums">
-                            {episodeTotalFrames}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
+              {/* Playback and Speed on same row */}
+              <div className="flex items-center gap-2 mb-1.5">
+                {/* Play/Pause */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => playAllEpisodes()}
+                  disabled={episodes.length === 0}
+                  title={isPlayingAll ? "Pause" : "Play"}
+                >
+                  {isPlayingAll ? (
+                    <Pause className="w-3 h-3" />
+                  ) : (
+                    <Play className="w-3 h-3 fill-current" />
+                  )}
+                </Button>
 
-              {/* Frame Range and Speed Controls */}
-              <div className="space-y-1.5">
-                <BlenderPropertyRow label="Speed">
-                  <div className="flex items-center gap-2">
-                    <Slider
-                      value={[playbackSpeed]}
-                      onValueChange={(values) => {
-                        const newSpeed = values[0];
-                        setPlaybackSpeed(newSpeed);
-                        (window as any).viewer3dSetPlaybackSpeed?.(newSpeed);
-                      }}
-                      min={0.25}
-                      max={6}
-                      step={0.25}
-                      className="flex-1"
-                    />
-                    <span className="text-xs font-mono text-foreground w-10 text-right blender-number">
-                      {playbackSpeed.toFixed(2)}x
-                    </span>
-                  </div>
-                </BlenderPropertyRow>
-                
-                {/* Graphics Viewer Buttons */}
-                <div className="px-1 flex gap-2">
-                  <Button
-                    size="sm"
-                    variant={isViewerModalOpen ? "default" : "outline"}
-                    className="flex-1 h-8 text-xs"
-                    onClick={() => {
-                      if (isViewerModalOpen) {
-                        setIsViewerModalOpen(false);
-                      } else {
-                        // Open viewer with current episode
-                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                        if (episodes.length > 0 && episodes[activeIndex]) {
-                          setViewerModalEpisode(episodes[activeIndex]);
-                          setIsViewerModalOpen(true);
-                        }
-                      }
+                {/* Speed Control - Blender style (Number Input) */}
+                <div className="flex items-center gap-1.5 flex-1">
+                  <label className="text-[10px] text-muted-foreground whitespace-nowrap">Speed:</label>
+                  <NumberInput
+                    value={playbackSpeed}
+                    onValueChange={(value) => {
+                      const newSpeed = value ?? 1.0;
+                      setPlaybackSpeed(newSpeed);
+                      (window as any).viewer3dSetPlaybackSpeed?.(newSpeed);
                     }}
-                    disabled={episodes.length === 0}
-                  >
-                    <Eye className="w-3.5 h-3.5 mr-1.5" />
-                    {isViewerModalOpen ? "Close Viewer" : "Open Viewer"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={isRerunViewerModalOpen ? "default" : "outline"}
-                    className="flex-1 h-8 text-xs"
-                    onClick={() => {
-                      if (isRerunViewerModalOpen) {
-                        setIsRerunViewerModalOpen(false);
-                      } else {
-                        // Open rerun viewer with current episode
-                        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                        if (episodes.length > 0 && episodes[activeIndex]) {
-                          setRerunViewerModalEpisode(episodes[activeIndex]);
-                          setIsRerunViewerModalOpen(true);
-                        }
-                      }
-                    }}
-                    disabled={episodes.length === 0}
-                  >
-                    <Box className="w-3.5 h-3.5 mr-1.5" />
-                    {isRerunViewerModalOpen ? "Close Rerun" : "Rerun Viewer"}
-                  </Button>
+                    min={0.25}
+                    max={6}
+                    step={0.25}
+                    compact={true}
+                    className="w-16"
+                  />
+                  <span className="text-[10px] font-mono text-foreground tabular-nums">
+                    x{playbackSpeed % 1 === 0 ? playbackSpeed.toFixed(0) : playbackSpeed.toFixed(2)}
+                  </span>
                 </div>
-                
-                <p className="text-[10px] text-muted-foreground px-1 truncate">
-                  {motionDataFileName ? `Motion data file: ${motionDataFileName}` : "No motion data file loaded"}
-                </p>
+              </div>
+              
+              {/* Viewer Controls - Compact */}
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant={isViewerModalOpen ? "default" : "ghost"}
+                  className="h-6 px-2 text-[10px] flex-1"
+                  onClick={() => {
+                    if (isViewerModalOpen) {
+                      setIsViewerModalOpen(false);
+                    } else {
+                      const activeIndex = currentPlayingEpisodeIndex ?? 0;
+                      if (episodes.length > 0 && episodes[activeIndex]) {
+                        setViewerModalEpisode(episodes[activeIndex]);
+                        setIsViewerModalOpen(true);
+                      }
+                    }
+                  }}
+                  disabled={episodes.length === 0}
+                  title="3D Viewer"
+                >
+                  <Eye className="w-3 h-3 mr-1" />
+                  Viewer
+                </Button>
+                <Button
+                  size="sm"
+                  variant={isRerunViewerModalOpen ? "default" : "ghost"}
+                  className="h-6 px-2 text-[10px] flex-1"
+                  onClick={() => {
+                    if (isRerunViewerModalOpen) {
+                      setIsRerunViewerModalOpen(false);
+                    } else {
+                      const activeIndex = currentPlayingEpisodeIndex ?? 0;
+                      if (episodes.length > 0 && episodes[activeIndex]) {
+                        setRerunViewerModalEpisode(episodes[activeIndex]);
+                        setIsRerunViewerModalOpen(true);
+                      }
+                    }
+                  }}
+                  disabled={episodes.length === 0}
+                  title="Rerun Viewer"
+                >
+                  <Box className="w-3 h-3 mr-1" />
+                  Rerun
+                </Button>
               </div>
             </BlenderPanel>
 
@@ -3908,36 +4061,107 @@ export const Sidebar = ({
                             key={episode.id}
                             className="group relative border border-border rounded p-1.5 bg-background hover:bg-muted/30 transition-colors"
                           >
-                            <div className="flex items-center gap-1.5">
+                            {/* Main Row */}
+                            <div className="flex items-start gap-1.5">
                               {/* Episode Number */}
-                              <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <span className="text-[10px] font-bold text-primary">
                                   {episode.number}
                                 </span>
                               </div>
                               
-                              {/* Episode Info */}
+                              {/* Episode Info - Blender Style */}
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5">
+                                {/* First Row: Stats */}
+                                <div className="flex items-center gap-1.5 mb-1">
                                   <span className="text-xs font-medium text-foreground">
                                     {episode.frames.length} frames
                                   </span>
+                                  <span className="text-[10px] text-muted-foreground">•</span>
                                   <span className="text-[10px] text-muted-foreground">
                                     {durationSeconds}s
                                   </span>
-                                  {/* Frame Counter */}
-                                  <span className="text-[10px] font-mono text-muted-foreground">
+                                  <span className="text-[10px] text-muted-foreground">•</span>
+                                  {/* Frame Counter - Highlighted when playing */}
+                                  <span className={`text-[10px] font-mono tabular-nums ${
+                                    currentPlayingEpisodeIndex === index && isPlayingAll
+                                      ? "text-primary font-semibold"
+                                      : "text-muted-foreground"
+                                  }`}>
                                     {episodeCurrentFrame}/{totalFrames}
                                   </span>
                                 </div>
+                                
+                                {/* Second Row: Source Info */}
+                                {episode.metadata?.additional?.sourceType && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge
+                                      variant={
+                                        episode.metadata.additional.sourceType === 'hf'
+                                          ? 'default'
+                                          : episode.metadata.additional.sourceType === 'local'
+                                          ? 'secondary'
+                                          : 'outline'
+                                      }
+                                      className="text-[9px] px-1.5 py-0 h-3.5 font-medium"
+                                    >
+                                      {episode.metadata.additional.sourceType === 'hf'
+                                        ? 'HF'
+                                        : episode.metadata.additional.sourceType === 'local'
+                                        ? 'Local'
+                                        : episode.metadata.additional.sourceType === 'recorded'
+                                        ? 'Recorded'
+                                        : episode.metadata.additional.sourceType}
+                                    </Badge>
+                                    {episode.metadata.additional.sourceName && (
+                                      <span className="text-[10px] text-muted-foreground truncate max-w-[180px]" title={episode.metadata.additional.sourceName}>
+                                        {episode.metadata.additional.sourceName}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
-                            {/* Quick Actions */}
-                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                            </div>
+                          
+                            {/* Compact Controls - All Actions Together */}
+                            <div className="flex items-center gap-0.5 mt-1.5 pt-1 border-t border-border/30 opacity-40 group-hover:opacity-100 transition-opacity">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-5 w-5 p-0"
+                                className="h-5 px-1 text-[10px] text-muted-foreground/60 hover:text-foreground"
+                                onClick={() => moveEpisode(episode.id, 'up')}
+                                disabled={index === 0}
+                                title="Move up"
+                              >
+                                <ArrowUp className="w-2.5 h-2.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 px-1 text-[10px] text-muted-foreground/60 hover:text-foreground"
+                                onClick={() => moveEpisode(episode.id, 'down')}
+                                disabled={index === episodes.length - 1}
+                                title="Move down"
+                              >
+                                <ArrowDown className="w-2.5 h-2.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 px-1 text-[10px] text-muted-foreground/60 hover:text-foreground"
+                                onClick={() => retakeEpisode(episode.id)}
+                                disabled={isRecording}
+                                title="Retake"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5 mr-0.5" />
+                                Retake
+                              </Button>
+                              <div className="flex-1" />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 text-muted-foreground/60 hover:text-foreground"
                                 onClick={() => exportEpisodeToDataFile(episode)}
                                 title="Export"
                               >
@@ -3946,7 +4170,7 @@ export const Sidebar = ({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-5 w-5 p-0"
+                                className="h-5 w-5 p-0 text-muted-foreground/60 hover:text-foreground"
                                 onClick={() => deleteEpisode(episode.id)}
                                 disabled={isRecording}
                                 title="Delete"
@@ -3955,48 +4179,13 @@ export const Sidebar = ({
                               </Button>
                             </div>
                           </div>
-                          
-                          {/* Compact Controls */}
-                          <div className="flex items-center gap-0.5 mt-1 pt-1 border-t border-border/50">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 px-1 text-[10px]"
-                              onClick={() => moveEpisode(episode.id, 'up')}
-                              disabled={index === 0}
-                              title="Move up"
-                            >
-                              <ArrowUp className="w-2.5 h-2.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 px-1 text-[10px]"
-                              onClick={() => moveEpisode(episode.id, 'down')}
-                              disabled={index === episodes.length - 1}
-                              title="Move down"
-                            >
-                              <ArrowDown className="w-2.5 h-2.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 px-1 text-[10px] flex-1"
-                              onClick={() => retakeEpisode(episode.id)}
-                              disabled={isRecording}
-                              title="Retake"
-                            >
-                              <RotateCcw className="w-2.5 h-2.5 mr-0.5" />
-                              Retake
-                            </Button>
-                          </div>
-                        </div>
                       );
                     })}
                   </div>
                 )}
               </div>
             </BlenderPanel>
+
           </TabsContent>
         </div>
       </Tabs>
@@ -4026,6 +4215,7 @@ export const Sidebar = ({
         onOpenChange={setIsRerunViewerModalOpen}
         urdfContent={vizUrdf || originalUrdf}
       />
+
     </div>
   );
 };

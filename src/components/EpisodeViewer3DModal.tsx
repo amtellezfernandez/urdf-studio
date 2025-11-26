@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallba
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
 import {
   Play,
   Pause,
@@ -608,6 +609,33 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             <p className="text-xs text-muted-foreground">
               {totalFrames} frames • {durationSeconds}s
             </p>
+            {episode.metadata?.additional?.sourceType && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <Badge
+                  variant={
+                    episode.metadata.additional.sourceType === 'hf'
+                      ? 'default'
+                      : episode.metadata.additional.sourceType === 'local'
+                      ? 'secondary'
+                      : 'outline'
+                  }
+                  className="text-[10px] px-1.5 py-0 h-4"
+                >
+                  {episode.metadata.additional.sourceType === 'hf'
+                    ? 'HF'
+                    : episode.metadata.additional.sourceType === 'local'
+                    ? 'Local'
+                    : episode.metadata.additional.sourceType === 'recorded'
+                    ? 'Recorded'
+                    : episode.metadata.additional.sourceType}
+                </Badge>
+                {episode.metadata.additional.sourceName && (
+                  <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                    {episode.metadata.additional.sourceName}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1">

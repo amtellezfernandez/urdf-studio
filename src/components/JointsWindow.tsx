@@ -247,15 +247,15 @@ export const JointsWindow = ({
 
   return (
     <div className="flex flex-col w-full">
-      {/* Robot Position - Compact single line */}
+      {/* Robot Position - Minimalistic */}
       {onRotateRobot && (
-        <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-border/30 bg-muted/10">
-          <span className="text-xs font-semibold text-foreground flex-shrink-0">Robot Position</span>
+        <div className="flex items-center gap-1.5 px-2 py-1 text-xs border-b border-border/20 bg-muted/5">
+          <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Position</span>
           <Select
             value={rotationAxis}
             onValueChange={(value) => onRotationAxisChange?.(value as "x" | "y" | "z")}
           >
-            <SelectTrigger className="h-6 text-xs w-20">
+            <SelectTrigger className="h-6 text-xs w-16 border-border/50">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
@@ -265,19 +265,19 @@ export const JointsWindow = ({
             </SelectContent>
           </Select>
           <Button
-            variant="default"
+            variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs flex-shrink-0"
+            className="h-6 px-1.5 text-xs flex-shrink-0"
             onClick={() => onRotateRobot(rotationAxis)}
             title={`Rotate root link and direct children 90° around ${rotationAxis.toUpperCase()}-axis`}
           >
-            <RotateCw className="w-3 h-3" />
+            <RotateCw className="w-3.5 h-3.5" />
           </Button>
           {onResetRotation && hasRotationChanges && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs flex-shrink-0"
+              className="h-6 px-1.5 text-xs flex-shrink-0"
               onClick={onResetRotation}
               title="Reset rotation to original position"
             >
@@ -287,28 +287,28 @@ export const JointsWindow = ({
         </div>
       )}
 
-      {/* Global Motion Limits - Compact single line */}
+      {/* Global Motion Limits - Minimalistic */}
       {(onVelocityLimitEnabledChange || onRotationPlaneVisibilityChange) && (
-        <div className="flex flex-col gap-1.5 px-3 py-2 text-xs border-b border-border/30 bg-muted/10">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-foreground flex-shrink-0">Motion Limits</span>
+        <div className="flex flex-col gap-1 px-2 py-1 text-xs border-b border-border/20 bg-muted/5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Motion</span>
             {onVelocityLimitEnabledChange && (
               <Switch
                 checked={velocityLimitEnabled}
                 onCheckedChange={onVelocityLimitEnabledChange}
-                className="h-5 w-9 flex-shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
+                className="h-4 w-7 flex-shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
               />
             )}
             {velocityLimitEnabled && fromDisplayVelocity && onGlobalMaxJointVelocityChange && (
               <>
-                <div className="flex-1 min-w-0 px-2">
+                <div className="flex-1 min-w-0 px-1.5">
                   <Slider
                     value={[sliderValue]}
                     min={sliderMin}
                     max={sliderMax}
                     step={sliderStep}
                     onValueChange={([value]) => onGlobalMaxJointVelocityChange(fromDisplayVelocity(value))}
-                    className="h-2"
+                    className="h-1.5"
                   />
                 </div>
                 <span className="text-[10px] text-muted-foreground min-w-[55px] text-right flex-shrink-0">
@@ -318,10 +318,10 @@ export const JointsWindow = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[10px] flex-shrink-0"
+                    className="h-6 px-1.5 text-[10px] flex-shrink-0"
                     onClick={applyGlobalVelocityToAll}
                   >
-                    Apply All
+                    Apply
                   </Button>
                 )}
               </>
@@ -329,8 +329,8 @@ export const JointsWindow = ({
           </div>
           {/* Rotation Planes Toggle */}
           {onRotationPlaneVisibilityChange && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground flex-shrink-0">Rotation Planes</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground flex-shrink-0">Planes</span>
               <Button
                 variant="ghost"
                 size="icon"
@@ -339,9 +339,9 @@ export const JointsWindow = ({
                 title={rotationPlaneVisible ? "Hide rotation planes" : "Show rotation planes"}
               >
                 {rotationPlaneVisible ? (
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-3.5 w-3.5" />
                 ) : (
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="h-3.5 w-3.5" />
                 )}
               </Button>
             </div>
@@ -349,36 +349,36 @@ export const JointsWindow = ({
         </div>
       )}
 
-      {/* Header Controls */}
-      <div className="flex-shrink-0 space-y-2 p-3 border-b border-border/30">
-        {/* Search Bar */}
+      {/* Header Controls - Minimalistic */}
+      <div className="flex-shrink-0 space-y-1.5 px-2 py-1.5 border-b border-border/20">
+        {/* Search Bar - Minimalistic */}
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search joints..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-7 pl-8 pr-8 text-xs bg-input border-border"
+            className="h-7 pl-8 pr-8 text-xs bg-input/50 border-border/50"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded"
             >
               <X className="w-3 h-3 text-muted-foreground" />
             </button>
           )}
         </div>
 
-        {/* Filters Row */}
-        <div className="flex items-center gap-2">
+        {/* Filters Row - Minimalistic */}
+        <div className="flex items-center gap-1.5">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="h-7 text-xs w-32">
+            <SelectTrigger className="h-7 text-xs w-32 border-border/50">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
-              <SelectItem value="all" className="text-xs">All Types</SelectItem>
+              <SelectItem value="all" className="text-xs">All</SelectItem>
               {jointTypes.map(type => (
                 <SelectItem key={type} value={type} className="text-xs capitalize">
                   {type}
@@ -387,55 +387,54 @@ export const JointsWindow = ({
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2.5 px-3 py-1.5 bg-muted/30 rounded border border-border/50">
-            <span className="text-xs text-muted-foreground min-w-[24px]">rad</span>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-muted/20 rounded border border-border/30">
+            <span className="text-[10px] text-muted-foreground min-w-[24px]">rad</span>
             <Switch
               checked={angleUnit === "deg"}
               onCheckedChange={(checked) => onAngleUnitChange(checked ? "deg" : "rad")}
-              className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted h-5 w-9"
+              className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted h-4 w-7"
             />
-            <span className="text-xs text-muted-foreground min-w-[24px]">deg</span>
+            <span className="text-[10px] text-muted-foreground min-w-[24px]">deg</span>
           </div>
 
           <button
             onClick={() => setViewMode(viewMode === "type" ? "hierarchy" : "type")}
             className={cn(
-              "h-7 px-2 flex items-center gap-1.5 text-xs rounded border transition-colors",
+              "h-7 px-1.5 flex items-center gap-1 text-xs rounded border transition-colors",
               viewMode === "hierarchy"
-                ? "bg-primary/20 border-primary text-primary"
-                : "bg-muted/30 border-border text-foreground hover:bg-muted/50"
+                ? "bg-primary/15 border-primary/50 text-primary"
+                : "bg-muted/20 border-border/30 text-foreground hover:bg-muted/30"
             )}
             title={viewMode === "type" ? "Switch to hierarchical view" : "Switch to type view"}
           >
-            <Network className="w-3 h-3" />
-            <span>Hierarchy</span>
+            <Network className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Stats */}
+        {/* Stats - Minimalistic */}
         {hasJoints && (
-          <div className="text-[10px] text-muted-foreground px-1">
-            {filteredJoints.length} of {Object.keys(jointLimits).length} joints
+          <div className="text-[10px] text-muted-foreground/70 px-0.5">
+            {filteredJoints.length} of {Object.keys(jointLimits).length}
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
         )}
       </div>
 
-      {/* Joints List */}
-      <div className="flex-1 p-2 px-3">
+      {/* Joints List - Minimalistic */}
+      <div className="flex-1 p-1.5 px-2">
         {!hasJoints ? (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
             No joints loaded
           </div>
         ) : filteredJoints.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
             No joints found
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
         ) : viewMode === "hierarchy" ? (
           <div className="space-y-0.5">
             {filteredOrderedJoints.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+              <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
                 No joints found in hierarchy
                 {searchQuery && ` matching "${searchQuery}"`}
               </div>
@@ -450,31 +449,31 @@ export const JointsWindow = ({
               const typeCount = joints.length;
               
               return (
-                <div key={type} className="border border-border/20 rounded-sm bg-muted/10">
+                <div key={type} className="border border-border/15 rounded-sm bg-muted/5">
                   <button
                     onClick={() => toggleTypeExpansion(type)}
-                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-muted/30 transition-colors"
+                    className="w-full flex items-center justify-between px-1.5 py-1 hover:bg-muted/20 transition-colors"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {isExpanded ? (
-                        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                        <ChevronDown className="w-3 h-3 text-muted-foreground/70" />
                       ) : (
-                        <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                        <ChevronRight className="w-3 h-3 text-muted-foreground/70" />
                       )}
-                      <span className="text-xs font-semibold text-foreground capitalize">
+                      <span className="text-xs font-medium text-foreground capitalize">
                         {type}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground/70">
                         ({typeCount})
                       </span>
                     </div>
                   </button>
                   
                   {isExpanded && (
-                    <div className="border-t border-border/20 divide-y divide-border/10">
+                    <div className="border-t border-border/15 divide-y divide-border/10">
                       {joints.map((jointName, index) => (
                         <div key={`${jointName}-${jointLimits[jointName]?.type || 'unknown'}`} className={cn(
-                          "bg-background/50",
+                          "bg-background/30",
                           index === 0 && "border-t-0"
                         )}>
                           <JointControl

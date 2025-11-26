@@ -216,8 +216,54 @@ const server = http.createServer((req, res) => {
             }
           });
         } else {
-          // For spawn mode, wait for process to complete
-          pythonProcess.on('close', (code) => {
+          // For spawn mode, the process will keep running to keep the viewer alive
+          // So we respond immediately after a short delay to check for early errors
+          let hasError = false;
+          const errorTimeout = setTimeout(() => {
+            if (hasError) {
+              return;
+            }
+            // Check for early errors in stderr
+            if (stderr.includes('ERROR') || stderr.includes('ImportError') || stderr.includes('ModuleNotFoundError')) {
+              hasError = true;
+              // Cleanup temp files
+              try {
+                unlinkSync(episodeFile);
+                unlinkSync(urdfFile);
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+              if (!res.headersSent) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  error: 'Failed to start Rerun viewer',
+                  stderr: stderr,
+                  stdout: stdout,
+                  hint: 'Make sure rerun-sdk is installed and the Rerun viewer application is available',
+                }));
+              }
+              return;
+            }
+            // Wait a bit longer to see if viewer opens successfully
+            setTimeout(() => {
+              if (!hasError && !res.headersSent) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  success: true,
+                  message: 'Rerun desktop viewer started',
+                  mode: 'spawn',
+                  stderr: stderr.trim() || undefined,
+                  stdout: stdout.trim() || undefined,
+                  note: 'The Python process will keep running while the viewer is open',
+                }));
+              }
+            }, 2000);
+          }, 1000);
+
+          // Monitor for errors
+          pythonProcess.on('error', (error) => {
+            hasError = true;
+            clearTimeout(errorTimeout);
             // Cleanup temp files
             try {
               unlinkSync(episodeFile);
@@ -226,21 +272,51 @@ const server = http.createServer((req, res) => {
               // Ignore cleanup errors
             }
             if (!res.headersSent) {
-              if (code === 0) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                  success: true,
-                  message: 'Rerun visualization started',
-                  mode: 'spawn',
-                }));
-              } else {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                error: `Failed to start Python process: ${error.message}`,
+                hint: `Make sure Python 3 and rerun-sdk are installed. Try: pip install rerun-sdk`,
+                command: `${pythonCmd} ${args.join(' ')}`,
+              }));
+            }
+          });
+
+          // Check stderr for import errors
+          pythonProcess.stderr.on('data', (data) => {
+            const errorText = data.toString();
+            if (errorText.includes('ImportError') || errorText.includes('ModuleNotFoundError') || 
+                errorText.includes('ERROR') || errorText.includes('rerun-sdk is not installed')) {
+              hasError = true;
+              clearTimeout(errorTimeout);
+              // Cleanup temp files
+              try {
+                unlinkSync(episodeFile);
+                unlinkSync(urdfFile);
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+              if (!res.headersSent) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
-                  error: `Python script failed with code ${code}`,
-                  stderr: stderr,
+                  error: 'Rerun SDK error detected',
+                  stderr: stderr + errorText,
+                  hint: 'Make sure rerun-sdk is installed: pip install rerun-sdk',
                 }));
               }
             }
+          });
+
+          // Store process reference for potential cleanup
+          // Note: In spawn mode, the process will keep running until the viewer is closed
+          pythonProcess.on('close', (code) => {
+            // Cleanup temp files when process exits
+            try {
+              unlinkSync(episodeFile);
+              unlinkSync(urdfFile);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            console.log(`[Rerun] Spawn mode process exited with code ${code}`);
           });
         }
 
@@ -249,15 +325,142 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ error: error.message }));
       }
     });
-  } else {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found' }));
+    return;
   }
+
+  if (pathname === '/api/mix-datasets' && req.method === 'POST') {
+    let body = '';
+    
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        const { repoIds, localPaths } = data;
+
+        // Need at least one source
+        if ((!repoIds || repoIds.length === 0) && (!localPaths || localPaths.length === 0)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'At least one repo ID or local path is required' }));
+          return;
+        }
+
+        // Check if Python script exists
+        const datasetMixerScript = join(rootDir, 'scripts', 'dataset_mixer.py');
+        if (!existsSync(datasetMixerScript)) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Dataset mixer script not found' }));
+          return;
+        }
+
+        // Prepare arguments for Python script
+        const args = [datasetMixerScript];
+        
+        if (repoIds && repoIds.length > 0) {
+          args.push('--repo-ids', ...repoIds);
+        }
+        
+        if (localPaths && localPaths.length > 0) {
+          args.push('--local-paths', ...localPaths);
+        }
+
+        // Try venv Python first, then system python3/python
+        const venvPython = join(rootDir, '.venv', 'bin', 'python3');
+        let pythonCmd = 'python3';
+
+        if (existsSync(venvPython)) {
+          pythonCmd = venvPython;
+        } else {
+          try {
+            execSync('python3 --version', { stdio: 'ignore' });
+          } catch (e) {
+            try {
+              execSync('python --version', { stdio: 'ignore' });
+              pythonCmd = 'python';
+            } catch (e2) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Python not found. Please install Python 3.' }));
+              return;
+            }
+          }
+        }
+
+        console.log(`[Dataset Mixer] Executing: ${pythonCmd} ${args.join(' ')}`);
+
+        // Execute Python script
+        const pythonProcess = spawn(pythonCmd, args, {
+          cwd: rootDir,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+          console.error(`[Dataset Mixer Error] ${data.toString().trim()}`);
+        });
+
+        pythonProcess.on('close', (code) => {
+          if (code !== 0) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+              success: false,
+              error: `Dataset mixing failed: ${stderr || 'Unknown error'}`,
+              stderr: stderr.trim() || undefined,
+            }));
+            return;
+          }
+
+          try {
+            const result = JSON.parse(stdout);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+          } catch (parseError) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+              success: false,
+              error: `Failed to parse result: ${stdout}`,
+              stdout: stdout.trim(),
+            }));
+          }
+        });
+
+        pythonProcess.on('error', (error) => {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            success: false,
+            error: `Failed to start Python process: ${error.message}`,
+            hint: 'Make sure Python 3 and robocandywrapper are installed. Try: pip install robocandywrapper',
+          }));
+        });
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        }));
+      }
+    });
+    return;
+  }
+
+  // 404 handler
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not found' }));
 });
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Rerun API server running on http://localhost:${PORT}`);
-  console.log(`  Endpoint: http://localhost:${PORT}/api/rerun-visualize`);
+  console.log(`  Endpoints:`);
+  console.log(`    - http://localhost:${PORT}/api/rerun-visualize`);
+  console.log(`    - http://localhost:${PORT}/api/mix-datasets`);
 }).on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`Port ${PORT} is already in use. Another instance might be running.`);
