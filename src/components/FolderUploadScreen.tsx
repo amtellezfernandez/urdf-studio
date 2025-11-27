@@ -622,10 +622,10 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
 
         {/* URDF Selection Dialog */}
         <Dialog open={showUrdfDialog} onOpenChange={setShowUrdfDialog}>
-          <DialogContent>
+          <DialogContent className="bg-[#282828] border-[#3d3d3d] text-[#d4d4d4]">
             <DialogHeader>
-              <DialogTitle>Multiple URDF Files Found</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-[#d4d4d4]">Multiple URDF Files Found</DialogTitle>
+              <DialogDescription className="text-[#9d9d9d]">
                 Select which URDF file to load. Files in folders with meshes are prioritized.
               </DialogDescription>
             </DialogHeader>
@@ -640,10 +640,12 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
                   <div key={candidate.path} className="space-y-2">
                     <Button
                       variant="secondary"
-                      className={`w-full justify-start text-left h-auto py-3 ${
+                      className={`w-full justify-start text-left h-auto py-3 border ${
                         isUnsupported 
-                          ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground" 
-                          : index === 0 ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""
+                          ? "opacity-50 cursor-not-allowed bg-[#1e1e1e] text-[#6d6d6d] border-[#3d3d3d] focus-visible:ring-[#3d3d3d]" 
+                          : index === 0 
+                            ? "bg-[#3d3d3d] text-[#d4d4d4] hover:bg-[#4a4a4a] border-[#5a5a5a] focus-visible:ring-[#5a5a5a] focus-visible:ring-offset-0" 
+                            : "bg-[#1e1e1e] text-[#d4d4d4] hover:bg-[#2a2a2a] border-[#3d3d3d] focus-visible:ring-[#3d3d3d] focus-visible:ring-offset-0"
                       }`}
                       onClick={() => {
                         if (isUnsupported) {
@@ -660,7 +662,7 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
                             {candidate.name}
                           </span>
                           {!isUnsupported && candidate.hasMeshesFolder && (
-                            <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                            <span className="text-xs bg-[#4a4a4a] text-[#b8b8b8] px-2 py-0.5 rounded">
                               Has Meshes
                             </span>
                           )}
@@ -671,7 +673,7 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
                             </span>
                           )}
                           {!isUnsupported && hasUnmatched && (
-                            <span className="text-xs bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 px-2 py-0.5 rounded flex items-center gap-1">
+                            <span className="text-xs bg-[#5a4a2a] text-[#d4a85a] px-2 py-0.5 rounded flex items-center gap-1">
                               <AlertTriangle className="w-3 h-3" />
                               Missing Meshes
                             </span>
@@ -686,14 +688,14 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
                       </div>
                     </Button>
                     {!isUnsupported && hasUnmatched && (
-                      <div className="ml-4 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
-                        <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">
+                      <div className="ml-4 p-2 bg-[#2a2518] border border-[#4a3d2a] rounded-md">
+                        <div className="text-xs font-medium text-[#d4a85a] mb-1">
                           Unmatched URDF References
                         </div>
-                        <div className="text-xs text-yellow-600 dark:text-yellow-500 mb-1">
+                        <div className="text-xs text-[#b89a6a] mb-1">
                           These mesh files are referenced in the URDF but were not found:
                         </div>
-                        <ul className="text-xs text-yellow-600 dark:text-yellow-500 list-disc list-inside space-y-0.5">
+                        <ul className="text-xs text-[#b89a6a] list-disc list-inside space-y-0.5">
                           {unmatchedRefs.map((ref, idx) => (
                             <li key={idx}>{ref}</li>
                           ))}
@@ -705,7 +707,11 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
               })}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowUrdfDialog(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowUrdfDialog(false)}
+                className="bg-[#1e1e1e] text-[#d4d4d4] border-[#3d3d3d] hover:bg-[#2a2a2a] hover:border-[#4a4a4a]"
+              >
                 Cancel
               </Button>
             </DialogFooter>

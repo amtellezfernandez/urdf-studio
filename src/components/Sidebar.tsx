@@ -90,6 +90,10 @@ interface SidebarProps {
   onFrameChange?: (frame: number) => void;
   onUrdfEditorToggle?: (show: boolean) => void;
   showUrdfEditor?: boolean;
+  viewerSplitView?: boolean;
+  onViewerSplitViewChange?: (splitView: boolean) => void;
+  onViewerEpisodeChange?: (episode: Episode | null) => void;
+  onViewerOpenChange?: (open: boolean) => void;
 }
 
 interface RecordedFrame {
@@ -805,6 +809,10 @@ export const Sidebar = ({
   onFrameChange,
   onUrdfEditorToggle,
   showUrdfEditor = false,
+  viewerSplitView = false,
+  onViewerSplitViewChange,
+  onViewerEpisodeChange,
+  onViewerOpenChange,
 }: SidebarProps) => {
   const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
@@ -1032,13 +1040,16 @@ export const Sidebar = ({
 
   // Auto-update viewer episode when currentPlayingEpisodeIndex changes
   useEffect(() => {
-    if (isViewerModalOpen && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+    if ((isViewerModalOpen || viewerSplitView) && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
       const currentEpisode = episodes[currentPlayingEpisodeIndex];
       if (currentEpisode && currentEpisode.id !== viewerModalEpisode?.id) {
         setViewerModalEpisode(currentEpisode);
+        if (viewerSplitView) {
+          onViewerEpisodeChange?.(currentEpisode);
+        }
       }
     }
-  }, [currentPlayingEpisodeIndex, isViewerModalOpen, episodes, viewerModalEpisode?.id]);
+  }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
 
   // Stop animation when all episodes are deleted
   useEffect(() => {
@@ -3230,28 +3241,33 @@ export const Sidebar = ({
   // Centralized function to stop all playback
   // This ensures consistent stopping behavior and prevents race conditions
   const stopAllPlayback = useCallback(() => {
-    // Set ref to false FIRST to prevent any pending timeout callbacks from continuing
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
-    
-    // Clear any pending timeouts
+
     if (playbackTimeoutRef.current) {
       clearTimeout(playbackTimeoutRef.current);
       playbackTimeoutRef.current = null;
     }
-    
-    // Stop the animation in the viewer
-    // viewer3dPlayAnimation is a toggle, so we need to call it only if currently playing
-    // Use viewer3dStopAnimation which explicitly stops
+
+    // Clear any pending navigation stop timeouts
+    navigationStopTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    navigationStopTimeoutsRef.current = [];
+
     (window as any).viewer3dStopAnimation?.();
-    
-    // Clear animation frames to release robot for manual control and recording
-    // This allows the user to move the robot and record new episodes after stopping playback
     (window as any).viewer3dClearAnimation?.();
-    
-    // Reset the loaded episode reference so we can load a new one when playing again
-    currentLoadedEpisodeRef.current = null;
-  }, []);
+
+    // Always reset frame to 0 and forget where we stopped
+    (window as any).viewer3dSetFrame?.(0);
+    onFrameChange?.(0);
+
+    // Clear any preserved frame state
+    delete (window as any).__viewer3dPreserveFrameTime;
+    delete (window as any).__viewer3dManualFrameTime;
+
+    // CRITICAL: Re-enable robot movement when stopping playback
+    // This allows manual joint control and recording
+    setIsAnimating(false);
+  }, [onFrameChange, setIsAnimating]);
 
   // Complete reset of all playback state - used when all episodes finish
   // This ensures clean state after a full loop, since episodes can be added/deleted
@@ -3259,20 +3275,49 @@ export const Sidebar = ({
     // Stop all playback first
     stopAllPlayback();
     
-    // Clear all playback-related state
-    setCurrentPlayingEpisodeIndex(null);
+    // Reset all playback-related state to 0
+    // Set episode index to 0 (or null if no episodes) so next playback starts from beginning
+    setCurrentPlayingEpisodeIndex(episodes.length > 0 ? 0 : null);
     
     // Reset frame to 0 via callback if available
     onFrameChange?.(0);
     
     // Clear any stored frame information
-    // This ensures next playback starts fresh regardless of what happened before
+    // This ensures next playback starts fresh from episode 0, frame 0
     currentLoadedEpisodeRef.current = null;
-  }, [stopAllPlayback, onFrameChange]);
+    
+    // If there are episodes, set the first episode as the current one
+    if (episodes.length > 0) {
+      const firstEpisode = episodes[0];
+      if (firstEpisode && firstEpisode.frames && firstEpisode.frames.length > 0) {
+        const frames = toAnimationFrames(firstEpisode);
+        (window as any).viewer3dPlayEpisode?.(frames);
+        (window as any).viewer3dSetFrame?.(0);
+      }
+    }
+  }, [stopAllPlayback, onFrameChange, episodes]);
   
   // Helper to start playback in Viewer3D
   // viewer3dPlayAnimation is a toggle, so we need to ensure it's in the right state
   const startViewer3DPlayback = useCallback(() => {
+    // Ensure we have frames loaded before trying to play
+    // If no frames are loaded, load them from the current episode
+    const currentIndex = currentPlayingEpisodeIndex;
+    if (currentIndex !== null && currentIndex >= 0 && currentIndex < episodes.length) {
+      const episode = episodes[currentIndex];
+      if (episode && episode.frames && episode.frames.length > 0) {
+        // Check if this episode is already loaded
+        if (currentLoadedEpisodeRef.current !== currentIndex) {
+          // Episode not loaded, load it first
+          const frames = toAnimationFrames(episode);
+          (window as any).viewer3dPlayEpisode?.(frames);
+          // viewer3dPlayEpisode will start playback automatically after 10ms
+          return;
+        }
+      }
+    }
+    
+    // If frames should already be loaded, just start/resume playback
     // viewer3dPlayAnimation toggles, so we need to call it only if not already playing
     // Since we can't easily check, we'll use a different approach:
     // Call viewer3dStopAnimation first to ensure it's stopped, then toggle to start
@@ -3281,7 +3326,7 @@ export const Sidebar = ({
     setTimeout(() => {
       (window as any).viewer3dPlayAnimation?.();
     }, 10);
-  }, []);
+  }, [episodes, currentPlayingEpisodeIndex]);
 
   // Helper function to set episode and frame consistently
   // This ensures all playback operations use the same logic regardless of speed
@@ -3299,18 +3344,39 @@ export const Sidebar = ({
     
     // Only reload episode if it's different from what's currently loaded
     // This prevents frame resets when resuming the same episode
+    // However, if frames were cleared (e.g., by stopAllPlayback), we need to reload them
     const isNewEpisode = currentLoadedEpisodeRef.current !== episodeIndex;
-    if (isNewEpisode) {
+    const needsReload = isNewEpisode || currentLoadedEpisodeRef.current === null;
+    
+    if (needsReload) {
       const frames = toAnimationFrames(episode);
       // viewer3dPlayEpisode loads the episode and automatically starts playback after 10ms
-      // It will start from frame 0 by default, which is what we want for new episodes
       (window as any).viewer3dPlayEpisode?.(frames);
       currentLoadedEpisodeRef.current = episodeIndex;
       
-      // Update frame callback to reflect we're at frame 0 (or specified frame)
-      // Don't call viewer3dSetFrame here as it would pause the animation
-      // The episode will start playing from frame 0 automatically
-      onFrameChange?.(clampedFrame);
+      // Explicitly set the frame to the requested frame (usually 0 for new episodes)
+      // This ensures we start from frame 0, not from the initialized timestamp
+      // Use requestAnimationFrame to ensure the episode is loaded before setting frame
+      // Note: viewer3dPlayEpisode auto-starts playback after 10ms, so we need to ensure
+      // playback continues after setting the frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
+            (window as any).viewer3dSetFrame?.(clampedFrame);
+            onFrameChange?.(clampedFrame);
+            // Ensure playback continues after setting frame (viewer3dSetFrame might pause)
+            // Check if we're supposed to be playing
+            if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
+              setTimeout(() => {
+                // Double-check state before resuming playback
+                if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
+                  (window as any).viewer3dPlayAnimation?.();
+                }
+              }, 30); // Delay longer than viewer3dPlayEpisode's auto-start (10ms) to ensure frame is set
+            }
+          }
+        });
+      });
     } else {
       // Same episode - just update frame position
       // Use double requestAnimationFrame to ensure playback speed state has updated before setting frame
@@ -3321,8 +3387,17 @@ export const Sidebar = ({
         requestAnimationFrame(() => {
           // Ensure we're setting a valid frame index before calling
           if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
+            const wasPlaying = isPlayingAllRef.current;
             (window as any).viewer3dSetFrame?.(clampedFrame);
             onFrameChange?.(clampedFrame);
+            // viewer3dSetFrame stops playback, so resume if we were playing
+            if (wasPlaying && isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
+              setTimeout(() => {
+                if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
+                  (window as any).viewer3dPlayAnimation?.();
+                }
+              }, 10);
+            }
           }
         });
       });
@@ -3355,9 +3430,8 @@ export const Sidebar = ({
       playbackTimeoutRef.current = null;
     }
 
-    const frameToUse = currentFrame !== undefined && currentFrame >= 0
-      ? Math.max(0, Math.min(currentFrame, episode.frames.length - 1))
-      : 0;
+    // Always start from frame 0 - forget where we stopped
+    const frameToUse = 0;
     
     // Use consistent helper function
     setEpisodeAndFrame(episodeIndex, frameToUse);
@@ -3376,7 +3450,7 @@ export const Sidebar = ({
         setCurrentPlayingEpisodeIndex(null);
       }
     }, duration);
-  }, [episodes, currentFrame, currentPlayingEpisodeIndex, playbackSpeed, setEpisodeAndFrame]);
+  }, [episodes, currentPlayingEpisodeIndex, playbackSpeed, setEpisodeAndFrame]);
 
   const playEpisode = useCallback((episode: Episode) => {
     if (!episode || !episode.frames || episode.frames.length === 0) {
@@ -3416,20 +3490,26 @@ export const Sidebar = ({
       }
       (window as any).viewer3dStopAnimation?.();
       (window as any).viewer3dPlayAnimation?.(false);
-      // Keep currentPlayingEpisodeIndex and currentFrame so we can resume from the same position
     } else {
       // Activate global play when playing individual episode (but loop just this one)
       setIsPlayingAll(true);
       isPlayingAllRef.current = true;
       
-      // Start looping this single episode (will resume from currentFrame if same episode)
+      // Start looping this single episode from frame 0
       playSingleEpisodeLoop(episodeIndex);
     }
   }, [episodes, playSingleEpisodeLoop, currentPlayingEpisodeIndex, isPlayingAll]);
 
   const playEpisodeSequentially = useCallback(
     (startIndex: number, resumeFrame?: number) => {
-      if (!isPlayingAllRef.current || episodes.length === 0) {
+      // Double-check state consistency - ensure ref and state are in sync
+      if (!isPlayingAllRef.current) {
+        setIsPlayingAll(false);
+        setCurrentPlayingEpisodeIndex(null);
+        return;
+      }
+      
+      if (episodes.length === 0) {
         isPlayingAllRef.current = false;
         setIsPlayingAll(false);
         setCurrentPlayingEpisodeIndex(null);
@@ -3462,22 +3542,8 @@ export const Sidebar = ({
         playbackTimeoutRef.current = null;
       }
 
-      // Determine frame to start from:
-      // - If resumeFrame is explicitly provided (including 0), use it
-      // - If resuming the same episode where we stopped, use currentFrame (where we stopped)
-      // - For all other episodes (new episodes), always start at frame 0
-      const isSameEpisode = playableIndex === startIndex;
-      let frameToUse = 0; // Default to frame 0 for new episodes
-      
-      if (resumeFrame !== undefined) {
-        // Explicitly provided frame (including 0 for starting from beginning)
-        frameToUse = Math.max(0, Math.min(resumeFrame, episode.frames.length - 1));
-      } else if (isSameEpisode && currentFrame !== undefined && currentFrame !== null && currentFrame >= 0) {
-        // Resuming the same episode where we stopped - use the stopped frame
-        // Only use currentFrame if it's a valid number (not null/undefined)
-        frameToUse = Math.max(0, Math.min(currentFrame, episode.frames.length - 1));
-      }
-      // Otherwise, frameToUse remains 0 (starting a new episode from the beginning)
+      // Always start from the provided frame (usually 0 after stop)
+      let frameToUse = resumeFrame !== undefined ? resumeFrame : 0;
       
       // Safety check: ensure frameToUse is valid
       if (episode.frames.length > 0) {
@@ -3497,15 +3563,29 @@ export const Sidebar = ({
       }
       
       // Start playing - use helper function that handles the toggle correctly
-      // For new episodes, viewer3dPlayEpisode already starts playback automatically
-      // Only call startViewer3DPlayback for same episode or if playback didn't start
-      const isNewEpisodeTransition = currentLoadedEpisodeRef.current !== playableIndex;
+      // Check if this is actually a new episode (not just null from stopAllPlayback)
+      const isNewEpisodeTransition = currentLoadedEpisodeRef.current !== playableIndex && currentLoadedEpisodeRef.current !== null;
+      
       if (!isNewEpisodeTransition) {
-        // Same episode - ensure playback is active
-        startViewer3DPlayback();
+        // Same episode - ensure frames are loaded and playback is active
+        // Since stopAllPlayback clears frames, we need to reload them
+        const currentEpisode = episodes[playableIndex];
+        if (currentEpisode && currentEpisode.frames && currentEpisode.frames.length > 0) {
+          const frames = toAnimationFrames(currentEpisode);
+          // Reload frames first, then start playback
+          (window as any).viewer3dPlayEpisode?.(frames);
+          // Wait a bit for frames to be set, then start playback
+          setTimeout(() => {
+            if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === playableIndex) {
+              (window as any).viewer3dPlayAnimation?.();
+            }
+          }, 20);
+        } else {
+          startViewer3DPlayback();
+        }
       }
-      // For new episodes, viewer3dPlayEpisode in setEpisodeAndFrame handles starting playback
-      // so we don't need to call startViewer3DPlayback here (it would cause conflicts)
+      // For new episodes, playback is handled in setEpisodeAndFrame after frame is set
+      // This prevents conflicts with viewer3dPlayEpisode's auto-start
 
       // Calculate remaining duration from current frame to end of episode
       // This ensures that if we resume from the middle, we only wait for the remaining part
@@ -3523,7 +3603,7 @@ export const Sidebar = ({
           
           // Ensure we have a valid positive duration
           if (remainingDuration <= 0) {
-            // If we're at or past the end, move to next episode immediately
+            // If we're at or past the end, stop immediately (don't try to play)
             remainingDuration = PLAYBACK_GAP_MS;
           }
         } else if (frameToUse === 0) {
@@ -3548,21 +3628,41 @@ export const Sidebar = ({
           return;
         }
         
-        const nextIndex = playableIndex + 1;
-        
-        // Check if we've reached the end of all episodes
-        if (nextIndex >= episodes.length) {
-          // All episodes have been played - completely reset all playback state
-          // This is important because episodes can be added/deleted, so we can't keep old state
-          resetAllPlaybackState();
-          return;
+        // Stop at end of current episode (no auto-advance to next episode)
+        // User must click "Next Episode" button to play the next episode
+        stopAllPlayback();
+        // Reset frame to 0 when episode finishes
+        // Reload the episode first (since stopAllPlayback clears frames), then set frame to 0
+        if (episodes[playableIndex] && episodes[playableIndex].frames && episodes[playableIndex].frames.length > 0) {
+          const finishedEpisode = episodes[playableIndex];
+          const frames = toAnimationFrames(finishedEpisode);
+          // Reload episode frames - viewer3dPlayEpisode will auto-start after 10ms
+          (window as any).viewer3dPlayEpisode?.(frames);
+          // Stop playback immediately and repeatedly to catch auto-start
+          // Then set frame to 0 once stopped
+          (window as any).viewer3dStopAnimation?.();
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+            (window as any).viewer3dSetFrame?.(0);
+            onFrameChange?.(0);
+          }, 5);
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+          }, 12); // Right before auto-start (10ms)
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+            (window as any).viewer3dSetFrame?.(0);
+            onFrameChange?.(0);
+          }, 25); // Right after auto-start
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+          }, 50); // Final safety stop
         }
-        
-        // Continue to next episode - always start from frame 0 for subsequent episodes
-        playEpisodeSequentially(nextIndex, 0);
+        // Keep currentPlayingEpisodeIndex so user can see which episode just finished
+        // and can click "Next Episode" to continue
       }, duration);
     },
-    [episodes, currentFrame, onFrameChange, playbackSpeed, setEpisodeAndFrame, startViewer3DPlayback, resetAllPlaybackState]
+    [episodes, currentFrame, onFrameChange, playbackSpeed, setEpisodeAndFrame, startViewer3DPlayback, stopAllPlayback]
   );
 
   const playAllEpisodes = useCallback((overrideFrame?: number) => {
@@ -3572,24 +3672,19 @@ export const Sidebar = ({
     }
 
     if (isPlayingAll) {
-      // Stop playback but preserve state
       stopAllPlayback();
       return;
     }
 
-    // Start or resume playback
     setIsPlayingAll(true);
     isPlayingAllRef.current = true;
     
     const startIndex = currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
-    // Use overrideFrame if provided, otherwise use currentFrame
-    const resumeFrame = overrideFrame !== undefined 
-      ? overrideFrame 
-      : (currentFrame !== undefined && currentFrame >= 0 ? currentFrame : undefined);
+    // Always start from frame 0 - completely forget where we stopped
+    const startFrame = 0;
     
-    // Start playback directly - playEpisodeSequentially handles frame setting
-    playEpisodeSequentially(startIndex, resumeFrame);
-  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, currentFrame]);
+    playEpisodeSequentially(startIndex, startFrame);
+  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, stopAllPlayback]);
 
   // Sync playback speed with Viewer3D
   useEffect(() => {
@@ -3621,8 +3716,13 @@ export const Sidebar = ({
         defaultValue="joints" 
         className="flex flex-col h-full"
         onValueChange={(value) => {
-          // When switching to recording tab, ensure robot movement is enabled
+          // When switching to editor tab, close the viewer
+          if (value === "joints") {
+            onViewerOpenChange?.(false);
+          }
+          // When switching to recording tab, close the URDF editor and ensure robot movement is enabled
           if (value === "recording") {
+            onUrdfEditorToggle?.(false);
             setIsAnimating(false);
           }
         }}
@@ -3712,6 +3812,10 @@ export const Sidebar = ({
                         const newState = activeEditorWindow === "urdf" ? "joints" : "urdf";
                         setActiveEditorWindow(newState);
                         onUrdfEditorToggle?.(newState === "urdf");
+                        // When opening URDF editor, close the viewer
+                        if (newState === "urdf") {
+                          onViewerOpenChange?.(false);
+                        }
                       }}
                       className={cn(
                         "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
@@ -3948,6 +4052,26 @@ export const Sidebar = ({
             <BlenderPanel title="Timeline" defaultOpen={true}>
               {/* Playback and Speed on same row */}
               <div className="flex items-center gap-2 mb-1.5">
+                {/* Previous Episode */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => {
+                    if (episodes.length === 0) return;
+                    const currentIndex = currentPlayingEpisodeIndex ?? 0;
+                    const prevIndex = currentIndex > 0 ? currentIndex - 1 : episodes.length - 1;
+                    setEpisodeAndFrame(prevIndex, 0);
+                    setCurrentPlayingEpisodeIndex(prevIndex);
+                    // Enable robot movement when navigating
+                    setIsAnimating(false);
+                  }}
+                  disabled={episodes.length === 0}
+                  title="Previous Episode"
+                >
+                  <SkipBack className="w-3 h-3" />
+                </Button>
+
                 {/* Play/Pause */}
                 <Button
                   size="sm"
@@ -3962,6 +4086,49 @@ export const Sidebar = ({
                   ) : (
                     <Play className="w-3 h-3 fill-current" />
                   )}
+                </Button>
+
+                {/* Next Episode */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => {
+                    if (episodes.length === 0) return;
+                    // ALWAYS stop playback first (equivalent to clicking stop)
+                    stopAllPlayback();
+                    
+                    // Then move to next episode starting at frame 0
+                    const currentIndex = currentPlayingEpisodeIndex ?? 0;
+                    const nextIndex = (currentIndex + 1) % episodes.length;
+                    
+                    // Always start from frame 0 when moving to next episode
+                    setEpisodeAndFrame(nextIndex, 0);
+                    setCurrentPlayingEpisodeIndex(nextIndex);
+                    // Update frame callback to ensure UI reflects frame 0
+                    onFrameChange?.(0);
+                    
+                    // viewer3dPlayEpisode automatically starts playback after 10ms, so we need to stop it
+                    // Use multiple stops to catch the auto-start at different times
+                    (window as any).viewer3dStopAnimation?.();
+                    setTimeout(() => {
+                      (window as any).viewer3dStopAnimation?.();
+                    }, 5);
+                    setTimeout(() => {
+                      (window as any).viewer3dStopAnimation?.();
+                    }, 12); // Right before auto-start (10ms)
+                    setTimeout(() => {
+                      (window as any).viewer3dStopAnimation?.();
+                      (window as any).viewer3dPlayAnimation?.(false);
+                    }, 25); // Right after auto-start
+                    setTimeout(() => {
+                      (window as any).viewer3dStopAnimation?.();
+                    }, 50); // Final safety stop
+                  }}
+                  disabled={episodes.length === 0}
+                  title="Next Episode"
+                >
+                  <SkipForward className="w-3 h-3" />
                 </Button>
 
                 {/* Speed Control - Blender style (Number Input) */}
@@ -3990,16 +4157,23 @@ export const Sidebar = ({
               <div className="flex items-center gap-1">
                 <Button
                   size="sm"
-                  variant={isViewerModalOpen ? "default" : "ghost"}
+                  variant={isViewerModalOpen || viewerSplitView ? "default" : "ghost"}
                   className="h-6 px-2 text-[10px] flex-1"
                   onClick={() => {
-                    if (isViewerModalOpen) {
+                    if (isViewerModalOpen || viewerSplitView) {
                       setIsViewerModalOpen(false);
+                      onViewerSplitViewChange?.(false);
+                      onViewerOpenChange?.(false);
                     } else {
                       const activeIndex = currentPlayingEpisodeIndex ?? 0;
                       if (episodes.length > 0 && episodes[activeIndex]) {
-                        setViewerModalEpisode(episodes[activeIndex]);
+                        const episode = episodes[activeIndex];
+                        setViewerModalEpisode(episode);
                         setIsViewerModalOpen(true);
+                        // Enable split view mode
+                        onViewerSplitViewChange?.(true);
+                        onViewerEpisodeChange?.(episode);
+                        onViewerOpenChange?.(true);
                       }
                     }
                   }}
@@ -4190,23 +4364,31 @@ export const Sidebar = ({
         </div>
       </Tabs>
 
-      {/* Episode Viewer Modal */}
-      <EpisodeViewer3DModal
-        episode={viewerModalEpisode}
-        open={isViewerModalOpen}
-        onOpenChange={setIsViewerModalOpen}
-        currentEpisodeIndex={currentPlayingEpisodeIndex}
-        allEpisodes={episodes}
-        isPlayingAll={isPlayingAll}
-        onPlayAllEpisodes={playAllEpisodes}
-        onSetCurrentEpisodeIndex={setCurrentPlayingEpisodeIndex}
-        globalCurrentFrame={currentFrame}
-        onSetGlobalFrame={(frame: number) => {
-          (window as any).viewer3dSetFrame?.(frame);
-          // Update parent's currentFrame state so playback resumes from scrubbed position
-          onFrameChange?.(frame);
-        }}
-      />
+      {/* Episode Viewer Modal - only render if not in split view */}
+      {!viewerSplitView && (
+        <EpisodeViewer3DModal
+          episode={viewerModalEpisode}
+          open={isViewerModalOpen}
+          onOpenChange={(open) => {
+            setIsViewerModalOpen(open);
+            onViewerOpenChange?.(open);
+            if (!open) {
+              onViewerSplitViewChange?.(false);
+            }
+          }}
+          currentEpisodeIndex={currentPlayingEpisodeIndex}
+          allEpisodes={episodes}
+          isPlayingAll={isPlayingAll}
+          onPlayAllEpisodes={playAllEpisodes}
+          onSetCurrentEpisodeIndex={setCurrentPlayingEpisodeIndex}
+          globalCurrentFrame={currentFrame}
+          onSetGlobalFrame={(frame: number) => {
+            (window as any).viewer3dSetFrame?.(frame);
+            // Update parent's currentFrame state so playback resumes from scrubbed position
+            onFrameChange?.(frame);
+          }}
+        />
+      )}
 
       {/* Rerun Viewer Modal */}
       <RerunViewer3DModal

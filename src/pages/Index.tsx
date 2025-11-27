@@ -5,6 +5,7 @@ import { Viewer3D } from "@/components/Viewer3D";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
+import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { toast } from "sonner";
 import { createVizFilename } from "@/urdf_corrections/addJointColors";
@@ -17,16 +18,7 @@ import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
 import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
-import { ChevronsRight, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
 
 interface MeshFiles {
   [key: string]: Blob;
@@ -78,6 +70,9 @@ const Index = () => {
   const [rotationPlaneVisible, setRotationPlaneVisible] = useState<boolean>(false);
   const [showUrdfEditor, setShowUrdfEditor] = useState<boolean>(false);
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState<boolean>(false);
+  const [viewerSplitView, setViewerSplitView] = useState<boolean>(false);
+  const [viewerEpisode, setViewerEpisode] = useState<any | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
@@ -685,6 +680,10 @@ const Index = () => {
             onFrameChange={setCurrentFrame}
             onUrdfEditorToggle={setShowUrdfEditor}
             showUrdfEditor={showUrdfEditor}
+            viewerSplitView={viewerSplitView}
+            onViewerSplitViewChange={setViewerSplitView}
+            onViewerEpisodeChange={setViewerEpisode}
+            onViewerOpenChange={setIsViewerOpen}
           />
 
           {!isSidebarCollapsed && (
@@ -719,7 +718,52 @@ const Index = () => {
             style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth }}
           >
             <div className="flex-1 min-h-0 relative">
-              {showUrdfEditor && urdfEditorSplitView ? (
+              {viewerSplitView && isViewerOpen && viewerEpisode ? (
+                <div className="flex flex-col h-full">
+                  {/* Visualizer in top half */}
+                  <div className="flex-1 min-h-0 border-b border-border/20">
+                    <Viewer3D
+                      key={`urdf-${urdfContentVersion}`}
+                      urdfFile={urdfFile}
+                      initialMeshFiles={meshFiles}
+                      selectedJoint={selectedJoint}
+                      jointValues={jointValues}
+                      jointLimits={jointLimits}
+                      jointAxes={jointAxes}
+                      gpuMode={gpuMode}
+                      onJointSelect={setSelectedJoint}
+                      onJointChange={handleJointChange}
+                      onRobotJointsLoaded={handleRobotJointsLoaded}
+                      onMotionFileChange={setMotionDataFile}
+                      onPlayingChange={setIsPlaying}
+                      onAnimationFramesChange={setHasAnimationFrames}
+                      onFrameChange={handleFrameChange}
+                      collisionVisibility={collisionVisibility}
+                      rotationPlaneVisible={rotationPlaneVisible}
+                    />
+                  </div>
+                  {/* Viewer in bottom half */}
+                  <div className="flex-1 min-h-0">
+                    <EpisodeViewer3DModal
+                      episode={viewerEpisode}
+                      open={isViewerOpen}
+                      onOpenChange={(open) => {
+                        setIsViewerOpen(open);
+                        if (!open) {
+                          setViewerSplitView(false);
+                        }
+                      }}
+                      inline={true}
+                      splitView={true}
+                      globalCurrentFrame={currentFrame}
+                      onSetGlobalFrame={(frame: number) => {
+                        (window as any).viewer3dSetFrame?.(frame);
+                        setCurrentFrame(frame);
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : showUrdfEditor && urdfEditorSplitView ? (
                 <div className="flex flex-col h-full">
                   {/* Simulation in top half */}
                   <div className="flex-1 min-h-0 border-b border-border/20">
@@ -800,128 +844,77 @@ const Index = () => {
         </>
       )}
       
-      {/* Debug Dialog for Mesh Files */}
-      <Dialog open={showDebugDialog} onOpenChange={setShowDebugDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Mesh Files Status</DialogTitle>
-            <DialogDescription>
-              List of all .STL files and whether they were found correctly in the URDF.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Mesh Files Status Panel - Bottom Right */}
+      {showDebugDialog && (
+        <div className="fixed bottom-4 right-4 z-50 w-80 max-h-[40vh] bg-[#282828] border border-[#3d3d3d] rounded-lg shadow-lg flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-2 border-b border-[#3d3d3d]">
+            <div className="text-xs font-medium text-[#d4d4d4]">Mesh Files Status</div>
+            <button
+              onClick={() => setShowDebugDialog(false)}
+              className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
           
-          <div className="space-y-4">
-            <div className="text-sm text-muted-foreground border-b pb-2 flex items-center justify-between">
-              <div>
-                Total STL files: {debugMeshInfo.length} | 
-                Found: <span className="text-green-600 font-medium">{debugMeshInfo.filter(m => m.found).length}</span> | 
-                Not Found: <span className="text-red-600 font-medium">{debugMeshInfo.filter(m => !m.found).length}</span>
-              </div>
+          {/* Summary */}
+          <div className="px-2 py-1.5 text-xs border-b border-[#3d3d3d] bg-[#1e1e1e]">
+            <div className="text-[#9d9d9d]">
+              Total: {debugMeshInfo.length} | 
+              <span className="text-[#6d9d6d] ml-1">✓ {debugMeshInfo.filter(m => m.found).length}</span> | 
+              <span className="text-[#9d6d6d] ml-1">✗ {debugMeshInfo.filter(m => !m.found).length}</span>
               {unmatchedURDFRefs.length > 0 && (
-                <span className="text-red-500 text-sm font-medium">
-                  Unmatched URDF refs: {unmatchedURDFRefs.length}
-                </span>
+                <span className="text-[#9d6d6d] ml-2">⚠ {unmatchedURDFRefs.length}</span>
               )}
             </div>
-            
+          </div>
+          
+          {/* Content */}
+          <div className="overflow-y-auto flex-1 p-2 space-y-1 blender-scrollbar">
             {unmatchedURDFRefs.length > 0 && (
-              <div className="border border-red-500/50 bg-red-500/10 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                  <span className="font-medium text-red-500">Unmatched URDF References</span>
-                </div>
-                <div className="text-sm space-y-1 ml-7">
-                  <p className="text-muted-foreground">
-                    These mesh files are referenced in the URDF but were not found:
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {unmatchedURDFRefs.map((ref, idx) => (
-                      <code
-                        key={idx}
-                        className="text-xs bg-muted/50 px-1 py-0.5 rounded text-red-600"
-                      >
-                        {ref}
-                      </code>
-                    ))}
-                  </div>
+              <div className="mb-2 p-1.5 bg-[#2a1e1e] border border-[#4a2d2d] rounded text-xs">
+                <div className="flex items-center gap-1 mb-1">
+                  <AlertCircle className="h-3 w-3 text-[#9d6d6d]" />
+                  <span className="font-medium text-[#9d6d6d]">Unmatched: {unmatchedURDFRefs.length}</span>
                 </div>
               </div>
             )}
             
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-              {debugMeshInfo.map((info, index) => (
-                <div
-                  key={index}
-                  className={`border rounded-lg p-3 ${
-                    info.found
-                      ? "border-green-500/50 bg-green-500/10"
-                      : "border-red-500/50 bg-red-500/10"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {info.found ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm mb-1">{info.filename}</div>
-                      <div className="text-xs space-y-1 text-muted-foreground">
-                        <div>
-                          <span className="font-medium">webkitRelativePath:</span>{" "}
-                          <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                            {info.webkitRelativePath}
-                          </code>
-                        </div>
-                        {info.found && info.urdfReference && (
-                          <div>
-                            <span className="font-medium">URDF Reference:</span>{" "}
-                            <code className="text-xs bg-muted px-1 py-0.5 rounded text-green-600">
-                              {info.urdfReference}
-                            </code>
-                          </div>
-                        )}
-                        {!info.found && (
-                          <div className="text-red-500 text-xs mt-1">
-                            ⚠️ This file is not referenced in the URDF or path mismatch
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {info.registeredPaths.length > 0 && (
-                    <details className="mt-3 ml-8">
-                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                        {info.registeredPaths.length} registered path variations
-                      </summary>
-                      <div className="mt-2 max-h-32 overflow-y-auto">
-                        <div className="flex flex-wrap gap-1">
-                          {info.registeredPaths.map((path, idx) => (
-                            <code
-                              key={idx}
-                              className="text-xs bg-muted/50 px-1 py-0.5 rounded"
-                            >
-                              {path}
-                            </code>
-                          ))}
-                          {info.registeredPaths.length >= 20 && (
-                            <span className="text-xs text-muted-foreground">...</span>
-                          )}
-                        </div>
-                      </div>
-                    </details>
+            {debugMeshInfo.map((info, index) => (
+              <div
+                key={index}
+                className={`text-xs p-1.5 rounded border ${
+                  info.found
+                    ? "bg-[#1e2a1e] border-[#3d4a3d]"
+                    : "bg-[#2a1e1e] border-[#4a3d3d]"
+                }`}
+              >
+                <div className="flex items-start gap-1.5">
+                  {info.found ? (
+                    <CheckCircle2 className="h-3 w-3 text-[#6d9d6d] flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-3 w-3 text-[#9d6d6d] flex-shrink-0 mt-0.5" />
                   )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-[#d4d4d4] truncate">{info.filename}</div>
+                    {info.found && info.urdfReference && (
+                      <div className="text-[#9d9d9d] text-[10px] mt-0.5 truncate">
+                        {info.urdfReference}
+                      </div>
+                    )}
+                    {!info.found && (
+                      <div className="text-[#9d6d6d] text-[10px] mt-0.5">
+                        Not found
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-          
-          <DialogFooter>
-            <Button onClick={() => setShowDebugDialog(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 };

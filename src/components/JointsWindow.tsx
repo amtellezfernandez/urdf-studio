@@ -296,7 +296,7 @@ export const JointsWindow = ({
               <Switch
                 checked={velocityLimitEnabled}
                 onCheckedChange={onVelocityLimitEnabledChange}
-                className="h-4 w-7 flex-shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
+                className="h-4 w-7 flex-shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
               />
             )}
             {velocityLimitEnabled && fromDisplayVelocity && onGlobalMaxJointVelocityChange && (
@@ -392,7 +392,7 @@ export const JointsWindow = ({
             <Switch
               checked={angleUnit === "deg"}
               onCheckedChange={(checked) => onAngleUnitChange(checked ? "deg" : "rad")}
-              className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted h-4 w-7"
+              className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
             />
             <span className="text-[10px] text-muted-foreground min-w-[24px]">deg</span>
           </div>

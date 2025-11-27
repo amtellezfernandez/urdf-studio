@@ -1,19 +1,13 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import {
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
   Minimize2,
   Maximize2,
   GripHorizontal,
-  Link,
-  Unlink,
   Eye,
+  X,
 } from "lucide-react";
 import {
   Tooltip,
@@ -27,7 +21,6 @@ const CANVAS_PADDING = 40;
 const MIN_WINDOW_WIDTH = 400;
 const MIN_WINDOW_HEIGHT = 300;
 const DRAG_THRESHOLD = 3;
-const DEFAULT_FRAME_TIME = 33.33;
 const JOINT_COLORS = [
   "#ec4899", "#eab308", "#22c55e", "#3b82f6",
   "#a855f7", "#f97316", "#06b6d4", "#ef4444",
@@ -57,6 +50,7 @@ interface EpisodeViewer3DModalProps {
   onSetCurrentEpisodeIndex?: (index: number | null) => void;
   globalCurrentFrame?: number;
   onSetGlobalFrame?: (frame: number) => void;
+  inline?: boolean; // If true, render inline instead of as modal
 }
 
 // Helper function to convert episode to animation frames
@@ -112,12 +106,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   onSetCurrentEpisodeIndex,
   globalCurrentFrame,
   onSetGlobalFrame,
+  inline = false,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
   const [isMinimized, setIsMinimized] = useState(false);
-  const [syncWith3DViewer, setSyncWith3DViewer] = useState(true);
   const [position, setPosition] = useState({ x: 100, y: 100 });
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -165,11 +158,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   // Listen to global frame updates from 3D viewer when playing
   useEffect(() => {
-    if (!syncWith3DViewer || !open || !isPlayingAll) return;
+    if (!open || !isPlayingAll) return;
 
     const handleFrameUpdate = (event: CustomEvent) => {
       const { frame, episodeIndex } = event.detail;
-      if (episodeIndex === currentEpisodeIndex && isPlayingAll) {
+      if (episodeIndex === currentEpisodeIndex) {
         setCurrentFrame(frame);
         preservedFrameRef.current = frame;
       }
@@ -179,24 +172,24 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     return () => {
       window.removeEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
     };
-  }, [syncWith3DViewer, open, currentEpisodeIndex, isPlayingAll]);
+  }, [open, currentEpisodeIndex, isPlayingAll]);
 
   // Update preserved frame when not playing
   useEffect(() => {
     if (isPlayingAll) return;
     const currentFrameValue = globalCurrentFrame ?? currentFrame;
-    if (currentFrameValue !== undefined && currentFrameValue !== null) {
+    if (currentFrameValue != null) {
       preservedFrameRef.current = currentFrameValue;
     }
   }, [isPlayingAll, globalCurrentFrame, currentFrame]);
 
   // Sync local frame with global when manually set (paused)
   useEffect(() => {
-    if (!isPlayingAll && globalCurrentFrame !== undefined && syncWith3DViewer) {
+    if (!isPlayingAll && globalCurrentFrame !== undefined) {
       setCurrentFrame(globalCurrentFrame);
       preservedFrameRef.current = globalCurrentFrame;
     }
-  }, [isPlayingAll, globalCurrentFrame, syncWith3DViewer]);
+  }, [isPlayingAll, globalCurrentFrame]);
 
   // Reset state when episode changes
   useEffect(() => {
@@ -213,54 +206,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (preservedFrameRef.current === null) {
       preservedFrameRef.current = globalCurrentFrame ?? currentFrame ?? 0;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Navigate to episode
-  const navigateToEpisode = useCallback((direction: 'prev' | 'next') => {
-    if (allEpisodes.length === 0) return;
-    const currentIndex = currentEpisodeIndex ?? 0;
-    const newIndex = direction === 'prev'
-      ? (currentIndex > 0 ? currentIndex - 1 : allEpisodes.length - 1)
-      : (currentIndex + 1) % allEpisodes.length;
-    
-    const targetEpisode = allEpisodes[newIndex];
-    if (targetEpisode?.frames.length > 0) {
-      updateViewerFrame(0, targetEpisode);
-      onSetCurrentEpisodeIndex?.(newIndex);
-      onSetGlobalFrame?.(0);
-    }
-  }, [allEpisodes, currentEpisodeIndex, onSetCurrentEpisodeIndex, onSetGlobalFrame]);
-
-  // Handle play/pause
-  const handlePlayPause = useCallback(() => {
-    if (!onPlayAllEpisodes || !episode) return;
-
-    const currentFrameValue = getCurrentFrameValue(
-      preservedFrameRef.current,
-      globalCurrentFrame,
-      currentFrame
-    );
-
-    preservedFrameRef.current = currentFrameValue;
-    setCurrentFrame(currentFrameValue);
-
-    if (episode) {
-      if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
-        onSetCurrentEpisodeIndex(currentEpisodeIndex);
-      } else if (currentEpisodeIndex === null && allEpisodes.length > 0) {
-        const episodeIndex = allEpisodes.findIndex(ep => ep.id === episode.id);
-        if (episodeIndex !== -1 && onSetCurrentEpisodeIndex) {
-          onSetCurrentEpisodeIndex(episodeIndex);
-        }
-      }
-
-      if (onSetGlobalFrame) {
-        onSetGlobalFrame(currentFrameValue);
-      }
-    }
-
-    onPlayAllEpisodes(currentFrameValue);
-  }, [onPlayAllEpisodes, episode, globalCurrentFrame, currentFrame, currentEpisodeIndex, allEpisodes, onSetCurrentEpisodeIndex, onSetGlobalFrame]);
 
   // Handle timeline mouse down
   const handleTimelineMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -277,17 +225,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
 
-    if (isPlayingAll && onPlayAllEpisodes) {
-      onPlayAllEpisodes();
-    }
-
     if (isPlayingAll) {
+      onPlayAllEpisodes?.();
       (window as any).viewer3dStopAnimation?.();
     }
 
-    if (onSetGlobalFrame) {
-      onSetGlobalFrame(frameIndex);
-    }
+    onSetGlobalFrame?.(frameIndex);
 
     if (currentEpisodeIndex !== null && onSetCurrentEpisodeIndex) {
       onSetCurrentEpisodeIndex(currentEpisodeIndex);
@@ -298,9 +241,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     }
 
-    if (episode) {
-      (window as any).viewer3dSetFrame?.(frameIndex);
-    }
+    (window as any).viewer3dSetFrame?.(frameIndex);
 
     setCurrentFrame(frameIndex);
   }, [episode, isPlayingAll, onPlayAllEpisodes, onSetGlobalFrame, currentEpisodeIndex, allEpisodes, onSetCurrentEpisodeIndex]);
@@ -326,11 +267,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     if (x >= CANVAS_PADDING && x <= rect.width - CANVAS_PADDING && episode.frames.length > 0) {
       const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
-
-      if (onSetGlobalFrame) {
-        onSetGlobalFrame(frameIndex);
-      }
-
+      onSetGlobalFrame?.(frameIndex);
       (window as any).viewer3dSetFrame?.(frameIndex);
       setCurrentFrame(frameIndex);
     }
@@ -352,15 +289,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     
     const totalFrames = episode.frames.length;
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
-    const effectiveSpeed = syncWith3DViewer 
-      ? ((window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0)
-      : playbackSpeed;
+    const effectiveSpeed = (window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0;
     const frameDuration = totalFrames > 1 
       ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
       : 0;
     const calculatedTime = frame * frameDuration;
     return `${(calculatedTime / 1000).toFixed(2)}s`;
-  }, [episode, syncWith3DViewer, playbackSpeed]);
+  }, [episode]);
 
   // Draw canvas
   useLayoutEffect(() => {
@@ -494,11 +429,21 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, isMinimized, size, syncWith3DViewer, playbackSpeed, calculateTime]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, isMinimized, size, calculateTime]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
-    if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains('drag-handle')) {
+    // Don't start dragging if clicking on buttons or interactive elements
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'BUTTON' ||
+      target.closest('button') ||
+      target.closest('[role="button"]') ||
+      target.closest('[data-interactive]') ||
+      target.closest('[data-radix-tooltip-trigger]') ||
+      target.closest('[data-radix-popper-content-wrapper]') ||
+      (target !== e.currentTarget && !target.classList.contains('drag-handle'))
+    ) {
       return;
     }
     setIsDragging(true);
@@ -584,11 +529,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
-  const modalContent = (
+  const content = (
     <div
       ref={containerRef}
-      className="fixed bg-background border-2 border-border rounded-lg shadow-2xl flex flex-col overflow-hidden"
-      style={{
+      className={cn(
+        "bg-background flex flex-col overflow-hidden h-full",
+        inline ? "border-t border-border" : "fixed border-2 border-border rounded-lg shadow-2xl"
+      )}
+      style={inline ? {} : {
         left: `${position.x}px`,
         top: `${position.y}px`,
         width: isMinimized ? '300px' : `${size.width}px`,
@@ -599,18 +547,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-3 py-2 bg-muted border-b border-border cursor-move drag-handle"
-        onMouseDown={handleMouseDownHeader}
+        className={cn(
+          "flex items-center justify-between px-3 py-2 bg-muted border-b border-border",
+          !inline && "cursor-move drag-handle"
+        )}
+        onMouseDown={!inline ? handleMouseDownHeader : undefined}
       >
         <div className="flex items-center gap-2 flex-1 pointer-events-none">
-          <GripHorizontal className="w-4 h-4 text-muted-foreground" />
-          <div>
-            <h3 className="text-sm font-semibold">Episode {episode.number} - Joint Movements</h3>
-            <p className="text-xs text-muted-foreground">
-              {totalFrames} frames • {durationSeconds}s
-            </p>
+          {!inline && <GripHorizontal className="w-4 h-4 text-muted-foreground" />}
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Episode {episode.number}</h3>
             {episode.metadata?.additional?.sourceType && (
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex items-center gap-1.5">
                 <Badge
                   variant={
                     episode.metadata.additional.sourceType === 'hf'
@@ -630,62 +578,60 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     : episode.metadata.additional.sourceType}
                 </Badge>
                 {episode.metadata.additional.sourceName && (
-                  <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 h-4"
+                  >
                     {episode.metadata.additional.sourceName}
-                  </span>
+                  </Badge>
                 )}
               </div>
             )}
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
+          {!inline && (
+            <>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={() => setIsMinimized(!isMinimized)}
+                  >
+                    {isMinimized ? (
+                      <Maximize2 className="w-3 h-3" />
+                    ) : (
+                      <Minimize2 className="w-3 h-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isMinimized ? "Maximize" : "Minimize"}</p>
+                </TooltipContent>
+              </Tooltip>
               <Button
                 size="sm"
-                variant={syncWith3DViewer ? "default" : "ghost"}
-                className="h-6 w-6 p-0"
-                onClick={() => setSyncWith3DViewer(!syncWith3DViewer)}
+                variant={open ? "default" : "outline"}
+                className="h-8 text-xs"
+                onClick={() => onOpenChange(!open)}
               >
-                {syncWith3DViewer ? (
-                  <Link className="w-3 h-3" />
-                ) : (
-                  <Unlink className="w-3 h-3" />
-                )}
+                <Eye className="w-3.5 h-3.5 mr-1.5" />
+                {open ? "Close Viewer" : "Open Viewer"}
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{syncWith3DViewer ? "Synced with 3D Viewer" : "Independent Playback"}</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={() => setIsMinimized(!isMinimized)}
-              >
-                {isMinimized ? (
-                  <Maximize2 className="w-3 h-3" />
-                ) : (
-                  <Minimize2 className="w-3 h-3" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isMinimized ? "Maximize" : "Minimize"}</p>
-            </TooltipContent>
-          </Tooltip>
-          <Button
-            size="sm"
-            variant={open ? "default" : "outline"}
-            className="h-8 text-xs"
-            onClick={() => onOpenChange(!open)}
-          >
-            <Eye className="w-3.5 h-3.5 mr-1.5" />
-            {open ? "Close Viewer" : "Open Viewer"}
-          </Button>
+            </>
+          )}
+          {inline && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -711,108 +657,49 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               {!episode || jointNames.length === 0 ? (
                 <div className="text-xs text-muted-foreground">No joints available</div>
               ) : (
-                (() => {
-                  const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
-                  
-                  if (selectedJointNames.length === 0) {
+                <div className="space-y-0.5">
+                  {jointNames.map((jointName) => {
+                    const isVisible = selectedJoints.has(jointName);
+                    const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
+                    const displayColor = isVisible ? color : "#71717a"; // Grey when not visible
+                    const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
+
                     return (
-                      <div className="text-xs text-muted-foreground">No joints selected</div>
-                    );
-                  }
-
-                  return (
-                    <div className="space-y-0.5">
-                      {selectedJointNames.map((jointName) => {
-                        const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
-                        const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
-
-                        return (
-                          <div key={jointName} className="min-w-0">
-                            <div className="text-xs font-mono truncate leading-tight" style={{ color }}>
-                              {jointName}
-                            </div>
-                            {currentValue !== undefined && (
-                              <div className="text-[10px] font-mono text-muted-foreground leading-tight">
-                                {currentValue.toFixed(2)}
-                              </div>
-                            )}
+                      <div
+                        key={jointName}
+                        className="min-w-0 cursor-pointer hover:bg-muted/30 rounded px-1 py-0.5 transition-colors"
+                        onClick={() => {
+                          const newSelected = new Set(selectedJoints);
+                          if (isVisible) {
+                            newSelected.delete(jointName);
+                          } else {
+                            newSelected.add(jointName);
+                          }
+                          setSelectedJoints(newSelected);
+                        }}
+                      >
+                        <div className="text-xs font-mono truncate leading-tight" style={{ color: displayColor }}>
+                          {jointName}
+                        </div>
+                        {currentValue !== undefined && (
+                          <div className="text-[10px] font-mono text-muted-foreground leading-tight">
+                            {currentValue.toFixed(2)}
                           </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
 
           {/* Controls Panel */}
-          <div className="p-3 bg-muted/30 space-y-3 border-t border-border">
-            {syncWith3DViewer && (
-              <div className="text-xs text-center text-muted-foreground bg-primary/10 border border-primary/30 rounded px-2 py-1">
-                <Link className="w-3 h-3 inline mr-1" />
-                Synced with 3D Viewer - Controls work globally
-              </div>
-            )}
-
-            {/* Playback Controls */}
-            <div className="flex items-center justify-center gap-1">
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => navigateToEpisode('prev')}
-                    disabled={allEpisodes.length === 0}
-                  >
-                    <SkipBack className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Previous episode</p></TooltipContent>
-              </Tooltip>
-
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant={isPlayingAll ? "default" : "ghost"}
-                    className="h-7 w-7 p-0"
-                    onClick={handlePlayPause}
-                    disabled={allEpisodes.length === 0}
-                  >
-                    {isPlayingAll ? (
-                      <Pause className="w-3.5 h-3.5" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{isPlayingAll ? "Pause" : "Play all episodes"}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => navigateToEpisode('next')}
-                    disabled={allEpisodes.length === 0}
-                  >
-                    <SkipForward className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Next episode</p></TooltipContent>
-              </Tooltip>
-
-              <div className="flex items-center gap-1 ml-2 px-2 py-1 bg-background rounded border text-xs">
+          <div className="p-3 bg-muted/30 border-t border-border" style={{ pointerEvents: 'auto' }}>
+            <div className="flex items-center justify-center gap-2" style={{ pointerEvents: 'auto' }}>
+              <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Frame:</span>
-                <span className="font-mono font-medium">
-                  {totalFrames > 0 ? displayFrame : 0}
-                </span>
+                <span className="font-mono font-medium">{displayFrame}</span>
                 <span className="text-muted-foreground">/</span>
                 <span className="font-mono text-muted-foreground">{totalFrames}</span>
               </div>
@@ -820,90 +707,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
                 <span className="text-muted-foreground">Time:</span>
                 <span className="font-mono font-medium">
-                  {totalFrames > 0 && episode ? calculateTime(displayFrame) : "0.00s"}
+                  {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds} s` : "0.00/0.00 s"}
                 </span>
-              </div>
-            </div>
-
-            {/* Speed Control */}
-            {!syncWith3DViewer && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground min-w-[45px]">Speed:</span>
-                <Slider
-                  value={[playbackSpeed]}
-                  onValueChange={(values) => setPlaybackSpeed(values[0])}
-                  min={0.25}
-                  max={6}
-                  step={0.25}
-                  className="flex-1"
-                />
-                <span className="text-xs font-mono min-w-[45px] text-right">
-                  {playbackSpeed.toFixed(2)}x
-                </span>
-              </div>
-            )}
-
-            {/* Joint Selection */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Visible Joints:</span>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-5 text-xs px-2"
-                    onClick={() => setSelectedJoints(new Set(jointNames))}
-                  >
-                    All
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-5 text-xs px-2"
-                    onClick={() => setSelectedJoints(new Set())}
-                  >
-                    None
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                {jointNames.map((jointName, index) => {
-                  const color = jointColorMap.get(jointName) || JOINT_COLORS[index % JOINT_COLORS.length];
-                  const isSelected = selectedJoints.has(jointName);
-
-                  return (
-                    <button
-                      key={jointName}
-                      onClick={() => {
-                        const newSelected = new Set(selectedJoints);
-                        if (isSelected) {
-                          newSelected.delete(jointName);
-                        } else {
-                          newSelected.add(jointName);
-                        }
-                        setSelectedJoints(newSelected);
-                      }}
-                      className={cn(
-                        "px-1.5 py-0.5 rounded text-xs font-mono transition-all border",
-                        isSelected
-                          ? "opacity-100 border-current"
-                          : "opacity-40 border-transparent hover:opacity-60"
-                      )}
-                      style={{
-                        color: color,
-                        backgroundColor: isSelected ? `${color}20` : "transparent",
-                      }}
-                    >
-                      {jointName}
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>
 
-          {/* Resize Handles */}
-          {['se', 's', 'e', 'w', 'n', 'sw', 'ne', 'nw'].map((direction) => (
+          {/* Resize Handles - only show when not inline */}
+          {!inline && ['se', 's', 'e', 'w', 'n', 'sw', 'ne', 'nw'].map((direction) => (
             <div
               key={direction}
               className={`absolute ${
@@ -925,5 +736,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     </div>
   );
 
-  return typeof window !== 'undefined' ? createPortal(modalContent, document.body) : null;
+  if (inline) {
+    return content;
+  }
+
+  return typeof window !== 'undefined' ? createPortal(content, document.body) : null;
 };

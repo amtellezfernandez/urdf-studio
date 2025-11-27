@@ -161,13 +161,13 @@ export const CustomSlider = React.forwardRef<HTMLDivElement, CustomSliderProps>(
         {/* Thumb - joint color */}
         <div
           className={cn(
-            "absolute w-4 h-4 rounded-full border-2 shadow-sm",
+            "absolute w-3 h-3 rounded-full border-2 shadow-sm",
             !isDragging && "transition-all duration-100 ease-out",
             isDragging && "scale-110",
             "group-hover:scale-105"
           )}
           style={{
-            left: `calc(${clampedPercentage}% - 8px)`,
+            left: `calc(${clampedPercentage}% - 6px)`,
             backgroundColor: jointColor,
             borderColor: jointColor,
             willChange: isDragging ? 'left, transform' : 'auto',
