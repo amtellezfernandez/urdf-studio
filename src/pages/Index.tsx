@@ -684,6 +684,7 @@ const Index = () => {
             onViewerSplitViewChange={setViewerSplitView}
             onViewerEpisodeChange={setViewerEpisode}
             onViewerOpenChange={setIsViewerOpen}
+            viewerOpen={isViewerOpen}
           />
 
           {!isSidebarCollapsed && (
@@ -750,18 +751,19 @@ const Index = () => {
                       onOpenChange={(open) => {
                         setIsViewerOpen(open);
                         if (!open) {
-                          // Clear the episode first to signal we're closing (not toggling)
+                          // When closing (not toggling), clear everything
                           setViewerEpisode(null);
-                          // Then close split view - Sidebar will check if episode is null
                           setViewerSplitView(false);
+                          // Don't auto-open floating view when closing
                         }
                       }}
                       inline={true}
                       onToggleViewMode={() => {
                         // Switch from split view to floating window
-                        // The episode is already set via onViewerEpisodeChange
+                        // Keep the episode set so Sidebar knows to open floating modal
                         setViewerSplitView(false);
-                        setIsViewerOpen(false);
+                        // The Sidebar will auto-open the floating modal
+                        setIsViewerOpen(true); // Keep open for floating modal
                       }}
                       globalCurrentFrame={currentFrame}
                       onSetGlobalFrame={(frame: number) => {

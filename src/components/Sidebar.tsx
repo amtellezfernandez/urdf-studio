@@ -94,6 +94,7 @@ interface SidebarProps {
   onViewerSplitViewChange?: (splitView: boolean) => void;
   onViewerEpisodeChange?: (episode: Episode | null) => void;
   onViewerOpenChange?: (open: boolean) => void;
+  viewerOpen?: boolean;
 }
 
 interface RecordedFrame {
@@ -813,6 +814,7 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
+  viewerOpen = false,
 }: SidebarProps) => {
   const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
@@ -1062,30 +1064,30 @@ export const Sidebar = ({
 
   // Auto-open floating window modal when switching from split view (but not when closing)
   const prevViewerSplitViewRef = useRef(viewerSplitView);
-  
+
   useEffect(() => {
     // When switching from split view (true) to floating window (false)
     // Only open if we're toggling, not closing
-    // We detect closing by checking if viewerModalEpisode is null
-    // When closing from split view, Index.tsx clears viewerEpisode to null
-    // and we should also clear viewerModalEpisode (via the effect below)
-    // So if viewerModalEpisode is null, we're closing - don't open
+    // We detect closing by checking if viewerOpen is false
+    // When closing from split view, Index.tsx sets viewerOpen to false
+    // When toggling, Index.tsx keeps viewerOpen as true
     if (prevViewerSplitViewRef.current && !viewerSplitView && !isViewerModalOpen) {
-      // Only open if we have a valid episode (means we're toggling, not closing)
-      // Check if viewerModalEpisode exists - if null, we're closing
-      if (viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+      // Check if parent wants viewer open (toggling) or closed (closing)
+      if (viewerOpen && viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+        // Toggling from split to floating - open the floating modal
         const currentEpisode = episodes[currentPlayingEpisodeIndex];
-        // Only open if episode exists and matches (means we're toggling, not closing)
         if (currentEpisode && currentEpisode.id === viewerModalEpisode.id) {
           setViewerModalEpisode(currentEpisode);
           setIsViewerModalOpen(true);
           onViewerOpenChange?.(true);
         }
+      } else {
+        // Closing - clear the episode to prevent future auto-opens
+        setViewerModalEpisode(null);
       }
-      // If viewerModalEpisode is null, we're closing - don't open
     }
     prevViewerSplitViewRef.current = viewerSplitView;
-  }, [viewerSplitView, isViewerModalOpen, currentPlayingEpisodeIndex, episodes, viewerModalEpisode, onViewerOpenChange]);
+  }, [viewerSplitView, viewerOpen, isViewerModalOpen, currentPlayingEpisodeIndex, episodes, viewerModalEpisode, onViewerOpenChange]);
   
   // Clear viewerModalEpisode when closing from split view
   // When Index.tsx closes from split view, it clears viewerEpisode to null
