@@ -1687,7 +1687,7 @@ export const Viewer3D = ({
     return { nodes, edges };
   };
 
-  const handleRun = () => {
+  const handleRun = (forceState?: boolean) => {
     if (!animationFrames || animationFrames.length === 0) {
       toast.error("Please upload a motion data file first");
       return;
@@ -1696,7 +1696,8 @@ export const Viewer3D = ({
       toast.error("Please upload a URDF file first");
       return;
     }
-    const newPlayingState = !isPlaying;
+    // If forceState is provided, use it; otherwise toggle
+    const newPlayingState = forceState !== undefined ? forceState : !isPlaying;
     setIsPlaying(newPlayingState);
     onPlayingChange?.(newPlayingState);
     // Clear pause flag when starting to play

@@ -3243,31 +3243,23 @@ export const Sidebar = ({
   const stopAllPlayback = useCallback(() => {
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
-
+    
     if (playbackTimeoutRef.current) {
       clearTimeout(playbackTimeoutRef.current);
       playbackTimeoutRef.current = null;
     }
-
-    // Clear any pending navigation stop timeouts
-    navigationStopTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-    navigationStopTimeoutsRef.current = [];
-
+    
     (window as any).viewer3dStopAnimation?.();
     (window as any).viewer3dClearAnimation?.();
-
+    
     // Always reset frame to 0 and forget where we stopped
     (window as any).viewer3dSetFrame?.(0);
     onFrameChange?.(0);
-
+    
     // Clear any preserved frame state
     delete (window as any).__viewer3dPreserveFrameTime;
     delete (window as any).__viewer3dManualFrameTime;
-
-    // CRITICAL: Re-enable robot movement when stopping playback
-    // This allows manual joint control and recording
-    setIsAnimating(false);
-  }, [onFrameChange, setIsAnimating]);
+  }, [onFrameChange]);
 
   // Complete reset of all playback state - used when all episodes finish
   // This ensures clean state after a full loop, since episodes can be added/deleted
@@ -3318,13 +3310,11 @@ export const Sidebar = ({
     }
     
     // If frames should already be loaded, just start/resume playback
-    // viewer3dPlayAnimation toggles, so we need to call it only if not already playing
-    // Since we can't easily check, we'll use a different approach:
-    // Call viewer3dStopAnimation first to ensure it's stopped, then toggle to start
+    // Force play (true) to ensure playback starts
     (window as any).viewer3dStopAnimation?.();
     // Small delay to ensure stop is processed, then start
     setTimeout(() => {
-      (window as any).viewer3dPlayAnimation?.();
+      (window as any).viewer3dPlayAnimation?.(true);
     }, 10);
   }, [episodes, currentPlayingEpisodeIndex]);
 
@@ -3370,9 +3360,10 @@ export const Sidebar = ({
               setTimeout(() => {
                 // Double-check state before resuming playback
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-                  (window as any).viewer3dPlayAnimation?.();
+                  // Force play (true) to ensure playback starts
+                  (window as any).viewer3dPlayAnimation?.(true);
                 }
-              }, 30); // Delay longer than viewer3dPlayEpisode's auto-start (10ms) to ensure frame is set
+              }, 50); // Increased delay to ensure frames are set and state is updated
             }
           }
         });
@@ -3394,9 +3385,10 @@ export const Sidebar = ({
             if (wasPlaying && isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
               setTimeout(() => {
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-                  (window as any).viewer3dPlayAnimation?.();
+                  // Force play (true) since viewer3dSetFrame stopped playback
+                  (window as any).viewer3dPlayAnimation?.(true);
                 }
-              }, 10);
+              }, 50); // Increased delay to ensure state is updated
             }
           }
         });
@@ -3577,9 +3569,10 @@ export const Sidebar = ({
           // Wait a bit for frames to be set, then start playback
           setTimeout(() => {
             if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === playableIndex) {
-              (window as any).viewer3dPlayAnimation?.();
+              // Force play (true) to ensure playback starts even if state is inconsistent
+              (window as any).viewer3dPlayAnimation?.(true);
             }
-          }, 20);
+          }, 50); // Increased delay to ensure frames are set and state is updated
         } else {
           startViewer3DPlayback();
         }
@@ -4063,8 +4056,6 @@ export const Sidebar = ({
                     const prevIndex = currentIndex > 0 ? currentIndex - 1 : episodes.length - 1;
                     setEpisodeAndFrame(prevIndex, 0);
                     setCurrentPlayingEpisodeIndex(prevIndex);
-                    // Enable robot movement when navigating
-                    setIsAnimating(false);
                   }}
                   disabled={episodes.length === 0}
                   title="Previous Episode"
