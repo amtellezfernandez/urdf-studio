@@ -3243,19 +3243,19 @@ export const Sidebar = ({
   const stopAllPlayback = useCallback(() => {
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
-    
+
     if (playbackTimeoutRef.current) {
       clearTimeout(playbackTimeoutRef.current);
       playbackTimeoutRef.current = null;
     }
-    
+
     (window as any).viewer3dStopAnimation?.();
     (window as any).viewer3dClearAnimation?.();
-    
-    // Always reset frame to 0 and forget where we stopped
-    (window as any).viewer3dSetFrame?.(0);
-    onFrameChange?.(0);
-    
+
+    // DO NOT reset frame - preserve current position so playback can resume from where it stopped
+    // (window as any).viewer3dSetFrame?.(0);
+    // onFrameChange?.(0);
+
     // Clear any preserved frame state
     delete (window as any).__viewer3dPreserveFrameTime;
     delete (window as any).__viewer3dManualFrameTime;
