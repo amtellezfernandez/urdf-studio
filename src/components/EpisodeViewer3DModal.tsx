@@ -536,15 +536,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
-  // Minimized view
+  // Minimized view - always centered at bottom regardless of inline or floating
   if (isMinimized) {
     const minimizedContent = (
       <div
-        className={cn(
-          "bg-muted/95 backdrop-blur-sm border border-border rounded-lg shadow-xl px-4 py-2",
-          inline ? "mx-auto w-fit" : "fixed left-1/2 -translate-x-1/2"
-        )}
-        style={inline ? {} : {
+        className="bg-muted/95 backdrop-blur-sm border border-border rounded-lg shadow-xl px-4 py-2 fixed left-1/2 -translate-x-1/2"
+        style={{
           bottom: '20px',
           zIndex: 99999,
         }}
@@ -586,6 +583,27 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {onToggleViewMode && (
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={onToggleViewMode}
+                  >
+                    {inline ? (
+                      <Square className="w-3 h-3" />
+                    ) : (
+                      <LayoutGrid className="w-3 h-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{inline ? "Floating Window" : "Split View"}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
                 <Button
@@ -613,7 +631,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Close Viewer</p>
+                <p>Close</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -621,10 +639,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       </div>
     );
 
-    if (inline) {
-      return minimizedContent;
-    }
-
+    // Always use portal to render at document.body level for consistent positioning
     return typeof window !== 'undefined' ? createPortal(minimizedContent, document.body) : null;
   }
 
@@ -735,6 +750,21 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </TooltipTrigger>
             <TooltipContent>
               <p>Minimize</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Close</p>
             </TooltipContent>
           </Tooltip>
         </div>

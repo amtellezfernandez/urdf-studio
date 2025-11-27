@@ -720,7 +720,7 @@ const Index = () => {
             style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth }}
           >
             <div className="flex-1 min-h-0 relative">
-              {viewerSplitView && isViewerOpen && viewerEpisode ? (
+              {viewerSplitView && isViewerOpen && viewerEpisode && !isViewerMinimized ? (
                 <div className="flex flex-col h-full">
                   {/* Visualizer in top half */}
                   <div className="flex-1 min-h-0 border-b border-border/20">
@@ -892,9 +892,43 @@ const Index = () => {
               )}
             </div>
           </main>
+
+          {/* Minimized Episode Viewer - shown when split view is minimized */}
+          {viewerSplitView && isViewerOpen && viewerEpisode && isViewerMinimized && (
+            <EpisodeViewer3DModal
+              episode={viewerEpisode}
+              open={isViewerOpen}
+              onOpenChange={(open) => {
+                setIsViewerOpen(open);
+                if (!open) {
+                  // When closing (not toggling), clear everything
+                  setViewerEpisode(null);
+                  setViewerSplitView(false);
+                  setIsViewerMinimized(false);
+                  // Don't auto-open floating view when closing
+                }
+              }}
+              inline={false}
+              onToggleViewMode={() => {
+                // Switch from split view to floating window
+                // Episode is already set in viewerEpisode
+                // Set split view to false first, which triggers Sidebar to open floating
+                setViewerSplitView(false);
+                // Keep viewer open so Sidebar knows we're toggling, not closing
+                setIsViewerOpen(true);
+              }}
+              globalCurrentFrame={currentFrame}
+              onSetGlobalFrame={(frame: number) => {
+                (window as any).viewer3dSetFrame?.(frame);
+                setCurrentFrame(frame);
+              }}
+              isMinimized={isViewerMinimized}
+              onMinimizedChange={setIsViewerMinimized}
+            />
+          )}
         </>
       )}
-      
+
       {/* Mesh Files Status Panel - Bottom Right */}
       {showDebugDialog && (
         <div className="fixed bottom-4 right-4 z-50 w-80 max-h-[40vh] bg-[#282828] border border-[#3d3d3d] rounded-lg shadow-lg flex flex-col">
