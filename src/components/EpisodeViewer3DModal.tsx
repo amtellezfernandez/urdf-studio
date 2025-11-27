@@ -8,6 +8,8 @@ import {
   GripHorizontal,
   Eye,
   X,
+  LayoutGrid,
+  Square,
 } from "lucide-react";
 import {
   Tooltip,
@@ -51,6 +53,7 @@ interface EpisodeViewer3DModalProps {
   globalCurrentFrame?: number;
   onSetGlobalFrame?: (frame: number) => void;
   inline?: boolean; // If true, render inline instead of as modal
+  onToggleViewMode?: () => void; // Toggle between split view and floating window
 }
 
 // Helper function to convert episode to animation frames
@@ -107,10 +110,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   globalCurrentFrame,
   onSetGlobalFrame,
   inline = false,
+  onToggleViewMode,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
-  const [isMinimized, setIsMinimized] = useState(false);
   const [position, setPosition] = useState({ x: 100, y: 100 });
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -299,7 +302,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   // Draw canvas
   useLayoutEffect(() => {
-    if (!episode || !canvasRef.current || isMinimized) return;
+    if (!episode || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -429,7 +432,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, isMinimized, size, calculateTime]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, calculateTime]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -539,8 +542,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       style={inline ? {} : {
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: isMinimized ? '300px' : `${size.width}px`,
-        height: isMinimized ? 'auto' : `${size.height}px`,
+        width: `${size.width}px`,
+        height: `${size.height}px`,
         zIndex: 99999,
         userSelect: isDragging ? 'none' : 'auto',
       }}
@@ -587,57 +590,62 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 )}
               </div>
             )}
+            <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
+              <span className="text-muted-foreground">Frame:</span>
+              <span className="font-mono font-medium">{displayFrame}</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="font-mono text-muted-foreground">{totalFrames}</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
+              <span className="text-muted-foreground">Time:</span>
+              <span className="font-mono font-medium">
+                {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds} s` : "0.00/0.00 s"}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {!inline && (
-            <>
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 w-6 p-0"
-                    onClick={() => setIsMinimized(!isMinimized)}
-                  >
-                    {isMinimized ? (
-                      <Maximize2 className="w-3 h-3" />
-                    ) : (
-                      <Minimize2 className="w-3 h-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{isMinimized ? "Maximize" : "Minimize"}</p>
-                </TooltipContent>
-              </Tooltip>
+          {onToggleViewMode && (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={onToggleViewMode}
+                >
+                  {inline ? (
+                    <Square className="w-3 h-3" />
+                  ) : (
+                    <LayoutGrid className="w-3 h-3" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{inline ? "Floating Window" : "Split View"}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <Button
                 size="sm"
-                variant={open ? "default" : "outline"}
-                className="h-8 text-xs"
-                onClick={() => onOpenChange(!open)}
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={() => onOpenChange(false)}
               >
-                <Eye className="w-3.5 h-3.5 mr-1.5" />
-                {open ? "Close Viewer" : "Open Viewer"}
+                <X className="w-3.5 h-3.5" />
               </Button>
-            </>
-          )}
-          {inline && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="w-3.5 h-3.5" />
-            </Button>
-          )}
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Close Viewer</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       {/* Content */}
-      {!isMinimized && (
-        <>
+      <>
           {/* Graph Canvas and Legend */}
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 relative bg-background overflow-hidden">
@@ -694,24 +702,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </div>
           </div>
 
-          {/* Controls Panel */}
-          <div className="p-3 bg-muted/30 border-t border-border" style={{ pointerEvents: 'auto' }}>
-            <div className="flex items-center justify-center gap-2" style={{ pointerEvents: 'auto' }}>
-              <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
-                <span className="text-muted-foreground">Frame:</span>
-                <span className="font-mono font-medium">{displayFrame}</span>
-                <span className="text-muted-foreground">/</span>
-                <span className="font-mono text-muted-foreground">{totalFrames}</span>
-              </div>
-
-              <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
-                <span className="text-muted-foreground">Time:</span>
-                <span className="font-mono font-medium">
-                  {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds} s` : "0.00/0.00 s"}
-                </span>
-              </div>
-            </div>
-          </div>
 
           {/* Resize Handles - only show when not inline */}
           {!inline && ['se', 's', 'e', 'w', 'n', 'sw', 'ne', 'nw'].map((direction) => (
@@ -732,7 +722,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             />
           ))}
         </>
-      )}
     </div>
   );
 

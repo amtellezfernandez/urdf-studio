@@ -750,17 +750,61 @@ const Index = () => {
                       onOpenChange={(open) => {
                         setIsViewerOpen(open);
                         if (!open) {
+                          // Clear the episode first to signal we're closing (not toggling)
+                          setViewerEpisode(null);
+                          // Then close split view - Sidebar will check if episode is null
                           setViewerSplitView(false);
                         }
                       }}
                       inline={true}
-                      splitView={true}
+                      onToggleViewMode={() => {
+                        // Switch from split view to floating window
+                        // The episode is already set via onViewerEpisodeChange
+                        setViewerSplitView(false);
+                        setIsViewerOpen(false);
+                      }}
                       globalCurrentFrame={currentFrame}
                       onSetGlobalFrame={(frame: number) => {
                         (window as any).viewer3dSetFrame?.(frame);
                         setCurrentFrame(frame);
                       }}
                     />
+                  </div>
+                </div>
+              ) : viewerSplitView && isViewerOpen && !viewerEpisode ? (
+                <div className="flex flex-col h-full">
+                  {/* Visualizer in top half */}
+                  <div className="flex-1 min-h-0 border-b border-border/20">
+                    <Viewer3D
+                      key={`urdf-${urdfContentVersion}`}
+                      urdfFile={urdfFile}
+                      initialMeshFiles={meshFiles}
+                      selectedJoint={selectedJoint}
+                      jointValues={jointValues}
+                      jointLimits={jointLimits}
+                      jointAxes={jointAxes}
+                      gpuMode={gpuMode}
+                      onJointSelect={setSelectedJoint}
+                      onJointChange={handleJointChange}
+                      onRobotJointsLoaded={handleRobotJointsLoaded}
+                      onMotionFileChange={setMotionDataFile}
+                      onPlayingChange={setIsPlaying}
+                      onAnimationFramesChange={setHasAnimationFrames}
+                      onFrameChange={handleFrameChange}
+                      collisionVisibility={collisionVisibility}
+                      rotationPlaneVisible={rotationPlaneVisible}
+                    />
+                  </div>
+                  {/* Message in bottom half when no episodes */}
+                  <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
+                    <div className="flex flex-col items-center gap-3 text-center px-6">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        No episodes available
+                      </div>
+                      <div className="text-xs text-muted-foreground/70 max-w-md">
+                        Record an episode or import episodes from files to view them here.
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : showUrdfEditor && urdfEditorSplitView ? (

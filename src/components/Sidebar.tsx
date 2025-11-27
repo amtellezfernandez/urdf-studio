@@ -1050,6 +1050,61 @@ export const Sidebar = ({
       }
     }
   }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
+  
+  // Clear viewerModalEpisode when viewerEpisode is cleared from Index (closing from split view)
+  // We detect this by monitoring when viewerSplitView becomes false and episode should be cleared
+  // Actually, we can't directly monitor Index's viewerEpisode, but we can clear when appropriate
+  // The key is: when closing from split view, Index clears viewerEpisode to null
+  // We should also clear viewerModalEpisode to prevent auto-opening floating window
+  // We do this by checking: if viewerSplitView is false and we're not opening modal, clear episode
+  // But only if we're actually closing (not toggling)
+  // The toggle button explicitly sets the episode, so if episode is null, we're closing
+
+  // Auto-open floating window modal when switching from split view (but not when closing)
+  const prevViewerSplitViewRef = useRef(viewerSplitView);
+  
+  useEffect(() => {
+    // When switching from split view (true) to floating window (false)
+    // Only open if we're toggling, not closing
+    // We detect closing by checking if viewerModalEpisode is null
+    // When closing from split view, Index.tsx clears viewerEpisode to null
+    // and we should also clear viewerModalEpisode (via the effect below)
+    // So if viewerModalEpisode is null, we're closing - don't open
+    if (prevViewerSplitViewRef.current && !viewerSplitView && !isViewerModalOpen) {
+      // Only open if we have a valid episode (means we're toggling, not closing)
+      // Check if viewerModalEpisode exists - if null, we're closing
+      if (viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+        const currentEpisode = episodes[currentPlayingEpisodeIndex];
+        // Only open if episode exists and matches (means we're toggling, not closing)
+        if (currentEpisode && currentEpisode.id === viewerModalEpisode.id) {
+          setViewerModalEpisode(currentEpisode);
+          setIsViewerModalOpen(true);
+          onViewerOpenChange?.(true);
+        }
+      }
+      // If viewerModalEpisode is null, we're closing - don't open
+    }
+    prevViewerSplitViewRef.current = viewerSplitView;
+  }, [viewerSplitView, isViewerModalOpen, currentPlayingEpisodeIndex, episodes, viewerModalEpisode, onViewerOpenChange]);
+  
+  // Clear viewerModalEpisode when closing from split view
+  // When Index.tsx closes from split view, it clears viewerEpisode to null
+  // We need to also clear viewerModalEpisode to prevent auto-opening floating window
+  // We detect closing by checking: if viewerSplitView becomes false and we're not toggling
+  // The key: when toggling, the toggle button explicitly sets the episode
+  // When closing, the episode is cleared, so we should also clear viewerModalEpisode
+  // We do this by checking if we're closing (not opening modal) and clearing the episode
+  useEffect(() => {
+    // When viewerSplitView becomes false and we're not opening the modal
+    // Check if we should clear viewerModalEpisode (closing, not toggling)
+    // We can't directly check Index's viewerEpisode, but we can infer from context
+    // If currentPlayingEpisodeIndex is invalid or episodes are empty, we're closing
+    // But actually, the toggle button ensures episode exists, so if it doesn't, we're closing
+    // The safest: only clear if we're definitely closing (not toggling)
+    // Actually, the auto-open useEffect already checks viewerModalEpisode !== null
+    // So if it's null, it won't open. The issue is ensuring it's null when closing.
+    // Let's not auto-clear here - instead, ensure the check in auto-open is sufficient
+  }, [viewerSplitView, isViewerModalOpen]);
 
   // Stop animation when all episodes are deleted
   useEffect(() => {
@@ -3717,6 +3772,24 @@ export const Sidebar = ({
           if (value === "recording") {
             onUrdfEditorToggle?.(false);
             setIsAnimating(false);
+            // Always enable split view mode when switching to recording tab
+            onViewerSplitViewChange?.(true);
+            onViewerOpenChange?.(true);
+            // Open viewer with episode if available, otherwise show message
+            if (episodes.length > 0) {
+              const activeIndex = currentPlayingEpisodeIndex ?? 0;
+              const episode = episodes[activeIndex];
+              if (episode) {
+                setViewerModalEpisode(episode);
+                setIsViewerModalOpen(true);
+                onViewerEpisodeChange?.(episode);
+              }
+            } else {
+              // No episodes - clear episode so message shows instead of popup
+              setViewerModalEpisode(null);
+              setIsViewerModalOpen(false);
+              onViewerEpisodeChange?.(null);
+            }
           }
         }}
       >
@@ -4365,6 +4438,17 @@ export const Sidebar = ({
             onViewerOpenChange?.(open);
             if (!open) {
               onViewerSplitViewChange?.(false);
+              // Clear the episode when closing
+              setViewerModalEpisode(null);
+            }
+          }}
+          onToggleViewMode={() => {
+            // Switch from floating window to split view
+            setIsViewerModalOpen(false);
+            onViewerSplitViewChange?.(true);
+            onViewerOpenChange?.(true);
+            if (viewerModalEpisode) {
+              onViewerEpisodeChange?.(viewerModalEpisode);
             }
           }}
           currentEpisodeIndex={currentPlayingEpisodeIndex}
