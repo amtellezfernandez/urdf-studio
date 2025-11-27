@@ -760,10 +760,11 @@ const Index = () => {
                       inline={true}
                       onToggleViewMode={() => {
                         // Switch from split view to floating window
-                        // Keep the episode set so Sidebar knows to open floating modal
+                        // Episode is already set in viewerEpisode
+                        // Set split view to false first, which triggers Sidebar to open floating
                         setViewerSplitView(false);
-                        // The Sidebar will auto-open the floating modal
-                        setIsViewerOpen(true); // Keep open for floating modal
+                        // Keep viewer open so Sidebar knows we're toggling, not closing
+                        setIsViewerOpen(true);
                       }}
                       globalCurrentFrame={currentFrame}
                       onSetGlobalFrame={(frame: number) => {

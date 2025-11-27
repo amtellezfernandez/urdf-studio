@@ -1042,7 +1042,7 @@ export const Sidebar = ({
 
   // Auto-update viewer episode when currentPlayingEpisodeIndex changes
   useEffect(() => {
-    if ((isViewerModalOpen || viewerSplitView) && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+    if ((isViewerModalOpen || viewerSplitView || viewerOpen) && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
       const currentEpisode = episodes[currentPlayingEpisodeIndex];
       if (currentEpisode && currentEpisode.id !== viewerModalEpisode?.id) {
         setViewerModalEpisode(currentEpisode);
@@ -1051,7 +1051,7 @@ export const Sidebar = ({
         }
       }
     }
-  }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
+  }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, viewerOpen, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
   
   // Clear viewerModalEpisode when viewerEpisode is cleared from Index (closing from split view)
   // We detect this by monitoring when viewerSplitView becomes false and episode should be cleared
@@ -1076,12 +1076,13 @@ export const Sidebar = ({
       if (viewerOpen && viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
         // Toggling from split to floating - open the floating modal
         const currentEpisode = episodes[currentPlayingEpisodeIndex];
-        if (currentEpisode && currentEpisode.id === viewerModalEpisode.id) {
+        // Extra safety: ensure current episode matches the modal episode or update it
+        if (currentEpisode) {
           setViewerModalEpisode(currentEpisode);
           setIsViewerModalOpen(true);
           onViewerOpenChange?.(true);
         }
-      } else {
+      } else if (!viewerOpen) {
         // Closing - clear the episode to prevent future auto-opens
         setViewerModalEpisode(null);
       }
@@ -4437,11 +4438,13 @@ export const Sidebar = ({
           open={isViewerModalOpen}
           onOpenChange={(open) => {
             setIsViewerModalOpen(open);
-            onViewerOpenChange?.(open);
             if (!open) {
-              onViewerSplitViewChange?.(false);
-              // Clear the episode when closing
+              // When closing (not toggling), clear everything
               setViewerModalEpisode(null);
+              onViewerSplitViewChange?.(false);
+              onViewerOpenChange?.(false);
+            } else {
+              onViewerOpenChange?.(open);
             }
           }}
           onToggleViewMode={() => {
