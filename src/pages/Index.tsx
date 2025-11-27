@@ -73,6 +73,7 @@ const Index = () => {
   const [viewerSplitView, setViewerSplitView] = useState<boolean>(false);
   const [viewerEpisode, setViewerEpisode] = useState<any | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
+  const [isViewerMinimized, setIsViewerMinimized] = useState<boolean>(false);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
@@ -754,6 +755,7 @@ const Index = () => {
                           // When closing (not toggling), clear everything
                           setViewerEpisode(null);
                           setViewerSplitView(false);
+                          setIsViewerMinimized(false);
                           // Don't auto-open floating view when closing
                         }
                       }}
@@ -771,6 +773,8 @@ const Index = () => {
                         (window as any).viewer3dSetFrame?.(frame);
                         setCurrentFrame(frame);
                       }}
+                      isMinimized={isViewerMinimized}
+                      onMinimizedChange={setIsViewerMinimized}
                     />
                   </div>
                 </div>

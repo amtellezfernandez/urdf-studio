@@ -1021,6 +1021,7 @@ export const Sidebar = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
   const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
+  const [isViewerModalMinimized, setIsViewerModalMinimized] = useState(false);
   const [rerunViewerModalEpisode, setRerunViewerModalEpisode] = useState<Episode | null>(null);
   const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
   // Track dataset sources for future mixing
@@ -4441,6 +4442,7 @@ export const Sidebar = ({
             if (!open) {
               // When closing (not toggling), clear everything
               setViewerModalEpisode(null);
+              setIsViewerModalMinimized(false);
               onViewerSplitViewChange?.(false);
               onViewerOpenChange?.(false);
             } else {
@@ -4467,6 +4469,8 @@ export const Sidebar = ({
             // Update parent's currentFrame state so playback resumes from scrubbed position
             onFrameChange?.(frame);
           }}
+          isMinimized={isViewerModalMinimized}
+          onMinimizedChange={setIsViewerModalMinimized}
         />
       )}
 

@@ -54,6 +54,8 @@ interface EpisodeViewer3DModalProps {
   onSetGlobalFrame?: (frame: number) => void;
   inline?: boolean; // If true, render inline instead of as modal
   onToggleViewMode?: () => void; // Toggle between split view and floating window
+  isMinimized?: boolean;
+  onMinimizedChange?: (minimized: boolean) => void;
 }
 
 // Helper function to convert episode to animation frames
@@ -111,6 +113,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   onSetGlobalFrame,
   inline = false,
   onToggleViewMode,
+  isMinimized = false,
+  onMinimizedChange,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
@@ -532,6 +536,98 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
+  // Minimized view
+  if (isMinimized) {
+    const minimizedContent = (
+      <div
+        className={cn(
+          "bg-muted/95 backdrop-blur-sm border border-border rounded-lg shadow-xl px-4 py-2",
+          inline ? "mx-auto w-fit" : "fixed left-1/2 -translate-x-1/2"
+        )}
+        style={inline ? {} : {
+          bottom: '20px',
+          zIndex: 99999,
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Episode {episode.number}</h3>
+            {episode.metadata?.additional?.sourceType && (
+              <Badge
+                variant={
+                  episode.metadata.additional.sourceType === 'hf'
+                    ? 'default'
+                    : episode.metadata.additional.sourceType === 'local'
+                    ? 'secondary'
+                    : 'outline'
+                }
+                className="text-[10px] px-1.5 py-0 h-4"
+              >
+                {episode.metadata.additional.sourceType === 'hf'
+                  ? 'HF'
+                  : episode.metadata.additional.sourceType === 'local'
+                  ? 'Local'
+                  : episode.metadata.additional.sourceType === 'recorded'
+                  ? 'Recorded'
+                  : episode.metadata.additional.sourceType}
+              </Badge>
+            )}
+            <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
+              <span className="text-muted-foreground">Frame:</span>
+              <span className="font-mono font-medium">{displayFrame}</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="font-mono text-muted-foreground">{totalFrames}</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
+              <span className="text-muted-foreground">Time:</span>
+              <span className="font-mono font-medium">
+                {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds} s` : "0.00/0.00 s"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => onMinimizedChange?.(false)}
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Restore</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Close Viewer</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (inline) {
+      return minimizedContent;
+    }
+
+    return typeof window !== 'undefined' ? createPortal(minimizedContent, document.body) : null;
+  }
+
   const content = (
     <div
       ref={containerRef}
@@ -632,13 +728,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0"
-                onClick={() => onOpenChange(false)}
+                onClick={() => onMinimizedChange?.(true)}
               >
-                <X className="w-3.5 h-3.5" />
+                <Minimize2 className="w-3.5 h-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Close Viewer</p>
+              <p>Minimize</p>
             </TooltipContent>
           </Tooltip>
         </div>
