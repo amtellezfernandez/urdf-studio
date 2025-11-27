@@ -7,7 +7,6 @@ import {
   Maximize2,
   GripHorizontal,
   Eye,
-  X,
   LayoutGrid,
   Square,
 } from "lucide-react";
@@ -619,21 +618,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 <p>Restore</p>
               </TooltipContent>
             </Tooltip>
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={() => onOpenChange(false)}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Close</p>
-              </TooltipContent>
-            </Tooltip>
           </div>
         </div>
       </div>
@@ -750,21 +734,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </TooltipTrigger>
             <TooltipContent>
               <p>Minimize</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={() => onOpenChange(false)}
-              >
-                <X className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Close</p>
             </TooltipContent>
           </Tooltip>
         </div>
