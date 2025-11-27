@@ -3673,11 +3673,11 @@ export const Sidebar = ({
     isPlayingAllRef.current = true;
     
     const startIndex = currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
-    // Always start from frame 0 - completely forget where we stopped
-    const startFrame = 0;
+    // Use overrideFrame if provided, otherwise use currentFrame to preserve where playback stopped
+    const startFrame = overrideFrame !== undefined ? overrideFrame : (currentFrame ?? 0);
     
     playEpisodeSequentially(startIndex, startFrame);
-  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, stopAllPlayback]);
+  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, stopAllPlayback, currentFrame]);
 
   // Sync playback speed with Viewer3D
   useEffect(() => {
