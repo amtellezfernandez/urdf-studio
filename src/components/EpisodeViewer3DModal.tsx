@@ -91,10 +91,9 @@ const calculateFrameFromMouse = (
   ));
 };
 
-// Helper to update frame in 3D viewer
-const updateViewerFrame = (frame: number, episode: Episode) => {
-  const frames = toAnimationFrames(episode);
-  (window as any).viewer3dPlayEpisode?.(frames);
+// Helper to update frame in 3D viewer (for timeline scrubbing)
+// This does NOT reload the episode, just sets the frame and ensures playback is stopped
+const updateViewerFrame = (frame: number) => {
   (window as any).viewer3dSetFrame?.(frame);
   (window as any).viewer3dStopAnimation?.();
   (window as any).viewer3dPlayAnimation?.(false);
@@ -252,8 +251,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
 
-    // Use the same logic as stopping the episode
-    updateViewerFrame(frameIndex, episode);
+    // Update to the clicked frame (stops playback)
+    updateViewerFrame(frameIndex);
 
     onSetGlobalFrame?.(frameIndex);
 
@@ -296,10 +295,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     if (x >= CANVAS_PADDING && x <= rect.width - CANVAS_PADDING && episode.frames.length > 0) {
       const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
-      
-      // Use the same logic as stopping the episode
-      updateViewerFrame(frameIndex, episode);
-      
+
+      // Update to the dragged frame (stops playback)
+      updateViewerFrame(frameIndex);
+
       onSetGlobalFrame?.(frameIndex);
       setCurrentFrame(frameIndex);
     }

@@ -3619,13 +3619,21 @@ export const Sidebar = ({
         const currentEpisode = episodes[playableIndex];
         if (currentEpisode && currentEpisode.frames && currentEpisode.frames.length > 0) {
           const frames = toAnimationFrames(currentEpisode);
-          // Reload frames first, then start playback
+          // Reload frames first
           (window as any).viewer3dPlayEpisode?.(frames);
-          // Wait a bit for frames to be set, then start playback
+          // CRITICAL: After reloading episode, restore the frame position (from timeline scrubbing)
+          // Wait for frames to load, then set frame, then start playback
           setTimeout(() => {
             if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === playableIndex) {
-              // Force play (true) to ensure playback starts even if state is inconsistent
-              (window as any).viewer3dPlayAnimation?.(true);
+              // Restore the frame position that was scrubbed to
+              (window as any).viewer3dSetFrame?.(frameToUse);
+              // Then start playback from that position
+              setTimeout(() => {
+                if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === playableIndex) {
+                  // Force play (true) to ensure playback starts even if state is inconsistent
+                  (window as any).viewer3dPlayAnimation?.(true);
+                }
+              }, 20); // Small delay after setting frame
             }
           }, 50); // Increased delay to ensure frames are set and state is updated
         } else {
@@ -4458,13 +4466,37 @@ export const Sidebar = ({
           onSetCurrentEpisodeIndex={setCurrentPlayingEpisodeIndex}
           globalCurrentFrame={currentFrame}
           onSetGlobalFrame={(frame: number) => {
-            // When user manually scrubs timeline, stop playback (hard stop)
-            if (isPlayingAll) {
-              stopAllPlayback();
-            }
+            // When user manually scrubs timeline, ALWAYS stop playback (hard stop)
+            // This is equivalent to clicking the STOP button
+
+            // CRITICAL ORDER: Set frame FIRST, then stop playback
+            // This ensures the scrubbed position is preserved for resume
+
+            // 1. Set the frame in 3D viewer
             (window as any).viewer3dSetFrame?.(frame);
-            // Update parent's currentFrame state
+
+            // 2. Update parent's currentFrame state (so play resumes from here)
             onFrameChange?.(frame);
+
+            // 3. THEN stop playback (after frame is set and state is updated)
+            stopAllPlayback();
+
+            // 4. Prevent auto-start from viewer3dPlayEpisode (called in timeline drag)
+            // Use multiple stops at different times to catch the 10ms auto-start
+            (window as any).viewer3dStopAnimation?.();
+            setTimeout(() => {
+              (window as any).viewer3dStopAnimation?.();
+            }, 5);
+            setTimeout(() => {
+              (window as any).viewer3dStopAnimation?.();
+            }, 12); // Right before auto-start (10ms)
+            setTimeout(() => {
+              (window as any).viewer3dStopAnimation?.();
+              (window as any).viewer3dPlayAnimation?.(false);
+            }, 25); // Right after auto-start
+            setTimeout(() => {
+              (window as any).viewer3dStopAnimation?.();
+            }, 50); // Final safety stop
           }}
         />
       )}
