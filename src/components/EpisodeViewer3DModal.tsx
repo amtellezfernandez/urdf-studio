@@ -22,6 +22,7 @@ const CANVAS_PADDING = 40;
 const MIN_WINDOW_WIDTH = 400;
 const MIN_WINDOW_HEIGHT = 300;
 const DRAG_THRESHOLD = 3;
+const TIMELINE_HEADER_HEIGHT = 60; // Height of the top area where dragging is allowed (FRAME/SECS area)
 const JOINT_COLORS = [
   "#ec4899", "#eab308", "#22c55e", "#3b82f6",
   "#a855f7", "#f97316", "#06b6d4", "#ef4444",
@@ -130,6 +131,22 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
   const preservedFrameRef = useRef<number | null>(null);
+  
+  // Handle canvas hover to change cursor
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const x = e.clientX - rect.left;
+    
+    // Change cursor to pointer only when hovering over the top header area
+    if (y <= TIMELINE_HEADER_HEIGHT && x >= CANVAS_PADDING && x <= rect.width - CANVAS_PADDING) {
+      canvasRef.current.style.cursor = 'pointer';
+    } else {
+      canvasRef.current.style.cursor = 'default';
+    }
+  }, []);
 
   // Get all joint names from the episode
   const jointNames = useMemo(() => {
@@ -223,7 +240,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
+    // Only allow dragging in the top header area (FRAME/SECS area)
+    if (y > TIMELINE_HEADER_HEIGHT) return;
+    
     if (x < CANVAS_PADDING || x > rect.width - CANVAS_PADDING) return;
 
     dragStartPositionRef.current = { x: e.clientX, y: e.clientY };
@@ -231,10 +252,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
 
-    if (isPlayingAll) {
-      onPlayAllEpisodes?.();
-      (window as any).viewer3dStopAnimation?.();
-    }
+    // Use the same logic as stopping the episode
+    updateViewerFrame(frameIndex, episode);
 
     onSetGlobalFrame?.(frameIndex);
 
@@ -247,10 +266,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     }
 
-    (window as any).viewer3dSetFrame?.(frameIndex);
-
     setCurrentFrame(frameIndex);
-  }, [episode, isPlayingAll, onPlayAllEpisodes, onSetGlobalFrame, currentEpisodeIndex, allEpisodes, onSetCurrentEpisodeIndex]);
+  }, [episode, onSetGlobalFrame, currentEpisodeIndex, allEpisodes, onSetCurrentEpisodeIndex]);
 
   // Handle timeline mouse move
   const handleTimelineMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -270,11 +287,20 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Only allow dragging if we're in the header area or if we started dragging from the header
+    // This allows dragging to continue even if mouse moves slightly below the header
+    const initialY = dragStartPositionRef.current.y - rect.top;
+    if (initialY > TIMELINE_HEADER_HEIGHT) return;
 
     if (x >= CANVAS_PADDING && x <= rect.width - CANVAS_PADDING && episode.frames.length > 0) {
       const frameIndex = calculateFrameFromMouse(x, rect.width, episode.frames.length);
+      
+      // Use the same logic as stopping the episode
+      updateViewerFrame(frameIndex, episode);
+      
       onSetGlobalFrame?.(frameIndex);
-      (window as any).viewer3dSetFrame?.(frameIndex);
       setCurrentFrame(frameIndex);
     }
   }, [episode, onSetGlobalFrame]);
@@ -766,12 +792,20 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             <div className="flex-1 relative bg-background overflow-hidden">
               <canvas
                 ref={canvasRef}
-                className="w-full h-full cursor-pointer"
+                className="w-full h-full"
                 style={{ background: "#09090b" }}
                 onMouseDown={handleTimelineMouseDown}
-                onMouseMove={handleTimelineMouseMove}
+                onMouseMove={(e) => {
+                  handleCanvasMouseMove(e);
+                  handleTimelineMouseMove(e);
+                }}
                 onMouseUp={handleTimelineMouseUp}
-                onMouseLeave={handleTimelineMouseLeave}
+                onMouseLeave={(e) => {
+                  if (canvasRef.current) {
+                    canvasRef.current.style.cursor = 'default';
+                  }
+                  handleTimelineMouseLeave();
+                }}
               />
             </div>
 

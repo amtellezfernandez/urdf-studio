@@ -94,7 +94,6 @@ interface SidebarProps {
   onViewerSplitViewChange?: (splitView: boolean) => void;
   onViewerEpisodeChange?: (episode: Episode | null) => void;
   onViewerOpenChange?: (open: boolean) => void;
-  viewerOpen?: boolean;
 }
 
 interface RecordedFrame {
@@ -814,7 +813,6 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
-  viewerOpen = false,
 }: SidebarProps) => {
   const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
@@ -1021,7 +1019,6 @@ export const Sidebar = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
   const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
-  const [isViewerModalMinimized, setIsViewerModalMinimized] = useState(false);
   const [rerunViewerModalEpisode, setRerunViewerModalEpisode] = useState<Episode | null>(null);
   const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
   // Track dataset sources for future mixing
@@ -1043,7 +1040,7 @@ export const Sidebar = ({
 
   // Auto-update viewer episode when currentPlayingEpisodeIndex changes
   useEffect(() => {
-    if ((isViewerModalOpen || viewerSplitView || viewerOpen) && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+    if ((isViewerModalOpen || viewerSplitView) && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
       const currentEpisode = episodes[currentPlayingEpisodeIndex];
       if (currentEpisode && currentEpisode.id !== viewerModalEpisode?.id) {
         setViewerModalEpisode(currentEpisode);
@@ -1052,7 +1049,7 @@ export const Sidebar = ({
         }
       }
     }
-  }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, viewerOpen, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
+  }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
   
   // Clear viewerModalEpisode when viewerEpisode is cleared from Index (closing from split view)
   // We detect this by monitoring when viewerSplitView becomes false and episode should be cleared
@@ -1065,31 +1062,30 @@ export const Sidebar = ({
 
   // Auto-open floating window modal when switching from split view (but not when closing)
   const prevViewerSplitViewRef = useRef(viewerSplitView);
-
+  
   useEffect(() => {
     // When switching from split view (true) to floating window (false)
     // Only open if we're toggling, not closing
-    // We detect closing by checking if viewerOpen is false
-    // When closing from split view, Index.tsx sets viewerOpen to false
-    // When toggling, Index.tsx keeps viewerOpen as true
+    // We detect closing by checking if viewerModalEpisode is null
+    // When closing from split view, Index.tsx clears viewerEpisode to null
+    // and we should also clear viewerModalEpisode (via the effect below)
+    // So if viewerModalEpisode is null, we're closing - don't open
     if (prevViewerSplitViewRef.current && !viewerSplitView && !isViewerModalOpen) {
-      // Check if parent wants viewer open (toggling) or closed (closing)
-      if (viewerOpen && viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
-        // Toggling from split to floating - open the floating modal
+      // Only open if we have a valid episode (means we're toggling, not closing)
+      // Check if viewerModalEpisode exists - if null, we're closing
+      if (viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
         const currentEpisode = episodes[currentPlayingEpisodeIndex];
-        // Extra safety: ensure current episode matches the modal episode or update it
-        if (currentEpisode) {
+        // Only open if episode exists and matches (means we're toggling, not closing)
+        if (currentEpisode && currentEpisode.id === viewerModalEpisode.id) {
           setViewerModalEpisode(currentEpisode);
           setIsViewerModalOpen(true);
           onViewerOpenChange?.(true);
         }
-      } else if (!viewerOpen) {
-        // Closing - clear the episode to prevent future auto-opens
-        setViewerModalEpisode(null);
       }
+      // If viewerModalEpisode is null, we're closing - don't open
     }
     prevViewerSplitViewRef.current = viewerSplitView;
-  }, [viewerSplitView, viewerOpen, isViewerModalOpen, currentPlayingEpisodeIndex, episodes, viewerModalEpisode, onViewerOpenChange]);
+  }, [viewerSplitView, isViewerModalOpen, currentPlayingEpisodeIndex, episodes, viewerModalEpisode, onViewerOpenChange]);
   
   // Clear viewerModalEpisode when closing from split view
   // When Index.tsx closes from split view, it clears viewerEpisode to null
@@ -4439,14 +4435,11 @@ export const Sidebar = ({
           open={isViewerModalOpen}
           onOpenChange={(open) => {
             setIsViewerModalOpen(open);
+            onViewerOpenChange?.(open);
             if (!open) {
-              // When closing (not toggling), clear everything
-              setViewerModalEpisode(null);
-              setIsViewerModalMinimized(false);
               onViewerSplitViewChange?.(false);
-              onViewerOpenChange?.(false);
-            } else {
-              onViewerOpenChange?.(open);
+              // Clear the episode when closing
+              setViewerModalEpisode(null);
             }
           }}
           onToggleViewMode={() => {
@@ -4465,12 +4458,14 @@ export const Sidebar = ({
           onSetCurrentEpisodeIndex={setCurrentPlayingEpisodeIndex}
           globalCurrentFrame={currentFrame}
           onSetGlobalFrame={(frame: number) => {
+            // When user manually scrubs timeline, stop playback (hard stop)
+            if (isPlayingAll) {
+              stopAllPlayback();
+            }
             (window as any).viewer3dSetFrame?.(frame);
-            // Update parent's currentFrame state so playback resumes from scrubbed position
+            // Update parent's currentFrame state
             onFrameChange?.(frame);
           }}
-          isMinimized={isViewerModalMinimized}
-          onMinimizedChange={setIsViewerModalMinimized}
         />
       )}
 
