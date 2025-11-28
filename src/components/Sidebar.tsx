@@ -3307,6 +3307,11 @@ export const Sidebar = ({
     (window as any).viewer3dStopAnimation?.();
     (window as any).viewer3dClearAnimation?.();
 
+    // CRITICAL: Clear the loaded episode ref so that when resuming playback,
+    // setEpisodeAndFrame knows it needs to reload the episode frames
+    // This prevents flickering from frame 0 → scrubbed frame
+    currentLoadedEpisodeRef.current = null;
+
     // DO NOT reset frame - preserve current position so playback can resume from where it stopped
     // (window as any).viewer3dSetFrame?.(0);
     // onFrameChange?.(0);
@@ -3395,34 +3400,39 @@ export const Sidebar = ({
     
     if (needsReload) {
       const frames = toAnimationFrames(episode);
+
+      // CRITICAL: Set frame index BEFORE reloading to prevent flicker at frame 0
+      // The useFrame hook checks __viewer3dCurrentFrameIndex when frames are loaded
+      (window as any).__viewer3dCurrentFrameIndex = clampedFrame;
+
       // viewer3dPlayEpisode loads the episode and automatically starts playback after 10ms
       (window as any).viewer3dPlayEpisode?.(frames);
       currentLoadedEpisodeRef.current = episodeIndex;
-      
-      // Explicitly set the frame to the requested frame (usually 0 for new episodes)
-      // This ensures we start from frame 0, not from the initialized timestamp
-      // Use requestAnimationFrame to ensure the episode is loaded before setting frame
-      // Note: viewer3dPlayEpisode auto-starts playback after 10ms, so we need to ensure
-      // playback continues after setting the frame
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
+
+      // If we need to start from a specific frame (not frame 0), set it after frames load
+      // Otherwise, let the natural auto-start happen for smooth playback from frame 0
+      if (clampedFrame > 0) {
+        // Starting from middle of episode - need to set frame and ensure playback continues
+        setTimeout(() => {
           if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
             (window as any).viewer3dSetFrame?.(clampedFrame);
             onFrameChange?.(clampedFrame);
-            // Ensure playback continues after setting frame (viewer3dSetFrame might pause)
-            // Check if we're supposed to be playing
+            // Ensure playback continues from this position
             if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
               setTimeout(() => {
-                // Double-check state before resuming playback
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-                  // Force play (true) to ensure playback starts
+                  // Force play (true) to ensure playback continues after setting frame
                   (window as any).viewer3dPlayAnimation?.(true);
                 }
-              }, 50); // Increased delay to ensure frames are set and state is updated
+              }, 20);
             }
           }
-        });
-      });
+        }, 15);
+      } else {
+        // Starting from frame 0 - just let the auto-start from viewer3dPlayEpisode handle it
+        // The auto-start will begin playback after 10ms automatically
+        // This ensures smooth playback without any stops/restarts
+      }
     } else {
       // Same episode - just update frame position
       // Use double requestAnimationFrame to ensure playback speed state has updated before setting frame
@@ -3600,48 +3610,19 @@ export const Sidebar = ({
       }
       
       // Use consistent helper function
+      // Since stopAllPlayback now clears currentLoadedEpisodeRef, setEpisodeAndFrame
+      // will properly reload the episode and set the frame without flickering
       setEpisodeAndFrame(playableIndex, frameToUse);
-      
+
       // Ensure state is set to playing before starting animation
       // This prevents the button from showing wrong state
       if (!isPlayingAllRef.current) {
         isPlayingAllRef.current = true;
         setIsPlayingAll(true);
       }
-      
-      // Start playing - use helper function that handles the toggle correctly
-      // Check if this is actually a new episode (not just null from stopAllPlayback)
-      const isNewEpisodeTransition = currentLoadedEpisodeRef.current !== playableIndex && currentLoadedEpisodeRef.current !== null;
-      
-      if (!isNewEpisodeTransition) {
-        // Same episode - ensure frames are loaded and playback is active
-        // Since stopAllPlayback clears frames, we need to reload them
-        const currentEpisode = episodes[playableIndex];
-        if (currentEpisode && currentEpisode.frames && currentEpisode.frames.length > 0) {
-          const frames = toAnimationFrames(currentEpisode);
-          // Reload frames first
-          (window as any).viewer3dPlayEpisode?.(frames);
-          // CRITICAL: After reloading episode, restore the frame position (from timeline scrubbing)
-          // Wait for frames to load, then set frame, then start playback
-          setTimeout(() => {
-            if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === playableIndex) {
-              // Restore the frame position that was scrubbed to
-              (window as any).viewer3dSetFrame?.(frameToUse);
-              // Then start playback from that position
-              setTimeout(() => {
-                if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === playableIndex) {
-                  // Force play (true) to ensure playback starts even if state is inconsistent
-                  (window as any).viewer3dPlayAnimation?.(true);
-                }
-              }, 20); // Small delay after setting frame
-            }
-          }, 50); // Increased delay to ensure frames are set and state is updated
-        } else {
-          startViewer3DPlayback();
-        }
-      }
-      // For new episodes, playback is handled in setEpisodeAndFrame after frame is set
-      // This prevents conflicts with viewer3dPlayEpisode's auto-start
+
+      // setEpisodeAndFrame handles both reloading and frame positioning
+      // No need for redundant reload here - it would cause flickering
 
       // Calculate remaining duration from current frame to end of episode
       // This ensures that if we resume from the middle, we only wait for the remaining part
