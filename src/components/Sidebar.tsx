@@ -1016,6 +1016,7 @@ export const Sidebar = ({
   const playbackTimeoutRef = useRef<number | null>(null);
   const isPlayingAllRef = useRef<boolean>(false);
   const currentLoadedEpisodeRef = useRef<number | null>(null); // Track which episode is currently loaded in Viewer3D
+  const playbackSessionIdRef = useRef<number>(0); // Track playback sessions to prevent race conditions
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
   const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
@@ -3296,8 +3297,19 @@ export const Sidebar = ({
   // Centralized function to stop all playback
   // This ensures consistent stopping behavior and prevents race conditions
   const stopAllPlayback = useCallback(() => {
+    // CRITICAL: Capture current frame position BEFORE clearing anything
+    // This ensures we can resume from where we stopped, even after 1000+ stop/start cycles
+    const currentFrameIndex = (window as any).__viewer3dCurrentFrameIndex;
+    if (currentFrameIndex !== undefined && currentFrameIndex !== null && onFrameChange) {
+      // Update parent's currentFrame state so playback resumes from this position
+      onFrameChange(currentFrameIndex);
+    }
+
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
+
+    // Increment session ID to invalidate any pending async operations from previous playback
+    playbackSessionIdRef.current += 1;
 
     if (playbackTimeoutRef.current) {
       clearTimeout(playbackTimeoutRef.current);
@@ -3312,9 +3324,8 @@ export const Sidebar = ({
     // This prevents flickering from frame 0 → scrubbed frame
     currentLoadedEpisodeRef.current = null;
 
-    // DO NOT reset frame - preserve current position so playback can resume from where it stopped
+    // DO NOT reset frame to 0 - we already captured and preserved the position above
     // (window as any).viewer3dSetFrame?.(0);
-    // onFrameChange?.(0);
 
     // Clear any preserved frame state
     delete (window as any).__viewer3dPreserveFrameTime;
@@ -3401,6 +3412,9 @@ export const Sidebar = ({
     if (needsReload) {
       const frames = toAnimationFrames(episode);
 
+      // Capture current session ID to detect if playback was stopped during async operations
+      const sessionId = playbackSessionIdRef.current;
+
       // CRITICAL: Set frame index BEFORE reloading to prevent flicker at frame 0
       // The useFrame hook checks __viewer3dCurrentFrameIndex when frames are loaded
       (window as any).__viewer3dCurrentFrameIndex = clampedFrame;
@@ -3414,12 +3428,17 @@ export const Sidebar = ({
       if (clampedFrame > 0) {
         // Starting from middle of episode - need to set frame and ensure playback continues
         setTimeout(() => {
+          // Check if this playback session is still valid (not stopped/restarted)
+          if (sessionId !== playbackSessionIdRef.current) return;
+
           if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
             (window as any).viewer3dSetFrame?.(clampedFrame);
             onFrameChange?.(clampedFrame);
             // Ensure playback continues from this position
             if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
               setTimeout(() => {
+                // Check session ID again before starting playback
+                if (sessionId !== playbackSessionIdRef.current) return;
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
                   // Force play (true) to ensure playback continues after setting frame
                   (window as any).viewer3dPlayAnimation?.(true);
@@ -3435,12 +3454,21 @@ export const Sidebar = ({
       }
     } else {
       // Same episode - just update frame position
+      // Capture session ID to detect if stopped during async operations
+      const sessionId = playbackSessionIdRef.current;
+
       // Use double requestAnimationFrame to ensure playback speed state has updated before setting frame
       // This is critical for non-1x speeds (e.g., 0.25x) to work correctly
       // First RAF: allows React state update to propagate
       requestAnimationFrame(() => {
+        // Check if playback session is still valid
+        if (sessionId !== playbackSessionIdRef.current) return;
+
         // Second RAF: ensures the prop has been passed to URDFModel and useFrame will use new speed
         requestAnimationFrame(() => {
+          // Check session again
+          if (sessionId !== playbackSessionIdRef.current) return;
+
           // Ensure we're setting a valid frame index before calling
           if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
             const wasPlaying = isPlayingAllRef.current;
@@ -3449,6 +3477,8 @@ export const Sidebar = ({
             // viewer3dSetFrame stops playback, so resume if we were playing
             if (wasPlaying && isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
               setTimeout(() => {
+                // Final session check before resuming playback
+                if (sessionId !== playbackSessionIdRef.current) return;
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
                   // Force play (true) since viewer3dSetFrame stopped playback
                   (window as any).viewer3dPlayAnimation?.(true);
@@ -3496,7 +3526,11 @@ export const Sidebar = ({
     // Start playing
     (window as any).viewer3dPlayAnimation?.(true);
 
-    const duration = getEpisodeDurationMs(episode) + PLAYBACK_GAP_MS;
+    // Calculate duration and adjust for playback speed
+    const baseDuration = getEpisodeDurationMs(episode);
+    const speedAdjustedDuration = baseDuration / playbackSpeed;
+    const duration = speedAdjustedDuration + PLAYBACK_GAP_MS;
+
     playbackTimeoutRef.current = window.setTimeout(() => {
       // Loop the same episode
       if (isPlayingAllRef.current && episodes.length > 0) {
@@ -3628,16 +3662,16 @@ export const Sidebar = ({
       // This ensures that if we resume from the middle, we only wait for the remaining part
       // We treat the stopped position as if we've already played up to that point
       let remainingDuration = DEFAULT_PLAYBACK_DURATION_MS; // Fallback default
-      
+
       if (episode.frames.length > 0) {
         const startTimestamp = episode.frames[0].timestamp;
         const endTimestamp = episode.frames[episode.frames.length - 1].timestamp;
-        
+
         if (frameToUse > 0 && frameToUse < episode.frames.length) {
           // Resuming from middle of episode - calculate remaining time
           const currentTimestamp = episode.frames[frameToUse]?.timestamp ?? startTimestamp;
           remainingDuration = endTimestamp - currentTimestamp;
-          
+
           // Ensure we have a valid positive duration
           if (remainingDuration <= 0) {
             // If we're at or past the end, stop immediately (don't try to play)
@@ -3646,17 +3680,29 @@ export const Sidebar = ({
         } else if (frameToUse === 0) {
           // Starting from frame 0, use full episode duration
           remainingDuration = endTimestamp - startTimestamp;
-          
+
           // Ensure minimum duration to prevent immediate timeout
           if (remainingDuration <= 0) {
             remainingDuration = DEFAULT_PLAYBACK_DURATION_MS;
           }
         }
       }
-      
+
+      // CRITICAL: Adjust duration for playback speed
+      // If playing at 2x speed, episode finishes in half the time
+      // If playing at 0.5x speed, episode takes twice as long
+      const speedAdjustedDuration = remainingDuration / playbackSpeed;
+
       // Ensure duration is always positive and reasonable
-      const duration = Math.max(PLAYBACK_GAP_MS, remainingDuration + PLAYBACK_GAP_MS);
+      const duration = Math.max(PLAYBACK_GAP_MS, speedAdjustedDuration + PLAYBACK_GAP_MS);
+
+      // Capture session ID to detect if playback was stopped/restarted during timeout
+      const sessionId = playbackSessionIdRef.current;
+
       playbackTimeoutRef.current = window.setTimeout(() => {
+        // Check if this playback session is still valid
+        if (sessionId !== playbackSessionIdRef.current) return;
+
         // Double-check that playback is still active (prevents race conditions)
         if (!isPlayingAllRef.current || episodes.length === 0) {
           isPlayingAllRef.current = false;
@@ -3713,13 +3759,17 @@ export const Sidebar = ({
       return;
     }
 
+    // Increment session ID to mark this as a new playback session
+    // This invalidates any pending operations from previous sessions
+    playbackSessionIdRef.current += 1;
+
     setIsPlayingAll(true);
     isPlayingAllRef.current = true;
-    
+
     const startIndex = currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
     // Use overrideFrame if provided, otherwise use currentFrame to preserve where playback stopped
     const startFrame = overrideFrame !== undefined ? overrideFrame : (currentFrame ?? 0);
-    
+
     playEpisodeSequentially(startIndex, startFrame);
   }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, stopAllPlayback, currentFrame]);
 
