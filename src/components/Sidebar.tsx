@@ -4483,6 +4483,9 @@ export const Sidebar = ({
 
             // 4. Prevent auto-start from viewer3dPlayEpisode (called in timeline drag)
             // Use multiple stops at different times to catch the 10ms auto-start
+            // NOTE: Do NOT call viewer3dPlayAnimation(false) here because stopAllPlayback()
+            // already cleared the frames, and viewer3dPlayAnimation checks for frames
+            // before doing anything, which would trigger "Please upload data first" error
             (window as any).viewer3dStopAnimation?.();
             setTimeout(() => {
               (window as any).viewer3dStopAnimation?.();
@@ -4492,7 +4495,6 @@ export const Sidebar = ({
             }, 12); // Right before auto-start (10ms)
             setTimeout(() => {
               (window as any).viewer3dStopAnimation?.();
-              (window as any).viewer3dPlayAnimation?.(false);
             }, 25); // Right after auto-start
             setTimeout(() => {
               (window as any).viewer3dStopAnimation?.();

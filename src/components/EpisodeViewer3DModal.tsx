@@ -93,10 +93,12 @@ const calculateFrameFromMouse = (
 
 // Helper to update frame in 3D viewer (for timeline scrubbing)
 // This does NOT reload the episode, just sets the frame and ensures playback is stopped
+// NOTE: We only call viewer3dStopAnimation, NOT viewer3dPlayAnimation(false)
+// because the parent's onSetGlobalFrame will call stopAllPlayback() which clears frames,
+// and calling viewer3dPlayAnimation with cleared frames would trigger "upload data first" error
 const updateViewerFrame = (frame: number) => {
   (window as any).viewer3dSetFrame?.(frame);
   (window as any).viewer3dStopAnimation?.();
-  (window as any).viewer3dPlayAnimation?.(false);
 };
 
 export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
