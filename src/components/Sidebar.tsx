@@ -4531,6 +4531,83 @@ export const Sidebar = ({
               (window as any).viewer3dStopAnimation?.();
             }, 50); // Final safety stop
           }}
+          onSaveEpisode={(savedEpisode, saveAsNew, newName) => {
+            if (saveAsNew) {
+              // Save as new episode
+              const newEpisodeId = `episode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              const newEpisodeNumber = episodes.length + 1;
+              
+              // Update metadata with new name if provided
+              const updatedMetadata = savedEpisode.metadata ? {
+                ...savedEpisode.metadata,
+                additional: {
+                  ...savedEpisode.metadata.additional,
+                  sourceType: savedEpisode.metadata.additional?.sourceType || 'local',
+                  sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
+                },
+              } : {
+                episodeNumber: newEpisodeNumber,
+                episode_index: newEpisodeNumber - 1,
+                num_frames: savedEpisode.frames.length,
+                additional: {
+                  sourceType: 'local',
+                  sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
+                },
+              };
+              
+              const newEpisode = createEpisode(
+                newEpisodeId,
+                newEpisodeNumber,
+                savedEpisode.frames,
+                updatedMetadata
+              );
+              
+              setEpisodes((prev) => {
+                const next = [...prev, newEpisode];
+                return renumberEpisodes(next);
+              });
+              
+              toast.success(`Saved as new episode: ${newName || `Episode ${newEpisodeNumber}`}`);
+            } else {
+              // Overwrite existing episode
+              const episodeIndex = episodes.findIndex((ep) => ep.id === savedEpisode.id);
+              if (episodeIndex !== -1) {
+                setEpisodes((prev) => {
+                  const next = [...prev];
+                  // Update the episode while preserving its ID and number
+                  next[episodeIndex] = {
+                    ...savedEpisode,
+                    id: next[episodeIndex].id, // Preserve original ID
+                    number: next[episodeIndex].number, // Preserve original number
+                    metadata: savedEpisode.metadata ? {
+                      ...savedEpisode.metadata,
+                      episodeNumber: next[episodeIndex].number,
+                      episode_index: next[episodeIndex].metadata?.episode_index ?? next[episodeIndex].number - 1,
+                      num_frames: savedEpisode.frames.length,
+                    } : {
+                      episodeNumber: next[episodeIndex].number,
+                      episode_index: next[episodeIndex].number - 1,
+                      num_frames: savedEpisode.frames.length,
+                    },
+                  };
+                  return next;
+                });
+                
+                // Update viewer episode if it's the one being edited
+                if (viewerModalEpisode?.id === savedEpisode.id) {
+                  setViewerModalEpisode({
+                    ...savedEpisode,
+                    id: viewerModalEpisode.id,
+                    number: viewerModalEpisode.number,
+                  });
+                }
+                
+                toast.success(`Episode ${episodes[episodeIndex].number} updated successfully`);
+              } else {
+                toast.error("Episode not found");
+              }
+            }
+          }}
         />
       )}
 

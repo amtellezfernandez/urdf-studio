@@ -3,12 +3,24 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   Minimize2,
   Maximize2,
   GripHorizontal,
   Eye,
   LayoutGrid,
   Square,
+  Pencil,
+  X,
+  Save,
 } from "lucide-react";
 import {
   Tooltip,
@@ -56,6 +68,7 @@ interface EpisodeViewer3DModalProps {
   onToggleViewMode?: () => void; // Toggle between split view and floating window
   isMinimized?: boolean;
   onMinimizedChange?: (minimized: boolean) => void;
+  onSaveEpisode?: (episode: Episode, saveAsNew: boolean, newName?: string) => void; // Callback to save/update episode
 }
 
 // Helper function to convert episode to animation frames
@@ -101,6 +114,185 @@ const updateViewerFrame = (frame: number) => {
   (window as any).viewer3dStopAnimation?.();
 };
 
+// Helper to smooth curve around a point using Catmull-Rom spline
+const smoothCurveAroundPoint = (
+  values: number[],
+  pointIndex: number,
+  newValue: number,
+  influenceRadius: number = 3
+): number[] => {
+  const result = [...values];
+  result[pointIndex] = newValue;
+  
+  // Apply smoothing to nearby points
+  const start = Math.max(0, pointIndex - influenceRadius);
+  const end = Math.min(values.length - 1, pointIndex + influenceRadius);
+  
+  for (let i = start; i <= end; i++) {
+    if (i === pointIndex) continue;
+    
+    const distance = Math.abs(i - pointIndex);
+    const influence = 1 - (distance / influenceRadius);
+    
+    if (influence > 0) {
+      // Interpolate between original and new value based on distance
+      const original = values[i];
+      const target = newValue;
+      result[i] = original + (target - original) * influence * 0.3; // 0.3 is smoothing factor
+    }
+  }
+  
+  return result;
+};
+
+// Bezier curve interpolation helper
+const bezierInterpolate = (p0: number, p1: number, p2: number, p3: number, t: number): number => {
+  const u = 1 - t;
+  const tt = t * t;
+  const uu = u * u;
+  const uuu = uu * u;
+  const ttt = tt * t;
+  
+  return uuu * p0 + 3 * uu * t * p1 + 3 * u * tt * p2 + ttt * p3;
+};
+
+// Apply Bezier curve interpolation using tangent handles
+// Handles control the curve shape through their position and length
+const applyBezierCurve = (
+  values: number[],
+  pointIndex: number,
+  leftHandle: {x: number, y: number, value: number, length: number} | null,
+  rightHandle: {x: number, y: number, value: number, length: number} | null,
+  frames: RecordedFrame[],
+  jointName: string,
+  pointX: number, // Screen X position of the main point
+  canvasWidth: number,
+  canvasHeight: number,
+  minVal: number,
+  maxVal: number
+): number[] => {
+  const result = [...values];
+  
+  if (leftHandle === null && rightHandle === null) {
+    return result; // No handles, return unchanged
+  }
+  
+  const currentValue = values[pointIndex];
+  
+  // Determine influence range based on handle length
+  // Longer handles affect more points
+  const leftInfluence = leftHandle ? Math.max(3, Math.floor(leftHandle.length / 10)) : 3;
+  const rightInfluence = rightHandle ? Math.max(3, Math.floor(rightHandle.length / 10)) : 3;
+  
+  const start = Math.max(0, pointIndex - leftInfluence);
+  const end = Math.min(values.length - 1, pointIndex + rightInfluence);
+  
+  // Get neighboring anchor points
+  const prevAnchorIndex = Math.max(0, pointIndex - leftInfluence);
+  const nextAnchorIndex = Math.min(values.length - 1, pointIndex + rightInfluence);
+  const prevAnchorValue = values[prevAnchorIndex];
+  const nextAnchorValue = values[nextAnchorIndex];
+  
+  // Calculate handle strength based on length (longer = stronger influence)
+  const leftStrength = leftHandle ? Math.min(1.0, leftHandle.length / 50) : 0;
+  const rightStrength = rightHandle ? Math.min(1.0, rightHandle.length / 50) : 0;
+  
+  // Apply Bezier interpolation
+  for (let i = start; i <= end; i++) {
+    if (i === pointIndex) {
+      result[i] = currentValue; // Keep the main point value unchanged
+      continue;
+    }
+    
+    // Calculate normalized position (0 to 1) relative to the selected point
+    let t: number;
+    if (i < pointIndex) {
+      // Before the point - use left handle
+      if (leftHandle && leftStrength > 0) {
+        const segmentLength = pointIndex - prevAnchorIndex;
+        t = segmentLength > 0 ? (i - prevAnchorIndex) / segmentLength : 0;
+        t = Math.max(0, Math.min(1, t));
+        
+        // Calculate the control point value based on handle
+        // The handle's value represents the tangent direction
+        const handleInfluence = leftStrength;
+        const controlValue = currentValue + (leftHandle.value - currentValue) * handleInfluence;
+        
+        // Bezier curve: prevAnchor -> controlValue -> currentPoint
+        result[i] = bezierInterpolate(
+          prevAnchorValue,
+          controlValue,
+          currentValue,
+          currentValue,
+          t
+        );
+      }
+    } else {
+      // After the point - use right handle
+      if (rightHandle && rightStrength > 0) {
+        const segmentLength = nextAnchorIndex - pointIndex;
+        t = segmentLength > 0 ? (i - pointIndex) / segmentLength : 0;
+        t = Math.max(0, Math.min(1, t));
+        
+        // Calculate the control point value based on handle
+        const handleInfluence = rightStrength;
+        const controlValue = currentValue + (rightHandle.value - currentValue) * handleInfluence;
+        
+        // Bezier curve: currentPoint -> controlValue -> nextAnchor
+        result[i] = bezierInterpolate(
+          currentValue,
+          controlValue,
+          nextAnchorValue,
+          nextAnchorValue,
+          t
+        );
+      }
+    }
+  }
+  
+  return result;
+};
+
+// Helper to find closest point on a curve
+const findClosestPointOnCurve = (
+  mouseX: number,
+  mouseY: number,
+  frames: RecordedFrame[],
+  jointName: string,
+  jointRange: { min: number; max: number },
+  canvasWidth: number,
+  canvasHeight: number
+): number | null => {
+  const graphWidth = canvasWidth - CANVAS_PADDING * 2;
+  const graphHeight = canvasHeight - CANVAS_PADDING * 2;
+  const rangePadding = (jointRange.max - jointRange.min) * 0.1 || 0.1;
+  const minVal = jointRange.min - rangePadding;
+  const maxVal = jointRange.max + rangePadding;
+  const valueRange = maxVal - minVal;
+  
+  let closestIndex: number | null = null;
+  let minDistance = Infinity;
+  const POINT_SELECTION_RADIUS = 8; // pixels
+  
+  frames.forEach((frame, frameIndex) => {
+    const value = frame.jointPositions[jointName];
+    const x = CANVAS_PADDING + (graphWidth * frameIndex) / (frames.length - 1);
+    const normalizedValue = (value - minVal) / valueRange;
+    const y = canvasHeight - CANVAS_PADDING - graphHeight * normalizedValue;
+    
+    const distance = Math.sqrt(
+      Math.pow(mouseX - x, 2) + Math.pow(mouseY - y, 2)
+    );
+    
+    if (distance < POINT_SELECTION_RADIUS && distance < minDistance) {
+      minDistance = distance;
+      closestIndex = frameIndex;
+    }
+  });
+  
+  return closestIndex;
+};
+
 export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   episode,
   open,
@@ -116,6 +308,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   onToggleViewMode,
   isMinimized = false,
   onMinimizedChange,
+  onSaveEpisode,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
@@ -126,6 +319,24 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState<string>("");
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  
+  // Edit mode states
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingJoint, setEditingJoint] = useState<string | null>(null);
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
+  const [isDraggingPoint, setIsDraggingPoint] = useState(false);
+  const [modifiedEpisode, setModifiedEpisode] = useState<Episode | null>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveAsNew, setSaveAsNew] = useState(false);
+  const [newEpisodeName, setNewEpisodeName] = useState("");
+  
+  // Tangent handles state: Map<pointIndex, {left: {x, y, value, length}, right: {x, y, value, length}}>
+  // x, y are screen coordinates, value is the joint value at that handle position, length is distance from point
+  const [tangentHandles, setTangentHandles] = useState<Map<number, {
+    left: {x: number, y: number, value: number, length: number}, 
+    right: {x: number, y: number, value: number, length: number}
+  }>>(new Map());
+  const [draggingHandle, setDraggingHandle] = useState<{pointIndex: number, side: 'left' | 'right'} | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -215,6 +426,29 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     }
   }, [isPlayingAll, globalCurrentFrame]);
 
+  // Helper to check if episode has been modified
+  const hasChanges = useMemo(() => {
+    if (!episode || !modifiedEpisode) return false;
+    if (episode.frames.length !== modifiedEpisode.frames.length) return true;
+    
+    for (let i = 0; i < episode.frames.length; i++) {
+      const original = episode.frames[i];
+      const modified = modifiedEpisode.frames[i];
+      const originalJoints = Object.keys(original.jointPositions);
+      const modifiedJoints = Object.keys(modified.jointPositions);
+      
+      if (originalJoints.length !== modifiedJoints.length) return true;
+      
+      for (const jointName of originalJoints) {
+        if (Math.abs(original.jointPositions[jointName] - modified.jointPositions[jointName]) > 0.0001) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }, [episode, modifiedEpisode]);
+
   // Reset state when episode changes
   useEffect(() => {
     setCurrentFrame(0);
@@ -222,7 +456,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (episode) {
       const allJoints = new Set(Object.keys(episode.frames[0]?.jointPositions || {}));
       setSelectedJoints(allJoints);
+      // Initialize modified episode copy for editing
+      setModifiedEpisode({
+        ...episode,
+        frames: episode.frames.map(f => ({
+          ...f,
+          jointPositions: { ...f.jointPositions }
+        }))
+      });
     }
+    // Reset edit mode when episode changes
+    setIsEditMode(false);
+    setEditingJoint(null);
+    setSelectedPointIndex(null);
+    setTangentHandles(new Map());
+    setShowSaveDialog(false);
+    setSaveAsNew(false);
+    setNewEpisodeName("");
   }, [episode?.id]);
 
   // Initialize preserved frame on mount
@@ -316,6 +566,391 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     dragStartPositionRef.current = null;
   }, []);
 
+  // Helper to create tangent handles for a point (Photoshop-style)
+  const createHandlesForPoint = useCallback((
+    pointIndex: number,
+    rect: DOMRect,
+    range: { min: number; max: number },
+    graphWidth: number,
+    graphHeight: number,
+    minVal: number,
+    maxVal: number,
+    valueRange: number
+  ) => {
+    const currentValue = modifiedEpisode!.frames[pointIndex].jointPositions[editingJoint!];
+    const normalizedValue = (currentValue - minVal) / valueRange;
+    const pointY = rect.height - CANVAS_PADDING - graphHeight * normalizedValue;
+    const pointX = CANVAS_PADDING + (graphWidth * pointIndex) / (modifiedEpisode!.frames.length - 1);
+    
+    // Calculate default handle positions based on curve tangent
+    const prevIndex = Math.max(0, pointIndex - 1);
+    const nextIndex = Math.min(modifiedEpisode!.frames.length - 1, pointIndex + 1);
+    
+    const prevValue = modifiedEpisode!.frames[prevIndex].jointPositions[editingJoint!];
+    const nextValue = modifiedEpisode!.frames[nextIndex].jointPositions[editingJoint!];
+    
+    const prevNormalized = (prevValue - minVal) / valueRange;
+    const nextNormalized = (nextValue - minVal) / valueRange;
+    
+    const prevY = rect.height - CANVAS_PADDING - graphHeight * prevNormalized;
+    const nextY = rect.height - CANVAS_PADDING - graphHeight * nextNormalized;
+    const prevX = CANVAS_PADDING + (graphWidth * prevIndex) / (modifiedEpisode!.frames.length - 1);
+    const nextX = CANVAS_PADDING + (graphWidth * nextIndex) / (modifiedEpisode!.frames.length - 1);
+    
+    // Calculate tangent direction
+    const dxLeft = pointX - prevX;
+    const dyLeft = pointY - prevY;
+    const dxRight = nextX - pointX;
+    const dyRight = nextY - pointY;
+    
+    // Default handle distance
+    const defaultHandleDistance = 40;
+    
+    // Calculate tangent angles
+    const leftAngle = Math.atan2(dyLeft, dxLeft);
+    const rightAngle = Math.atan2(dyRight, dxRight);
+    
+    // Position handles along tangent direction
+    const leftHandleX = pointX - Math.cos(leftAngle) * defaultHandleDistance;
+    const leftHandleY = pointY - Math.sin(leftAngle) * defaultHandleDistance;
+    const rightHandleX = pointX + Math.cos(rightAngle) * defaultHandleDistance;
+    const rightHandleY = pointY + Math.sin(rightAngle) * defaultHandleDistance;
+    
+    // Convert handle positions to values
+    const leftNormalizedY = 1 - ((leftHandleY - CANVAS_PADDING) / graphHeight);
+    const rightNormalizedY = 1 - ((rightHandleY - CANVAS_PADDING) / graphHeight);
+    const leftHandleValue = minVal + leftNormalizedY * valueRange;
+    const rightHandleValue = minVal + rightNormalizedY * valueRange;
+    
+    // Calculate handle lengths
+    const leftLength = Math.sqrt(Math.pow(leftHandleX - pointX, 2) + Math.pow(leftHandleY - pointY, 2));
+    const rightLength = Math.sqrt(Math.pow(rightHandleX - pointX, 2) + Math.pow(rightHandleY - pointY, 2));
+    
+    return {
+      left: { x: leftHandleX, y: leftHandleY, value: leftHandleValue, length: leftLength },
+      right: { x: rightHandleX, y: rightHandleY, value: rightHandleValue, length: rightLength }
+    };
+  }, [isEditMode, editingJoint, modifiedEpisode]);
+
+  // Handle curve editing - click to select point (Photoshop-style: dragging creates handles)
+  const handleCurveClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isEditMode || !editingJoint || !episode || !canvasRef.current || !modifiedEpisode) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Don't handle clicks in the header area
+    if (y <= TIMELINE_HEADER_HEIGHT) return;
+
+    const range = jointRanges[editingJoint];
+    if (!range) return;
+
+    const closestIndex = findClosestPointOnCurve(
+      x, y,
+      modifiedEpisode.frames,
+      editingJoint,
+      range,
+      rect.width,
+      rect.height
+    );
+
+    if (closestIndex !== null) {
+      setSelectedPointIndex(closestIndex);
+      setIsDraggingPoint(true);
+      
+      // Photoshop-style: automatically create handles if they don't exist when dragging
+      if (!tangentHandles.has(closestIndex)) {
+        const graphWidth = rect.width - CANVAS_PADDING * 2;
+        const graphHeight = rect.height - CANVAS_PADDING * 2;
+        const rangePadding = (range.max - range.min) * 0.1 || 0.1;
+        const minVal = range.min - rangePadding;
+        const maxVal = range.max + rangePadding;
+        const valueRange = maxVal - minVal;
+        
+        const handles = createHandlesForPoint(
+          closestIndex,
+          rect,
+          range,
+          graphWidth,
+          graphHeight,
+          minVal,
+          maxVal,
+          valueRange
+        );
+        
+        const newHandles = new Map(tangentHandles);
+        newHandles.set(closestIndex, handles);
+        setTangentHandles(newHandles);
+      }
+    }
+  }, [isEditMode, editingJoint, episode, modifiedEpisode, jointRanges, tangentHandles, createHandlesForPoint]);
+
+  // Handle curve editing - drag to modify point (Photoshop-style: uses handles for smooth curves)
+  const handleCurveDrag = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isEditMode || !editingJoint || !episode || !canvasRef.current || !modifiedEpisode || selectedPointIndex === null || !isDraggingPoint) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Don't handle drags in the header area
+    if (y <= TIMELINE_HEADER_HEIGHT) return;
+
+    const range = jointRanges[editingJoint];
+    if (!range) return;
+
+    const graphWidth = rect.width - CANVAS_PADDING * 2;
+    const graphHeight = rect.height - CANVAS_PADDING * 2;
+    const rangePadding = (range.max - range.min) * 0.1 || 0.1;
+    const minVal = range.min - rangePadding;
+    const maxVal = range.max + rangePadding;
+    const valueRange = maxVal - minVal;
+
+    // Convert mouse Y position to joint value
+    const normalizedY = 1 - ((y - CANVAS_PADDING) / graphHeight);
+    const newValue = minVal + normalizedY * valueRange;
+    const clampedValue = Math.max(minVal, Math.min(maxVal, newValue));
+
+    // Update the point value
+    const currentValues = modifiedEpisode.frames.map(f => f.jointPositions[editingJoint]);
+    currentValues[selectedPointIndex] = clampedValue;
+
+    // Get or create handles (Photoshop-style: handles are always used when dragging)
+    let handles = tangentHandles.get(selectedPointIndex);
+    const pointX = CANVAS_PADDING + (graphWidth * selectedPointIndex) / (modifiedEpisode.frames.length - 1);
+    
+    // If handles don't exist, create them automatically
+    if (!handles) {
+      handles = createHandlesForPoint(
+        selectedPointIndex,
+        rect,
+        range,
+        graphWidth,
+        graphHeight,
+        minVal,
+        maxVal,
+        valueRange
+      );
+      const newHandles = new Map(tangentHandles);
+      newHandles.set(selectedPointIndex, handles);
+      setTangentHandles(newHandles);
+    } else {
+      // Update handle positions relative to the new point position (Photoshop-style)
+      const oldPointValue = modifiedEpisode.frames[selectedPointIndex].jointPositions[editingJoint];
+      const oldPointNormalized = (oldPointValue - minVal) / valueRange;
+      const oldPointY = rect.height - CANVAS_PADDING - graphHeight * oldPointNormalized;
+      
+      const newPointY = rect.height - CANVAS_PADDING - graphHeight * ((clampedValue - minVal) / valueRange);
+      
+      // Calculate offset from old point to handles
+      const leftDx = handles.left.x - pointX;
+      const leftDy = handles.left.y - oldPointY;
+      const rightDx = handles.right.x - pointX;
+      const rightDy = handles.right.y - oldPointY;
+      
+      // Apply same offset to new point position
+      const leftHandleX = pointX + leftDx;
+      const leftHandleY = newPointY + leftDy;
+      const rightHandleX = pointX + rightDx;
+      const rightHandleY = newPointY + rightDy;
+      
+      // Convert to values
+      const leftNormalizedY = 1 - ((leftHandleY - CANVAS_PADDING) / graphHeight);
+      const rightNormalizedY = 1 - ((rightHandleY - CANVAS_PADDING) / graphHeight);
+      const leftHandleValue = minVal + leftNormalizedY * valueRange;
+      const rightHandleValue = minVal + rightNormalizedY * valueRange;
+      
+      // Recalculate lengths
+      const leftLength = Math.sqrt(Math.pow(leftHandleX - pointX, 2) + Math.pow(leftHandleY - newPointY, 2));
+      const rightLength = Math.sqrt(Math.pow(rightHandleX - pointX, 2) + Math.pow(rightHandleY - newPointY, 2));
+      
+      handles = {
+        left: { x: leftHandleX, y: leftHandleY, value: leftHandleValue, length: leftLength },
+        right: { x: rightHandleX, y: rightHandleY, value: rightHandleValue, length: rightLength }
+      };
+      
+      const newHandles = new Map(tangentHandles);
+      newHandles.set(selectedPointIndex, handles);
+      setTangentHandles(newHandles);
+    }
+    
+    // Always use Bezier interpolation with handles (Photoshop-style)
+    const updatedValues = applyBezierCurve(
+      currentValues,
+      selectedPointIndex,
+      handles.left,
+      handles.right,
+      modifiedEpisode.frames,
+      editingJoint,
+      pointX,
+      rect.width,
+      rect.height,
+      minVal,
+      maxVal
+    );
+
+    // Update modified episode
+    const updatedFrames = modifiedEpisode.frames.map((frame, index) => ({
+      ...frame,
+      jointPositions: {
+        ...frame.jointPositions,
+        [editingJoint]: updatedValues[index]
+      }
+    }));
+
+    setModifiedEpisode({
+      ...modifiedEpisode,
+      frames: updatedFrames
+    });
+  }, [isEditMode, editingJoint, episode, modifiedEpisode, selectedPointIndex, isDraggingPoint, jointRanges, tangentHandles]);
+
+  // Handle curve editing - mouse up
+  const handleCurveMouseUp = useCallback(() => {
+    setIsDraggingPoint(false);
+    setDraggingHandle(null);
+  }, []);
+
+
+  // Handle dragging tangent handles - allows free 2D movement
+  const handleHandleDrag = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isEditMode || !editingJoint || !episode || !canvasRef.current || !modifiedEpisode || !draggingHandle) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Don't handle drags in the header area
+    if (mouseY <= TIMELINE_HEADER_HEIGHT) return;
+
+    const range = jointRanges[editingJoint];
+    if (!range) return;
+
+    const graphWidth = rect.width - CANVAS_PADDING * 2;
+    const graphHeight = rect.height - CANVAS_PADDING * 2;
+    const rangePadding = (range.max - range.min) * 0.1 || 0.1;
+    const minVal = range.min - rangePadding;
+    const maxVal = range.max + rangePadding;
+    const valueRange = maxVal - minVal;
+
+    // Get the main point position
+    const pointValue = modifiedEpisode.frames[draggingHandle.pointIndex].jointPositions[editingJoint];
+    const pointNormalized = (pointValue - minVal) / valueRange;
+    const pointY = rect.height - CANVAS_PADDING - graphHeight * pointNormalized;
+    const pointX = CANVAS_PADDING + (graphWidth * draggingHandle.pointIndex) / (modifiedEpisode.frames.length - 1);
+
+    // Allow free 2D movement - calculate new handle position
+    const newHandleX = Math.max(CANVAS_PADDING, Math.min(rect.width - CANVAS_PADDING, mouseX));
+    const newHandleY = Math.max(CANVAS_PADDING, Math.min(rect.height - CANVAS_PADDING, mouseY));
+
+    // Calculate handle length (distance from point)
+    const handleLength = Math.sqrt(
+      Math.pow(newHandleX - pointX, 2) + Math.pow(newHandleY - pointY, 2)
+    );
+
+    // Convert handle Y position to joint value
+    const normalizedY = 1 - ((newHandleY - CANVAS_PADDING) / graphHeight);
+    const newValue = minVal + normalizedY * valueRange;
+    const clampedValue = Math.max(minVal, Math.min(maxVal, newValue));
+
+    // Update the handle position, value, and length
+    const handles = tangentHandles.get(draggingHandle.pointIndex);
+    if (!handles) return;
+
+    const newHandles = new Map(tangentHandles);
+    const updatedHandle = draggingHandle.side === 'left' 
+      ? { 
+          ...handles, 
+          left: { x: newHandleX, y: newHandleY, value: clampedValue, length: handleLength },
+          right: handles.right
+        }
+      : { 
+          ...handles, 
+          left: handles.left,
+          right: { x: newHandleX, y: newHandleY, value: clampedValue, length: handleLength }
+        };
+    newHandles.set(draggingHandle.pointIndex, updatedHandle);
+    setTangentHandles(newHandles);
+
+    // Apply Bezier curve interpolation with updated handle positions
+    const currentValues = modifiedEpisode.frames.map(f => f.jointPositions[editingJoint]);
+    const updatedValues = applyBezierCurve(
+      currentValues,
+      draggingHandle.pointIndex,
+      updatedHandle.left,
+      updatedHandle.right,
+      modifiedEpisode.frames,
+      editingJoint,
+      pointX,
+      rect.width,
+      rect.height,
+      minVal,
+      maxVal
+    );
+
+    // Update modified episode
+    const updatedFrames = modifiedEpisode.frames.map((frame, index) => ({
+      ...frame,
+      jointPositions: {
+        ...frame.jointPositions,
+        [editingJoint]: updatedValues[index]
+      }
+    }));
+
+    setModifiedEpisode({
+      ...modifiedEpisode,
+      frames: updatedFrames
+    });
+  }, [isEditMode, editingJoint, episode, modifiedEpisode, draggingHandle, tangentHandles, jointRanges]);
+
+  // Handle clicking on tangent handles
+  const handleHandleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isEditMode || !editingJoint || !episode || !canvasRef.current || !modifiedEpisode) return false;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Don't handle clicks in the header area
+    if (mouseY <= TIMELINE_HEADER_HEIGHT) return false;
+
+    const HANDLE_RADIUS = 8; // pixels - larger for easier grabbing
+    const range = jointRanges[editingJoint];
+    if (!range) return false;
+
+    // Check if clicking on any handle (use stored screen coordinates)
+    for (const [pointIndex, handles] of tangentHandles.entries()) {
+      // Use stored screen coordinates, clamped to canvas bounds
+      const leftHandleX = Math.max(CANVAS_PADDING, Math.min(rect.width - CANVAS_PADDING, handles.left.x));
+      const leftHandleY = Math.max(CANVAS_PADDING, Math.min(rect.height - CANVAS_PADDING, handles.left.y));
+      const rightHandleX = Math.max(CANVAS_PADDING, Math.min(rect.width - CANVAS_PADDING, handles.right.x));
+      const rightHandleY = Math.max(CANVAS_PADDING, Math.min(rect.height - CANVAS_PADDING, handles.right.y));
+      
+      const leftDist = Math.sqrt(
+        Math.pow(mouseX - leftHandleX, 2) + Math.pow(mouseY - leftHandleY, 2)
+      );
+      const rightDist = Math.sqrt(
+        Math.pow(mouseX - rightHandleX, 2) + Math.pow(mouseY - rightHandleY, 2)
+      );
+
+      if (leftDist < HANDLE_RADIUS) {
+        setDraggingHandle({ pointIndex, side: 'left' });
+        setSelectedPointIndex(pointIndex);
+        return true; // Indicate we handled this click
+      }
+      if (rightDist < HANDLE_RADIUS) {
+        setDraggingHandle({ pointIndex, side: 'right' });
+        setSelectedPointIndex(pointIndex);
+        return true; // Indicate we handled this click
+      }
+    }
+    return false; // No handle was clicked
+  }, [isEditMode, editingJoint, episode, modifiedEpisode, tangentHandles, jointRanges]);
+
   // Calculate time display
   const calculateTime = useCallback((frame: number): string => {
     if (!episode || episode.frames.length === 0) return "0.00s";
@@ -406,6 +1041,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     // Draw joint curves
     const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
+    const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
 
     selectedJointNames.forEach((jointName) => {
       const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
@@ -417,13 +1053,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const maxVal = range.max + rangePadding;
       const valueRange = maxVal - minVal;
 
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      // In edit mode, show non-edited lines in dark grey
+      const isEditingThisJoint = isEditMode && editingJoint === jointName;
+      const displayColor = isEditMode 
+        ? (isEditingThisJoint ? color : "#404040") // Dark grey for non-edited
+        : color;
+
+      ctx.strokeStyle = displayColor;
+      ctx.lineWidth = isEditingThisJoint ? 3 : 2; // Thicker line for editing
       ctx.beginPath();
 
-      episode.frames.forEach((frame, frameIndex) => {
+      activeEpisode.frames.forEach((frame, frameIndex) => {
         const value = frame.jointPositions[jointName];
-        const x = CANVAS_PADDING + (graphWidth * frameIndex) / (episode.frames.length - 1);
+        const x = CANVAS_PADDING + (graphWidth * frameIndex) / (activeEpisode.frames.length - 1);
         const normalizedValue = (value - minVal) / valueRange;
         const y = height - CANVAS_PADDING - graphHeight * normalizedValue;
 
@@ -435,6 +1077,87 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       });
 
       ctx.stroke();
+
+      // Draw points on the editable line
+      if (isEditingThisJoint) {
+        activeEpisode.frames.forEach((frame, frameIndex) => {
+          const value = frame.jointPositions[jointName];
+          const x = CANVAS_PADDING + (graphWidth * frameIndex) / (activeEpisode.frames.length - 1);
+          const normalizedValue = (value - minVal) / valueRange;
+          const y = height - CANVAS_PADDING - graphHeight * normalizedValue;
+
+          const isSelected = selectedPointIndex === frameIndex;
+          const hasHandles = tangentHandles.has(frameIndex);
+          
+          // Draw tangent handles and lines if they exist
+          if (hasHandles && isSelected) {
+            const handles = tangentHandles.get(frameIndex);
+            if (handles) {
+              // Use stored screen coordinates for handles (allows free 2D movement)
+              const leftHandleX = Math.max(CANVAS_PADDING, Math.min(width - CANVAS_PADDING, handles.left.x));
+              const leftHandleY = Math.max(CANVAS_PADDING, Math.min(height - CANVAS_PADDING, handles.left.y));
+              const rightHandleX = Math.max(CANVAS_PADDING, Math.min(width - CANVAS_PADDING, handles.right.x));
+              const rightHandleY = Math.max(CANVAS_PADDING, Math.min(height - CANVAS_PADDING, handles.right.y));
+              
+              // Draw lines from point to handles (thicker, more visible)
+              ctx.strokeStyle = "#3b82f6"; // Blue color for handles
+              ctx.lineWidth = 2;
+              ctx.setLineDash([4, 4]);
+              
+              // Left handle line
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.lineTo(leftHandleX, leftHandleY);
+              ctx.stroke();
+              
+              // Right handle line
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.lineTo(rightHandleX, rightHandleY);
+              ctx.stroke();
+              
+              ctx.setLineDash([]);
+              
+              // Draw larger, more visible handle circles
+              const isDraggingLeft = draggingHandle?.pointIndex === frameIndex && draggingHandle.side === 'left';
+              const isDraggingRight = draggingHandle?.pointIndex === frameIndex && draggingHandle.side === 'right';
+              
+              // Left handle - larger when dragging
+              ctx.fillStyle = isDraggingLeft ? "#60a5fa" : "#ffffff";
+              ctx.strokeStyle = "#3b82f6";
+              ctx.lineWidth = isDraggingLeft ? 3 : 2;
+              ctx.beginPath();
+              ctx.arc(leftHandleX, leftHandleY, isDraggingLeft ? 6 : 5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+              
+              // Right handle - larger when dragging
+              ctx.fillStyle = isDraggingRight ? "#60a5fa" : "#ffffff";
+              ctx.strokeStyle = "#3b82f6";
+              ctx.lineWidth = isDraggingRight ? 3 : 2;
+              ctx.beginPath();
+              ctx.arc(rightHandleX, rightHandleY, isDraggingRight ? 6 : 5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            }
+          }
+          
+          // Draw point
+          ctx.fillStyle = isSelected ? "#3b82f6" : color; // Blue when selected, original color otherwise
+          ctx.beginPath();
+          ctx.arc(x, y, isSelected ? 5 : 3, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Draw a ring around selected point
+          if (isSelected) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, 7, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+      }
     });
 
     // Draw current frame indicator
@@ -462,7 +1185,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, calculateTime]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -746,7 +1469,79 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+          {/* Save Button (only in edit mode) */}
+          {isEditMode && (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="h-6 px-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (modifiedEpisode && onSaveEpisode) {
+                      setShowSaveDialog(true);
+                      setSaveAsNew(false);
+                      setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+                    }
+                  }}
+                  disabled={!hasChanges || !modifiedEpisode || !onSaveEpisode}
+                >
+                  <Save className="w-3.5 h-3.5 mr-1" />
+                  <span className="text-xs">Save</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Save Changes</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {/* Edit Mode Toggle */}
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={isEditMode ? "default" : "ghost"}
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isEditMode) {
+                    // Check if there are changes before exiting
+                    if (hasChanges && modifiedEpisode && onSaveEpisode) {
+                      // Show save dialog
+                      setShowSaveDialog(true);
+                      setSaveAsNew(false);
+                      setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+                    } else {
+                      // No changes, just exit
+                      setIsEditMode(false);
+                      setEditingJoint(null);
+                      setSelectedPointIndex(null);
+                      setTangentHandles(new Map());
+                    }
+                  } else {
+                    // Enter edit mode - select first visible joint
+                    const firstVisibleJoint = jointNames.find(name => selectedJoints.has(name));
+                    if (firstVisibleJoint) {
+                      setIsEditMode(true);
+                      setEditingJoint(firstVisibleJoint);
+                    }
+                  }
+                }}
+                disabled={jointNames.length === 0}
+              >
+                {isEditMode ? (
+                  <X className="w-3.5 h-3.5" />
+                ) : (
+                  <Pencil className="w-3.5 h-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isEditMode ? "Exit Edit Mode" : "Edit Curves"}</p>
+            </TooltipContent>
+          </Tooltip>
           {onToggleViewMode && (
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
@@ -754,7 +1549,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   size="sm"
                   variant="ghost"
                   className="h-6 w-6 p-0"
-                  onClick={onToggleViewMode}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleViewMode();
+                  }}
                 >
                   {inline ? (
                     <Square className="w-3 h-3" />
@@ -774,7 +1572,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0"
-                onClick={() => onMinimizedChange?.(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMinimizedChange?.(true);
+                }}
               >
                 <Minimize2 className="w-3.5 h-3.5" />
               </Button>
@@ -794,18 +1595,47 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <canvas
                 ref={canvasRef}
                 className="w-full h-full"
-                style={{ background: "#09090b" }}
-                onMouseDown={handleTimelineMouseDown}
+                style={{ background: "#09090b", cursor: isEditMode && editingJoint ? 'crosshair' : 'default' }}
+                onMouseDown={(e) => {
+                  if (isEditMode && editingJoint) {
+                    // First check if clicking on a handle
+                    const handleClicked = handleHandleClick(e);
+                    // If not a handle, check for curve point
+                    if (!handleClicked) {
+                      handleCurveClick(e);
+                    }
+                  } else {
+                    handleTimelineMouseDown(e);
+                  }
+                }}
                 onMouseMove={(e) => {
                   handleCanvasMouseMove(e);
-                  handleTimelineMouseMove(e);
+                  if (isEditMode && editingJoint) {
+                    if (draggingHandle) {
+                      handleHandleDrag(e);
+                    } else if (isDraggingPoint) {
+                      handleCurveDrag(e);
+                    }
+                  } else {
+                    handleTimelineMouseMove(e);
+                  }
                 }}
-                onMouseUp={handleTimelineMouseUp}
+                onMouseUp={(e) => {
+                  if (isEditMode && editingJoint) {
+                    handleCurveMouseUp();
+                  } else {
+                    handleTimelineMouseUp();
+                  }
+                }}
                 onMouseLeave={(e) => {
                   if (canvasRef.current) {
-                    canvasRef.current.style.cursor = 'default';
+                    canvasRef.current.style.cursor = isEditMode && editingJoint ? 'crosshair' : 'default';
                   }
-                  handleTimelineMouseLeave();
+                  if (isEditMode && editingJoint) {
+                    handleCurveMouseUp();
+                  } else {
+                    handleTimelineMouseLeave();
+                  }
                 }}
               />
             </div>
@@ -820,24 +1650,44 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     const isVisible = selectedJoints.has(jointName);
                     const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
                     const displayColor = isVisible ? color : "#71717a"; // Grey when not visible
-                    const currentValue = episode.frames[displayFrame]?.jointPositions[jointName];
+                    const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
+                    const currentValue = activeEpisode.frames[displayFrame]?.jointPositions[jointName];
+                    const isEditingThisJoint = isEditMode && editingJoint === jointName;
 
                     return (
                       <div
                         key={jointName}
-                        className="min-w-0 cursor-pointer hover:bg-muted/30 rounded px-1 py-0.5 transition-colors"
+                        className={cn(
+                          "min-w-0 cursor-pointer hover:bg-muted/30 rounded px-1 py-0.5 transition-colors",
+                          isEditingThisJoint && "bg-muted/50 border border-primary/50"
+                        )}
                         onClick={() => {
-                          const newSelected = new Set(selectedJoints);
-                          if (isVisible) {
-                            newSelected.delete(jointName);
+                          if (isEditMode) {
+                            // In edit mode, clicking selects which joint to edit
+                            // Make sure the joint is visible first
+                            if (!isVisible) {
+                              const newSelected = new Set(selectedJoints);
+                              newSelected.add(jointName);
+                              setSelectedJoints(newSelected);
+                            }
+                            setEditingJoint(jointName);
+                            setSelectedPointIndex(null);
+                            setTangentHandles(new Map()); // Clear handles when switching joints
                           } else {
-                            newSelected.add(jointName);
+                            // Normal mode: toggle visibility
+                            const newSelected = new Set(selectedJoints);
+                            if (isVisible) {
+                              newSelected.delete(jointName);
+                            } else {
+                              newSelected.add(jointName);
+                            }
+                            setSelectedJoints(newSelected);
                           }
-                          setSelectedJoints(newSelected);
                         }}
                       >
-                        <div className="text-xs font-mono truncate leading-tight" style={{ color: displayColor }}>
+                        <div className="text-xs font-mono truncate leading-tight flex items-center gap-1" style={{ color: displayColor }}>
                           {jointName}
+                          {isEditingThisJoint && <Pencil className="w-3 h-3" />}
                         </div>
                         {currentValue !== undefined && (
                           <div className="text-[10px] font-mono text-muted-foreground leading-tight">
@@ -875,9 +1725,110 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     </div>
   );
 
+  // Save Dialog
+  const handleSave = useCallback(() => {
+    if (!modifiedEpisode || !onSaveEpisode) return;
+    
+    if (saveAsNew && newEpisodeName.trim()) {
+      // Save as new episode
+      onSaveEpisode(modifiedEpisode, true, newEpisodeName.trim());
+    } else if (!saveAsNew) {
+      // Overwrite existing episode
+      onSaveEpisode(modifiedEpisode, false);
+    }
+    
+    // Close dialog and exit edit mode
+    setShowSaveDialog(false);
+    setIsEditMode(false);
+    setEditingJoint(null);
+    setSelectedPointIndex(null);
+    setTangentHandles(new Map());
+    setSaveAsNew(false);
+    setNewEpisodeName("");
+  }, [modifiedEpisode, onSaveEpisode, saveAsNew, newEpisodeName]);
+
+  const handleCancelSave = useCallback(() => {
+    setShowSaveDialog(false);
+    setSaveAsNew(false);
+    setNewEpisodeName("");
+  }, []);
+
+  const saveDialog = (
+    <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Save Trajectory Changes</DialogTitle>
+          <DialogDescription>
+            You have unsaved changes to the trajectory. How would you like to save them?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="radio"
+              id="overwrite"
+              name="saveOption"
+              checked={!saveAsNew}
+              onChange={() => setSaveAsNew(false)}
+              className="h-4 w-4"
+            />
+            <label htmlFor="overwrite" className="text-sm font-medium cursor-pointer">
+              Overwrite existing episode
+            </label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="radio"
+              id="saveAsNew"
+              name="saveOption"
+              checked={saveAsNew}
+              onChange={() => setSaveAsNew(true)}
+              className="h-4 w-4"
+            />
+            <label htmlFor="saveAsNew" className="text-sm font-medium cursor-pointer">
+              Save as new episode
+            </label>
+          </div>
+          {saveAsNew && (
+            <div className="pl-6 space-y-2">
+              <label htmlFor="newEpisodeName" className="text-sm text-muted-foreground">
+                New episode name:
+              </label>
+              <Input
+                id="newEpisodeName"
+                value={newEpisodeName}
+                onChange={(e) => setNewEpisodeName(e.target.value)}
+                placeholder="Enter episode name"
+                className="w-full"
+              />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancelSave}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saveAsNew && !newEpisodeName.trim()}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const contentWithDialog = (
+    <>
+      {content}
+      {saveDialog}
+    </>
+  );
+
   if (inline) {
-    return content;
+    return contentWithDialog;
   }
 
-  return typeof window !== 'undefined' ? createPortal(content, document.body) : null;
+  return typeof window !== 'undefined' ? createPortal(contentWithDialog, document.body) : null;
 };
