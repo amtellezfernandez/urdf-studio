@@ -56,6 +56,7 @@ interface SidebarProps {
   jointLimits?: JointLimits;
   jointAxes?: JointAxisMap;
   originalJointAxes?: JointAxisMap;
+  onEpisodeSaveReady?: (saveHandler: (episode: Episode, saveAsNew: boolean, newName?: string) => void) => void;
   originalUrdf?: string;
   vizUrdf?: string;
   onJointChange?: (jointName: string, value: number) => void;
@@ -813,6 +814,7 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
+  onEpisodeSaveReady,
 }: SidebarProps) => {
   const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
@@ -1126,6 +1128,87 @@ export const Sidebar = ({
       (window as any).viewer3dSetFrame?.(0);
     }
   }, [episodes.length]);
+
+  // Episode save handler - shared between floating modal and split view
+  const handleSaveEpisode = useCallback((savedEpisode: Episode, saveAsNew: boolean, newName?: string) => {
+    if (saveAsNew) {
+      // Save as new episode
+      const newEpisodeId = `episode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newEpisodeNumber = episodes.length + 1;
+
+      // Update metadata with new name if provided
+      const updatedMetadata = savedEpisode.metadata ? {
+        ...savedEpisode.metadata,
+        additional: {
+          ...savedEpisode.metadata.additional,
+          sourceType: savedEpisode.metadata.additional?.sourceType || 'local',
+          sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
+        },
+      } : {
+        episodeNumber: newEpisodeNumber,
+        episode_index: newEpisodeNumber - 1,
+        num_frames: savedEpisode.frames.length,
+        additional: {
+          sourceType: 'local',
+          sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
+        },
+      };
+
+      const newEpisode = createEpisode(
+        newEpisodeId,
+        newEpisodeNumber,
+        savedEpisode.frames,
+        updatedMetadata
+      );
+
+      setEpisodes((prev) => {
+        const next = [...prev, newEpisode];
+        return renumberEpisodes(next);
+      });
+
+      toast.success(`Saved as new episode: ${newName || `Episode ${newEpisodeNumber}`}`);
+    } else {
+      // Overwrite existing episode
+      const episodeIndex = episodes.findIndex((ep) => ep.id === savedEpisode.id);
+      if (episodeIndex !== -1) {
+        const updatedEpisode = {
+          ...savedEpisode,
+          id: episodes[episodeIndex].id, // Preserve original ID
+          number: episodes[episodeIndex].number, // Preserve original number
+          metadata: savedEpisode.metadata ? {
+            ...savedEpisode.metadata,
+            episodeNumber: episodes[episodeIndex].number,
+            episode_index: episodes[episodeIndex].metadata?.episode_index ?? episodes[episodeIndex].number - 1,
+            num_frames: savedEpisode.frames.length,
+          } : {
+            episodeNumber: episodes[episodeIndex].number,
+            episode_index: episodes[episodeIndex].number - 1,
+            num_frames: savedEpisode.frames.length,
+          },
+        };
+
+        setEpisodes((prev) => {
+          const next = [...prev];
+          next[episodeIndex] = updatedEpisode;
+          return next;
+        });
+
+        // Update viewer episode if it's the one being edited
+        if (viewerModalEpisode?.id === savedEpisode.id) {
+          setViewerModalEpisode(updatedEpisode);
+        }
+
+        toast.success(`Episode ${episodes[episodeIndex].number} updated successfully`);
+      } else {
+        toast.error("Episode not found");
+      }
+    }
+  }, [episodes, viewerModalEpisode?.id]);
+
+  // Provide save handler to parent (Index) so it can use it for split view modals
+  useEffect(() => {
+    onEpisodeSaveReady?.(handleSaveEpisode);
+  }, [onEpisodeSaveReady, handleSaveEpisode]);
 
   const handleJointChange = (jointName: string, value: number) => {
     const limited = previewJointValue(jointName, value);
@@ -4531,83 +4614,7 @@ export const Sidebar = ({
               (window as any).viewer3dStopAnimation?.();
             }, 50); // Final safety stop
           }}
-          onSaveEpisode={(savedEpisode, saveAsNew, newName) => {
-            if (saveAsNew) {
-              // Save as new episode
-              const newEpisodeId = `episode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-              const newEpisodeNumber = episodes.length + 1;
-              
-              // Update metadata with new name if provided
-              const updatedMetadata = savedEpisode.metadata ? {
-                ...savedEpisode.metadata,
-                additional: {
-                  ...savedEpisode.metadata.additional,
-                  sourceType: savedEpisode.metadata.additional?.sourceType || 'local',
-                  sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
-                },
-              } : {
-                episodeNumber: newEpisodeNumber,
-                episode_index: newEpisodeNumber - 1,
-                num_frames: savedEpisode.frames.length,
-                additional: {
-                  sourceType: 'local',
-                  sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
-                },
-              };
-              
-              const newEpisode = createEpisode(
-                newEpisodeId,
-                newEpisodeNumber,
-                savedEpisode.frames,
-                updatedMetadata
-              );
-              
-              setEpisodes((prev) => {
-                const next = [...prev, newEpisode];
-                return renumberEpisodes(next);
-              });
-              
-              toast.success(`Saved as new episode: ${newName || `Episode ${newEpisodeNumber}`}`);
-            } else {
-              // Overwrite existing episode
-              const episodeIndex = episodes.findIndex((ep) => ep.id === savedEpisode.id);
-              if (episodeIndex !== -1) {
-                setEpisodes((prev) => {
-                  const next = [...prev];
-                  // Update the episode while preserving its ID and number
-                  next[episodeIndex] = {
-                    ...savedEpisode,
-                    id: next[episodeIndex].id, // Preserve original ID
-                    number: next[episodeIndex].number, // Preserve original number
-                    metadata: savedEpisode.metadata ? {
-                      ...savedEpisode.metadata,
-                      episodeNumber: next[episodeIndex].number,
-                      episode_index: next[episodeIndex].metadata?.episode_index ?? next[episodeIndex].number - 1,
-                      num_frames: savedEpisode.frames.length,
-                    } : {
-                      episodeNumber: next[episodeIndex].number,
-                      episode_index: next[episodeIndex].number - 1,
-                      num_frames: savedEpisode.frames.length,
-                    },
-                  };
-                  return next;
-                });
-                
-                // Update viewer episode if it's the one being edited
-                if (viewerModalEpisode?.id === savedEpisode.id) {
-                  setViewerModalEpisode({
-                    ...savedEpisode,
-                    id: viewerModalEpisode.id,
-                    number: viewerModalEpisode.number,
-                  });
-                }
-                
-                toast.success(`Episode ${episodes[episodeIndex].number} updated successfully`);
-              } else {
-                toast.error("Episode not found");
-              }
-            }
-          }}
+          onSaveEpisode={handleSaveEpisode}
         />
       )}
 

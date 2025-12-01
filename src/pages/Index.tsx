@@ -74,6 +74,7 @@ const Index = () => {
   const [viewerEpisode, setViewerEpisode] = useState<any | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
   const [isViewerMinimized, setIsViewerMinimized] = useState<boolean>(false);
+  const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: any, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
@@ -683,9 +684,15 @@ const Index = () => {
             showUrdfEditor={showUrdfEditor}
             viewerSplitView={viewerSplitView}
             onViewerSplitViewChange={setViewerSplitView}
-            onViewerEpisodeChange={setViewerEpisode}
+            onViewerEpisodeChange={(episode) => {
+              setViewerEpisode(episode);
+            }}
             onViewerOpenChange={setIsViewerOpen}
             viewerOpen={isViewerOpen}
+            onEpisodeSaveReady={(handler) => {
+              // Receive save handler from Sidebar and store it
+              setEpisodeSaveHandler(() => handler);
+            }}
           />
 
           {!isSidebarCollapsed && (
@@ -775,6 +782,7 @@ const Index = () => {
                       }}
                       isMinimized={isViewerMinimized}
                       onMinimizedChange={setIsViewerMinimized}
+                      onSaveEpisode={episodeSaveHandler}
                     />
                   </div>
                 </div>
@@ -924,6 +932,7 @@ const Index = () => {
               }}
               isMinimized={isViewerMinimized}
               onMinimizedChange={setIsViewerMinimized}
+              onSaveEpisode={episodeSaveHandler}
             />
           )}
         </>
