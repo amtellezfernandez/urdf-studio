@@ -56,11 +56,11 @@ export const AxisGizmo3D = () => {
     groupRef.current.scale.setScalar(scale);
   });
 
-  // Sweet, softer colors - more pleasant than bright primary colors
+  // Axis colors matching specified RGB values
   const colors = {
-    x: "#FF0000", // X axis - red
-    y: "#00FF00", // Y axis - green
-    z: "#0000FF", // Z axis - blue
+    x: "#BE2C41", // X axis - red/pink (190, 44, 65)
+    y: "#6DA424", // Y axis - green (109, 164, 36)
+    z: "#3464AD", // Z axis - blue (52, 100, 173)
   };
   
   // Size parameters

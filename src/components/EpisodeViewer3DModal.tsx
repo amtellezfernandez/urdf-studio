@@ -24,6 +24,7 @@ import {
   Undo2,
   Redo2,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -1467,7 +1468,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     : episode.metadata.additional.sourceType === 'local'
                     ? 'Local'
                     : episode.metadata.additional.sourceType === 'recorded'
-                    ? 'Recorded'
+                    ? 'REC'
                     : episode.metadata.additional.sourceType}
                 </Badge>
                 {episode.metadata.additional.sourceName && (
@@ -1551,7 +1552,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ref={containerRef}
       className={cn(
         "bg-background flex flex-col overflow-hidden h-full",
-        inline ? "border-t border-border" : "fixed border-2 border-border rounded-lg shadow-2xl"
+        inline ? "border-t border-border" : "fixed border-2 border-border rounded-lg shadow-2xl",
+        isEditMode && hasChanges && "bg-orange-500/10 border-orange-500/30"
       )}
       style={inline ? {} : {
         left: `${position.x}px`,
@@ -1574,8 +1576,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           {!inline && <GripHorizontal className="w-4 h-4 text-muted-foreground" />}
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">
-              Episode {episode.number}{isEditMode && hasChanges && <span className="text-orange-500 ml-1">*</span>}
+              Episode {episode.number}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
             </h3>
+            {isEditMode && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] px-1.5 py-0 h-4",
+                  hasChanges && "border-orange-500/50 text-orange-500 bg-orange-500/10"
+                )}
+              >
+                EDIT
+              </Badge>
+            )}
             {episode.metadata?.additional?.sourceType && (
               <div className="flex items-center gap-1.5">
                 <Badge
@@ -1593,7 +1606,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     : episode.metadata.additional.sourceType === 'local'
                     ? 'Local'
                     : episode.metadata.additional.sourceType === 'recorded'
-                    ? 'Recorded'
+                    ? 'REC'
                     : episode.metadata.additional.sourceType}
                 </Badge>
                 {episode.metadata.additional.sourceName && (
@@ -1697,7 +1710,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <Button
                 size="sm"
                 variant={isEditMode ? "default" : "ghost"}
-                className="h-6 w-6 p-0"
+                className={cn(
+                  "h-6 w-6 p-0",
+                  isEditMode && hasChanges && "bg-orange-500 hover:bg-orange-600 border-orange-500/50"
+                )}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isEditMode) {

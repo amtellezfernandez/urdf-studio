@@ -6,14 +6,14 @@ interface CustomAxesHelperProps {
 }
 
 const DOT_SPACING = 0.25;
-const DOT_SIZE = 0.02;
+const DOT_SIZE = 0.01;
 const LINE_WIDTH = 1;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
 const AXES: Array<{ color: number; direction: THREE.Vector3 }> = [
-  { color: 0xff0000, direction: new THREE.Vector3(1, 0, 0) }, // X (red)
-  { color: 0x00ff00, direction: new THREE.Vector3(0, 1, 0) }, // Y (green)
-  { color: 0x0000ff, direction: new THREE.Vector3(0, 0, 1) }, // Z (blue)
+  { color: 0xBE2C41, direction: new THREE.Vector3(1, 0, 0) }, // X (red/pink - 190, 44, 65)
+  { color: 0x6DA424, direction: new THREE.Vector3(0, 1, 0) }, // Y (green - 109, 164, 36)
+  { color: 0x3464AD, direction: new THREE.Vector3(0, 0, 1) }, // Z (blue - 52, 100, 173)
 ];
 
 const createPositiveLine = (direction: THREE.Vector3, color: number, length: number) => {

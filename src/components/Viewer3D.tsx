@@ -1085,17 +1085,17 @@ const RotationPlane = ({
     let negative = false;
     
     if (absX >= absY && absX >= absZ) {
-      // X-axis dominant - Red
+      // X-axis dominant - Red/Pink
       negative = axisVec.x < 0;
-      color = axisVec.x > 0 ? 0xff0000 : 0xcc0000; // Bright red for +X, darker for -X
+      color = axisVec.x > 0 ? 0xBE2C41 : 0x9A2333; // Red/pink for +X (190, 44, 65), darker for -X
     } else if (absY >= absX && absY >= absZ) {
       // Y-axis dominant - Green
       negative = axisVec.y < 0;
-      color = axisVec.y > 0 ? 0x00ff00 : 0x00cc00; // Bright green for +Y, darker for -Y
+      color = axisVec.y > 0 ? 0x6DA424 : 0x56831C; // Green for +Y (109, 164, 36), darker for -Y
     } else {
       // Z-axis dominant - Blue
       negative = axisVec.z < 0;
-      color = axisVec.z > 0 ? 0x0000ff : 0x0000cc; // Bright blue for +Z, darker for -Z
+      color = axisVec.z > 0 ? 0x3464AD : 0x29508A; // Blue for +Z (52, 100, 173), darker for -Z
     }
     
     return { planeColor: color, isNegative: negative };
