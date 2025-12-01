@@ -21,6 +21,8 @@ import {
   Pencil,
   X,
   Save,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import {
   Tooltip,
@@ -329,6 +331,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveAsNew, setSaveAsNew] = useState(false);
   const [newEpisodeName, setNewEpisodeName] = useState("");
+  const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
+
+  // Undo/Redo system (Blender-like)
+  const [editHistory, setEditHistory] = useState<Episode[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [lastSaveChoice, setLastSaveChoice] = useState<'overwrite' | 'new' | null>(null);
   
   // Tangent handles state: Map<pointIndex, {left: {x, y, value, length}, right: {x, y, value, length}}>
   // x, y are screen coordinates, value is the joint value at that handle position, length is distance from point
@@ -340,9 +348,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
   const preservedFrameRef = useRef<number | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
   // Handle canvas hover to change cursor
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -457,13 +467,17 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const allJoints = new Set(Object.keys(episode.frames[0]?.jointPositions || {}));
       setSelectedJoints(allJoints);
       // Initialize modified episode copy for editing
-      setModifiedEpisode({
+      const initialEpisode = {
         ...episode,
         frames: episode.frames.map(f => ({
           ...f,
           jointPositions: { ...f.jointPositions }
         }))
-      });
+      };
+      setModifiedEpisode(initialEpisode);
+      // Initialize undo/redo history
+      setEditHistory([initialEpisode]);
+      setHistoryIndex(0);
     }
     // Reset edit mode when episode changes
     setIsEditMode(false);
@@ -473,6 +487,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setShowSaveDialog(false);
     setSaveAsNew(false);
     setNewEpisodeName("");
+    setShowExitConfirmDialog(false);
+    setLastSaveChoice(null);
   }, [episode?.id]);
 
   // Initialize preserved frame on mount
@@ -481,6 +497,131 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       preservedFrameRef.current = globalCurrentFrame ?? currentFrame ?? 0;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Helper to push a new state to edit history (for undo/redo)
+  const pushToHistory = useCallback((newEpisode: Episode) => {
+    setEditHistory(prev => {
+      // Remove any future history if we're not at the end
+      const newHistory = prev.slice(0, historyIndex + 1);
+      // Add new state
+      newHistory.push(newEpisode);
+      // Limit history to 50 states to prevent memory issues
+      if (newHistory.length > 50) {
+        newHistory.shift();
+        setHistoryIndex(prev => prev); // Don't change index since we removed from start
+        return newHistory;
+      }
+      setHistoryIndex(newHistory.length - 1);
+      return newHistory;
+    });
+  }, [historyIndex]);
+
+  // Undo function
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0 && editHistory.length > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setModifiedEpisode(editHistory[newIndex]);
+      toast.info("Undo");
+    }
+  }, [historyIndex, editHistory]);
+
+  // Redo function
+  const handleRedo = useCallback(() => {
+    if (historyIndex < editHistory.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setModifiedEpisode(editHistory[newIndex]);
+      toast.info("Redo");
+    }
+  }, [historyIndex, editHistory]);
+
+  // Keyboard shortcuts (Blender-like)
+  useEffect(() => {
+    if (!open || !isEditMode) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S or Cmd+S - Save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasChanges && modifiedEpisode && onSaveEpisode) {
+          // Quick save: use last choice if available, otherwise show dialog
+          if (lastSaveChoice === 'overwrite') {
+            onSaveEpisode(modifiedEpisode, false);
+            toast.success(`Episode ${episode?.number} updated`);
+          } else if (lastSaveChoice === 'new') {
+            setShowSaveDialog(true);
+            setSaveAsNew(true);
+            setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+          } else {
+            // First time saving, show dialog
+            setShowSaveDialog(true);
+            setSaveAsNew(false);
+            setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+          }
+        }
+      }
+      // Shift+Ctrl+S or Shift+Cmd+S - Save As (always show dialog)
+      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        if (hasChanges && modifiedEpisode && onSaveEpisode) {
+          setShowSaveDialog(true);
+          setSaveAsNew(true);
+          setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+        }
+      }
+      // Ctrl+Z or Cmd+Z - Undo
+      else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Ctrl+Shift+Z, Cmd+Shift+Z, or Ctrl+Y - Redo
+      else if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z') ||
+               ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+        e.preventDefault();
+        handleRedo();
+      }
+      // Escape - Exit edit mode (with confirmation if unsaved)
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (hasChanges && modifiedEpisode && onSaveEpisode) {
+          setShowExitConfirmDialog(true);
+        } else {
+          setIsEditMode(false);
+          setEditingJoint(null);
+          setSelectedPointIndex(null);
+          setTangentHandles(new Map());
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, isEditMode, hasChanges, modifiedEpisode, onSaveEpisode, lastSaveChoice, episode, allEpisodes, handleUndo, handleRedo]);
+
+  // Watch for container size changes to redraw canvas
+  useEffect(() => {
+    if (!canvasContainerRef.current) return;
+
+    // Initialize size on mount
+    const rect = canvasContainerRef.current.getBoundingClientRect();
+    setContainerSize({ width: rect.width, height: rect.height });
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setContainerSize({ width, height });
+      }
+    });
+
+    resizeObserver.observe(canvasContainerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, []);
 
 
@@ -721,7 +862,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     // Get or create handles (Photoshop-style: handles are always used when dragging)
     let handles = tangentHandles.get(selectedPointIndex);
     const pointX = CANVAS_PADDING + (graphWidth * selectedPointIndex) / (modifiedEpisode.frames.length - 1);
-    
+
     // If handles don't exist, create them automatically
     if (!handles) {
       handles = createHandlesForPoint(
@@ -742,41 +883,41 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const oldPointValue = modifiedEpisode.frames[selectedPointIndex].jointPositions[editingJoint];
       const oldPointNormalized = (oldPointValue - minVal) / valueRange;
       const oldPointY = rect.height - CANVAS_PADDING - graphHeight * oldPointNormalized;
-      
+
       const newPointY = rect.height - CANVAS_PADDING - graphHeight * ((clampedValue - minVal) / valueRange);
-      
+
       // Calculate offset from old point to handles
       const leftDx = handles.left.x - pointX;
       const leftDy = handles.left.y - oldPointY;
       const rightDx = handles.right.x - pointX;
       const rightDy = handles.right.y - oldPointY;
-      
+
       // Apply same offset to new point position
       const leftHandleX = pointX + leftDx;
       const leftHandleY = newPointY + leftDy;
       const rightHandleX = pointX + rightDx;
       const rightHandleY = newPointY + rightDy;
-      
+
       // Convert to values
       const leftNormalizedY = 1 - ((leftHandleY - CANVAS_PADDING) / graphHeight);
       const rightNormalizedY = 1 - ((rightHandleY - CANVAS_PADDING) / graphHeight);
       const leftHandleValue = minVal + leftNormalizedY * valueRange;
       const rightHandleValue = minVal + rightNormalizedY * valueRange;
-      
+
       // Recalculate lengths
       const leftLength = Math.sqrt(Math.pow(leftHandleX - pointX, 2) + Math.pow(leftHandleY - newPointY, 2));
       const rightLength = Math.sqrt(Math.pow(rightHandleX - pointX, 2) + Math.pow(rightHandleY - newPointY, 2));
-      
+
       handles = {
         left: { x: leftHandleX, y: leftHandleY, value: leftHandleValue, length: leftLength },
         right: { x: rightHandleX, y: rightHandleY, value: rightHandleValue, length: rightLength }
       };
-      
+
       const newHandles = new Map(tangentHandles);
       newHandles.set(selectedPointIndex, handles);
       setTangentHandles(newHandles);
     }
-    
+
     // Always use Bezier interpolation with handles (Photoshop-style)
     const updatedValues = applyBezierCurve(
       currentValues,
@@ -801,17 +942,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     }));
 
-    setModifiedEpisode({
+    const newEpisode = {
       ...modifiedEpisode,
       frames: updatedFrames
-    });
-  }, [isEditMode, editingJoint, episode, modifiedEpisode, selectedPointIndex, isDraggingPoint, jointRanges, tangentHandles]);
+    };
+    setModifiedEpisode(newEpisode);
+    // Don't push to history while dragging - we'll push on mouse up to avoid too many history states
+  }, [isEditMode, editingJoint, episode, modifiedEpisode, selectedPointIndex, isDraggingPoint, jointRanges, tangentHandles, createHandlesForPoint]);
 
   // Handle curve editing - mouse up
   const handleCurveMouseUp = useCallback(() => {
+    // Push to history when done dragging (not on every mouse move)
+    if ((isDraggingPoint || draggingHandle) && modifiedEpisode) {
+      pushToHistory(modifiedEpisode);
+    }
     setIsDraggingPoint(false);
     setDraggingHandle(null);
-  }, []);
+  }, [isDraggingPoint, draggingHandle, modifiedEpisode, pushToHistory]);
 
 
   // Handle dragging tangent handles - allows free 2D movement
@@ -900,10 +1047,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     }));
 
-    setModifiedEpisode({
+    const newEpisode = {
       ...modifiedEpisode,
       frames: updatedFrames
-    });
+    };
+    setModifiedEpisode(newEpisode);
+    // Don't push to history while dragging - we'll push on mouse up to avoid too many history states
   }, [isEditMode, editingJoint, episode, modifiedEpisode, draggingHandle, tangentHandles, jointRanges]);
 
   // Handle clicking on tangent handles
@@ -974,12 +1123,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    // Use containerSize if available, otherwise fall back to getBoundingClientRect
+    const width = containerSize.width > 0 ? containerSize.width : rect.width;
+    const height = containerSize.height > 0 ? containerSize.height : rect.height;
+    canvas.width = width * window.devicePixelRatio;
+    canvas.height = height * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-    const width = rect.width;
-    const height = rect.height;
     const graphHeight = height - CANVAS_PADDING * 2;
     const graphWidth = width - CANVAS_PADDING * 2;
 
@@ -1185,7 +1334,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -1424,7 +1573,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         <div className="flex items-center gap-2 flex-1 pointer-events-none">
           {!inline && <GripHorizontal className="w-4 h-4 text-muted-foreground" />}
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">Episode {episode.number}</h3>
+            <h3 className="text-sm font-semibold">
+              Episode {episode.number}{isEditMode && hasChanges && <span className="text-orange-500 ml-1">*</span>}
+            </h3>
             {episode.metadata?.additional?.sourceType && (
               <div className="flex items-center gap-1.5">
                 <Badge
@@ -1470,6 +1621,49 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+          {/* Undo/Redo Buttons (only in edit mode) */}
+          {isEditMode && (
+            <>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUndo();
+                    }}
+                    disabled={historyIndex <= 0}
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Undo (Ctrl+Z)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRedo();
+                    }}
+                    disabled={historyIndex >= editHistory.length - 1}
+                  >
+                    <Redo2 className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Redo (Ctrl+Shift+Z)</p>
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
           {/* Save Button (only in edit mode) */}
           {isEditMode && (
             <Tooltip delayDuration={0}>
@@ -1493,7 +1687,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Save Changes</p>
+                <p>Save Changes (Ctrl+S)</p>
               </TooltipContent>
             </Tooltip>
           )}
@@ -1509,10 +1703,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   if (isEditMode) {
                     // Check if there are changes before exiting
                     if (hasChanges && modifiedEpisode && onSaveEpisode) {
-                      // Show save dialog
-                      setShowSaveDialog(true);
-                      setSaveAsNew(false);
-                      setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+                      // Show exit confirmation dialog (Blender-like)
+                      setShowExitConfirmDialog(true);
                     } else {
                       // No changes, just exit
                       setIsEditMode(false);
@@ -1539,7 +1731,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{isEditMode ? "Exit Edit Mode" : "Edit Curves"}</p>
+              <p>{isEditMode ? "Exit Edit Mode (Esc)" : "Edit Curves"}</p>
             </TooltipContent>
           </Tooltip>
           {onToggleViewMode && (
@@ -1591,7 +1783,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       <>
           {/* Graph Canvas and Legend */}
           <div className="flex-1 flex overflow-hidden">
-            <div className="flex-1 relative bg-background overflow-hidden">
+            <div ref={canvasContainerRef} className="flex-1 relative bg-background overflow-hidden">
               <canvas
                 ref={canvasRef}
                 className="w-full h-full"
@@ -1728,15 +1920,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   // Save Dialog
   const handleSave = useCallback(() => {
     if (!modifiedEpisode || !onSaveEpisode) return;
-    
+
     if (saveAsNew && newEpisodeName.trim()) {
       // Save as new episode
       onSaveEpisode(modifiedEpisode, true, newEpisodeName.trim());
+      // Remember choice for quick save (Ctrl+S)
+      setLastSaveChoice('new');
     } else if (!saveAsNew) {
       // Overwrite existing episode
       onSaveEpisode(modifiedEpisode, false);
+      // Remember choice for quick save (Ctrl+S)
+      setLastSaveChoice('overwrite');
     }
-    
+
     // Close dialog and exit edit mode
     setShowSaveDialog(false);
     setIsEditMode(false);
@@ -1819,10 +2015,70 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     </Dialog>
   );
 
+  // Exit Confirmation Dialog (Blender-like)
+  const exitConfirmDialog = (
+    <Dialog open={showExitConfirmDialog} onOpenChange={setShowExitConfirmDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Unsaved Changes</DialogTitle>
+          <DialogDescription>
+            You have unsaved changes to the trajectory. Do you want to save before exiting?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Don't Save - discard changes and exit
+              setShowExitConfirmDialog(false);
+              setIsEditMode(false);
+              setEditingJoint(null);
+              setSelectedPointIndex(null);
+              setTangentHandles(new Map());
+              // Reset to original episode
+              if (episode) {
+                setModifiedEpisode({
+                  ...episode,
+                  frames: episode.frames.map(f => ({
+                    ...f,
+                    jointPositions: { ...f.jointPositions }
+                  }))
+                });
+              }
+            }}
+          >
+            Don't Save
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Cancel - go back to editing
+              setShowExitConfirmDialog(false);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              // Save - show save dialog
+              setShowExitConfirmDialog(false);
+              setShowSaveDialog(true);
+              setSaveAsNew(lastSaveChoice === 'new');
+              setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+            }}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   const contentWithDialog = (
     <>
       {content}
       {saveDialog}
+      {exitConfirmDialog}
     </>
   );
 
