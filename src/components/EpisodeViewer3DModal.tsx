@@ -16,8 +16,6 @@ import {
   Maximize2,
   GripHorizontal,
   Eye,
-  LayoutGrid,
-  Square,
   Pencil,
   X,
   Save,
@@ -72,7 +70,6 @@ interface EpisodeViewer3DModalProps {
   globalCurrentFrame?: number;
   onSetGlobalFrame?: (frame: number) => void;
   inline?: boolean; // If true, render inline instead of as modal
-  onToggleViewMode?: () => void; // Toggle between split view and floating window
   isMinimized?: boolean;
   onMinimizedChange?: (minimized: boolean) => void;
   onSaveEpisode?: (episode: Episode, saveAsNew: boolean, newName?: string) => void; // Callback to save/update episode
@@ -312,7 +309,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   globalCurrentFrame,
   onSetGlobalFrame,
   inline = false,
-  onToggleViewMode,
   isMinimized = false,
   onMinimizedChange,
   onSaveEpisode,
@@ -1444,98 +1440,41 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     const currentTime = episode ? calculateTime(displayFrame).replace('s', '') : "0.00";
     const minimizedContent = (
       <div
-        className="bg-muted/95 backdrop-blur-sm border border-border rounded-lg shadow-xl px-3 py-2 fixed left-1/2 -translate-x-1/2"
+        className="bg-muted border-b border-border px-3 py-2 fixed left-1/2 -translate-x-1/2"
         style={{
-          bottom: '20px',
+          bottom: 0,
           zIndex: 99999,
           maxWidth: '95vw',
+          borderTopLeftRadius: '0.5rem',
+          borderTopRightRadius: '0.5rem',
         }}
       >
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Episode Info */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <h3 className="text-sm font-semibold whitespace-nowrap">Episode {episode.number - 1}</h3>
-            {episode.metadata?.additional?.sourceType && (
-              <div className="flex items-center gap-1">
-                <Badge
-                  variant={
-                    episode.metadata.additional.sourceType === 'hf'
-                      ? 'default'
-                      : episode.metadata.additional.sourceType === 'local'
-                      ? 'secondary'
-                      : 'outline'
-                  }
-                  className="text-[10px] px-1.5 py-0 h-4 whitespace-nowrap"
-                >
-                  {episode.metadata.additional.sourceType === 'hf'
-                    ? 'HF'
-                    : episode.metadata.additional.sourceType === 'local'
-                    ? 'Local'
-                    : episode.metadata.additional.sourceType === 'recorded'
-                    ? 'REC'
-                    : episode.metadata.additional.sourceType}
-                </Badge>
-                {episode.metadata.additional.sourceName && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0 h-4 whitespace-nowrap max-w-[100px] truncate"
-                    title={episode.metadata.additional.sourceName}
-                  >
-                    {episode.metadata.additional.sourceName}
-                  </Badge>
-                )}
-              </div>
-            )}
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Episode Title - matching split viewer header */}
+          <h3 className="text-sm font-semibold whitespace-nowrap">
+            Episode {episode.number - 1}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
+          </h3>
 
-          {/* Frame Counter */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs whitespace-nowrap">
-            <span className="text-muted-foreground">Frame:</span>
-            <span className="font-mono font-medium">{displayFrame}</span>
-            <span className="text-muted-foreground">/</span>
-            <span className="font-mono text-muted-foreground">{totalFrames - 1}</span>
-          </div>
-
-          {/* Time Display */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs whitespace-nowrap">
-            <span className="text-muted-foreground">Time:</span>
-            <span className="font-mono font-medium">
-              {episode ? `${currentTime} / ${durationSeconds} s` : "0.00 / 0.00 s"}
+          {/* Compact Counters - matching split viewer style */}
+          <div className="flex items-center gap-2 px-1.5 py-0.5 text-[10px] font-mono">
+            <span className="tabular-nums">{displayFrame}/{totalFrames - 1}</span>
+            <span className="text-muted-foreground/60">•</span>
+            <span className="tabular-nums text-muted-foreground">
+              {episode ? `${currentTime}/${durationSeconds}s` : "0.00/0.00s"}
             </span>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-            {onToggleViewMode && (
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={onToggleViewMode}
-                  >
-                    {inline ? (
-                      <Square className="w-3.5 h-3.5" />
-                    ) : (
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{inline ? "Switch to Floating Window" : "Switch to Split View"}</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 w-7 p-0"
+                  className="h-6 w-6 p-0"
                   onClick={() => onMinimizedChange?.(false)}
                 >
-                  <Maximize2 className="w-4 h-4" />
+                  <Maximize2 className="w-3.5 h-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -1570,14 +1509,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     >
       {/* Header */}
       <div
-        className={cn(
-          "flex items-center justify-between px-3 py-2 bg-muted border-b border-border",
-          !inline && "cursor-move drag-handle"
-        )}
-        onMouseDown={!inline ? handleMouseDownHeader : undefined}
+          className="flex items-center justify-between px-3 py-2 bg-muted border-b border-border"
       >
         <div className="flex items-center gap-2 flex-1 pointer-events-none">
-          {!inline && <GripHorizontal className="w-4 h-4 text-muted-foreground" />}
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">
               Episode {episode.number - 1}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
@@ -1671,46 +1605,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 EDIT
               </Badge>
             )}
-            {episode.metadata?.additional?.sourceType && (
-              <div className="flex items-center gap-1.5">
-                <Badge
-                  variant={
-                    episode.metadata.additional.sourceType === 'hf'
-                      ? 'default'
-                      : episode.metadata.additional.sourceType === 'local'
-                      ? 'secondary'
-                      : 'outline'
-                  }
-                  className="text-[10px] px-1.5 py-0 h-4"
-                >
-                  {episode.metadata.additional.sourceType === 'hf'
-                    ? 'HF'
-                    : episode.metadata.additional.sourceType === 'local'
-                    ? 'Local'
-                    : episode.metadata.additional.sourceType === 'recorded'
-                    ? 'REC'
-                    : episode.metadata.additional.sourceType}
-                </Badge>
-                {episode.metadata.additional.sourceName && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0 h-4"
-                  >
-                    {episode.metadata.additional.sourceName}
-                  </Badge>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
-              <span className="text-muted-foreground">Frame:</span>
-              <span className="font-mono font-medium">{displayFrame}</span>
-              <span className="text-muted-foreground">/</span>
-              <span className="font-mono text-muted-foreground">{totalFrames - 1}</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
-              <span className="text-muted-foreground">Time:</span>
-              <span className="font-mono font-medium">
-                {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds} s` : "0.00/0.00 s"}
+            <div className="flex items-center gap-2 px-1.5 py-0.5 text-[10px] font-mono">
+              <span className="tabular-nums">{displayFrame}/{totalFrames - 1}</span>
+              <span className="text-muted-foreground/60">•</span>
+              <span className="tabular-nums text-muted-foreground">
+                {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds}s` : "0.00/0.00s"}
               </span>
             </div>
           </div>
@@ -1832,30 +1731,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <p>{isEditMode ? "Exit Edit Mode (Esc)" : "Edit Curves"}</p>
             </TooltipContent>
           </Tooltip>
-          {onToggleViewMode && (
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleViewMode();
-                  }}
-                >
-                  {inline ? (
-                    <Square className="w-3 h-3" />
-                  ) : (
-                    <LayoutGrid className="w-3 h-3" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{inline ? "Switch to Floating Window" : "Switch to Split View"}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <Button
@@ -1993,24 +1868,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           </div>
 
 
-          {/* Resize Handles - only show when not inline */}
-          {!inline && ['se', 's', 'e', 'w', 'n', 'sw', 'ne', 'nw'].map((direction) => (
-            <div
-              key={direction}
-              className={`absolute ${
-                direction === 'se' ? 'bottom-0 right-0 w-4 h-4 cursor-se-resize' :
-                direction === 's' ? 'bottom-0 left-0 right-0 h-1 cursor-s-resize' :
-                direction === 'e' ? 'top-0 bottom-0 right-0 w-1 cursor-e-resize' :
-                direction === 'w' ? 'top-0 bottom-0 left-0 w-1 cursor-w-resize' :
-                direction === 'n' ? 'top-0 left-0 right-0 h-1 cursor-n-resize' :
-                direction === 'sw' ? 'bottom-0 left-0 w-4 h-4 cursor-sw-resize' :
-                direction === 'ne' ? 'top-0 right-0 w-4 h-4 cursor-ne-resize' :
-                'top-0 left-0 w-4 h-4 cursor-nw-resize'
-              }`}
-              onMouseDown={(e) => handleMouseDownResize(e, direction)}
-              style={{ background: direction.length === 2 ? 'transparent' : undefined }}
-            />
-          ))}
         </>
     </div>
   );

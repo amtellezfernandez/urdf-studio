@@ -727,7 +727,7 @@ const Index = () => {
             style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth }}
           >
             <div className="flex-1 min-h-0 relative">
-              {viewerSplitView && isViewerOpen && viewerEpisode && !isViewerMinimized ? (
+              {viewerSplitView && isViewerOpen && viewerEpisode ? (
                 <div className="flex flex-col h-full">
                   {/* Visualizer in top half */}
                   <div className="flex-1 min-h-0 border-b border-border/20">
@@ -751,30 +751,48 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                     />
                   </div>
-                  {/* Viewer in bottom half */}
-                  <div className="flex-1 min-h-0">
+                  {/* Viewer in bottom half - hidden when minimized */}
+                  {!isViewerMinimized && (
+                    <div className="flex-1 min-h-0">
+                      <EpisodeViewer3DModal
+                        episode={viewerEpisode}
+                        open={isViewerOpen}
+                        onOpenChange={(open) => {
+                          setIsViewerOpen(open);
+                          if (!open) {
+                            // When closing, clear everything
+                            setViewerEpisode(null);
+                            setViewerSplitView(false);
+                            setIsViewerMinimized(false);
+                          }
+                        }}
+                        inline={true}
+                        globalCurrentFrame={currentFrame}
+                        onSetGlobalFrame={(frame: number) => {
+                          (window as any).viewer3dSetFrame?.(frame);
+                          setCurrentFrame(frame);
+                        }}
+                        isMinimized={isViewerMinimized}
+                        onMinimizedChange={setIsViewerMinimized}
+                        onSaveEpisode={episodeSaveHandler}
+                      />
+                    </div>
+                  )}
+                  {/* Minimized view - rendered as portal */}
+                  {isViewerMinimized && (
                     <EpisodeViewer3DModal
                       episode={viewerEpisode}
                       open={isViewerOpen}
                       onOpenChange={(open) => {
                         setIsViewerOpen(open);
                         if (!open) {
-                          // When closing (not toggling), clear everything
+                          // When closing, clear everything
                           setViewerEpisode(null);
                           setViewerSplitView(false);
                           setIsViewerMinimized(false);
-                          // Don't auto-open floating view when closing
                         }
                       }}
                       inline={true}
-                      onToggleViewMode={() => {
-                        // Switch from split view to floating window
-                        // Episode is already set in viewerEpisode
-                        // Set split view to false first, which triggers Sidebar to open floating
-                        setViewerSplitView(false);
-                        // Keep viewer open so Sidebar knows we're toggling, not closing
-                        setIsViewerOpen(true);
-                      }}
                       globalCurrentFrame={currentFrame}
                       onSetGlobalFrame={(frame: number) => {
                         (window as any).viewer3dSetFrame?.(frame);
@@ -784,7 +802,7 @@ const Index = () => {
                       onMinimizedChange={setIsViewerMinimized}
                       onSaveEpisode={episodeSaveHandler}
                     />
-                  </div>
+                  )}
                 </div>
               ) : viewerSplitView && isViewerOpen && !viewerEpisode ? (
                 <div className="flex flex-col h-full">
@@ -901,40 +919,6 @@ const Index = () => {
             </div>
           </main>
 
-          {/* Minimized Episode Viewer - shown when split view is minimized */}
-          {viewerSplitView && isViewerOpen && viewerEpisode && isViewerMinimized && (
-            <EpisodeViewer3DModal
-              episode={viewerEpisode}
-              open={isViewerOpen}
-              onOpenChange={(open) => {
-                setIsViewerOpen(open);
-                if (!open) {
-                  // When closing (not toggling), clear everything
-                  setViewerEpisode(null);
-                  setViewerSplitView(false);
-                  setIsViewerMinimized(false);
-                  // Don't auto-open floating view when closing
-                }
-              }}
-              inline={false}
-              onToggleViewMode={() => {
-                // Switch from split view to floating window
-                // Episode is already set in viewerEpisode
-                // Set split view to false first, which triggers Sidebar to open floating
-                setViewerSplitView(false);
-                // Keep viewer open so Sidebar knows we're toggling, not closing
-                setIsViewerOpen(true);
-              }}
-              globalCurrentFrame={currentFrame}
-              onSetGlobalFrame={(frame: number) => {
-                (window as any).viewer3dSetFrame?.(frame);
-                setCurrentFrame(frame);
-              }}
-              isMinimized={isViewerMinimized}
-              onMinimizedChange={setIsViewerMinimized}
-              onSaveEpisode={episodeSaveHandler}
-            />
-          )}
         </>
       )}
 

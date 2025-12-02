@@ -1018,8 +1018,6 @@ export const Sidebar = ({
   const currentLoadedEpisodeRef = useRef<number | null>(null); // Track which episode is currently loaded in Viewer3D
   const playbackSessionIdRef = useRef<number>(0); // Track playback sessions to prevent race conditions
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
-  const [viewerModalEpisode, setViewerModalEpisode] = useState<Episode | null>(null);
-  const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
   const [rerunViewerModalEpisode, setRerunViewerModalEpisode] = useState<Episode | null>(null);
   const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
   // Track dataset sources for future mixing
@@ -1041,71 +1039,14 @@ export const Sidebar = ({
 
   // Auto-update viewer episode when currentPlayingEpisodeIndex changes
   useEffect(() => {
-    if ((isViewerModalOpen || viewerSplitView) && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+    if (viewerSplitView && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
       const currentEpisode = episodes[currentPlayingEpisodeIndex];
-      if (currentEpisode && currentEpisode.id !== viewerModalEpisode?.id) {
-        setViewerModalEpisode(currentEpisode);
-        if (viewerSplitView) {
-          onViewerEpisodeChange?.(currentEpisode);
-        }
+      if (currentEpisode) {
+        onViewerEpisodeChange?.(currentEpisode);
       }
     }
-  }, [currentPlayingEpisodeIndex, isViewerModalOpen, viewerSplitView, episodes, viewerModalEpisode?.id, onViewerEpisodeChange]);
+  }, [currentPlayingEpisodeIndex, viewerSplitView, episodes, onViewerEpisodeChange]);
   
-  // Clear viewerModalEpisode when viewerEpisode is cleared from Index (closing from split view)
-  // We detect this by monitoring when viewerSplitView becomes false and episode should be cleared
-  // Actually, we can't directly monitor Index's viewerEpisode, but we can clear when appropriate
-  // The key is: when closing from split view, Index clears viewerEpisode to null
-  // We should also clear viewerModalEpisode to prevent auto-opening floating window
-  // We do this by checking: if viewerSplitView is false and we're not opening modal, clear episode
-  // But only if we're actually closing (not toggling)
-  // The toggle button explicitly sets the episode, so if episode is null, we're closing
-
-  // Auto-open floating window modal when switching from split view (but not when closing)
-  const prevViewerSplitViewRef = useRef(viewerSplitView);
-  
-  useEffect(() => {
-    // When switching from split view (true) to floating window (false)
-    // Only open if we're toggling, not closing
-    // We detect closing by checking if viewerModalEpisode is null
-    // When closing from split view, Index.tsx clears viewerEpisode to null
-    // and we should also clear viewerModalEpisode (via the effect below)
-    // So if viewerModalEpisode is null, we're closing - don't open
-    if (prevViewerSplitViewRef.current && !viewerSplitView && !isViewerModalOpen) {
-      // Only open if we have a valid episode (means we're toggling, not closing)
-      // Check if viewerModalEpisode exists - if null, we're closing
-      if (viewerModalEpisode !== null && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
-        const currentEpisode = episodes[currentPlayingEpisodeIndex];
-        // Only open if episode exists and matches (means we're toggling, not closing)
-        if (currentEpisode && currentEpisode.id === viewerModalEpisode.id) {
-          setViewerModalEpisode(currentEpisode);
-          setIsViewerModalOpen(true);
-          onViewerOpenChange?.(true);
-        }
-      }
-      // If viewerModalEpisode is null, we're closing - don't open
-    }
-    prevViewerSplitViewRef.current = viewerSplitView;
-  }, [viewerSplitView, isViewerModalOpen, currentPlayingEpisodeIndex, episodes, viewerModalEpisode, onViewerOpenChange]);
-  
-  // Clear viewerModalEpisode when closing from split view
-  // When Index.tsx closes from split view, it clears viewerEpisode to null
-  // We need to also clear viewerModalEpisode to prevent auto-opening floating window
-  // We detect closing by checking: if viewerSplitView becomes false and we're not toggling
-  // The key: when toggling, the toggle button explicitly sets the episode
-  // When closing, the episode is cleared, so we should also clear viewerModalEpisode
-  // We do this by checking if we're closing (not opening modal) and clearing the episode
-  useEffect(() => {
-    // When viewerSplitView becomes false and we're not opening the modal
-    // Check if we should clear viewerModalEpisode (closing, not toggling)
-    // We can't directly check Index's viewerEpisode, but we can infer from context
-    // If currentPlayingEpisodeIndex is invalid or episodes are empty, we're closing
-    // But actually, the toggle button ensures episode exists, so if it doesn't, we're closing
-    // The safest: only clear if we're definitely closing (not toggling)
-    // Actually, the auto-open useEffect already checks viewerModalEpisode !== null
-    // So if it's null, it won't open. The issue is ensuring it's null when closing.
-    // Let's not auto-clear here - instead, ensure the check in auto-open is sufficient
-  }, [viewerSplitView, isViewerModalOpen]);
 
   // Stop animation when all episodes are deleted
   useEffect(() => {
@@ -2132,12 +2073,12 @@ export const Sidebar = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    const filename = `${robotBaseName}_episode_${String(episode.number - 1).padStart(3, "0")}.json`;
+    const filename = `${robotBaseName}_episode_${String(episode.number).padStart(3, "0")}.json`;
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
 
-    toast.success(`Exported Episode ${episode.number - 1} to ${filename}`);
+    toast.success(`Exported Episode ${episode.number} to ${filename}`);
   }, [getJointOrderForFrames, robotBaseName]);
 
   // Handle file upload for dataset loading
@@ -3738,42 +3679,34 @@ export const Sidebar = ({
         
         // Stop at end of current episode (no auto-advance to next episode)
         // User must click "Next Episode" button to play the next episode
-
-        // Stop playback WITHOUT clearing frames (so we can reset to frame 0)
-        isPlayingAllRef.current = false;
-        setIsPlayingAll(false);
-
-        // Clear any pending playback timeouts
-        if (playbackTimeoutRef.current) {
-          clearTimeout(playbackTimeoutRef.current);
-          playbackTimeoutRef.current = null;
+        stopAllPlayback();
+        // Reset frame to 0 when episode finishes
+        // Reload the episode first (since stopAllPlayback clears frames), then set frame to 0
+        if (episodes[playableIndex] && episodes[playableIndex].frames && episodes[playableIndex].frames.length > 0) {
+          const finishedEpisode = episodes[playableIndex];
+          const frames = toAnimationFrames(finishedEpisode);
+          // Reload episode frames - viewer3dPlayEpisode will auto-start after 10ms
+          (window as any).viewer3dPlayEpisode?.(frames);
+          // Stop playback immediately and repeatedly to catch auto-start
+          // Then set frame to 0 once stopped
+          (window as any).viewer3dStopAnimation?.();
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+            (window as any).viewer3dSetFrame?.(0);
+            onFrameChange?.(0);
+          }, 5);
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+          }, 12); // Right before auto-start (10ms)
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+            (window as any).viewer3dSetFrame?.(0);
+            onFrameChange?.(0);
+          }, 25); // Right after auto-start
+          setTimeout(() => {
+            (window as any).viewer3dStopAnimation?.();
+          }, 50); // Final safety stop
         }
-
-        // CRITICAL STEP 1: HARD LOCK frame to 0 BEFORE stopping
-        // Force frame index to 0 in global state IMMEDIATELY (prevents animation loop from calculating more frames)
-        (window as any).__viewer3dCurrentFrameIndex = 0;
-
-        // Set pause flag to prevent ANY interpolation or movement
-        (window as any).__viewer3dIsPaused = true;
-
-        // Set preserved frame time to 0 (so stopAnimation preserves frame 0, not current frame)
-        const firstTimestamp = episodes[playableIndex]?.frames?.[0]?.timestamp ?? 0;
-        (window as any).__viewer3dPreserveFrameTime = firstTimestamp;
-
-        // CRITICAL STEP 2: Stop animation NOW (will preserve frame 0 due to step 1)
-        (window as any).viewer3dStopAnimation?.();
-
-        // CRITICAL STEP 3: Force frame to 0 again after stop
-        (window as any).__viewer3dCurrentFrameIndex = 0;
-        delete (window as any).__viewer3dPreserveFrameTime;
-        (window as any).__viewer3dManualFrameTime = firstTimestamp;
-
-        // Update UI state immediately
-        onFrameChange?.(0);
-
-        // Set frame position to 0 (locks it at frame 0)
-        (window as any).viewer3dSetFrame?.(0);
-
         // Keep currentPlayingEpisodeIndex so user can see which episode just finished
         // and can click "Next Episode" to continue
       }, duration);
@@ -3852,14 +3785,10 @@ export const Sidebar = ({
               const activeIndex = currentPlayingEpisodeIndex ?? 0;
               const episode = episodes[activeIndex];
               if (episode) {
-                setViewerModalEpisode(episode);
-                setIsViewerModalOpen(true);
                 onViewerEpisodeChange?.(episode);
               }
             } else {
-              // No episodes - clear episode so message shows instead of popup
-              setViewerModalEpisode(null);
-              setIsViewerModalOpen(false);
+              // No episodes - clear episode so message shows instead of viewer
               onViewerEpisodeChange?.(null);
             }
           }
@@ -4373,7 +4302,7 @@ export const Sidebar = ({
                               {/* Episode Number */}
                               <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <span className="text-[10px] font-bold text-primary">
-                                  {episode.number - 1}
+                                  {episode.number}
                                 </span>
                               </div>
                               
@@ -4395,7 +4324,7 @@ export const Sidebar = ({
                                       ? "text-primary font-semibold"
                                       : "text-muted-foreground"
                                   }`}>
-                                    {episodeCurrentFrame}/{totalFrames - 1}
+                                    {episodeCurrentFrame}/{totalFrames}
                                   </span>
                                 </div>
                                 
@@ -4496,150 +4425,6 @@ export const Sidebar = ({
           </TabsContent>
         </div>
       </Tabs>
-
-      {/* Episode Viewer Modal - only render if not in split view */}
-      {!viewerSplitView && (
-        <EpisodeViewer3DModal
-          episode={viewerModalEpisode}
-          open={isViewerModalOpen}
-          onOpenChange={(open) => {
-            setIsViewerModalOpen(open);
-            onViewerOpenChange?.(open);
-            if (!open) {
-              onViewerSplitViewChange?.(false);
-              // Clear the episode when closing
-              setViewerModalEpisode(null);
-            }
-          }}
-          onToggleViewMode={() => {
-            // Switch from floating window to split view
-            setIsViewerModalOpen(false);
-            onViewerSplitViewChange?.(true);
-            onViewerOpenChange?.(true);
-            if (viewerModalEpisode) {
-              onViewerEpisodeChange?.(viewerModalEpisode);
-            }
-          }}
-          currentEpisodeIndex={currentPlayingEpisodeIndex}
-          allEpisodes={episodes}
-          isPlayingAll={isPlayingAll}
-          onPlayAllEpisodes={playAllEpisodes}
-          onSetCurrentEpisodeIndex={setCurrentPlayingEpisodeIndex}
-          globalCurrentFrame={currentFrame}
-          onSetGlobalFrame={(frame: number) => {
-            // When user manually scrubs timeline, ALWAYS stop playback (hard stop)
-            // This is equivalent to clicking the STOP button
-
-            // CRITICAL ORDER: Set frame FIRST, then stop playback
-            // This ensures the scrubbed position is preserved for resume
-
-            // 1. Set the frame in 3D viewer
-            (window as any).viewer3dSetFrame?.(frame);
-
-            // 2. Update parent's currentFrame state (so play resumes from here)
-            onFrameChange?.(frame);
-
-            // 3. THEN stop playback (after frame is set and state is updated)
-            stopAllPlayback();
-
-            // 4. Prevent auto-start from viewer3dPlayEpisode (called in timeline drag)
-            // Use multiple stops at different times to catch the 10ms auto-start
-            // NOTE: Do NOT call viewer3dPlayAnimation(false) here because stopAllPlayback()
-            // already cleared the frames, and viewer3dPlayAnimation checks for frames
-            // before doing anything, which would trigger "Please upload data first" error
-            (window as any).viewer3dStopAnimation?.();
-            setTimeout(() => {
-              (window as any).viewer3dStopAnimation?.();
-            }, 5);
-            setTimeout(() => {
-              (window as any).viewer3dStopAnimation?.();
-            }, 12); // Right before auto-start (10ms)
-            setTimeout(() => {
-              (window as any).viewer3dStopAnimation?.();
-            }, 25); // Right after auto-start
-            setTimeout(() => {
-              (window as any).viewer3dStopAnimation?.();
-            }, 50); // Final safety stop
-          }}
-          onSaveEpisode={(savedEpisode, saveAsNew, newName) => {
-            if (saveAsNew) {
-              // Save as new episode
-              const newEpisodeId = `episode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-              const newEpisodeNumber = episodes.length + 1;
-              
-              // Update metadata with new name if provided
-              const updatedMetadata = savedEpisode.metadata ? {
-                ...savedEpisode.metadata,
-                additional: {
-                  ...savedEpisode.metadata.additional,
-                  sourceType: savedEpisode.metadata.additional?.sourceType || 'local',
-                  sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
-                },
-              } : {
-                episodeNumber: newEpisodeNumber,
-                episode_index: newEpisodeNumber - 1,
-                num_frames: savedEpisode.frames.length,
-                additional: {
-                  sourceType: 'local',
-                  sourceName: newName || `Episode ${newEpisodeNumber} (edited)`,
-                },
-              };
-              
-              const newEpisode = createEpisode(
-                newEpisodeId,
-                newEpisodeNumber,
-                savedEpisode.frames,
-                updatedMetadata
-              );
-              
-              setEpisodes((prev) => {
-                const next = [...prev, newEpisode];
-                return renumberEpisodes(next);
-              });
-              
-              toast.success(`Saved as new episode: ${newName || `Episode ${newEpisodeNumber}`}`);
-            } else {
-              // Overwrite existing episode
-              const episodeIndex = episodes.findIndex((ep) => ep.id === savedEpisode.id);
-              if (episodeIndex !== -1) {
-                setEpisodes((prev) => {
-                  const next = [...prev];
-                  // Update the episode while preserving its ID and number
-                  next[episodeIndex] = {
-                    ...savedEpisode,
-                    id: next[episodeIndex].id, // Preserve original ID
-                    number: next[episodeIndex].number, // Preserve original number
-                    metadata: savedEpisode.metadata ? {
-                      ...savedEpisode.metadata,
-                      episodeNumber: next[episodeIndex].number,
-                      episode_index: next[episodeIndex].metadata?.episode_index ?? next[episodeIndex].number - 1,
-                      num_frames: savedEpisode.frames.length,
-                    } : {
-                      episodeNumber: next[episodeIndex].number,
-                      episode_index: next[episodeIndex].number - 1,
-                      num_frames: savedEpisode.frames.length,
-                    },
-                  };
-                  return next;
-                });
-                
-                // Update viewer episode if it's the one being edited
-                if (viewerModalEpisode?.id === savedEpisode.id) {
-                  setViewerModalEpisode({
-                    ...savedEpisode,
-                    id: viewerModalEpisode.id,
-                    number: viewerModalEpisode.number,
-                  });
-                }
-                
-                toast.success(`Episode ${episodes[episodeIndex].number - 1} updated successfully`);
-              } else {
-                toast.error("Episode not found");
-              }
-            }
-          }}
-        />
-      )}
 
       {/* Rerun Viewer Modal */}
       <RerunViewer3DModal
