@@ -564,7 +564,7 @@ const URDFModel = ({
     const preservedFrameTime = (window as any).__viewer3dPreserveFrameTime;
     if (preservedFrameTime !== undefined && preservedFrameTime !== null) {
       // Use preserved frame time and convert to normalized time
-      const frameIndex = Math.floor((preservedFrameTime - firstTimestamp) / normalizedFrameDuration);
+      const frameIndex = Math.round((preservedFrameTime - firstTimestamp) / normalizedFrameDuration);
       const clampedFrameIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));
       const normalizedTime = firstTimestamp + clampedFrameIndex * normalizedFrameDuration;
       currentTime = normalizedTime;
@@ -625,7 +625,7 @@ const URDFModel = ({
       // Use stored manual frame time (paused at a specific frame)
       currentTime = manualFrameTimeRef.current;
       // Calculate frame index from stored time to keep it consistent
-      const storedFrameIndex = Math.floor((currentTime - firstTimestamp) / normalizedFrameDuration);
+      const storedFrameIndex = Math.round((currentTime - firstTimestamp) / normalizedFrameDuration);
       const clampedStoredIndex = Math.max(0, Math.min(storedFrameIndex, animationFrames.length - 1));
       (window as any).__viewer3dCurrentFrameIndex = clampedStoredIndex;
       // If we start playing from a paused state, update start time and clear manual frame
@@ -649,6 +649,14 @@ const URDFModel = ({
       shouldApplyAnimation = true;
       // Clear pause flag when playing
       delete (window as any).__viewer3dIsPaused;
+      
+      // Check if we need to reset animation start time (when starting from last frame)
+      const shouldResetStartTime = (window as any).__viewer3dResetAnimationStartTime;
+      if (shouldResetStartTime) {
+        animationStartTime.current = 0;
+        delete (window as any).__viewer3dResetAnimationStartTime;
+      }
+      
       if (animationStartTime.current === 0) {
         // First time playing - start from the beginning
         animationStartTime.current = Date.now();
@@ -659,7 +667,31 @@ const URDFModel = ({
       // Use normalized duration for uniform playback
       const normalizedDuration = normalizedLastTimestamp - firstTimestamp;
       if (normalizedDuration > 0) {
-        currentTime = firstTimestamp + (speedAdjustedElapsed % normalizedDuration);
+        // Don't loop - stop at the last frame
+        const calculatedTime = firstTimestamp + speedAdjustedElapsed;
+        if (calculatedTime >= normalizedLastTimestamp) {
+          // Reached the last frame - stop playing but keep position
+          currentTime = normalizedLastTimestamp;
+          // Calculate and set the last frame index immediately
+          const lastFrameIndex = animationFrames.length - 1;
+          (window as any).__viewer3dCurrentFrameIndex = lastFrameIndex;
+          currentFrameIndexRef.current = lastFrameIndex;
+          // Store the last frame time so we stay at this position
+          manualFrameTimeRef.current = normalizedLastTimestamp;
+          // Set pause flag to prevent interpolation
+          (window as any).__viewer3dIsPaused = true;
+          // Update frame callback immediately to reflect last frame
+          if (onFrameChange) {
+            onFrameChange(lastFrameIndex);
+          }
+          // Stop playback using the window-based handler (will preserve last frame position)
+          // Use requestAnimationFrame to ensure this happens after current frame is applied
+          requestAnimationFrame(() => {
+            (window as any).viewer3dStopAnimation?.();
+          });
+        } else {
+          currentTime = calculatedTime;
+        }
       } else {
         currentTime = firstTimestamp;
       }
@@ -706,8 +738,10 @@ const URDFModel = ({
     if (normalizedFrameDuration > 0 && animationFrames.length > 1) {
       const normalizedTimePosition = currentTime - firstTimestamp;
       const calculatedIndex = normalizedTimePosition / normalizedFrameDuration;
+      // Use Math.round to increment at midpoint between frames
+      // This ensures the last frame is reached during playback
       frameIndex = Math.min(
-        Math.max(0, Math.floor(calculatedIndex)),
+        Math.max(0, Math.round(calculatedIndex)),
         animationFrames.length - 1
       );
     } else if (animationFrames.length === 1) {
@@ -1687,7 +1721,7 @@ export const Viewer3D = ({
     return { nodes, edges };
   };
 
-  const handleRun = (forceState?: boolean) => {
+  const handleRun = useCallback((forceState?: boolean) => {
     if (!animationFrames || animationFrames.length === 0) {
       toast.error("Please upload a motion data file first");
       return;
@@ -1698,6 +1732,35 @@ export const Viewer3D = ({
     }
     // If forceState is provided, use it; otherwise toggle
     const newPlayingState = forceState !== undefined ? forceState : !isPlaying;
+    
+    // If we're starting to play and we're at the last frame, reset to frame 0 first
+    if (newPlayingState && !isPlaying) {
+      const currentFrameIdx = (window as any).__viewer3dCurrentFrameIndex;
+      const lastFrameIdx = animationFrames.length - 1;
+      
+      if (currentFrameIdx !== undefined && currentFrameIdx !== null && currentFrameIdx >= lastFrameIdx) {
+        // We're at the last frame - reset to frame 0 before starting to play
+        const firstTimestamp = animationFrames[0].timestamp;
+        const lastTimestamp = animationFrames[lastFrameIdx].timestamp;
+        const animationDuration = lastTimestamp - firstTimestamp;
+        const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
+        
+        // Use window properties to communicate with the animation loop
+        // Set manual frame time to first frame
+        const normalizedFirstTime = firstTimestamp;
+        (window as any).__viewer3dManualFrameTime = normalizedFirstTime;
+        (window as any).__viewer3dCurrentFrameIndex = 0;
+        (window as any).__viewer3dResetAnimationStartTime = true; // Flag to reset animation start time
+        // Clear any preserved frame time that might keep us at the last frame
+        delete (window as any).__viewer3dPreserveFrameTime;
+        
+        // Update frame callback immediately
+        if (onFrameChange) {
+          onFrameChange(0);
+        }
+      }
+    }
+    
     setIsPlaying(newPlayingState);
     onPlayingChange?.(newPlayingState);
     // Clear pause flag when starting to play
@@ -1707,7 +1770,7 @@ export const Viewer3D = ({
       // Set pause flag when pausing
       (window as any).__viewer3dIsPaused = true;
     }
-  };
+  }, [animationFrames, robot, isPlaying, onFrameChange, onPlayingChange]);
 
   // Handler to play episode frames directly
   const handlePlayEpisode = useCallback((frames: AnimationFrame[]) => {

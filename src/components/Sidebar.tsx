@@ -2132,12 +2132,12 @@ export const Sidebar = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    const filename = `${robotBaseName}_episode_${String(episode.number).padStart(3, "0")}.json`;
+    const filename = `${robotBaseName}_episode_${String(episode.number - 1).padStart(3, "0")}.json`;
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
 
-    toast.success(`Exported Episode ${episode.number} to ${filename}`);
+    toast.success(`Exported Episode ${episode.number - 1} to ${filename}`);
   }, [getJointOrderForFrames, robotBaseName]);
 
   // Handle file upload for dataset loading
@@ -3666,11 +3666,24 @@ export const Sidebar = ({
       if (episode.frames.length > 0) {
         const startTimestamp = episode.frames[0].timestamp;
         const endTimestamp = episode.frames[episode.frames.length - 1].timestamp;
+        const totalFrames = episode.frames.length;
 
-        if (frameToUse > 0 && frameToUse < episode.frames.length) {
+        if (frameToUse > 0 && frameToUse < totalFrames) {
           // Resuming from middle of episode - calculate remaining time
-          const currentTimestamp = episode.frames[frameToUse]?.timestamp ?? startTimestamp;
-          remainingDuration = endTimestamp - currentTimestamp;
+          // Use normalized frame duration to match Viewer3D's calculation
+          // normalizedFrameDuration = (endTimestamp - startTimestamp) / (totalFrames - 1)
+          // To reach the last frame (index totalFrames - 1), we need to play through
+          // (totalFrames - 1 - frameToUse) intervals
+          const animationDuration = endTimestamp - startTimestamp;
+          if (animationDuration > 0 && totalFrames > 1) {
+            const normalizedFrameDuration = animationDuration / (totalFrames - 1);
+            const remainingFrames = totalFrames - 1 - frameToUse;
+            // Calculate time needed to play through remaining intervals to reach last frame
+            // Add a small buffer (half a frame duration) to ensure the last frame is displayed
+            remainingDuration = remainingFrames * normalizedFrameDuration + (normalizedFrameDuration / 2);
+          } else {
+            remainingDuration = endTimestamp - startTimestamp;
+          }
 
           // Ensure we have a valid positive duration
           if (remainingDuration <= 0) {
@@ -3679,7 +3692,18 @@ export const Sidebar = ({
           }
         } else if (frameToUse === 0) {
           // Starting from frame 0, use full episode duration
-          remainingDuration = endTimestamp - startTimestamp;
+          // Use normalized frame duration to match Viewer3D's calculation
+          // To reach the last frame (index totalFrames - 1), we need to play through
+          // (totalFrames - 1) intervals, plus a small buffer to ensure last frame displays
+          const animationDuration = endTimestamp - startTimestamp;
+          if (animationDuration > 0 && totalFrames > 1) {
+            const normalizedFrameDuration = animationDuration / (totalFrames - 1);
+            // Play through all intervals (totalFrames - 1) to reach last frame
+            // Add a small buffer (half a frame duration) to ensure the last frame is displayed
+            remainingDuration = (totalFrames - 1) * normalizedFrameDuration + (normalizedFrameDuration / 2);
+          } else {
+            remainingDuration = endTimestamp - startTimestamp;
+          }
 
           // Ensure minimum duration to prevent immediate timeout
           if (remainingDuration <= 0) {
@@ -3694,6 +3718,7 @@ export const Sidebar = ({
       const speedAdjustedDuration = remainingDuration / playbackSpeed;
 
       // Ensure duration is always positive and reasonable
+      // Add buffer to ensure the last frame is actually displayed before stopping
       const duration = Math.max(PLAYBACK_GAP_MS, speedAdjustedDuration + PLAYBACK_GAP_MS);
 
       // Capture session ID to detect if playback was stopped/restarted during timeout
@@ -3713,34 +3738,42 @@ export const Sidebar = ({
         
         // Stop at end of current episode (no auto-advance to next episode)
         // User must click "Next Episode" button to play the next episode
-        stopAllPlayback();
-        // Reset frame to 0 when episode finishes
-        // Reload the episode first (since stopAllPlayback clears frames), then set frame to 0
-        if (episodes[playableIndex] && episodes[playableIndex].frames && episodes[playableIndex].frames.length > 0) {
-          const finishedEpisode = episodes[playableIndex];
-          const frames = toAnimationFrames(finishedEpisode);
-          // Reload episode frames - viewer3dPlayEpisode will auto-start after 10ms
-          (window as any).viewer3dPlayEpisode?.(frames);
-          // Stop playback immediately and repeatedly to catch auto-start
-          // Then set frame to 0 once stopped
-          (window as any).viewer3dStopAnimation?.();
-          setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
-            (window as any).viewer3dSetFrame?.(0);
-            onFrameChange?.(0);
-          }, 5);
-          setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
-          }, 12); // Right before auto-start (10ms)
-          setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
-            (window as any).viewer3dSetFrame?.(0);
-            onFrameChange?.(0);
-          }, 25); // Right after auto-start
-          setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
-          }, 50); // Final safety stop
+
+        // Stop playback WITHOUT clearing frames (so we can reset to frame 0)
+        isPlayingAllRef.current = false;
+        setIsPlayingAll(false);
+
+        // Clear any pending playback timeouts
+        if (playbackTimeoutRef.current) {
+          clearTimeout(playbackTimeoutRef.current);
+          playbackTimeoutRef.current = null;
         }
+
+        // CRITICAL STEP 1: HARD LOCK frame to 0 BEFORE stopping
+        // Force frame index to 0 in global state IMMEDIATELY (prevents animation loop from calculating more frames)
+        (window as any).__viewer3dCurrentFrameIndex = 0;
+
+        // Set pause flag to prevent ANY interpolation or movement
+        (window as any).__viewer3dIsPaused = true;
+
+        // Set preserved frame time to 0 (so stopAnimation preserves frame 0, not current frame)
+        const firstTimestamp = episodes[playableIndex]?.frames?.[0]?.timestamp ?? 0;
+        (window as any).__viewer3dPreserveFrameTime = firstTimestamp;
+
+        // CRITICAL STEP 2: Stop animation NOW (will preserve frame 0 due to step 1)
+        (window as any).viewer3dStopAnimation?.();
+
+        // CRITICAL STEP 3: Force frame to 0 again after stop
+        (window as any).__viewer3dCurrentFrameIndex = 0;
+        delete (window as any).__viewer3dPreserveFrameTime;
+        (window as any).__viewer3dManualFrameTime = firstTimestamp;
+
+        // Update UI state immediately
+        onFrameChange?.(0);
+
+        // Set frame position to 0 (locks it at frame 0)
+        (window as any).viewer3dSetFrame?.(0);
+
         // Keep currentPlayingEpisodeIndex so user can see which episode just finished
         // and can click "Next Episode" to continue
       }, duration);
@@ -4260,34 +4293,6 @@ export const Sidebar = ({
               <div className="flex items-center gap-1">
                 <Button
                   size="sm"
-                  variant={isViewerModalOpen || viewerSplitView ? "default" : "ghost"}
-                  className="h-6 px-2 text-[10px] flex-1"
-                  onClick={() => {
-                    if (isViewerModalOpen || viewerSplitView) {
-                      setIsViewerModalOpen(false);
-                      onViewerSplitViewChange?.(false);
-                      onViewerOpenChange?.(false);
-                    } else {
-                      const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                      if (episodes.length > 0 && episodes[activeIndex]) {
-                        const episode = episodes[activeIndex];
-                        setViewerModalEpisode(episode);
-                        setIsViewerModalOpen(true);
-                        // Enable split view mode
-                        onViewerSplitViewChange?.(true);
-                        onViewerEpisodeChange?.(episode);
-                        onViewerOpenChange?.(true);
-                      }
-                    }
-                  }}
-                  disabled={episodes.length === 0}
-                  title="3D Viewer"
-                >
-                  <Eye className="w-3 h-3 mr-1" />
-                  Viewer
-                </Button>
-                <Button
-                  size="sm"
                   variant={isRerunViewerModalOpen ? "default" : "ghost"}
                   className="h-6 px-2 text-[10px] flex-1"
                   onClick={() => {
@@ -4368,7 +4373,7 @@ export const Sidebar = ({
                               {/* Episode Number */}
                               <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <span className="text-[10px] font-bold text-primary">
-                                  {episode.number}
+                                  {episode.number - 1}
                                 </span>
                               </div>
                               
@@ -4390,7 +4395,7 @@ export const Sidebar = ({
                                       ? "text-primary font-semibold"
                                       : "text-muted-foreground"
                                   }`}>
-                                    {episodeCurrentFrame}/{totalFrames}
+                                    {episodeCurrentFrame}/{totalFrames - 1}
                                   </span>
                                 </div>
                                 
@@ -4627,7 +4632,7 @@ export const Sidebar = ({
                   });
                 }
                 
-                toast.success(`Episode ${episodes[episodeIndex].number} updated successfully`);
+                toast.success(`Episode ${episodes[episodeIndex].number - 1} updated successfully`);
               } else {
                 toast.error("Episode not found");
               }

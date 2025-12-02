@@ -23,6 +23,10 @@ import {
   Save,
   Undo2,
   Redo2,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -550,16 +554,16 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           // Quick save: use last choice if available, otherwise show dialog
           if (lastSaveChoice === 'overwrite') {
             onSaveEpisode(modifiedEpisode, false);
-            toast.success(`Episode ${episode?.number} updated`);
+            toast.success(`Episode ${episode?.number ? episode.number - 1 : 0} updated`);
           } else if (lastSaveChoice === 'new') {
             setShowSaveDialog(true);
             setSaveAsNew(true);
-            setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+            setNewEpisodeName(`Episode ${episode?.number ? episode.number - 1 : allEpisodes.length} (edited)`);
           } else {
             // First time saving, show dialog
             setShowSaveDialog(true);
             setSaveAsNew(false);
-            setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+            setNewEpisodeName(`Episode ${episode?.number ? episode.number - 1 : allEpisodes.length} (edited)`);
           }
         }
       }
@@ -569,7 +573,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         if (hasChanges && modifiedEpisode && onSaveEpisode) {
           setShowSaveDialog(true);
           setSaveAsNew(true);
-          setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+          setNewEpisodeName(`Episode ${episode?.number ? episode.number - 1 : allEpisodes.length} (edited)`);
         }
       }
       // Ctrl+Z or Cmd+Z - Undo
@@ -1142,22 +1146,22 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.lineWidth = 1;
 
     const totalFrames = episode.frames.length;
-    const gridDivisions = Math.min(10, totalFrames);
 
-    for (let i = 0; i <= gridDivisions; i++) {
-      const x = CANVAS_PADDING + (graphWidth * i) / gridDivisions;
+    // Draw a line for EVERY frame, equally spaced (no skipping)
+    for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
+      // Position evenly across the graph width
+      const x = CANVAS_PADDING + (graphWidth * frameNumber) / (totalFrames - 1);
+
       ctx.beginPath();
       ctx.moveTo(x, CANVAS_PADDING);
       ctx.lineTo(x, height - CANVAS_PADDING);
       ctx.stroke();
 
-      if (totalFrames > 0) {
-        const frameNumber = Math.round((i / gridDivisions) * (totalFrames - 1));
-        ctx.fillStyle = "#71717a";
-        ctx.font = "9px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(`F${frameNumber}`, x, height - CANVAS_PADDING + 15);
-      }
+      // Label every frame
+      ctx.fillStyle = "#71717a";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`F${frameNumber}`, x, height - CANVAS_PADDING + 15);
     }
 
     for (let i = 0; i <= 5; i++) {
@@ -1450,7 +1454,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Episode Info */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <h3 className="text-sm font-semibold whitespace-nowrap">Episode {episode.number}</h3>
+            <h3 className="text-sm font-semibold whitespace-nowrap">Episode {episode.number - 1}</h3>
             {episode.metadata?.additional?.sourceType && (
               <div className="flex items-center gap-1">
                 <Badge
@@ -1489,7 +1493,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             <span className="text-muted-foreground">Frame:</span>
             <span className="font-mono font-medium">{displayFrame}</span>
             <span className="text-muted-foreground">/</span>
-            <span className="font-mono text-muted-foreground">{totalFrames}</span>
+            <span className="font-mono text-muted-foreground">{totalFrames - 1}</span>
           </div>
 
           {/* Time Display */}
@@ -1576,8 +1580,86 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           {!inline && <GripHorizontal className="w-4 h-4 text-muted-foreground" />}
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">
-              Episode {episode.number}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
+              Episode {episode.number - 1}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
             </h3>
+            {/* Timeline Controls */}
+            {onPlayAllEpisodes && (
+              <div className="flex items-center gap-1 pointer-events-auto" onMouseDown={(e) => e.stopPropagation()}>
+                {onSetCurrentEpisodeIndex && allEpisodes.length > 1 && (
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (allEpisodes.length === 0) return;
+                          const currentIndex = currentEpisodeIndex ?? 0;
+                          const prevIndex = currentIndex > 0 ? currentIndex - 1 : allEpisodes.length - 1;
+                          onSetCurrentEpisodeIndex(prevIndex);
+                          onSetGlobalFrame?.(0);
+                        }}
+                        disabled={allEpisodes.length <= 1}
+                      >
+                        <SkipBack className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Previous Episode</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlayAllEpisodes();
+                      }}
+                      disabled={!episode || episode.frames.length === 0}
+                    >
+                      {isPlayingAll ? (
+                        <Pause className="w-3 h-3" />
+                      ) : (
+                        <Play className="w-3 h-3 fill-current" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isPlayingAll ? "Pause" : "Play"}</p>
+                  </TooltipContent>
+                </Tooltip>
+                {onSetCurrentEpisodeIndex && allEpisodes.length > 1 && (
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (allEpisodes.length === 0) return;
+                          const currentIndex = currentEpisodeIndex ?? 0;
+                          const nextIndex = (currentIndex + 1) % allEpisodes.length;
+                          onSetCurrentEpisodeIndex(nextIndex);
+                          onSetGlobalFrame?.(0);
+                        }}
+                        disabled={allEpisodes.length <= 1}
+                      >
+                        <SkipForward className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Next Episode</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            )}
             {isEditMode && (
               <Badge
                 variant="outline"
@@ -1623,7 +1705,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <span className="text-muted-foreground">Frame:</span>
               <span className="font-mono font-medium">{displayFrame}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="font-mono text-muted-foreground">{totalFrames}</span>
+              <span className="font-mono text-muted-foreground">{totalFrames - 1}</span>
             </div>
             <div className="flex items-center gap-1 px-2 py-1 bg-background rounded border text-xs">
               <span className="text-muted-foreground">Time:</span>
@@ -1690,7 +1772,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     if (modifiedEpisode && onSaveEpisode) {
                       setShowSaveDialog(true);
                       setSaveAsNew(false);
-                      setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+                      setNewEpisodeName(`Episode ${episode?.number ? episode.number - 1 : allEpisodes.length} (edited)`);
                     }
                   }}
                   disabled={!hasChanges || !modifiedEpisode || !onSaveEpisode}
@@ -2080,7 +2162,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               setShowExitConfirmDialog(false);
               setShowSaveDialog(true);
               setSaveAsNew(lastSaveChoice === 'new');
-              setNewEpisodeName(`Episode ${episode?.number || allEpisodes.length + 1} (edited)`);
+              setNewEpisodeName(`Episode ${episode?.number ? episode.number - 1 : allEpisodes.length} (edited)`);
             }}
           >
             Save
