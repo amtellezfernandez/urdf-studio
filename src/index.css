@@ -128,6 +128,37 @@
     background: transparent;
   }
 
+  /* Minimal dark scrollbar - smaller, darker, more subtle */
+  .minimal-scrollbar {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 0% 25% / 0.6) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 25% / 0.6);
+    border-radius: 2px;
+    border: 0;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 35% / 0.7);
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Blender-style number font - clean sans-serif for numbers */
   .blender-number {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;

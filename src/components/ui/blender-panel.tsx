@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { cn } from "@/lib/utils";
 
 interface BlenderPanelProps {
-  title: string | React.ReactNode;
+  title: string | React.ReactNode | null;
   defaultOpen?: boolean;
   children: React.ReactNode;
   className?: string;
@@ -20,30 +20,36 @@ export const BlenderPanel = ({ title, defaultOpen = true, children, className, a
     }
   }, [alwaysExpanded]);
 
+  const shouldShowTitle = title !== "" && title !== null && title !== undefined;
+  
   return (
-    <Collapsible open={isOpen} onOpenChange={alwaysExpanded ? undefined : setIsOpen} className={cn("mb-0.5", className)}>
-      <CollapsibleTrigger 
-        className={cn(
-          "w-full flex items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm",
-          alwaysExpanded && "cursor-default"
-        )}
-        disabled={alwaysExpanded}
-      >
-        <div className="flex items-center gap-1 min-w-0 flex-1">
-          {!alwaysExpanded && (
-            <ChevronRight 
-              className={cn(
-                "w-2.5 h-2.5 transition-transform duration-200 flex-shrink-0",
-                isOpen && "rotate-90"
-              )} 
-            />
+    <Collapsible open={isOpen} onOpenChange={alwaysExpanded ? undefined : setIsOpen} className={cn(shouldShowTitle ? "mb-0.5" : "mb-0", className)}>
+      {shouldShowTitle && (
+        <CollapsibleTrigger 
+          className={cn(
+            "w-full flex items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm",
+            alwaysExpanded && "cursor-default"
           )}
-          <div className="min-w-0 flex-1 text-left truncate">
-            {typeof title === "string" ? <span className="truncate block">{title}</span> : title}
+          disabled={alwaysExpanded}
+        >
+          <div className="flex items-center gap-1 min-w-0 flex-1">
+            {!alwaysExpanded && (
+              <ChevronRight 
+                className={cn(
+                  "w-2.5 h-2.5 transition-transform duration-200 flex-shrink-0",
+                  isOpen && "rotate-90"
+                )} 
+              />
+            )}
+            <div className="min-w-0 flex-1 text-left truncate">
+              {typeof title === "string" ? <span className="truncate block">{title}</span> : title}
+            </div>
           </div>
-        </div>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="px-1.5 pb-1 pt-0.5">
+        </CollapsibleTrigger>
+      )}
+      <CollapsibleContent className={cn(
+        shouldShowTitle ? "px-1.5 pb-1 pt-0.5" : "px-1 pb-0.5 pt-0"
+      )}>
         {children}
       </CollapsibleContent>
     </Collapsible>

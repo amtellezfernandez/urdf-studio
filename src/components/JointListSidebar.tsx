@@ -147,7 +147,6 @@ const HierarchyTreeView = ({
                   angleUnit={angleUnit}
                       onClick={() => {
                         onJointSelect?.(joint.jointName);
-                        setSelectedLink(null); // Clear link selection when selecting joint
                       }}
                       onHover={onJointHover}
                 />
@@ -395,16 +394,15 @@ export const JointListSidebar = ({
           <div className="flex-shrink-0 px-3 py-2 border-b border-border/20 bg-muted/5">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setViewMode("links")}
-                disabled={!urdfContent}
+                onClick={() => setViewMode("flat")}
                 className={cn(
                   "text-xs font-medium transition-colors",
-                  viewMode === "links"
+                  viewMode === "flat"
                     ? "text-primary cursor-default"
                     : "text-muted-foreground hover:text-foreground cursor-pointer"
                 )}
               >
-                Links
+                Joints
               </button>
               <button
                 onClick={() => setViewMode("hierarchy")}
@@ -419,15 +417,16 @@ export const JointListSidebar = ({
                 Hierarchy
               </button>
               <button
-                onClick={() => setViewMode("flat")}
+                onClick={() => setViewMode("links")}
+                disabled={!urdfContent}
                 className={cn(
                   "text-xs font-medium transition-colors",
-                  viewMode === "flat"
+                  viewMode === "links"
                     ? "text-primary cursor-default"
                     : "text-muted-foreground hover:text-foreground cursor-pointer"
                 )}
               >
-                Joints
+                Links
               </button>
               <div className="flex-1"></div>
             </div>
@@ -488,7 +487,7 @@ export const JointListSidebar = ({
           </div>
 
           {/* Scrollable Joint List */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 minimal-scrollbar">
             {viewMode === "links" ? (
               // Links view
               filteredLinks.length === 0 ? (
@@ -580,7 +579,7 @@ export const JointListSidebar = ({
           <div className="flex-shrink-0 px-3 py-2 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-foreground">
-                {selectedJoint ? "Joint Editor" : selectedLink ? "Link Editor" : "No Selection"}
+                {selectedJoint ? `Joint Editor (${selectedJoint})` : selectedLink ? `Link Editor (${selectedLink})` : "No Selection"}
               </span>
               {(selectedJoint || selectedLink) && (
                 <button
@@ -598,10 +597,10 @@ export const JointListSidebar = ({
           </div>
 
           {/* Editor Content */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden minimal-scrollbar">
             {selectedJoint ? (
               <div 
-                className="p-2"
+                className="p-1"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
@@ -630,12 +629,12 @@ export const JointListSidebar = ({
                   } : undefined}
                   onNameChange={onJointNameChange}
                   alwaysExpanded={true}
-                  hideValueDisplay={false}
+                  hideValueDisplay={true}
                 />
               </div>
             ) : selectedLink && selectedLinkData ? (
               <div 
-                className="p-2"
+                className="p-1"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >

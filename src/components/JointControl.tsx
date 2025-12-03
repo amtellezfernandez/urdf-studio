@@ -597,105 +597,106 @@ export const JointControl = ({
     >
       {/* Blender-style collapsible header - Minimalistic */}
       <Collapsible open={isExpanded} onOpenChange={alwaysExpanded ? undefined : setIsExpanded}>
-        <CollapsibleTrigger
-          className={cn(
-            "w-full flex items-center gap-1.5 px-1 py-1 hover:bg-muted/20 rounded-sm transition-colors group",
-            isHighlighted && "bg-primary/8 text-primary hover:bg-primary/15",
-            alwaysExpanded && "cursor-default"
-          )}
-          disabled={alwaysExpanded}
-        >
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            {!alwaysExpanded && (
+        {!alwaysExpanded && (
+          <CollapsibleTrigger
+            className={cn(
+              "w-full flex items-center gap-1.5 px-1 py-1 hover:bg-muted/20 rounded-sm transition-colors group",
+              isHighlighted && "bg-primary/8 text-primary hover:bg-primary/15"
+            )}
+          >
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <ChevronRight 
                 className={cn(
                   "w-3 h-3 transition-transform duration-200 flex-shrink-0",
                   isExpanded && "rotate-90"
                 )} 
               />
-            )}
-            {isEditingName ? (
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={editedName}
-                onChange={(e) => setEditedName(e.target.value)}
-                onBlur={handleNameSubmit}
-                onKeyDown={handleNameKeyDown}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  "text-xs font-medium flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
-                  isDeleted
-                    ? "text-muted-foreground/50"
-                    : isHighlighted
-                      ? "text-primary"
-                      : "text-foreground"
-                )}
-              />
-            ) : (
-              <label
-                className={cn(
-                  "text-xs font-medium truncate flex-1 min-w-0 text-left cursor-text",
-                  isDeleted
-                    ? "text-muted-foreground/50"
-                    : isHighlighted
-                      ? "text-primary"
-                      : "text-foreground",
-                  onNameChange && "hover:text-primary/80"
-                )}
-                title={isDeleted ? "Will be deleted in exported URDF" : onNameChange ? "Double-click to rename" : undefined}
-                onDoubleClick={handleNameDoubleClick}
+              {isEditingName ? (
+                <input
+                  ref={nameInputRef}
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  onBlur={handleNameSubmit}
+                  onKeyDown={handleNameKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "text-xs font-medium flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
+                    isDeleted
+                      ? "text-muted-foreground/50"
+                      : isHighlighted
+                        ? "text-primary"
+                        : "text-foreground"
+                  )}
+                />
+              ) : (
+                <label
+                  className={cn(
+                    "text-xs font-medium truncate flex-1 min-w-0 text-left cursor-text",
+                    isDeleted
+                      ? "text-muted-foreground/50"
+                      : isHighlighted
+                        ? "text-primary"
+                        : "text-foreground",
+                    onNameChange && "hover:text-primary/80"
+                  )}
+                  title={isDeleted ? "Will be deleted in exported URDF" : onNameChange ? "Double-click to rename" : undefined}
+                  onDoubleClick={handleNameDoubleClick}
+                >
+                  {jointName}
+                  {isDeleted && (
+                    <span className="ml-1 text-[9px] text-muted-foreground/70">
+                      (deleted)
+                    </span>
+                  )}
+                </label>
+              )}
+            </div>
+            {!hideValueDisplay && (
+              <span
+                ref={valueDisplayRef}
+                tabIndex={0}
+                role="spinbutton"
+                aria-label="Joint value"
+                aria-valuemin={
+                  Number.isFinite(min)
+                    ? angleUnit === "deg"
+                      ? min * RAD_TO_DEG
+                      : min
+                    : undefined
+                }
+                aria-valuemax={
+                  Number.isFinite(max)
+                    ? angleUnit === "deg"
+                      ? max * RAD_TO_DEG
+                      : max
+                    : undefined
+                }
+                aria-valuenow={
+                  angleUnit === "deg"
+                    ? currentValue * RAD_TO_DEG
+                    : currentValue
+                }
+                className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
+                style={{ color: valueColor }}
+                onFocus={() => setIsValueFocused(true)}
+                onBlur={() => setIsValueFocused(false)}
+                onMouseDown={handleValueMouseDown}
+                onWheel={handleValueWheel}
+                onKeyDown={handleValueKeyDown}
               >
-                {jointName}
-                {isDeleted && (
-                  <span className="ml-1 text-[9px] text-muted-foreground/70">
-                    (deleted)
-                  </span>
-                )}
-              </label>
+                {angleUnit === "deg" 
+                  ? `${(currentValue * RAD_TO_DEG).toFixed(2)}°`
+                  : `${currentValue.toFixed(2)}`}
+              </span>
             )}
-          </div>
-          {!hideValueDisplay && (
-            <span
-              ref={valueDisplayRef}
-              tabIndex={0}
-              role="spinbutton"
-              aria-label="Joint value"
-              aria-valuemin={
-                Number.isFinite(min)
-                  ? angleUnit === "deg"
-                    ? min * RAD_TO_DEG
-                    : min
-                  : undefined
-              }
-              aria-valuemax={
-                Number.isFinite(max)
-                  ? angleUnit === "deg"
-                    ? max * RAD_TO_DEG
-                    : max
-                  : undefined
-              }
-              aria-valuenow={
-                angleUnit === "deg"
-                  ? currentValue * RAD_TO_DEG
-                  : currentValue
-              }
-              className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
-              style={{ color: valueColor }}
-              onFocus={() => setIsValueFocused(true)}
-              onBlur={() => setIsValueFocused(false)}
-              onMouseDown={handleValueMouseDown}
-              onWheel={handleValueWheel}
-              onKeyDown={handleValueKeyDown}
-            >
-              {angleUnit === "deg" 
-                ? `${(currentValue * RAD_TO_DEG).toFixed(2)}°`
-                : `${currentValue.toFixed(2)}`}
-            </span>
-          )}
-        </CollapsibleTrigger>
+          </CollapsibleTrigger>
+        )}
 
-        <CollapsibleContent className="px-1 pt-1.5 space-y-1.5">
+        <CollapsibleContent className={cn(
+          "px-1 space-y-1.5",
+          alwaysExpanded ? "pt-0" : "pt-1.5"
+        )}>
           {/* Value Slider */}
           <BlenderPropertyRow label="Value">
             <div className="flex items-center gap-2">

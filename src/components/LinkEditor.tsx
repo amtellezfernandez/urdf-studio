@@ -407,16 +407,9 @@ export const LinkControl = ({
   };
 
   return (
-    <div
-      className={cn(
-        "border border-border/10 rounded-sm bg-muted/5 mb-0.5",
-        isHighlighted && "ring-1 ring-primary/30"
-      )}
-      onMouseEnter={onSelect}
-    >
+    <div onMouseEnter={onSelect}>
       <BlenderPanel 
-        title={
-          isEditingName ? (
+        title={alwaysExpanded ? null : (isEditingName ? (
             <Input
               ref={nameInputRef}
               value={editedName}
@@ -438,10 +431,10 @@ export const LinkControl = ({
             >
               {linkData.name}
             </span>
-          )
-        }
+          ))}
         defaultOpen={alwaysExpanded}
         alwaysExpanded={alwaysExpanded}
+        className={alwaysExpanded ? "mb-0" : ""}
       >
         {/* Section Selector */}
         <div className="flex items-center gap-0.5 px-1 py-0.5 mb-0.5 border-b border-border/15">
