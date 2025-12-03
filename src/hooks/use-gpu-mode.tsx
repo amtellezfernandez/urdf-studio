@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 
 export type GPUMode = "high" | "low";
 
@@ -28,7 +28,14 @@ const getInitialGPUMode = (): GPUMode => {
   return "high";
 };
 
-export function useGPUMode() {
+interface GPUModeContextType {
+  gpuMode: GPUMode;
+  setGPUMode: (mode: GPUMode) => void;
+}
+
+const GPUModeContext = createContext<GPUModeContextType | undefined>(undefined);
+
+export function GPUModeProvider({ children }: { children: ReactNode }) {
   const [gpuMode, setGpuMode] = useState<GPUMode>(getInitialGPUMode);
 
   useEffect(() => {
@@ -39,7 +46,27 @@ export function useGPUMode() {
     setGpuMode(mode);
   };
 
-  return { gpuMode, setGPUMode };
+  return (
+    <GPUModeContext.Provider value={{ gpuMode, setGPUMode }}>
+      {children}
+    </GPUModeContext.Provider>
+  );
+}
+
+export function useGPUMode() {
+  const context = useContext(GPUModeContext);
+  if (context === undefined) {
+    // Fallback to local state if context is not available (for backward compatibility)
+    const [gpuMode, setGpuMode] = useState<GPUMode>(getInitialGPUMode);
+    useEffect(() => {
+      localStorage.setItem(GPU_MODE_STORAGE_KEY, gpuMode);
+    }, [gpuMode]);
+    const setGPUMode = (mode: GPUMode) => {
+      setGpuMode(mode);
+    };
+    return { gpuMode, setGPUMode };
+  }
+  return context;
 }
 
 

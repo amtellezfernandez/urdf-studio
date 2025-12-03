@@ -62,7 +62,7 @@ interface WindowWithViewerHandlers extends Window {
 
 const Index = () => {
   useTheme(); // Initialize dark mode
-  const { gpuMode } = useGPUMode();
+  const { gpuMode, setGPUMode } = useGPUMode();
   const [urdfFile, setUrdfFile] = useState<File | null>(null);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
@@ -1086,6 +1086,33 @@ const Index = () => {
                         )}
                       >
                         Degrees
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      GPU Mode
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-40 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => setGPUMode("low")}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          gpuMode === "low" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        Low GPU Mode
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setGPUMode("high")}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          gpuMode === "high" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        High GPU Mode
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
