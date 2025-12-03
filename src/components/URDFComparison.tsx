@@ -30,7 +30,6 @@ import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
 import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
 import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
 import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
-import { ExportDialog } from "@/components/ExportDialog";
 import { convertURDFToXacro } from "@/urdf_corrections/urdfToXacro";
 import { convertURDFToMJCF } from "@/urdf_corrections/urdfToMJCF";
 
@@ -46,6 +45,8 @@ interface URDFComparisonProps {
   inline?: boolean; // If true, render inline instead of as Dialog
   splitView?: boolean; // If true, render in split view (simulation top, editor bottom)
   onSplitViewToggle?: (split: boolean) => void;
+  selectedView?: "original" | "modified" | "split";
+  onSelectedViewChange?: (view: "original" | "modified" | "split") => void;
 }
 
 export const URDFComparison = ({
@@ -60,12 +61,15 @@ export const URDFComparison = ({
   inline = false,
   splitView = false,
   onSplitViewToggle,
+  selectedView: selectedViewProp,
+  onSelectedViewChange,
 }: URDFComparisonProps) => {
-  const [selectedView, setSelectedView] = useState<"original" | "modified" | "split">("split");
+  const [internalSelectedView, setInternalSelectedView] = useState<"original" | "modified" | "split">("split");
+  const selectedView = selectedViewProp ?? internalSelectedView;
+  const setSelectedView = onSelectedViewChange ?? setInternalSelectedView;
   const [isEditing, setIsEditing] = useState(false);
   const [editedVizUrdf, setEditedVizUrdf] = useState(vizUrdf);
   const [showSaveToGitHub, setShowSaveToGitHub] = useState(false);
-  const [showExportDialog, setShowExportDialog] = useState(false);
   const [originalFormat, setOriginalFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
   const [modifiedFormat, setModifiedFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
 
@@ -390,85 +394,20 @@ export const URDFComparison = ({
 
       {inline && (
         <div className="flex items-center justify-between px-2 py-1 border-b border-border/20 bg-muted/5 flex-shrink-0">
-          <div className="flex items-center gap-1">
-            {/* Export Button */}
+          <div className="flex-1" />
+          <div className="flex items-center gap-2">
+            <img 
+              src="/assets/urdf-studio-logo.png" 
+              alt="URDF Studio" 
+              className="h-6 w-auto object-contain"
+            />
             <button
-              className="h-6 px-2 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors"
-              onClick={() => setShowExportDialog(true)}
+              className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+              onClick={onClose}
             >
-              Export
+              <X className="w-3.5 h-3.5" />
             </button>
-
-            {/* Utils Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-6 px-2 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors">
-                  Utils
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuItem
-                  onClick={handleCanonicalOrder}
-                  className="text-xs cursor-pointer"
-                >
-                  Canonical Order
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handlePrettyPrint}
-                  className="text-xs cursor-pointer"
-                >
-                  Pretty Print
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleNormalizeAxes}
-                  className="text-xs cursor-pointer"
-                >
-                  Normalize Axes
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleFixMeshPaths}
-                  className="text-xs cursor-pointer"
-                >
-                  Fix Mesh Paths
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* View Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-6 px-2 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors">
-                  View
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => setSelectedView("original")}
-                  className="text-xs cursor-pointer"
-                >
-                  Original
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setSelectedView("modified")}
-                  className="text-xs cursor-pointer"
-                >
-                  Modified
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setSelectedView("split")}
-                  className="text-xs cursor-pointer"
-                >
-                  Split View
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
-          <button
-            className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
-            onClick={onClose}
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
         </div>
       )}
 
@@ -477,15 +416,6 @@ export const URDFComparison = ({
         inline && "p-2"
       )}>
 
-        {/* Export Dialog */}
-        <ExportDialog
-          isOpen={showExportDialog}
-          onClose={() => setShowExportDialog(false)}
-          urdfContent={isEditing ? editedVizUrdf : vizUrdf}
-          meshFiles={meshFiles}
-          githubToken={githubToken}
-          robotName={robotName}
-        />
 
         <div className={cn(
           "flex flex-col gap-2 flex-1 min-h-0",

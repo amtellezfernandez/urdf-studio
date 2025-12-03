@@ -1435,13 +1435,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
-  // Minimized view - always centered at bottom regardless of inline or floating
+  // Minimized view - full width when inline, centered when floating
   if (isMinimized) {
     const currentTime = episode ? calculateTime(displayFrame).replace('s', '') : "0.00";
     const minimizedContent = (
       <div
-        className="bg-muted border-b border-border px-3 py-2 fixed left-1/2 -translate-x-1/2"
-        style={{
+        className={cn(
+          "bg-muted border-b border-border px-3 py-2",
+          inline 
+            ? "w-full" // Full width when inline
+            : "fixed left-1/2 -translate-x-1/2" // Centered when floating
+        )}
+        style={inline ? {} : {
           bottom: 0,
           zIndex: 99999,
           maxWidth: '95vw',
@@ -1486,7 +1491,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       </div>
     );
 
-    // Always use portal to render at document.body level for consistent positioning
+    // When inline, render directly (not as portal) so it's part of the layout
+    // When floating, use portal to render at document.body level
+    if (inline) {
+      return minimizedContent;
+    }
     return typeof window !== 'undefined' ? createPortal(minimizedContent, document.body) : null;
   }
 

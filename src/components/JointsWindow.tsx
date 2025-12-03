@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { BlenderPanel } from "@/components/ui/blender-panel";
 import { JointControl } from "@/components/JointControl";
-import { Search, X, ChevronDown, ChevronRight, Network, RotateCw, Eye, EyeOff } from "lucide-react";
+import { Search, X, ChevronDown, ChevronRight, Network, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
@@ -39,11 +39,6 @@ interface JointsWindowProps {
   sliderStep?: number;
   fromDisplayVelocity?: (value: number) => number;
   applyGlobalVelocityToAll?: () => void;
-  onRotateRobot?: (axis: "x" | "y" | "z") => void;
-  rotationAxis?: "x" | "y" | "z";
-  onRotationAxisChange?: (axis: "x" | "y" | "z") => void;
-  onResetRotation?: () => void;
-  hasRotationChanges?: boolean;
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   rotationPlaneVisible?: boolean;
   onRotationPlaneVisibilityChange?: (visible: boolean) => void;
@@ -77,11 +72,6 @@ export const JointsWindow = ({
   sliderStep = 0.1,
   fromDisplayVelocity,
   applyGlobalVelocityToAll,
-  onRotateRobot,
-  rotationAxis = "z",
-  onRotationAxisChange,
-  onResetRotation,
-  hasRotationChanges = false,
   onJointLinkChange,
   rotationPlaneVisible = false,
   onRotationPlaneVisibilityChange,
@@ -247,45 +237,6 @@ export const JointsWindow = ({
 
   return (
     <div className="flex flex-col w-full">
-      {/* Robot Position - Minimalistic */}
-      {onRotateRobot && (
-        <div className="flex items-center gap-1.5 px-2 py-1 text-xs border-b border-border/20 bg-muted/5">
-          <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Position</span>
-          <Select
-            value={rotationAxis}
-            onValueChange={(value) => onRotationAxisChange?.(value as "x" | "y" | "z")}
-          >
-            <SelectTrigger className="h-6 text-xs w-16 border-border/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-popover border-border">
-              <SelectItem value="x" className="text-xs">X</SelectItem>
-              <SelectItem value="y" className="text-xs">Y</SelectItem>
-              <SelectItem value="z" className="text-xs">Z</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-1.5 text-xs flex-shrink-0"
-            onClick={() => onRotateRobot(rotationAxis)}
-            title={`Rotate root link and direct children 90° around ${rotationAxis.toUpperCase()}-axis`}
-          >
-            <RotateCw className="w-3.5 h-3.5" />
-          </Button>
-          {onResetRotation && hasRotationChanges && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-xs flex-shrink-0"
-              onClick={onResetRotation}
-              title="Reset rotation to original position"
-            >
-              Reset
-            </Button>
-          )}
-        </div>
-      )}
 
       {/* Global Motion Limits - Minimalistic */}
       {(onVelocityLimitEnabledChange || onRotationPlaneVisibilityChange) && (

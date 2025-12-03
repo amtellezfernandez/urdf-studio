@@ -6,6 +6,7 @@ import type { CollisionVisibility } from "@/components/LinkEditor";
 import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
+import { ExportDialog } from "@/components/ExportDialog";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { toast } from "sonner";
 import { createVizFilename } from "@/urdf_corrections/addJointColors";
@@ -15,10 +16,26 @@ import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
 import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
 import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
 import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
+import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
+import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
+import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
+import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
+import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 interface MeshFiles {
   [key: string]: Blob;
@@ -69,6 +86,9 @@ const Index = () => {
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
   const [rotationPlaneVisible, setRotationPlaneVisible] = useState<boolean>(false);
   const [showUrdfEditor, setShowUrdfEditor] = useState<boolean>(false);
+  const [urdfViewMode, setUrdfViewMode] = useState<"original" | "modified" | "split">("split");
+  const [showExportDialog, setShowExportDialog] = useState<boolean>(false);
+  const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState<boolean>(false);
   const [viewerSplitView, setViewerSplitView] = useState<boolean>(false);
   const [viewerEpisode, setViewerEpisode] = useState<any | null>(null);
@@ -76,6 +96,7 @@ const Index = () => {
   const [isViewerMinimized, setIsViewerMinimized] = useState<boolean>(false);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: any, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<"joints" | "recording">("joints");
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
     webkitRelativePath: string;
@@ -515,10 +536,68 @@ const Index = () => {
     return new XMLSerializer().serializeToString(xmlDoc);
   }, []);
 
+  // URDF Utility Handlers
+  const handleCanonicalOrder = useCallback(() => {
+    if (!vizUrdfContent) return;
+    const result = canonicalOrderURDF(vizUrdfContent);
+    handleVizUrdfChange(result);
+    toast.success("URDF elements reordered to canonical format");
+  }, [vizUrdfContent, handleVizUrdfChange]);
+
+  const handlePrettyPrint = useCallback(() => {
+    if (!vizUrdfContent) return;
+    const result = prettyPrintURDF(vizUrdfContent);
+    handleVizUrdfChange(result);
+    toast.success("URDF formatted with consistent indentation");
+  }, [vizUrdfContent, handleVizUrdfChange]);
+
+  const handleNormalizeAxes = useCallback(() => {
+    if (!vizUrdfContent) return;
+    const result = normalizeJointAxes(vizUrdfContent);
+    handleVizUrdfChange(result.urdfContent);
+
+    if (result.errors.length > 0) {
+      toast.warning(`Normalized axes with ${result.errors.length} error(s) fixed`);
+      result.errors.forEach(err => {
+        console.warn(`Joint "${err.jointName}" (${err.jointType}): ${err.issue}`);
+      });
+    } else if (result.corrections.length > 0) {
+      toast.success(`Normalized ${result.corrections.length} joint axis(es)`);
+      result.corrections.forEach(correction => {
+        console.info(`Joint "${correction.jointName}": ${correction.reason}`);
+      });
+    } else {
+      toast.info("All joint axes are already normalized");
+    }
+  }, [vizUrdfContent, handleVizUrdfChange]);
+
+  const handleFixMeshPaths = useCallback(() => {
+    if (!vizUrdfContent) return;
+    const result = fixMeshPaths(vizUrdfContent);
+    handleVizUrdfChange(result.urdfContent);
+
+    if (result.corrections.length > 0) {
+      toast.success(`Fixed ${result.corrections.length} mesh path(s)`);
+      result.corrections.forEach(correction => {
+        console.info(`Fixed path: "${correction.oldPath}" -> "${correction.newPath}"`);
+      });
+    } else {
+      toast.info("All mesh paths are already correct");
+    }
+  }, [vizUrdfContent, handleVizUrdfChange]);
+
   const getExportUrdfContent = useCallback((): string => {
     if (!vizUrdfContent) return "";
     return deleteJointsFromURDF(vizUrdfContent, deletedJoints);
   }, [vizUrdfContent, deleteJointsFromURDF, deletedJoints]);
+
+  const robotName = useMemo(() => {
+    if (!vizUrdfContent) return "robot";
+    const parsed = parseURDF(vizUrdfContent);
+    if (!parsed.isValid) return "robot";
+    const robot = parsed.document.querySelector("robot");
+    return robot?.getAttribute("name") || "robot";
+  }, [vizUrdfContent]);
 
   const handleDeleteJoint = useCallback((jointName: string): void => {
     setDeletedJoints((prev) => {
@@ -643,6 +722,206 @@ const Index = () => {
         </div>
       ) : (
         <>
+          {/* Fixed Top Navigation Bar - Blender Style */}
+          <div className="fixed top-0 left-0 right-0 z-50 h-7 bg-[#282828] border-b border-[#3d3d3d] flex items-center px-1">
+            <img 
+              src="/assets/urdf-studio-logo.png" 
+              alt="URDF Studio" 
+              className="h-5 w-auto object-contain ml-1 mr-3"
+            />
+            {originalUrdfContent && vizUrdfContent && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
+                      File
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                    <DropdownMenuItem
+                      onClick={() => setShowExportDialog(true)}
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Export
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleResetRotation}
+                      disabled={!hasRotationChanges}
+                      className={cn(
+                        "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                        !hasRotationChanges && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      Reset
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none">
+                      Utils
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                    <DropdownMenuItem
+                      onClick={handleCanonicalOrder}
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Canonical Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handlePrettyPrint}
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Pretty Print
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleNormalizeAxes}
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Normalize Axes
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleFixMeshPaths}
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Fix Mesh Paths
+                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        Rotate
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setRotationAxis("x");
+                            handleRotateRobot("x");
+                          }}
+                          className={cn(
+                            "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                            rotationAxis === "x" && "bg-[#3d3d3d] text-white"
+                          )}
+                        >
+                          X
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setRotationAxis("y");
+                            handleRotateRobot("y");
+                          }}
+                          className={cn(
+                            "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                            rotationAxis === "y" && "bg-[#3d3d3d] text-white"
+                          )}
+                        >
+                          Y
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setRotationAxis("z");
+                            handleRotateRobot("z");
+                          }}
+                          className={cn(
+                            "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                            rotationAxis === "z" && "bg-[#3d3d3d] text-white"
+                          )}
+                        >
+                          Z
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "joints" | "recording")}>
+              <TabsList className="h-5 bg-transparent gap-0 p-0">
+                <TabsTrigger 
+                  value="joints" 
+                  className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] data-[state=active]:bg-[#3d3d3d] data-[state=active]:text-white rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1"
+                >
+                  Editor
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="recording" 
+                  className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] data-[state=active]:bg-[#3d3d3d] data-[state=active]:text-white rounded-none border-r border-[#3d3d3d] flex items-center transition-none"
+                >
+                  Recording
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {originalUrdfContent && vizUrdfContent && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
+                    View
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                  <DropdownMenuItem
+                    onClick={() => setShowUrdfEditor(false)}
+                    className={cn(
+                      "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                      !showUrdfEditor && "bg-[#3d3d3d] text-white"
+                    )}
+                  >
+                    3D Visualization
+                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className={cn(
+                        "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                        showUrdfEditor && "bg-[#3d3d3d] text-white"
+                      )}
+                    >
+                      URDF File
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-40 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setShowUrdfEditor(true);
+                          setUrdfViewMode("original");
+                        }}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          showUrdfEditor && urdfViewMode === "original" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        Original
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setShowUrdfEditor(true);
+                          setUrdfViewMode("modified");
+                        }}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          showUrdfEditor && urdfViewMode === "modified" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        Modified
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setShowUrdfEditor(true);
+                          setUrdfViewMode("split");
+                        }}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          showUrdfEditor && urdfViewMode === "split" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        Split View
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+
           <Sidebar
             isLoading={isLoading}
             availableJoints={availableJoints}
@@ -662,9 +941,6 @@ const Index = () => {
             onDeleteJoint={handleDeleteJoint}
             deletedJoints={deletedJoints}
             getExportUrdf={getExportUrdfContent}
-            onRotateRobot={handleRotateRobot}
-            onResetRotation={handleResetRotation}
-            hasRotationChanges={hasRotationChanges}
             onMotionDataUpload={handleMotionDataUpload}
             onPlayAnimation={handlePlayAnimation}
             isPlaying={isPlaying}
@@ -693,6 +969,19 @@ const Index = () => {
               // Receive save handler from Sidebar and store it
               setEpisodeSaveHandler(() => handler);
             }}
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              setActiveTab(tab);
+              // Handle tab change logic
+              if (tab === "joints") {
+                setIsViewerOpen(false);
+              }
+              if (tab === "recording") {
+                setShowUrdfEditor(false);
+                setViewerSplitView(true);
+                setIsViewerOpen(true);
+              }
+            }}
           />
 
           {!isSidebarCollapsed && (
@@ -701,8 +990,10 @@ const Index = () => {
               aria-orientation="vertical"
               aria-label="Resize sidebar"
               onPointerDown={handleSidebarResizeStart}
-              className="fixed top-0 bottom-0 z-40 cursor-col-resize select-none"
+              className="fixed z-40 cursor-col-resize select-none"
               style={{
+                top: "32px",
+                bottom: 0,
                 left: sidebarWidth - SIDEBAR_RESIZER_WIDTH / 2,
                 width: SIDEBAR_RESIZER_WIDTH,
               }}
@@ -724,7 +1015,7 @@ const Index = () => {
 
           <main
             className="flex-1 flex flex-col overflow-hidden bg-background transition-[margin-left] duration-200 ease-out"
-            style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth }}
+            style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth, marginTop: "28px" }}
           >
             <div className="flex-1 min-h-0 relative">
               {viewerSplitView && isViewerOpen && viewerEpisode ? (
@@ -751,8 +1042,8 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                     />
                   </div>
-                  {/* Viewer in bottom half - hidden when minimized */}
-                  {!isViewerMinimized && (
+                  {/* Viewer in bottom half - full height when not minimized, minimized bar at bottom when minimized */}
+                  {!isViewerMinimized ? (
                     <div className="flex-1 min-h-0">
                       <EpisodeViewer3DModal
                         episode={viewerEpisode}
@@ -777,31 +1068,32 @@ const Index = () => {
                         onSaveEpisode={episodeSaveHandler}
                       />
                     </div>
-                  )}
-                  {/* Minimized view - rendered as portal */}
-                  {isViewerMinimized && (
-                    <EpisodeViewer3DModal
-                      episode={viewerEpisode}
-                      open={isViewerOpen}
-                      onOpenChange={(open) => {
-                        setIsViewerOpen(open);
-                        if (!open) {
-                          // When closing, clear everything
-                          setViewerEpisode(null);
-                          setViewerSplitView(false);
-                          setIsViewerMinimized(false);
-                        }
-                      }}
-                      inline={true}
-                      globalCurrentFrame={currentFrame}
-                      onSetGlobalFrame={(frame: number) => {
-                        (window as any).viewer3dSetFrame?.(frame);
-                        setCurrentFrame(frame);
-                      }}
-                      isMinimized={isViewerMinimized}
-                      onMinimizedChange={setIsViewerMinimized}
-                      onSaveEpisode={episodeSaveHandler}
-                    />
+                  ) : (
+                    /* Minimized view - rendered inline at bottom */
+                    <div className="flex-shrink-0">
+                      <EpisodeViewer3DModal
+                        episode={viewerEpisode}
+                        open={isViewerOpen}
+                        onOpenChange={(open) => {
+                          setIsViewerOpen(open);
+                          if (!open) {
+                            // When closing, clear everything
+                            setViewerEpisode(null);
+                            setViewerSplitView(false);
+                            setIsViewerMinimized(false);
+                          }
+                        }}
+                        inline={true}
+                        globalCurrentFrame={currentFrame}
+                        onSetGlobalFrame={(frame: number) => {
+                          (window as any).viewer3dSetFrame?.(frame);
+                          setCurrentFrame(frame);
+                        }}
+                        isMinimized={isViewerMinimized}
+                        onMinimizedChange={setIsViewerMinimized}
+                        onSaveEpisode={episodeSaveHandler}
+                      />
+                    </div>
                   )}
                 </div>
               ) : viewerSplitView && isViewerOpen && !viewerEpisode ? (
@@ -878,6 +1170,8 @@ const Index = () => {
                       inline={true}
                       splitView={true}
                       onSplitViewToggle={setUrdfEditorSplitView}
+                      selectedView={urdfViewMode}
+                      onSelectedViewChange={setUrdfViewMode}
                     />
                   </div>
                 </div>
@@ -890,6 +1184,8 @@ const Index = () => {
                   onVizUrdfChange={handleVizUrdfChange}
                   getExportUrdf={getExportUrdfContent}
                   meshFiles={meshFiles}
+                  selectedView={urdfViewMode}
+                  onSelectedViewChange={setUrdfViewMode}
                   githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
                   inline={true}
                   splitView={false}
@@ -992,6 +1288,17 @@ const Index = () => {
             ))}
           </div>
         </div>
+      )}
+      {/* Export Dialog */}
+      {showUrdfEditor && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          urdfContent={getExportUrdfContent()}
+          meshFiles={meshFiles}
+          githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+          robotName={robotName}
+        />
       )}
     </div>
   );

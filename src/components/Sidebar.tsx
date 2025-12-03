@@ -70,9 +70,6 @@ interface SidebarProps {
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   deletedJoints?: Set<string>;
   getExportUrdf?: () => string;
-  onRotateRobot?: (axis: "x" | "y" | "z") => void;
-  onResetRotation?: () => void;
-  hasRotationChanges?: boolean;
   onMotionDataUpload?: (file: File) => void;
   onPlayAnimation?: () => void;
   isPlaying?: boolean;
@@ -94,6 +91,8 @@ interface SidebarProps {
   onViewerSplitViewChange?: (splitView: boolean) => void;
   onViewerEpisodeChange?: (episode: Episode | null) => void;
   onViewerOpenChange?: (open: boolean) => void;
+  activeTab?: "joints" | "recording";
+  onTabChange?: (tab: "joints" | "recording") => void;
 }
 
 interface RecordedFrame {
@@ -813,20 +812,12 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
+  activeTab = "joints",
+  onTabChange,
 }: SidebarProps) => {
-  const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
-  const [activeEditorWindow, setActiveEditorWindow] = useState<"joints" | "links" | "urdf">("joints");
-  
-  // Sync activeEditorWindow with showUrdfEditor prop
-  useEffect(() => {
-    if (showUrdfEditor && activeEditorWindow !== "urdf") {
-      setActiveEditorWindow("urdf");
-    } else if (!showUrdfEditor && activeEditorWindow === "urdf") {
-      setActiveEditorWindow("joints");
-    }
-  }, [showUrdfEditor]);
+  const [activeEditorWindow, setActiveEditorWindow] = useState<"joints" | "links">("joints");
 
   // Notify parent when collision visibility changes
   useEffect(() => {
@@ -1046,7 +1037,32 @@ export const Sidebar = ({
       }
     }
   }, [currentPlayingEpisodeIndex, viewerSplitView, episodes, onViewerEpisodeChange]);
-  
+
+  // Handle tab changes from top navigation - select episode when switching to recording tab
+  useEffect(() => {
+    if (activeTab === "recording") {
+      // When switching to recording tab, close the URDF editor and ensure robot movement is enabled
+      onUrdfEditorToggle?.(false);
+      setIsAnimating(false);
+      // Always enable split view mode when switching to recording tab
+      onViewerSplitViewChange?.(true);
+      onViewerOpenChange?.(true);
+      // Open viewer with episode if available, otherwise show message
+      if (episodes.length > 0) {
+        const activeIndex = currentPlayingEpisodeIndex ?? 0;
+        const episode = episodes[activeIndex];
+        if (episode) {
+          onViewerEpisodeChange?.(episode);
+        }
+      } else {
+        // No episodes - clear episode so message shows instead of viewer
+        onViewerEpisodeChange?.(null);
+      }
+    } else if (activeTab === "joints") {
+      // When switching to editor tab, close the viewer
+      onViewerOpenChange?.(false);
+    }
+  }, [activeTab, episodes, currentPlayingEpisodeIndex, onUrdfEditorToggle, onViewerSplitViewChange, onViewerOpenChange, onViewerEpisodeChange, setIsAnimating]);
 
   // Stop animation when all episodes are deleted
   useEffect(() => {
@@ -3756,25 +3772,29 @@ export const Sidebar = ({
 
   return (
     <div
-      className="sidebar-panel flex flex-col h-screen fixed left-0 top-0 bg-[hsl(var(--sidebar-bg))] transition-transform duration-200 ease-out shadow-xl z-30"
+      className="sidebar-panel flex flex-col fixed left-0 bg-[hsl(var(--sidebar-bg))] transition-transform duration-200 ease-out shadow-xl z-30"
       style={{
         width,
         minWidth: SIDEBAR_MIN_WIDTH,
+        top: "28px",
+        height: "calc(100vh - 28px)",
         transform: isCollapsed ? "translateX(-100%)" : undefined,
         pointerEvents: isCollapsed ? "none" : "auto",
       }}
       aria-hidden={isCollapsed}
     >
       <Tabs 
-        defaultValue="joints" 
+        value={activeTab}
         className="flex flex-col h-full"
         onValueChange={(value) => {
+          const tab = value as "joints" | "recording";
+          onTabChange?.(tab);
           // When switching to editor tab, close the viewer
-          if (value === "joints") {
+          if (tab === "joints") {
             onViewerOpenChange?.(false);
           }
           // When switching to recording tab, close the URDF editor and ensure robot movement is enabled
-          if (value === "recording") {
+          if (tab === "recording") {
             onUrdfEditorToggle?.(false);
             setIsAnimating(false);
             // Always enable split view mode when switching to recording tab
@@ -3794,70 +3814,33 @@ export const Sidebar = ({
           }
         }}
       >
-        {/* Header with Logo and Tabs */}
-        <div className="flex-shrink-0 border-b border-border/30">
-          <div className="flex items-center gap-3 p-3">
-            <img 
-              src="/assets/urdf-studio-logo.png" 
-              alt="URDF Studio" 
-              className="h-10 w-auto object-contain"
-            />
-            <TabsList className="grid grid-cols-2 bg-transparent flex-1">
-              <TabsTrigger value="joints" className="flex items-center gap-1.5 text-xs">
-                <Sliders className="w-3.5 h-3.5" />
-                Editor
-              </TabsTrigger>
-              <TabsTrigger value="recording" className="flex items-center gap-1.5 text-xs">
-                <Square className="w-3.5 h-3.5" />
-                Recording
-              </TabsTrigger>
-            </TabsList>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={onToggleCollapse}
-              aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
-              title={isCollapsed ? "Show sidebar" : "Hide sidebar"}
-              disabled={!onToggleCollapse}
-            >
-              {isCollapsed ? (
-                <ChevronsRight className="w-4 h-4" />
-              ) : (
-                <ChevronsLeft className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-          
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="px-4 py-2 border-t border-border/30">
+        {/* Header */}
+        {isLoading && (
+          <div className="flex-shrink-0 border-b border-border/30">
+            <div className="px-4 py-2">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <span>Loading robot model...</span>
               </div>
             </div>
-          )}
-
-        </div>
+          </div>
+        )}
 
         {/* Tabs Content */}
         <div className="flex-1 min-h-0 overflow-hidden">
           {/* Joints Tab */}
           <TabsContent value="joints" className="flex-1 overflow-hidden mt-0 h-full">
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="px-3 py-2 space-y-2 flex-shrink-0">
-              </div>
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 {/* Minimalistic Window Selector - Blender Style */}
-                <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border/30 bg-muted/10">
+                <div className="flex items-center gap-0 px-2 py-1 border-b border-border/30 bg-muted/10">
                   <button
                     onClick={() => setActiveEditorWindow("joints")}
                     className={cn(
-                      "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
+                      "px-3 py-1.5 text-xs font-medium transition-all rounded-none border-r border-border/20",
                       activeEditorWindow === "joints"
-                        ? "bg-primary/20 text-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                        ? "bg-primary/15 text-primary border-primary/30"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                     )}
                   >
                     Joints
@@ -3865,35 +3848,14 @@ export const Sidebar = ({
                   <button
                     onClick={() => setActiveEditorWindow("links")}
                     className={cn(
-                      "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
+                      "px-3 py-1.5 text-xs font-medium transition-all rounded-none",
                       activeEditorWindow === "links"
-                        ? "bg-primary/20 text-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                        ? "bg-primary/15 text-primary border-primary/30"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                     )}
                   >
                     Links
                   </button>
-                  {originalUrdf && vizUrdf && (
-                    <button
-                      onClick={() => {
-                        const newState = activeEditorWindow === "urdf" ? "joints" : "urdf";
-                        setActiveEditorWindow(newState);
-                        onUrdfEditorToggle?.(newState === "urdf");
-                        // When opening URDF editor, close the viewer
-                        if (newState === "urdf") {
-                          onViewerOpenChange?.(false);
-                        }
-                      }}
-                      className={cn(
-                        "px-2 py-1 text-xs font-medium transition-colors rounded-sm",
-                        activeEditorWindow === "urdf"
-                          ? "bg-primary/20 text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
-                      )}
-                    >
-                      URDF File
-                    </button>
-                  )}
                 </div>
                 
                 {/* Editor Content - Show only active window */}
@@ -3927,14 +3889,9 @@ export const Sidebar = ({
                       sliderStep={sliderStep}
                       fromDisplayVelocity={fromDisplayVelocity}
                       applyGlobalVelocityToAll={applyGlobalVelocityToAll}
-                      onRotateRobot={onRotateRobot}
-                      rotationAxis={rotationAxis}
-                      onRotationAxisChange={setRotationAxis}
-                      onResetRotation={onResetRotation}
-                      hasRotationChanges={hasRotationChanges}
                       onJointLinkChange={handleJointLinkChange}
                     />
-                  ) : activeEditorWindow === "links" ? (
+                  ) : (
                     <LinkEditor
                       urdfContent={vizUrdf}
                       onMaterialChange={handleMaterialChange}
@@ -3944,10 +3901,6 @@ export const Sidebar = ({
                       collisionVisibility={collisionVisibility}
                       onCollisionVisibilityChange={setCollisionVisibility}
                     />
-                  ) : (
-                    <div className="p-3 text-xs text-muted-foreground text-center">
-                      URDF Editor is displayed in the main view. Click "URDF File" again to return to visualization.
-                    </div>
                   )}
                 </div>
               </div>
@@ -4433,6 +4386,26 @@ export const Sidebar = ({
         onOpenChange={setIsRerunViewerModalOpen}
         urdfContent={vizUrdf || originalUrdf}
       />
+
+      {/* Collapse Button at Bottom */}
+      {onToggleCollapse && (
+        <div className="flex-shrink-0 border-t border-border/30 flex items-center justify-center p-2">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={onToggleCollapse}
+            aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
+            title={isCollapsed ? "Show sidebar" : "Hide sidebar"}
+          >
+            {isCollapsed ? (
+              <ChevronsRight className="w-4 h-4" />
+            ) : (
+              <ChevronsLeft className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      )}
 
     </div>
   );
