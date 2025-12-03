@@ -1743,16 +1743,15 @@ const Index = () => {
         </div>
       )}
       {/* Export Dialog */}
-      {showUrdfEditor && (
-        <ExportDialog
-          isOpen={showExportDialog}
-          onClose={() => setShowExportDialog(false)}
-          urdfContent={getExportUrdfContent()}
-          meshFiles={meshFiles}
-          githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
-          robotName={robotName}
-        />
-      )}
+      <ExportDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        urdfContent={getExportUrdfContent()}
+        originalUrdfContent={originalUrdfContent}
+        meshFiles={meshFiles}
+        githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+        robotName={robotName}
+      />
     </div>
   );
 };
