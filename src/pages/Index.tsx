@@ -191,6 +191,8 @@ const Index = () => {
       setOriginalVizUrdfContent(originalContent);
       setSavedVizUrdfContent(originalContent);
       setUrdfFile(createUrdfFile(originalContent, urdfFilename));
+      // Clear selection when loading new URDF - let user choose what to select
+      setSelectedJoint(null);
 
       const stlFiles = Array.from(fileList).filter(file => 
         file.name.toLowerCase().endsWith('.stl')
@@ -848,11 +850,9 @@ const Index = () => {
     startTransition(() => {
       setAvailableJoints(joints);
       setJointValues(angles);
-      if (!selectedJoint && joints.length > 0) {
-        setSelectedJoint(joints[0]);
-      }
+      // Don't automatically select a joint - let user choose what to select
     });
-  }, [selectedJoint]);
+  }, []);
 
   const clampSidebarWidth = useCallback(
     (width: number) => Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)),
