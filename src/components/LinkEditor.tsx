@@ -304,7 +304,7 @@ interface LinkControlProps {
   alwaysExpanded?: boolean;
 }
 
-const LinkControl = ({
+export const LinkControl = ({
   linkData,
   urdfContent,
   onMaterialChange,

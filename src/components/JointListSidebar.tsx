@@ -4,12 +4,169 @@ import { JointListItem } from "@/components/JointListItem";
 import { JointControl } from "@/components/JointControl";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, Network } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
-import { parseJointHierarchy } from "@/urdf_corrections/parseJointHierarchy";
+import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections/parseJointHierarchy";
+import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";
+import { LinkControl } from "@/components/LinkEditor";
+import type { CollisionVisibility } from "@/components/LinkEditor";
+
+// Recursive component to render hierarchy tree
+interface HierarchyTreeViewProps {
+  hierarchyTree: {
+    linkToJoints: Map<string, JointHierarchyNode[]>;
+    rootLinks: string[];
+    filteredJoints: JointHierarchyNode[];
+  } | null;
+  jointLimits: JointLimits;
+  jointValues: Record<string, number>;
+  deletedJoints: Set<string>;
+  selectedJoint?: string | null;
+  hoveredJoint?: string | null;
+  angleUnit: "rad" | "deg";
+  onJointSelect?: (jointName: string | null) => void;
+  onJointHover?: (jointName: string | null) => void;
+}
+
+const HierarchyTreeView = ({
+  hierarchyTree,
+  jointLimits,
+  jointValues,
+  deletedJoints,
+  selectedJoint,
+  hoveredJoint,
+  angleUnit,
+  onJointSelect,
+  onJointHover,
+}: HierarchyTreeViewProps) => {
+  if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
+        No joints found
+      </div>
+    );
+  }
+
+  const renderLinkNode = (linkName: string, depth: number = 0, visitedLinks: Set<string> = new Set()): React.ReactNode => {
+    if (visitedLinks.has(linkName)) {
+      // Prevent infinite loops
+      return null;
+    }
+    visitedLinks.add(linkName);
+
+    const joints = hierarchyTree.linkToJoints.get(linkName) || [];
+    if (joints.length === 0) {
+      // Leaf link - just show the link
+      return (
+        <div key={`link-${linkName}-${depth}`} className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
+          <div className="px-1.5 py-0.5">
+            <span className="text-[10px] text-muted-foreground/60">
+              🔗 {linkName}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={`link-${linkName}-${depth}`}>
+        {/* Link */}
+        <div className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
+          {depth > 0 && (
+            <>
+              {/* Horizontal line to link */}
+              <div
+                className="absolute top-1/2 bg-border/30"
+                style={{
+                  left: `${(depth - 1) * 12 + 6}px`,
+                  width: '6px',
+                  height: '1px',
+                }}
+              />
+              {/* Vertical line */}
+              <div
+                className="absolute bg-border/30"
+                style={{
+                  left: `${(depth - 1) * 12 + 6}px`,
+                  top: '0',
+                  bottom: '0',
+                  width: '1px',
+                }}
+              />
+            </>
+          )}
+          <div className="px-1.5 py-0.5">
+            <span className="text-[10px] text-muted-foreground/60">
+              🔗 {linkName}
+            </span>
+          </div>
+        </div>
+        {/* Joints connected from this link */}
+        {joints.map((joint, jointIndex) => {
+          const isLastJoint = jointIndex === joints.length - 1;
+          const childJoints = hierarchyTree.linkToJoints.get(joint.childLink) || [];
+          const hasChildJoints = childJoints.length > 0;
+          
+          return (
+            <div key={`joint-${joint.jointName}`}>
+              {/* Joint */}
+              <div className="relative" style={{ paddingLeft: `${(depth + 1) * 12}px` }}>
+                {/* Tree lines */}
+                <>
+                  {/* Horizontal line to joint */}
+                  <div
+                    className="absolute top-1/2 bg-border/30"
+                    style={{
+                      left: `${depth * 12 + 6}px`,
+                      width: '6px',
+                      height: '1px',
+                    }}
+                  />
+                  {/* Vertical line */}
+                  <div
+                    className="absolute bg-border/30"
+                    style={{
+                      left: `${depth * 12 + 6}px`,
+                      top: '0',
+                      bottom: hasChildJoints || !isLastJoint ? '0' : '50%',
+                      width: '1px',
+                    }}
+                  />
+                </>
+                <JointListItem
+                  jointName={joint.jointName}
+                  jointInfo={jointLimits[joint.jointName]}
+                  currentValue={jointValues[joint.jointName] ?? 0}
+                  onValueChange={() => {}} // Read-only
+                  isDeleted={deletedJoints.has(joint.jointName)}
+                  isSelected={selectedJoint === joint.jointName}
+                  isHighlighted={hoveredJoint === joint.jointName}
+                  angleUnit={angleUnit}
+                      onClick={() => {
+                        onJointSelect?.(joint.jointName);
+                        setSelectedLink(null); // Clear link selection when selecting joint
+                      }}
+                      onHover={onJointHover}
+                />
+              </div>
+              {/* Recursively render child link */}
+              {renderLinkNode(joint.childLink, depth + 2, new Set(visitedLinks))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-0.5">
+      {hierarchyTree.rootLinks.map(rootLink => renderLinkNode(rootLink, 0))}
+    </div>
+  );
+};
 
 export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 200;
@@ -37,6 +194,13 @@ interface JointListSidebarProps {
   onJointNameChange?: (oldName: string, newName: string) => void;
   onDeleteJoint?: (jointName: string) => void;
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
+  // Link editing props
+  meshFiles?: Record<string, Blob>;
+  onMaterialChange?: (linkName: string, materialName: string, color: string) => void;
+  onLinkNameChange?: (oldName: string, newName: string) => void;
+  onUrdfChange?: (newContent: string) => void;
+  collisionVisibility?: CollisionVisibility;
+  onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
 }
 
 export const JointListSidebar = ({
@@ -61,6 +225,12 @@ export const JointListSidebar = ({
   onJointNameChange,
   onDeleteJoint,
   onJointLinkChange,
+  meshFiles = {},
+  onMaterialChange,
+  onLinkNameChange,
+  onUrdfChange,
+  collisionVisibility = {},
+  onCollisionVisibilityChange,
 }: JointListSidebarProps) => {
   const jointValues = useJointStore((s) => s.jointValues);
 
@@ -70,7 +240,8 @@ export const JointListSidebar = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"flat" | "hierarchy">("flat");
+  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy">("flat");
+  const [selectedLink, setSelectedLink] = useState<string | null>(null);
 
   // Get all unique joint types
   const jointTypes = useMemo(() => {
@@ -86,6 +257,49 @@ export const JointListSidebar = ({
     if (!urdfContent) return null;
     return parseJointHierarchy(urdfContent);
   }, [urdfContent]);
+
+  // Get all links from URDF
+  const allLinks = useMemo(() => {
+    if (!urdfContent) return [];
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+      const parserError = xmlDoc.querySelector("parsererror");
+      if (parserError) return [];
+
+      const robot = xmlDoc.querySelector("robot");
+      if (!robot) return [];
+
+      const linkElements = xmlDoc.querySelectorAll("link");
+      const links: string[] = [];
+      linkElements.forEach((link) => {
+        const name = link.getAttribute("name");
+        if (name) links.push(name);
+      });
+      return links.sort();
+    } catch (error) {
+      console.error("Error parsing links:", error);
+      return [];
+    }
+  }, [urdfContent]);
+
+  // Get selected link data
+  const selectedLinkData = useMemo(() => {
+    if (!selectedLink || !urdfContent) return null;
+    try {
+      return parseLinkData(urdfContent, selectedLink);
+    } catch (error) {
+      console.error("Error parsing link data:", error);
+      return null;
+    }
+  }, [selectedLink, urdfContent]);
+
+  // Filter links by search query
+  const filteredLinks = useMemo(() => {
+    if (!searchQuery.trim()) return allLinks;
+    const query = searchQuery.toLowerCase();
+    return allLinks.filter(linkName => linkName.toLowerCase().includes(query));
+  }, [allLinks, searchQuery]);
 
   // Filter joints by search and type (flat view)
   const filteredJoints = useMemo(() => {
@@ -110,7 +324,43 @@ export const JointListSidebar = ({
     return joints;
   }, [availableJoints, jointLimits, typeFilter, searchQuery]);
 
-  // Filter hierarchical joints
+  // Build tree structure for hierarchy view (Link -> Joint -> Link -> Joint...)
+  const hierarchyTree = useMemo(() => {
+    if (!jointHierarchy || viewMode !== "hierarchy") return null;
+
+    // Build a map of link -> joints that have this link as parent
+    const linkToJoints = new Map<string, JointHierarchyNode[]>();
+    const processedLinks = new Set<string>();
+    const rootLinks = new Set<string>();
+
+    // Get filtered joints
+    const filteredJoints = jointHierarchy.orderedJoints.filter(joint => {
+      const jointType = jointLimits[joint.jointName]?.type || joint.type;
+      const matchesType = typeFilter === "all" || jointType === typeFilter;
+      const matchesSearch = !searchQuery.trim() || joint.jointName.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesType && matchesSearch;
+    });
+
+    // Build link to joints mapping
+    filteredJoints.forEach(joint => {
+      if (!linkToJoints.has(joint.parentLink)) {
+        linkToJoints.set(joint.parentLink, []);
+      }
+      linkToJoints.get(joint.parentLink)!.push(joint);
+      processedLinks.add(joint.childLink);
+    });
+
+    // Find root links (links that are not child links of any filtered joint)
+    filteredJoints.forEach(joint => {
+      if (!processedLinks.has(joint.parentLink)) {
+        rootLinks.add(joint.parentLink);
+      }
+    });
+
+    return { linkToJoints, rootLinks: Array.from(rootLinks), filteredJoints };
+  }, [jointHierarchy, viewMode, typeFilter, searchQuery, jointLimits]);
+
+  // Filter hierarchical joints (for backward compatibility)
   const filteredHierarchyJoints = useMemo(() => {
     if (!jointHierarchy) return [];
 
@@ -143,11 +393,43 @@ export const JointListSidebar = ({
         <div className="flex flex-col min-h-0 border border-border/30 rounded-sm bg-background overflow-hidden">
           {/* Header */}
           <div className="flex-shrink-0 px-3 py-2 border-b border-border/20 bg-muted/5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">Joints</span>
-              <span className="text-[10px] text-muted-foreground">
-                {filteredJoints.length} of {availableJoints.length}
-              </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setViewMode("links")}
+                disabled={!urdfContent}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  viewMode === "links"
+                    ? "text-primary cursor-default"
+                    : "text-muted-foreground hover:text-foreground cursor-pointer"
+                )}
+              >
+                Links
+              </button>
+              <button
+                onClick={() => setViewMode("hierarchy")}
+                disabled={!urdfContent}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  viewMode === "hierarchy"
+                    ? "text-primary cursor-default"
+                    : "text-muted-foreground hover:text-foreground cursor-pointer"
+                )}
+              >
+                Hierarchy
+              </button>
+              <button
+                onClick={() => setViewMode("flat")}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  viewMode === "flat"
+                    ? "text-primary cursor-default"
+                    : "text-muted-foreground hover:text-foreground cursor-pointer"
+                )}
+              >
+                Joints
+              </button>
+              <div className="flex-1"></div>
             </div>
           </div>
 
@@ -158,7 +440,7 @@ export const JointListSidebar = ({
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <Input
                 type="text"
-                placeholder="Search joints..."
+                placeholder={viewMode === "links" ? "Search links..." : "Search joints..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-7 pl-7 pr-7 text-xs bg-background border-border/50"
@@ -173,41 +455,71 @@ export const JointListSidebar = ({
               )}
             </div>
 
-            {/* Type Filter and Hierarchy Toggle */}
-            <div className="flex items-center gap-2">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="h-7 text-xs flex-1 bg-background border-border/50">
-                  <SelectValue placeholder="All types" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  <SelectItem value="all" className="text-xs">All</SelectItem>
-                  {jointTypes.map(type => (
-                    <SelectItem key={type} value={type} className="text-xs capitalize">
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Type Filter - only show for joint views */}
+            {viewMode !== "links" && (
+              <div className="flex items-center gap-2">
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="h-7 text-xs flex-1 bg-background border-border/50">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    <SelectItem value="all" className="text-xs">All</SelectItem>
+                    {jointTypes.map(type => (
+                      <SelectItem key={type} value={type} className="text-xs capitalize">
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <button
-                onClick={() => setViewMode(viewMode === "flat" ? "hierarchy" : "flat")}
-                className={cn(
-                  "h-7 px-1.5 flex items-center gap-1 text-xs rounded border transition-colors flex-shrink-0",
-                  viewMode === "hierarchy"
-                    ? "bg-primary/15 border-primary/50 text-primary"
-                    : "bg-muted/20 border-border/30 text-foreground hover:bg-muted/30"
-                )}
-                title={viewMode === "flat" ? "Switch to hierarchical view" : "Switch to flat view"}
-                disabled={!urdfContent}
-              >
-                <Network className="w-3.5 h-3.5" />
-              </button>
-            </div>
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                  {filteredJoints.length} of {availableJoints.length}
+                </span>
+              </div>
+            )}
+            {/* Links count - only show for links view */}
+            {viewMode === "links" && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                  {filteredLinks.length} of {allLinks.length}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Scrollable Joint List */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2">
-            {viewMode === "flat" ? (
+            {viewMode === "links" ? (
+              // Links view
+              filteredLinks.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
+                  {searchQuery
+                    ? "No links match the search"
+                    : "No links available"}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {filteredLinks.map((linkName) => (
+                    <div
+                      key={linkName}
+                      className={cn(
+                        "px-1.5 py-1.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/10",
+                        selectedLink === linkName && "bg-primary/10 border-primary/30"
+                      )}
+                      onClick={() => {
+                        setSelectedLink(linkName);
+                        onJointSelect?.(null); // Clear joint selection when selecting link
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground/60">🔗</span>
+                        <span className="text-xs font-medium text-foreground">{linkName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : viewMode === "flat" ? (
               // Flat view
               filteredJoints.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
@@ -228,7 +540,10 @@ export const JointListSidebar = ({
                       isSelected={selectedJoint === jointName}
                       isHighlighted={hoveredJoint === jointName}
                       angleUnit={angleUnit}
-                      onClick={() => onJointSelect?.(jointName)}
+                      onClick={() => {
+                        onJointSelect?.(jointName);
+                        setSelectedLink(null); // Clear link selection when selecting joint
+                      }}
                       onHover={onJointHover}
                     />
                   ))}
@@ -243,74 +558,36 @@ export const JointListSidebar = ({
                     : "No joints available"}
                 </div>
               ) : (
-                <div className="space-y-0.5">
-                  {filteredHierarchyJoints.map((joint, index) => {
-                    const depth = joint.depth ?? 0;
-                    const isLast = index === filteredHierarchyJoints.length - 1;
-                    const nextDepth = !isLast ? (filteredHierarchyJoints[index + 1]?.depth ?? 0) : 0;
-
-                    return (
-                      <div
-                        key={`${joint.jointName}-${jointLimits[joint.jointName]?.type || 'unknown'}`}
-                        className="relative"
-                        style={{ paddingLeft: `${depth * 12}px` }}
-                      >
-                        {/* Tree lines */}
-                        {depth > 0 && (
-                          <>
-                            {/* Horizontal line to joint */}
-                            <div
-                              className="absolute top-1/2 bg-border/30"
-                              style={{
-                                left: `${(depth - 1) * 12 + 6}px`,
-                                width: '6px',
-                                height: '1px',
-                              }}
-                            />
-                            {/* Vertical line from parent */}
-                            <div
-                              className="absolute bg-border/30"
-                              style={{
-                                left: `${(depth - 1) * 12 + 6}px`,
-                                top: '0',
-                                bottom: nextDepth >= depth ? '0' : '50%',
-                                width: '1px',
-                              }}
-                            />
-                          </>
-                        )}
-                        <JointListItem
-                          jointName={joint.jointName}
-                          jointInfo={jointLimits[joint.jointName]}
-                          currentValue={jointValues[joint.jointName] ?? 0}
-                          onValueChange={() => {}} // Read-only
-                          isDeleted={deletedJoints.has(joint.jointName)}
-                          isSelected={selectedJoint === joint.jointName}
-                          isHighlighted={hoveredJoint === joint.jointName}
-                          angleUnit={angleUnit}
-                          onClick={() => onJointSelect?.(joint.jointName)}
-                          onHover={onJointHover}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                <HierarchyTreeView
+                  hierarchyTree={hierarchyTree}
+                  jointLimits={jointLimits}
+                  jointValues={jointValues}
+                  deletedJoints={deletedJoints}
+                  selectedJoint={selectedJoint}
+                  hoveredJoint={hoveredJoint}
+                  angleUnit={angleUnit}
+                  onJointSelect={onJointSelect}
+                  onJointHover={onJointHover}
+                />
               )
             )}
           </div>
         </div>
 
-        {/* Bottom Section: Joint Editor */}
+        {/* Bottom Section: General Editor */}
         <div className="flex flex-col min-h-0 border border-border/30 rounded-sm bg-background overflow-hidden">
           {/* Header */}
           <div className="flex-shrink-0 px-3 py-2 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-foreground">
-                {selectedJoint ? "Joint Editor" : "No Selection"}
+                {selectedJoint ? "Joint Editor" : selectedLink ? "Link Editor" : "No Selection"}
               </span>
-              {selectedJoint && (
+              {(selectedJoint || selectedLink) && (
                 <button
-                  onClick={() => onJointSelect?.(null)}
+                  onClick={() => {
+                    onJointSelect?.(null);
+                    setSelectedLink(null);
+                  }}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                   title="Close editor"
                 >
@@ -356,9 +633,40 @@ export const JointListSidebar = ({
                   hideValueDisplay={false}
                 />
               </div>
+            ) : selectedLink && selectedLinkData ? (
+              <div 
+                className="p-2"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <LinkControl
+                  linkData={selectedLinkData}
+                  urdfContent={urdfContent}
+                  onMaterialChange={onMaterialChange}
+                  onLinkNameChange={onLinkNameChange}
+                  onUrdfChange={onUrdfChange}
+                  meshFiles={meshFiles}
+                  isHighlighted={true}
+                  onSelect={() => {}}
+                  collisionVisibility={collisionVisibility[selectedLink] || {}}
+                  onCollisionVisibilityChange={(index, visible) => {
+                    if (onCollisionVisibilityChange) {
+                      const newVisibility = {
+                        ...collisionVisibility,
+                        [selectedLink]: {
+                          ...(collisionVisibility[selectedLink] || {}),
+                          [index]: visible,
+                        },
+                      };
+                      onCollisionVisibilityChange(newVisibility);
+                    }
+                  }}
+                  alwaysExpanded={true}
+                />
+              </div>
             ) : (
               <div className="flex items-center justify-center h-full text-xs text-muted-foreground/50 p-4 text-center">
-                Select a joint to edit its properties
+                Select a joint or link to edit its properties
               </div>
             )}
           </div>

@@ -16,6 +16,7 @@ import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/pa
 import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
 import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
 import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
+import { updateLinkNameInURDF } from "@/urdf_corrections/updateLinkName";
 import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
 import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
 import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
@@ -438,6 +439,111 @@ const Index = () => {
     updateUrdfFile(newContent);
     toast.success("Viz URDF updated from manual edit");
   }, [updateUrdfFile]);
+
+  const handleMaterialChange = useCallback((linkName: string, materialName: string, color: string): void => {
+    if (!vizUrdfContent) {
+      toast.error("No URDF content available");
+      return;
+    }
+    
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(vizUrdfContent, "text/xml");
+      
+      const parserError = xmlDoc.querySelector("parsererror");
+      if (parserError) {
+        toast.error("Invalid URDF XML");
+        return;
+      }
+
+      // Find or create material element
+      let material = xmlDoc.querySelector(`material[name="${materialName}"]`);
+      if (!material) {
+        // Create material in robot tag
+        const robot = xmlDoc.querySelector("robot");
+        if (!robot) {
+          toast.error("No robot tag found in URDF");
+          return;
+        }
+        material = xmlDoc.createElement("material");
+        material.setAttribute("name", materialName);
+        const colorElement = xmlDoc.createElement("color");
+        // Convert hex to rgba
+        const r = parseInt(color.slice(1, 3), 16) / 255;
+        const g = parseInt(color.slice(3, 5), 16) / 255;
+        const b = parseInt(color.slice(5, 7), 16) / 255;
+        colorElement.setAttribute("rgba", `${r} ${g} ${b} 1.0`);
+        material.appendChild(colorElement);
+        robot.appendChild(material);
+      } else {
+        // Update existing material color
+        let colorElement = material.querySelector("color");
+        if (!colorElement) {
+          colorElement = xmlDoc.createElement("color");
+          material.appendChild(colorElement);
+        }
+        const r = parseInt(color.slice(1, 3), 16) / 255;
+        const g = parseInt(color.slice(3, 5), 16) / 255;
+        const b = parseInt(color.slice(5, 7), 16) / 255;
+        colorElement.setAttribute("rgba", `${r} ${g} ${b} 1.0`);
+      }
+
+      // Find the link
+      const link = xmlDoc.querySelector(`link[name="${linkName}"]`);
+      if (!link) {
+        toast.error(`Link "${linkName}" not found`);
+        return;
+      }
+
+      // Find or create visual element
+      let visual = link.querySelector("visual");
+      if (!visual) {
+        visual = xmlDoc.createElement("visual");
+        const geometry = xmlDoc.createElement("geometry");
+        const box = xmlDoc.createElement("box");
+        box.setAttribute("size", "0.1 0.1 0.1");
+        geometry.appendChild(box);
+        visual.appendChild(geometry);
+        link.appendChild(visual);
+      }
+
+      // Add or update material reference
+      let materialRef = visual.querySelector("material");
+      if (!materialRef) {
+        materialRef = xmlDoc.createElement("material");
+        visual.appendChild(materialRef);
+      }
+      materialRef.setAttribute("name", materialName);
+
+      // Serialize back
+      const serializer = new XMLSerializer();
+      const newContent = serializer.serializeToString(xmlDoc);
+      
+      updateUrdfFile(newContent);
+      toast.success(`Updated material for link "${linkName}"`);
+    } catch (error) {
+      console.error("Error updating material:", error);
+      toast.error("Failed to update material");
+    }
+  }, [vizUrdfContent, updateUrdfFile]);
+
+  const handleLinkNameChange = useCallback((oldName: string, newName: string): void => {
+    if (newName === oldName || !vizUrdfContent) return;
+
+    try {
+      const updatedContent = updateLinkNameInURDF(vizUrdfContent, oldName, newName);
+      if (updatedContent === vizUrdfContent) {
+        toast.error(`Link "${newName}" already exists or "${oldName}" not found`);
+        return;
+      }
+
+      updateUrdfFile(updatedContent);
+      toast.success(`Renamed link "${oldName}" to "${newName}"`);
+    } catch (error) {
+      console.error("Error updating link name:", error);
+      toast.error("Failed to update link name");
+    }
+  }, [vizUrdfContent, updateUrdfFile]);
 
   const handleJointAxisChange = useCallback((jointName: string, axis: [number, number, number]): void => {
     if (!vizUrdfContent) {
@@ -1482,6 +1588,12 @@ const Index = () => {
             onJointLinkChange={handleJointLinkChange}
             angleUnit={angleUnit}
             onAngleUnitChange={setAngleUnit}
+            meshFiles={meshFiles}
+            onMaterialChange={handleMaterialChange}
+            onLinkNameChange={handleLinkNameChange}
+            onUrdfChange={handleVizUrdfChange}
+            collisionVisibility={collisionVisibility}
+            onCollisionVisibilityChange={setCollisionVisibility}
           />
 
           {/* Right Sidebar Resizer */}
