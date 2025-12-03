@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState, useCallback, useMemo, startTransition } from "react";
 import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
+import { JointListSidebar, DEFAULT_RIGHT_SIDEBAR_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH } from "@/components/JointListSidebar";
 import { Viewer3D } from "@/components/Viewer3D";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { URDFComparison } from "@/components/URDFComparison";
@@ -86,6 +87,8 @@ const Index = () => {
   const [totalFrames, setTotalFrames] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
   const [rotationPlaneVisible, setRotationPlaneVisible] = useState<boolean>(false);
   const [showUrdfEditor, setShowUrdfEditor] = useState<boolean>(false);
@@ -725,6 +728,45 @@ const Index = () => {
     [sidebarWidth, clampSidebarWidth]
   );
 
+  const clampRightSidebarWidth = useCallback(
+    (width: number) => Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, width)),
+    []
+  );
+
+  const handleRightSidebarResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startX = event.clientX;
+      const startWidth = rightSidebarWidth;
+      const originalCursor = document.body.style.cursor;
+      const originalUserSelect = document.body.style.userSelect;
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        // For right sidebar, dragging left should increase width, dragging right should decrease
+        const delta = startX - moveEvent.clientX;
+        const nextWidth = clampRightSidebarWidth(startWidth + delta);
+        setRightSidebarWidth(nextWidth);
+      };
+
+      const handlePointerUp = () => {
+        document.body.style.cursor = originalCursor;
+        document.body.style.userSelect = originalUserSelect;
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+    },
+    [rightSidebarWidth, clampRightSidebarWidth]
+  );
+
   const clampRecordingViewHeight = useCallback(
     (height: number, containerHeight: number) => {
       // Minimum height to always show the header (approximately 50px)
@@ -1106,8 +1148,12 @@ const Index = () => {
           )}
 
           <main
-            className="flex-1 flex flex-col overflow-hidden bg-background transition-[margin-left] duration-200 ease-out"
-            style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth, marginTop: "28px" }}
+            className="flex-1 flex flex-col overflow-hidden bg-background transition-[margin-left,margin-right] duration-200 ease-out"
+            style={{
+              marginLeft: isSidebarCollapsed ? 0 : sidebarWidth,
+              marginRight: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
+              marginTop: "28px"
+            }}
           >
             <div className="flex-1 min-h-0 relative">
               {showUrdfEditor && urdfEditorSplitView ? (
@@ -1294,12 +1340,47 @@ const Index = () => {
             </div>
           </main>
 
+          {/* Right Sidebar - Joint List */}
+          <JointListSidebar
+            availableJoints={availableJoints}
+            jointLimits={jointLimits}
+            selectedJoint={selectedJoint}
+            onJointSelect={setSelectedJoint}
+            deletedJoints={deletedJoints}
+            width={rightSidebarWidth}
+            isCollapsed={isRightSidebarCollapsed}
+          />
+
+          {/* Right Sidebar Resizer */}
+          {!isRightSidebarCollapsed && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize right sidebar"
+              onPointerDown={handleRightSidebarResizeStart}
+              className="fixed z-40 cursor-col-resize select-none"
+              style={{
+                top: "32px",
+                bottom: 0,
+                right: rightSidebarWidth - SIDEBAR_RESIZER_WIDTH / 2,
+                width: SIDEBAR_RESIZER_WIDTH,
+              }}
+            >
+              <span className="pointer-events-none absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-border/70" />
+            </div>
+          )}
+
         </>
       )}
 
       {/* Mesh Files Status Panel - Bottom Right */}
       {showDebugDialog && (
-        <div className="fixed bottom-4 right-4 z-50 w-80 max-h-[40vh] bg-[#282828] border border-[#3d3d3d] rounded-lg shadow-lg flex flex-col">
+        <div
+          className="fixed bottom-4 z-50 w-80 max-h-[40vh] bg-[#282828] border border-[#3d3d3d] rounded-lg shadow-lg flex flex-col"
+          style={{
+            right: isRightSidebarCollapsed ? "1rem" : `${rightSidebarWidth + 16}px`
+          }}
+        >
           {/* Header */}
           <div className="flex items-center justify-between p-2 border-b border-[#3d3d3d]">
             <div className="text-xs font-medium text-[#d4d4d4]">Mesh Files Status</div>
