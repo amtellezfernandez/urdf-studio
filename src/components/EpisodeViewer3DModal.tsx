@@ -1780,11 +1780,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                           {jointName}
                           {isEditingThisJoint && <Pencil className="w-3 h-3" />}
                         </div>
-                        {currentValue !== undefined && (
-                          <div className="text-[10px] font-mono text-muted-foreground leading-tight">
-                            {currentValue.toFixed(2)}
-                          </div>
-                        )}
                       </div>
                     );
                   })}

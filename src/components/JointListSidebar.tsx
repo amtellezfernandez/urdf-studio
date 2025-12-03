@@ -4,10 +4,11 @@ import { JointListItem } from "@/components/JointListItem";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Search, X } from "lucide-react";
+import { Search, X, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import { useJointStore } from "@/store/useJointStore";
+import { parseJointHierarchy } from "@/urdf_corrections/parseJointHierarchy";
 
 export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 200;
@@ -23,6 +24,7 @@ interface JointListSidebarProps {
   isCollapsed?: boolean;
   angleUnit?: "rad" | "deg";
   onAngleUnitChange?: (unit: "rad" | "deg") => void;
+  urdfContent?: string;
 }
 
 export const JointListSidebar = ({
@@ -35,6 +37,7 @@ export const JointListSidebar = ({
   isCollapsed = false,
   angleUnit: angleUnitProp,
   onAngleUnitChange: onAngleUnitChangeProp,
+  urdfContent,
 }: JointListSidebarProps) => {
   const jointValues = useJointStore((s) => s.jointValues);
   const angleUnitStore = useJointStore((s) => s.angleUnit);
@@ -46,6 +49,7 @@ export const JointListSidebar = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"flat" | "hierarchy">("flat");
 
   // Get all unique joint types
   const jointTypes = useMemo(() => {
@@ -56,7 +60,13 @@ export const JointListSidebar = ({
     return Array.from(types).sort();
   }, [jointLimits]);
 
-  // Filter joints by search and type
+  // Parse hierarchical structure
+  const jointHierarchy = useMemo(() => {
+    if (!urdfContent) return null;
+    return parseJointHierarchy(urdfContent);
+  }, [urdfContent]);
+
+  // Filter joints by search and type (flat view)
   const filteredJoints = useMemo(() => {
     let joints = availableJoints;
 
@@ -78,6 +88,20 @@ export const JointListSidebar = ({
 
     return joints;
   }, [availableJoints, jointLimits, typeFilter, searchQuery]);
+
+  // Filter hierarchical joints
+  const filteredHierarchyJoints = useMemo(() => {
+    if (!jointHierarchy) return [];
+
+    // Get all joints in URDF order, filtered
+    return jointHierarchy.orderedJoints.filter(joint => {
+      // Use type from jointLimits if available (updates immediately), fallback to hierarchy type
+      const jointType = jointLimits[joint.jointName]?.type || joint.type;
+      const matchesType = typeFilter === "all" || jointType === typeFilter;
+      const matchesSearch = !searchQuery.trim() || joint.jointName.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesType && matchesSearch;
+    });
+  }, [jointHierarchy, typeFilter, searchQuery, jointLimits]);
 
   if (isCollapsed) {
     return null;
@@ -124,7 +148,7 @@ export const JointListSidebar = ({
           )}
         </div>
 
-        {/* Type Filter and Angle Unit */}
+        {/* Type Filter, Angle Unit, and Hierarchy Toggle */}
         <div className="flex items-center gap-2">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="h-7 text-xs flex-1 bg-background border-border/50">
@@ -140,6 +164,20 @@ export const JointListSidebar = ({
             </SelectContent>
           </Select>
 
+          <button
+            onClick={() => setViewMode(viewMode === "flat" ? "hierarchy" : "flat")}
+            className={cn(
+              "h-7 px-1.5 flex items-center gap-1 text-xs rounded border transition-colors flex-shrink-0",
+              viewMode === "hierarchy"
+                ? "bg-primary/15 border-primary/50 text-primary"
+                : "bg-muted/20 border-border/30 text-foreground hover:bg-muted/30"
+            )}
+            title={viewMode === "flat" ? "Switch to hierarchical view" : "Switch to flat view"}
+            disabled={!urdfContent}
+          >
+            <Network className="w-3.5 h-3.5" />
+          </button>
+
           <div className="flex items-center gap-1.5 px-2 py-0.5 bg-muted/20 rounded border border-border/30 flex-shrink-0">
             <span className="text-[10px] text-muted-foreground min-w-[24px]">rad</span>
             <Switch
@@ -154,29 +192,93 @@ export const JointListSidebar = ({
 
       {/* Scrollable Joint List */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
-        {filteredJoints.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-            {searchQuery || typeFilter !== "all"
-              ? "No joints match the filters"
-              : "No joints available"}
-          </div>
+        {viewMode === "flat" ? (
+          // Flat view
+          filteredJoints.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
+              {searchQuery || typeFilter !== "all"
+                ? "No joints match the filters"
+                : "No joints available"}
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {filteredJoints.map((jointName) => (
+                <JointListItem
+                  key={jointName}
+                  jointName={jointName}
+                  jointInfo={jointLimits[jointName]}
+                  currentValue={jointValues[jointName] ?? 0}
+                  onValueChange={() => {}} // Read-only
+                  isDeleted={deletedJoints.has(jointName)}
+                  isSelected={selectedJoint === jointName}
+                  angleUnit={angleUnit}
+                  onClick={() => onJointSelect?.(jointName)}
+                  onHover={onJointSelect}
+                />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="space-y-0.5">
-            {filteredJoints.map((jointName) => (
-              <JointListItem
-                key={jointName}
-                jointName={jointName}
-                jointInfo={jointLimits[jointName]}
-                currentValue={jointValues[jointName] ?? 0}
-                onValueChange={() => {}} // Read-only
-                isDeleted={deletedJoints.has(jointName)}
-                isSelected={selectedJoint === jointName}
-                angleUnit={angleUnit}
-                onClick={() => onJointSelect?.(jointName)}
-                onHover={onJointSelect}
-              />
-            ))}
-          </div>
+          // Hierarchical view
+          filteredHierarchyJoints.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
+              {searchQuery || typeFilter !== "all"
+                ? "No joints match the filters"
+                : "No joints available"}
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {filteredHierarchyJoints.map((joint, index) => {
+                const depth = joint.depth ?? 0;
+                const isLast = index === filteredHierarchyJoints.length - 1;
+                const nextDepth = !isLast ? (filteredHierarchyJoints[index + 1]?.depth ?? 0) : 0;
+
+                return (
+                  <div
+                    key={`${joint.jointName}-${jointLimits[joint.jointName]?.type || 'unknown'}`}
+                    className="relative"
+                    style={{ paddingLeft: `${depth * 12}px` }}
+                  >
+                    {/* Tree lines */}
+                    {depth > 0 && (
+                      <>
+                        {/* Horizontal line to joint */}
+                        <div
+                          className="absolute top-1/2 bg-border/30"
+                          style={{
+                            left: `${(depth - 1) * 12 + 6}px`,
+                            width: '6px',
+                            height: '1px',
+                          }}
+                        />
+                        {/* Vertical line from parent */}
+                        <div
+                          className="absolute bg-border/30"
+                          style={{
+                            left: `${(depth - 1) * 12 + 6}px`,
+                            top: '0',
+                            bottom: nextDepth >= depth ? '0' : '50%',
+                            width: '1px',
+                          }}
+                        />
+                      </>
+                    )}
+                    <JointListItem
+                      jointName={joint.jointName}
+                      jointInfo={jointLimits[joint.jointName]}
+                      currentValue={jointValues[joint.jointName] ?? 0}
+                      onValueChange={() => {}} // Read-only
+                      isDeleted={deletedJoints.has(joint.jointName)}
+                      isSelected={selectedJoint === joint.jointName}
+                      angleUnit={angleUnit}
+                      onClick={() => onJointSelect?.(joint.jointName)}
+                      onHover={onJointSelect}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
     </div>

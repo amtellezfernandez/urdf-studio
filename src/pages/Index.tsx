@@ -1349,6 +1349,7 @@ const Index = () => {
             deletedJoints={deletedJoints}
             width={rightSidebarWidth}
             isCollapsed={isRightSidebarCollapsed}
+            urdfContent={vizUrdfContent}
           />
 
           {/* Right Sidebar Resizer */}

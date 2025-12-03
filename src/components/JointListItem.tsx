@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { JointLimitInfo } from "@/urdf_corrections/parseJointLimits";
+import jointColors from "@/joint_colors.json";
 
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";
@@ -312,13 +313,33 @@ export const JointListItem = ({
     [applyValueChange, currentValue, max, min]
   );
 
+  // Get joint type color from joint_colors.json
+  const jointTypeColor = jointInfo?.type
+    ? (jointColors as Record<string, string>)[jointInfo.type] || jointColors.light_gray
+    : jointColors.light_gray;
+
+  // Helper to convert hex to rgba
+  const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   return (
     <div
       className={cn(
         "flex items-center gap-1.5 px-2 py-1.5 hover:bg-muted/30 rounded-sm transition-colors cursor-pointer",
-        isHighlighted && "bg-primary/10 text-primary hover:bg-primary/15",
-        isSelected && "bg-primary/20 hover:bg-primary/25"
+        isHighlighted && "hover:bg-muted/40",
+        isSelected && "hover:bg-muted/50"
       )}
+      style={
+        isHighlighted || isSelected
+          ? {
+              backgroundColor: hexToRgba(jointTypeColor, isSelected ? 0.25 : 0.15),
+            }
+          : undefined
+      }
       onMouseEnter={() => onHover?.(jointName)}
       onMouseLeave={() => onHover?.(null)}
       onClick={onClick}
@@ -326,12 +347,14 @@ export const JointListItem = ({
       <span
         className={cn(
           "text-xs font-medium truncate flex-1 min-w-0 text-left",
-          isDeleted
-            ? "text-muted-foreground/50"
-            : isHighlighted || isSelected
-              ? "text-primary"
-              : "text-foreground"
+          isDeleted && "text-muted-foreground/50",
+          !isDeleted && !isHighlighted && !isSelected && "text-foreground"
         )}
+        style={
+          !isDeleted && (isHighlighted || isSelected)
+            ? { color: jointTypeColor }
+            : undefined
+        }
         title={isDeleted ? "Will be deleted in exported URDF" : undefined}
       >
         {jointName}
