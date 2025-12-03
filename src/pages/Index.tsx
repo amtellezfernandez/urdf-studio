@@ -74,6 +74,7 @@ const Index = () => {
   const [vizUrdfContent, setVizUrdfContent] = useState<string>("");
   const [originalJointAxes, setOriginalJointAxes] = useState<JointAxisMap>({});
   const [originalVizUrdfContent, setOriginalVizUrdfContent] = useState<string>("");
+  const [savedVizUrdfContent, setSavedVizUrdfContent] = useState<string>("");
   const [deletedJoints, setDeletedJoints] = useState<Set<string>>(new Set());
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
@@ -180,6 +181,7 @@ const Index = () => {
       setOriginalJointAxes(parsedAxes);
       setVizUrdfContent(originalContent);
       setOriginalVizUrdfContent(originalContent);
+      setSavedVizUrdfContent(originalContent);
       setUrdfFile(createUrdfFile(originalContent, urdfFilename));
 
       const stlFiles = Array.from(fileList).filter(file => 
@@ -505,8 +507,28 @@ const Index = () => {
     }
 
     updateUrdfFile(originalVizUrdfContent);
-    toast.success("Reset robot rotation to original position");
+    toast.success("Reset to original loaded file");
   }, [originalVizUrdfContent, updateUrdfFile]);
+
+  const handleSave = useCallback((): void => {
+    if (!vizUrdfContent) {
+      toast.error("No URDF content to save");
+      return;
+    }
+
+    setSavedVizUrdfContent(vizUrdfContent);
+    toast.success("Changes saved");
+  }, [vizUrdfContent]);
+
+  const handleRevert = useCallback((): void => {
+    if (!savedVizUrdfContent) {
+      toast.error("No saved URDF content found");
+      return;
+    }
+
+    updateUrdfFile(savedVizUrdfContent);
+    toast.success("Reverted to last saved file");
+  }, [savedVizUrdfContent, updateUrdfFile]);
 
   const deleteJointsFromURDF = useCallback((urdfContent: string, jointsToDelete: Set<string>): string => {
     if (jointsToDelete.size === 0) return urdfContent;
@@ -737,12 +759,29 @@ const Index = () => {
                       File
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                  <DropdownMenuContent align="start" className="w-56 bg-[#282828] border-[#3d3d3d]">
                     <DropdownMenuItem
                       onClick={() => setShowExportDialog(true)}
                       className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                     >
                       Export
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleSave}
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Save
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleRevert}
+                      disabled={!savedVizUrdfContent || savedVizUrdfContent === vizUrdfContent}
+                      className={cn(
+                        "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                        (!savedVizUrdfContent || savedVizUrdfContent === vizUrdfContent) && "opacity-50 cursor-not-allowed"
+                      )}
+                      title="Reloads the last saved file"
+                    >
+                      Revert
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleResetRotation}
@@ -751,6 +790,7 @@ const Index = () => {
                         "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
                         !hasRotationChanges && "opacity-50 cursor-not-allowed"
                       )}
+                      title="Reloads the original loaded file"
                     >
                       Reset
                     </DropdownMenuItem>
@@ -1018,9 +1058,9 @@ const Index = () => {
             style={{ marginLeft: isSidebarCollapsed ? 0 : sidebarWidth, marginTop: "28px" }}
           >
             <div className="flex-1 min-h-0 relative">
-              {viewerSplitView && isViewerOpen && viewerEpisode ? (
+              {showUrdfEditor && urdfEditorSplitView ? (
                 <div className="flex flex-col h-full">
-                  {/* Visualizer in top half */}
+                  {/* Simulation in top half */}
                   <div className="flex-1 min-h-0 border-b border-border/20">
                     <Viewer3D
                       key={`urdf-${urdfContentVersion}`}
@@ -1042,97 +1082,26 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                     />
                   </div>
-                  {/* Viewer in bottom half - full height when not minimized, minimized bar at bottom when minimized */}
-                  {!isViewerMinimized ? (
-                    <div className="flex-1 min-h-0">
-                      <EpisodeViewer3DModal
-                        episode={viewerEpisode}
-                        open={isViewerOpen}
-                        onOpenChange={(open) => {
-                          setIsViewerOpen(open);
-                          if (!open) {
-                            // When closing, clear everything
-                            setViewerEpisode(null);
-                            setViewerSplitView(false);
-                            setIsViewerMinimized(false);
-                          }
-                        }}
-                        inline={true}
-                        globalCurrentFrame={currentFrame}
-                        onSetGlobalFrame={(frame: number) => {
-                          (window as any).viewer3dSetFrame?.(frame);
-                          setCurrentFrame(frame);
-                        }}
-                        isMinimized={isViewerMinimized}
-                        onMinimizedChange={setIsViewerMinimized}
-                        onSaveEpisode={episodeSaveHandler}
-                      />
-                    </div>
-                  ) : (
-                    /* Minimized view - rendered inline at bottom */
-                    <div className="flex-shrink-0">
-                      <EpisodeViewer3DModal
-                        episode={viewerEpisode}
-                        open={isViewerOpen}
-                        onOpenChange={(open) => {
-                          setIsViewerOpen(open);
-                          if (!open) {
-                            // When closing, clear everything
-                            setViewerEpisode(null);
-                            setViewerSplitView(false);
-                            setIsViewerMinimized(false);
-                          }
-                        }}
-                        inline={true}
-                        globalCurrentFrame={currentFrame}
-                        onSetGlobalFrame={(frame: number) => {
-                          (window as any).viewer3dSetFrame?.(frame);
-                          setCurrentFrame(frame);
-                        }}
-                        isMinimized={isViewerMinimized}
-                        onMinimizedChange={setIsViewerMinimized}
-                        onSaveEpisode={episodeSaveHandler}
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : viewerSplitView && isViewerOpen && !viewerEpisode ? (
-                <div className="flex flex-col h-full">
-                  {/* Visualizer in top half */}
-                  <div className="flex-1 min-h-0 border-b border-border/20">
-                    <Viewer3D
-                      key={`urdf-${urdfContentVersion}`}
-                      urdfFile={urdfFile}
-                      initialMeshFiles={meshFiles}
-                      selectedJoint={selectedJoint}
-                      jointValues={jointValues}
-                      jointLimits={jointLimits}
-                      jointAxes={jointAxes}
-                      gpuMode={gpuMode}
-                      onJointSelect={setSelectedJoint}
-                      onJointChange={handleJointChange}
-                      onRobotJointsLoaded={handleRobotJointsLoaded}
-                      onMotionFileChange={setMotionDataFile}
-                      onPlayingChange={setIsPlaying}
-                      onAnimationFramesChange={setHasAnimationFrames}
-                      onFrameChange={handleFrameChange}
-                      collisionVisibility={collisionVisibility}
-                      rotationPlaneVisible={rotationPlaneVisible}
+                  {/* Editor in bottom half */}
+                  <div className="flex-1 min-h-0">
+                    <URDFComparison
+                      originalUrdf={originalUrdfContent}
+                      vizUrdf={vizUrdfContent}
+                      isOpen={true}
+                      onClose={() => setShowUrdfEditor(false)}
+                      onVizUrdfChange={handleVizUrdfChange}
+                      getExportUrdf={getExportUrdfContent}
+                      meshFiles={meshFiles}
+                      githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+                      inline={true}
+                      splitView={true}
+                      onSplitViewToggle={setUrdfEditorSplitView}
+                      selectedView={urdfViewMode}
+                      onSelectedViewChange={setUrdfViewMode}
                     />
                   </div>
-                  {/* Message in bottom half when no episodes */}
-                  <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
-                    <div className="flex flex-col items-center gap-3 text-center px-6">
-                      <div className="text-sm font-medium text-muted-foreground">
-                        No episodes available
-                      </div>
-                      <div className="text-xs text-muted-foreground/70 max-w-md">
-                        Record an episode or import episodes from files to view them here.
-                      </div>
-                    </div>
-                  </div>
                 </div>
-              ) : showUrdfEditor && urdfEditorSplitView ? (
+              ) : showUrdfEditor ? (
                 <div className="flex flex-col h-full">
                   {/* Simulation in top half */}
                   <div className="flex-1 min-h-0 border-b border-border/20">
@@ -1192,25 +1161,65 @@ const Index = () => {
                   onSplitViewToggle={setUrdfEditorSplitView}
                 />
               ) : (
-                <Viewer3D
-                  key={`urdf-${urdfContentVersion}`}
-                  urdfFile={urdfFile}
-                  initialMeshFiles={meshFiles}
-                  selectedJoint={selectedJoint}
-                  jointValues={jointValues}
-                  jointLimits={jointLimits}
-                  jointAxes={jointAxes}
-                  gpuMode={gpuMode}
-                  onJointSelect={setSelectedJoint}
-                  onJointChange={handleJointChange}
-                  onRobotJointsLoaded={handleRobotJointsLoaded}
-                  onMotionFileChange={setMotionDataFile}
-                  onPlayingChange={setIsPlaying}
-                  onAnimationFramesChange={setHasAnimationFrames}
-                  onFrameChange={handleFrameChange}
-                  collisionVisibility={collisionVisibility}
-                  rotationPlaneVisible={rotationPlaneVisible}
-                />
+                <div className="flex flex-col h-full">
+                  {/* 3D Viewer in top half */}
+                  <div className="flex-1 min-h-0 border-b border-border/20">
+                    <Viewer3D
+                      key={`urdf-${urdfContentVersion}`}
+                      urdfFile={urdfFile}
+                      initialMeshFiles={meshFiles}
+                      selectedJoint={selectedJoint}
+                      jointValues={jointValues}
+                      jointLimits={jointLimits}
+                      jointAxes={jointAxes}
+                      gpuMode={gpuMode}
+                      onJointSelect={setSelectedJoint}
+                      onJointChange={handleJointChange}
+                      onRobotJointsLoaded={handleRobotJointsLoaded}
+                      onMotionFileChange={setMotionDataFile}
+                      onPlayingChange={setIsPlaying}
+                      onAnimationFramesChange={setHasAnimationFrames}
+                      onFrameChange={handleFrameChange}
+                      collisionVisibility={collisionVisibility}
+                      rotationPlaneVisible={rotationPlaneVisible}
+                    />
+                  </div>
+                  {/* Recording view in bottom half - always visible */}
+                  <div className={isViewerMinimized ? "flex-shrink-0" : "flex-1 min-h-0"}>
+                    {viewerEpisode ? (
+                      <EpisodeViewer3DModal
+                        episode={viewerEpisode}
+                        open={true}
+                        onOpenChange={(open) => {
+                          // Don't allow closing - always keep it open
+                          if (!open) {
+                            setIsViewerOpen(true);
+                          }
+                        }}
+                        inline={true}
+                        globalCurrentFrame={currentFrame}
+                        onSetGlobalFrame={(frame: number) => {
+                          (window as any).viewer3dSetFrame?.(frame);
+                          setCurrentFrame(frame);
+                        }}
+                        isMinimized={isViewerMinimized}
+                        onMinimizedChange={setIsViewerMinimized}
+                        onSaveEpisode={episodeSaveHandler}
+                      />
+                    ) : (
+                      <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
+                        <div className="flex flex-col items-center gap-3 text-center px-6">
+                          <div className="text-sm font-medium text-muted-foreground">
+                            No episodes available
+                          </div>
+                          <div className="text-xs text-muted-foreground/70 max-w-md">
+                            Record an episode or import episodes from files to view them here.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </main>

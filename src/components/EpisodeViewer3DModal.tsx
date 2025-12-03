@@ -1428,10 +1428,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     }
   }, [isDragging, isResizing, dragOffset, resizeStart, resizeDirection, position]);
 
-  if (!open || !episode) return null;
+  if (!open) return null;
 
-  const totalFrames = episode.frames.length;
-  const duration = totalFrames > 0 ? episode.frames[totalFrames - 1].timestamp : 0;
+  // Allow minimized view even if episode is null (for graceful degradation)
+  if (!episode && !isMinimized) return null;
+
+  const totalFrames = episode?.frames.length ?? 0;
+  const duration = totalFrames > 0 && episode ? episode.frames[totalFrames - 1].timestamp : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
 
@@ -1457,12 +1460,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           {/* Episode Title - matching split viewer header */}
           <h3 className="text-sm font-semibold whitespace-nowrap">
-            Episode {episode.number - 1}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
+            Episode {episode ? episode.number - 1 : 0}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
           </h3>
 
           {/* Compact Counters - matching split viewer style */}
           <div className="flex items-center gap-2 px-1.5 py-0.5 text-[10px] font-mono">
-            <span className="tabular-nums">{displayFrame}/{totalFrames - 1}</span>
+            <span className="tabular-nums">{displayFrame}/{totalFrames > 0 ? totalFrames - 1 : 0}</span>
             <span className="text-muted-foreground/60">•</span>
             <span className="tabular-nums text-muted-foreground">
               {episode ? `${currentTime}/${durationSeconds}s` : "0.00/0.00s"}
@@ -1523,7 +1526,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         <div className="flex items-center gap-2 flex-1 pointer-events-none">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">
-              Episode {episode.number - 1}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
+              Episode {episode ? episode.number - 1 : 0}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
             </h3>
             {/* Timeline Controls */}
             {onPlayAllEpisodes && (
