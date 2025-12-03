@@ -252,7 +252,7 @@ export const LinkEditor = ({
 
       {/* Link Editor Panel - Always visible */}
       <div className="flex-shrink-0 border-t border-border/20 bg-muted/5">
-        <div className="p-2 max-h-[50vh] overflow-y-auto blender-scrollbar">
+        <div className="p-2 max-h-[50vh] overflow-y-auto minimal-scrollbar">
           {(() => {
             const selectedLinkData = selectedLink ? links.find(l => l.name === selectedLink) : null;
             return selectedLinkData ? (

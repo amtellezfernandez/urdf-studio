@@ -1698,7 +1698,7 @@ const Index = () => {
           </div>
           
           {/* Content */}
-          <div className="overflow-y-auto flex-1 p-2 space-y-1 blender-scrollbar">
+          <div className="overflow-y-auto flex-1 p-2 space-y-1 minimal-scrollbar">
             {unmatchedURDFRefs.length > 0 && (
               <div className="mb-2 p-1.5 bg-[#2a1e1e] border border-[#4a2d2d] rounded text-xs">
                 <div className="flex items-center gap-1 mb-1">

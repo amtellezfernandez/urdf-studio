@@ -560,7 +560,7 @@ export const JointsWindow = ({
 
       {/* Joint Editor Panel - Always visible */}
       <div className="flex-shrink-0 border-t border-border/20 bg-muted/5">
-        <div className="p-2 max-h-[50vh] overflow-y-auto blender-scrollbar">
+        <div className="p-2 max-h-[50vh] overflow-y-auto minimal-scrollbar">
           {selectedJoint && jointLimits[selectedJoint] ? (
             <JointControl
               jointName={selectedJoint}

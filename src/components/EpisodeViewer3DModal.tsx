@@ -1732,7 +1732,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </div>
 
             {/* Joints Legend */}
-            <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto blender-scrollbar">
+            <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto minimal-scrollbar">
               {!episode || jointNames.length === 0 ? (
                 <div className="text-xs text-muted-foreground">No joints available</div>
               ) : (

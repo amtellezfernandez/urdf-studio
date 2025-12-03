@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { X, ChevronDown, Info, Copy, Download, Edit } from "lucide-react";
+import { X, ChevronDown, Info, Copy, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { URDFSyntaxHighlighter } from "./URDFSyntaxHighlighter";
 import { parseURDF } from "@/urdf_corrections/urdfParser";
@@ -393,21 +393,13 @@ export const URDFComparison = ({
       )}
 
       {inline && (
-        <div className="flex items-center justify-between px-2 py-1 border-b border-border/20 bg-muted/5 flex-shrink-0">
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <img 
-              src="/assets/urdf-studio-logo.png" 
-              alt="URDF Studio" 
-              className="h-6 w-auto object-contain"
-            />
-            <button
-              className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
-              onClick={onClose}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        <div className="flex items-center justify-end px-1.5 py-0.5 border-b border-border/20 bg-muted/5 flex-shrink-0">
+          <button
+            className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
+            onClick={onClose}
+          >
+            <X className="w-2.5 h-2.5" />
+          </button>
         </div>
       )}
 
@@ -511,31 +503,6 @@ export const URDFComparison = ({
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs">
                       Copy {originalFormat.toUpperCase()}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                      <button
-                        className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
-                        onClick={() => {
-                          const content = getOriginalContent();
-                          const ext = originalFormat === "urdf" ? "urdf" : originalFormat === "xacro" ? "xacro" : "xml";
-                          const filename = `original.${ext}`;
-                          const blob = new Blob([content], { type: "application/xml" });
-                          const url = URL.createObjectURL(blob);
-                          const link = document.createElement("a");
-                          link.href = url;
-                          link.download = filename;
-                          link.click();
-                          URL.revokeObjectURL(url);
-                          toast.success(`Downloaded ${filename}`);
-                        }}
-                      >
-                        <Download className="w-3 h-3" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">
-                      Download {originalFormat.toUpperCase()}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -662,39 +629,6 @@ export const URDFComparison = ({
                           Copy {modifiedFormat.toUpperCase()}
                         </TooltipContent>
                       </Tooltip>
-                      <Tooltip delayDuration={0}>
-                        <TooltipTrigger asChild>
-                          <button
-                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
-                            onClick={() => {
-                              const content = getModifiedContent();
-                              const ext = modifiedFormat === "urdf" ? "urdf" : modifiedFormat === "xacro" ? "xacro" : "xml";
-                              const filename = `modified.${ext}`;
-                              const blob = new Blob([content], { type: "application/xml" });
-                              const url = URL.createObjectURL(blob);
-                              const link = document.createElement("a");
-                              link.href = url;
-                              link.download = filename;
-                              link.click();
-                              URL.revokeObjectURL(url);
-                              toast.success(`Downloaded ${filename}`);
-                            }}
-                          >
-                            <Download className="w-3 h-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs">
-                          Download {modifiedFormat.toUpperCase()}
-                        </TooltipContent>
-                      </Tooltip>
-                      {githubToken && (
-                        <button
-                          className="h-5 w-5 flex items-center justify-center text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/20 px-1 py-0.5 rounded-sm transition-colors"
-                          onClick={() => setShowSaveToGitHub(true)}
-                        >
-                          GitHub
-                        </button>
-                      )}
                     </>
                   ) : (
                     <>

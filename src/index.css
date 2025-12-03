@@ -87,58 +87,17 @@
     @apply bg-[hsl(var(--node-bg))] rounded-lg shadow-sm p-4;
   }
 
-  /* Blender-style scrollbar - thin, always visible, doesn't shift content */
-  .blender-scrollbar {
-    /* Firefox */
-    scrollbar-width: thin;
-    scrollbar-color: hsl(0 0% 20% / 0.8) transparent;
-    /* Reserve space for scrollbar to prevent content shift */
-    scrollbar-gutter: stable;
-  }
-
-  /* Webkit browsers (Chrome, Safari, Edge) */
-  .blender-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  .blender-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .blender-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 20% / 0.8);
-    border-radius: 3px;
-    border: 1px solid transparent;
-    background-clip: padding-box;
-    min-height: 20px;
-  }
-
-  .blender-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 0% 30% / 0.9);
-    background-clip: padding-box;
-  }
-
-  .blender-scrollbar::-webkit-scrollbar-thumb:active {
-    background: hsl(0 0% 40% / 1);
-    background-clip: padding-box;
-  }
-
-  .blender-scrollbar::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  /* Minimal dark scrollbar - smaller, darker, more subtle */
+  /* Minimal dark scrollbar - small, dark, subtle */
   .minimal-scrollbar {
     /* Firefox */
     scrollbar-width: thin;
-    scrollbar-color: hsl(0 0% 25% / 0.6) transparent;
+    scrollbar-color: hsl(0 0% 15% / 0.8) transparent;
     scrollbar-gutter: stable;
   }
 
   .minimal-scrollbar::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 3px;
+    height: 3px;
   }
 
   .minimal-scrollbar::-webkit-scrollbar-track {
@@ -146,17 +105,54 @@
   }
 
   .minimal-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 25% / 0.6);
-    border-radius: 2px;
+    background: hsl(0 0% 15% / 0.8);
+    border-radius: 1.5px;
     border: 0;
   }
 
   .minimal-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 0% 35% / 0.7);
+    background: hsl(0 0% 25% / 0.9);
   }
 
   .minimal-scrollbar::-webkit-scrollbar-corner {
     background: transparent;
+  }
+
+  /* Radix ScrollArea dark theme overrides - scoped to scroll areas */
+  [data-radix-scroll-area-scrollbar] {
+    width: 3px !important;
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+
+  [data-radix-scroll-area-scrollbar][data-orientation="horizontal"] {
+    height: 3px !important;
+    width: auto !important;
+  }
+
+  /* Target the thumb with multiple specificity levels */
+  [data-radix-scroll-area-thumb],
+  [data-radix-scroll-area-scrollbar] > [data-radix-scroll-area-thumb],
+  [data-radix-scroll-area-scrollbar] > div,
+  [data-radix-scroll-area-scrollbar] > * {
+    background-color: #262626 !important;
+    background: #262626 !important;
+    border-radius: 9999px !important;
+    opacity: 0.8 !important;
+  }
+
+  [data-radix-scroll-area-thumb]:hover,
+  [data-radix-scroll-area-scrollbar] > [data-radix-scroll-area-thumb]:hover,
+  [data-radix-scroll-area-scrollbar] > div:hover,
+  [data-radix-scroll-area-scrollbar] > *:hover {
+    background-color: #404040 !important;
+    background: #404040 !important;
+    opacity: 0.9 !important;
+  }
+
+  [data-radix-scroll-area-corner] {
+    background: transparent !important;
+    background-color: transparent !important;
   }
 
   /* Blender-style number font - clean sans-serif for numbers */

@@ -3723,7 +3723,7 @@ export const Sidebar = ({
         )}
 
         {/* Recording Content */}
-        <div className="flex-1 overflow-hidden flex flex-col p-1.5 mt-0 h-full blender-scrollbar">
+        <div className="flex-1 overflow-hidden flex flex-col p-1.5 mt-0 h-full minimal-scrollbar">
             {/* Blender-style Menu Bar */}
             <div className="flex items-center gap-1.5 border-b border-border/50 pb-1 mb-1.5">
               {/* Record Button - Always Visible */}
@@ -3908,7 +3908,7 @@ export const Sidebar = ({
 
             {/* Episodes List */}
             <BlenderPanel title={`Episodes (${episodes.length})`} defaultOpen={true}>
-              <div className="flex-1 overflow-y-auto max-h-[400px] blender-scrollbar -mx-1.5">
+              <div className="flex-1 overflow-y-auto max-h-[400px] minimal-scrollbar -mx-1.5">
                 {episodes.length === 0 ? (
                   <div className="py-2 text-center">
                     <p className="text-xs text-muted-foreground">No episodes</p>
