@@ -91,15 +91,15 @@
   .blender-scrollbar {
     /* Firefox */
     scrollbar-width: thin;
-    scrollbar-color: hsl(0 0% 30% / 0.6) transparent;
+    scrollbar-color: hsl(0 0% 20% / 0.8) transparent;
     /* Reserve space for scrollbar to prevent content shift */
     scrollbar-gutter: stable;
   }
 
   /* Webkit browsers (Chrome, Safari, Edge) */
   .blender-scrollbar::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
 
   .blender-scrollbar::-webkit-scrollbar-track {
@@ -107,20 +107,20 @@
   }
 
   .blender-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 30% / 0.6);
-    border-radius: 5px;
-    border: 2px solid transparent;
+    background: hsl(0 0% 20% / 0.8);
+    border-radius: 3px;
+    border: 1px solid transparent;
     background-clip: padding-box;
     min-height: 20px;
   }
 
   .blender-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 0% 40% / 0.8);
+    background: hsl(0 0% 30% / 0.9);
     background-clip: padding-box;
   }
 
   .blender-scrollbar::-webkit-scrollbar-thumb:active {
-    background: hsl(0 0% 50% / 0.9);
+    background: hsl(0 0% 40% / 1);
     background-clip: padding-box;
   }
 

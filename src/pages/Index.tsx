@@ -51,6 +51,8 @@ const AXIS_NAMES: Record<RotationAxis, string> = {
 } as const;
 
 const SIDEBAR_RESIZER_WIDTH = 8;
+const VIEWER_RESIZER_HEIGHT = 4;
+const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4; // 40% of available height
 
 interface WindowWithViewerHandlers extends Window {
   viewer3dUploadMotionData?: (file: File) => void;
@@ -94,7 +96,7 @@ const Index = () => {
   const [viewerSplitView, setViewerSplitView] = useState<boolean>(false);
   const [viewerEpisode, setViewerEpisode] = useState<any | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
-  const [isViewerMinimized, setIsViewerMinimized] = useState<boolean>(false);
+  const [recordingViewHeight, setRecordingViewHeight] = useState<number>(DEFAULT_RECORDING_VIEW_HEIGHT);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: any, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<"joints" | "recording">("joints");
@@ -723,6 +725,56 @@ const Index = () => {
     [sidebarWidth, clampSidebarWidth]
   );
 
+  const clampRecordingViewHeight = useCallback(
+    (height: number, containerHeight: number) => {
+      // Minimum height to always show the header (approximately 50px)
+      const MIN_HEADER_HEIGHT = 50;
+      const minRatio = containerHeight > 0 ? MIN_HEADER_HEIGHT / containerHeight : 0.08;
+      return Math.min(0.95, Math.max(minRatio, height));
+    },
+    []
+  );
+
+  const handleViewerResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startY = event.clientY;
+      const container = event.currentTarget.closest('.flex.flex-col.h-full') as HTMLElement;
+      if (!container) return;
+
+      const containerHeight = container.clientHeight;
+      const startHeight = recordingViewHeight;
+      const originalCursor = document.body.style.cursor;
+      const originalUserSelect = document.body.style.userSelect;
+
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const delta = moveEvent.clientY - startY;
+        const deltaRatio = delta / containerHeight;
+        // Dragging up (negative delta) should make recording view smaller
+        // Dragging down (positive delta) should make recording view bigger
+        const nextHeight = clampRecordingViewHeight(startHeight - deltaRatio, containerHeight);
+        setRecordingViewHeight(nextHeight);
+      };
+
+      const handlePointerUp = () => {
+        document.body.style.cursor = originalCursor;
+        document.body.style.userSelect = originalUserSelect;
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+    },
+    [recordingViewHeight, clampRecordingViewHeight]
+  );
+
   const hasRotationChanges = useMemo(
     () => vizUrdfContent !== originalVizUrdfContent,
     [vizUrdfContent, originalVizUrdfContent]
@@ -1163,7 +1215,10 @@ const Index = () => {
               ) : (
                 <div className="flex flex-col h-full">
                   {/* 3D Viewer in top half */}
-                  <div className="flex-1 min-h-0 border-b border-border/20">
+                  <div 
+                    className="min-h-0 border-b border-border/20"
+                    style={{ flex: `0 0 ${(1 - recordingViewHeight) * 100}%` }}
+                  >
                     <Viewer3D
                       key={`urdf-${urdfContentVersion}`}
                       urdfFile={urdfFile}
@@ -1184,40 +1239,55 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                     />
                   </div>
-                  {/* Recording view in bottom half - always visible */}
-                  <div className={isViewerMinimized ? "flex-shrink-0" : "flex-1 min-h-0"}>
+                  {/* Vertical Resizer - always visible */}
+                  <div
+                    onPointerDown={handleViewerResizeStart}
+                    className="cursor-row-resize select-none bg-border/30 hover:bg-border/60 transition-colors relative group flex-shrink-0 z-10"
+                    style={{ height: VIEWER_RESIZER_HEIGHT }}
+                    aria-label="Resize viewer"
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-12 h-0.5 bg-border/40 group-hover:bg-border/80 transition-colors rounded-full" />
+                    </div>
+                  </div>
+                  {/* Recording view in bottom half - always shows header */}
+                  <div 
+                    className="min-h-0 overflow-hidden flex flex-col"
+                    style={{ 
+                      flex: `0 0 ${recordingViewHeight * 100}%`,
+                    }}
+                  >
                     {viewerEpisode ? (
-                      <EpisodeViewer3DModal
-                        episode={viewerEpisode}
-                        open={true}
-                        onOpenChange={(open) => {
-                          // Don't allow closing - always keep it open
-                          if (!open) {
-                            setIsViewerOpen(true);
-                          }
-                        }}
-                        inline={true}
-                        globalCurrentFrame={currentFrame}
-                        onSetGlobalFrame={(frame: number) => {
-                          (window as any).viewer3dSetFrame?.(frame);
-                          setCurrentFrame(frame);
-                        }}
-                        isMinimized={isViewerMinimized}
-                        onMinimizedChange={setIsViewerMinimized}
-                        onSaveEpisode={episodeSaveHandler}
-                      />
+                        <EpisodeViewer3DModal
+                          episode={viewerEpisode}
+                          open={true}
+                          onOpenChange={(open) => {
+                            // Don't allow closing - always keep it open
+                            if (!open) {
+                              setIsViewerOpen(true);
+                            }
+                          }}
+                          inline={true}
+                          globalCurrentFrame={currentFrame}
+                          onSetGlobalFrame={(frame: number) => {
+                            (window as any).viewer3dSetFrame?.(frame);
+                            setCurrentFrame(frame);
+                          }}
+                          showOnlyHeader={recordingViewHeight <= 0.08}
+                          onSaveEpisode={episodeSaveHandler}
+                        />
                     ) : (
-                      <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
-                        <div className="flex flex-col items-center gap-3 text-center px-6">
-                          <div className="text-sm font-medium text-muted-foreground">
-                            No episodes available
-                          </div>
-                          <div className="text-xs text-muted-foreground/70 max-w-md">
-                            Record an episode or import episodes from files to view them here.
+                        <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
+                          <div className="flex flex-col items-center gap-3 text-center px-6">
+                            <div className="text-sm font-medium text-muted-foreground">
+                              No episodes available
+                            </div>
+                            <div className="text-xs text-muted-foreground/70 max-w-md">
+                              Record an episode or import episodes from files to view them here.
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
                 </div>
               )}

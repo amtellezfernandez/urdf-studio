@@ -12,8 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Minimize2,
-  Maximize2,
   GripHorizontal,
   Eye,
   Pencil,
@@ -70,8 +68,7 @@ interface EpisodeViewer3DModalProps {
   globalCurrentFrame?: number;
   onSetGlobalFrame?: (frame: number) => void;
   inline?: boolean; // If true, render inline instead of as modal
-  isMinimized?: boolean;
-  onMinimizedChange?: (minimized: boolean) => void;
+  showOnlyHeader?: boolean; // If true, only show the header (for collapsed view)
   onSaveEpisode?: (episode: Episode, saveAsNew: boolean, newName?: string) => void; // Callback to save/update episode
 }
 
@@ -309,8 +306,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   globalCurrentFrame,
   onSetGlobalFrame,
   inline = false,
-  isMinimized = false,
-  onMinimizedChange,
+  showOnlyHeader = false,
   onSaveEpisode,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -1430,77 +1426,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   if (!open) return null;
 
-  // Allow minimized view even if episode is null (for graceful degradation)
-  if (!episode && !isMinimized) return null;
+  if (!episode) return null;
 
   const totalFrames = episode?.frames.length ?? 0;
   const duration = totalFrames > 0 && episode ? episode.frames[totalFrames - 1].timestamp : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
-
-  // Minimized view - full width when inline, centered when floating
-  if (isMinimized) {
-    const currentTime = episode ? calculateTime(displayFrame).replace('s', '') : "0.00";
-    const minimizedContent = (
-      <div
-        className={cn(
-          "bg-muted border-b border-border px-3 py-2",
-          inline 
-            ? "w-full" // Full width when inline
-            : "fixed left-1/2 -translate-x-1/2" // Centered when floating
-        )}
-        style={inline ? {} : {
-          bottom: 0,
-          zIndex: 99999,
-          maxWidth: '95vw',
-          borderTopLeftRadius: '0.5rem',
-          borderTopRightRadius: '0.5rem',
-        }}
-      >
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Episode Title - matching split viewer header */}
-          <h3 className="text-sm font-semibold whitespace-nowrap">
-            Episode {episode ? episode.number - 1 : 0}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
-          </h3>
-
-          {/* Compact Counters - matching split viewer style */}
-          <div className="flex items-center gap-2 px-1.5 py-0.5 text-[10px] font-mono">
-            <span className="tabular-nums">{displayFrame}/{totalFrames > 0 ? totalFrames - 1 : 0}</span>
-            <span className="text-muted-foreground/60">•</span>
-            <span className="tabular-nums text-muted-foreground">
-              {episode ? `${currentTime}/${durationSeconds}s` : "0.00/0.00s"}
-            </span>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={() => onMinimizedChange?.(false)}
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Restore</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </div>
-    );
-
-    // When inline, render directly (not as portal) so it's part of the layout
-    // When floating, use portal to render at document.body level
-    if (inline) {
-      return minimizedContent;
-    }
-    return typeof window !== 'undefined' ? createPortal(minimizedContent, document.body) : null;
-  }
 
   const content = (
     <div
@@ -1743,28 +1674,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <p>{isEditMode ? "Exit Edit Mode (Esc)" : "Edit Curves"}</p>
             </TooltipContent>
           </Tooltip>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMinimizedChange?.(true);
-                }}
-              >
-                <Minimize2 className="w-3.5 h-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Minimize</p>
-            </TooltipContent>
-          </Tooltip>
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content - hidden when showOnlyHeader is true */}
+      {!showOnlyHeader && (
       <>
           {/* Graph Canvas and Legend */}
           <div className="flex-1 flex overflow-hidden">
@@ -1818,7 +1732,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </div>
 
             {/* Joints Legend */}
-            <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto">
+            <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto blender-scrollbar">
               {!episode || jointNames.length === 0 ? (
                 <div className="text-xs text-muted-foreground">No joints available</div>
               ) : (
@@ -1878,9 +1792,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               )}
             </div>
           </div>
-
-
         </>
+      )}
     </div>
   );
 

@@ -1236,6 +1236,70 @@ const RotationPlane = ({
   );
 };
 
+// Infinite grid component - Blender-style grey infinite grid
+const InfiniteGrid = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => {
+  // Shader for infinite grid using world space coordinates
+  const gridMaterial = useMemo(() => {
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uSize1: { value: 1.0 },
+        uSize2: { value: 10.0 },
+        uColor1: { value: new THREE.Color(0x808080) }, // Main grid lines - grey
+        uColor2: { value: new THREE.Color(0x808080) }, // Sub grid lines - same grey
+      },
+      vertexShader: `
+        varying vec3 worldPosition;
+        void main() {
+          vec3 pos = position.xzy; // Swap Y and Z for Z-up coordinate system
+          worldPosition = (modelMatrix * vec4(pos, 1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uSize1;
+        uniform float uSize2;
+        uniform vec3 uColor1;
+        uniform vec3 uColor2;
+        varying vec3 worldPosition;
+        
+        void main() {
+          // Calculate grid lines in world space
+          vec2 coord = worldPosition.xy;
+          
+          // Main grid (1 unit spacing)
+          vec2 grid1 = abs(fract(coord / uSize1 - 0.5) - 0.5);
+          grid1 = grid1 / fwidth(coord);
+          float line1 = min(grid1.x, grid1.y);
+          
+          // Sub grid (10 unit spacing)
+          vec2 grid2 = abs(fract(coord / uSize2 - 0.5) - 0.5);
+          grid2 = grid2 / fwidth(coord);
+          float line2 = min(grid2.x, grid2.y);
+          
+          // Combine grids - main grid is stronger
+          float alpha = 1.0 - min(line1, 1.0);
+          float alpha2 = 1.0 - min(line2, 1.0);
+          alpha = max(alpha, alpha2 * 0.3);
+          
+          // Apply grey color with appropriate opacity
+          gl_FragColor = vec4(uColor1, alpha * 0.5);
+        }
+      `,
+      side: THREE.DoubleSide,
+      transparent: true,
+      depthWrite: false,
+    });
+    return material;
+  }, []);
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} renderOrder={-1}>
+      <planeGeometry args={[10000, 10000]} />
+      <primitive object={gridMaterial} attach="material" />
+    </mesh>
+  );
+};
+
 const PlaceholderLamp = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => {
   const isLowGPU = gpuMode === "low";
   const baseSegments = isLowGPU ? 16 : 32;
@@ -2074,8 +2138,8 @@ export const Viewer3D = ({
             typeCounts[type] = (typeCounts[type] || 0) + 1;
           });
 
-          // Get all joint types that exist in the robot, ordered by predefined order
-          const typeOrder: string[] = ["revolute", "continuous", "prismatic", "fixed", "floating", "planar", "mimic"];
+          // Get all joint types that exist in the robot, ordered by importance (most common first)
+          const typeOrder: string[] = ["revolute", "continuous", "prismatic", "fixed", "planar", "floating", "mimic"];
           const existingTypes = Object.keys(typeCounts).sort((a, b) => {
             const aIndex = typeOrder.indexOf(a);
             const bIndex = typeOrder.indexOf(b);
@@ -2094,28 +2158,18 @@ export const Viewer3D = ({
           };
 
           return (
-            <div className="absolute top-6 left-6 z-10 w-56 bg-background/95 backdrop-blur-xl rounded-lg shadow-lg border border-border/50">
-              {/* Header */}
-              <div className="px-3 py-2 border-b border-border/30">
-                <div className="text-xs font-semibold text-foreground tracking-tight">
+            <div className="absolute top-4 left-4 z-10 w-48 bg-background/98 backdrop-blur-sm rounded border border-border/40 shadow-md">
+              {/* Header - Compact */}
+              <div className="px-2 py-1 border-b border-border/20">
+                <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight uppercase">
                   Joint Types ({totalJoints})
                 </div>
               </div>
 
-              {/* Content */}
-              <div className="p-3 space-y-3">
-                {/* Selected Joint Section */}
-                <div className="pb-2 border-b border-border/20">
-                  <div className="text-[10px] font-semibold text-muted-foreground tracking-tight mb-1 uppercase">
-                    Selected Joint
-                  </div>
-                  <div className="text-xs text-foreground font-medium">
-                    {selectedJoint || "None"}
-                  </div>
-                </div>
-
-                {/* Joint Types List */}
-                <div className="space-y-1">
+              {/* Content - Compact */}
+              <div className="p-1.5 space-y-1.5">
+                {/* Joint Types List - Compact (First) */}
+                <div className="space-y-0.5">
                   {existingTypes.map((type) => {
                     const count = typeCounts[type];
                     const color = (jointColors as Record<string, string>)[type] || jointColors.light_gray;
@@ -2129,8 +2183,10 @@ export const Viewer3D = ({
                       <div
                         key={type}
                         className={cn(
-                          "flex items-center gap-2 px-1.5 py-1 rounded-sm cursor-pointer hover:bg-muted/20 transition-colors",
-                          isSelected && "bg-primary/10"
+                          "flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer transition-colors",
+                          isSelected 
+                            ? "bg-primary/15 border border-primary/30" 
+                            : "hover:bg-muted/15 border border-transparent"
                         )}
                         onClick={() => {
                           if (typeJoints.length > 0 && onJointSelect) {
@@ -2139,21 +2195,31 @@ export const Viewer3D = ({
                         }}
                       >
                         <div 
-                          className="w-2.5 h-2.5 rounded-sm border-2 flex-shrink-0"
+                          className="w-2 h-2 rounded-sm border flex-shrink-0"
                           style={{ 
                             borderColor: color,
-                            backgroundColor: isFixed ? color : hexToRgba(color, 0.3)
+                            backgroundColor: isFixed ? color : hexToRgba(color, 0.25)
                           }}
                         />
-                        <span className="text-xs text-foreground capitalize flex-1">
+                        <span className="text-[11px] text-foreground font-medium capitalize flex-1 truncate">
                           {getJointTypeLabel(type)}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[9px] text-muted-foreground/70 flex-shrink-0">
                           ({count})
                         </span>
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Selected Joint Section - Compact (Second) */}
+                <div className="pt-1.5 border-t border-border/15">
+                  <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
+                    Selected Joint
+                  </div>
+                  <div className="text-[11px] text-foreground font-medium truncate">
+                    {selectedJoint || "None"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2199,12 +2265,8 @@ export const Viewer3D = ({
             </>
           )}
 
-          {/* Floor grid - simplified for low GPU mode */}
-          <gridHelper 
-            args={gpuMode === "low" ? [20, 10, 0xcccccc, 0xf5f5f5] : [20, 20, 0xcccccc, 0xf5f5f5]} 
-            position={[0, 0, 0]} 
-            rotation={[Math.PI / 2, 0, 0]}
-          />
+          {/* Infinite grid - Blender-style grey infinite grid */}
+          <InfiniteGrid gpuMode={gpuMode} />
           
           {/* Floor plane */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow={gpuMode === "high"}>
