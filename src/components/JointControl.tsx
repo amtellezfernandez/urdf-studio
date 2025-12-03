@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
-import { ArrowRight, ArrowUp, ArrowDown, ArrowLeft, Settings, Trash2, ChevronRight } from "lucide-react";
+import { Settings, Trash2, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,15 +25,8 @@ import type { JointLimitInfo } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisInfo } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks } from "@/urdf_corrections/getJointLinks";
-
-const JOINT_TYPES = [
-  "continuous",
-  "revolute",
-  "prismatic",
-  "fixed",
-  "planar",
-  "floating",
-] as const;
+import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
+import { DEG_TO_RAD, RAD_TO_DEG } from "@/utils/angleConversions";
 
 interface JointControlProps {
   jointName: string;
@@ -57,63 +50,6 @@ interface JointControlProps {
   hideValueDisplay?: boolean;
 }
 
-// Helper function to create axis preset icon
-const createAxisIcon = (axis: [number, number, number]) => {
-  const [x, y, z] = axis;
-  // X-axis (red)
-  if (Math.abs(x) > 0.9 && Math.abs(y) < 0.1 && Math.abs(z) < 0.1) {
-    return x > 0 
-      ? <ArrowRight className="w-3 h-3 text-red-500" />
-      : <ArrowLeft className="w-3 h-3 text-red-500" />;
-  }
-  // Y-axis (green)
-  if (Math.abs(y) > 0.9 && Math.abs(x) < 0.1 && Math.abs(z) < 0.1) {
-    return y > 0
-      ? <ArrowUp className="w-3 h-3 text-green-500" />
-      : <ArrowDown className="w-3 h-3 text-green-500" />;
-  }
-  // Z-axis (blue)
-  if (Math.abs(z) > 0.9 && Math.abs(x) < 0.1 && Math.abs(y) < 0.1) {
-    return z > 0
-      ? <ArrowUp className="w-3 h-3 text-blue-500 rotate-[135deg]" />
-      : <ArrowDown className="w-3 h-3 text-blue-500 rotate-[135deg]" />;
-  }
-  return null;
-};
-
-// Common axis presets with icons
-const AXIS_PRESETS: Record<string, { axis: [number, number, number]; label: string; icon: React.ReactNode }> = {
-  "X (1 0 0)": {
-    axis: [1, 0, 0],
-    label: "X-axis",
-    icon: <ArrowRight className="w-3 h-3 text-red-500" />
-  },
-  "Y (0 1 0)": {
-    axis: [0, 1, 0],
-    label: "Y-axis",
-    icon: <ArrowUp className="w-3 h-3 text-green-500" />
-  },
-  "Z (0 0 1)": {
-    axis: [0, 0, 1],
-    label: "Z-axis",
-    icon: <ArrowUp className="w-3 h-3 text-blue-500 rotate-[135deg]" />
-  },
-  "-X (-1 0 0)": {
-    axis: [-1, 0, 0],
-    label: "-X-axis",
-    icon: <ArrowLeft className="w-3 h-3 text-red-500" />
-  },
-  "-Y (0 -1 0)": {
-    axis: [0, -1, 0],
-    label: "-Y-axis",
-    icon: <ArrowDown className="w-3 h-3 text-green-500" />
-  },
-  "-Z (0 0 -1)": {
-    axis: [0, 0, -1],
-    label: "-Z-axis",
-    icon: <ArrowDown className="w-3 h-3 text-blue-500 rotate-[135deg]" />
-  },
-};
 
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";
@@ -208,8 +144,8 @@ export const JointControl = ({
   const globalMaxJointVelocity = useJointStore((s) => s.globalMaxJointVelocity);
   const setJointMaxVelocity = useJointStore((s) => s.setJointMaxVelocity);
   const velocityLimitEnabled = useJointStore((s) => s.velocityLimitEnabled);
-  const degPerRad = 180 / Math.PI;
-  const radPerDeg = Math.PI / 180;
+  const degPerRad = RAD_TO_DEG;
+  const radPerDeg = DEG_TO_RAD;
   const hasCustomVelocity =
     jointMaxVelocityOverride !== undefined && jointMaxVelocityOverride !== null;
   const effectiveJointVelocity =
@@ -218,7 +154,7 @@ export const JointControl = ({
       : globalMaxJointVelocity;
   const velocityUnit = angleUnit === "deg" ? "°/s" : "rad/s";
   const velocityStep = angleUnit === "deg" ? 0.5 : 0.05;
-  const velocityMin = angleUnit === "deg" ? (0.01 * 180) / Math.PI : 0.01;
+  const velocityMin = angleUnit === "deg" ? 0.01 * RAD_TO_DEG : 0.01;
   const velocityDisplayRaw =
     angleUnit === "deg" ? effectiveJointVelocity * degPerRad : effectiveJointVelocity;
   const velocityPrecision = angleUnit === "deg" ? 100 : 1000;
@@ -454,7 +390,7 @@ export const JointControl = ({
     (value: number, shouldSnap: boolean) => {
       if (!shouldSnap) return value;
       const snapIncrementDeg = 5;
-      const snapIncrementRad = snapIncrementDeg * (Math.PI / 180);
+      const snapIncrementRad = snapIncrementDeg * DEG_TO_RAD;
       const snapped = Math.round(value / snapIncrementRad) * snapIncrementRad;
       return snapped;
     },
@@ -481,7 +417,7 @@ export const JointControl = ({
       const range = max - min;
       let baseSensitivity = !Number.isFinite(range) || range === 0 ? 0.005 : range / 800;
       if (angleUnit === "deg") {
-        baseSensitivity *= 180 / Math.PI;
+        baseSensitivity *= RAD_TO_DEG;
       }
       if (isFine) {
         baseSensitivity *= 0.2;
@@ -517,7 +453,7 @@ export const JointControl = ({
         dragDirection.current === "horizontal" ? deltaX : deltaY;
       const sensitivity = getDragSensitivity(event.shiftKey);
       const delta = direction * sensitivity;
-      const deltaRad = angleUnit === "deg" ? delta * (Math.PI / 180) : delta;
+      const deltaRad = angleUnit === "deg" ? delta * DEG_TO_RAD : delta;
       const nextValue = dragState.current.startValue + deltaRad;
 
       applyValueChange(nextValue, { snap: event.ctrlKey });
@@ -586,7 +522,7 @@ export const JointControl = ({
       if (angleUnit === "deg") {
         return stepDeg;
       }
-      return stepDeg * (Math.PI / 180);
+      return stepDeg * DEG_TO_RAD;
     },
     [angleUnit]
   );
@@ -606,7 +542,7 @@ export const JointControl = ({
       const direction = event.deltaY < 0 ? 1 : -1;
       let delta = step * direction;
       if (angleUnit === "deg") {
-        delta *= Math.PI / 180;
+        delta *= DEG_TO_RAD;
       }
       applyValueChange(currentValue + delta);
     },
@@ -616,7 +552,7 @@ export const JointControl = ({
   const handleValueKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLSpanElement>) => {
       const baseStepDeg = event.ctrlKey ? 10 : event.shiftKey ? 0.1 : 1;
-      const stepRad = baseStepDeg * (Math.PI / 180);
+      const stepRad = baseStepDeg * DEG_TO_RAD;
 
       if (["ArrowUp", "ArrowRight", "PageUp"].includes(event.key)) {
         event.preventDefault();
@@ -728,20 +664,20 @@ export const JointControl = ({
               aria-valuemin={
                 Number.isFinite(min)
                   ? angleUnit === "deg"
-                    ? min * (180 / Math.PI)
+                    ? min * RAD_TO_DEG
                     : min
                   : undefined
               }
               aria-valuemax={
                 Number.isFinite(max)
                   ? angleUnit === "deg"
-                    ? max * (180 / Math.PI)
+                    ? max * RAD_TO_DEG
                     : max
                   : undefined
               }
               aria-valuenow={
                 angleUnit === "deg"
-                  ? currentValue * (180 / Math.PI)
+                  ? currentValue * RAD_TO_DEG
                   : currentValue
               }
               className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
@@ -753,7 +689,7 @@ export const JointControl = ({
               onKeyDown={handleValueKeyDown}
             >
               {angleUnit === "deg" 
-                ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
+                ? `${(currentValue * RAD_TO_DEG).toFixed(2)}°`
                 : `${currentValue.toFixed(2)}`}
             </span>
           )}
@@ -775,15 +711,15 @@ export const JointControl = ({
                 />
               </div>
               <NumberInput
-                value={angleUnit === "deg" ? currentValue * (180 / Math.PI) : currentValue}
-                onValueChange={(val) => {
-                  const radValue = angleUnit === "deg" ? val * (Math.PI / 180) : val;
+                value={angleUnit === "deg" ? currentValue * RAD_TO_DEG : currentValue}
+              onValueChange={(val) => {
+                const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
                   const clampedValue = Math.max(min, Math.min(max, radValue));
                   onValueChange(clampedValue);
                 }}
                 step={angleUnit === "deg" ? 1 : 0.01}
-                min={angleUnit === "deg" ? min * (180 / Math.PI) : min}
-                max={angleUnit === "deg" ? max * (180 / Math.PI) : max}
+                min={angleUnit === "deg" ? min * RAD_TO_DEG : min}
+                max={angleUnit === "deg" ? max * RAD_TO_DEG : max}
                 compact
                 className="w-16"
               />
@@ -824,10 +760,10 @@ export const JointControl = ({
                   <span className="text-[10px] text-muted-foreground">Min:</span>
                   <NumberInput
                     value={angleUnit === "deg" 
-                      ? (localLowerLimit ? parseFloat(localLowerLimit) * (180 / Math.PI) : (jointInfo?.lower ?? 0) * (180 / Math.PI))
+                      ? (localLowerLimit ? parseFloat(localLowerLimit) * RAD_TO_DEG : (jointInfo?.lower ?? 0) * RAD_TO_DEG)
                       : (localLowerLimit ? parseFloat(localLowerLimit) : (jointInfo?.lower ?? 0))}
                     onValueChange={(val) => {
-                      const radValue = angleUnit === "deg" ? val * (Math.PI / 180) : val;
+                      const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
                       setLocalLowerLimit(String(radValue));
                     }}
                     step={angleUnit === "deg" ? 1 : 0.01}
@@ -840,10 +776,10 @@ export const JointControl = ({
                   <span className="text-[10px] text-muted-foreground">Max:</span>
                   <NumberInput
                     value={angleUnit === "deg"
-                      ? (localUpperLimit ? parseFloat(localUpperLimit) * (180 / Math.PI) : (jointInfo?.upper ?? 0) * (180 / Math.PI))
+                      ? (localUpperLimit ? parseFloat(localUpperLimit) * RAD_TO_DEG : (jointInfo?.upper ?? 0) * RAD_TO_DEG)
                       : (localUpperLimit ? parseFloat(localUpperLimit) : (jointInfo?.upper ?? 0))}
                     onValueChange={(val) => {
-                      const radValue = angleUnit === "deg" ? val * (Math.PI / 180) : val;
+                      const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
                       setLocalUpperLimit(String(radValue));
                     }}
                     step={angleUnit === "deg" ? 1 : 0.01}

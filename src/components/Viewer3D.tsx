@@ -16,9 +16,7 @@ import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
-import { useGPUMode } from "@/hooks/use-gpu-mode";
-
-type GPUMode = "high" | "low";
+import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
 
 interface Viewer3DProps {
   urdfFile: File | null;
@@ -27,7 +25,6 @@ interface Viewer3DProps {
   jointValues?: Record<string, number>;
   jointLimits?: JointLimits;
   jointAxes?: JointAxisMap;
-  gpuMode?: GPUMode;
   onJointSelect?: (jointName: string | null) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onRobotJointsLoaded?: (
@@ -1350,7 +1347,6 @@ export const Viewer3D = ({
   jointValues = {},
   jointLimits = {},
   jointAxes = {},
-  gpuMode: gpuModeProp = "high",
   onJointSelect,
   onJointChange,
   onRobotJointsLoaded,

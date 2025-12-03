@@ -1290,7 +1290,6 @@ const Index = () => {
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
-                      gpuMode={gpuMode}
                       onJointSelect={setSelectedJoint}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
@@ -1333,7 +1332,6 @@ const Index = () => {
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
-                      gpuMode={gpuMode}
                       onJointSelect={setSelectedJoint}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
@@ -1395,7 +1393,6 @@ const Index = () => {
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
-                      gpuMode={gpuMode}
                       onJointSelect={setSelectedJoint}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}

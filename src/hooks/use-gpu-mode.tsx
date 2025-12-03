@@ -56,17 +56,7 @@ export function GPUModeProvider({ children }: { children: ReactNode }) {
 export function useGPUMode() {
   const context = useContext(GPUModeContext);
   if (context === undefined) {
-    // Fallback to local state if context is not available (for backward compatibility)
-    const [gpuMode, setGpuMode] = useState<GPUMode>(getInitialGPUMode);
-    useEffect(() => {
-      localStorage.setItem(GPU_MODE_STORAGE_KEY, gpuMode);
-    }, [gpuMode]);
-    const setGPUMode = (mode: GPUMode) => {
-      setGpuMode(mode);
-    };
-    return { gpuMode, setGPUMode };
+    throw new Error("useGPUMode must be used within a GPUModeProvider");
   }
   return context;
 }
-
-

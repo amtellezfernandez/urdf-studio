@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections/parseJointHierarchy";
+import { RAD_TO_DEG } from "@/utils/angleConversions";
 
 interface JointsWindowProps {
   availableJoints: string[];
@@ -285,7 +286,7 @@ export const JointsWindow = ({
     const isDeleted = deletedJoints.has(jointName);
     const isEditing = editingJointName === jointName;
     const valueDisplay = angleUnit === "deg" 
-      ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
+      ? `${(currentValue * RAD_TO_DEG).toFixed(2)}°`
       : `${currentValue.toFixed(2)}`;
 
     return (
