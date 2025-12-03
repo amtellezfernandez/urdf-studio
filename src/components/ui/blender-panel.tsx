@@ -27,7 +27,7 @@ export const BlenderPanel = ({ title, defaultOpen = true, children, className, a
       {shouldShowTitle && (
         <CollapsibleTrigger 
           className={cn(
-            "w-full flex items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm",
+            "w-full flex items-center justify-between px-1 py-0.5 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm",
             alwaysExpanded && "cursor-default"
           )}
           disabled={alwaysExpanded}
@@ -48,7 +48,7 @@ export const BlenderPanel = ({ title, defaultOpen = true, children, className, a
         </CollapsibleTrigger>
       )}
       <CollapsibleContent className={cn(
-        shouldShowTitle ? "px-1.5 pb-1 pt-0.5" : "px-1 pb-0.5 pt-0"
+        shouldShowTitle ? "px-1 pb-0.5 pt-0" : "px-0.5 pb-0.5 pt-0"
       )}>
         {children}
       </CollapsibleContent>

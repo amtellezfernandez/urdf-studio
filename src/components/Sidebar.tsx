@@ -44,9 +44,9 @@ import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 import { Badge } from "@/components/ui/badge";
 
-export const DEFAULT_SIDEBAR_WIDTH = 420;
-export const SIDEBAR_MIN_WIDTH = 320;
-export const SIDEBAR_MAX_WIDTH = 620;
+export const DEFAULT_SIDEBAR_WIDTH = 220;
+export const SIDEBAR_MIN_WIDTH = 200;
+export const SIDEBAR_MAX_WIDTH = 320;
 
 interface SidebarProps {
   isLoading?: boolean;
@@ -3713,7 +3713,7 @@ export const Sidebar = ({
         {/* Header */}
         {isLoading && (
           <div className="flex-shrink-0 border-b border-border/30">
-            <div className="px-4 py-2">
+            <div className="px-2 py-1.5">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <span>Loading robot model...</span>
@@ -3723,16 +3723,16 @@ export const Sidebar = ({
         )}
 
         {/* Recording Content */}
-        <div className="flex-1 overflow-hidden flex flex-col p-2 mt-0 h-full blender-scrollbar">
+        <div className="flex-1 overflow-hidden flex flex-col p-1.5 mt-0 h-full blender-scrollbar">
             {/* Blender-style Menu Bar */}
-            <div className="flex items-center gap-2 border-b border-border/50 pb-1.5 mb-2">
+            <div className="flex items-center gap-1.5 border-b border-border/50 pb-1 mb-1.5">
               {/* Record Button - Always Visible */}
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 px-2.5 text-xs flex-shrink-0 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:border-red-500"
+                    className="h-7 px-2 text-xs flex-shrink-0 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:border-red-500"
                     onClick={isRecording ? stopRecording : startRecording}
                   >
                     <div className="flex items-center gap-1.5">
@@ -3805,7 +3805,7 @@ export const Sidebar = ({
             {/* Blender-style Timeline Controls */}
             <BlenderPanel title="Timeline" defaultOpen={true}>
               {/* Playback and Speed on same row */}
-              <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
                 {/* Previous Episode */}
                 <Button
                   size="sm"
@@ -3908,14 +3908,14 @@ export const Sidebar = ({
 
             {/* Episodes List */}
             <BlenderPanel title={`Episodes (${episodes.length})`} defaultOpen={true}>
-              <div className="flex-1 overflow-y-auto max-h-[400px] blender-scrollbar">
+              <div className="flex-1 overflow-y-auto max-h-[400px] blender-scrollbar -mx-1.5">
                 {episodes.length === 0 ? (
-                  <div className="py-4 text-center">
+                  <div className="py-2 text-center">
                     <p className="text-xs text-muted-foreground">No episodes</p>
                     <p className="text-xs text-muted-foreground/70 mt-1">Load JSON data or record new</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-0">
                     {episodes.map((episode, index) => {
                       const duration = episode.frames.length > 0 
                         ? episode.frames[episode.frames.length - 1].timestamp 
@@ -3933,14 +3933,14 @@ export const Sidebar = ({
                           <div
                             key={episode.id}
                             className={cn(
-                              "group relative border rounded p-1.5 transition-all",
+                              "group relative border rounded px-0.25 py-0.5 transition-all",
                               isPlaying
                                 ? "border-primary shadow-lg shadow-primary/20 bg-primary/5"
                                 : "border-border bg-background hover:bg-muted/30"
                             )}
                           >
                             {/* Main Row */}
-                            <div className="flex items-start gap-1.5">
+                            <div className="flex items-start gap-1">
                               {/* Play/Pause Button - Prominent like Blender's video strips */}
                               <Button
                                 size="sm"
@@ -3971,7 +3971,7 @@ export const Sidebar = ({
                               {/* Episode Info - Blender Style */}
                               <div className="flex-1 min-w-0">
                                 {/* First Row: Stats */}
-                                <div className="flex items-center gap-1.5 mb-1">
+                                <div className="flex items-center gap-1 mb-0.5">
                                   <span className="text-xs font-medium text-foreground">
                                     {episode.frames.length} frames
                                   </span>
@@ -3992,7 +3992,7 @@ export const Sidebar = ({
                                 
                                 {/* Second Row: Source Info */}
                                 {episode.metadata?.additional?.sourceType && (
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1">
                                     <Badge
                                       variant={
                                         episode.metadata.additional.sourceType === 'hf'
@@ -4012,7 +4012,7 @@ export const Sidebar = ({
                                         : episode.metadata.additional.sourceType}
                                     </Badge>
                                     {episode.metadata.additional.sourceName && (
-                                      <span className="text-[10px] text-muted-foreground truncate max-w-[180px]" title={episode.metadata.additional.sourceName}>
+                                      <span className="text-[10px] text-muted-foreground truncate" title={episode.metadata.additional.sourceName}>
                                         {episode.metadata.additional.sourceName}
                                       </span>
                                     )}
@@ -4023,7 +4023,7 @@ export const Sidebar = ({
                             </div>
                           
                             {/* Compact Controls - All Actions Together */}
-                            <div className="flex items-center gap-0.5 mt-1.5 pt-1 border-t border-border/30 opacity-40 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-0.5 mt-1 pt-0.5 border-t border-border/30 opacity-40 group-hover:opacity-100 transition-opacity">
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -4097,7 +4097,7 @@ export const Sidebar = ({
 
       {/* Collapse Button at Bottom */}
       {onToggleCollapse && (
-        <div className="flex-shrink-0 border-t border-border/30 flex items-center justify-center p-2">
+        <div className="flex-shrink-0 border-t border-border/30 flex items-center justify-center p-1.5">
           <Button
             size="icon"
             variant="ghost"
