@@ -27,7 +27,6 @@ import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,7 +102,6 @@ const Index = () => {
   const [recordingViewHeight, setRecordingViewHeight] = useState<number>(DEFAULT_RECORDING_VIEW_HEIGHT);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: any, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"joints" | "recording">("joints");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
@@ -1144,22 +1142,6 @@ const Index = () => {
                 </DropdownMenu>
               </>
             )}
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "joints" | "recording")}>
-              <TabsList className="h-5 bg-transparent gap-0 p-0">
-                <TabsTrigger 
-                  value="joints" 
-                  className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] data-[state=active]:bg-[#3d3d3d] data-[state=active]:text-white rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1"
-                >
-                  Editor
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="recording" 
-                  className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] data-[state=active]:bg-[#3d3d3d] data-[state=active]:text-white rounded-none border-r border-[#3d3d3d] flex items-center transition-none"
-                >
-                  Recording
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
             {originalUrdfContent && vizUrdfContent && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1330,19 +1312,6 @@ const Index = () => {
             onEpisodeSaveReady={(handler) => {
               // Receive save handler from Sidebar and store it
               setEpisodeSaveHandler(() => handler);
-            }}
-            activeTab={activeTab}
-            onTabChange={(tab) => {
-              setActiveTab(tab);
-              // Handle tab change logic
-              if (tab === "joints") {
-                setIsViewerOpen(false);
-              }
-              if (tab === "recording") {
-                setShowUrdfEditor(false);
-                setViewerSplitView(true);
-                setIsViewerOpen(true);
-              }
             }}
           />
 

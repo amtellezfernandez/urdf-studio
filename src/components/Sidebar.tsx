@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
@@ -19,7 +18,7 @@ import { toast } from "sonner";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { URDFComparison } from "@/components/URDFComparison";
-import { LinkEditor, type CollisionVisibility } from "@/components/LinkEditor";
+import { type CollisionVisibility } from "@/components/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { cn } from "@/lib/utils";
 import { parseEpisodeCsv } from "@/utils/episodeCsv";
@@ -90,8 +89,6 @@ interface SidebarProps {
   onViewerSplitViewChange?: (splitView: boolean) => void;
   onViewerEpisodeChange?: (episode: Episode | null) => void;
   onViewerOpenChange?: (open: boolean) => void;
-  activeTab?: "joints" | "recording";
-  onTabChange?: (tab: "joints" | "recording") => void;
 }
 
 interface RecordedFrame {
@@ -811,11 +808,8 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
-  activeTab = "joints",
-  onTabChange,
 }: SidebarProps) => {
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
-  const [selectedLink, setSelectedLink] = useState<string | null>(null);
 
   // Notify parent when collision visibility changes
   useEffect(() => {
@@ -1028,39 +1022,17 @@ export const Sidebar = ({
 
   // Auto-update viewer episode when currentPlayingEpisodeIndex changes
   useEffect(() => {
-    if (viewerSplitView && currentPlayingEpisodeIndex !== null && episodes.length > 0) {
+    if (currentPlayingEpisodeIndex !== null && episodes.length > 0) {
       const currentEpisode = episodes[currentPlayingEpisodeIndex];
       if (currentEpisode) {
+        // Always enable split view and open viewer when an episode is selected
+        onViewerSplitViewChange?.(true);
+        onViewerOpenChange?.(true);
         onViewerEpisodeChange?.(currentEpisode);
       }
     }
-  }, [currentPlayingEpisodeIndex, viewerSplitView, episodes, onViewerEpisodeChange]);
+  }, [currentPlayingEpisodeIndex, episodes, onViewerEpisodeChange, onViewerSplitViewChange, onViewerOpenChange]);
 
-  // Handle tab changes from top navigation - select episode when switching to recording tab
-  useEffect(() => {
-    if (activeTab === "recording") {
-      // When switching to recording tab, close the URDF editor and ensure robot movement is enabled
-      onUrdfEditorToggle?.(false);
-      setIsAnimating(false);
-      // Always enable split view mode when switching to recording tab
-      onViewerSplitViewChange?.(true);
-      onViewerOpenChange?.(true);
-      // Open viewer with episode if available, otherwise show message
-      if (episodes.length > 0) {
-        const activeIndex = currentPlayingEpisodeIndex ?? 0;
-        const episode = episodes[activeIndex];
-        if (episode) {
-          onViewerEpisodeChange?.(episode);
-        }
-      } else {
-        // No episodes - clear episode so message shows instead of viewer
-        onViewerEpisodeChange?.(null);
-      }
-    } else if (activeTab === "joints") {
-      // When switching to editor tab, close the viewer
-      onViewerOpenChange?.(false);
-    }
-  }, [activeTab, episodes, currentPlayingEpisodeIndex, onUrdfEditorToggle, onViewerSplitViewChange, onViewerOpenChange, onViewerEpisodeChange, setIsAnimating]);
 
   // Stop animation when all episodes are deleted
   useEffect(() => {
@@ -1091,89 +1063,6 @@ export const Sidebar = ({
     onJointChange(jointName, limited);
   };
 
-
-  const handleMaterialChange = (linkName: string, materialName: string, color: string) => {
-    if (!vizUrdf) return;
-    
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(vizUrdf, "text/xml");
-      
-      const parserError = xmlDoc.querySelector("parsererror");
-      if (parserError) {
-        toast.error("Invalid URDF XML");
-        return;
-      }
-
-      // Find or create material element
-      let material = xmlDoc.querySelector(`material[name="${materialName}"]`);
-      if (!material) {
-        // Create material in robot tag
-        const robot = xmlDoc.querySelector("robot");
-        if (!robot) {
-          toast.error("No robot tag found in URDF");
-          return;
-        }
-        material = xmlDoc.createElement("material");
-        material.setAttribute("name", materialName);
-        const colorElement = xmlDoc.createElement("color");
-        // Convert hex to rgba
-        const r = parseInt(color.slice(1, 3), 16) / 255;
-        const g = parseInt(color.slice(3, 5), 16) / 255;
-        const b = parseInt(color.slice(5, 7), 16) / 255;
-        colorElement.setAttribute("rgba", `${r} ${g} ${b} 1.0`);
-        material.appendChild(colorElement);
-        robot.appendChild(material);
-      } else {
-        // Update existing material color
-        let colorElement = material.querySelector("color");
-        if (!colorElement) {
-          colorElement = xmlDoc.createElement("color");
-          material.appendChild(colorElement);
-        }
-        const r = parseInt(color.slice(1, 3), 16) / 255;
-        const g = parseInt(color.slice(3, 5), 16) / 255;
-        const b = parseInt(color.slice(5, 7), 16) / 255;
-        colorElement.setAttribute("rgba", `${r} ${g} ${b} 1.0`);
-      }
-
-      // Find the link
-      const link = xmlDoc.querySelector(`link[name="${linkName}"]`);
-      if (!link) {
-        toast.error(`Link "${linkName}" not found`);
-        return;
-      }
-
-      // Find or create visual element
-      let visual = link.querySelector("visual");
-      if (!visual) {
-        visual = xmlDoc.createElement("visual");
-        const geometry = xmlDoc.createElement("geometry");
-        const box = xmlDoc.createElement("box");
-        box.setAttribute("size", "0.1 0.1 0.1");
-        geometry.appendChild(box);
-        visual.appendChild(geometry);
-        link.appendChild(visual);
-      }
-
-      // Add or update material reference
-      let materialRef = visual.querySelector("material");
-      if (!materialRef) {
-        materialRef = xmlDoc.createElement("material");
-        visual.appendChild(materialRef);
-      }
-      materialRef.setAttribute("name", materialName);
-
-      // Serialize back
-      const serializer = new XMLSerializer();
-      const newContent = serializer.serializeToString(xmlDoc);
-      
-      onVizUrdfChange?.(newContent);
-    } catch (error) {
-      console.error("Error updating material:", error);
-      toast.error("Failed to update material");
-    }
-  };
 
   const handleLinkNameChange = useCallback((oldName: string, newName: string): void => {
     if (newName === oldName || !vizUrdf) return;
@@ -3521,6 +3410,11 @@ export const Sidebar = ({
       (window as any).viewer3dStopAnimation?.();
       (window as any).viewer3dPlayAnimation?.(false);
     } else {
+      // Ensure viewer is open and split view is enabled when playing an episode
+      onViewerSplitViewChange?.(true);
+      onViewerOpenChange?.(true);
+      onViewerEpisodeChange?.(episode);
+      
       // Activate global play when playing individual episode (but loop just this one)
       setIsPlayingAll(true);
       isPlayingAllRef.current = true;
@@ -3528,7 +3422,7 @@ export const Sidebar = ({
       // Start looping this single episode from frame 0
       playSingleEpisodeLoop(episodeIndex);
     }
-  }, [episodes, playSingleEpisodeLoop, currentPlayingEpisodeIndex, isPlayingAll]);
+  }, [episodes, playSingleEpisodeLoop, currentPlayingEpisodeIndex, isPlayingAll, onViewerSplitViewChange, onViewerOpenChange, onViewerEpisodeChange]);
 
   const playEpisodeSequentially = useCallback(
     (startIndex: number, resumeFrame?: number) => {
@@ -3765,37 +3659,7 @@ export const Sidebar = ({
       }}
       aria-hidden={isCollapsed}
     >
-      <Tabs 
-        value={activeTab}
-        className="flex flex-col h-full"
-        onValueChange={(value) => {
-          const tab = value as "joints" | "recording";
-          onTabChange?.(tab);
-          // When switching to editor tab, close the viewer
-          if (tab === "joints") {
-            onViewerOpenChange?.(false);
-          }
-          // When switching to recording tab, close the URDF editor and ensure robot movement is enabled
-          if (tab === "recording") {
-            onUrdfEditorToggle?.(false);
-            setIsAnimating(false);
-            // Always enable split view mode when switching to recording tab
-            onViewerSplitViewChange?.(true);
-            onViewerOpenChange?.(true);
-            // Open viewer with episode if available, otherwise show message
-            if (episodes.length > 0) {
-              const activeIndex = currentPlayingEpisodeIndex ?? 0;
-              const episode = episodes[activeIndex];
-              if (episode) {
-                onViewerEpisodeChange?.(episode);
-              }
-            } else {
-              // No episodes - clear episode so message shows instead of viewer
-              onViewerEpisodeChange?.(null);
-            }
-          }
-        }}
-      >
+      <div className="flex flex-col h-full">
         {/* Header */}
         {isLoading && (
           <div className="flex-shrink-0 border-b border-border/30">
@@ -3808,32 +3672,8 @@ export const Sidebar = ({
           </div>
         )}
 
-        {/* Tabs Content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {/* Joints Tab */}
-          <TabsContent value="joints" className="flex-1 overflow-hidden mt-0 h-full">
-            <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                {/* Links Editor - Direct access, no sub-tabs */}
-                <div className="flex-1 min-h-0 overflow-y-auto blender-scrollbar">
-                  <LinkEditor
-                    urdfContent={vizUrdf}
-                    onMaterialChange={handleMaterialChange}
-                    onLinkNameChange={handleLinkNameChange}
-                    onUrdfChange={onVizUrdfChange}
-                    meshFiles={meshFiles}
-                    collisionVisibility={collisionVisibility}
-                    onCollisionVisibilityChange={setCollisionVisibility}
-                    selectedLink={selectedLink}
-                    onLinkSelect={setSelectedLink}
-                  />
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Recording Tab - Blender Style */}
-          <TabsContent value="recording" className="flex-1 overflow-hidden flex flex-col p-2 mt-0 h-full blender-scrollbar">
+        {/* Recording Content */}
+        <div className="flex-1 overflow-hidden flex flex-col p-2 mt-0 h-full blender-scrollbar">
             {/* Blender-style Menu Bar */}
             <div className="flex items-center gap-2 border-b border-border/50 pb-1.5 mb-2">
               {/* Record Button - Always Visible */}
@@ -4300,9 +4140,8 @@ export const Sidebar = ({
               </div>
             </BlenderPanel>
 
-          </TabsContent>
         </div>
-      </Tabs>
+      </div>
 
       {/* Rerun Viewer Modal */}
       <RerunViewer3DModal
