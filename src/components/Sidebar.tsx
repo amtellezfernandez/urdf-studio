@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { URDFComparison } from "@/components/URDFComparison";
-import { JointsWindow } from "@/components/JointsWindow";
 import { LinkEditor, type CollisionVisibility } from "@/components/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { cn } from "@/lib/utils";
@@ -815,9 +814,7 @@ export const Sidebar = ({
   activeTab = "joints",
   onTabChange,
 }: SidebarProps) => {
-  const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
-  const [activeEditorWindow, setActiveEditorWindow] = useState<"joints" | "links">("joints");
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
 
   // Notify parent when collision visibility changes
@@ -1094,22 +1091,6 @@ export const Sidebar = ({
     onJointChange(jointName, limited);
   };
 
-  const degPerRad = 180 / Math.PI;
-  const toDisplayVelocity = (radValue: number) =>
-    angleUnit === "deg" ? radValue * degPerRad : radValue;
-  const fromDisplayVelocity = (value: number) =>
-    angleUnit === "deg" ? value / degPerRad : value;
-
-  const defaultSliderMinRad = 0.01;
-  const defaultSliderMaxRad = 4 * Math.PI; // ~12.57 rad (~720 deg/s)
-  const sliderMin = angleUnit === "deg" ? defaultSliderMinRad * degPerRad : defaultSliderMinRad;
-  const sliderMaxBase =
-    angleUnit === "deg" ? defaultSliderMaxRad * degPerRad : defaultSliderMaxRad;
-  const sliderStep = angleUnit === "deg" ? 0.5 : 0.05;
-
-  const displayVelocity = toDisplayVelocity(globalMaxJointVelocity);
-  const sliderMax = Math.max(sliderMaxBase, displayVelocity, sliderMin);
-  const sliderValue = Math.min(Math.max(displayVelocity, sliderMin), sliderMax);
 
   const handleMaterialChange = (linkName: string, materialName: string, color: string) => {
     if (!vizUrdf) return;
@@ -3833,78 +3814,19 @@ export const Sidebar = ({
           <TabsContent value="joints" className="flex-1 overflow-hidden mt-0 h-full">
             <div className="flex flex-col h-full overflow-hidden">
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                {/* Minimalistic Window Selector - Blender Style */}
-                <div className="flex items-center gap-0 px-2 py-1 border-b border-border/30 bg-muted/10">
-                  <button
-                    onClick={() => setActiveEditorWindow("joints")}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium transition-all rounded-none border-r border-border/20",
-                      activeEditorWindow === "joints"
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                    )}
-                  >
-                    Joints
-                  </button>
-                  <button
-                    onClick={() => setActiveEditorWindow("links")}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium transition-all rounded-none",
-                      activeEditorWindow === "links"
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                    )}
-                  >
-                    Links
-                  </button>
-                </div>
-                
-                {/* Editor Content - Show only active window */}
+                {/* Links Editor - Direct access, no sub-tabs */}
                 <div className="flex-1 min-h-0 overflow-y-auto blender-scrollbar">
-                  {activeEditorWindow === "joints" ? (
-                    <JointsWindow
-                      availableJoints={availableJoints}
-                      jointLimits={jointLimits}
-                      jointAxes={jointAxes}
-                      originalJointAxes={originalJointAxes}
-                      storeJointValues={storeJointValues}
-                      onJointChange={handleJointChange}
-                      onJointSelect={onJointSelect}
-                      selectedJoint={selectedJoint}
-                      onJointAxisChange={onJointAxisChange}
-                      onResetAxis={onResetAxis}
-                      onJointTypeChange={onJointTypeChange}
-                      onJointNameChange={onJointNameChange}
-                      onDeleteJoint={onDeleteJoint}
-                      deletedJoints={deletedJoints}
-                      angleUnit={angleUnit}
-                      onAngleUnitChange={setAngleUnit}
-                      urdfContent={vizUrdf}
-                      velocityLimitEnabled={velocityLimitEnabled}
-                      onVelocityLimitEnabledChange={setVelocityLimitEnabled}
-                      globalMaxJointVelocity={globalMaxJointVelocity}
-                      onGlobalMaxJointVelocityChange={setGlobalMaxJointVelocity}
-                      sliderValue={sliderValue}
-                      sliderMin={sliderMin}
-                      sliderMax={sliderMax}
-                      sliderStep={sliderStep}
-                      fromDisplayVelocity={fromDisplayVelocity}
-                      applyGlobalVelocityToAll={applyGlobalVelocityToAll}
-                      onJointLinkChange={handleJointLinkChange}
-                    />
-                  ) : (
-                    <LinkEditor
-                      urdfContent={vizUrdf}
-                      onMaterialChange={handleMaterialChange}
-                      onLinkNameChange={handleLinkNameChange}
-                      onUrdfChange={onVizUrdfChange}
-                      meshFiles={meshFiles}
-                      collisionVisibility={collisionVisibility}
-                      onCollisionVisibilityChange={setCollisionVisibility}
-                      selectedLink={selectedLink}
-                      onLinkSelect={setSelectedLink}
-                    />
-                  )}
+                  <LinkEditor
+                    urdfContent={vizUrdf}
+                    onMaterialChange={handleMaterialChange}
+                    onLinkNameChange={handleLinkNameChange}
+                    onUrdfChange={onVizUrdfChange}
+                    meshFiles={meshFiles}
+                    collisionVisibility={collisionVisibility}
+                    onCollisionVisibilityChange={setCollisionVisibility}
+                    selectedLink={selectedLink}
+                    onLinkSelect={setSelectedLink}
+                  />
                 </div>
               </div>
             </div>

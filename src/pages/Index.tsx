@@ -103,6 +103,7 @@ const Index = () => {
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: any, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<"joints" | "recording">("joints");
+  const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
     webkitRelativePath: string;
@@ -1060,6 +1061,33 @@ const Index = () => {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Angle Unit
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => setAngleUnit("rad")}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          angleUnit === "rad" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        Radians
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setAngleUnit("deg")}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          angleUnit === "deg" && "bg-[#3d3d3d] text-white"
+                        )}
+                      >
+                        Degrees
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                   <DropdownMenuItem
                     onClick={() => setShowUrdfEditor(false)}
                     className={cn(
@@ -1425,6 +1453,8 @@ const Index = () => {
             onJointNameChange={handleJointNameChange}
             onDeleteJoint={handleDeleteJoint}
             onJointLinkChange={handleJointLinkChange}
+            angleUnit={angleUnit}
+            onAngleUnitChange={setAngleUnit}
           />
 
           {/* Right Sidebar Resizer */}

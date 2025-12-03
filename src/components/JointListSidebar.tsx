@@ -4,7 +4,6 @@ import { JointListItem } from "@/components/JointListItem";
 import { JointControl } from "@/components/JointControl";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Search, X, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
@@ -21,6 +20,8 @@ interface JointListSidebarProps {
   jointLimits: JointLimits;
   selectedJoint?: string | null;
   onJointSelect?: (jointName: string | null) => void;
+  onJointHover?: (jointName: string | null) => void;
+  hoveredJoint?: string | null;
   deletedJoints?: Set<string>;
   width?: number;
   isCollapsed?: boolean;
@@ -43,6 +44,8 @@ export const JointListSidebar = ({
   jointLimits,
   selectedJoint,
   onJointSelect,
+  onJointHover,
+  hoveredJoint,
   deletedJoints = new Set(),
   width = DEFAULT_RIGHT_SIDEBAR_WIDTH,
   isCollapsed = false,
@@ -60,12 +63,10 @@ export const JointListSidebar = ({
   onJointLinkChange,
 }: JointListSidebarProps) => {
   const jointValues = useJointStore((s) => s.jointValues);
-  const angleUnitStore = useJointStore((s) => s.angleUnit);
-  const setAngleUnitStore = useJointStore((s) => s.setAngleUnit);
 
-  // Use prop if provided, otherwise use store
-  const angleUnit = angleUnitProp ?? angleUnitStore;
-  const onAngleUnitChange = onAngleUnitChangeProp ?? setAngleUnitStore;
+  // Use prop if provided, otherwise default to "rad"
+  const angleUnit = angleUnitProp ?? "rad";
+  const onAngleUnitChange = onAngleUnitChangeProp ?? (() => {});
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -172,7 +173,7 @@ export const JointListSidebar = ({
               )}
             </div>
 
-            {/* Type Filter, Angle Unit, and Hierarchy Toggle */}
+            {/* Type Filter and Hierarchy Toggle */}
             <div className="flex items-center gap-2">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="h-7 text-xs flex-1 bg-background border-border/50">
@@ -201,16 +202,6 @@ export const JointListSidebar = ({
               >
                 <Network className="w-3.5 h-3.5" />
               </button>
-
-              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-muted/20 rounded border border-border/30 flex-shrink-0">
-                <span className="text-[10px] text-muted-foreground min-w-[24px]">rad</span>
-                <Switch
-                  checked={angleUnit === "deg"}
-                  onCheckedChange={(checked) => onAngleUnitChange(checked ? "deg" : "rad")}
-                  className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
-                />
-                <span className="text-[10px] text-muted-foreground min-w-[24px]">deg</span>
-              </div>
             </div>
           </div>
 
@@ -235,9 +226,10 @@ export const JointListSidebar = ({
                       onValueChange={() => {}} // Read-only
                       isDeleted={deletedJoints.has(jointName)}
                       isSelected={selectedJoint === jointName}
+                      isHighlighted={hoveredJoint === jointName}
                       angleUnit={angleUnit}
                       onClick={() => onJointSelect?.(jointName)}
-                      onHover={onJointSelect}
+                      onHover={onJointHover}
                     />
                   ))}
                 </div>
@@ -294,9 +286,10 @@ export const JointListSidebar = ({
                           onValueChange={() => {}} // Read-only
                           isDeleted={deletedJoints.has(joint.jointName)}
                           isSelected={selectedJoint === joint.jointName}
+                          isHighlighted={hoveredJoint === joint.jointName}
                           angleUnit={angleUnit}
                           onClick={() => onJointSelect?.(joint.jointName)}
-                          onHover={onJointSelect}
+                          onHover={onJointHover}
                         />
                       </div>
                     );
@@ -315,6 +308,15 @@ export const JointListSidebar = ({
               <span className="text-xs font-medium text-foreground">
                 {selectedJoint ? "Joint Editor" : "No Selection"}
               </span>
+              {selectedJoint && (
+                <button
+                  onClick={() => onJointSelect?.(null)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  title="Close editor"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
