@@ -104,6 +104,7 @@ const Index = () => {
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<"joints" | "recording">("joints");
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
+  const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
   const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
     filename: string;
     webkitRelativePath: string;
@@ -1258,7 +1259,7 @@ const Index = () => {
                       key={`urdf-${urdfContentVersion}`}
                       urdfFile={urdfFile}
                       initialMeshFiles={meshFiles}
-                      selectedJoint={selectedJoint}
+                      selectedJoint={hoveredJoint || selectedJoint}
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
@@ -1301,7 +1302,7 @@ const Index = () => {
                       key={`urdf-${urdfContentVersion}`}
                       urdfFile={urdfFile}
                       initialMeshFiles={meshFiles}
-                      selectedJoint={selectedJoint}
+                      selectedJoint={hoveredJoint || selectedJoint}
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
@@ -1363,7 +1364,7 @@ const Index = () => {
                       key={`urdf-${urdfContentVersion}`}
                       urdfFile={urdfFile}
                       initialMeshFiles={meshFiles}
-                      selectedJoint={selectedJoint}
+                      selectedJoint={hoveredJoint || selectedJoint}
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
@@ -1440,6 +1441,8 @@ const Index = () => {
             jointLimits={jointLimits}
             selectedJoint={selectedJoint}
             onJointSelect={setSelectedJoint}
+            hoveredJoint={hoveredJoint}
+            onJointHover={setHoveredJoint}
             deletedJoints={deletedJoints}
             width={rightSidebarWidth}
             isCollapsed={isRightSidebarCollapsed}
