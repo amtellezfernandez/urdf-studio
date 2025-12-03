@@ -1,12 +1,14 @@
 import type React from "react";
 import { useState, useMemo } from "react";
 import { JointListItem } from "@/components/JointListItem";
+import { JointControl } from "@/components/JointControl";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Search, X, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
+import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
 import { parseJointHierarchy } from "@/urdf_corrections/parseJointHierarchy";
 
@@ -25,6 +27,15 @@ interface JointListSidebarProps {
   angleUnit?: "rad" | "deg";
   onAngleUnitChange?: (unit: "rad" | "deg") => void;
   urdfContent?: string;
+  jointAxes?: JointAxisMap;
+  originalJointAxes?: JointAxisMap;
+  onJointChange?: (jointName: string, value: number) => void;
+  onJointAxisChange?: (jointName: string, axis: [number, number, number]) => void;
+  onResetAxis?: (jointName: string) => void;
+  onJointTypeChange?: (jointName: string, jointType: string, lowerLimit?: number, upperLimit?: number) => void;
+  onJointNameChange?: (oldName: string, newName: string) => void;
+  onDeleteJoint?: (jointName: string) => void;
+  onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
 }
 
 export const JointListSidebar = ({
@@ -38,6 +49,15 @@ export const JointListSidebar = ({
   angleUnit: angleUnitProp,
   onAngleUnitChange: onAngleUnitChangeProp,
   urdfContent,
+  jointAxes = {},
+  originalJointAxes = {},
+  onJointChange,
+  onJointAxisChange,
+  onResetAxis,
+  onJointTypeChange,
+  onJointNameChange,
+  onDeleteJoint,
+  onJointLinkChange,
 }: JointListSidebarProps) => {
   const jointValues = useJointStore((s) => s.jointValues);
   const angleUnitStore = useJointStore((s) => s.angleUnit);
@@ -287,10 +307,50 @@ export const JointListSidebar = ({
           </div>
         </div>
 
-        {/* Bottom Section: Empty for now */}
+        {/* Bottom Section: Joint Editor */}
         <div className="flex flex-col min-h-0 border border-border/30 rounded-sm bg-background overflow-hidden">
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground/50">
-            {/* Empty section - ready for future content */}
+          {/* Header */}
+          <div className="flex-shrink-0 px-3 py-2 border-b border-border/20 bg-muted/5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-foreground">
+                {selectedJoint ? "Joint Editor" : "No Selection"}
+              </span>
+            </div>
+          </div>
+
+          {/* Editor Content */}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+            {selectedJoint ? (
+              <div className="p-2">
+                <JointControl
+                  jointName={selectedJoint}
+                  jointInfo={jointLimits[selectedJoint]}
+                  jointAxis={jointAxes[selectedJoint]}
+                  originalAxis={originalJointAxes[selectedJoint]}
+                  currentValue={jointValues[selectedJoint] ?? 0}
+                  onValueChange={(value) => onJointChange?.(selectedJoint, value)}
+                  onAxisChange={onJointAxisChange}
+                  onResetAxis={onResetAxis}
+                  onDeleteJoint={onDeleteJoint}
+                  isDeleted={deletedJoints.has(selectedJoint)}
+                  angleUnit={angleUnit}
+                  onHover={onJointSelect}
+                  urdfContent={urdfContent}
+                  isHighlighted={true}
+                  onLinkChange={onJointLinkChange}
+                  onTypeChange={onJointTypeChange ? (newType, lowerLimit, upperLimit) => {
+                    onJointTypeChange(selectedJoint, newType, lowerLimit, upperLimit);
+                  } : undefined}
+                  onNameChange={onJointNameChange}
+                  alwaysExpanded={true}
+                  hideValueDisplay={false}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-xs text-muted-foreground/50 p-4 text-center">
+                Select a joint to edit its properties
+              </div>
+            )}
           </div>
         </div>
       </div>

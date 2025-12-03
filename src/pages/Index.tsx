@@ -505,6 +505,72 @@ const Index = () => {
     toast.success(`Renamed joint "${oldName}" to "${newName}"`);
   }, [vizUrdfContent, updateUrdfFile, selectedJoint]);
 
+  const handleJointLinkChange = useCallback((jointName: string, parentLink: string, childLink: string): void => {
+    if (!vizUrdfContent) {
+      toast.error("No URDF content available");
+      return;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(vizUrdfContent, "text/xml");
+
+      const parserError = xmlDoc.querySelector("parsererror");
+      if (parserError) {
+        toast.error("Invalid URDF XML");
+        return;
+      }
+
+      const joint = xmlDoc.querySelector(`joint[name="${jointName}"]`);
+      if (!joint) {
+        toast.error(`Joint "${jointName}" not found`);
+        return;
+      }
+
+      // Preserve joint attributes
+      const preservedName = joint.getAttribute("name");
+      const preservedType = joint.getAttribute("type");
+
+      // Update or create parent element
+      let parentElement = joint.querySelector("parent");
+      if (!parentElement) {
+        parentElement = xmlDoc.createElement("parent");
+        joint.insertBefore(parentElement, joint.firstChild);
+      }
+      parentElement.setAttribute("link", parentLink);
+
+      // Update or create child element
+      let childElement = joint.querySelector("child");
+      if (!childElement) {
+        childElement = xmlDoc.createElement("child");
+        if (parentElement.nextSibling) {
+          joint.insertBefore(childElement, parentElement.nextSibling);
+        } else {
+          joint.appendChild(childElement);
+        }
+      }
+      childElement.setAttribute("link", childLink);
+
+      // Restore preserved attributes
+      if (preservedName) {
+        joint.setAttribute("name", preservedName);
+      }
+      if (preservedType) {
+        joint.setAttribute("type", preservedType);
+      }
+
+      // Serialize back
+      const serializer = new XMLSerializer();
+      const newContent = serializer.serializeToString(xmlDoc);
+
+      updateUrdfFile(newContent);
+      toast.success(`Updated links for joint "${jointName}"`);
+    } catch (error) {
+      console.error("Error updating joint links:", error);
+      toast.error("Failed to update joint links");
+    }
+  }, [vizUrdfContent, updateUrdfFile]);
+
   const handleResetRotation = useCallback((): void => {
     if (!originalVizUrdfContent) {
       toast.error("No original URDF content found");
@@ -1350,6 +1416,15 @@ const Index = () => {
             width={rightSidebarWidth}
             isCollapsed={isRightSidebarCollapsed}
             urdfContent={vizUrdfContent}
+            jointAxes={jointAxes}
+            originalJointAxes={originalJointAxes}
+            onJointChange={handleJointChange}
+            onJointAxisChange={handleJointAxisChange}
+            onResetAxis={handleResetAxis}
+            onJointTypeChange={handleJointTypeChange}
+            onJointNameChange={handleJointNameChange}
+            onDeleteJoint={handleDeleteJoint}
+            onJointLinkChange={handleJointLinkChange}
           />
 
           {/* Right Sidebar Resizer */}
