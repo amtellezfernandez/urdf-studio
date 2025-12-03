@@ -12,10 +12,10 @@ import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import jointColors from "@/joint_colors.json";
 import { AxisGizmo3D } from "@/components/AxisGizmo3D";
 import { CustomAxesHelper } from "@/components/CustomAxesHelper";
-import { NavigationGizmo } from "@/components/NavigationGizmo";
 import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
+import { cn } from "@/lib/utils";
 
 type GPUMode = "high" | "low";
 
@@ -2063,7 +2063,7 @@ export const Viewer3D = ({
 
       {/* 3D Viewer Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Joint Types Legend - Top Left Overlay */}
+        {/* Joint Types Panel with Selected Joint - Blender Style */}
         {Object.keys(jointLimits || {}).length > 0 && (() => {
           // Count joints by type
           const totalJoints = Object.keys(jointLimits || {}).length;
@@ -2085,64 +2085,81 @@ export const Viewer3D = ({
             return aIndex - bIndex;
           });
 
+          // Helper to convert hex to rgba
+          const hexToRgba = (hex: string, alpha: number) => {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+          };
+
           return (
-            <div className="absolute top-6 left-6 z-10 flex flex-col gap-3 p-4 bg-background/95 backdrop-blur-xl rounded-lg shadow-lg">
-              <div className="text-xs font-semibold text-foreground tracking-tight">
-                Joint Types ({totalJoints})
+            <div className="absolute top-6 left-6 z-10 w-56 bg-background/95 backdrop-blur-xl rounded-lg shadow-lg border border-border/50">
+              {/* Header */}
+              <div className="px-3 py-2 border-b border-border/30">
+                <div className="text-xs font-semibold text-foreground tracking-tight">
+                  Joint Types ({totalJoints})
+                </div>
               </div>
-              <div className="flex flex-col gap-2.5">
-                {existingTypes.map((type) => {
-                  const count = typeCounts[type];
-                  const color = (jointColors as Record<string, string>)[type] || jointColors.light_gray;
-                  const isFixed = type === "fixed";
-                  
-                  // Convert hex to rgba for opacity
-                  const hexToRgba = (hex: string, alpha: number) => {
-                    const r = parseInt(hex.slice(1, 3), 16);
-                    const g = parseInt(hex.slice(3, 5), 16);
-                    const b = parseInt(hex.slice(5, 7), 16);
-                    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                  };
-                  
-                  return (
-                    <div key={type} className="flex items-center gap-2.5">
-                      <div 
-                        className="w-3 h-3 rounded border-2"
-                        style={{ 
-                          borderColor: color,
-                          backgroundColor: isFixed ? color : hexToRgba(color, 0.3)
+
+              {/* Content */}
+              <div className="p-3 space-y-3">
+                {/* Selected Joint Section */}
+                <div className="pb-2 border-b border-border/20">
+                  <div className="text-[10px] font-semibold text-muted-foreground tracking-tight mb-1 uppercase">
+                    Selected Joint
+                  </div>
+                  <div className="text-xs text-foreground font-medium">
+                    {selectedJoint || "None"}
+                  </div>
+                </div>
+
+                {/* Joint Types List */}
+                <div className="space-y-1">
+                  {existingTypes.map((type) => {
+                    const count = typeCounts[type];
+                    const color = (jointColors as Record<string, string>)[type] || jointColors.light_gray;
+                    const isFixed = type === "fixed";
+                    const typeJoints = Object.entries(jointLimits || {})
+                      .filter(([_, info]) => (info?.type || "continuous") === type)
+                      .map(([name]) => name);
+                    const isSelected = selectedJoint && typeJoints.includes(selectedJoint);
+                    
+                    return (
+                      <div
+                        key={type}
+                        className={cn(
+                          "flex items-center gap-2 px-1.5 py-1 rounded-sm cursor-pointer hover:bg-muted/20 transition-colors",
+                          isSelected && "bg-primary/10"
+                        )}
+                        onClick={() => {
+                          if (typeJoints.length > 0 && onJointSelect) {
+                            onJointSelect(typeJoints[0]);
+                          }
                         }}
-                      />
-                      <span className="text-xs text-foreground">
-                        {getJointTypeLabel(type)} ({count})
-              </span>
-        </div>
-                  );
-                })}
-      </div>
+                      >
+                        <div 
+                          className="w-2.5 h-2.5 rounded-sm border-2 flex-shrink-0"
+                          style={{ 
+                            borderColor: color,
+                            backgroundColor: isFixed ? color : hexToRgba(color, 0.3)
+                          }}
+                        />
+                        <span className="text-xs text-foreground capitalize flex-1">
+                          {getJointTypeLabel(type)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          ({count})
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           );
         })()}
 
-        {/* Selected Joint Popup */}
-        {selectedJoint && (
-          <div className="absolute top-6 right-6 z-10 p-4 bg-background/95 backdrop-blur-xl rounded-lg shadow-lg">
-            <div className="text-xs font-semibold text-foreground tracking-tight mb-1.5">
-              Selected Joint
-            </div>
-            <div className="text-sm text-foreground font-medium">
-              {selectedJoint}
-            </div>
-          </div>
-        )}
-
-        {/* Blender-style Navigation Gizmo */}
-        {robot && (
-          <NavigationGizmo
-            onViewChange={setView}
-            onFitToView={fitToView}
-          />
-        )}
         <Canvas
           camera={{ position: [1.5, 1.5, 0.8], fov: 50 }}
           style={{ background: "hsl(var(--background))" }}
@@ -2252,7 +2269,7 @@ export const Viewer3D = ({
           <CustomAxesHelper size={10} />
           
           {/* Blender-style 3D axis gizmo */}
-          <AxisGizmo3D />
+          <AxisGizmo3D onViewChange={setView} />
           
           <OrbitControls
             ref={controlsRef}
@@ -2275,6 +2292,7 @@ export const Viewer3D = ({
             </span>
           </div>
         )}
+
       </div>
 
     </div>

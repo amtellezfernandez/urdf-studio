@@ -1,14 +1,19 @@
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 
+interface AxisGizmo3DProps {
+  onViewChange?: (direction: 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right') => void;
+}
+
 /**
  * Blender-style 3D axis gizmo showing X (coral), Y (mint), Z (sky blue) axes
- * Positioned in the bottom-left corner of the viewport
+ * Positioned on the right side of the viewport (to the right of the lateral bar)
  * Shows the exact same orientation as axesHelper (world axes)
+ * Clicking on the balls changes the camera view
  */
-export const AxisGizmo3D = () => {
+export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
   const groupRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   
@@ -27,11 +32,11 @@ export const AxisGizmo3D = () => {
     const cameraUp = new THREE.Vector3();
     cameraUp.setFromMatrixColumn(camera.matrixWorld, 1);
     
-    // Calculate gizmo position: bottom-left corner of viewport
-    // Position it at a fixed distance from camera, offset to bottom-left
+    // Calculate gizmo position: top-right corner of viewport (where Selected Joint popup was)
+    // Position it at a fixed distance from camera, offset to top-right
     const viewDistance = 1.2; // Distance from camera (in world units)
-    const screenOffsetX = -0.65; // Left offset (negative = left)
-    const screenOffsetY = -0.4; // Down offset (negative = down)
+    const screenOffsetX = 0.65; // Right offset (positive = right)
+    const screenOffsetY = 0.4; // Top offset (positive = up)
     
     // Calculate position: start from camera, move forward, then offset
     const gizmoPosition = camera.position.clone()
@@ -46,13 +51,13 @@ export const AxisGizmo3D = () => {
     
     // Scale based on distance to camera to maintain consistent screen size
     const distanceToCamera = camera.position.distanceTo(gizmoPosition);
-    const targetScreenSize = 150; // Target size in pixels
+    const targetScreenSize = 140; // Target size in pixels (bigger)
     const fov = camera.fov * (Math.PI / 180);
     const screenHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
     const scaleFactor = (targetScreenSize / 600) * (screenHeight / 2); // 600px reference
     
-    // Apply scale with reasonable min/max bounds
-    const scale = Math.max(0.18, Math.min(0.45, scaleFactor));
+    // Apply scale with reasonable min/max bounds (bigger)
+    const scale = Math.max(0.16, Math.min(0.40, scaleFactor));
     groupRef.current.scale.setScalar(scale);
   });
 
@@ -63,12 +68,62 @@ export const AxisGizmo3D = () => {
     z: "#3464AD", // Z axis - blue (52, 100, 173)
   };
   
-  // Size parameters
-  const axisLength = 0.34;
-  const axisRadius = 0.015;
-  const arrowLength = 0.09;
+  // Size parameters (bigger)
+  const axisLength = 0.32;
+  const axisRadius = 0.016;
+  const arrowLength = 0.08;
   const arrowRadius = 0.024;
-  const labelDistance = 0.42;
+  const labelDistance = 0.40;
+  const ballRadius = 0.11;
+
+  // Memoize materials to prevent recreation on re-renders
+  const materials = useMemo(() => {
+    const xMaterial = new THREE.MeshBasicMaterial({ 
+      color: colors.x, 
+      depthTest: false, 
+      depthWrite: false 
+    });
+    const yMaterial = new THREE.MeshBasicMaterial({ 
+      color: colors.y, 
+      depthTest: false, 
+      depthWrite: false 
+    });
+    const zMaterial = new THREE.MeshBasicMaterial({ 
+      color: colors.z, 
+      depthTest: false, 
+      depthWrite: false 
+    });
+    const xTransparentMaterial = new THREE.MeshBasicMaterial({ 
+      color: colors.x, 
+      transparent: true, 
+      opacity: 0.3, 
+      depthTest: false, 
+      depthWrite: false 
+    });
+    const yTransparentMaterial = new THREE.MeshBasicMaterial({ 
+      color: colors.y, 
+      transparent: true, 
+      opacity: 0.3, 
+      depthTest: false, 
+      depthWrite: false 
+    });
+    const zTransparentMaterial = new THREE.MeshBasicMaterial({ 
+      color: colors.z, 
+      transparent: true, 
+      opacity: 0.3, 
+      depthTest: false, 
+      depthWrite: false 
+    });
+    
+    return {
+      x: xMaterial,
+      y: yMaterial,
+      z: zMaterial,
+      xTransparent: xTransparentMaterial,
+      yTransparent: yTransparentMaterial,
+      zTransparent: zTransparentMaterial,
+    };
+  }, []);
 
   // VERIFICATION: World axes alignment - MUST match axesHelper exactly
   // ===================================================================
@@ -96,77 +151,194 @@ export const AxisGizmo3D = () => {
   //   - Arrow head at end should point in +Z (same rotation)
 
   return (
-    <group ref={groupRef} renderOrder={1000}>
+    <group ref={groupRef} renderOrder={9999}>
       {/* X-axis (Coral) - Horizontal, pointing in +X direction (right) */}
       <group>
-        <mesh position={[axisLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+        <mesh position={[axisLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={materials.x}>
           <cylinderGeometry args={[axisRadius, axisRadius, axisLength, 16]} />
-          <meshBasicMaterial color={colors.x} />
         </mesh>
-        <mesh position={[axisLength, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+        <mesh position={[axisLength, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={materials.x}>
           <coneGeometry args={[arrowRadius, arrowLength, 16]} />
-          <meshBasicMaterial color={colors.x} />
         </mesh>
-        <Text
-          position={[labelDistance, 0, 0]}
-          fontSize={0.14}
-          color={colors.x}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.005}
-          outlineColor="#000000"
-          billboard
+        {/* Solid ball at positive end (with text inside) - X positive = right view */}
+        <mesh 
+          position={[labelDistance, 0, 0]} 
+          renderOrder={999}
+          material={materials.x}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onViewChange?.('right');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
         >
-          X
-        </Text>
+          <sphereGeometry args={[ballRadius, 16, 16]} />
+        </mesh>
+        {/* Transparent ball at negative end - X negative = left view */}
+        <mesh 
+          position={[-axisLength, 0, 0]}
+          material={materials.xTransparent}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onViewChange?.('left');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
+        >
+          <sphereGeometry args={[ballRadius, 16, 16]} />
+        </mesh>
+        <group renderOrder={10000}>
+          <Text
+            position={[labelDistance, 0, 0]}
+            fontSize={0.13}
+            color="#FFFFFF"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.008}
+            outlineColor="#000000"
+            billboard
+          >
+            X
+          </Text>
+        </group>
       </group>
 
       {/* Y-axis (Mint) - Horizontal, pointing in +Y direction (forward) */}
       <group>
-        <mesh position={[0, axisLength / 2, 0]}>
+        <mesh position={[0, axisLength / 2, 0]} material={materials.y}>
           <cylinderGeometry args={[axisRadius, axisRadius, axisLength, 16]} />
-          <meshBasicMaterial color={colors.y} />
         </mesh>
-        <mesh position={[0, axisLength + arrowLength / 2, 0]}>
+        <mesh position={[0, axisLength + arrowLength / 2, 0]} material={materials.y}>
           <coneGeometry args={[arrowRadius, arrowLength, 16]} />
-          <meshBasicMaterial color={colors.y} />
         </mesh>
-        <Text
-          position={[0, labelDistance, 0]}
-          fontSize={0.14}
-          color={colors.y}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.005}
-          outlineColor="#000000"
-          billboard
+        {/* Solid ball at positive end (with text inside) - Y positive = front view */}
+        <mesh 
+          position={[0, labelDistance, 0]} 
+          renderOrder={999}
+          material={materials.y}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onViewChange?.('front');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
         >
-          Y
-        </Text>
+          <sphereGeometry args={[ballRadius, 16, 16]} />
+        </mesh>
+        {/* Transparent ball at negative end - Y negative = back view */}
+        <mesh 
+          position={[0, -axisLength, 0]}
+          material={materials.yTransparent}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onViewChange?.('back');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
+        >
+          <sphereGeometry args={[ballRadius, 16, 16]} />
+        </mesh>
+        <group renderOrder={10000}>
+          <Text
+            position={[0, labelDistance, 0]}
+            fontSize={0.13}
+            color="#FFFFFF"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.008}
+            outlineColor="#000000"
+            billboard
+          >
+            Y
+          </Text>
+        </group>
       </group>
 
       {/* Z-axis (Sky Blue) - Vertical, pointing in +Z direction (up) */}
       <group>
-        <mesh position={[0, 0, axisLength / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh position={[0, 0, axisLength / 2]} rotation={[Math.PI / 2, 0, 0]} material={materials.z}>
           <cylinderGeometry args={[axisRadius, axisRadius, axisLength, 16]} />
-          <meshBasicMaterial color={colors.z} />
         </mesh>
-        <mesh position={[0, 0, axisLength + arrowLength / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh position={[0, 0, axisLength + arrowLength / 2]} rotation={[Math.PI / 2, 0, 0]} material={materials.z}>
           <coneGeometry args={[arrowRadius, arrowLength, 16]} />
-          <meshBasicMaterial color={colors.z} />
         </mesh>
-        <Text
-          position={[0, 0, labelDistance]}
-          fontSize={0.14}
-          color={colors.z}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.005}
-          outlineColor="#000000"
-          billboard
+        {/* Solid ball at positive end (with text inside) - Z positive = top view */}
+        <mesh 
+          position={[0, 0, labelDistance]} 
+          renderOrder={999}
+          material={materials.z}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onViewChange?.('top');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
         >
-          Z
-        </Text>
+          <sphereGeometry args={[ballRadius, 16, 16]} />
+        </mesh>
+        {/* Transparent ball at negative end - Z negative = bottom view */}
+        <mesh 
+          position={[0, 0, -axisLength]}
+          material={materials.zTransparent}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onViewChange?.('bottom');
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
+        >
+          <sphereGeometry args={[ballRadius, 16, 16]} />
+        </mesh>
+        <group renderOrder={10000}>
+          <Text
+            position={[0, 0, labelDistance]}
+            fontSize={0.13}
+            color="#FFFFFF"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.008}
+            outlineColor="#000000"
+            billboard
+          >
+            Z
+          </Text>
+        </group>
       </group>
     </group>
   );
