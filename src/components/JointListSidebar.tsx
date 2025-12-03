@@ -323,20 +323,28 @@ export const JointListSidebar = ({
           {/* Editor Content */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
             {selectedJoint ? (
-              <div className="p-2">
+              <div 
+                className="p-2"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <JointControl
                   jointName={selectedJoint}
                   jointInfo={jointLimits[selectedJoint]}
                   jointAxis={jointAxes[selectedJoint]}
                   originalAxis={originalJointAxes[selectedJoint]}
                   currentValue={jointValues[selectedJoint] ?? 0}
-                  onValueChange={(value) => onJointChange?.(selectedJoint, value)}
+                  onValueChange={(value) => {
+                    if (onJointChange && selectedJoint) {
+                      onJointChange(selectedJoint, value);
+                    }
+                  }}
                   onAxisChange={onJointAxisChange}
                   onResetAxis={onResetAxis}
                   onDeleteJoint={onDeleteJoint}
                   isDeleted={deletedJoints.has(selectedJoint)}
                   angleUnit={angleUnit}
-                  onHover={onJointSelect}
+                  onHover={onJointHover}
                   urdfContent={urdfContent}
                   isHighlighted={true}
                   onLinkChange={onJointLinkChange}

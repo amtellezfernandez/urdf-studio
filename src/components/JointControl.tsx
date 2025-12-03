@@ -641,11 +641,23 @@ export const JointControl = ({
     [applyValueChange, currentValue, max, min]
   );
 
+  const handleMouseLeave = useCallback((e: React.MouseEvent) => {
+    // Only clear hover if mouse actually leaves the component
+    // Don't clear if moving to a child element (like Select dropdown)
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (relatedTarget && e.currentTarget.contains(relatedTarget)) {
+      return; // Mouse moved to a child element, don't clear hover
+    }
+    onHover?.(null);
+  }, [onHover]);
+
   return (
     <div 
       className="px-1.5 py-1"
       onMouseEnter={() => onHover?.(jointName)}
-      onMouseLeave={() => onHover?.(null)}
+      onMouseLeave={handleMouseLeave}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Blender-style collapsible header - Minimalistic */}
       <Collapsible open={isExpanded} onOpenChange={alwaysExpanded ? undefined : setIsExpanded}>
@@ -873,7 +885,11 @@ export const JointControl = ({
                   onTypeChange(newType, lower, upper);
                 }}
               >
-                <SelectTrigger className="h-7 text-xs">
+                <SelectTrigger 
+                  className="h-7 text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
@@ -899,7 +915,11 @@ export const JointControl = ({
                     }
                   }}
                 >
-                  <SelectTrigger className="h-7 text-xs truncate text-left">
+                  <SelectTrigger 
+                    className="h-7 text-xs truncate text-left"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
                     <SelectValue placeholder="Select parent link" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
@@ -920,7 +940,11 @@ export const JointControl = ({
                     }
                   }}
                 >
-                  <SelectTrigger className="h-7 text-xs truncate text-left">
+                  <SelectTrigger 
+                    className="h-7 text-xs truncate text-left"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
                     <SelectValue placeholder="Select child link" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
@@ -941,7 +965,11 @@ export const JointControl = ({
               <BlenderPropertyRow label="Axis">
                 <div className="flex items-center gap-1.5">
                   <Select value={selectedPreset} onValueChange={handleAxisPresetChange}>
-                    <SelectTrigger className="h-7 text-xs flex-1">
+                    <SelectTrigger 
+                      className="h-7 text-xs flex-1"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
                       <SelectValue>
                         {selectedPreset !== "Custom" && AXIS_PRESETS[selectedPreset] ? (
                           <div className="flex items-center gap-1.5">
