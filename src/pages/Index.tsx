@@ -112,18 +112,6 @@ const Index = () => {
     registeredPaths: string[];
   }>>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
-  const [datasetActions, setDatasetActions] = useState<{
-    loadFromLocal: () => void;
-    loadFromHuggingFace: () => void;
-    exportToLocal: () => void;
-    exportToHuggingFace: () => void;
-    openRerunViewer: () => void;
-    isImportingFromHF: boolean;
-    isExportingDataset: boolean;
-    isUploadingToHF: boolean;
-    hasEpisodes: boolean;
-    isRerunViewerOpen: boolean;
-  } | null>(null);
 
   const createUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
@@ -1284,60 +1272,21 @@ const Index = () => {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Add
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.loadFromLocal()}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        Local Files...
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.loadFromHuggingFace()}
-                        disabled={datasetActions?.isImportingFromHF}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        {datasetActions?.isImportingFromHF ? "Loading..." : "Hugging Face..."}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Export
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.exportToLocal()}
-                        disabled={!datasetActions?.hasEpisodes || datasetActions?.isExportingDataset}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        {datasetActions?.isExportingDataset ? "Building..." : "Local Folder..."}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.exportToHuggingFace()}
-                        disabled={!datasetActions?.hasEpisodes || datasetActions?.isUploadingToHF}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        {datasetActions?.isUploadingToHF ? "Uploading..." : "Hugging Face..."}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
                   <DropdownMenuItem
-                    onClick={() => datasetActions?.openRerunViewer()}
-                    disabled={!datasetActions?.hasEpisodes}
-                    className={cn(
-                      "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                      datasetActions?.isRerunViewerOpen && "bg-[#3d3d3d] text-white"
-                    )}
+                    onClick={() => {
+                      // Add functionality - empty for now
+                    }}
+                    className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                   >
-                    Rerun Viewer
+                    Add
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      // Export functionality - empty for now
+                    }}
+                    className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                  >
+                    Export
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1391,7 +1340,6 @@ const Index = () => {
               // Receive save handler from Sidebar and store it
               setEpisodeSaveHandler(() => handler);
             }}
-            onDatasetActionsReady={setDatasetActions}
           />
 
           {!isSidebarCollapsed && (
@@ -1698,7 +1646,7 @@ const Index = () => {
           </div>
           
           {/* Content */}
-          <div className="overflow-y-auto flex-1 p-2 space-y-1 minimal-scrollbar">
+          <div className="overflow-y-auto flex-1 p-2 space-y-1 blender-scrollbar">
             {unmatchedURDFRefs.length > 0 && (
               <div className="mb-2 p-1.5 bg-[#2a1e1e] border border-[#4a2d2d] rounded text-xs">
                 <div className="flex items-center gap-1 mb-1">
@@ -1743,15 +1691,16 @@ const Index = () => {
         </div>
       )}
       {/* Export Dialog */}
-      <ExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        urdfContent={getExportUrdfContent()}
-        originalUrdfContent={originalUrdfContent}
-        meshFiles={meshFiles}
-        githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
-        robotName={robotName}
-      />
+      {showUrdfEditor && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          urdfContent={getExportUrdfContent()}
+          meshFiles={meshFiles}
+          githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+          robotName={robotName}
+        />
+      )}
     </div>
   );
 };

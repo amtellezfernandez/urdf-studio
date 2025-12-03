@@ -506,7 +506,7 @@ export const URDFComparison = ({
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden">
+                <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden [&>[data-radix-scroll-area-scrollbar]]:w-[2px] [&>[data-radix-scroll-area-scrollbar]]:bg-transparent [&>[data-radix-scroll-area-scrollbar]]:p-0 [&>[data-radix-scroll-area-thumb]]:bg-[hsl(0,0%,30%)] [&>[data-radix-scroll-area-thumb]]:rounded-full [&>[data-radix-scroll-area-thumb]]:hover:bg-[hsl(0,0%,40%)]">
                   <div className="min-w-0 p-3 bg-muted/20">
                     <URDFSyntaxHighlighter xml={getOriginalContent()} className="text-xs leading-relaxed" />
                   </div>
@@ -675,7 +675,7 @@ export const URDFComparison = ({
                     />
                   </div>
                 ) : (
-                  <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden">
+                  <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden [&>[data-radix-scroll-area-scrollbar]]:w-[2px] [&>[data-radix-scroll-area-scrollbar]]:bg-transparent [&>[data-radix-scroll-area-scrollbar]]:p-0 [&>[data-radix-scroll-area-thumb]]:bg-[hsl(0,0%,30%)] [&>[data-radix-scroll-area-thumb]]:rounded-full [&>[data-radix-scroll-area-thumb]]:hover:bg-[hsl(0,0%,40%)]">
                     <div className="min-w-0 p-3 bg-muted/20">
                       <URDFSyntaxHighlighter xml={getModifiedContent()} className="text-xs leading-relaxed" />
                     </div>

@@ -689,7 +689,7 @@ export const ExportDialog = ({
         </div>
 
         {/* Content - Compact Blender Style */}
-        <div className="p-2 space-y-1 overflow-y-auto flex-1 minimal-scrollbar">
+        <div className="p-2 space-y-1 overflow-y-auto flex-1 blender-scrollbar">
           {/* Robot File Name Input */}
           <BlenderPanel title="Robot File Name" defaultOpen={true}>
             {originalUrdfContent && (
