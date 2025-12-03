@@ -31,7 +31,6 @@ interface HierarchyTreeViewProps {
   onJointHover?: (jointName: string | null) => void;
   onLinkSelect?: (linkName: string | null) => void;
   selectedLink?: string | null;
-  searchQuery?: string;
 }
 
 const HierarchyTreeView = ({
@@ -46,7 +45,6 @@ const HierarchyTreeView = ({
   onJointHover,
   onLinkSelect,
   selectedLink,
-  searchQuery = "",
 }: HierarchyTreeViewProps) => {
   if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
     return (
@@ -56,29 +54,7 @@ const HierarchyTreeView = ({
     );
   }
 
-  const query = searchQuery?.trim().toLowerCase() || "";
-  
-  // Build set of links that should be shown
-  const linksToShow = new Set<string>();
-  hierarchyTree.filteredJoints.forEach(joint => {
-    linksToShow.add(joint.parentLink);
-    linksToShow.add(joint.childLink);
-  });
-
   const renderLinkNode = (linkName: string, depth: number = 0, visitedLinks: Set<string> = new Set()): React.ReactNode => {
-    // If searching, only show links that are in the filtered set or match the search
-    if (query) {
-      const linkMatches = linkName.toLowerCase().includes(query);
-      const hasMatchingJoints = hierarchyTree.linkToJoints.has(linkName) && 
-                                 hierarchyTree.linkToJoints.get(linkName)!.some(j => 
-                                   hierarchyTree.filteredJoints.includes(j)
-                                 );
-      const isChildOfMatchingJoint = hierarchyTree.filteredJoints.some(j => j.childLink === linkName);
-      
-      if (!linkMatches && !hasMatchingJoints && !isChildOfMatchingJoint) {
-        return null;
-      }
-    }
     if (visitedLinks.has(linkName)) {
       // Prevent infinite loops
       return null;
@@ -95,8 +71,7 @@ const HierarchyTreeView = ({
               "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
               selectedLink === linkName && "bg-primary/10"
             )}
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent activating joints
+            onClick={() => {
               onLinkSelect?.(linkName);
               onJointSelect?.(null); // Clear joint selection when selecting link
             }}
@@ -141,8 +116,7 @@ const HierarchyTreeView = ({
               "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
               selectedLink === linkName && "bg-primary/10"
             )}
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent activating joints
+            onClick={() => {
               onLinkSelect?.(linkName);
               onJointSelect?.(null); // Clear joint selection when selecting link
             }}
@@ -184,23 +158,21 @@ const HierarchyTreeView = ({
                     }}
                   />
                 </>
-                <div onClick={(e) => e.stopPropagation()} style={{ display: 'contents' }}>
-                  <JointListItem
-                    jointName={joint.jointName}
-                    jointInfo={jointLimits[joint.jointName]}
-                    currentValue={jointValues[joint.jointName] ?? 0}
-                    onValueChange={() => {}} // Read-only
-                    isDeleted={deletedJoints.has(joint.jointName)}
-                    isSelected={selectedJoint === joint.jointName}
-                    isHighlighted={hoveredJoint === joint.jointName}
-                    angleUnit={angleUnit}
-                    onClick={() => {
-                      onJointSelect?.(joint.jointName);
-                      onLinkSelect?.(null); // Clear link selection when selecting joint
-                    }}
-                    onHover={undefined} // Disable hover activation in hierarchy view
-                  />
-                </div>
+                <JointListItem
+                  jointName={joint.jointName}
+                  jointInfo={jointLimits[joint.jointName]}
+                  currentValue={jointValues[joint.jointName] ?? 0}
+                  onValueChange={() => {}} // Read-only
+                  isDeleted={deletedJoints.has(joint.jointName)}
+                  isSelected={selectedJoint === joint.jointName}
+                  isHighlighted={hoveredJoint === joint.jointName}
+                  angleUnit={angleUnit}
+                      onClick={() => {
+                        onJointSelect?.(joint.jointName);
+                        onLinkSelect?.(null); // Clear link selection when selecting joint
+                      }}
+                      onHover={undefined} // Disable hover activation in hierarchy view
+                />
               </div>
               {/* Recursively render child link */}
               {renderLinkNode(joint.childLink, depth + 2, new Set(visitedLinks))}
@@ -382,100 +354,47 @@ export const JointListSidebar = ({
     const linkToJoints = new Map<string, JointHierarchyNode[]>();
     const processedLinks = new Set<string>();
     const rootLinks = new Set<string>();
-    const query = searchQuery.trim().toLowerCase();
 
-    // Get all links from joints
-    const allLinksInHierarchy = new Set<string>();
-    jointHierarchy.orderedJoints.forEach(joint => {
-      allLinksInHierarchy.add(joint.parentLink);
-      allLinksInHierarchy.add(joint.childLink);
-    });
-
-    // Filter joints and links by search query
-    // If search is empty, show all. Otherwise, show if joint OR any of its links match
+    // Get filtered joints
     const filteredJoints = jointHierarchy.orderedJoints.filter(joint => {
-      if (!query) return true;
-      
-      const jointMatches = joint.jointName.toLowerCase().includes(query);
-      const parentLinkMatches = joint.parentLink.toLowerCase().includes(query);
-      const childLinkMatches = joint.childLink.toLowerCase().includes(query);
-      
-      return jointMatches || parentLinkMatches || childLinkMatches;
+      const jointType = jointLimits[joint.jointName]?.type || joint.type;
+      const matchesType = typeFilter === "all" || jointType === typeFilter;
+      const matchesSearch = !searchQuery.trim() || joint.jointName.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesType && matchesSearch;
     });
 
-    // Build link to joints mapping - include links that match search even if their joints don't
-    const linksToShow = new Set<string>();
-    
-    // Add links from filtered joints
+    // Build link to joints mapping
     filteredJoints.forEach(joint => {
-      linksToShow.add(joint.parentLink);
-      linksToShow.add(joint.childLink);
+      if (!linkToJoints.has(joint.parentLink)) {
+        linkToJoints.set(joint.parentLink, []);
+      }
+      linkToJoints.get(joint.parentLink)!.push(joint);
+      processedLinks.add(joint.childLink);
     });
 
-    // Also add links that match the search query directly
-    if (query) {
-      allLinksInHierarchy.forEach(linkName => {
-        if (linkName.toLowerCase().includes(query)) {
-          linksToShow.add(linkName);
-          // Include joints connected to this link
-          jointHierarchy.orderedJoints.forEach(joint => {
-            if (joint.parentLink === linkName || joint.childLink === linkName) {
-              linksToShow.add(joint.parentLink);
-              linksToShow.add(joint.childLink);
-            }
-          });
-        }
-      });
-    } else {
-      // If no search, show all links
-      allLinksInHierarchy.forEach(link => linksToShow.add(link));
-    }
-
-    // Build link to joints mapping only for links we want to show
+    // Find root links (links that are not child links of any filtered joint)
     filteredJoints.forEach(joint => {
-      if (linksToShow.has(joint.parentLink)) {
-        if (!linkToJoints.has(joint.parentLink)) {
-          linkToJoints.set(joint.parentLink, []);
-        }
-        linkToJoints.get(joint.parentLink)!.push(joint);
-        processedLinks.add(joint.childLink);
+      if (!processedLinks.has(joint.parentLink)) {
+        rootLinks.add(joint.parentLink);
       }
     });
 
-    // Find root links (links that are not child links of any filtered joint, or match search)
-    if (query) {
-      // For search mode, find root links that either:
-      // 1. Are not child links of any joint, OR
-      // 2. Match the search query
-      linksToShow.forEach(linkName => {
-        const isChildLink = jointHierarchy.orderedJoints.some(j => j.childLink === linkName);
-        const matchesSearch = linkName.toLowerCase().includes(query);
-        if (!isChildLink || matchesSearch) {
-          rootLinks.add(linkName);
-        }
-      });
-    } else {
-      // No search - find actual root links
-      filteredJoints.forEach(joint => {
-        if (!processedLinks.has(joint.parentLink)) {
-          rootLinks.add(joint.parentLink);
-        }
-      });
-    }
-
     return { linkToJoints, rootLinks: Array.from(rootLinks), filteredJoints };
-  }, [jointHierarchy, viewMode, searchQuery]);
+  }, [jointHierarchy, viewMode, typeFilter, searchQuery, jointLimits]);
 
-  // Filter hierarchical joints (for backward compatibility - only by search, no type filter)
+  // Filter hierarchical joints (for backward compatibility)
   const filteredHierarchyJoints = useMemo(() => {
     if (!jointHierarchy) return [];
 
-    // Get all joints in URDF order, filtered only by search query
+    // Get all joints in URDF order, filtered
     return jointHierarchy.orderedJoints.filter(joint => {
+      // Use type from jointLimits if available (updates immediately), fallback to hierarchy type
+      const jointType = jointLimits[joint.jointName]?.type || joint.type;
+      const matchesType = typeFilter === "all" || jointType === typeFilter;
       const matchesSearch = !searchQuery.trim() || joint.jointName.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
+      return matchesType && matchesSearch;
     });
-  }, [jointHierarchy, searchQuery]);
+  }, [jointHierarchy, typeFilter, searchQuery, jointLimits]);
 
   if (isCollapsed) {
     return null;
@@ -537,68 +456,54 @@ export const JointListSidebar = ({
           </div>
 
           {/* Filters and Controls */}
-          <div className="flex-shrink-0 p-1.5 space-y-1.5 border-b border-border/20 bg-background">
+          <div className="flex-shrink-0 p-2 space-y-2 border-b border-border/20 bg-background">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <Input
                 type="text"
-                placeholder={
-                  viewMode === "links" 
-                    ? "Search links..." 
-                    : viewMode === "hierarchy"
-                    ? "Search joints & links..."
-                    : "Search joints..."
-                }
+                placeholder={viewMode === "links" ? "Search links..." : "Search joints..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-6 pl-6 pr-6 text-[10px] bg-background border-border/50"
+                className="h-7 pl-7 pr-7 text-xs bg-background border-border/50"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
             {/* Type Filter - only show for flat joint view (not hierarchy or links) */}
             {viewMode === "flat" && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="h-6 text-[10px] flex-1 bg-background border-border/50">
+                  <SelectTrigger className="h-7 text-xs flex-1 bg-background border-border/50">
                     <SelectValue placeholder="All types" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
-                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    <SelectItem value="all" className="text-xs">All</SelectItem>
                     {jointTypes.map(type => (
-                      <SelectItem key={type} value={type} className="text-[10px] capitalize">
+                      <SelectItem key={type} value={type} className="text-xs capitalize">
                         {type}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                <span className="text-[9px] text-muted-foreground flex-shrink-0">
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">
                   {filteredJoints.length} of {availableJoints.length}
                 </span>
               </div>
             )}
             {/* Links count - only show for links view */}
             {viewMode === "links" && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-muted-foreground flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">
                   {filteredLinks.length} of {allLinks.length}
-                </span>
-              </div>
-            )}
-            {/* Hierarchy count - show for hierarchy view */}
-            {viewMode === "hierarchy" && hierarchyTree && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-muted-foreground flex-shrink-0">
-                  {hierarchyTree.filteredJoints.length} joints, {hierarchyTree.rootLinks.length} root links
                 </span>
               </div>
             )}
@@ -670,8 +575,8 @@ export const JointListSidebar = ({
               // Hierarchical view
               filteredHierarchyJoints.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-                  {searchQuery
-                    ? "No joints match the search"
+                  {searchQuery || typeFilter !== "all"
+                    ? "No joints match the filters"
                     : "No joints available"}
                 </div>
               ) : (
@@ -689,7 +594,6 @@ export const JointListSidebar = ({
                     setSelectedLink(linkName);
                   }}
                   selectedLink={selectedLink}
-                  searchQuery={searchQuery}
                 />
               )
             )}

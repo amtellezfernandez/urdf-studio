@@ -89,6 +89,18 @@ interface SidebarProps {
   onViewerSplitViewChange?: (splitView: boolean) => void;
   onViewerEpisodeChange?: (episode: Episode | null) => void;
   onViewerOpenChange?: (open: boolean) => void;
+  onDatasetActionsReady?: (actions: {
+    loadFromLocal: () => void;
+    loadFromHuggingFace: () => void;
+    exportToLocal: () => void;
+    exportToHuggingFace: () => void;
+    openRerunViewer: () => void;
+    isImportingFromHF: boolean;
+    isExportingDataset: boolean;
+    isUploadingToHF: boolean;
+    hasEpisodes: boolean;
+    isRerunViewerOpen: boolean;
+  }) => void;
 }
 
 interface RecordedFrame {
@@ -808,6 +820,7 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
+  onDatasetActionsReady,
 }: SidebarProps) => {
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
 
@@ -3016,6 +3029,43 @@ export const Sidebar = ({
     setEpisodes,
   ]);
 
+  // Expose dataset actions to parent component
+  useEffect(() => {
+    if (onDatasetActionsReady) {
+      onDatasetActionsReady({
+        loadFromLocal: () => {
+          document.getElementById("motion-upload-episodes")?.click();
+        },
+        loadFromHuggingFace: loadEpisodesFromHuggingFaceDataset,
+        exportToLocal: exportDatasetToLeRobotFormat,
+        exportToHuggingFace: uploadEpisodesToHuggingFace,
+        openRerunViewer: () => {
+          const activeIndex = currentPlayingEpisodeIndex ?? 0;
+          if (episodes.length > 0 && episodes[activeIndex]) {
+            setRerunViewerModalEpisode(episodes[activeIndex]);
+            setIsRerunViewerModalOpen(true);
+          }
+        },
+        isImportingFromHF: isImportingFromHFDataset,
+        isExportingDataset,
+        isUploadingToHF,
+        hasEpisodes: episodes.length > 0,
+        isRerunViewerOpen: isRerunViewerModalOpen,
+      });
+    }
+  }, [
+    onDatasetActionsReady,
+    loadEpisodesFromHuggingFaceDataset,
+    exportDatasetToLeRobotFormat,
+    uploadEpisodesToHuggingFace,
+    isImportingFromHFDataset,
+    isExportingDataset,
+    isUploadingToHF,
+    episodes.length,
+    currentPlayingEpisodeIndex,
+    isRerunViewerModalOpen,
+  ]);
+
   const deleteEpisode = useCallback((episodeId: string) => {
     // Block robot movement during episode deletion
     setIsAnimating(true);
@@ -3733,104 +3783,23 @@ export const Sidebar = ({
                 />
               </div>
 
-              {/* Add Menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="px-2 py-1 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors">
-                    Add
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48">
-                  <input
-                    type="file"
-                    id="motion-upload-episodes"
-                    accept=".json,.csv,.pos"
-                    multiple
-                    {...({
-                      webkitdirectory: "",
-                      directory: "",
-                      mozdirectory: "",
-                    } as React.InputHTMLAttributes<HTMLInputElement>)}
-                    onChange={(e) => {
-                      void handleFileUpload(e.target.files);
-                      e.target.value = "";
-                    }}
-                    className="hidden"
-                  />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      document.getElementById("motion-upload-episodes")?.click();
-                    }}
-                    className="text-xs cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <FolderOpen className="w-3 h-3" />
-                      <span>Local Files...</span>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      void loadEpisodesFromHuggingFaceDataset();
-                    }}
-                    disabled={isImportingFromHFDataset}
-                    className="text-xs"
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <CloudDownload className="w-3 h-3" />
-                      <span>{isImportingFromHFDataset ? "Loading..." : "Hugging Face..."}</span>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Export Menu - Always Visible */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button 
-                    className="px-2 py-1 text-xs text-foreground hover:bg-muted/50 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={episodes.length === 0 || isExportingDataset || isUploadingToHF}
-                  >
-                    Export
-                  </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        void exportDatasetToLeRobotFormat();
-                      }}
-                      disabled={episodes.length === 0 || isExportingDataset}
-                      className="text-xs"
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <FolderOpen className="w-3 h-3" />
-                        <span>{isExportingDataset ? "Building..." : "Local Folder..."}</span>
-                      </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        void uploadEpisodesToHuggingFace();
-                      }}
-                      disabled={episodes.length === 0 || isUploadingToHF}
-                      className="text-xs"
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <Send className="w-3 h-3" />
-                        <span>{isUploadingToHF ? "Uploading..." : "Hugging Face..."}</span>
-                      </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled
-                      className="text-xs"
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <GitBranch className="w-3 h-3" />
-                        <span>GitHub... (Coming Soon)</span>
-                      </div>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {/* Hidden file input for dataset loading - triggered from top menu */}
+              <input
+                type="file"
+                id="motion-upload-episodes"
+                accept=".json,.csv,.pos"
+                multiple
+                {...({
+                  webkitdirectory: "",
+                  directory: "",
+                  mozdirectory: "",
+                } as React.InputHTMLAttributes<HTMLInputElement>)}
+                onChange={(e) => {
+                  void handleFileUpload(e.target.files);
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
             </div>
 
             {/* Blender-style Timeline Controls */}
@@ -3934,31 +3903,6 @@ export const Sidebar = ({
                     x{playbackSpeed % 1 === 0 ? playbackSpeed.toFixed(0) : playbackSpeed.toFixed(2)}
                   </span>
                 </div>
-              </div>
-              
-              {/* Viewer Controls - Compact */}
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant={isRerunViewerModalOpen ? "default" : "ghost"}
-                  className="h-6 px-2 text-[10px] flex-1"
-                  onClick={() => {
-                    if (isRerunViewerModalOpen) {
-                      setIsRerunViewerModalOpen(false);
-                    } else {
-                      const activeIndex = currentPlayingEpisodeIndex ?? 0;
-                      if (episodes.length > 0 && episodes[activeIndex]) {
-                        setRerunViewerModalEpisode(episodes[activeIndex]);
-                        setIsRerunViewerModalOpen(true);
-                      }
-                    }
-                  }}
-                  disabled={episodes.length === 0}
-                  title="Rerun Viewer"
-                >
-                  <Box className="w-3 h-3 mr-1" />
-                  Rerun
-                </Button>
               </div>
             </BlenderPanel>
 

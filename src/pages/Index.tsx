@@ -112,6 +112,18 @@ const Index = () => {
     registeredPaths: string[];
   }>>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
+  const [datasetActions, setDatasetActions] = useState<{
+    loadFromLocal: () => void;
+    loadFromHuggingFace: () => void;
+    exportToLocal: () => void;
+    exportToHuggingFace: () => void;
+    openRerunViewer: () => void;
+    isImportingFromHF: boolean;
+    isExportingDataset: boolean;
+    isUploadingToHF: boolean;
+    hasEpisodes: boolean;
+    isRerunViewerOpen: boolean;
+  } | null>(null);
 
   const createUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
@@ -1264,6 +1276,72 @@ const Index = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {originalUrdfContent && vizUrdfContent && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
+                    Dataset
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Add
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.loadFromLocal()}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        Local Files...
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.loadFromHuggingFace()}
+                        disabled={datasetActions?.isImportingFromHF}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        {datasetActions?.isImportingFromHF ? "Loading..." : "Hugging Face..."}
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Export
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.exportToLocal()}
+                        disabled={!datasetActions?.hasEpisodes || datasetActions?.isExportingDataset}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        {datasetActions?.isExportingDataset ? "Building..." : "Local Folder..."}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.exportToHuggingFace()}
+                        disabled={!datasetActions?.hasEpisodes || datasetActions?.isUploadingToHF}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        {datasetActions?.isUploadingToHF ? "Uploading..." : "Hugging Face..."}
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuItem
+                    onClick={() => datasetActions?.openRerunViewer()}
+                    disabled={!datasetActions?.hasEpisodes}
+                    className={cn(
+                      "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                      datasetActions?.isRerunViewerOpen && "bg-[#3d3d3d] text-white"
+                    )}
+                  >
+                    Rerun Viewer
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           <Sidebar
@@ -1313,6 +1391,7 @@ const Index = () => {
               // Receive save handler from Sidebar and store it
               setEpisodeSaveHandler(() => handler);
             }}
+            onDatasetActionsReady={setDatasetActions}
           />
 
           {!isSidebarCollapsed && (
