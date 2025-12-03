@@ -8,21 +8,36 @@ interface BlenderPanelProps {
   defaultOpen?: boolean;
   children: React.ReactNode;
   className?: string;
+  alwaysExpanded?: boolean;
 }
 
-export const BlenderPanel = ({ title, defaultOpen = true, children, className }: BlenderPanelProps) => {
-  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+export const BlenderPanel = ({ title, defaultOpen = true, children, className, alwaysExpanded = false }: BlenderPanelProps) => {
+  const [isOpen, setIsOpen] = React.useState(alwaysExpanded || defaultOpen);
+
+  React.useEffect(() => {
+    if (alwaysExpanded) {
+      setIsOpen(true);
+    }
+  }, [alwaysExpanded]);
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className={cn("mb-0.5", className)}>
-      <CollapsibleTrigger className="w-full flex items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm">
+    <Collapsible open={isOpen} onOpenChange={alwaysExpanded ? undefined : setIsOpen} className={cn("mb-0.5", className)}>
+      <CollapsibleTrigger 
+        className={cn(
+          "w-full flex items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:bg-muted/20 transition-colors rounded-sm",
+          alwaysExpanded && "cursor-default"
+        )}
+        disabled={alwaysExpanded}
+      >
         <div className="flex items-center gap-1 min-w-0 flex-1">
-          <ChevronRight 
-            className={cn(
-              "w-2.5 h-2.5 transition-transform duration-200 flex-shrink-0",
-              isOpen && "rotate-90"
-            )} 
-          />
+          {!alwaysExpanded && (
+            <ChevronRight 
+              className={cn(
+                "w-2.5 h-2.5 transition-transform duration-200 flex-shrink-0",
+                isOpen && "rotate-90"
+              )} 
+            />
+          )}
           <div className="min-w-0 flex-1 text-left truncate">
             {typeof title === "string" ? <span className="truncate block">{title}</span> : title}
           </div>

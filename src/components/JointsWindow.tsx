@@ -83,6 +83,9 @@ export const JointsWindow = ({
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["revolute", "continuous"]));
   const [viewMode, setViewMode] = useState<"type" | "hierarchy">("type");
   const lastJointTypesRef = useRef<Record<string, string>>({});
+  const [editingJointName, setEditingJointName] = useState<string | null>(null);
+  const [editedName, setEditedName] = useState<string>("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Get all unique joint types
   const jointTypes = useMemo(() => {
@@ -235,8 +238,128 @@ export const JointsWindow = ({
 
   const hasJoints = Object.keys(jointLimits).length > 0;
 
+  // Handle name editing
+  const handleNameDoubleClick = (e: React.MouseEvent, jointName: string) => {
+    if (!onJointNameChange) return;
+    e.stopPropagation();
+    setEditingJointName(jointName);
+    setEditedName(jointName);
+  };
+
+  const handleNameSubmit = (jointName: string) => {
+    const trimmedName = editedName.trim();
+    if (trimmedName && trimmedName !== jointName && onJointNameChange) {
+      onJointNameChange(jointName, trimmedName);
+    }
+    setEditingJointName(null);
+  };
+
+  const handleNameCancel = () => {
+    setEditingJointName(null);
+    setEditedName("");
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, jointName: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleNameSubmit(jointName);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleNameCancel();
+    }
+  };
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingJointName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [editingJointName]);
+
+  // Render simple joint list item (clickable, no expandable controls)
+  const renderSimpleJointItem = (jointName: string, depth: number = 0) => {
+    const jointInfo = jointLimits[jointName];
+    const currentValue = storeJointValues[jointName] ?? 0;
+    const isSelected = selectedJoint === jointName;
+    const isDeleted = deletedJoints.has(jointName);
+    const isEditing = editingJointName === jointName;
+    const valueDisplay = angleUnit === "deg" 
+      ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
+      : `${currentValue.toFixed(2)}`;
+
+    return (
+      <div
+        key={jointName}
+        className={cn(
+          "px-1.5 py-1.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/10",
+          isSelected && "bg-primary/10 border-primary/30",
+          isDeleted && "opacity-50"
+        )}
+        style={{ paddingLeft: `${depth * 16 + 6}px` }}
+        onClick={() => !isEditing && onJointSelect?.(jointName)}
+        onMouseEnter={() => !isEditing && onJointSelect?.(jointName)}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {isEditing ? (
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onBlur={() => handleNameSubmit(jointName)}
+                onKeyDown={(e) => handleNameKeyDown(e, jointName)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "text-xs font-medium flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
+                  isDeleted
+                    ? "text-muted-foreground/50"
+                    : isSelected
+                      ? "text-primary"
+                      : "text-foreground"
+                )}
+              />
+            ) : (
+              <span
+                className={cn(
+                  "text-xs font-medium truncate cursor-text",
+                  isSelected ? "text-primary" : "text-foreground",
+                  isDeleted && "text-muted-foreground/50",
+                  onJointNameChange && "hover:text-primary/80"
+                )}
+                title={isDeleted ? "Will be deleted in exported URDF" : onJointNameChange ? "Double-click to rename" : undefined}
+                onDoubleClick={(e) => handleNameDoubleClick(e, jointName)}
+              >
+                {jointName}
+              </span>
+            )}
+            {isDeleted && !isEditing && (
+              <span className="text-[9px] text-muted-foreground/70">(deleted)</span>
+            )}
+          </div>
+          {!isEditing && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+              {valueDisplay}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render simple list for hierarchy view
+  const renderSimpleHierarchy = (): React.ReactNode => {
+    if (!jointHierarchy) return null;
+    
+    return filteredOrderedJoints.map((joint) => {
+      const depth = joint.depth ?? 0;
+      return renderSimpleJointItem(joint.jointName, depth);
+    });
+  };
+
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full h-full">
 
       {/* Global Motion Limits - Minimalistic */}
       {(onVelocityLimitEnabledChange || onRotationPlaneVisibilityChange) && (
@@ -371,8 +494,8 @@ export const JointsWindow = ({
         )}
       </div>
 
-      {/* Joints List - Minimalistic */}
-      <div className="flex-1 p-1.5 px-2">
+      {/* Joints List - Simple clickable list */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 px-2">
         {!hasJoints ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
             No joints loaded
@@ -383,24 +506,24 @@ export const JointsWindow = ({
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
         ) : viewMode === "hierarchy" ? (
-          <div className="space-y-0.5">
+          <div>
             {filteredOrderedJoints.length === 0 ? (
               <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
                 No joints found in hierarchy
                 {searchQuery && ` matching "${searchQuery}"`}
               </div>
             ) : (
-              renderFlatHierarchy()
+              renderSimpleHierarchy()
             )}
           </div>
         ) : (
-          <div className="space-y-1">
+          <div>
             {Object.entries(jointsByType).map(([type, joints]) => {
               const isExpanded = expandedTypes.has(type);
               const typeCount = joints.length;
               
               return (
-                <div key={type} className="border border-border/15 rounded-sm bg-muted/5">
+                <div key={type} className="border border-border/15 rounded-sm bg-muted/5 mb-1">
                   <button
                     onClick={() => toggleTypeExpansion(type)}
                     className="w-full flex items-center justify-between px-1.5 py-1 hover:bg-muted/20 transition-colors"
@@ -421,37 +544,9 @@ export const JointsWindow = ({
                   </button>
                   
                   {isExpanded && (
-                    <div className="border-t border-border/15 divide-y divide-border/10">
-                      {joints.map((jointName, index) => (
-                        <div key={`${jointName}-${jointLimits[jointName]?.type || 'unknown'}`} className={cn(
-                          "bg-background/30",
-                          index === 0 && "border-t-0"
-                        )}>
-                          <JointControl
-                            jointName={jointName}
-                            jointInfo={jointLimits[jointName]}
-                            jointAxis={jointAxes[jointName]}
-                            originalAxis={originalJointAxes?.[jointName]}
-                            currentValue={storeJointValues[jointName] ?? 0}
-                            onValueChange={(value) => {
-                              onJointChange(jointName, value);
-                              onJointSelect?.(jointName);
-                            }}
-                            onAxisChange={onJointAxisChange}
-                            onResetAxis={onResetAxis}
-                            onDeleteJoint={onDeleteJoint}
-                            isDeleted={deletedJoints.has(jointName)}
-                            angleUnit={angleUnit}
-                            onHover={onJointSelect}
-                            urdfContent={urdfContent}
-                            isHighlighted={selectedJoint === jointName}
-                            onLinkChange={onJointLinkChange}
-                            onTypeChange={onJointTypeChange ? (newType, lowerLimit, upperLimit) => {
-                              onJointTypeChange(jointName, newType, lowerLimit, upperLimit);
-                            } : undefined}
-                            onNameChange={onJointNameChange}
-                          />
-                        </div>
+                    <div className="border-t border-border/15">
+                      {joints.map((jointName) => (
+                        renderSimpleJointItem(jointName)
                       ))}
                     </div>
                   )}
@@ -460,6 +555,42 @@ export const JointsWindow = ({
             })}
           </div>
         )}
+      </div>
+
+      {/* Joint Editor Panel - Always visible */}
+      <div className="flex-shrink-0 border-t border-border/20 bg-muted/5">
+        <div className="p-2 max-h-[50vh] overflow-y-auto blender-scrollbar">
+          {selectedJoint && jointLimits[selectedJoint] ? (
+            <JointControl
+              jointName={selectedJoint}
+              jointInfo={jointLimits[selectedJoint]}
+              jointAxis={jointAxes[selectedJoint]}
+              originalAxis={originalJointAxes?.[selectedJoint]}
+              currentValue={storeJointValues[selectedJoint] ?? 0}
+              onValueChange={(value) => {
+                onJointChange(selectedJoint, value);
+              }}
+              onAxisChange={onJointAxisChange}
+              onResetAxis={onResetAxis}
+              onDeleteJoint={onDeleteJoint}
+              isDeleted={deletedJoints.has(selectedJoint)}
+              angleUnit={angleUnit}
+              urdfContent={urdfContent}
+              isHighlighted={true}
+              onLinkChange={onJointLinkChange}
+              onTypeChange={onJointTypeChange ? (newType, lowerLimit, upperLimit) => {
+                onJointTypeChange(selectedJoint, newType, lowerLimit, upperLimit);
+              } : undefined}
+              onNameChange={onJointNameChange}
+              alwaysExpanded={true}
+              hideValueDisplay={true}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-32 text-xs text-muted-foreground/70">
+              Click on a joint to edit
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

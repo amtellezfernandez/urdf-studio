@@ -818,6 +818,7 @@ export const Sidebar = ({
   const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
   const [activeEditorWindow, setActiveEditorWindow] = useState<"joints" | "links">("joints");
+  const [selectedLink, setSelectedLink] = useState<string | null>(null);
 
   // Notify parent when collision visibility changes
   useEffect(() => {
@@ -3900,6 +3901,8 @@ export const Sidebar = ({
                       meshFiles={meshFiles}
                       collisionVisibility={collisionVisibility}
                       onCollisionVisibilityChange={setCollisionVisibility}
+                      selectedLink={selectedLink}
+                      onLinkSelect={setSelectedLink}
                     />
                   )}
                 </div>

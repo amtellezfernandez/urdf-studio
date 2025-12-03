@@ -53,6 +53,8 @@ interface JointControlProps {
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   onTypeChange?: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
   onNameChange?: (oldName: string, newName: string) => void;
+  alwaysExpanded?: boolean;
+  hideValueDisplay?: boolean;
 }
 
 // Helper function to create axis preset icon
@@ -186,6 +188,8 @@ export const JointControl = ({
   onLinkChange,
   onTypeChange,
   onNameChange,
+  alwaysExpanded = false,
+  hideValueDisplay = false,
 }: JointControlProps) => {
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
@@ -384,7 +388,14 @@ export const JointControl = ({
   );
 
   // State for showing/hiding advanced options
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(alwaysExpanded);
+  
+  // Update isExpanded when alwaysExpanded changes
+  useEffect(() => {
+    if (alwaysExpanded) {
+      setIsExpanded(true);
+    }
+  }, [alwaysExpanded]);
 
   // Update local limits when jointInfo changes (including type changes)
   useEffect(() => {
@@ -637,20 +648,24 @@ export const JointControl = ({
       onMouseLeave={() => onHover?.(null)}
     >
       {/* Blender-style collapsible header - Minimalistic */}
-      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <Collapsible open={isExpanded} onOpenChange={alwaysExpanded ? undefined : setIsExpanded}>
         <CollapsibleTrigger
           className={cn(
             "w-full flex items-center gap-1.5 px-1 py-1 hover:bg-muted/20 rounded-sm transition-colors group",
-            isHighlighted && "bg-primary/8 text-primary hover:bg-primary/15"
+            isHighlighted && "bg-primary/8 text-primary hover:bg-primary/15",
+            alwaysExpanded && "cursor-default"
           )}
+          disabled={alwaysExpanded}
         >
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <ChevronRight 
-              className={cn(
-                "w-3 h-3 transition-transform duration-200 flex-shrink-0",
-                isExpanded && "rotate-90"
-              )} 
-            />
+            {!alwaysExpanded && (
+              <ChevronRight 
+                className={cn(
+                  "w-3 h-3 transition-transform duration-200 flex-shrink-0",
+                  isExpanded && "rotate-90"
+                )} 
+              />
+            )}
             {isEditingName ? (
               <input
                 ref={nameInputRef}
@@ -692,42 +707,44 @@ export const JointControl = ({
               </label>
             )}
           </div>
-          <span
-            ref={valueDisplayRef}
-            tabIndex={0}
-            role="spinbutton"
-            aria-label="Joint value"
-            aria-valuemin={
-              Number.isFinite(min)
-                ? angleUnit === "deg"
-                  ? min * (180 / Math.PI)
-                  : min
-                : undefined
-            }
-            aria-valuemax={
-              Number.isFinite(max)
-                ? angleUnit === "deg"
-                  ? max * (180 / Math.PI)
-                  : max
-                : undefined
-            }
-            aria-valuenow={
-              angleUnit === "deg"
-                ? currentValue * (180 / Math.PI)
-                : currentValue
-            }
-            className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
-            style={{ color: valueColor }}
-            onFocus={() => setIsValueFocused(true)}
-            onBlur={() => setIsValueFocused(false)}
-            onMouseDown={handleValueMouseDown}
-            onWheel={handleValueWheel}
-            onKeyDown={handleValueKeyDown}
-          >
-            {angleUnit === "deg" 
-              ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
-              : `${currentValue.toFixed(2)}`}
-          </span>
+          {!hideValueDisplay && (
+            <span
+              ref={valueDisplayRef}
+              tabIndex={0}
+              role="spinbutton"
+              aria-label="Joint value"
+              aria-valuemin={
+                Number.isFinite(min)
+                  ? angleUnit === "deg"
+                    ? min * (180 / Math.PI)
+                    : min
+                  : undefined
+              }
+              aria-valuemax={
+                Number.isFinite(max)
+                  ? angleUnit === "deg"
+                    ? max * (180 / Math.PI)
+                    : max
+                  : undefined
+              }
+              aria-valuenow={
+                angleUnit === "deg"
+                  ? currentValue * (180 / Math.PI)
+                  : currentValue
+              }
+              className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
+              style={{ color: valueColor }}
+              onFocus={() => setIsValueFocused(true)}
+              onBlur={() => setIsValueFocused(false)}
+              onMouseDown={handleValueMouseDown}
+              onWheel={handleValueWheel}
+              onKeyDown={handleValueKeyDown}
+            >
+              {angleUnit === "deg" 
+                ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
+                : `${currentValue.toFixed(2)}`}
+            </span>
+          )}
         </CollapsibleTrigger>
 
         <CollapsibleContent className="px-1 pt-1.5 space-y-1.5">

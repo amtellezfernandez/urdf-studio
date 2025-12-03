@@ -63,6 +63,48 @@ export const LinkEditor = ({
   onCollisionVisibilityChange,
 }: LinkEditorProps) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [editingLinkName, setEditingLinkName] = useState<string | null>(null);
+  const [editedName, setEditedName] = useState<string>("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle name editing
+  const handleNameDoubleClick = (e: React.MouseEvent, linkName: string) => {
+    if (!onLinkNameChange) return;
+    e.stopPropagation();
+    setEditingLinkName(linkName);
+    setEditedName(linkName);
+  };
+
+  const handleNameSubmit = (linkName: string) => {
+    const trimmedName = editedName.trim();
+    if (trimmedName && trimmedName !== linkName && onLinkNameChange) {
+      onLinkNameChange(linkName, trimmedName);
+    }
+    setEditingLinkName(null);
+  };
+
+  const handleNameCancel = () => {
+    setEditingLinkName(null);
+    setEditedName("");
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, linkName: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleNameSubmit(linkName);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleNameCancel();
+    }
+  };
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingLinkName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [editingLinkName]);
 
   // Parse all links from URDF
   const links = useMemo((): LinkData[] => {
@@ -109,8 +151,56 @@ export const LinkEditor = ({
     return links.filter((link) => link.name.toLowerCase().includes(query));
   }, [links, searchQuery]);
 
+  // Render simple link list item (clickable, no expandable controls)
+  const renderSimpleLinkItem = (link: LinkData) => {
+    const isSelected = selectedLink === link.name;
+    const isEditing = editingLinkName === link.name;
+
+    return (
+      <div
+        key={link.name}
+        className={cn(
+          "px-1.5 py-1.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/10",
+          isSelected && "bg-primary/10 border-primary/30"
+        )}
+        onClick={() => !isEditing && onLinkSelect?.(link.name)}
+        onMouseEnter={() => !isEditing && onLinkSelect?.(link.name)}
+      >
+        <div className="flex items-center justify-between gap-2">
+          {isEditing ? (
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={editedName}
+              onChange={(e) => setEditedName(e.target.value)}
+              onBlur={() => handleNameSubmit(link.name)}
+              onKeyDown={(e) => handleNameKeyDown(e, link.name)}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "text-xs font-medium flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
+                isSelected ? "text-primary" : "text-foreground"
+              )}
+            />
+          ) : (
+            <span
+              className={cn(
+                "text-xs font-medium truncate flex-1 cursor-text",
+                isSelected ? "text-primary" : "text-foreground",
+                onLinkNameChange && "hover:text-primary/80"
+              )}
+              title={onLinkNameChange ? "Double-click to rename" : undefined}
+              onDoubleClick={(e) => handleNameDoubleClick(e, link.name)}
+            >
+              {link.name}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full h-full">
       {/* Header Controls - Minimalistic */}
       <div className="flex-shrink-0 space-y-1 px-1.5 py-1 border-b border-border/15">
         {/* Search Bar - Minimalistic */}
@@ -142,8 +232,8 @@ export const LinkEditor = ({
         )}
       </div>
 
-      {/* Links List - Minimalistic */}
-      <div className="flex-1 p-1 px-1.5">
+      {/* Links List - Simple clickable list */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-1 px-1.5">
         {links.length === 0 ? (
           <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground/70">
             No links loaded
@@ -154,33 +244,47 @@ export const LinkEditor = ({
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
         ) : (
-          <div className="space-y-0.5">
-            {filteredLinks.map((link) => (
-                <LinkControl
-                  key={link.name}
-                  linkData={link}
-                  urdfContent={urdfContent}
-                  onMaterialChange={onMaterialChange}
-                  onLinkNameChange={onLinkNameChange}
-                  onUrdfChange={onUrdfChange}
-                  meshFiles={meshFiles}
-                  isHighlighted={selectedLink === link.name}
-                  onSelect={() => onLinkSelect?.(link.name)}
-                  collisionVisibility={collisionVisibility[link.name] || {}}
-                  onCollisionVisibilityChange={(index, visible) => {
-                    const newVisibility = {
-                      ...collisionVisibility,
-                      [link.name]: {
-                        ...(collisionVisibility[link.name] || {}),
-                        [index]: visible,
-                      },
-                    };
-                    onCollisionVisibilityChange?.(newVisibility);
-                  }}
-                />
-            ))}
+          <div>
+            {filteredLinks.map((link) => renderSimpleLinkItem(link))}
           </div>
         )}
+      </div>
+
+      {/* Link Editor Panel - Always visible */}
+      <div className="flex-shrink-0 border-t border-border/20 bg-muted/5">
+        <div className="p-2 max-h-[50vh] overflow-y-auto blender-scrollbar">
+          {(() => {
+            const selectedLinkData = selectedLink ? links.find(l => l.name === selectedLink) : null;
+            return selectedLinkData ? (
+              <LinkControl
+                linkData={selectedLinkData}
+                urdfContent={urdfContent}
+                onMaterialChange={onMaterialChange}
+                onLinkNameChange={onLinkNameChange}
+                onUrdfChange={onUrdfChange}
+                meshFiles={meshFiles}
+                isHighlighted={true}
+                onSelect={() => {}}
+                collisionVisibility={collisionVisibility[selectedLink] || {}}
+                onCollisionVisibilityChange={(index, visible) => {
+                  const newVisibility = {
+                    ...collisionVisibility,
+                    [selectedLink]: {
+                      ...(collisionVisibility[selectedLink] || {}),
+                      [index]: visible,
+                    },
+                  };
+                  onCollisionVisibilityChange?.(newVisibility);
+                }}
+                alwaysExpanded={true}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-32 text-xs text-muted-foreground/70">
+                Click on a link to edit
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
@@ -197,6 +301,7 @@ interface LinkControlProps {
   onSelect?: () => void;
   collisionVisibility?: { [index: number]: boolean };
   onCollisionVisibilityChange?: (index: number, visible: boolean) => void;
+  alwaysExpanded?: boolean;
 }
 
 const LinkControl = ({
@@ -210,6 +315,7 @@ const LinkControl = ({
   onSelect,
   collisionVisibility = {},
   onCollisionVisibilityChange,
+  alwaysExpanded = false,
 }: LinkControlProps) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(linkData.name);
@@ -334,7 +440,8 @@ const LinkControl = ({
             </span>
           )
         }
-        defaultOpen={false}
+        defaultOpen={alwaysExpanded}
+        alwaysExpanded={alwaysExpanded}
       >
         {/* Section Selector */}
         <div className="flex items-center gap-0.5 px-1 py-0.5 mb-0.5 border-b border-border/15">
