@@ -16,6 +16,8 @@ import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
+import { useGPUMode } from "@/hooks/use-gpu-mode";
+import { Switch } from "@/components/ui/switch";
 
 type GPUMode = "high" | "low";
 
@@ -1349,7 +1351,7 @@ export const Viewer3D = ({
   jointValues = {},
   jointLimits = {},
   jointAxes = {},
-  gpuMode = "high",
+  gpuMode: gpuModeProp = "high",
   onJointSelect,
   onJointChange,
   onRobotJointsLoaded,
@@ -1361,6 +1363,12 @@ export const Viewer3D = ({
   collisionVisibility = {},
   rotationPlaneVisible = false,
 }: Viewer3DProps) => {
+  // Use GPU mode hook to allow switching from view tab
+  const { gpuMode, setGPUMode } = useGPUMode();
+  
+  const handleGPUModeToggle = useCallback((checked: boolean): void => {
+    setGPUMode(checked ? "high" : "low");
+  }, [setGPUMode]);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
   const [animationFrames, setAnimationFrames] = useState<
     AnimationFrame[] | null
@@ -2117,13 +2125,24 @@ export const Viewer3D = ({
   return (
     <div className="h-full flex flex-col">
       {/* Top Controls */}
-      <div className="flex items-center justify-center mb-1.5">
-          <span className="text-xs text-muted-foreground">
+      <div className="flex items-center justify-between mb-1.5 px-2">
+        <span className="text-xs text-muted-foreground">
           {urdfFile 
             ? `${urdfFile.name.replace(/^viz-/, "")} loaded`
               : "No robot"}
+        </span>
+        {/* GPU Performance Toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {gpuMode === "high" ? "High Performance" : "Low GPU Mode"}
           </span>
+          <Switch
+            checked={gpuMode === "high"}
+            onCheckedChange={handleGPUModeToggle}
+            className="data-[state=checked]:bg-primary h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
+          />
         </div>
+      </div>
 
       {/* 3D Viewer Area */}
       <div className="flex-1 overflow-hidden relative">
