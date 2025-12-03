@@ -61,34 +61,40 @@
     @apply border-border;
   }
 
-  html {
-    /* Global dark scrollbar for html element */
+  /* Global dark scrollbar for html and body elements */
+  html,
+  body {
     scrollbar-width: thin;
     scrollbar-color: hsl(0 0% 20% / 0.8) transparent;
   }
 
-  html::-webkit-scrollbar {
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
-  html::-webkit-scrollbar-track {
+  html::-webkit-scrollbar-track,
+  body::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  html::-webkit-scrollbar-thumb {
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb {
     background: hsl(0 0% 20% / 0.8);
     border-radius: 3px;
     border: 1px solid transparent;
     background-clip: padding-box;
   }
 
-  html::-webkit-scrollbar-thumb:hover {
+  html::-webkit-scrollbar-thumb:hover,
+  body::-webkit-scrollbar-thumb:hover {
     background: hsl(0 0% 30% / 0.9);
     background-clip: padding-box;
   }
 
-  html::-webkit-scrollbar-corner {
+  html::-webkit-scrollbar-corner,
+  body::-webkit-scrollbar-corner {
     background: transparent;
   }
 
@@ -99,34 +105,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.011em;
-    /* Global dark scrollbar for body element */
-    scrollbar-width: thin;
-    scrollbar-color: hsl(0 0% 20% / 0.8) transparent;
-  }
-
-  body::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  body::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  body::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 20% / 0.8);
-    border-radius: 3px;
-    border: 1px solid transparent;
-    background-clip: padding-box;
-  }
-
-  body::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 0% 30% / 0.9);
-    background-clip: padding-box;
-  }
-
-  body::-webkit-scrollbar-corner {
-    background: transparent;
   }
   
   h1, h2, h3, h4, h5, h6 {

@@ -38,12 +38,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+// Types
 interface MeshFiles {
   [key: string]: Blob;
 }
 
 type RotationAxis = "x" | "y" | "z";
+type UrdfViewMode = "original" | "modified" | "split";
+type AngleUnit = "rad" | "deg";
 
+interface WindowWithViewerHandlers extends Window {
+  viewer3dUploadMotionData?: (file: File) => void;
+  viewer3dPlayAnimation?: () => void;
+  viewer3dSetFrame?: (frame: number) => void;
+}
+
+interface DebugMeshInfo {
+  filename: string;
+  webkitRelativePath: string;
+  found: boolean;
+  urdfReference?: string;
+  registeredPaths: string[];
+}
+
+// Constants
 const DEFAULT_URDF_FILENAME = "robot.urdf";
 const AXIS_NAMES: Record<RotationAxis, string> = {
   x: "X",
@@ -53,12 +71,9 @@ const AXIS_NAMES: Record<RotationAxis, string> = {
 
 const SIDEBAR_RESIZER_WIDTH = 8;
 const VIEWER_RESIZER_HEIGHT = 4;
-const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4; // 40% of available height
-
-interface WindowWithViewerHandlers extends Window {
-  viewer3dUploadMotionData?: (file: File) => void;
-  viewer3dPlayAnimation?: () => void;
-}
+const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4;
+const MIN_HEADER_HEIGHT = 50;
+const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'] as const;
 
 const Index = () => {
   useTheme(); // Initialize dark mode
@@ -90,32 +105,25 @@ const Index = () => {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
-  const [rotationPlaneVisible, setRotationPlaneVisible] = useState<boolean>(false);
-  const [showUrdfEditor, setShowUrdfEditor] = useState<boolean>(false);
-  const [urdfViewMode, setUrdfViewMode] = useState<"original" | "modified" | "split">("split");
-  const [showExportDialog, setShowExportDialog] = useState<boolean>(false);
-  const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("z");
-  const [urdfEditorSplitView, setUrdfEditorSplitView] = useState<boolean>(false);
-  const [viewerSplitView, setViewerSplitView] = useState<boolean>(false);
-  const [viewerEpisode, setViewerEpisode] = useState<any | null>(null);
-  const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
-  const [recordingViewHeight, setRecordingViewHeight] = useState<number>(DEFAULT_RECORDING_VIEW_HEIGHT);
-  const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: any, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
+  const [rotationPlaneVisible, setRotationPlaneVisible] = useState(false);
+  const [showUrdfEditor, setShowUrdfEditor] = useState(false);
+  const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
+  const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
+  const [viewerSplitView, setViewerSplitView] = useState(false);
+  const [viewerEpisode, setViewerEpisode] = useState<{ id: string; number: number; frames: Array<{ timestamp: number; jointPositions: Record<string, number> }>; createdAt: number; metadata?: unknown } | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
+  const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: unknown, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
-  const [angleUnit, setAngleUnit] = useState<"rad" | "deg">("rad");
+  const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
-  const [debugMeshInfo, setDebugMeshInfo] = useState<Array<{
-    filename: string;
-    webkitRelativePath: string;
-    found: boolean;
-    urdfReference?: string;
-    registeredPaths: string[];
-  }>>([]);
+  const [debugMeshInfo, setDebugMeshInfo] = useState<DebugMeshInfo[]>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
 
-  const createUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
+  const createUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
-    // Add timestamp to filename to ensure uniqueness and force reload
     const uniqueFilename = timestamp 
       ? `${vizFilename.replace('.urdf', '')}_${timestamp}.urdf`
       : vizFilename;
@@ -123,12 +131,10 @@ const Index = () => {
     return new File([blob], uniqueFilename, { type: "application/xml" });
   }, []);
 
-  const updateUrdfFile = useCallback((content: string, filename: string = DEFAULT_URDF_FILENAME): void => {
+  const updateUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME) => {
     setVizUrdfContent(content);
-    const limits = parseJointLimitsFromURDF(content);
-    const axes = parseJointAxesFromURDF(content);
-    setJointLimits(limits);
-    setJointAxes(axes);
+    setJointLimits(parseJointLimitsFromURDF(content));
+    setJointAxes(parseJointAxesFromURDF(content));
     setUrdfFile(createUrdfFile(content, filename));
   }, [createUrdfFile]);
 
@@ -282,9 +288,8 @@ const Index = () => {
               // Ignore decode errors
             }
             
-            // 7. Try common mesh folder patterns (meshes/, mesh/, assets/, models/)
-            const commonFolders = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'];
-            for (const folder of commonFolders) {
+            // 7. Try common mesh folder patterns
+            for (const folder of COMMON_MESH_FOLDERS) {
               meshes[`${folder}/${filename}`] = blob;
               meshes[`/${folder}/${filename}`] = blob;
             }
@@ -307,13 +312,7 @@ const Index = () => {
       const urdfMeshReferences = extractMeshReferencesFromURDF(originalContent);
       
       // Check which STL files match URDF references
-      const debugInfo: Array<{
-        filename: string;
-        webkitRelativePath: string;
-        found: boolean;
-        urdfReference?: string;
-        registeredPaths: string[];
-      }> = [];
+      const debugInfo: DebugMeshInfo[] = [];
       
       for (const file of stlFiles) {
         const fileWithPath = file as FileWithPath;
@@ -426,7 +425,7 @@ const Index = () => {
     }
   };
 
-  const handleJointChange = useCallback((jointName: string, value: number): void => {
+  const handleJointChange = useCallback((jointName: string, value: number) => {
     const limited = setStoreJointValue(jointName, value);
     setJointValues((prev) => {
       if (prev[jointName] === limited) return prev;
@@ -435,12 +434,12 @@ const Index = () => {
   }, [setStoreJointValue]);
 
 
-  const handleVizUrdfChange = useCallback((newContent: string): void => {
+  const handleVizUrdfChange = useCallback((newContent: string) => {
     updateUrdfFile(newContent);
     toast.success("Viz URDF updated from manual edit");
   }, [updateUrdfFile]);
 
-  const handleMaterialChange = useCallback((linkName: string, materialName: string, color: string): void => {
+  const handleMaterialChange = useCallback((linkName: string, materialName: string, color: string) => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
       return;
@@ -527,7 +526,7 @@ const Index = () => {
     }
   }, [vizUrdfContent, updateUrdfFile]);
 
-  const handleLinkNameChange = useCallback((oldName: string, newName: string): void => {
+  const handleLinkNameChange = useCallback((oldName: string, newName: string) => {
     if (newName === oldName || !vizUrdfContent) return;
 
     try {
@@ -545,7 +544,7 @@ const Index = () => {
     }
   }, [vizUrdfContent, updateUrdfFile]);
 
-  const handleJointAxisChange = useCallback((jointName: string, axis: [number, number, number]): void => {
+  const handleJointAxisChange = useCallback((jointName: string, axis: [number, number, number]) => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
       return;
@@ -567,7 +566,7 @@ const Index = () => {
     toast.success(`Updated axis for joint "${jointName}"`);
   }, [vizUrdfContent, createUrdfFile]);
 
-  const handleResetAxis = useCallback((jointName: string): void => {
+  const handleResetAxis = useCallback((jointName: string) => {
     if (!originalJointAxes[jointName]) {
       toast.error(`No original axis found for joint "${jointName}"`);
       return;
@@ -577,7 +576,7 @@ const Index = () => {
     handleJointAxisChange(jointName, originalAxis);
   }, [originalJointAxes, handleJointAxisChange]);
 
-  const handleJointTypeChange = useCallback((jointName: string, newType: string, lowerLimit?: number, upperLimit?: number): void => {
+  const handleJointTypeChange = useCallback((jointName: string, newType: string, lowerLimit?: number, upperLimit?: number) => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
       return;
@@ -590,7 +589,7 @@ const Index = () => {
     toast.success(`Updated joint "${jointName}" type to ${newType}${limitMsg}`);
   }, [vizUrdfContent, updateUrdfFile]);
 
-  const handleJointNameChange = useCallback((oldName: string, newName: string): void => {
+  const handleJointNameChange = useCallback((oldName: string, newName: string) => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
       return;
@@ -613,7 +612,7 @@ const Index = () => {
     toast.success(`Renamed joint "${oldName}" to "${newName}"`);
   }, [vizUrdfContent, updateUrdfFile, selectedJoint]);
 
-  const handleJointLinkChange = useCallback((jointName: string, parentLink: string, childLink: string): void => {
+  const handleJointLinkChange = useCallback((jointName: string, parentLink: string, childLink: string) => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
       return;
@@ -679,7 +678,7 @@ const Index = () => {
     }
   }, [vizUrdfContent, updateUrdfFile]);
 
-  const handleResetRotation = useCallback((): void => {
+  const handleResetRotation = useCallback(() => {
     if (!originalVizUrdfContent) {
       toast.error("No original URDF content found");
       return;
@@ -689,7 +688,7 @@ const Index = () => {
     toast.success("Reset to original loaded file");
   }, [originalVizUrdfContent, updateUrdfFile]);
 
-  const handleSave = useCallback((): void => {
+  const handleSave = useCallback(() => {
     if (!vizUrdfContent) {
       toast.error("No URDF content to save");
       return;
@@ -699,7 +698,7 @@ const Index = () => {
     toast.success("Changes saved");
   }, [vizUrdfContent]);
 
-  const handleRevert = useCallback((): void => {
+  const handleRevert = useCallback(() => {
     if (!savedVizUrdfContent) {
       toast.error("No saved URDF content found");
       return;
@@ -780,14 +779,14 @@ const Index = () => {
     if (result.corrections.length > 0) {
       toast.success(`Fixed ${result.corrections.length} mesh path(s)`);
       result.corrections.forEach(correction => {
-        console.info(`Fixed path: "${correction.oldPath}" -> "${correction.newPath}"`);
+        console.info(`Fixed path: "${correction.original}" -> "${correction.corrected}"`);
       });
     } else {
       toast.info("All mesh paths are already correct");
     }
   }, [vizUrdfContent, handleVizUrdfChange]);
 
-  const getExportUrdfContent = useCallback((): string => {
+  const getExportUrdfContent = useCallback(() => {
     if (!vizUrdfContent) return "";
     return deleteJointsFromURDF(vizUrdfContent, deletedJoints);
   }, [vizUrdfContent, deleteJointsFromURDF, deletedJoints]);
@@ -800,7 +799,7 @@ const Index = () => {
     return robot?.getAttribute("name") || "robot";
   }, [vizUrdfContent]);
 
-  const handleDeleteJoint = useCallback((jointName: string): void => {
+  const handleDeleteJoint = useCallback((jointName: string) => {
     setDeletedJoints((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(jointName)) {
@@ -814,7 +813,7 @@ const Index = () => {
     });
   }, []);
 
-  const handleRotateRobot = useCallback((axis: RotationAxis): void => {
+  const handleRotateRobot = useCallback((axis: RotationAxis) => {
     if (!vizUrdfContent) {
       toast.error("No URDF loaded");
       return;
@@ -831,20 +830,20 @@ const Index = () => {
     toast.success(`Robot rotated 90° around ${AXIS_NAMES[axis]}-axis`);
   }, [vizUrdfContent, updateUrdfFile]);
 
-  const handleMotionDataUpload = useCallback((file: File): void => {
+  const handleMotionDataUpload = useCallback((file: File) => {
     (window as WindowWithViewerHandlers).viewer3dUploadMotionData?.(file);
   }, []);
 
-  const handlePlayAnimation = useCallback((): void => {
+  const handlePlayAnimation = useCallback(() => {
     (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.();
   }, []);
 
-  const handleFrameChange = useCallback((frame: number, total: number): void => {
+  const handleFrameChange = useCallback((frame: number, total: number) => {
     setCurrentFrame(frame);
     setTotalFrames(total);
   }, []);
 
-  const handleRobotJointsLoaded = useCallback((joints: string[], angles: Record<string, number>): void => {
+  const handleRobotJointsLoaded = useCallback((joints: string[], angles: Record<string, number>) => {
     startTransition(() => {
       setAvailableJoints(joints);
       setJointValues(angles);
@@ -939,15 +938,10 @@ const Index = () => {
     [rightSidebarWidth, clampRightSidebarWidth]
   );
 
-  const clampRecordingViewHeight = useCallback(
-    (height: number, containerHeight: number) => {
-      // Minimum height to always show the header (approximately 50px)
-      const MIN_HEADER_HEIGHT = 50;
-      const minRatio = containerHeight > 0 ? MIN_HEADER_HEIGHT / containerHeight : 0.08;
-      return Math.min(0.95, Math.max(minRatio, height));
-    },
-    []
-  );
+  const clampRecordingViewHeight = useCallback((height: number, containerHeight: number) => {
+    const minRatio = containerHeight > 0 ? MIN_HEADER_HEIGHT / containerHeight : 0.08;
+    return Math.min(0.95, Math.max(minRatio, height));
+  }, []);
 
   const handleViewerResizeStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1335,11 +1329,6 @@ const Index = () => {
               setViewerEpisode(episode);
             }}
             onViewerOpenChange={setIsViewerOpen}
-            viewerOpen={isViewerOpen}
-            onEpisodeSaveReady={(handler) => {
-              // Receive save handler from Sidebar and store it
-              setEpisodeSaveHandler(() => handler);
-            }}
           />
 
           {!isSidebarCollapsed && (
@@ -1413,7 +1402,7 @@ const Index = () => {
                       onVizUrdfChange={handleVizUrdfChange}
                       getExportUrdf={getExportUrdfContent}
                       meshFiles={meshFiles}
-                      githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+                      githubToken={typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null}
                       inline={true}
                       splitView={true}
                       onSplitViewToggle={setUrdfEditorSplitView}
@@ -1455,7 +1444,7 @@ const Index = () => {
                       onVizUrdfChange={handleVizUrdfChange}
                       getExportUrdf={getExportUrdfContent}
                       meshFiles={meshFiles}
-                      githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+                      githubToken={typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null}
                       inline={true}
                       splitView={true}
                       onSplitViewToggle={setUrdfEditorSplitView}
@@ -1537,7 +1526,7 @@ const Index = () => {
                           inline={true}
                           globalCurrentFrame={currentFrame}
                           onSetGlobalFrame={(frame: number) => {
-                            (window as any).viewer3dSetFrame?.(frame);
+                            (window as WindowWithViewerHandlers).viewer3dSetFrame?.(frame);
                             setCurrentFrame(frame);
                           }}
                           showOnlyHeader={recordingViewHeight <= 0.08}
@@ -1584,8 +1573,6 @@ const Index = () => {
             onJointLinkChange={handleJointLinkChange}
             angleUnit={angleUnit}
             onAngleUnitChange={setAngleUnit}
-            meshFiles={meshFiles}
-            onMaterialChange={handleMaterialChange}
             onLinkNameChange={handleLinkNameChange}
             onUrdfChange={handleVizUrdfChange}
             collisionVisibility={collisionVisibility}
