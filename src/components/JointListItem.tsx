@@ -73,6 +73,7 @@ interface JointListItemProps {
   availableJoints?: string[];
   isVisible?: boolean;
   onVisibilityToggle?: (jointName: string) => void;
+  hideColorSquare?: boolean;
 }
 
 export const JointListItem = ({
@@ -89,6 +90,7 @@ export const JointListItem = ({
   availableJoints = [],
   isVisible = true,
   onVisibilityToggle,
+  hideColorSquare = false,
 }: JointListItemProps) => {
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
@@ -349,12 +351,14 @@ export const JointListItem = ({
   return (
     <div className="flex items-center gap-1.5">
       {/* Color square matching 3D editor colors - outside highlight area */}
-      <div
-        className="w-3.5 h-3.5 rounded-sm flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-        style={{ backgroundColor: squareColor }}
-        title={isVisible ? `Joint visible - click to hide` : `Joint hidden - click to show`}
-        onClick={handleSquareClick}
-      />
+      {!hideColorSquare && (
+        <div
+          className="w-3.5 h-3.5 rounded-sm flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+          style={{ backgroundColor: squareColor }}
+          title={isVisible ? `Joint visible - click to hide` : `Joint hidden - click to show`}
+          onClick={handleSquareClick}
+        />
+      )}
       <div
         className={cn(
           "flex items-center gap-1.5 flex-1 px-2 py-1.5 hover:bg-muted/30 rounded-sm transition-colors cursor-pointer",

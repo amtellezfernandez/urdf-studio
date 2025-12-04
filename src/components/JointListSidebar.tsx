@@ -1,5 +1,4 @@
-import type React from "react";
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { JointListItem } from "@/components/JointListItem";
 import { JointControl } from "@/components/JointControl";
 import { Input } from "@/components/ui/input";
@@ -61,142 +60,175 @@ const HierarchyTreeView = ({
   }
 
   const renderLinkNode = (linkName: string, depth: number = 0, visitedLinks: Set<string> = new Set()): React.ReactNode => {
-    if (visitedLinks.has(linkName)) {
-      // Prevent infinite loops
+    // Prevent infinite loops and excessive depth
+    if (visitedLinks.has(linkName) || depth > 100) {
       return null;
     }
-    visitedLinks.add(linkName);
+    
+    // Create a new set for this branch to track visited links
+    const branchVisitedLinks = new Set(visitedLinks);
+    branchVisitedLinks.add(linkName);
 
-    const joints = hierarchyTree.linkToJoints.get(linkName) || [];
-    if (joints.length === 0) {
-      // Leaf link - just show the link
-      return (
-        <div key={`link-${linkName}-${depth}`} className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
-          <div 
-            className={cn(
-              "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-              selectedLink === linkName && "bg-primary/10"
-            )}
-            onClick={() => {
-              onLinkSelect?.(linkName);
-              onJointSelect?.(null); // Clear joint selection when selecting link
-            }}
-          >
-            <span className="text-[10px] text-muted-foreground/60">
-              🔗 {linkName}
-            </span>
+    try {
+      const joints = hierarchyTree.linkToJoints.get(linkName) || [];
+      if (joints.length === 0) {
+        // Leaf link - just show the link
+        return (
+          <div key={`link-${linkName}-${depth}`} className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
+            <div 
+              className={cn(
+                "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
+                selectedLink === linkName && "bg-primary/10"
+              )}
+              onClick={() => {
+                onLinkSelect?.(linkName);
+                onJointSelect?.(null); // Clear joint selection when selecting link
+              }}
+            >
+              <span className="text-[10px] text-muted-foreground/60">
+                🔗 {linkName}
+              </span>
+            </div>
           </div>
+        );
+      }
+
+      return (
+        <div key={`link-${linkName}-${depth}`}>
+          {/* Link */}
+          <div className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
+            {depth > 0 && (
+              <>
+                {/* Horizontal line to link */}
+                <div
+                  className="absolute top-1/2 bg-border/30"
+                  style={{
+                    left: `${(depth - 1) * 12 + 6}px`,
+                    width: '6px',
+                    height: '1px',
+                  }}
+                />
+                {/* Vertical line */}
+                <div
+                  className="absolute bg-border/30"
+                  style={{
+                    left: `${(depth - 1) * 12 + 6}px`,
+                    top: '0',
+                    bottom: '0',
+                    width: '1px',
+                  }}
+                />
+              </>
+            )}
+            <div 
+              className={cn(
+                "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
+                selectedLink === linkName && "bg-primary/10"
+              )}
+              onClick={() => {
+                onLinkSelect?.(linkName);
+                onJointSelect?.(null); // Clear joint selection when selecting link
+              }}
+            >
+              <span className="text-[10px] text-muted-foreground/60">
+                🔗 {linkName}
+              </span>
+            </div>
+          </div>
+          {/* Joints connected from this link */}
+          {joints.map((joint, jointIndex) => {
+            if (!joint || !joint.jointName || !joint.childLink) {
+              return null;
+            }
+            
+            const isLastJoint = jointIndex === joints.length - 1;
+            const childJoints = hierarchyTree.linkToJoints.get(joint.childLink) || [];
+            const hasChildJoints = childJoints.length > 0;
+            
+            return (
+              <div key={`joint-${joint.jointName}`}>
+                {/* Joint */}
+                <div className="relative" style={{ paddingLeft: `${(depth + 1) * 12}px` }}>
+                  {/* Tree lines */}
+                  <>
+                    {/* Horizontal line to joint */}
+                    <div
+                      className="absolute top-1/2 bg-border/30"
+                      style={{
+                        left: `${depth * 12 + 6}px`,
+                        width: '6px',
+                        height: '1px',
+                      }}
+                    />
+                    {/* Vertical line */}
+                    <div
+                      className="absolute bg-border/30"
+                      style={{
+                        left: `${depth * 12 + 6}px`,
+                        top: '0',
+                        bottom: hasChildJoints || !isLastJoint ? '0' : '50%',
+                        width: '1px',
+                      }}
+                    />
+                  </>
+                  <JointListItem
+                    jointName={joint.jointName}
+                    jointInfo={jointLimits[joint.jointName]}
+                    currentValue={jointValues[joint.jointName] ?? 0}
+                    onValueChange={() => {}} // Read-only
+                    isDeleted={deletedJoints.has(joint.jointName)}
+                    isSelected={selectedJoint === joint.jointName}
+                    isHighlighted={hoveredJoint === joint.jointName}
+                    angleUnit={angleUnit}
+                    onClick={() => {
+                      onJointSelect?.(joint.jointName);
+                      onLinkSelect?.(null); // Clear link selection when selecting joint
+                    }}
+                    onHover={undefined} // Disable hover activation in hierarchy view
+                    availableJoints={availableJoints}
+                    isVisible={visibleJoints.has(joint.jointName)}
+                    onVisibilityToggle={onVisibilityToggle}
+                    hideColorSquare={true}
+                  />
+                </div>
+                {/* Recursively render child link */}
+                {renderLinkNode(joint.childLink, depth + 2, branchVisitedLinks)}
+              </div>
+            );
+          })}
+        </div>
+      );
+    } catch (error) {
+      console.error(`Error rendering link node ${linkName}:`, error);
+      return (
+        <div key={`error-${linkName}-${depth}`} className="text-xs text-red-500 px-2 py-1">
+          Error rendering {linkName}
         </div>
       );
     }
+  };
 
+  try {
     return (
-      <div key={`link-${linkName}-${depth}`}>
-        {/* Link */}
-        <div className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
-          {depth > 0 && (
-            <>
-              {/* Horizontal line to link */}
-              <div
-                className="absolute top-1/2 bg-border/30"
-                style={{
-                  left: `${(depth - 1) * 12 + 6}px`,
-                  width: '6px',
-                  height: '1px',
-                }}
-              />
-              {/* Vertical line */}
-              <div
-                className="absolute bg-border/30"
-                style={{
-                  left: `${(depth - 1) * 12 + 6}px`,
-                  top: '0',
-                  bottom: '0',
-                  width: '1px',
-                }}
-              />
-            </>
-          )}
-          <div 
-            className={cn(
-              "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-              selectedLink === linkName && "bg-primary/10"
-            )}
-            onClick={() => {
-              onLinkSelect?.(linkName);
-              onJointSelect?.(null); // Clear joint selection when selecting link
-            }}
-          >
-            <span className="text-[10px] text-muted-foreground/60">
-              🔗 {linkName}
-            </span>
-          </div>
-        </div>
-        {/* Joints connected from this link */}
-        {joints.map((joint, jointIndex) => {
-          const isLastJoint = jointIndex === joints.length - 1;
-          const childJoints = hierarchyTree.linkToJoints.get(joint.childLink) || [];
-          const hasChildJoints = childJoints.length > 0;
-          
+      <div className="space-y-0.5">
+        {hierarchyTree.rootLinks.map((rootLink, index) => {
+          if (!rootLink) return null;
           return (
-            <div key={`joint-${joint.jointName}`}>
-              {/* Joint */}
-              <div className="relative" style={{ paddingLeft: `${(depth + 1) * 12}px` }}>
-                {/* Tree lines */}
-                <>
-                  {/* Horizontal line to joint */}
-                  <div
-                    className="absolute top-1/2 bg-border/30"
-                    style={{
-                      left: `${depth * 12 + 6}px`,
-                      width: '6px',
-                      height: '1px',
-                    }}
-                  />
-                  {/* Vertical line */}
-                  <div
-                    className="absolute bg-border/30"
-                    style={{
-                      left: `${depth * 12 + 6}px`,
-                      top: '0',
-                      bottom: hasChildJoints || !isLastJoint ? '0' : '50%',
-                      width: '1px',
-                    }}
-                  />
-                </>
-                <JointListItem
-                  jointName={joint.jointName}
-                  jointInfo={jointLimits[joint.jointName]}
-                  currentValue={jointValues[joint.jointName] ?? 0}
-                  onValueChange={() => {}} // Read-only
-                  isDeleted={deletedJoints.has(joint.jointName)}
-                  isSelected={selectedJoint === joint.jointName}
-                  isHighlighted={hoveredJoint === joint.jointName}
-                  angleUnit={angleUnit}
-                      onClick={() => {
-                        onJointSelect?.(joint.jointName);
-                        onLinkSelect?.(null); // Clear link selection when selecting joint
-                      }}
-                      onHover={undefined} // Disable hover activation in hierarchy view
-                  availableJoints={availableJoints}
-                  isVisible={visibleJoints.has(joint.jointName)}
-                  onVisibilityToggle={handleVisibilityToggle}
-                />
-              </div>
-              {/* Recursively render child link */}
-              {renderLinkNode(joint.childLink, depth + 2, new Set(visitedLinks))}
-            </div>
+            <React.Fragment key={`root-${rootLink}-${index}`}>
+              {renderLinkNode(rootLink, 0)}
+            </React.Fragment>
           );
         })}
       </div>
     );
-  };
-
-  return (
-    <div className="space-y-0.5">
-      {hierarchyTree.rootLinks.map(rootLink => renderLinkNode(rootLink, 0))}
-    </div>
-  );
+  } catch (error) {
+    console.error("Error rendering hierarchy tree:", error);
+    return (
+      <div className="flex items-center justify-center h-full text-xs text-red-500 p-4 text-center">
+        Error rendering hierarchy view. Check console for details.
+      </div>
+    );
+  }
 };
 
 export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
@@ -637,9 +669,11 @@ export const JointListSidebar = ({
               )
             ) : (
               // Hierarchical view
-              filteredHierarchyJoints.length === 0 ? (
+              !hierarchyTree || filteredHierarchyJoints.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-                  {searchQuery || typeFilter !== "all"
+                  {!hierarchyTree 
+                    ? "Loading hierarchy..."
+                    : searchQuery || typeFilter !== "all"
                     ? "No joints match the filters"
                     : "No joints available"}
                 </div>
