@@ -369,6 +369,7 @@ const URDFModel = ({
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const previewJointValue = useJointStore((s) => s.previewJointValue);
   const currentFrameIndexRef = useRef<number>(0);
+  const hasManualJointChangesRef = useRef<boolean>(false); // Track if user has manually changed joints
 
   // Reset animation when frames change
   useEffect(() => {
@@ -647,6 +648,9 @@ const URDFModel = ({
       shouldApplyAnimation = true;
       // Clear pause flag when playing
       delete (window as any).__viewer3dIsPaused;
+      // Clear manual joint changes flag when playing - allow animation to take control
+      hasManualJointChangesRef.current = false;
+      delete (window as any).__viewer3dHasManualJointChanges;
       
       // Check if we need to reset animation start time (when starting from last frame)
       const shouldResetStartTime = (window as any).__viewer3dResetAnimationStartTime;
@@ -767,7 +771,8 @@ const URDFModel = ({
     }
 
     // Only apply animation values if we should (playing or manual frame set)
-    if (!shouldApplyAnimation) {
+    // But skip if user has manually changed joints (to allow manual control)
+    if (!shouldApplyAnimation || (hasManualJointChangesRef.current && !isPlaying)) {
       return;
     }
 
@@ -793,6 +798,19 @@ const URDFModel = ({
       const current = currentFrame.joints[jointName];
       const next = nextFrame.joints[jointName] ?? current;
       interpolatedJoints[jointName] = THREE.MathUtils.lerp(current, next, t);
+    }
+
+    // Check for manual joint changes flag from window (set by slider changes or dragging)
+    if ((window as any).__viewer3dHasManualJointChanges) {
+      hasManualJointChangesRef.current = true;
+      // Clear the window property after reading it
+      delete (window as any).__viewer3dHasManualJointChanges;
+    }
+    
+    // When paused and manual changes have been made, don't apply animation values
+    // This allows manual control to work after stopping playback
+    if (isPaused && hasManualJointChangesRef.current) {
+      return;
     }
 
     // Apply joint values to robot
@@ -976,6 +994,9 @@ const URDFModel = ({
       } else if (typeof joint.setJointValue === "function") {
         joint.setJointValue(limited);
       }
+      
+      // Mark that manual joint changes have been made - this prevents animation from overwriting manual changes
+      hasManualJointChangesRef.current = true;
       
       // Update store immediately for responsive UI, but effects are skipped during drag
       if (onJointChange) {
@@ -1578,12 +1599,24 @@ export const Viewer3D = ({
     if (!robot || isDraggingJoint) return;
     const r: any = robot as any;
     if (typeof r.setJointValue !== "function") return;
+    let hasChanges = false;
     for (const [jointName, value] of Object.entries(storeJointValues)) {
       if (typeof value === "number" && !Number.isNaN(value)) {
+        // Check if the value differs from current robot joint value
+        const currentValue = r.joints?.[jointName]?.jointValue ?? r.getJointValue?.(jointName);
+        if (currentValue !== undefined && Math.abs(currentValue - value) > 0.001) {
+          hasChanges = true;
+        }
         r.setJointValue(jointName, value);
       }
     }
-  }, [robot, storeJointValues, isDraggingJoint]);
+    // Mark manual changes if we're not playing and values actually changed
+    // This allows slider changes to also prevent animation from overwriting manual changes
+    if (hasChanges && !isPlaying) {
+      // Use window property to communicate with URDFModel's animation loop
+      (window as any).__viewer3dHasManualJointChanges = true;
+    }
+  }, [robot, storeJointValues, isDraggingJoint, isPlaying]);
 
   const handleMotionDataUpload = (e: React.ChangeEvent<HTMLInputElement> | File) => {
     const file = e instanceof File ? e : e.target.files?.[0];
@@ -1829,6 +1862,9 @@ export const Viewer3D = ({
     // Clear pause flag when starting to play
     if (newPlayingState) {
       delete (window as any).__viewer3dIsPaused;
+      // Clear manual joint changes flag when starting to play - allow animation to take control
+      // Use window property since URDFModel manages the actual ref
+      delete (window as any).__viewer3dHasManualJointChanges;
     } else {
       // Set pause flag when pausing
       (window as any).__viewer3dIsPaused = true;
@@ -1854,6 +1890,9 @@ export const Viewer3D = ({
       onPlayingChange?.(true);
       // Clear pause flag when starting to play
       delete (window as any).__viewer3dIsPaused;
+      // Clear manual joint changes flag when starting to play - allow animation to take control
+      // Note: hasManualJointChangesRef is in URDFModel, so we use window property
+      delete (window as any).__viewer3dHasManualJointChanges;
     }, 10);
   }, [onPlayingChange]);
 
