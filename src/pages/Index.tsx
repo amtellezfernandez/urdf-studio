@@ -11,7 +11,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { JointMappingDialog, type SavedMapping } from "@/components/JointMappingDialog";
 import { MappingListPanel } from "@/components/MappingListPanel";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
-import { getSavedMappings, deleteMapping } from "@/utils/jointMappingUtils";
+import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
 import { toast } from "sonner";
 import { createVizFilename } from "@/urdf_corrections/addJointColors";
 import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
@@ -1060,13 +1060,27 @@ const Index = () => {
   }, []);
 
   const handleSelectMapping = useCallback((mapping: SavedMapping) => {
+    // Extract dataset joints from the saved mapping
+    const datasetJoints = mapping.mappings.map(m => m.datasetJoint);
+    
+    // Use stored joint ranges if available, otherwise create empty ranges
+    const jointRanges: Record<string, { min: number; max: number }> = mapping.jointRanges || {};
+    
+    // Ensure all dataset joints have ranges (even if empty)
+    datasetJoints.forEach(joint => {
+      if (!jointRanges[joint]) {
+        jointRanges[joint] = { min: 0, max: 0 };
+      }
+    });
+
+    // Set up dialog data
+    setMappingDialogData({
+      datasetJoints,
+      jointRanges,
+    });
     setSelectedMapping(mapping);
     setShowMappingListPanel(false);
-
-    // Open dialog with the selected mapping
-    // Note: We need dataset joints and ranges from current episodes
-    // For now, we just close the list panel - the user can apply this later
-    toast.info(`Selected mapping for ${mapping.source}. Load episodes from this source to edit.`);
+    setShowMappingDialog(true);
   }, []);
 
   const handleDeleteMappingById = useCallback((id: string) => {
@@ -1078,10 +1092,70 @@ const Index = () => {
   }, []);
 
   const handleApplyMapping = useCallback((mappings: any[], degToRad: boolean) => {
-    // This will be called from the dialog
-    // The Sidebar component will handle the actual application to episodes
-    toast.success("Joint mapping applied");
-  }, []);
+    // This will be called from the dialog when editing an existing mapping
+    if (selectedMapping && mappingDialogData) {
+      // Build offset map from new mappings (per dataset joint)
+      const newOffsets: Record<string, number> = {};
+      const newMapping: Record<string, string> = {}; // dataset joint -> URDF joint
+      mappings.forEach(m => {
+        if (m.urdfJoint && m.urdfJoint !== "?") {
+          newMapping[m.datasetJoint] = m.urdfJoint;
+          if (m.offset !== undefined) {
+            newOffsets[m.datasetJoint] = m.offset;
+          }
+        }
+      });
+      
+      // Compare with old mapping to detect structural changes
+      const oldMapping: Record<string, string> = {};
+      const oldOffsets: Record<string, number> = {};
+      selectedMapping.mappings.forEach((m: any) => {
+        if (m.urdfJoint && m.urdfJoint !== "?") {
+          oldMapping[m.datasetJoint] = m.urdfJoint;
+          if (m.offset !== undefined) {
+            oldOffsets[m.datasetJoint] = m.offset;
+          }
+        }
+      });
+      
+      // Check if mapping structure changed (connections or degToRad)
+      const mappingStructureChanged = 
+        selectedMapping.degToRad !== degToRad ||
+        JSON.stringify(oldMapping) !== JSON.stringify(newMapping);
+      
+      // Save the updated mapping with joint ranges
+      saveMapping(selectedMapping.source, mappings, degToRad, mappingDialogData.jointRanges);
+      
+      // Notify Sidebar to update episodes from this mapping source
+      window.dispatchEvent(new CustomEvent('mapping:updated', {
+        detail: {
+          mappingSource: selectedMapping.source,
+          newOffsets,
+          newMapping,
+          oldOffsets,
+          oldMapping,
+          oldDegToRad: selectedMapping.degToRad,
+          newDegToRad: degToRad,
+          mappingStructureChanged, // Flag indicating if structure changed (needs full reload)
+        }
+      }));
+      
+      toast.success(mappingStructureChanged
+        ? "Joint mapping updated - episodes will be reloaded"
+        : "Joint mapping updated");
+      setShowMappingDialog(false);
+      setMappingDialogData(null);
+      setSelectedMapping(undefined);
+      
+      // Refresh the mapping list panel if it was open
+      if (showMappingListPanel) {
+        setShowMappingListPanel(false);
+        setTimeout(() => setShowMappingListPanel(true), 0);
+      }
+    } else {
+      toast.success("Joint mapping applied");
+    }
+  }, [selectedMapping, mappingDialogData, showMappingListPanel]);
 
   const handleDatasetActionsReady = useCallback((actions: {
     loadFromLocal: () => void;
@@ -1858,6 +1932,8 @@ const Index = () => {
           urdfJoints={availableJoints}
           jointRanges={mappingDialogData.jointRanges}
           existingMapping={selectedMapping}
+          source={selectedMapping?.source}
+          jointLimits={jointLimits}
           onApply={handleApplyMapping}
         />
       )}

@@ -1087,6 +1087,128 @@ export const Sidebar = ({
     }
   }, [episodes.length]);
 
+  // Listen for mapping updates and update episodes accordingly
+  useEffect(() => {
+    const handleMappingUpdate = (event: CustomEvent) => {
+      const { 
+        mappingSource, 
+        newOffsets, 
+        newMapping, 
+        oldOffsets,
+        oldMapping,
+        oldDegToRad,
+        newDegToRad,
+        mappingStructureChanged 
+      } = event.detail;
+      
+      // If mapping structure changed (connections or degToRad), we need to reload episodes
+      // Since we don't have raw data stored, we'll remove episodes from this source
+      // The episodes will need to be reloaded from the source to apply the new mapping
+      if (mappingStructureChanged) {
+        setEpisodes((prev) => {
+          const episodesToRemove: Episode[] = [];
+          const filtered = prev.filter((episode) => {
+            const metadata = episode.metadata;
+            if (!metadata?.additional) return true;
+            const mappingSourceInEpisode = metadata.additional.mappingSource;
+            if (mappingSourceInEpisode === mappingSource) {
+              episodesToRemove.push(episode);
+              return false;
+            }
+            return true;
+          });
+
+          // Extract source name from mapping source (e.g., "hf:owner/dataset" -> "owner/dataset")
+          const sourceName = mappingSource.startsWith('hf:')
+            ? mappingSource.slice(3)
+            : mappingSource;
+
+          if (episodesToRemove.length > 0) {
+            toast.warning(
+              `Mapping structure changed (connections or deg→rad conversion). ${episodesToRemove.length} episode(s) from "${sourceName}" were removed. Please reload the dataset to apply the new mapping.`,
+              { duration: 7000 }
+            );
+          }
+
+          return filtered;
+        });
+        return;
+      }
+      
+      // Only offset changes - update episodes by adjusting offset differences
+      setEpisodes((prev) => {
+        return prev.map((episode) => {
+          const metadata = episode.metadata;
+          if (!metadata?.additional) return episode;
+          
+          const mappingSourceInEpisode = metadata.additional.mappingSource;
+          if (mappingSourceInEpisode !== mappingSource) return episode;
+          
+          // Get old offsets and mapping that were applied
+          const storedOldOffsets = metadata.additional.appliedOffsets as Record<string, number> | undefined;
+          const reverseMapping = metadata.additional.appliedMapping as Record<string, string> | undefined; // URDF joint -> dataset joint
+          
+          if (!storedOldOffsets || !reverseMapping) return episode;
+          
+          // Update frames with new offsets
+          const updatedFrames = episode.frames.map((frame) => {
+            const updatedJointPositions: Record<string, number> = {};
+            
+            // For each joint position in the frame
+            Object.entries(frame.jointPositions).forEach(([urdfJoint, currentValue]) => {
+              // Find which dataset joint this URDF joint came from
+              const datasetJoint = reverseMapping[urdfJoint];
+              if (!datasetJoint) {
+                // Joint not in mapping, keep as is
+                updatedJointPositions[urdfJoint] = currentValue;
+                return;
+              }
+              
+              // Get old and new offsets for this dataset joint
+              const oldOffset = storedOldOffsets[datasetJoint] || 0;
+              const newOffset = newOffsets[datasetJoint] || 0;
+              
+              // Adjust value: newValue = currentValue - oldOffset + newOffset
+              const offsetDiff = newOffset - oldOffset;
+              updatedJointPositions[urdfJoint] = currentValue + offsetDiff;
+            });
+            
+            return {
+              ...frame,
+              jointPositions: updatedJointPositions,
+            };
+          });
+          
+          // Update metadata with new offsets
+          const updatedMetadata = {
+            ...metadata,
+            additional: {
+              ...metadata.additional,
+              appliedOffsets: { ...newOffsets },
+              appliedMapping: Object.entries(newMapping).reduce((acc, [datasetJoint, urdfJoint]) => {
+                acc[urdfJoint] = datasetJoint;
+                return acc;
+              }, {} as Record<string, string>),
+            },
+          };
+          
+          return {
+            ...episode,
+            frames: updatedFrames,
+            metadata: updatedMetadata,
+          };
+        });
+      });
+      
+      toast.success(`Updated trajectories for episodes from ${mappingSource}`);
+    };
+    
+    window.addEventListener('mapping:updated', handleMappingUpdate as EventListener);
+    return () => {
+      window.removeEventListener('mapping:updated', handleMappingUpdate as EventListener);
+    };
+  }, []);
+
   const handleJointChange = (jointName: string, value: number) => {
     const limited = previewJointValue(jointName, value);
     if (!onJointChange) {
@@ -2877,14 +2999,24 @@ export const Sidebar = ({
         const continueWithMapping = (mappings: JointMapping[], degToRad: boolean) => {
           // Convert mappings to record format
           const jointMapping: Record<string, string> = {};
+          const jointOffsets: Record<string, number> = {}; // Offset transformations per dataset joint
+          const jointInversions: Record<string, boolean> = {}; // Track which joints are inverted
           for (const mapping of mappings) {
             if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
               jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
+              // Store offset if present
+              if (mapping.offset !== undefined) {
+                jointOffsets[mapping.datasetJoint] = mapping.offset;
+              }
+              // Store inversion if present
+              if (mapping.inverted !== undefined && mapping.inverted) {
+                jointInversions[mapping.datasetJoint] = true;
+              }
             }
           }
 
           // Save mapping for future use
-          saveMapping(sourceName, mappings, degToRad);
+          saveMapping(sourceName, mappings, degToRad, jointRanges);
 
           // Check if dataset has more joints than URDF
           const mappedCount = mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length;
@@ -2899,6 +3031,7 @@ export const Sidebar = ({
 
           console.log("Convert degrees to radians:", degToRad);
           console.log("Final joint mapping:", jointMapping);
+          console.log("Joint offsets:", jointOffsets);
 
           // Convert to episodes
           const newEpisodes: Episode[] = [];
@@ -2935,6 +3068,17 @@ export const Sidebar = ({
                 value = value * degToRadConst;
               }
 
+              // Apply inversion BEFORE offset (if joint axis is inverted)
+              if (jointInversions[name]) {
+                value = -value;
+              }
+
+              // Apply offset transformation if present
+              const offset = jointOffsets[name];
+              if (offset !== undefined) {
+                value = value + offset;
+              }
+
               jointPositions[mappedName] = value;
             });
 
@@ -2966,6 +3110,13 @@ export const Sidebar = ({
             additional: {
               sourceType: 'hf',
               sourceName: parsedPath,
+              mappingSource: sourceName, // Store mapping source identifier
+              appliedOffsets: { ...jointOffsets }, // Store offsets that were applied (per dataset joint)
+              appliedInversions: { ...jointInversions }, // Store inversions that were applied (per dataset joint)
+              appliedMapping: Object.entries(jointMapping).reduce((acc, [datasetJoint, urdfJoint]) => {
+                acc[urdfJoint] = datasetJoint; // Reverse mapping: URDF joint -> dataset joint
+                return acc;
+              }, {} as Record<string, string>), // Store reverse mapping for offset updates
             },
           };
 

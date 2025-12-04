@@ -57,7 +57,8 @@ export const MappingListPanel = ({
             {mappings.map((mapping) => (
               <div
                 key={mapping.id}
-                className="p-3 bg-[#1e1e1e] border border-[#3d3d3d] rounded hover:border-[#4d4d4d] transition-colors"
+                className="p-3 bg-[#1e1e1e] border border-[#3d3d3d] rounded hover:border-[#4d4d4d] transition-colors cursor-pointer"
+                onClick={() => onSelectMapping(mapping)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -101,7 +102,10 @@ export const MappingListPanel = ({
 
                   <div className="flex gap-1 flex-shrink-0">
                     <Button
-                      onClick={() => onSelectMapping(mapping)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectMapping(mapping);
+                      }}
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-xs bg-[#2d2d2d] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#3d3d3d] hover:text-white"
@@ -109,7 +113,10 @@ export const MappingListPanel = ({
                       <Edit className="h-3 w-3" />
                     </Button>
                     <Button
-                      onClick={() => onDeleteMapping(mapping.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteMapping(mapping.id);
+                      }}
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-xs bg-[#2d2d2d] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#3d1e1e] hover:border-[#5d2e2e] hover:text-[#dd6d6d]"

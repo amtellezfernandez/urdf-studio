@@ -48,7 +48,8 @@ export const getSavedMappings = (): SavedMapping[] => {
 export const saveMapping = (
   source: string,
   mappings: JointMapping[],
-  degToRad: boolean
+  degToRad: boolean,
+  jointRanges?: Record<string, { min: number; max: number }>
 ): SavedMapping => {
   const allMappings = getSavedMappings();
 
@@ -61,6 +62,7 @@ export const saveMapping = (
     mappings,
     degToRad,
     timestamp: Date.now(),
+    jointRanges: jointRanges || (existingIndex >= 0 ? allMappings[existingIndex].jointRanges : undefined),
   };
 
   if (existingIndex >= 0) {
@@ -111,7 +113,13 @@ export const applyMapping = (
     const value = jointPositions[mapping.datasetJoint];
     if (value !== undefined) {
       // Apply deg→rad conversion if enabled
-      const convertedValue = degToRad ? (value * Math.PI) / 180 : value;
+      let convertedValue = degToRad ? (value * Math.PI) / 180 : value;
+      
+      // Apply offset transformation if present
+      if (mapping.offset !== undefined) {
+        convertedValue = convertedValue + mapping.offset;
+      }
+      
       result[mapping.urdfJoint] = convertedValue;
     }
   }
