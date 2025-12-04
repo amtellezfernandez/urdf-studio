@@ -1554,13 +1554,13 @@ export const Viewer3D = ({
   useEffect(() => {
     if (!robot) return;
     const allJoints = Object.keys((robot as any).joints || {});
-    // Filter out fixed joints and non-joint items like "imu_site_frame"
+    // Include all joints (including fixed) but exclude non-joint items like "imu_site_frame"
+    // Fixed joints need to be visible so users can change their type back
     const joints = allJoints.filter((j) => {
       const jointObj: any = (robot as any).joints?.[j];
-      // Only include revolute/actuated joints, exclude fixed joints and sensor frames
+      // Include all joint types (including fixed), but exclude sensor frames
       return jointObj && 
-             jointObj.type !== 'fixed' && 
-             typeof jointObj.angle === "number" &&
+             (typeof jointObj.angle === "number" || jointObj.type === 'fixed') &&
              !j.toLowerCase().includes('imu') &&
              !j.toLowerCase().includes('site') &&
              !j.toLowerCase().includes('frame');
@@ -1568,7 +1568,12 @@ export const Viewer3D = ({
     const angles: Record<string, number> = {};
     joints.forEach((j) => {
       const jointObj: any = (robot as any).joints?.[j];
-      angles[j] = typeof jointObj?.angle === "number" ? jointObj.angle : 0;
+      // Fixed joints always have angle 0, other joints use their actual angle
+      if (jointObj.type === 'fixed') {
+        angles[j] = 0;
+      } else {
+        angles[j] = typeof jointObj?.angle === "number" ? jointObj.angle : 0;
+      }
     });
     // Update external callback
     onRobotJointsLoaded?.(joints, angles);

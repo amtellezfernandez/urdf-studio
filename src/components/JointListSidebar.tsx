@@ -379,8 +379,14 @@ export const JointListSidebar = ({
   }, [allLinks, searchQuery]);
 
   // Filter joints by search and type (flat view)
+  // Use jointLimits as source of truth to ensure all joints (including fixed) are visible
   const filteredJoints = useMemo(() => {
-    let joints = availableJoints;
+    // Combine availableJoints and all joints from jointLimits to ensure nothing is missed
+    const allJointsSet = new Set([
+      ...availableJoints,
+      ...Object.keys(jointLimits)
+    ]);
+    let joints = Array.from(allJointsSet);
 
     // Filter by type
     if (typeFilter !== "all") {
@@ -550,7 +556,7 @@ export const JointListSidebar = ({
                 </Select>
 
                 <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                  {filteredJoints.length} of {availableJoints.length}
+                  {filteredJoints.length} of {Object.keys(jointLimits).length}
                 </span>
               </div>
             )}
