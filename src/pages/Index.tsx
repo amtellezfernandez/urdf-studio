@@ -72,6 +72,7 @@ const AXIS_NAMES: Record<RotationAxis, string> = {
 const SIDEBAR_RESIZER_WIDTH = 8;
 const VIEWER_RESIZER_HEIGHT = 4;
 const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4;
+const DEFAULT_EPISODES_VIEW_HEIGHT = 0.4;
 const MIN_HEADER_HEIGHT = 50;
 const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'] as const;
 
@@ -115,6 +116,7 @@ const Index = () => {
   const [viewerEpisode, setViewerEpisode] = useState<{ id: string; number: number; frames: Array<{ timestamp: number; jointPositions: Record<string, number> }>; createdAt: number; metadata?: unknown } | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
+  const [episodesViewHeight, setEpisodesViewHeight] = useState(DEFAULT_EPISODES_VIEW_HEIGHT);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: unknown, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
@@ -983,6 +985,46 @@ const Index = () => {
     [recordingViewHeight, clampRecordingViewHeight]
   );
 
+  const handleEpisodesResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startY = event.clientY;
+      const container = event.currentTarget.closest('.sidebar-panel') as HTMLElement;
+      if (!container) return;
+
+      const containerHeight = container.clientHeight;
+      const startHeight = episodesViewHeight;
+      const originalCursor = document.body.style.cursor;
+      const originalUserSelect = document.body.style.userSelect;
+
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const delta = moveEvent.clientY - startY;
+        const deltaRatio = delta / containerHeight;
+        // Dragging up (negative delta) should make top section smaller
+        // Dragging down (positive delta) should make top section bigger
+        const nextHeight = clampRecordingViewHeight(startHeight + deltaRatio, containerHeight);
+        setEpisodesViewHeight(nextHeight);
+      };
+
+      const handlePointerUp = () => {
+        document.body.style.cursor = originalCursor;
+        document.body.style.userSelect = originalUserSelect;
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+    },
+    [episodesViewHeight, clampRecordingViewHeight]
+  );
+
   const hasRotationChanges = useMemo(
     () => vizUrdfContent !== originalVizUrdfContent,
     [vizUrdfContent, originalVizUrdfContent]
@@ -1329,6 +1371,8 @@ const Index = () => {
               setViewerEpisode(episode);
             }}
             onViewerOpenChange={setIsViewerOpen}
+            episodesViewHeight={recordingViewHeight}
+            onEpisodesResizeStart={handleEpisodesResizeStart}
           />
 
           {!isSidebarCollapsed && (

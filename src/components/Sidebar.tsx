@@ -101,6 +101,8 @@ interface SidebarProps {
     hasEpisodes: boolean;
     isRerunViewerOpen: boolean;
   }) => void;
+  episodesViewHeight?: number;
+  onEpisodesResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
 }
 
 interface RecordedFrame {
@@ -821,6 +823,8 @@ export const Sidebar = ({
   onViewerEpisodeChange,
   onViewerOpenChange,
   onDatasetActionsReady,
+  episodesViewHeight = 0.4,
+  onEpisodesResizeStart,
 }: SidebarProps) => {
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
 
@@ -3722,8 +3726,15 @@ export const Sidebar = ({
           </div>
         )}
 
-        {/* Recording Content */}
-        <div className="flex-1 overflow-hidden flex flex-col p-1.5 mt-0 h-full blender-scrollbar">
+        {/* Top Section - Recording Controls (height adjusts based on episodesViewHeight) */}
+        <div
+          className="overflow-hidden flex flex-col p-1.5 border-b border-border/20"
+          style={{
+            flex: `0 0 ${((episodesViewHeight ?? 0.4) * 100)}%`,
+            minHeight: '50px'
+          }}
+        >
+          <div className="flex-1 overflow-y-auto blender-scrollbar">
             {/* Blender-style Menu Bar */}
             <div className="flex items-center gap-1.5 border-b border-border/50 pb-1 mb-1.5">
               {/* Record Button - Always Visible */}
@@ -4083,7 +4094,37 @@ export const Sidebar = ({
                 )}
               </div>
             </BlenderPanel>
+          </div>
+        </div>
 
+        {/* Horizontal Resizer */}
+        {onEpisodesResizeStart && (
+          <div
+            onPointerDown={onEpisodesResizeStart}
+            className="cursor-row-resize select-none bg-border/30 hover:bg-border/60 transition-colors relative group flex-shrink-0 z-10"
+            style={{ height: 4 }}
+            aria-label="Resize episodes view"
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-12 h-0.5 bg-border/40 group-hover:bg-border/80 transition-colors rounded-full" />
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Section - Placeholder for future content */}
+        <div
+          className="overflow-hidden flex flex-col p-1.5"
+          style={{
+            flex: `0 0 ${((1 - (episodesViewHeight ?? 0.4)) * 100)}%`,
+            minHeight: '50px'
+          }}
+        >
+          <div className="flex-1 overflow-y-auto blender-scrollbar">
+            <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
+              {/* Placeholder for additional controls or information */}
+              <span>Additional Panel</span>
+            </div>
+          </div>
         </div>
       </div>
 
