@@ -71,6 +71,8 @@ interface JointListItemProps {
   onClick?: () => void;
   isSelected?: boolean;
   availableJoints?: string[];
+  isVisible?: boolean;
+  onVisibilityToggle?: (jointName: string) => void;
 }
 
 export const JointListItem = ({
@@ -85,6 +87,8 @@ export const JointListItem = ({
   onClick,
   isSelected = false,
   availableJoints = [],
+  isVisible = true,
+  onVisibilityToggle,
 }: JointListItemProps) => {
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
@@ -326,6 +330,9 @@ export const JointListItem = ({
     ? getJointColor(jointName, availableJoints)
     : jointTypeColor;
 
+  // Determine square color - grey if hidden, otherwise use editor color
+  const squareColor = isVisible ? jointEditorColor : "#71717a";
+
   // Helper to convert hex to rgba
   const hexToRgba = (hex: string, alpha: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -334,13 +341,19 @@ export const JointListItem = ({
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
+  const handleSquareClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onVisibilityToggle?.(jointName);
+  };
+
   return (
     <div className="flex items-center gap-1.5">
       {/* Color square matching 3D editor colors - outside highlight area */}
       <div
-        className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
-        style={{ backgroundColor: jointEditorColor }}
-        title={`Joint color: ${jointEditorColor}`}
+        className="w-3.5 h-3.5 rounded-sm flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ backgroundColor: squareColor }}
+        title={isVisible ? `Joint visible - click to hide` : `Joint hidden - click to show`}
+        onClick={handleSquareClick}
       />
       <div
         className={cn(

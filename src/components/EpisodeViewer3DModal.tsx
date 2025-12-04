@@ -494,6 +494,57 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setLastSaveChoice(null);
   }, [episode?.id]);
 
+  // Listen for joint visibility toggles from joint list sidebar
+  useEffect(() => {
+    const handleJointVisibilityToggle = (event: Event) => {
+      const customEvent = event as CustomEvent<{ jointName: string; isVisible: boolean }>;
+      const { jointName, isVisible } = customEvent.detail;
+      setSelectedJoints(prev => {
+        const newSelected = new Set(prev);
+        if (isVisible) {
+          newSelected.add(jointName);
+        } else {
+          newSelected.delete(jointName);
+        }
+        // Dispatch event back to sync with joint list
+        const syncEvent = new CustomEvent('episodeViewer:jointVisibilityChange', {
+          detail: { jointName, isVisible }
+        });
+        window.dispatchEvent(syncEvent);
+        return newSelected;
+      });
+    };
+
+    window.addEventListener('jointVisibilityToggle' as any, handleJointVisibilityToggle);
+    return () => {
+      window.removeEventListener('jointVisibilityToggle' as any, handleJointVisibilityToggle);
+    };
+  }, []);
+
+  // Dispatch visibility changes when selectedJoints changes (from episode viewer legend clicks)
+  // Use a ref to track previous state and only dispatch for changed joints
+  const prevSelectedJointsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!episode) return;
+    const jointNames = Object.keys(episode.frames[0]?.jointPositions || {});
+    const prev = prevSelectedJointsRef.current;
+    
+    jointNames.forEach(jointName => {
+      const wasVisible = prev.has(jointName);
+      const isVisible = selectedJoints.has(jointName);
+      // Only dispatch if visibility actually changed
+      if (wasVisible !== isVisible) {
+        const syncEvent = new CustomEvent('episodeViewer:jointVisibilityChange', {
+          detail: { jointName, isVisible }
+        });
+        window.dispatchEvent(syncEvent);
+      }
+    });
+    
+    // Update ref for next comparison
+    prevSelectedJointsRef.current = new Set(selectedJoints);
+  }, [selectedJoints, episode]);
+
   // Initialize preserved frame on mount
   useEffect(() => {
     if (preservedFrameRef.current === null) {

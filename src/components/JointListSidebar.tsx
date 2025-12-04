@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { JointListItem } from "@/components/JointListItem";
 import { JointControl } from "@/components/JointControl";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ interface HierarchyTreeViewProps {
   onLinkSelect?: (linkName: string | null) => void;
   selectedLink?: string | null;
   availableJoints: string[];
+  visibleJoints: Set<string>;
+  onVisibilityToggle: (jointName: string) => void;
 }
 
 const HierarchyTreeView = ({
@@ -47,6 +49,8 @@ const HierarchyTreeView = ({
   onLinkSelect,
   selectedLink,
   availableJoints,
+  visibleJoints,
+  onVisibilityToggle,
 }: HierarchyTreeViewProps) => {
   if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
     return (
@@ -175,6 +179,8 @@ const HierarchyTreeView = ({
                       }}
                       onHover={undefined} // Disable hover activation in hierarchy view
                   availableJoints={availableJoints}
+                  isVisible={visibleJoints.has(joint.jointName)}
+                  onVisibilityToggle={handleVisibilityToggle}
                 />
               </div>
               {/* Recursively render child link */}
@@ -267,6 +273,52 @@ export const JointListSidebar = ({
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy">("flat");
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
+  const [visibleJoints, setVisibleJoints] = useState<Set<string>>(new Set(availableJoints));
+
+  // Sync visibility state with availableJoints changes
+  useEffect(() => {
+    // Initialize all joints as visible when availableJoints changes
+    setVisibleJoints(new Set(availableJoints));
+  }, [availableJoints]);
+
+  // Listen for visibility changes from episode viewer
+  useEffect(() => {
+    const handleVisibilityChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ jointName: string; isVisible: boolean }>;
+      const { jointName, isVisible } = customEvent.detail;
+      setVisibleJoints(prev => {
+        const newSet = new Set(prev);
+        if (isVisible) {
+          newSet.add(jointName);
+        } else {
+          newSet.delete(jointName);
+        }
+        return newSet;
+      });
+    };
+
+    window.addEventListener('episodeViewer:jointVisibilityChange' as any, handleVisibilityChange);
+    return () => {
+      window.removeEventListener('episodeViewer:jointVisibilityChange' as any, handleVisibilityChange);
+    };
+  }, []);
+
+  const handleVisibilityToggle = (jointName: string) => {
+    const isVisible = visibleJoints.has(jointName);
+    const newVisible = new Set(visibleJoints);
+    if (isVisible) {
+      newVisible.delete(jointName);
+    } else {
+      newVisible.add(jointName);
+    }
+    setVisibleJoints(newVisible);
+    
+    // Dispatch event for episode viewer
+    const event = new CustomEvent('jointVisibilityToggle', {
+      detail: { jointName, isVisible: !isVisible }
+    });
+    window.dispatchEvent(event);
+  };
 
   // Get all unique joint types
   const jointTypes = useMemo(() => {
@@ -571,6 +623,8 @@ export const JointListSidebar = ({
                       }}
                       onHover={onJointHover}
                       availableJoints={availableJoints}
+                      isVisible={visibleJoints.has(jointName)}
+                      onVisibilityToggle={handleVisibilityToggle}
                     />
                   ))}
                 </div>
@@ -599,6 +653,8 @@ export const JointListSidebar = ({
                   }}
                   selectedLink={selectedLink}
                   availableJoints={availableJoints}
+                  visibleJoints={visibleJoints}
+                  onVisibilityToggle={handleVisibilityToggle}
                 />
               )
             )}
