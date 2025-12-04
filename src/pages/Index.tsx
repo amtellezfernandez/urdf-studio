@@ -8,7 +8,10 @@ import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { ExportDialog } from "@/components/ExportDialog";
+import { JointMappingDialog, type SavedMapping } from "@/components/JointMappingDialog";
+import { MappingListPanel } from "@/components/MappingListPanel";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
+import { getSavedMappings, deleteMapping } from "@/utils/jointMappingUtils";
 import { toast } from "sonner";
 import { createVizFilename } from "@/urdf_corrections/addJointColors";
 import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
@@ -121,6 +124,15 @@ const Index = () => {
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
   const [debugMeshInfo, setDebugMeshInfo] = useState<DebugMeshInfo[]>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
+
+  // Joint Mapping state
+  const [showMappingListPanel, setShowMappingListPanel] = useState(false);
+  const [showMappingDialog, setShowMappingDialog] = useState(false);
+  const [selectedMapping, setSelectedMapping] = useState<SavedMapping | undefined>(undefined);
+  const [mappingDialogData, setMappingDialogData] = useState<{
+    datasetJoints: string[];
+    jointRanges: Record<string, { min: number; max: number }>;
+  } | null>(null);
 
   const createUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
@@ -1028,6 +1040,35 @@ const Index = () => {
     [vizUrdfContent, originalVizUrdfContent]
   );
 
+  // Joint Mapping handlers
+  const handleOpenMappingList = useCallback(() => {
+    setShowMappingListPanel(true);
+  }, []);
+
+  const handleSelectMapping = useCallback((mapping: SavedMapping) => {
+    setSelectedMapping(mapping);
+    setShowMappingListPanel(false);
+
+    // Open dialog with the selected mapping
+    // Note: We need dataset joints and ranges from current episodes
+    // For now, we just close the list panel - the user can apply this later
+    toast.info(`Selected mapping for ${mapping.source}. Load episodes from this source to edit.`);
+  }, []);
+
+  const handleDeleteMappingById = useCallback((id: string) => {
+    deleteMapping(id);
+    toast.success("Mapping deleted");
+    // Force re-render by toggling the panel
+    setShowMappingListPanel(false);
+    setTimeout(() => setShowMappingListPanel(true), 0);
+  }, []);
+
+  const handleApplyMapping = useCallback((mappings: any[], degToRad: boolean) => {
+    // This will be called from the dialog
+    // The Sidebar component will handle the actual application to episodes
+    toast.success("Joint mapping applied");
+  }, []);
+
   // Show upload screen if no files loaded yet
   if (!hasLoadedFiles) {
     return <FolderUploadScreen onFolderSelected={loadFilesFromFolder} />;
@@ -1306,6 +1347,12 @@ const Index = () => {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                  <DropdownMenuItem
+                    onClick={handleOpenMappingList}
+                    className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                  >
+                    Joint Mappings
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => {
                       // Add functionality - empty for now
@@ -1728,6 +1775,32 @@ const Index = () => {
           meshFiles={meshFiles}
           githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
           robotName={robotName}
+        />
+      )}
+
+      {/* Joint Mapping List Panel */}
+      <MappingListPanel
+        isOpen={showMappingListPanel}
+        onClose={() => setShowMappingListPanel(false)}
+        mappings={getSavedMappings()}
+        onSelectMapping={handleSelectMapping}
+        onDeleteMapping={handleDeleteMappingById}
+      />
+
+      {/* Joint Mapping Dialog */}
+      {mappingDialogData && (
+        <JointMappingDialog
+          isOpen={showMappingDialog}
+          onClose={() => {
+            setShowMappingDialog(false);
+            setMappingDialogData(null);
+            setSelectedMapping(undefined);
+          }}
+          datasetJoints={mappingDialogData.datasetJoints}
+          urdfJoints={availableJoints}
+          jointRanges={mappingDialogData.jointRanges}
+          existingMapping={selectedMapping}
+          onApply={handleApplyMapping}
         />
       )}
     </div>
