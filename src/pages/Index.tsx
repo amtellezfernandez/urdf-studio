@@ -1826,17 +1826,15 @@ const Index = () => {
           </div>
         </div>
       )}
-      {/* Export Dialog */}
-      {showUrdfEditor && (
-        <ExportDialog
-          isOpen={showExportDialog}
-          onClose={() => setShowExportDialog(false)}
-          urdfContent={getExportUrdfContent()}
-          meshFiles={meshFiles}
-          githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
-          robotName={robotName}
-        />
-      )}
+      {/* Export Dialog - Always available, even when on 3D viewer */}
+      <ExportDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        urdfContent={getExportUrdfContent()}
+        meshFiles={meshFiles}
+        githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
+        robotName={robotName}
+      />
 
       {/* Joint Mapping List Panel */}
       <MappingListPanel

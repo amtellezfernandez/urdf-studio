@@ -4196,6 +4196,7 @@ export const Sidebar = ({
           jointRanges={mappingDialogData.jointRanges}
           existingMapping={getMappingForSource(`hf:${mappingDialogData.datasetPath}`)}
           source={mappingDialogData.source}
+          jointLimits={jointLimits}
           onApply={(mappings, degToRad) => {
             if (pendingMappingCallback) {
               pendingMappingCallback(mappings, degToRad);

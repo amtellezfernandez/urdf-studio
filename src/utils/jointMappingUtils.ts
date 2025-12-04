@@ -29,11 +29,11 @@ export const computeGlobalJointRanges = (
 };
 
 /**
- * Get all saved mappings from localStorage
+ * Get all saved mappings from sessionStorage (session-only, not persistent)
  */
 export const getSavedMappings = (): SavedMapping[] => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (!stored) return [];
     return JSON.parse(stored);
   } catch (error) {
@@ -43,7 +43,7 @@ export const getSavedMappings = (): SavedMapping[] => {
 };
 
 /**
- * Save a new mapping to localStorage
+ * Save a new mapping to sessionStorage (session-only, not persistent across browser restarts)
  */
 export const saveMapping = (
   source: string,
@@ -71,7 +71,7 @@ export const saveMapping = (
     allMappings.push(newMapping);
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(allMappings));
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(allMappings));
   return newMapping;
 };
 
@@ -89,7 +89,7 @@ export const getMappingForSource = (source: string): SavedMapping | undefined =>
 export const deleteMapping = (id: string): void => {
   const allMappings = getSavedMappings();
   const filtered = allMappings.filter((m) => m.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
 };
 
 /**
