@@ -11,7 +11,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box, CloudDownload, GitBranch, Plus } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box, CloudDownload, GitBranch } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -43,9 +43,8 @@ import {
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 import { Badge } from "@/components/ui/badge";
-import { JointMappingDialog, type SavedMapping, type JointMapping } from "@/components/JointMappingDialog";
-import { EpisodeSelectionDialog, type SelectionMode } from "@/components/EpisodeSelectionDialog";
-import { getMappingForSource, saveMapping, computeGlobalJointRanges } from "@/utils/jointMappingUtils";
+import { JointMappingDialog, type JointMapping } from "@/components/JointMappingDialog";
+import { getMappingForSource, saveMapping } from "@/utils/jointMappingUtils";
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
@@ -1026,34 +1025,25 @@ export const Sidebar = ({
   // Track dataset sources for future mixing
   const [datasetSources, setDatasetSources] = useState<Array<{ type: 'hf' | 'local' | 'github' | 'recorded'; name: string; timestamp: number }>>([]);
   
-  // Joint mapping dialog state
-  const [showMappingDialog, setShowMappingDialog] = useState(false);
-  const [mappingDialogData, setMappingDialogData] = useState<{
+  // Mapping dialog state for Hugging Face loading
+  const [showHfMappingDialog, setShowHfMappingDialog] = useState(false);
+  const [hfMappingDialogData, setHfMappingDialogData] = useState<{
     datasetJoints: string[];
     jointRanges: Record<string, { min: number; max: number }>;
     source: string;
     datasetPath: string;
-    allRows: Array<Record<string, unknown>>;
-    episodesMap: Map<number, Array<Record<string, unknown>>>;
+    firstEpisodeRows: Array<Record<string, unknown>>;
+    firstEpisodeMap: Map<number, Array<Record<string, unknown>>>;
+    allEpisodesPromise: Promise<{ allRows: Array<Record<string, unknown>>; episodesMap: Map<number, Array<Record<string, unknown>>> }>;
     jointNames: string[];
     loadingToastId?: string | number;
   } | null>(null);
-  const [pendingMappingCallback, setPendingMappingCallback] = useState<((mappings: JointMapping[], degToRad: boolean) => void) | null>(null);
-
-  // Episode selection dialog state
-  const [showEpisodeSelectionDialog, setShowEpisodeSelectionDialog] = useState(false);
-  const [episodeSelectionData, setEpisodeSelectionData] = useState<{
-    parsedPath: string;
-    episodesMap: Map<number, Array<Record<string, unknown>>>;
-    allRows: Array<Record<string, unknown>>;
-    jointNames: string[];
-    jointRanges: Record<string, { min: number; max: number }>;
-    datasetJointNames: string[];
-    urdfUrls: Array<{ url: string; path: string }>;
-    loadingToastId?: string | number;
-    loadedEpisodeIndex?: number; // Track which episode was loaded as preview
-  } | null>(null);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [canApplyToWholeDataset, setCanApplyToWholeDataset] = useState(false);
+  const backgroundLoadingPromiseRef = useRef<Promise<{ allRows: Array<Record<string, unknown>>; episodesMap: Map<number, Array<Record<string, unknown>>> }> | null>(null);
+  
+  // Store callbacks for mapping dialog
+  const [applyFirstEpisodeCallback, setApplyFirstEpisodeCallback] = useState<((mappings: JointMapping[], degToRad: boolean) => void) | null>(null);
+  const [applyWholeDatasetCallback, setApplyWholeDatasetCallback] = useState<((mappings: JointMapping[], degToRad: boolean) => Promise<void>) | null>(null);
 
   // Dispatch custom event when frame changes to sync with EpisodeViewer3DModal
   useEffect(() => {
@@ -1102,128 +1092,6 @@ export const Sidebar = ({
       (window as any).viewer3dSetFrame?.(0);
     }
   }, [episodes.length]);
-
-  // Listen for mapping updates and update episodes accordingly
-  useEffect(() => {
-    const handleMappingUpdate = (event: CustomEvent) => {
-      const { 
-        mappingSource, 
-        newOffsets, 
-        newMapping, 
-        oldOffsets,
-        oldMapping,
-        oldDegToRad,
-        newDegToRad,
-        mappingStructureChanged 
-      } = event.detail;
-      
-      // If mapping structure changed (connections or degToRad), we need to reload episodes
-      // Since we don't have raw data stored, we'll remove episodes from this source
-      // The episodes will need to be reloaded from the source to apply the new mapping
-      if (mappingStructureChanged) {
-        setEpisodes((prev) => {
-          const episodesToRemove: Episode[] = [];
-          const filtered = prev.filter((episode) => {
-            const metadata = episode.metadata;
-            if (!metadata?.additional) return true;
-            const mappingSourceInEpisode = metadata.additional.mappingSource;
-            if (mappingSourceInEpisode === mappingSource) {
-              episodesToRemove.push(episode);
-              return false;
-            }
-            return true;
-          });
-
-          // Extract source name from mapping source (e.g., "hf:owner/dataset" -> "owner/dataset")
-          const sourceName = mappingSource.startsWith('hf:')
-            ? mappingSource.slice(3)
-            : mappingSource;
-
-          if (episodesToRemove.length > 0) {
-            toast.warning(
-              `Mapping structure changed (connections or deg→rad conversion). ${episodesToRemove.length} episode(s) from "${sourceName}" were removed. Please reload the dataset to apply the new mapping.`,
-              { duration: 7000 }
-            );
-          }
-
-          return filtered;
-        });
-        return;
-      }
-      
-      // Only offset changes - update episodes by adjusting offset differences
-      setEpisodes((prev) => {
-        return prev.map((episode) => {
-          const metadata = episode.metadata;
-          if (!metadata?.additional) return episode;
-          
-          const mappingSourceInEpisode = metadata.additional.mappingSource;
-          if (mappingSourceInEpisode !== mappingSource) return episode;
-          
-          // Get old offsets and mapping that were applied
-          const storedOldOffsets = metadata.additional.appliedOffsets as Record<string, number> | undefined;
-          const reverseMapping = metadata.additional.appliedMapping as Record<string, string> | undefined; // URDF joint -> dataset joint
-          
-          if (!storedOldOffsets || !reverseMapping) return episode;
-          
-          // Update frames with new offsets
-          const updatedFrames = episode.frames.map((frame) => {
-            const updatedJointPositions: Record<string, number> = {};
-            
-            // For each joint position in the frame
-            Object.entries(frame.jointPositions).forEach(([urdfJoint, currentValue]) => {
-              // Find which dataset joint this URDF joint came from
-              const datasetJoint = reverseMapping[urdfJoint];
-              if (!datasetJoint) {
-                // Joint not in mapping, keep as is
-                updatedJointPositions[urdfJoint] = currentValue;
-                return;
-              }
-              
-              // Get old and new offsets for this dataset joint
-              const oldOffset = storedOldOffsets[datasetJoint] || 0;
-              const newOffset = newOffsets[datasetJoint] || 0;
-              
-              // Adjust value: newValue = currentValue - oldOffset + newOffset
-              const offsetDiff = newOffset - oldOffset;
-              updatedJointPositions[urdfJoint] = currentValue + offsetDiff;
-            });
-            
-            return {
-              ...frame,
-              jointPositions: updatedJointPositions,
-            };
-          });
-          
-          // Update metadata with new offsets
-          const updatedMetadata = {
-            ...metadata,
-            additional: {
-              ...metadata.additional,
-              appliedOffsets: { ...newOffsets },
-              appliedMapping: Object.entries(newMapping).reduce((acc, [datasetJoint, urdfJoint]) => {
-                acc[urdfJoint] = datasetJoint;
-                return acc;
-              }, {} as Record<string, string>),
-            },
-          };
-          
-          return {
-            ...episode,
-            frames: updatedFrames,
-            metadata: updatedMetadata,
-          };
-        });
-      });
-      
-      toast.success(`Updated trajectories for episodes from ${mappingSource}`);
-    };
-    
-    window.addEventListener('mapping:updated', handleMappingUpdate as EventListener);
-    return () => {
-      window.removeEventListener('mapping:updated', handleMappingUpdate as EventListener);
-    };
-  }, []);
 
   const handleJointChange = (jointName: string, value: number) => {
     const limited = previewJointValue(jointName, value);
@@ -2842,11 +2710,17 @@ export const Sidebar = ({
 
         // Silent progress - no toast for row count
 
-        // Fetch data in batches
-        while (hasMore) {
+        // STEP 1: Load first episode first, then open mapping dialog, then load all episodes in background
+        // First, load only enough rows to complete the first episode
+        let firstEpisodeIndex: number | null = null;
+        let firstEpisodeComplete = false;
+        const firstEpisodeRows: Array<Record<string, unknown>> = [];
+        
+        // Fetch first episode data
+        while (hasMore && !firstEpisodeComplete) {
           try {
             const rowsUrl = `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(parsedPath)}&config=default&split=train&offset=${offset}&length=${batchSize}`;
-            console.log(`Fetching rows ${offset} to ${offset + batchSize}...`);
+            console.log(`Fetching first episode rows ${offset} to ${offset + batchSize}...`);
 
             const response = await fetch(rowsUrl, { headers });
             if (!response.ok) {
@@ -2862,26 +2736,37 @@ export const Sidebar = ({
               break;
             }
 
-            // Extract row data from the response
+            // Extract row data and check for first episode completion
             for (const rowWrapper of rows) {
               const row = rowWrapper.row || rowWrapper;
+              const episodeIndex = (row.episode_index as number) ?? 0;
+              
+              // Determine first episode index from first row
+              if (firstEpisodeIndex === null) {
+                firstEpisodeIndex = episodeIndex;
+              }
+              
+              // If we've moved to a different episode, first episode is complete
+              if (episodeIndex !== firstEpisodeIndex) {
+                firstEpisodeComplete = true;
+                break;
+              }
+              
+              firstEpisodeRows.push(row);
               allRows.push(row);
             }
 
-            console.log(`Loaded ${rows.length} rows (total: ${allRows.length})`);
-
-            // Silent progress - no frequent toasts
+            console.log(`Loaded ${firstEpisodeRows.length} rows for first episode (total so far: ${allRows.length})`);
 
             offset += batchSize;
-            hasMore = rows.length === batchSize;
+            hasMore = rows.length === batchSize && !firstEpisodeComplete;
           } catch (error) {
             console.error(`Error fetching rows at offset ${offset}:`, error);
             break;
           }
         }
 
-        console.log(`Total rows loaded: ${allRows.length}`);
-        if (allRows.length === 0) {
+        if (firstEpisodeRows.length === 0) {
           console.error("No rows were loaded from parquet files. Check console for details.");
           if (loadingToastId) {
             toast.dismiss(loadingToastId);
@@ -2891,17 +2776,67 @@ export const Sidebar = ({
           return;
         }
 
-        // Silent processing - no intermediate toast
+        // Group first episode rows
+        const firstEpisodeMap = new Map<number, Array<Record<string, unknown>>>();
+        firstEpisodeMap.set(firstEpisodeIndex!, firstEpisodeRows);
 
-        // Group rows by episode_index
-        const episodesMap = new Map<number, Array<Record<string, unknown>>>();
-        for (const row of allRows) {
-          const episodeIndex = (row.episode_index as number) ?? 0;
-          if (!episodesMap.has(episodeIndex)) {
-            episodesMap.set(episodeIndex, []);
+        // STEP 2: Start loading ALL episodes in background (fire and forget)
+        const loadAllEpisodesInBackground = async () => {
+          const backgroundAllRows: Array<Record<string, unknown>> = [...firstEpisodeRows];
+          let backgroundOffset = offset;
+          let backgroundHasMore = hasMore;
+          
+          console.log(`Starting background loading of all episodes from offset ${backgroundOffset}...`);
+          
+          while (backgroundHasMore) {
+            try {
+              const rowsUrl = `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(parsedPath)}&config=default&split=train&offset=${backgroundOffset}&length=${batchSize}`;
+              const response = await fetch(rowsUrl, { headers });
+              if (!response.ok) break;
+
+              const data = await response.json();
+              const rows = data.rows || [];
+              if (rows.length === 0) break;
+
+              for (const rowWrapper of rows) {
+                const row = rowWrapper.row || rowWrapper;
+                backgroundAllRows.push(row);
+              }
+
+              console.log(`Background loading: loaded ${rows.length} rows (total: ${backgroundAllRows.length})`);
+              backgroundOffset += batchSize;
+              backgroundHasMore = rows.length === batchSize;
+            } catch (error) {
+              console.error(`Error fetching background rows:`, error);
+              break;
+            }
           }
-          episodesMap.get(episodeIndex)!.push(row);
-        }
+
+          console.log(`Background loading complete: ${backgroundAllRows.length} total rows`);
+
+          // Group all rows by episode_index
+          const backgroundEpisodesMap = new Map<number, Array<Record<string, unknown>>>();
+          for (const row of backgroundAllRows) {
+            const episodeIndex = (row.episode_index as number) ?? 0;
+            if (!backgroundEpisodesMap.has(episodeIndex)) {
+              backgroundEpisodesMap.set(episodeIndex, []);
+            }
+            backgroundEpisodesMap.get(episodeIndex)!.push(row);
+          }
+
+          // Mark as complete - this will enable the "Apply to Whole Dataset" button
+          setCanApplyToWholeDataset(true);
+
+          return { allRows: backgroundAllRows, episodesMap: backgroundEpisodesMap };
+        };
+
+        // Start background loading (don't await - fire and forget, but store promise)
+        const backgroundLoadingPromise = loadAllEpisodesInBackground();
+        backgroundLoadingPromiseRef.current = backgroundLoadingPromise;
+
+        // Group rows by episode_index for first episode only
+        const episodesMap = new Map<number, Array<Record<string, unknown>>>();
+        episodesMap.set(firstEpisodeIndex!, firstEpisodeRows);
 
         // Try to fetch info.json for joint names using Dataset Server API (avoids CORS)
         let jointNames: string[] = [];
@@ -2980,8 +2915,8 @@ export const Sidebar = ({
 
         console.log("Available joints in URDF:", availableJointsStore);
 
-        // Prepare dataset joints and compute ranges
-        const firstRow = allRows[0];
+        // Prepare dataset joints and compute ranges from first episode only
+        const firstRow = firstEpisodeRows[0];
         const sampleValues = (firstRow?.action as number[]) ?? (firstRow?.["observation.state"] as number[]) ?? [];
         
         // Determine dataset joint names - use names from info.json if available, otherwise infer from data
@@ -2989,12 +2924,12 @@ export const Sidebar = ({
           ? jointNames
           : sampleValues.map((_, idx) => `joint_${idx}`);
 
-        // Compute joint ranges from all rows
-        const jointRanges: Record<string, { min: number; max: number }> = {};
+        // Compute joint ranges from first episode only (for mapping dialog display)
+        const firstEpisodeJointRanges: Record<string, { min: number; max: number }> = {};
         datasetJointNames.forEach((jointName, idx) => {
           let min = Infinity;
           let max = -Infinity;
-          for (const row of allRows) {
+          for (const row of firstEpisodeRows) {
             const values = (row.action as number[]) ?? (row["observation.state"] as number[]) ?? [];
             const value = values[idx];
             if (typeof value === 'number') {
@@ -3003,7 +2938,7 @@ export const Sidebar = ({
             }
           }
           if (isFinite(min) && isFinite(max)) {
-            jointRanges[jointName] = { min, max };
+            firstEpisodeJointRanges[jointName] = { min, max };
           }
         });
 
@@ -3011,20 +2946,18 @@ export const Sidebar = ({
         const sourceName = `hf:${parsedPath}`;
         const savedMapping = getMappingForSource(sourceName);
 
-        // Prepare callback to continue processing after mapping is applied
-        const continueWithMapping = (mappings: JointMapping[], degToRad: boolean) => {
+        // Create callback for applying to first episode only
+        const applyToFirstEpisodeOnly = (mappings: JointMapping[], degToRad: boolean) => {
           // Convert mappings to record format
           const jointMapping: Record<string, string> = {};
-          const jointOffsets: Record<string, number> = {}; // Offset transformations per dataset joint
-          const jointInversions: Record<string, boolean> = {}; // Track which joints are inverted
+          const jointOffsets: Record<string, number> = {};
+          const jointInversions: Record<string, boolean> = {};
           for (const mapping of mappings) {
             if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
               jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
-              // Store offset if present
               if (mapping.offset !== undefined) {
                 jointOffsets[mapping.datasetJoint] = mapping.offset;
               }
-              // Store inversion if present
               if (mapping.inverted !== undefined && mapping.inverted) {
                 jointInversions[mapping.datasetJoint] = true;
               }
@@ -3032,10 +2965,9 @@ export const Sidebar = ({
           }
 
           // Save mapping for future use
-          saveMapping(sourceName, mappings, degToRad, jointRanges);
+          saveMapping(sourceName, mappings, degToRad, firstEpisodeJointRanges);
 
           // Check if dataset has more joints than URDF
-          const mappedCount = mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length;
           if (datasetJointNames.length > availableJointsStore.length) {
             if (loadingToastId) {
               toast.dismiss(loadingToastId);
@@ -3047,204 +2979,333 @@ export const Sidebar = ({
 
           console.log("Convert degrees to radians:", degToRad);
           console.log("Final joint mapping:", jointMapping);
-          console.log("Joint offsets:", jointOffsets);
 
-          // Convert to episodes
+          // Convert ONLY the first episode
           const newEpisodes: Episode[] = [];
-          let totalFramesLoaded = 0;
           const degToRadConst = Math.PI / 180;
 
-        for (const [episodeIndex, episodeRows] of episodesMap.entries()) {
-          // Sort rows by frame_index
-          episodeRows.sort((a, b) => {
-            const aIdx = (a.frame_index as number) ?? 0;
-            const bIdx = (b.frame_index as number) ?? 0;
-            return aIdx - bIdx;
-          });
-
-          // Extract frames
-          const frames: RecordedFrame[] = episodeRows.map((row) => {
-            const action = row.action as number[] | undefined;
-            const observationState = row["observation.state"] as number[] | undefined;
-            const dataArray = action ?? observationState ?? [];
-            const timestamp = ((row.timestamp as number) ?? 0) * 1000; // Convert to milliseconds
-
-            // Convert action array to joint positions object
-            const actualJointNames = datasetJointNames;
-
-            const jointPositions: Record<string, number> = {};
-            // Store joints with optional mapping to URDF names
-            actualJointNames.forEach((name: string, idx: number) => {
-              // Apply mapping if available, otherwise use original name
-              const mappedName = jointMapping[name] || name;
-              let value = dataArray[idx] ?? 0;
-
-              // Convert degrees to radians if needed
-              if (degToRad) {
-                value = value * degToRadConst;
-              }
-
-              // Apply inversion BEFORE offset (if joint axis is inverted)
-              if (jointInversions[name]) {
-                value = -value;
-              }
-
-              // Apply offset transformation if present
-              const offset = jointOffsets[name];
-              if (offset !== undefined) {
-                value = value + offset;
-              }
-
-              jointPositions[mappedName] = value;
+          // Process only first episode
+          for (const [episodeIndex, episodeRows] of firstEpisodeMap.entries()) {
+            // Sort rows by frame_index
+            episodeRows.sort((a, b) => {
+              const aIdx = (a.frame_index as number) ?? 0;
+              const bIdx = (b.frame_index as number) ?? 0;
+              return aIdx - bIdx;
             });
 
-            return {
-              timestamp,
-              jointPositions,
-            };
-          });
+            // Extract frames
+            const frames: RecordedFrame[] = episodeRows.map((row) => {
+              const action = row.action as number[] | undefined;
+              const observationState = row["observation.state"] as number[] | undefined;
+              const dataArray = action ?? observationState ?? [];
+              const timestamp = ((row.timestamp as number) ?? 0) * 1000; // Convert to milliseconds
 
-          if (frames.length === 0) continue;
+              // Convert action array to joint positions object
+              const actualJointNames =
+                jointNames.length > 0
+                  ? jointNames
+                  : dataArray.map((_, i) => `joint_${i}`);
 
-          totalFramesLoaded += frames.length;
+              const jointPositions: Record<string, number> = {};
+              // Store joints with optional mapping to URDF names
+              actualJointNames.forEach((name: string, idx: number) => {
+                // Apply mapping if available, otherwise use original name
+                const mappedName = jointMapping[name] || name;
+                let value = dataArray[idx] ?? 0;
 
-          // Calculate FPS from timestamps
-          let fps = 30; // default
-          if (frames.length > 1) {
-            const totalDuration = frames[frames.length - 1].timestamp - frames[0].timestamp;
-            if (totalDuration > 0) {
-              fps = Math.round(((frames.length - 1) / totalDuration) * 1000);
+                // Apply offset if available
+                if (jointOffsets[name] !== undefined) {
+                  value = value + jointOffsets[name];
+                }
+
+                // Apply inversion if needed
+                if (jointInversions[name]) {
+                  value = -value;
+                }
+
+                // Convert degrees to radians if needed
+                if (degToRad) {
+                  value = value * degToRadConst;
+                }
+
+                if (mappedName && mappedName !== "?") {
+                  jointPositions[mappedName] = value;
+                }
+              });
+
+              return {
+                timestamp,
+                jointPositions,
+              };
+            });
+
+            if (frames.length === 0) continue;
+
+            // Calculate FPS from timestamps
+            let fps = 30; // default
+            if (frames.length > 1) {
+              const totalDuration = frames[frames.length - 1].timestamp - frames[0].timestamp;
+              if (totalDuration > 0) {
+                fps = Math.round(((frames.length - 1) / totalDuration) * 1000);
+              }
             }
+
+            const episodeMetadata: EpisodeMetadata = {
+              episode_index: episodeIndex,
+              fps,
+              joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
+              num_frames: frames.length,
+              robot_type: "unknown",
+              additional: {
+                sourceType: 'hf',
+                sourceName: parsedPath,
+              },
+            };
+
+            const episode: Episode = {
+              id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
+              number: episodes.length + newEpisodes.length + 1,
+              frames,
+              createdAt: Date.now(),
+              metadata: episodeMetadata,
+            };
+
+            newEpisodes.push(episode);
           }
 
-          const episodeMetadata: EpisodeMetadata = {
-            episode_index: episodeIndex,
-            fps,
-            joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
-            num_frames: frames.length,
-            robot_type: "unknown",
-            additional: {
-              sourceType: 'hf',
-              sourceName: parsedPath,
-              mappingSource: sourceName, // Store mapping source identifier
-              appliedOffsets: { ...jointOffsets }, // Store offsets that were applied (per dataset joint)
-              appliedInversions: { ...jointInversions }, // Store inversions that were applied (per dataset joint)
-              appliedMapping: Object.entries(jointMapping).reduce((acc, [datasetJoint, urdfJoint]) => {
-                acc[urdfJoint] = datasetJoint; // Reverse mapping: URDF joint -> dataset joint
-                return acc;
-              }, {} as Record<string, string>), // Store reverse mapping for offset updates
-            },
-          };
+          if (newEpisodes.length === 0) {
+            if (loadingToastId) {
+              toast.dismiss(loadingToastId);
+            }
+            toast.error("No episodes found in dataset");
+            setIsImportingFromHFDataset(false);
+            return;
+          }
 
-          const episode: Episode = {
-            id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
-            number: episodes.length + newEpisodes.length + 1,
-            frames,
-            createdAt: Date.now(),
-            metadata: episodeMetadata,
-          };
+          setEpisodes((prev) => [...prev, ...newEpisodes]);
+          
+          // Track source
+          setDatasetSources(prev => [...prev, { type: 'hf', name: parsedPath, timestamp: Date.now() }]);
 
-          newEpisodes.push(episode);
-        }
-
-        if (newEpisodes.length === 0) {
+          // Dismiss loading and show success
           if (loadingToastId) {
             toast.dismiss(loadingToastId);
           }
-          toast.error("No episodes found in dataset");
-          setIsImportingFromHFDataset(false);
-          return;
-        }
-
-        setEpisodes((prev) => [...prev, ...newEpisodes]);
-        
-        // Track source
-        setDatasetSources(prev => [...prev, { type: 'hf', name: parsedPath, timestamp: Date.now() }]);
-
-        // Log first episode first frame for debugging
-        if (newEpisodes.length > 0 && newEpisodes[0].frames.length > 0) {
-          console.log("First episode, first frame joint positions:", newEpisodes[0].frames[0].jointPositions);
-          console.log("Sample values (first 3 frames):", newEpisodes[0].frames.slice(0, 3).map(f => ({
-            timestamp: f.timestamp,
-            joints: f.jointPositions
-          })));
-        }
-
-        // Dismiss loading and show success
-        if (loadingToastId) {
-          toast.dismiss(loadingToastId);
-        }
-
-        // Check if this was just the first episode (preview mode)
-        const totalEpisodesInDataset = episodeSelectionData?.episodesMap.size ?? 0;
-        const isFirstEpisodeOnly = newEpisodes.length === 1 && totalEpisodesInDataset > 1;
-
-        if (isFirstEpisodeOnly) {
           toast.success(
-            `Preview episode ${newEpisodes[0].metadata.episode_index} loaded! Test the transforms, then load more episodes if needed.`,
-            { duration: 8000 }
+            `Loaded first episode from ${parsedPath}. Other episodes are loading in background.`,
+            { duration: 3000 }
           );
-          // Keep the episode selection data for loading more episodes later
-        } else {
+
+          // Close dialog and reset state
+          setShowHfMappingDialog(false);
+          setHfMappingDialogData(null);
+          setCanApplyToWholeDataset(false);
+          backgroundLoadingPromiseRef.current = null;
+          setIsImportingFromHFDataset(false);
+        };
+
+        // Create callback for applying to whole dataset
+        const applyToWholeDataset = async (mappings: JointMapping[], degToRad: boolean) => {
+          // Wait for background loading to complete
+          const { allRows: allEpisodesRows, episodesMap: allEpisodesMap } = await backgroundLoadingPromise!;
+
+          // Compute joint ranges from ALL episodes (for accurate processing)
+          const fullDatasetJointRanges: Record<string, { min: number; max: number }> = {};
+          datasetJointNames.forEach((jointName, idx) => {
+            let min = Infinity;
+            let max = -Infinity;
+            for (const row of allEpisodesRows) {
+              const values = (row.action as number[]) ?? (row["observation.state"] as number[]) ?? [];
+              const value = values[idx];
+              if (typeof value === 'number') {
+                min = Math.min(min, value);
+                max = Math.max(max, value);
+              }
+            }
+            if (isFinite(min) && isFinite(max)) {
+              fullDatasetJointRanges[jointName] = { min, max };
+            }
+          });
+
+          // Convert mappings to record format
+          const jointMapping: Record<string, string> = {};
+          const jointOffsets: Record<string, number> = {};
+          const jointInversions: Record<string, boolean> = {};
+          for (const mapping of mappings) {
+            if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
+              jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
+              if (mapping.offset !== undefined) {
+                jointOffsets[mapping.datasetJoint] = mapping.offset;
+              }
+              if (mapping.inverted !== undefined && mapping.inverted) {
+                jointInversions[mapping.datasetJoint] = true;
+              }
+            }
+          }
+
+          // Save mapping for future use (using full dataset ranges)
+          saveMapping(sourceName, mappings, degToRad, fullDatasetJointRanges);
+
+          // Check if dataset has more joints than URDF
+          if (datasetJointNames.length > availableJointsStore.length) {
+            if (loadingToastId) {
+              toast.dismiss(loadingToastId);
+            }
+            toast.error(`Dataset has ${datasetJointNames.length} joints but URDF has only ${availableJointsStore.length} joints. Cannot add episodes.`);
+            setIsImportingFromHFDataset(false);
+            return;
+          }
+
+          console.log("Convert degrees to radians:", degToRad);
+          console.log("Final joint mapping:", jointMapping);
+
+          // Convert ALL episodes
+          const newEpisodes: Episode[] = [];
+          const degToRadConst = Math.PI / 180;
+
+          // Process all episodes
+          for (const [episodeIndex, episodeRows] of allEpisodesMap.entries()) {
+            // Sort rows by frame_index
+            episodeRows.sort((a, b) => {
+              const aIdx = (a.frame_index as number) ?? 0;
+              const bIdx = (b.frame_index as number) ?? 0;
+              return aIdx - bIdx;
+            });
+
+            // Extract frames
+            const frames: RecordedFrame[] = episodeRows.map((row) => {
+              const action = row.action as number[] | undefined;
+              const observationState = row["observation.state"] as number[] | undefined;
+              const dataArray = action ?? observationState ?? [];
+              const timestamp = ((row.timestamp as number) ?? 0) * 1000; // Convert to milliseconds
+
+              // Convert action array to joint positions object
+              const actualJointNames =
+                jointNames.length > 0
+                  ? jointNames
+                  : dataArray.map((_, i) => `joint_${i}`);
+
+              const jointPositions: Record<string, number> = {};
+              // Store joints with optional mapping to URDF names
+              actualJointNames.forEach((name: string, idx: number) => {
+                // Apply mapping if available, otherwise use original name
+                const mappedName = jointMapping[name] || name;
+                let value = dataArray[idx] ?? 0;
+
+                // Apply offset if available
+                if (jointOffsets[name] !== undefined) {
+                  value = value + jointOffsets[name];
+                }
+
+                // Apply inversion if needed
+                if (jointInversions[name]) {
+                  value = -value;
+                }
+
+                // Convert degrees to radians if needed
+                if (degToRad) {
+                  value = value * degToRadConst;
+                }
+
+                if (mappedName && mappedName !== "?") {
+                  jointPositions[mappedName] = value;
+                }
+              });
+
+              return {
+                timestamp,
+                jointPositions,
+              };
+            });
+
+            if (frames.length === 0) continue;
+
+            // Calculate FPS from timestamps
+            let fps = 30; // default
+            if (frames.length > 1) {
+              const totalDuration = frames[frames.length - 1].timestamp - frames[0].timestamp;
+              if (totalDuration > 0) {
+                fps = Math.round(((frames.length - 1) / totalDuration) * 1000);
+              }
+            }
+
+            const episodeMetadata: EpisodeMetadata = {
+              episode_index: episodeIndex,
+              fps,
+              joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
+              num_frames: frames.length,
+              robot_type: "unknown",
+              additional: {
+                sourceType: 'hf',
+                sourceName: parsedPath,
+              },
+            };
+
+            const episode: Episode = {
+              id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
+              number: episodes.length + newEpisodes.length + 1,
+              frames,
+              createdAt: Date.now(),
+              metadata: episodeMetadata,
+            };
+
+            newEpisodes.push(episode);
+          }
+
+          if (newEpisodes.length === 0) {
+            if (loadingToastId) {
+              toast.dismiss(loadingToastId);
+            }
+            toast.error("No episodes found in dataset");
+            setIsImportingFromHFDataset(false);
+            return;
+          }
+
+          setEpisodes((prev) => [...prev, ...newEpisodes]);
+          
+          // Track source
+          setDatasetSources(prev => [...prev, { type: 'hf', name: parsedPath, timestamp: Date.now() }]);
+
+          // Dismiss loading and show success
+          if (loadingToastId) {
+            toast.dismiss(loadingToastId);
+          }
           toast.success(
             `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
             { duration: 2000 }
           );
-          // Clear episode selection data since we're done
-          setEpisodeSelectionData(null);
-        }
-        setIsImportingFromHFDataset(false);
+
+          // Close dialog and reset state
+          setShowHfMappingDialog(false);
+          setHfMappingDialogData(null);
+          setCanApplyToWholeDataset(false);
+          backgroundLoadingPromiseRef.current = null;
+          setIsImportingFromHFDataset(false);
         };
 
-        // Get first episode index
-        const firstEpisodeIndex = Array.from(episodesMap.keys()).sort((a, b) => a - b)[0];
-
-        // Store episode selection data for later (when user wants to load more)
-        setEpisodeSelectionData({
-          parsedPath,
-          episodesMap,
-          allRows,
-          jointNames,
-          jointRanges,
-          datasetJointNames,
-          urdfUrls,
-          loadingToastId,
-          loadedEpisodeIndex: firstEpisodeIndex,
-        });
-
-        // Filter to only include first episode
-        const firstEpisodeMap = new Map<number, Array<Record<string, unknown>>>();
-        const firstEpisodeData = episodesMap.get(firstEpisodeIndex);
-        if (firstEpisodeData) {
-          firstEpisodeMap.set(firstEpisodeIndex, firstEpisodeData);
-        }
-
-        // Filter allRows to only include first episode
-        const firstEpisodeRows = allRows.filter((row) => {
-          const episodeIndex = (row.episode_index as number) ?? 0;
-          return episodeIndex === firstEpisodeIndex;
-        });
-
-        // Show mapping dialog with ONLY the first episode
+        // Open mapping dialog immediately with first episode data
         if (datasetJointNames.length === 0 || availableJointsStore.length === 0) {
-          // No joints to map, continue without mapping
-          continueWithMapping([], false);
+          // No joints to map, skip dialog and process directly
+          applyToFirstEpisodeOnly([], false);
         } else {
-          // Store dialog data and callback for first episode only
-          setMappingDialogData({
+          // Store callbacks
+          setApplyFirstEpisodeCallback(() => applyToFirstEpisodeOnly);
+          setApplyWholeDatasetCallback(() => applyToWholeDataset);
+          
+          setHfMappingDialogData({
             datasetJoints: datasetJointNames,
-            jointRanges,
-            source: parsedPath,
+            jointRanges: firstEpisodeJointRanges,
+            source: sourceName,
             datasetPath: parsedPath,
-            allRows: firstEpisodeRows,
-            episodesMap: firstEpisodeMap,
+            firstEpisodeRows,
+            firstEpisodeMap,
+            allEpisodesPromise: backgroundLoadingPromise,
             jointNames,
             loadingToastId,
           });
-          setPendingMappingCallback(() => continueWithMapping);
-          setShowMappingDialog(true);
+          setShowHfMappingDialog(true);
+          toast.info("Loading first episode and opening mapping window. All episodes are loading in the background...", { duration: 4000 });
         }
-        return;
       } else if (urdfUrls.length > 0) {
         // Only URDF was found, no parquet files
         if (loadingToastId) {
@@ -3273,237 +3334,6 @@ export const Sidebar = ({
     isImportingFromHFDataset,
     setEpisodes,
   ]);
-
-  // Handle episode selection from the dialog
-  const handleEpisodeSelection = useCallback((selectionMode: SelectionMode) => {
-    if (!episodeSelectionData) return;
-
-    const {
-      parsedPath,
-      episodesMap,
-      allRows,
-      jointNames,
-      jointRanges,
-      datasetJointNames,
-      loadingToastId,
-    } = episodeSelectionData;
-
-    // Close episode selection dialog
-    setShowEpisodeSelectionDialog(false);
-
-    // Determine which episodes to load
-    let episodesToLoad: number[] = [];
-    let isPreview = false;
-
-    if (selectionMode.type === "preview") {
-      episodesToLoad = [selectionMode.previewEpisode!];
-      isPreview = true;
-    } else if (selectionMode.type === "specific") {
-      episodesToLoad = selectionMode.specificEpisodes!;
-    } else {
-      // Load all episodes
-      episodesToLoad = Array.from(episodesMap.keys());
-    }
-
-    // Filter the episodes map to only include selected episodes
-    const filteredEpisodesMap = new Map<number, Array<Record<string, unknown>>>();
-    for (const episodeIndex of episodesToLoad) {
-      const episodeData = episodesMap.get(episodeIndex);
-      if (episodeData) {
-        filteredEpisodesMap.set(episodeIndex, episodeData);
-      }
-    }
-
-    // Filter allRows to only include selected episodes
-    const filteredRows = allRows.filter((row) => {
-      const episodeIndex = (row.episode_index as number) ?? 0;
-      return episodesToLoad.includes(episodeIndex);
-    });
-
-    // Store preview mode state
-    setIsPreviewMode(isPreview);
-
-    // Create the continueWithMapping callback (same as before, but with filtered data)
-    const continueWithMapping = (mappings: JointMapping[], degToRad: boolean) => {
-      // Convert mappings to record format
-      const jointMapping: Record<string, string> = {};
-      const jointOffsets: Record<string, number> = {};
-      const jointInversions: Record<string, boolean> = {};
-      for (const mapping of mappings) {
-        if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
-          jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
-          if (mapping.offset !== undefined) {
-            jointOffsets[mapping.datasetJoint] = mapping.offset;
-          }
-          if (mapping.inverted !== undefined && mapping.inverted) {
-            jointInversions[mapping.datasetJoint] = true;
-          }
-        }
-      }
-
-      // Save mapping for future use
-      const sourceName = `hf:${parsedPath}`;
-      saveMapping(sourceName, mappings, degToRad, jointRanges);
-
-      // Check if dataset has more joints than URDF
-      const mappedCount = mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length;
-      if (datasetJointNames.length > availableJointsStore.length) {
-        if (loadingToastId) {
-          toast.dismiss(loadingToastId);
-        }
-        toast.error(`Dataset has ${datasetJointNames.length} joints but URDF has only ${availableJointsStore.length} joints. Cannot add episodes.`);
-        setIsImportingFromHFDataset(false);
-        return;
-      }
-
-      console.log("Convert degrees to radians:", degToRad);
-      console.log("Final joint mapping:", jointMapping);
-      console.log("Joint offsets:", jointOffsets);
-
-      // Convert to episodes (using filtered data)
-      const newEpisodes: Episode[] = [];
-      let totalFramesLoaded = 0;
-      const degToRadConst = Math.PI / 180;
-
-      for (const [episodeIndex, episodeRows] of filteredEpisodesMap.entries()) {
-        // Sort rows by frame_index
-        episodeRows.sort((a, b) => {
-          const aIdx = (a.frame_index as number) ?? 0;
-          const bIdx = (b.frame_index as number) ?? 0;
-          return aIdx - bIdx;
-        });
-
-        // Extract frames
-        const frames: RecordedFrame[] = episodeRows.map((row) => {
-          const action = row.action as number[] | undefined;
-          const observationState = row["observation.state"] as number[] | undefined;
-          const dataArray = action ?? observationState ?? [];
-          const timestamp = ((row.timestamp as number) ?? 0) * 1000;
-
-          const jointPositions: Record<string, number> = {};
-          datasetJointNames.forEach((name: string, idx: number) => {
-            const mappedName = jointMapping[name] || name;
-            let value = dataArray[idx] ?? 0;
-
-            if (degToRad) {
-              value = value * degToRadConst;
-            }
-
-            if (jointInversions[name]) {
-              value = -value;
-            }
-
-            const offset = jointOffsets[name];
-            if (offset !== undefined) {
-              value = value + offset;
-            }
-
-            jointPositions[mappedName] = value;
-          });
-
-          return {
-            timestamp,
-            jointPositions,
-          };
-        });
-
-        if (frames.length === 0) continue;
-
-        totalFramesLoaded += frames.length;
-
-        let fps = 30;
-        if (frames.length > 1) {
-          const totalDuration = frames[frames.length - 1].timestamp - frames[0].timestamp;
-          if (totalDuration > 0) {
-            fps = Math.round(((frames.length - 1) / totalDuration) * 1000);
-          }
-        }
-
-        const episodeMetadata: EpisodeMetadata = {
-          episode_index: episodeIndex,
-          fps,
-          joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
-          num_frames: frames.length,
-          robot_type: "unknown",
-          additional: {
-            sourceType: 'hf',
-            sourceName: parsedPath,
-            mappingSource: sourceName,
-            appliedOffsets: { ...jointOffsets },
-            appliedInversions: { ...jointInversions },
-            appliedMapping: Object.entries(jointMapping).reduce((acc, [datasetJoint, urdfJoint]) => {
-              acc[urdfJoint] = datasetJoint;
-              return acc;
-            }, {} as Record<string, string>),
-          },
-        };
-
-        const episode: Episode = {
-          id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
-          number: episodes.length + newEpisodes.length + 1,
-          frames,
-          createdAt: Date.now(),
-          metadata: episodeMetadata,
-        };
-
-        newEpisodes.push(episode);
-      }
-
-      if (newEpisodes.length === 0) {
-        if (loadingToastId) {
-          toast.dismiss(loadingToastId);
-        }
-        toast.error("No episodes found in selection");
-        setIsImportingFromHFDataset(false);
-        return;
-      }
-
-      setEpisodes((prev) => [...prev, ...newEpisodes]);
-
-      setDatasetSources(prev => [...prev, { type: 'hf', name: parsedPath, timestamp: Date.now() }]);
-
-      if (newEpisodes.length > 0 && newEpisodes[0].frames.length > 0) {
-        console.log("First episode, first frame joint positions:", newEpisodes[0].frames[0].jointPositions);
-      }
-
-      if (loadingToastId) {
-        toast.dismiss(loadingToastId);
-      }
-
-      // Show appropriate success message based on mode
-      if (isPreview) {
-        toast.success(
-          `Loaded preview episode ${episodesToLoad[0]} from ${parsedPath}. Review the transforms, then load more if needed.`,
-          { duration: 5000 }
-        );
-      } else {
-        toast.success(
-          `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
-          { duration: 2000 }
-        );
-      }
-
-      setIsImportingFromHFDataset(false);
-    };
-
-    // Open mapping dialog with filtered data
-    if (datasetJointNames.length === 0 || availableJointsStore.length === 0) {
-      continueWithMapping([], false);
-    } else {
-      setMappingDialogData({
-        datasetJoints: datasetJointNames,
-        jointRanges,
-        source: parsedPath,
-        datasetPath: parsedPath,
-        allRows: filteredRows,
-        episodesMap: filteredEpisodesMap,
-        jointNames,
-        loadingToastId,
-      });
-      setPendingMappingCallback(() => continueWithMapping);
-      setShowMappingDialog(true);
-    }
-  }, [episodeSelectionData, availableJointsStore, episodes.length, setEpisodes]);
 
   // Expose dataset actions to parent component
   useEffect(() => {
@@ -4266,29 +4096,6 @@ export const Sidebar = ({
                 />
               </div>
 
-              {/* Load More Episodes Button - Shows when preview episode is loaded */}
-              {episodeSelectionData && !isImportingFromHFDataset && (
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs flex-shrink-0 border-primary/50 text-primary hover:bg-primary/10"
-                      onClick={() => setShowEpisodeSelectionDialog(true)}
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Load More
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">Load More Episodes</p>
-                    <p className="text-muted-foreground">
-                      Load additional episodes from {episodeSelectionData.parsedPath}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-
               {/* Hidden file input for dataset loading - triggered from top menu */}
               <input
                 type="file"
@@ -4643,52 +4450,6 @@ export const Sidebar = ({
         </div>
       </div>
 
-      {/* Episode Selection Dialog */}
-      {episodeSelectionData && (
-        <EpisodeSelectionDialog
-          isOpen={showEpisodeSelectionDialog}
-          onClose={() => {
-            setShowEpisodeSelectionDialog(false);
-            // Don't clear episodeSelectionData - keep it for re-opening
-          }}
-          totalEpisodes={episodeSelectionData.episodesMap.size}
-          episodeIndices={Array.from(episodeSelectionData.episodesMap.keys()).sort((a, b) => a - b)}
-          onContinue={handleEpisodeSelection}
-          datasetName={episodeSelectionData.parsedPath}
-          loadedEpisodeIndex={episodeSelectionData.loadedEpisodeIndex}
-        />
-      )}
-
-      {/* Joint Mapping Dialog */}
-      {mappingDialogData && (
-        <JointMappingDialog
-          isOpen={showMappingDialog}
-          onClose={() => {
-            setShowMappingDialog(false);
-            setMappingDialogData(null);
-            setPendingMappingCallback(null);
-            if (mappingDialogData.loadingToastId) {
-              toast.dismiss(mappingDialogData.loadingToastId);
-            }
-            setIsImportingFromHFDataset(false);
-          }}
-          datasetJoints={mappingDialogData.datasetJoints}
-          urdfJoints={availableJointsStore}
-          jointRanges={mappingDialogData.jointRanges}
-          existingMapping={getMappingForSource(`hf:${mappingDialogData.datasetPath}`)}
-          source={mappingDialogData.source}
-          jointLimits={jointLimits}
-          onApply={(mappings, degToRad) => {
-            if (pendingMappingCallback) {
-              pendingMappingCallback(mappings, degToRad);
-            }
-            setShowMappingDialog(false);
-            setMappingDialogData(null);
-            setPendingMappingCallback(null);
-          }}
-        />
-      )}
-
       {/* Rerun Viewer Modal */}
       <RerunViewer3DModal
         episode={rerunViewerModalEpisode}
@@ -4696,6 +4457,42 @@ export const Sidebar = ({
         onOpenChange={setIsRerunViewerModalOpen}
         urdfContent={vizUrdf || originalUrdf}
       />
+
+      {/* Hugging Face Mapping Dialog */}
+      {hfMappingDialogData && (
+        <JointMappingDialog
+          isOpen={showHfMappingDialog}
+          onClose={() => {
+            const toastId = hfMappingDialogData?.loadingToastId;
+            setShowHfMappingDialog(false);
+            setHfMappingDialogData(null);
+            setCanApplyToWholeDataset(false);
+            backgroundLoadingPromiseRef.current = null;
+            setApplyFirstEpisodeCallback(null);
+            setApplyWholeDatasetCallback(null);
+            if (toastId) {
+              toast.dismiss(toastId);
+            }
+            setIsImportingFromHFDataset(false);
+          }}
+          datasetJoints={hfMappingDialogData.datasetJoints}
+          urdfJoints={availableJointsStore}
+          jointRanges={hfMappingDialogData.jointRanges}
+          existingMapping={getMappingForSource(hfMappingDialogData.source)}
+          source={hfMappingDialogData.source}
+          jointLimits={jointLimits}
+          onApply={(mappings, degToRad) => {
+            // Fallback to default apply if callbacks not set
+            if (applyFirstEpisodeCallback) {
+              applyFirstEpisodeCallback(mappings, degToRad);
+            }
+          }}
+          showTwoButtons={true}
+          onApplyFirstEpisode={applyFirstEpisodeCallback || undefined}
+          onApplyToWholeDataset={applyWholeDatasetCallback || undefined}
+          canApplyToWholeDataset={canApplyToWholeDataset}
+        />
+      )}
 
     </div>
   );

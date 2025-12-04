@@ -40,6 +40,12 @@ interface JointMappingDialogProps {
   onApply: (mappings: JointMapping[], degToRad: boolean) => void;
   source?: string; // Dataset source name for display
   jointLimits?: JointLimits; // URDF joint limits for comparison
+  applyToWholeDataset?: boolean; // Show "Apply to Whole Dataset" text when true
+  // New props for two-button mode
+  onApplyFirstEpisode?: (mappings: JointMapping[], degToRad: boolean) => void; // Apply only to first episode
+  onApplyToWholeDataset?: (mappings: JointMapping[], degToRad: boolean) => void; // Apply to all episodes
+  canApplyToWholeDataset?: boolean; // Enable/disable whole dataset button
+  showTwoButtons?: boolean; // Show two buttons instead of one
 }
 
 export const JointMappingDialog = ({
@@ -52,6 +58,11 @@ export const JointMappingDialog = ({
   onApply,
   source,
   jointLimits = {},
+  applyToWholeDataset = false,
+  onApplyFirstEpisode,
+  onApplyToWholeDataset,
+  canApplyToWholeDataset = false,
+  showTwoButtons = false,
 }: JointMappingDialogProps) => {
   // Check if dataset has more joints than URDF
   const hasTooManyJoints = datasetJoints.length > urdfJoints.length;
@@ -436,6 +447,34 @@ export const JointMappingDialog = ({
       inverted: jointInversions[m.datasetJoint] !== undefined ? jointInversions[m.datasetJoint] : undefined
     }));
     onApply(mappingsWithOffsets, degToRad);
+    onClose();
+  };
+
+  const handleApplyFirstEpisode = () => {
+    if (validationErrors.length > 0 || !onApplyFirstEpisode) {
+      return;
+    }
+    // Include offsets and inversions in mappings
+    const mappingsWithOffsets = mappings.map(m => ({
+      ...m,
+      offset: jointOffsets[m.datasetJoint] !== undefined ? jointOffsets[m.datasetJoint] : undefined,
+      inverted: jointInversions[m.datasetJoint] !== undefined ? jointInversions[m.datasetJoint] : undefined
+    }));
+    onApplyFirstEpisode(mappingsWithOffsets, degToRad);
+    onClose();
+  };
+
+  const handleApplyToWholeDataset = () => {
+    if (validationErrors.length > 0 || !onApplyToWholeDataset) {
+      return;
+    }
+    // Include offsets and inversions in mappings
+    const mappingsWithOffsets = mappings.map(m => ({
+      ...m,
+      offset: jointOffsets[m.datasetJoint] !== undefined ? jointOffsets[m.datasetJoint] : undefined,
+      inverted: jointInversions[m.datasetJoint] !== undefined ? jointInversions[m.datasetJoint] : undefined
+    }));
+    onApplyToWholeDataset(mappingsWithOffsets, degToRad);
     onClose();
   };
 
@@ -884,18 +923,48 @@ export const JointMappingDialog = ({
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleApply}
-              disabled={errors.length > 0 || hasTooManyJoints}
-              className={cn(
-                "h-6 px-3 text-[10px]",
-                errors.length > 0 || hasTooManyJoints
-                  ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
-                  : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
-              )}
-            >
-              {hasTooManyJoints ? "Nonvalid" : "Apply"}
-            </Button>
+            {showTwoButtons ? (
+              <>
+                <Button
+                  onClick={handleApplyFirstEpisode}
+                  disabled={errors.length > 0 || hasTooManyJoints}
+                  className={cn(
+                    "h-6 px-3 text-[10px]",
+                    errors.length > 0 || hasTooManyJoints
+                      ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
+                      : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
+                  )}
+                >
+                  {hasTooManyJoints ? "Nonvalid" : "Apply"}
+                </Button>
+                <Button
+                  onClick={handleApplyToWholeDataset}
+                  disabled={errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset}
+                  className={cn(
+                    "h-6 px-3 text-[10px]",
+                    errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset
+                      ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
+                      : "bg-[#7d9d5d] text-white hover:bg-[#8dad6d]"
+                  )}
+                  title={!canApplyToWholeDataset ? "Waiting for all episodes to finish loading..." : "Apply mappings to all episodes"}
+                >
+                  Apply to Whole Dataset
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={handleApply}
+                disabled={errors.length > 0 || hasTooManyJoints}
+                className={cn(
+                  "h-6 px-3 text-[10px]",
+                  errors.length > 0 || hasTooManyJoints
+                    ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
+                    : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
+                )}
+              >
+                {hasTooManyJoints ? "Nonvalid" : (applyToWholeDataset ? "Apply to Whole Dataset" : "Apply")}
+              </Button>
+            )}
           </div>
         </div>
       </div>
