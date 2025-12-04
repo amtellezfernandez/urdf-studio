@@ -11,7 +11,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { NumberInput } from "@/components/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box, CloudDownload, GitBranch } from "lucide-react";
+import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box, CloudDownload, GitBranch, Plus } from "lucide-react";
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -1051,6 +1051,7 @@ export const Sidebar = ({
     datasetJointNames: string[];
     urdfUrls: Array<{ url: string; path: string }>;
     loadingToastId?: string | number;
+    loadedEpisodeIndex?: number; // Track which episode was loaded as preview
   } | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
@@ -3173,14 +3174,32 @@ export const Sidebar = ({
         if (loadingToastId) {
           toast.dismiss(loadingToastId);
         }
-        toast.success(
-          `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
-          { duration: 2000 }
-        );
+
+        // Check if this was just the first episode (preview mode)
+        const totalEpisodesInDataset = episodeSelectionData?.episodesMap.size ?? 0;
+        const isFirstEpisodeOnly = newEpisodes.length === 1 && totalEpisodesInDataset > 1;
+
+        if (isFirstEpisodeOnly) {
+          toast.success(
+            `Preview episode ${newEpisodes[0].metadata.episode_index} loaded! Test the transforms, then load more episodes if needed.`,
+            { duration: 8000 }
+          );
+          // Keep the episode selection data for loading more episodes later
+        } else {
+          toast.success(
+            `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
+            { duration: 2000 }
+          );
+          // Clear episode selection data since we're done
+          setEpisodeSelectionData(null);
+        }
         setIsImportingFromHFDataset(false);
         };
 
-        // Show episode selection dialog first
+        // Get first episode index
+        const firstEpisodeIndex = Array.from(episodesMap.keys()).sort((a, b) => a - b)[0];
+
+        // Store episode selection data for later (when user wants to load more)
         setEpisodeSelectionData({
           parsedPath,
           episodesMap,
@@ -3190,8 +3209,41 @@ export const Sidebar = ({
           datasetJointNames,
           urdfUrls,
           loadingToastId,
+          loadedEpisodeIndex: firstEpisodeIndex,
         });
-        setShowEpisodeSelectionDialog(true);
+
+        // Filter to only include first episode
+        const firstEpisodeMap = new Map<number, Array<Record<string, unknown>>>();
+        const firstEpisodeData = episodesMap.get(firstEpisodeIndex);
+        if (firstEpisodeData) {
+          firstEpisodeMap.set(firstEpisodeIndex, firstEpisodeData);
+        }
+
+        // Filter allRows to only include first episode
+        const firstEpisodeRows = allRows.filter((row) => {
+          const episodeIndex = (row.episode_index as number) ?? 0;
+          return episodeIndex === firstEpisodeIndex;
+        });
+
+        // Show mapping dialog with ONLY the first episode
+        if (datasetJointNames.length === 0 || availableJointsStore.length === 0) {
+          // No joints to map, continue without mapping
+          continueWithMapping([], false);
+        } else {
+          // Store dialog data and callback for first episode only
+          setMappingDialogData({
+            datasetJoints: datasetJointNames,
+            jointRanges,
+            source: parsedPath,
+            datasetPath: parsedPath,
+            allRows: firstEpisodeRows,
+            episodesMap: firstEpisodeMap,
+            jointNames,
+            loadingToastId,
+          });
+          setPendingMappingCallback(() => continueWithMapping);
+          setShowMappingDialog(true);
+        }
         return;
       } else if (urdfUrls.length > 0) {
         // Only URDF was found, no parquet files
@@ -4214,6 +4266,29 @@ export const Sidebar = ({
                 />
               </div>
 
+              {/* Load More Episodes Button - Shows when preview episode is loaded */}
+              {episodeSelectionData && !isImportingFromHFDataset && (
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs flex-shrink-0 border-primary/50 text-primary hover:bg-primary/10"
+                      onClick={() => setShowEpisodeSelectionDialog(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Load More
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    <p className="font-medium">Load More Episodes</p>
+                    <p className="text-muted-foreground">
+                      Load additional episodes from {episodeSelectionData.parsedPath}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               {/* Hidden file input for dataset loading - triggered from top menu */}
               <input
                 type="file"
@@ -4574,16 +4649,13 @@ export const Sidebar = ({
           isOpen={showEpisodeSelectionDialog}
           onClose={() => {
             setShowEpisodeSelectionDialog(false);
-            setEpisodeSelectionData(null);
-            if (episodeSelectionData.loadingToastId) {
-              toast.dismiss(episodeSelectionData.loadingToastId);
-            }
-            setIsImportingFromHFDataset(false);
+            // Don't clear episodeSelectionData - keep it for re-opening
           }}
           totalEpisodes={episodeSelectionData.episodesMap.size}
           episodeIndices={Array.from(episodeSelectionData.episodesMap.keys()).sort((a, b) => a - b)}
           onContinue={handleEpisodeSelection}
           datasetName={episodeSelectionData.parsedPath}
+          loadedEpisodeIndex={episodeSelectionData.loadedEpisodeIndex}
         />
       )}
 

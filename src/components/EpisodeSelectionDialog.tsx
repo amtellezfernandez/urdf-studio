@@ -27,11 +27,11 @@ interface EpisodeSelectionDialogProps {
   episodeIndices: number[];
   onContinue: (selectedMode: SelectionMode) => void;
   datasetName: string;
+  loadedEpisodeIndex?: number; // The preview episode that was already loaded
 }
 
 export interface SelectionMode {
-  type: "preview" | "specific" | "all";
-  previewEpisode?: number;
+  type: "specific" | "all";
   specificEpisodes?: number[];
 }
 
@@ -42,24 +42,23 @@ export const EpisodeSelectionDialog = ({
   episodeIndices,
   onContinue,
   datasetName,
+  loadedEpisodeIndex,
 }: EpisodeSelectionDialogProps) => {
-  const [selectionType, setSelectionType] = useState<"preview" | "specific" | "all">("preview");
-  const [previewEpisode, setPreviewEpisode] = useState<number>(episodeIndices[0] ?? 0);
+  const [selectionType, setSelectionType] = useState<"specific" | "all">("all");
   const [specificMode, setSpecificMode] = useState<"numbers" | "interval">("numbers");
   const [numbersInput, setNumbersInput] = useState<string>("");
   const [intervalStart, setIntervalStart] = useState<string>("");
   const [intervalEnd, setIntervalEnd] = useState<string>("");
   const [error, setError] = useState<string>("");
 
+  // Filter out the already loaded episode
+  const availableEpisodes = episodeIndices.filter(idx => idx !== loadedEpisodeIndex);
+  const remainingCount = availableEpisodes.length;
+
   const handleContinue = () => {
     setError("");
 
-    if (selectionType === "preview") {
-      onContinue({
-        type: "preview",
-        previewEpisode,
-      });
-    } else if (selectionType === "specific") {
+    if (selectionType === "specific") {
       let selectedEpisodes: number[] = [];
 
       if (specificMode === "numbers") {
@@ -78,6 +77,10 @@ export const EpisodeSelectionDialog = ({
           const episodeNum = parseInt(num, 10);
           if (isNaN(episodeNum)) {
             setError(`Invalid episode number: ${num}`);
+            return;
+          }
+          if (episodeNum === loadedEpisodeIndex) {
+            setError(`Episode ${episodeNum} is already loaded`);
             return;
           }
           if (!episodeIndices.includes(episodeNum)) {
@@ -101,11 +104,11 @@ export const EpisodeSelectionDialog = ({
           return;
         }
 
-        // Get all episodes in the interval that exist in the dataset
-        selectedEpisodes = episodeIndices.filter((idx) => idx >= start && idx <= end);
+        // Get all episodes in the interval that exist in the dataset (excluding loaded episode)
+        selectedEpisodes = availableEpisodes.filter((idx) => idx >= start && idx <= end);
 
         if (selectedEpisodes.length === 0) {
-          setError(`No episodes found in range ${start}-${end}`);
+          setError(`No episodes found in range ${start}-${end} (excluding already loaded episodes)`);
           return;
         }
       }
@@ -125,51 +128,38 @@ export const EpisodeSelectionDialog = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Episode Selection</DialogTitle>
+          <DialogTitle>Load More Episodes</DialogTitle>
           <DialogDescription>
             Dataset: <span className="font-semibold">{datasetName}</span>
             <br />
-            Found <span className="font-semibold">{totalEpisodes}</span> episode(s) in the dataset
-            (indices: {episodeIndices.slice(0, 10).join(", ")}
-            {episodeIndices.length > 10 ? "..." : ""})
+            {loadedEpisodeIndex !== undefined && (
+              <>
+                Preview episode {loadedEpisodeIndex} is already loaded.
+                <br />
+              </>
+            )}
+            <span className="font-semibold">{remainingCount}</span> remaining episode(s) available
+            {remainingCount > 0 && (
+              <>
+                {" "}(indices: {availableEpisodes.slice(0, 10).join(", ")}
+                {availableEpisodes.length > 10 ? "..." : ""})
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <RadioGroup value={selectionType} onValueChange={(v) => setSelectionType(v as any)}>
-            {/* Preview Mode */}
+            {/* Import All Mode */}
             <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-              <RadioGroupItem value="preview" id="preview" className="mt-1" />
+              <RadioGroupItem value="all" id="all" className="mt-1" />
               <div className="flex-1">
-                <Label htmlFor="preview" className="text-base font-semibold cursor-pointer">
-                  Try one episode first (Recommended)
+                <Label htmlFor="all" className="text-base font-semibold cursor-pointer">
+                  Import all remaining episodes
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Import a single episode to test transforms and mapping before bulk import
+                  Apply the same transforms to all {remainingCount} remaining episode(s)
                 </p>
-
-                {selectionType === "preview" && (
-                  <div className="mt-3">
-                    <Label htmlFor="preview-select" className="text-sm">
-                      Select episode to preview:
-                    </Label>
-                    <Select
-                      value={previewEpisode.toString()}
-                      onValueChange={(v) => setPreviewEpisode(parseInt(v, 10))}
-                    >
-                      <SelectTrigger id="preview-select" className="mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {episodeIndices.map((idx) => (
-                          <SelectItem key={idx} value={idx.toString()}>
-                            Episode {idx}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -253,19 +243,6 @@ export const EpisodeSelectionDialog = ({
                 )}
               </div>
             </div>
-
-            {/* Import All Mode */}
-            <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-              <RadioGroupItem value="all" id="all" className="mt-1" />
-              <div className="flex-1">
-                <Label htmlFor="all" className="text-base font-semibold cursor-pointer">
-                  Import all episodes
-                </Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Import all {totalEpisodes} episodes at once
-                </p>
-              </div>
-            </div>
           </RadioGroup>
 
           {error && (
@@ -280,7 +257,9 @@ export const EpisodeSelectionDialog = ({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleContinue}>Continue</Button>
+          <Button onClick={handleContinue} disabled={remainingCount === 0}>
+            Load Episodes
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
