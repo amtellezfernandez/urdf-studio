@@ -134,6 +134,20 @@ const Index = () => {
     jointRanges: Record<string, { min: number; max: number }>;
   } | null>(null);
 
+  // Dataset actions from Sidebar
+  const [datasetActions, setDatasetActions] = useState<{
+    loadFromLocal: () => void;
+    loadFromHuggingFace: () => void;
+    exportToLocal: () => void;
+    exportToHuggingFace: () => void;
+    openRerunViewer: () => void;
+    isImportingFromHF: boolean;
+    isExportingDataset: boolean;
+    isUploadingToHF: boolean;
+    hasEpisodes: boolean;
+    isRerunViewerOpen: boolean;
+  } | null>(null);
+
   const createUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
     const uniqueFilename = timestamp 
@@ -1069,6 +1083,21 @@ const Index = () => {
     toast.success("Joint mapping applied");
   }, []);
 
+  const handleDatasetActionsReady = useCallback((actions: {
+    loadFromLocal: () => void;
+    loadFromHuggingFace: () => void;
+    exportToLocal: () => void;
+    exportToHuggingFace: () => void;
+    openRerunViewer: () => void;
+    isImportingFromHF: boolean;
+    isExportingDataset: boolean;
+    isUploadingToHF: boolean;
+    hasEpisodes: boolean;
+    isRerunViewerOpen: boolean;
+  }) => {
+    setDatasetActions(actions);
+  }, []);
+
   // Show upload screen if no files loaded yet
   if (!hasLoadedFiles) {
     return <FolderUploadScreen onFolderSelected={loadFilesFromFolder} />;
@@ -1353,22 +1382,52 @@ const Index = () => {
                   >
                     Joint Mappings
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      // Add functionality - empty for now
-                    }}
-                    className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                  >
-                    Add
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      // Export functionality - empty for now
-                    }}
-                    className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                  >
-                    Export
-                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Load Episodes
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.loadFromLocal()}
+                        disabled={!datasetActions}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        From Local File
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.loadFromHuggingFace()}
+                        disabled={!datasetActions || datasetActions.isImportingFromHF}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {datasetActions?.isImportingFromHF ? "Loading from HF..." : "From Hugging Face"}
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Export Episodes
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.exportToLocal()}
+                        disabled={!datasetActions || !datasetActions.hasEpisodes || datasetActions.isExportingDataset}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {datasetActions?.isExportingDataset ? "Exporting..." : "To Local File"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => datasetActions?.exportToHuggingFace()}
+                        disabled={!datasetActions || !datasetActions.hasEpisodes || datasetActions.isUploadingToHF}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {datasetActions?.isUploadingToHF ? "Uploading to HF..." : "To Hugging Face"}
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1418,6 +1477,7 @@ const Index = () => {
             onViewerOpenChange={setIsViewerOpen}
             episodesViewHeight={recordingViewHeight}
             onEpisodesResizeStart={handleEpisodesResizeStart}
+            onDatasetActionsReady={handleDatasetActionsReady}
           />
 
           {!isSidebarCollapsed && (
