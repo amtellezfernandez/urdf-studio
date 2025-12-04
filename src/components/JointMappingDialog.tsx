@@ -39,6 +39,7 @@ interface JointMappingDialogProps {
   jointRanges: Record<string, { min: number; max: number }>;
   existingMapping?: SavedMapping;
   onApply: (mappings: JointMapping[], degToRad: boolean) => void;
+  source?: string; // Dataset source name for display
 }
 
 export const JointMappingDialog = ({
@@ -49,7 +50,10 @@ export const JointMappingDialog = ({
   jointRanges,
   existingMapping,
   onApply,
+  source,
 }: JointMappingDialogProps) => {
+  // Check if dataset has more joints than URDF
+  const hasTooManyJoints = datasetJoints.length > urdfJoints.length;
   const [mappings, setMappings] = useState<JointMapping[]>([]);
   const [degToRad, setDegToRad] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -114,7 +118,7 @@ export const JointMappingDialog = ({
     }
 
     return errors;
-  }, [mappings, urdfJoints]);
+  }, [mappings, urdfJoints, hasTooManyJoints, datasetJoints.length, urdfJoints.length]);
 
   useEffect(() => {
     setErrors(validationErrors);
@@ -145,22 +149,22 @@ export const JointMappingDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col bg-[#282828] border border-[#3d3d3d] text-[#d4d4d4]">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="text-sm font-medium text-white">
-            Joint Mapping
+      <DialogContent className="max-w-3xl max-h-[75vh] overflow-hidden flex flex-col bg-[#2d2d2d] border border-[#3d3d3d] text-[#d4d4d4] p-0">
+        <DialogHeader className="flex-shrink-0 px-3 py-2 border-b border-[#3d3d3d]">
+          <DialogTitle className="text-xs font-normal text-[#d4d4d4]">
+            Joint Mapping{source && ` - ${source}`}
+            {hasTooManyJoints && (
+              <span className="ml-2 text-[#d46d6d]">(nonvalid)</span>
+            )}
           </DialogTitle>
-          <DialogDescription className="text-xs text-[#9d9d9d]">
-            Map dataset joint names to URDF joint names
-          </DialogDescription>
         </DialogHeader>
 
         {/* Error Banner */}
         {errors.length > 0 && (
-          <div className="flex-shrink-0 p-2 bg-[#3d1e1e] border border-[#5d2e2e] rounded text-xs">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-[#d46d6d] flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-1">
+          <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d1e1e] border-b border-[#5d2e2e] text-[10px]">
+            <div className="flex items-start gap-1.5">
+              <AlertCircle className="h-3 w-3 text-[#d46d6d] flex-shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-0.5">
                 {errors.map((error, idx) => (
                   <div key={idx} className="text-[#d46d6d]">
                     {error}
@@ -172,24 +176,23 @@ export const JointMappingDialog = ({
         )}
 
         {/* Deg→Rad Toggle */}
-        <div className="flex-shrink-0 flex items-center justify-between p-2 bg-[#1e1e1e] border border-[#3d3d3d] rounded">
-          <span className="text-xs text-[#d4d4d4]">Convert Degrees to Radians</span>
+        <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 bg-[#252525] border-b border-[#3d3d3d]">
+          <span className="text-[10px] text-[#9d9d9d]">Deg→Rad</span>
           <Switch
             checked={degToRad}
             onCheckedChange={setDegToRad}
-            className="data-[state=checked]:bg-[#4d7d9d]"
+            className="h-4 w-7 data-[state=checked]:bg-[#5d7d9d]"
           />
         </div>
 
         {/* Mapping Table */}
         <div className="flex-1 overflow-y-auto blender-scrollbar">
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-[#1e1e1e] border-b border-[#3d3d3d]">
+          <table className="w-full text-[10px]">
+            <thead className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d]">
               <tr>
-                <th className="text-left p-2 font-medium text-[#9d9d9d]">Dataset Joint</th>
-                <th className="text-left p-2 font-medium text-[#9d9d9d]">URDF Joint</th>
-                <th className="text-left p-2 font-medium text-[#9d9d9d]">Sample</th>
-                <th className="text-left p-2 font-medium text-[#9d9d9d]">Range</th>
+                <th className="text-left px-2 py-1 font-normal text-[#9d9d9d]">Dataset</th>
+                <th className="text-left px-2 py-1 font-normal text-[#9d9d9d]">URDF</th>
+                <th className="text-right px-2 py-1 font-normal text-[#9d9d9d]">Range</th>
               </tr>
             </thead>
             <tbody>
@@ -204,14 +207,14 @@ export const JointMappingDialog = ({
                     key={mapping.datasetJoint}
                     className={cn(
                       "border-b border-[#3d3d3d] hover:bg-[#2d2d2d] transition-colors",
-                      idx % 2 === 0 ? "bg-[#252525]" : "bg-[#282828]",
+                      idx % 2 === 0 ? "bg-[#252525]" : "bg-[#2a2a2a]",
                       hasError && "bg-[#2d1e1e]"
                     )}
                   >
-                    <td className="p-2 font-mono text-[#d4d4d4]">
+                    <td className="px-2 py-1 font-mono text-[#d4d4d4] text-[10px]">
                       {mapping.datasetJoint}
                     </td>
-                    <td className="p-2">
+                    <td className="px-2 py-1">
                       <Select
                         value={mapping.urdfJoint}
                         onValueChange={(value) =>
@@ -220,16 +223,16 @@ export const JointMappingDialog = ({
                       >
                         <SelectTrigger
                           className={cn(
-                            "h-7 text-xs bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] font-mono",
+                            "h-6 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] font-mono px-2",
                             hasError && "border-[#5d2e2e] bg-[#2d1e1e]"
                           )}
                         >
-                          <SelectValue placeholder="Select URDF joint" />
+                          <SelectValue placeholder="?" />
                         </SelectTrigger>
-                        <SelectContent className="bg-[#282828] border-[#3d3d3d]">
+                        <SelectContent className="bg-[#282828] border-[#3d3d3d] max-h-[200px]">
                           <SelectItem
                             value="?"
-                            className="text-xs text-[#9d9d9d] hover:bg-[#3d3d3d]"
+                            className="text-[10px] text-[#9d9d9d] hover:bg-[#3d3d3d] py-1"
                           >
                             (skip)
                           </SelectItem>
@@ -237,7 +240,7 @@ export const JointMappingDialog = ({
                             <SelectItem
                               key={joint}
                               value={joint}
-                              className="text-xs font-mono text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                              className="text-[10px] font-mono text-[#d4d4d4] hover:bg-[#3d3d3d] py-1"
                             >
                               {joint}
                             </SelectItem>
@@ -245,22 +248,19 @@ export const JointMappingDialog = ({
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="p-2 font-mono text-[#9d9d9d] text-right">
-                      {getSampleValue(mapping.datasetJoint)}
-                    </td>
-                    <td className="p-2">
+                    <td className="px-2 py-1 text-right">
                       {range ? (
-                        <div className="flex items-center gap-2 font-mono text-xs">
-                          <span className="text-[#6d9ddd]">
-                            {range.min.toFixed(3)}
+                        <div className="flex items-center justify-end gap-1 font-mono text-[10px]">
+                          <span className="text-[#9d9d9d]">
+                            {range.min.toFixed(2)}
                           </span>
                           <span className="text-[#5d5d5d]">→</span>
-                          <span className="text-[#dd6d6d]">
-                            {range.max.toFixed(3)}
+                          <span className="text-[#9d9d9d]">
+                            {range.max.toFixed(2)}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-[#5d5d5d] text-xs">N/A</span>
+                        <span className="text-[#5d5d5d] text-[10px]">—</span>
                       )}
                     </td>
                   </tr>
@@ -271,30 +271,29 @@ export const JointMappingDialog = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex-shrink-0 flex items-center justify-between pt-3 border-t border-[#3d3d3d]">
-          <div className="text-xs text-[#9d9d9d]">
-            {mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length} /{" "}
-            {datasetJoints.length} joints mapped
+        <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-t border-[#3d3d3d] bg-[#252525]">
+          <div className="text-[10px] text-[#9d9d9d]">
+            {mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length}/{datasetJoints.length}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <Button
               onClick={onClose}
               variant="outline"
-              className="h-7 text-xs bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#2d2d2d] hover:text-white"
+              className="h-6 px-3 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#2d2d2d] hover:text-white"
             >
               Cancel
             </Button>
             <Button
               onClick={handleApply}
-              disabled={errors.length > 0}
+              disabled={errors.length > 0 || hasTooManyJoints}
               className={cn(
-                "h-7 text-xs",
-                errors.length > 0
+                "h-6 px-3 text-[10px]",
+                errors.length > 0 || hasTooManyJoints
                   ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
-                  : "bg-[#4d7d9d] text-white hover:bg-[#5d8dad]"
+                  : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
               )}
             >
-              Apply
+              {hasTooManyJoints ? "Nonvalid" : "Apply"}
             </Button>
           </div>
         </div>

@@ -43,6 +43,8 @@ import {
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 import { Badge } from "@/components/ui/badge";
+import { JointMappingDialog, type SavedMapping, type JointMapping } from "@/components/JointMappingDialog";
+import { getMappingForSource, saveMapping, computeGlobalJointRanges } from "@/utils/jointMappingUtils";
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
@@ -1022,6 +1024,20 @@ export const Sidebar = ({
   const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
   // Track dataset sources for future mixing
   const [datasetSources, setDatasetSources] = useState<Array<{ type: 'hf' | 'local' | 'github' | 'recorded'; name: string; timestamp: number }>>([]);
+  
+  // Joint mapping dialog state
+  const [showMappingDialog, setShowMappingDialog] = useState(false);
+  const [mappingDialogData, setMappingDialogData] = useState<{
+    datasetJoints: string[];
+    jointRanges: Record<string, { min: number; max: number }>;
+    source: string;
+    datasetPath: string;
+    allRows: Array<Record<string, unknown>>;
+    episodesMap: Map<number, Array<Record<string, unknown>>>;
+    jointNames: string[];
+    loadingToastId?: string | number;
+  } | null>(null);
+  const [pendingMappingCallback, setPendingMappingCallback] = useState<((mappings: JointMapping[], degToRad: boolean) => void) | null>(null);
 
   // Dispatch custom event when frame changes to sync with EpisodeViewer3DModal
   useEffect(() => {
@@ -2826,74 +2842,68 @@ export const Sidebar = ({
 
         console.log("Available joints in URDF:", availableJointsStore);
 
-        // Always show mapping dialog to allow user to configure mapping and unit conversion
-        let jointMapping: Record<string, string> = {};
-        let convertDegreesToRadians = false;
+        // Prepare dataset joints and compute ranges
+        const firstRow = allRows[0];
+        const sampleValues = (firstRow?.action as number[]) ?? (firstRow?.["observation.state"] as number[]) ?? [];
+        
+        // Determine dataset joint names - use names from info.json if available, otherwise infer from data
+        const datasetJointNames = jointNames.length > 0
+          ? jointNames
+          : sampleValues.map((_, idx) => `joint_${idx}`);
 
-        if (jointNames.length > 0 || availableJointsStore.length > 0) {
-          // Check if values look like degrees (absolute values > π ≈ 3.14)
-          const firstRow = allRows[0];
-          const sampleValues = (firstRow?.action as number[]) ?? (firstRow?.["observation.state"] as number[]) ?? [];
-          const maxAbsValue = Math.max(...sampleValues.map(Math.abs));
-          const likelyDegrees = maxAbsValue > 10; // If max value > 10, probably degrees
+        // Compute joint ranges from all rows
+        const jointRanges: Record<string, { min: number; max: number }> = {};
+        datasetJointNames.forEach((jointName, idx) => {
+          let min = Infinity;
+          let max = -Infinity;
+          for (const row of allRows) {
+            const values = (row.action as number[]) ?? (row["observation.state"] as number[]) ?? [];
+            const value = values[idx];
+            if (typeof value === 'number') {
+              min = Math.min(min, value);
+              max = Math.max(max, value);
+            }
+          }
+          if (isFinite(min) && isFinite(max)) {
+            jointRanges[jointName] = { min, max };
+          }
+        });
 
-          // Build detailed mapping showing index, name, and value for each
-          const datasetJointsInfo = jointNames.length > 0
-            ? jointNames.map((name, idx) => `[${idx}] ${name} = ${sampleValues[idx]?.toFixed(2) ?? "?"}`).join("\n")
-            : sampleValues.map((val, idx) => `[${idx}] joint_${idx} = ${val.toFixed(2)}`).join("\n");
+        // Check for saved mapping
+        const sourceName = `hf:${parsedPath}`;
+        const savedMapping = getMappingForSource(sourceName);
 
-          const urdfJointsInfo = availableJointsStore.map((name, idx) => `[${idx}] ${name}`).join("\n");
+        // Prepare callback to continue processing after mapping is applied
+        const continueWithMapping = (mappings: JointMapping[], degToRad: boolean) => {
+          // Convert mappings to record format
+          const jointMapping: Record<string, string> = {};
+          for (const mapping of mappings) {
+            if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
+              jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
+            }
+          }
 
-          // Build default mapping - map by index position
-          const defaultMapping = jointNames.length > 0
-            ? jointNames.map((name) => `${name}=${availableJointsStore.includes(name) ? name : "?"}`).join(",")
-            : sampleValues.map((_, idx) => `joint_${idx}=${availableJointsStore[idx] ?? "?"}`).join(",");
+          // Save mapping for future use
+          saveMapping(sourceName, mappings, degToRad);
 
-          const mappingPrompt = `JOINT MAPPING CONFIGURATION\n\n` +
-            `Dataset joints (index, name, sample value):\n${datasetJointsInfo}\n\n` +
-            `URDF joints (index, name):\n${urdfJointsInfo}\n\n` +
-            `${likelyDegrees ? "⚠️ Values appear to be in DEGREES" : "✓ Values appear to be in RADIANS"}\n\n` +
-            `Edit mapping below (format: dataset_name=urdf_name,...):\n` +
-            `Use "?" for joints to skip, reorder as needed:`;
-
-          const mappingInput = window.prompt(mappingPrompt, defaultMapping)?.trim();
-
-          if (mappingInput === null) {
+          // Check if dataset has more joints than URDF
+          const mappedCount = mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length;
+          if (datasetJointNames.length > availableJointsStore.length) {
             if (loadingToastId) {
               toast.dismiss(loadingToastId);
             }
+            toast.error(`Dataset has ${datasetJointNames.length} joints but URDF has only ${availableJointsStore.length} joints. Cannot add episodes.`);
             setIsImportingFromHFDataset(false);
             return;
           }
 
-          if (mappingInput) {
-            // Parse mapping string
-            const mappingPairs = mappingInput.split(",").map((pair) => pair.trim());
-            for (const pair of mappingPairs) {
-              const [datasetJoint, urdfJoint] = pair.split("=").map((s) => s.trim());
-              if (datasetJoint && urdfJoint && urdfJoint !== "?") {
-                jointMapping[datasetJoint] = urdfJoint;
-              }
-            }
-            console.log("Joint mapping:", jointMapping);
-          }
+          console.log("Convert degrees to radians:", degToRad);
+          console.log("Final joint mapping:", jointMapping);
 
-          // Ask about unit conversion
-          if (likelyDegrees) {
-            convertDegreesToRadians = window.confirm(
-              `Values appear to be in DEGREES (max: ${maxAbsValue.toFixed(2)})\n\nConvert to radians?\n\nClick OK to convert degrees → radians\nClick Cancel to keep original values`
-            );
-          }
-        }
-
-        console.log("Convert degrees to radians:", convertDegreesToRadians);
-        console.log("Final joint mapping:", jointMapping);
-
-        // Convert to episodes
-        const newEpisodes: Episode[] = [];
-        let totalFramesLoaded = 0;
-
-        const degToRad = Math.PI / 180;
+          // Convert to episodes
+          const newEpisodes: Episode[] = [];
+          let totalFramesLoaded = 0;
+          const degToRadConst = Math.PI / 180;
 
         for (const [episodeIndex, episodeRows] of episodesMap.entries()) {
           // Sort rows by frame_index
@@ -2911,10 +2921,7 @@ export const Sidebar = ({
             const timestamp = ((row.timestamp as number) ?? 0) * 1000; // Convert to milliseconds
 
             // Convert action array to joint positions object
-            const actualJointNames =
-              jointNames.length > 0
-                ? jointNames
-                : dataArray.map((_, i) => `joint_${i}`);
+            const actualJointNames = datasetJointNames;
 
             const jointPositions: Record<string, number> = {};
             // Store joints with optional mapping to URDF names
@@ -2924,8 +2931,8 @@ export const Sidebar = ({
               let value = dataArray[idx] ?? 0;
 
               // Convert degrees to radians if needed
-              if (convertDegreesToRadians) {
-                value = value * degToRad;
+              if (degToRad) {
+                value = value * degToRadConst;
               }
 
               jointPositions[mappedName] = value;
@@ -3004,6 +3011,29 @@ export const Sidebar = ({
           `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
           { duration: 2000 }
         );
+        setIsImportingFromHFDataset(false);
+        };
+
+        // Open mapping dialog
+        if (datasetJointNames.length === 0 || availableJointsStore.length === 0) {
+          // No joints to map, continue without mapping
+          continueWithMapping([], false);
+        } else {
+          // Store dialog data and callback
+          setMappingDialogData({
+            datasetJoints: datasetJointNames,
+            jointRanges,
+            source: parsedPath,
+            datasetPath: parsedPath,
+            allRows,
+            episodesMap,
+            jointNames,
+            loadingToastId,
+          });
+          setPendingMappingCallback(() => continueWithMapping);
+          setShowMappingDialog(true);
+        }
+        return;
       } else if (urdfUrls.length > 0) {
         // Only URDF was found, no parquet files
         if (loadingToastId) {
@@ -4147,6 +4177,35 @@ export const Sidebar = ({
           </div>
         </div>
       </div>
+
+      {/* Joint Mapping Dialog */}
+      {mappingDialogData && (
+        <JointMappingDialog
+          isOpen={showMappingDialog}
+          onClose={() => {
+            setShowMappingDialog(false);
+            setMappingDialogData(null);
+            setPendingMappingCallback(null);
+            if (mappingDialogData.loadingToastId) {
+              toast.dismiss(mappingDialogData.loadingToastId);
+            }
+            setIsImportingFromHFDataset(false);
+          }}
+          datasetJoints={mappingDialogData.datasetJoints}
+          urdfJoints={availableJointsStore}
+          jointRanges={mappingDialogData.jointRanges}
+          existingMapping={getMappingForSource(`hf:${mappingDialogData.datasetPath}`)}
+          source={mappingDialogData.source}
+          onApply={(mappings, degToRad) => {
+            if (pendingMappingCallback) {
+              pendingMappingCallback(mappings, degToRad);
+            }
+            setShowMappingDialog(false);
+            setMappingDialogData(null);
+            setPendingMappingCallback(null);
+          }}
+        />
+      )}
 
       {/* Rerun Viewer Modal */}
       <RerunViewer3DModal
