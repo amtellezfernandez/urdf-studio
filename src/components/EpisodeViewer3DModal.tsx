@@ -521,7 +521,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     };
   }, []);
 
-  // Dispatch visibility changes when selectedJoints changes (from episode viewer legend clicks)
+  // Dispatch visibility changes when selectedJoints changes
   // Use a ref to track previous state and only dispatch for changed joints
   const prevSelectedJointsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -1782,7 +1782,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       {/* Content - hidden when showOnlyHeader is true */}
       {!showOnlyHeader && (
       <>
-          {/* Graph Canvas and Legend */}
+          {/* Graph Canvas */}
           <div className="flex-1 flex overflow-hidden">
             <div ref={canvasContainerRef} className="flex-1 relative bg-background overflow-hidden">
               <canvas
@@ -1837,62 +1837,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   <div className="text-[8px] font-mono text-[#9d9d9d] bg-[#09090b]/80 px-1.5 py-0.5 rounded">
                     editing trajectory of joint <span style={{ color: jointColorMap.get(editingJoint) || JOINT_COLORS[0] }}>{editingJoint}</span>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Joints Legend */}
-            <div className="w-32 bg-background border-l border-border p-2 overflow-y-auto minimal-scrollbar">
-              {!episode || jointNames.length === 0 ? (
-                <div className="text-xs text-muted-foreground">No joints available</div>
-              ) : (
-                <div className="space-y-0.5">
-                  {jointNames.map((jointName) => {
-                    const isVisible = selectedJoints.has(jointName);
-                    const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
-                    const displayColor = isVisible ? color : "#71717a"; // Grey when not visible
-                    const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
-                    const currentValue = activeEpisode.frames[displayFrame]?.jointPositions[jointName];
-                    const isEditingThisJoint = isEditMode && editingJoint === jointName;
-
-                    return (
-                      <div
-                        key={jointName}
-                        className={cn(
-                          "min-w-0 cursor-pointer hover:bg-muted/30 rounded px-1 py-0.5 transition-colors",
-                          isEditingThisJoint && "bg-muted/50 border border-primary/50"
-                        )}
-                        onClick={() => {
-                          if (isEditMode) {
-                            // In edit mode, clicking selects which joint to edit
-                            // Make sure the joint is visible first
-                            if (!isVisible) {
-                              const newSelected = new Set(selectedJoints);
-                              newSelected.add(jointName);
-                              setSelectedJoints(newSelected);
-                            }
-                            setEditingJoint(jointName);
-                            setSelectedPointIndex(null);
-                            setTangentHandles(new Map()); // Clear handles when switching joints
-                          } else {
-                            // Normal mode: toggle visibility
-                            const newSelected = new Set(selectedJoints);
-                            if (isVisible) {
-                              newSelected.delete(jointName);
-                            } else {
-                              newSelected.add(jointName);
-                            }
-                            setSelectedJoints(newSelected);
-                          }
-                        }}
-                      >
-                        <div className="text-xs font-mono truncate leading-tight flex items-center gap-1" style={{ color: displayColor }}>
-                          {jointName}
-                          {isEditingThisJoint && <Pencil className="w-3 h-3" />}
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </div>
