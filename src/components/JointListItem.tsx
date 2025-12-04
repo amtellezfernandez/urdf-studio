@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { JointLimitInfo } from "@/urdf_corrections/parseJointLimits";
 import jointColors from "@/joint_colors.json";
+import { getJointColor } from "@/utils/jointColors";
 
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";
@@ -69,6 +70,7 @@ interface JointListItemProps {
   angleUnit?: "rad" | "deg";
   onClick?: () => void;
   isSelected?: boolean;
+  availableJoints?: string[];
 }
 
 export const JointListItem = ({
@@ -82,6 +84,7 @@ export const JointListItem = ({
   angleUnit = "rad",
   onClick,
   isSelected = false,
+  availableJoints = [],
 }: JointListItemProps) => {
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
@@ -318,6 +321,11 @@ export const JointListItem = ({
     ? (jointColors as Record<string, string>)[jointInfo.type] || jointColors.light_gray
     : jointColors.light_gray;
 
+  // Get joint color from 3D editor color scheme (based on sorted joint names)
+  const jointEditorColor = availableJoints.length > 0
+    ? getJointColor(jointName, availableJoints)
+    : jointTypeColor;
+
   // Helper to convert hex to rgba
   const hexToRgba = (hex: string, alpha: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -344,6 +352,12 @@ export const JointListItem = ({
       onMouseLeave={() => onHover?.(null)}
       onClick={onClick}
     >
+      {/* Color dot matching 3D editor colors */}
+      <div
+        className="w-2 h-2 rounded-full flex-shrink-0"
+        style={{ backgroundColor: jointEditorColor }}
+        title={`Joint color: ${jointEditorColor}`}
+      />
       <span
         className={cn(
           "text-xs font-medium truncate flex-1 min-w-0 text-left",

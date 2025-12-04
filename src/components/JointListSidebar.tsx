@@ -31,6 +31,7 @@ interface HierarchyTreeViewProps {
   onJointHover?: (jointName: string | null) => void;
   onLinkSelect?: (linkName: string | null) => void;
   selectedLink?: string | null;
+  availableJoints: string[];
 }
 
 const HierarchyTreeView = ({
@@ -45,6 +46,7 @@ const HierarchyTreeView = ({
   onJointHover,
   onLinkSelect,
   selectedLink,
+  availableJoints,
 }: HierarchyTreeViewProps) => {
   if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
     return (
@@ -172,6 +174,7 @@ const HierarchyTreeView = ({
                         onLinkSelect?.(null); // Clear link selection when selecting joint
                       }}
                       onHover={undefined} // Disable hover activation in hierarchy view
+                  availableJoints={availableJoints}
                 />
               </div>
               {/* Recursively render child link */}
@@ -567,6 +570,7 @@ export const JointListSidebar = ({
                         setSelectedLink(null); // Clear link selection when selecting joint
                       }}
                       onHover={onJointHover}
+                      availableJoints={availableJoints}
                     />
                   ))}
                 </div>
@@ -594,6 +598,7 @@ export const JointListSidebar = ({
                     setSelectedLink(linkName);
                   }}
                   selectedLink={selectedLink}
+                  availableJoints={availableJoints}
                 />
               )
             )}
