@@ -577,14 +577,14 @@ export const JointMappingDialog = ({
     <>
       {/* Light overlay - allows seeing background */}
       <div
-        className="fixed inset-0 z-50 bg-black/30"
+        className="fixed inset-0 z-[9999] bg-black/30"
         onClick={onClose}
       />
       {/* Draggable dialog */}
       <div
         ref={dialogRef}
         className={cn(
-          "fixed z-50 w-[600px] max-w-[90vw] max-h-[75vh] overflow-hidden flex flex-col bg-[#2d2d2d] border border-[#3d3d3d] text-[#d4d4d4] p-0 shadow-lg",
+          "fixed z-[9999] w-[700px] max-w-[calc(100vw-40px)] max-h-[85vh] overflow-hidden flex flex-col bg-[#2d2d2d] border border-[#3d3d3d] text-[#d4d4d4] p-0 shadow-2xl",
           position.x === 0 && position.y === 0 ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" : ""
         )}
         style={
@@ -597,38 +597,38 @@ export const JointMappingDialog = ({
         }
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Draggable Header */}
+        {/* Draggable Header - Compact Blender Style */}
         <div
-          className="flex-shrink-0 px-3 py-2 border-b border-[#3d3d3d] cursor-move flex items-center justify-between"
+          className="flex-shrink-0 px-2 py-1 border-b border-[#3d3d3d] cursor-move flex items-center justify-between bg-[#252525]"
           onMouseDown={handleHeaderMouseDown}
         >
-          <div className="text-xs font-normal text-[#d4d4d4] select-none">
+          <div className="text-[10px] font-normal text-[#d4d4d4] select-none">
             {source || "Dataset"}
             {hasTooManyJoints && (
-              <span className="ml-2 text-[#d46d6d]">(nonvalid)</span>
+              <span className="ml-1.5 text-[#d46d6d] text-[9px]">(nonvalid)</span>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors"
+            className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors p-0.5"
           >
             <X className="h-3 w-3" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex-shrink-0 px-3 py-2 border-b border-[#3d3d3d]">
+        {/* Tabs - Compact */}
+        <div className="flex-shrink-0 px-2 py-1 border-b border-[#3d3d3d] bg-[#252525]">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "mapping" | "metadata")} className="w-full">
-            <TabsList className="w-full grid grid-cols-2 bg-[#1e1e1e] border border-[#3d3d3d]">
+            <TabsList className="w-full grid grid-cols-2 bg-[#1e1e1e] border border-[#3d3d3d] h-6">
               <TabsTrigger 
                 value="mapping" 
-                className="text-[10px] data-[state=active]:bg-[#5d7d9d] data-[state=active]:text-white text-[#9d9d9d]"
+                className="text-[9px] h-5 data-[state=active]:bg-[#5d7d9d] data-[state=active]:text-white text-[#9d9d9d] py-0"
               >
                 Joint Mapping
               </TabsTrigger>
               <TabsTrigger 
                 value="metadata"
-                className="text-[10px] data-[state=active]:bg-[#5d7d9d] data-[state=active]:text-white text-[#9d9d9d]"
+                className="text-[9px] h-5 data-[state=active]:bg-[#5d7d9d] data-[state=active]:text-white text-[#9d9d9d] py-0"
               >
                 Metadata
               </TabsTrigger>
@@ -640,11 +640,11 @@ export const JointMappingDialog = ({
         <div className="flex-1 overflow-y-auto blender-scrollbar">
           {activeTab === "mapping" ? (
             <>
-              {/* Error Banner */}
+              {/* Error Banner - Compact */}
               {errors.length > 0 && (
-                <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d1e1e] border-b border-[#5d2e2e] text-[10px]">
-                  <div className="flex items-start gap-1.5">
-                    <AlertCircle className="h-3 w-3 text-[#d46d6d] flex-shrink-0 mt-0.5" />
+                <div className="flex-shrink-0 px-2 py-1 bg-[#3d1e1e] border-b border-[#5d2e2e] text-[9px]">
+                  <div className="flex items-start gap-1">
+                    <AlertCircle className="h-2.5 w-2.5 text-[#d46d6d] flex-shrink-0 mt-0.5" />
                     <div className="flex-1 space-y-0.5">
                       {errors.map((error, idx) => (
                         <div key={idx} className="text-[#d46d6d]">
@@ -656,19 +656,19 @@ export const JointMappingDialog = ({
                 </div>
               )}
 
-              {/* Deg→Rad Toggle with Auto-convert and Undo */}
-              <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 bg-[#252525] border-b border-[#3d3d3d]">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-[#9d9d9d]">Deg→Rad</span>
+              {/* Deg→Rad Toggle with Auto-convert and Undo - Compact */}
+              <div className="flex-shrink-0 flex items-center justify-between px-2 py-1 bg-[#252525] border-b border-[#3d3d3d]">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-[#9d9d9d]">Deg→Rad</span>
                   {autoConverted && degToRad && (
                     <Button
                       onClick={handleUndoConversion}
                       variant="ghost"
                       size="sm"
-                      className="h-5 px-2 text-[9px] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                      className="h-4 px-1.5 text-[8px] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d]"
                       title="Undo auto-conversion"
                     >
-                      <RotateCcw className="h-3 w-3 mr-1" />
+                      <RotateCcw className="h-2.5 w-2.5 mr-0.5" />
                       Undo
                     </Button>
                   )}
@@ -689,15 +689,15 @@ export const JointMappingDialog = ({
                 </SwitchPrimitives.Root>
               </div>
 
-              {/* Joint Limit Warnings */}
+              {/* Joint Limit Warnings - Compact */}
               {limitWarnings.length > 0 && (
-                <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d2e1e] border-b border-[#5d4e2e] text-[10px]">
-                  <div className="flex items-start gap-1.5">
-                    <AlertTriangle className="h-3 w-3 text-[#d4a46d] flex-shrink-0 mt-0.5" />
+                <div className="flex-shrink-0 px-2 py-1 bg-[#3d2e1e] border-b border-[#5d4e2e] text-[9px]">
+                  <div className="flex items-start gap-1">
+                    <AlertTriangle className="h-2.5 w-2.5 text-[#d4a46d] flex-shrink-0 mt-0.5" />
                     <div className="flex-1 space-y-0.5">
-                      <div className="text-[#d4a46d] font-medium">Joint limit warnings:</div>
+                      <div className="text-[#d4a46d] font-medium text-[9px]">Joint limit warnings:</div>
                       {limitWarnings.map((warning, idx) => (
-                        <div key={idx} className="text-[#d4a46d] font-mono text-[9px]">
+                        <div key={idx} className="text-[#d4a46d] font-mono text-[8px]">
                           {warning.joint}: {warning.issue}
                         </div>
                       ))}
@@ -706,18 +706,18 @@ export const JointMappingDialog = ({
                 </div>
               )}
 
-              {/* Mapping Table */}
-          <table className="w-full text-[10px]">
-            <thead className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d]">
+              {/* Mapping Table - Compact Blender Style */}
+          <table className="w-full text-[9px]">
+            <thead className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d] z-10">
               <tr>
-                <th className="text-left px-2 py-1 font-normal text-[#9d9d9d]">Dataset</th>
-                <th className="text-left px-2 py-1 font-normal text-[#9d9d9d]">URDF</th>
-                <th className="text-right px-2 py-1 font-normal text-[#9d9d9d]">Original</th>
-                <th className="text-center px-2 py-1 font-normal text-[#9d9d9d]">Invert</th>
-                <th className="text-right px-2 py-1 font-normal text-[#9d9d9d]">After Invert</th>
-                <th className="text-right px-2 py-1 font-normal text-[#9d9d9d]">Offset</th>
-                <th className="text-right px-2 py-1 font-normal text-[#9d9d9d]">Final</th>
-                <th className="text-right px-2 py-1 font-normal text-[#9d9d9d]">URDF Limits</th>
+                <th className="text-left px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Dataset</th>
+                <th className="text-left px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">URDF</th>
+                <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Original</th>
+                <th className="text-center px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Invert</th>
+                <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">After Invert</th>
+                <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Offset</th>
+                <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Final</th>
+                <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">URDF Limits</th>
               </tr>
             </thead>
             <tbody>
@@ -736,10 +736,10 @@ export const JointMappingDialog = ({
                       hasError && "bg-[#2d1e1e]"
                     )}
                   >
-                    <td className="px-2 py-1 font-mono text-[#d4d4d4] text-[10px]">
+                    <td className="px-1.5 py-0.5 font-mono text-[#d4d4d4] text-[9px]">
                       {mapping.datasetJoint}
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-1.5 py-0.5">
                       <Select
                         value={mapping.urdfJoint}
                         onValueChange={(value) =>
@@ -748,7 +748,7 @@ export const JointMappingDialog = ({
                       >
                         <SelectTrigger
                           className={cn(
-                            "h-6 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] font-mono px-2",
+                            "h-5 text-[9px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] font-mono px-1.5",
                             hasError && "border-[#5d2e2e] bg-[#2d1e1e]"
                           )}
                         >
@@ -757,7 +757,7 @@ export const JointMappingDialog = ({
                         <SelectContent className="bg-[#282828] border-[#3d3d3d] max-h-[200px]">
                           <SelectItem
                             value="?"
-                            className="text-[10px] text-[#9d9d9d] hover:bg-[#3d3d3d] py-1"
+                            className="text-[9px] text-[#9d9d9d] hover:bg-[#3d3d3d] py-0.5"
                           >
                             (skip)
                           </SelectItem>
@@ -765,7 +765,7 @@ export const JointMappingDialog = ({
                             <SelectItem
                               key={joint}
                               value={joint}
-                              className="text-[10px] font-mono text-[#d4d4d4] hover:bg-[#3d3d3d] py-1"
+                              className="text-[9px] font-mono text-[#d4d4d4] hover:bg-[#3d3d3d] py-0.5"
                             >
                               {joint}
                             </SelectItem>
@@ -774,22 +774,22 @@ export const JointMappingDialog = ({
                       </Select>
                     </td>
                     {/* Original Range Column */}
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-1.5 py-0.5 text-right">
                       {range ? (() => {
                         const originalMin = degToRad ? (range.min * Math.PI) / 180 : range.min;
                         const originalMax = degToRad ? (range.max * Math.PI) / 180 : range.max;
                         return (
-                          <div className="font-mono text-[10px] text-[#9d9d9d]">
+                          <div className="font-mono text-[9px] text-[#9d9d9d]">
                             {originalMin.toFixed(2)} → {originalMax.toFixed(2)}
                           </div>
                         );
                       })() : (
-                        <span className="text-[#5d5d5d] text-[10px]">—</span>
+                        <span className="text-[#5d5d5d] text-[9px]">—</span>
                       )}
                     </td>
                     
                     {/* Inversion Column (Yes/No toggle) */}
-                    <td className="px-2 py-1 text-center">
+                    <td className="px-1.5 py-0.5 text-center">
                       {range && mapping.urdfJoint && mapping.urdfJoint !== "?" ? (() => {
                         const currentInversion = mapping.inverted !== undefined 
                           ? mapping.inverted 
@@ -800,7 +800,7 @@ export const JointMappingDialog = ({
                             <button
                               onClick={() => handleInversionToggle(mapping.datasetJoint, !currentInversion)}
                               className={cn(
-                                "px-2 py-0.5 text-[9px] font-mono rounded border transition-colors",
+                                "px-1.5 py-0.5 text-[8px] font-mono rounded border transition-colors",
                                 currentInversion 
                                   ? "bg-[#5d7dad] border-[#5d7dad] text-white" 
                                   : "bg-[#1e1e1e] border-[#3d3d3d] text-[#9d9d9d] hover:bg-[#2d2d2d]"
@@ -811,12 +811,12 @@ export const JointMappingDialog = ({
                           </div>
                         );
                       })() : (
-                        <span className="text-[#5d5d5d] text-[10px]">—</span>
+                        <span className="text-[#5d5d5d] text-[9px]">—</span>
                       )}
                     </td>
                     
                     {/* Result After Inversion Column */}
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-1.5 py-0.5 text-right">
                       {range && mapping.urdfJoint && mapping.urdfJoint !== "?" ? (() => {
                         const originalMin = degToRad ? (range.min * Math.PI) / 180 : range.min;
                         const originalMax = degToRad ? (range.max * Math.PI) / 180 : range.max;
@@ -828,17 +828,17 @@ export const JointMappingDialog = ({
                         const afterInvertMax = isInverted ? -originalMin : originalMax;
                         
                         return (
-                          <div className="font-mono text-[10px] text-[#9d9d9d]">
+                          <div className="font-mono text-[9px] text-[#9d9d9d]">
                             {afterInvertMin.toFixed(2)} → {afterInvertMax.toFixed(2)}
                           </div>
                         );
                       })() : (
-                        <span className="text-[#5d5d5d] text-[10px]">—</span>
+                        <span className="text-[#5d5d5d] text-[9px]">—</span>
                       )}
                     </td>
                     
                     {/* Offset Column */}
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-1.5 py-0.5 text-right">
                       {(() => {
                         const hasWarning = limitWarnings.some(w => w.joint === mapping.urdfJoint);
                         const hasMapping = mapping.urdfJoint && mapping.urdfJoint !== "?";
@@ -853,7 +853,7 @@ export const JointMappingDialog = ({
                         
                         // Always show input field when there's a mapping
                         if (!hasMapping) {
-                          return <span className="text-[#5d5d5d] text-[10px]">—</span>;
+                          return <span className="text-[#5d5d5d] text-[9px]">—</span>;
                         }
                         
                         // Get current offset
@@ -911,7 +911,7 @@ export const JointMappingDialog = ({
                             }}
                             placeholder={hasProposedOffset ? proposedOffset.toFixed(4) : ""}
                             className={cn(
-                              "h-5 text-[10px] font-mono bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-1.5 w-24 text-right",
+                              "h-4 text-[9px] font-mono bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-1 w-20 text-right",
                               currentOffset !== undefined && Math.abs(currentOffset) > 0.0001 && "border-[#5d7dad] bg-[#1e2e3e] ring-1 ring-[#5d7dad]/30",
                               !currentOffset && hasProposedOffset && "placeholder:text-[#7d9dcd]/60"
                             )}
@@ -922,7 +922,7 @@ export const JointMappingDialog = ({
                     </td>
                     
                     {/* Final Result Column (after inversion + offset) */}
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-1.5 py-0.5 text-right">
                       {range && mapping.urdfJoint && mapping.urdfJoint !== "?" ? (() => {
                         const originalMin = degToRad ? (range.min * Math.PI) / 180 : range.min;
                         const originalMax = degToRad ? (range.max * Math.PI) / 180 : range.max;
@@ -943,23 +943,23 @@ export const JointMappingDialog = ({
                         const hasWarning = limitWarnings.some(w => w.joint === mapping.urdfJoint);
                         
                         return (
-                          <div className="font-mono text-[10px]">
+                          <div className="font-mono text-[9px]">
                             <span className={hasWarning ? "text-[#d4a46d]" : "text-[#9d9d9d]"}>
                               {finalMin.toFixed(2)} → {finalMax.toFixed(2)}
                             </span>
                           </div>
                         );
                       })() : (
-                        <span className="text-[#5d5d5d] text-[10px]">—</span>
+                        <span className="text-[#5d5d5d] text-[9px]">—</span>
                       )}
                     </td>
                     
                     {/* URDF Limits Column */}
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-1.5 py-0.5 text-right">
                       {mapping.urdfJoint && mapping.urdfJoint !== "?" ? (() => {
                         const urdfLimit = jointLimits[mapping.urdfJoint];
                         if (!urdfLimit || (urdfLimit.lower === null && urdfLimit.upper === null)) {
-                          return <span className="text-[#5d5d5d] text-[10px]">—</span>;
+                          return <span className="text-[#5d5d5d] text-[9px]">—</span>;
                         }
                         return (
                           <div className="text-[8px] text-[#5d5d5d] font-mono">
@@ -967,7 +967,7 @@ export const JointMappingDialog = ({
                           </div>
                         );
                       })() : (
-                        <span className="text-[#5d5d5d] text-[10px]">—</span>
+                        <span className="text-[#5d5d5d] text-[9px]">—</span>
                       )}
                     </td>
                   </tr>
@@ -977,79 +977,79 @@ export const JointMappingDialog = ({
           </table>
             </>
           ) : (
-            /* Metadata View */
-            <div className="p-4 space-y-4">
+            /* Metadata View - Compact */
+            <div className="p-2 space-y-2">
               {metadataLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-4 w-4 animate-spin text-[#9d9d9d] mr-2" />
-                  <span className="text-[10px] text-[#9d9d9d]">Loading metadata...</span>
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-3 w-3 animate-spin text-[#9d9d9d] mr-1.5" />
+                  <span className="text-[9px] text-[#9d9d9d]">Loading metadata...</span>
                 </div>
               ) : metadataError ? (
-                <div className="flex items-center gap-2 p-3 bg-[#3d1e1e] border border-[#5d2e2e] rounded text-[10px] text-[#d46d6d]">
-                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                <div className="flex items-center gap-1.5 p-2 bg-[#3d1e1e] border border-[#5d2e2e] rounded text-[9px] text-[#d46d6d]">
+                  <AlertCircle className="h-2.5 w-2.5 flex-shrink-0" />
                   <span>{metadataError}</span>
                 </div>
               ) : metadata ? (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {/* Basic Info */}
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Basic Information</h3>
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="space-y-1">
+                    <h3 className="text-[10px] font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-0.5">Basic Information</h3>
+                    <div className="grid grid-cols-2 gap-1.5 text-[9px]">
                       <div>
                         <span className="text-[#9d9d9d]">Codebase Version:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.codebase_version}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.codebase_version}</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Robot Type:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.robot_type}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.robot_type}</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">FPS:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.fps}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.fps}</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Chunk Size:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.chunks_size}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.chunks_size}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Statistics */}
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Statistics</h3>
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="space-y-1">
+                    <h3 className="text-[10px] font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-0.5">Statistics</h3>
+                    <div className="grid grid-cols-2 gap-1.5 text-[9px]">
                       <div>
                         <span className="text-[#9d9d9d]">Total Episodes:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.total_episodes?.toLocaleString()}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.total_episodes?.toLocaleString()}</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Total Frames:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.total_frames?.toLocaleString()}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.total_frames?.toLocaleString()}</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Total Tasks:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.total_tasks}</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.total_tasks}</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Data Size:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.data_files_size_in_mb} MB</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.data_files_size_in_mb} MB</span>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Video Size:</span>
-                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.video_files_size_in_mb} MB</span>
+                        <span className="ml-1.5 text-[#d4d4d4] font-mono">{metadata.video_files_size_in_mb} MB</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Splits */}
                   {metadata.splits && (
-                    <div className="space-y-2">
-                      <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Splits</h3>
-                      <div className="text-[10px]">
+                    <div className="space-y-1">
+                      <h3 className="text-[10px] font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-0.5">Splits</h3>
+                      <div className="text-[9px]">
                         {Object.entries(metadata.splits).map(([key, value]) => (
-                          <div key={key} className="mb-1">
+                          <div key={key} className="mb-0.5">
                             <span className="text-[#9d9d9d]">{key}:</span>
-                            <span className="ml-2 text-[#d4d4d4] font-mono">{String(value)}</span>
+                            <span className="ml-1.5 text-[#d4d4d4] font-mono">{String(value)}</span>
                           </div>
                         ))}
                       </div>
@@ -1057,18 +1057,18 @@ export const JointMappingDialog = ({
                   )}
 
                   {/* Paths */}
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Paths</h3>
-                    <div className="space-y-1 text-[10px]">
+                  <div className="space-y-1">
+                    <h3 className="text-[10px] font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-0.5">Paths</h3>
+                    <div className="space-y-0.5 text-[9px]">
                       <div>
                         <span className="text-[#9d9d9d]">Data Path:</span>
-                        <div className="ml-2 mt-1 text-[#d4d4d4] font-mono bg-[#1e1e1e] p-2 rounded border border-[#3d3d3d] break-all">
+                        <div className="ml-1.5 mt-0.5 text-[#d4d4d4] font-mono bg-[#1e1e1e] p-1 rounded border border-[#3d3d3d] break-all text-[8px]">
                           {metadata.data_path}
                         </div>
                       </div>
                       <div>
                         <span className="text-[#9d9d9d]">Video Path:</span>
-                        <div className="ml-2 mt-1 text-[#d4d4d4] font-mono bg-[#1e1e1e] p-2 rounded border border-[#3d3d3d] break-all">
+                        <div className="ml-1.5 mt-0.5 text-[#d4d4d4] font-mono bg-[#1e1e1e] p-1 rounded border border-[#3d3d3d] break-all text-[8px]">
                           {metadata.video_path}
                         </div>
                       </div>
@@ -1077,27 +1077,27 @@ export const JointMappingDialog = ({
 
                   {/* Features */}
                   {metadata.features && (
-                    <div className="space-y-2">
-                      <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Features</h3>
-                      <div className="space-y-3">
+                    <div className="space-y-1">
+                      <h3 className="text-[10px] font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-0.5">Features</h3>
+                      <div className="space-y-1.5">
                         {Object.entries(metadata.features).map(([key, feature]: [string, any]) => (
-                          <div key={key} className="bg-[#1e1e1e] border border-[#3d3d3d] rounded p-2">
-                            <div className="text-[10px] font-semibold text-[#d4d4d4] mb-2">{key}</div>
-                            <div className="space-y-1 text-[9px] text-[#9d9d9d]">
+                          <div key={key} className="bg-[#1e1e1e] border border-[#3d3d3d] rounded p-1.5">
+                            <div className="text-[9px] font-semibold text-[#d4d4d4] mb-1">{key}</div>
+                            <div className="space-y-0.5 text-[8px] text-[#9d9d9d]">
                               <div>
                                 <span className="text-[#9d9d9d]">Type:</span>
-                                <span className="ml-2 text-[#d4d4d4] font-mono">{feature.dtype}</span>
+                                <span className="ml-1.5 text-[#d4d4d4] font-mono">{feature.dtype}</span>
                               </div>
                               {feature.shape && (
                                 <div>
                                   <span className="text-[#9d9d9d]">Shape:</span>
-                                  <span className="ml-2 text-[#d4d4d4] font-mono">[{feature.shape.join(", ")}]</span>
+                                  <span className="ml-1.5 text-[#d4d4d4] font-mono">[{feature.shape.join(", ")}]</span>
                                 </div>
                               )}
                               {feature.names && Array.isArray(feature.names) && feature.names.length > 0 && (
                                 <div>
                                   <span className="text-[#9d9d9d]">Names:</span>
-                                  <div className="ml-2 mt-1 text-[#d4d4d4] font-mono">
+                                  <div className="ml-1.5 mt-0.5 text-[#d4d4d4] font-mono text-[8px]">
                                     {feature.names.join(", ")}
                                   </div>
                                 </div>
@@ -1105,16 +1105,16 @@ export const JointMappingDialog = ({
                               {feature.fps && (
                                 <div>
                                   <span className="text-[#9d9d9d]">FPS:</span>
-                                  <span className="ml-2 text-[#d4d4d4] font-mono">{feature.fps}</span>
+                                  <span className="ml-1.5 text-[#d4d4d4] font-mono">{feature.fps}</span>
                                 </div>
                               )}
                               {feature.info && (
-                                <div className="mt-2 pt-2 border-t border-[#3d3d3d]">
-                                  <div className="text-[9px] text-[#9d9d9d] mb-1">Additional Info:</div>
+                                <div className="mt-1 pt-1 border-t border-[#3d3d3d]">
+                                  <div className="text-[8px] text-[#9d9d9d] mb-0.5">Additional Info:</div>
                                   {Object.entries(feature.info).map(([infoKey, infoValue]) => (
-                                    <div key={infoKey} className="ml-2">
+                                    <div key={infoKey} className="ml-1.5">
                                       <span className="text-[#9d9d9d]">{infoKey}:</span>
-                                      <span className="ml-2 text-[#d4d4d4] font-mono">{String(infoValue)}</span>
+                                      <span className="ml-1.5 text-[#d4d4d4] font-mono">{String(infoValue)}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1127,7 +1127,7 @@ export const JointMappingDialog = ({
                   )}
                 </div>
               ) : (
-                <div className="text-center py-8 text-[10px] text-[#9d9d9d]">
+                <div className="text-center py-6 text-[9px] text-[#9d9d9d]">
                   No metadata available
                 </div>
               )}
@@ -1135,17 +1135,17 @@ export const JointMappingDialog = ({
           )}
         </div>
 
-        {/* Footer Actions - Only show for mapping tab */}
+        {/* Footer Actions - Only show for mapping tab - Compact */}
         {activeTab === "mapping" && (
-          <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-t border-[#3d3d3d] bg-[#252525]">
-            <div className="text-[10px] text-[#9d9d9d]">
+          <div className="flex-shrink-0 flex items-center justify-between px-2 py-1 border-t border-[#3d3d3d] bg-[#252525]">
+            <div className="text-[9px] text-[#9d9d9d]">
               {mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length}/{datasetJoints.length}
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1">
               <Button
                 onClick={onClose}
                 variant="outline"
-                className="h-6 px-3 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#2d2d2d] hover:text-white"
+                className="h-5 px-2 text-[9px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#2d2d2d] hover:text-white"
               >
                 Cancel
               </Button>
@@ -1155,7 +1155,7 @@ export const JointMappingDialog = ({
                     onClick={handleApplyFirstEpisode}
                     disabled={errors.length > 0 || hasTooManyJoints}
                     className={cn(
-                      "h-6 px-3 text-[10px]",
+                      "h-5 px-2 text-[9px]",
                       errors.length > 0 || hasTooManyJoints
                         ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
                         : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
@@ -1168,7 +1168,7 @@ export const JointMappingDialog = ({
                       onClick={handleApplyToWholeDataset}
                       disabled={errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset}
                       className={cn(
-                        "h-6 px-3 text-[10px]",
+                        "h-5 px-2 text-[9px]",
                         errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset
                           ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
                           : "bg-[#7d9d5d] text-white hover:bg-[#8dad6d]"
@@ -1184,7 +1184,7 @@ export const JointMappingDialog = ({
                   onClick={handleApply}
                   disabled={errors.length > 0 || hasTooManyJoints}
                   className={cn(
-                    "h-6 px-3 text-[10px]",
+                    "h-5 px-2 text-[9px]",
                     errors.length > 0 || hasTooManyJoints
                       ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
                       : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
