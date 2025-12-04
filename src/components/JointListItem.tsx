@@ -335,49 +335,50 @@ export const JointListItem = ({
   };
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 px-2 py-1.5 hover:bg-muted/30 rounded-sm transition-colors cursor-pointer",
-        isHighlighted && "hover:bg-muted/40",
-        isSelected && "hover:bg-muted/50"
-      )}
-      style={
-        isHighlighted || isSelected
-          ? {
-              backgroundColor: hexToRgba(jointTypeColor, isSelected ? 0.25 : 0.15),
-            }
-          : undefined
-      }
-      onMouseEnter={() => onHover?.(jointName)}
-      onMouseLeave={() => onHover?.(null)}
-      onClick={onClick}
-    >
-      {/* Color dot matching 3D editor colors */}
+    <div className="flex items-center gap-1.5">
+      {/* Color square matching 3D editor colors - outside highlight area */}
       <div
-        className="w-2 h-2 rounded-full flex-shrink-0"
+        className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
         style={{ backgroundColor: jointEditorColor }}
         title={`Joint color: ${jointEditorColor}`}
       />
-      <span
+      <div
         className={cn(
-          "text-xs font-medium truncate flex-1 min-w-0 text-left",
-          isDeleted && "text-muted-foreground/50",
-          !isDeleted && !isHighlighted && !isSelected && "text-foreground"
+          "flex items-center gap-1.5 flex-1 px-2 py-1.5 hover:bg-muted/30 rounded-sm transition-colors cursor-pointer",
+          isHighlighted && "hover:bg-muted/40",
+          isSelected && "hover:bg-muted/50"
         )}
         style={
-          !isDeleted && (isHighlighted || isSelected)
-            ? { color: jointTypeColor }
+          isHighlighted || isSelected
+            ? {
+                backgroundColor: hexToRgba(jointTypeColor, isSelected ? 0.25 : 0.15),
+              }
             : undefined
         }
-        title={isDeleted ? "Will be deleted in exported URDF" : undefined}
+        onMouseEnter={() => onHover?.(jointName)}
+        onMouseLeave={() => onHover?.(null)}
+        onClick={onClick}
       >
-        {jointName}
-        {isDeleted && (
-          <span className="ml-1 text-[9px] text-muted-foreground/70">
-            (deleted)
-          </span>
-        )}
-      </span>
+        <span
+          className={cn(
+            "text-xs font-medium truncate flex-1 min-w-0 text-left",
+            isDeleted && "text-muted-foreground/50",
+            !isDeleted && !isHighlighted && !isSelected && "text-foreground"
+          )}
+          style={
+            !isDeleted && (isHighlighted || isSelected)
+              ? { color: jointTypeColor }
+              : undefined
+          }
+          title={isDeleted ? "Will be deleted in exported URDF" : undefined}
+        >
+          {jointName}
+          {isDeleted && (
+            <span className="ml-1 text-[9px] text-muted-foreground/70">
+              (deleted)
+            </span>
+          )}
+        </span>
       <span
         ref={valueDisplayRef}
         tabIndex={0}
@@ -414,6 +415,7 @@ export const JointListItem = ({
           ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
           : `${currentValue.toFixed(2)}`}
       </span>
+      </div>
     </div>
   );
 };
