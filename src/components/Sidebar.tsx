@@ -1039,6 +1039,8 @@ export const Sidebar = ({
     loadingToastId?: string | number;
   } | null>(null);
   const [canApplyToWholeDataset, setCanApplyToWholeDataset] = useState(false);
+  const [totalEpisodesCount, setTotalEpisodesCount] = useState<number | undefined>(undefined);
+  const [expectedTotalEpisodes, setExpectedTotalEpisodes] = useState<number | undefined>(undefined);
   const backgroundLoadingPromiseRef = useRef<Promise<{ allRows: Array<Record<string, unknown>>; episodesMap: Map<number, Array<Record<string, unknown>>> }> | null>(null);
   
   // Store callbacks for mapping dialog
@@ -2780,39 +2782,101 @@ export const Sidebar = ({
         const firstEpisodeMap = new Map<number, Array<Record<string, unknown>>>();
         firstEpisodeMap.set(firstEpisodeIndex!, firstEpisodeRows);
 
+        // Fetch total_episodes from meta/info.json early (before background loading starts)
+        let totalEpisodesFromInfo: number | undefined = undefined;
+        try {
+          const infoUrl = `https://huggingface.co/datasets/${parsedPath}/raw/main/meta/info.json`;
+          const infoResponse = await fetch(infoUrl, { headers });
+          if (infoResponse.ok) {
+            const infoJson = await infoResponse.json();
+            // Extract total_episodes if available
+            if (infoJson.total_episodes !== undefined) {
+              totalEpisodesFromInfo = infoJson.total_episodes;
+              console.log(`Found total_episodes in info.json: ${totalEpisodesFromInfo}`);
+              setExpectedTotalEpisodes(totalEpisodesFromInfo);
+            }
+          }
+        } catch (error) {
+          console.warn("Could not fetch info.json for total_episodes:", error);
+        }
+
         // STEP 2: Start loading ALL episodes in background (fire and forget)
         const loadAllEpisodesInBackground = async () => {
           const backgroundAllRows: Array<Record<string, unknown>> = [...firstEpisodeRows];
           let backgroundOffset = offset;
-          let backgroundHasMore = hasMore;
+          // Always start as true - don't rely on hasMore flag which becomes false when first episode completes
+          let backgroundHasMore = true;
+          const discoveredEpisodes = new Set<number>();
+          
+          // Add first episode to discovered episodes
+          discoveredEpisodes.add(firstEpisodeIndex!);
+          setTotalEpisodesCount(1); // Start with 1 episode (the first one)
           
           console.log(`Starting background loading of all episodes from offset ${backgroundOffset}...`);
+          if (totalEpisodesFromInfo) {
+            console.log(`Expected total episodes: ${totalEpisodesFromInfo}`);
+          }
+          if (totalRows > 0) {
+            console.log(`Expected total rows: ${totalRows}`);
+          }
           
           while (backgroundHasMore) {
             try {
+              // Check if we've loaded all expected rows
+              if (totalRows > 0 && backgroundAllRows.length >= totalRows) {
+                console.log(`Background loading complete: reached expected total rows (${totalRows})`);
+                break;
+              }
+              
+              // Check if we've discovered all expected episodes
+              if (totalEpisodesFromInfo && discoveredEpisodes.size >= totalEpisodesFromInfo) {
+                console.log(`Background loading complete: discovered all expected episodes (${totalEpisodesFromInfo})`);
+                break;
+              }
+              
               const rowsUrl = `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(parsedPath)}&config=default&split=train&offset=${backgroundOffset}&length=${batchSize}`;
               const response = await fetch(rowsUrl, { headers });
-              if (!response.ok) break;
+              if (!response.ok) {
+                console.log(`Background loading stopped: response not ok (${response.status})`);
+                break;
+              }
 
               const data = await response.json();
               const rows = data.rows || [];
-              if (rows.length === 0) break;
+              if (rows.length === 0) {
+                console.log(`Background loading complete: no more rows at offset ${backgroundOffset}`);
+                break;
+              }
 
+              // Track unique episodes as we load rows
               for (const rowWrapper of rows) {
                 const row = rowWrapper.row || rowWrapper;
                 backgroundAllRows.push(row);
+                
+                const episodeIndex = (row.episode_index as number) ?? 0;
+                if (!discoveredEpisodes.has(episodeIndex)) {
+                  discoveredEpisodes.add(episodeIndex);
+                  // Update count in real-time as we discover new episodes
+                  setTotalEpisodesCount(discoveredEpisodes.size);
+                }
               }
 
-              console.log(`Background loading: loaded ${rows.length} rows (total: ${backgroundAllRows.length})`);
-              backgroundOffset += batchSize;
-              backgroundHasMore = rows.length === batchSize;
+              console.log(`Background loading: loaded ${rows.length} rows (total: ${backgroundAllRows.length}, episodes: ${discoveredEpisodes.size}${totalEpisodesFromInfo ? `/${totalEpisodesFromInfo}` : ''})`);
+              
+              // Increment offset by actual number of rows loaded, not batchSize
+              // This ensures we don't skip or duplicate rows
+              backgroundOffset += rows.length;
+              
+              // Continue loading - only stop when we get 0 rows or reach expected totals
+              // Don't stop just because we got less than a full batch (that might just be the last partial batch)
+              backgroundHasMore = rows.length > 0;
             } catch (error) {
               console.error(`Error fetching background rows:`, error);
               break;
             }
           }
 
-          console.log(`Background loading complete: ${backgroundAllRows.length} total rows`);
+          console.log(`Background loading complete: ${backgroundAllRows.length} total rows, ${discoveredEpisodes.size} episodes`);
 
           // Group all rows by episode_index
           const backgroundEpisodesMap = new Map<number, Array<Record<string, unknown>>>();
@@ -2825,7 +2889,9 @@ export const Sidebar = ({
           }
 
           // Mark as complete - this will enable the "Apply to Whole Dataset" button
+          const totalEpisodes = backgroundEpisodesMap.size;
           setCanApplyToWholeDataset(true);
+          setTotalEpisodesCount(totalEpisodes); // Final count (should match discoveredEpisodes.size)
 
           return { allRows: backgroundAllRows, episodesMap: backgroundEpisodesMap };
         };
@@ -2885,7 +2951,7 @@ export const Sidebar = ({
           console.warn("Could not fetch info from Dataset Server API:", error);
         }
 
-        // Fallback: Try direct fetch with /raw/ endpoint (less likely to have CORS issues)
+        // Fallback: Try direct fetch with /raw/ endpoint for joint names if not already found
         if (jointNames.length === 0) {
           try {
             const infoUrl = `https://huggingface.co/datasets/${parsedPath}/raw/main/meta/info.json`;
@@ -3100,6 +3166,7 @@ export const Sidebar = ({
           setShowHfMappingDialog(false);
           setHfMappingDialogData(null);
           setCanApplyToWholeDataset(false);
+          setTotalEpisodesCount(undefined);
           backgroundLoadingPromiseRef.current = null;
           setIsImportingFromHFDataset(false);
         };
@@ -3279,6 +3346,7 @@ export const Sidebar = ({
           setShowHfMappingDialog(false);
           setHfMappingDialogData(null);
           setCanApplyToWholeDataset(false);
+          setTotalEpisodesCount(undefined);
           backgroundLoadingPromiseRef.current = null;
           setIsImportingFromHFDataset(false);
         };
@@ -3291,6 +3359,9 @@ export const Sidebar = ({
           // Store callbacks
           setApplyFirstEpisodeCallback(() => applyToFirstEpisodeOnly);
           setApplyWholeDatasetCallback(() => applyToWholeDataset);
+          
+          // Initialize episode count to 1 (first episode) so button appears immediately
+          setTotalEpisodesCount(1);
           
           setHfMappingDialogData({
             datasetJoints: datasetJointNames,
@@ -4467,6 +4538,8 @@ export const Sidebar = ({
             setShowHfMappingDialog(false);
             setHfMappingDialogData(null);
             setCanApplyToWholeDataset(false);
+            setTotalEpisodesCount(undefined);
+            setExpectedTotalEpisodes(undefined);
             backgroundLoadingPromiseRef.current = null;
             setApplyFirstEpisodeCallback(null);
             setApplyWholeDatasetCallback(null);
@@ -4480,6 +4553,7 @@ export const Sidebar = ({
           jointRanges={hfMappingDialogData.jointRanges}
           existingMapping={getMappingForSource(hfMappingDialogData.source)}
           source={hfMappingDialogData.source}
+          datasetPath={hfMappingDialogData.datasetPath}
           jointLimits={jointLimits}
           onApply={(mappings, degToRad) => {
             // Fallback to default apply if callbacks not set
@@ -4491,6 +4565,8 @@ export const Sidebar = ({
           onApplyFirstEpisode={applyFirstEpisodeCallback || undefined}
           onApplyToWholeDataset={applyWholeDatasetCallback || undefined}
           canApplyToWholeDataset={canApplyToWholeDataset}
+          totalEpisodesCount={totalEpisodesCount}
+          expectedTotalEpisodes={expectedTotalEpisodes}
         />
       )}
 

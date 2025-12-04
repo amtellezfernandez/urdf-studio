@@ -10,7 +10,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import * as SwitchPrimitives from "@radix-ui/react-switch";
 import { Input } from "@/components/ui/input";
-import { X, AlertCircle, RotateCcw, AlertTriangle } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { X, AlertCircle, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 
@@ -46,6 +47,9 @@ interface JointMappingDialogProps {
   onApplyToWholeDataset?: (mappings: JointMapping[], degToRad: boolean) => void; // Apply to all episodes
   canApplyToWholeDataset?: boolean; // Enable/disable whole dataset button
   showTwoButtons?: boolean; // Show two buttons instead of one
+  totalEpisodesCount?: number; // Total number of episodes to load (for button text)
+  expectedTotalEpisodes?: number; // Expected total episodes from info.json (for percentage)
+  datasetPath?: string; // Dataset path for loading meta/info.json
 }
 
 export const JointMappingDialog = ({
@@ -63,6 +67,9 @@ export const JointMappingDialog = ({
   onApplyToWholeDataset,
   canApplyToWholeDataset = false,
   showTwoButtons = false,
+  totalEpisodesCount,
+  expectedTotalEpisodes,
+  datasetPath,
 }: JointMappingDialogProps) => {
   // Check if dataset has more joints than URDF
   const hasTooManyJoints = datasetJoints.length > urdfJoints.length;
@@ -75,6 +82,10 @@ export const JointMappingDialog = ({
   const [proposedOffsets, setProposedOffsets] = useState<Record<string, number>>({}); // Proposed offsets (not yet applied)
   const [offsetInputValues, setOffsetInputValues] = useState<Record<string, string>>({}); // Raw input values for free editing
   const [jointInversions, setJointInversions] = useState<Record<string, boolean>>({}); // Track which joints are inverted
+  const [activeTab, setActiveTab] = useState<"mapping" | "metadata">("mapping");
+  const [metadata, setMetadata] = useState<any>(null);
+  const [metadataLoading, setMetadataLoading] = useState(false);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
   
   // Dragging state
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -86,8 +97,41 @@ export const JointMappingDialog = ({
   useEffect(() => {
     if (isOpen) {
       setPosition({ x: 0, y: 0 });
+      setActiveTab("mapping");
+      setMetadata(null);
+      setMetadataError(null);
     }
   }, [isOpen]);
+
+  // Load metadata when metadata tab is active
+  useEffect(() => {
+    if (isOpen && activeTab === "metadata" && datasetPath && !metadata && !metadataLoading) {
+      setMetadataLoading(true);
+      setMetadataError(null);
+      
+      const loadMetadata = async () => {
+        try {
+          // Try to fetch from Hugging Face
+          const infoUrl = `https://huggingface.co/datasets/${datasetPath}/raw/main/meta/info.json`;
+          const response = await fetch(infoUrl);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to load metadata: ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          setMetadata(data);
+        } catch (error) {
+          console.error("Failed to load metadata:", error);
+          setMetadataError(error instanceof Error ? error.message : "Failed to load metadata");
+        } finally {
+          setMetadataLoading(false);
+        }
+      };
+      
+      loadMetadata();
+    }
+  }, [isOpen, activeTab, datasetPath, metadata, metadataLoading]);
 
   // Auto-detect if values are in degrees and convert
   useEffect(() => {
@@ -559,7 +603,7 @@ export const JointMappingDialog = ({
           onMouseDown={handleHeaderMouseDown}
         >
           <div className="text-xs font-normal text-[#d4d4d4] select-none">
-            Joint Mapping{source && ` - ${source}`}
+            {source || "Dataset"}
             {hasTooManyJoints && (
               <span className="ml-2 text-[#d46d6d]">(nonvalid)</span>
             )}
@@ -572,74 +616,97 @@ export const JointMappingDialog = ({
           </button>
         </div>
 
-        {/* Error Banner */}
-        {errors.length > 0 && (
-          <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d1e1e] border-b border-[#5d2e2e] text-[10px]">
-            <div className="flex items-start gap-1.5">
-              <AlertCircle className="h-3 w-3 text-[#d46d6d] flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-0.5">
-                {errors.map((error, idx) => (
-                  <div key={idx} className="text-[#d46d6d]">
-                    {error}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Deg→Rad Toggle with Auto-convert and Undo */}
-        <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 bg-[#252525] border-b border-[#3d3d3d]">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[#9d9d9d]">Deg→Rad</span>
-            {autoConverted && degToRad && (
-              <Button
-                onClick={handleUndoConversion}
-                variant="ghost"
-                size="sm"
-                className="h-5 px-2 text-[9px] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d]"
-                title="Undo auto-conversion"
+        {/* Tabs */}
+        <div className="flex-shrink-0 px-3 py-2 border-b border-[#3d3d3d]">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "mapping" | "metadata")} className="w-full">
+            <TabsList className="w-full grid grid-cols-2 bg-[#1e1e1e] border border-[#3d3d3d]">
+              <TabsTrigger 
+                value="mapping" 
+                className="text-[10px] data-[state=active]:bg-[#5d7d9d] data-[state=active]:text-white text-[#9d9d9d]"
               >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Undo
-              </Button>
-            )}
-          </div>
-          {/* Custom compact switch */}
-          <SwitchPrimitives.Root
-            checked={degToRad}
-            onCheckedChange={(checked) => {
-              setDegToRad(checked);
-              // Clear auto-converted flag if user manually toggles
-              if (!checked || (checked && !autoConverted)) {
-                setAutoConverted(false);
-              }
-            }}
-            className="h-3 w-6 rounded-full bg-[#3d3d3d] data-[state=checked]:bg-[#5d7d9d] transition-colors cursor-pointer relative outline-none"
-          >
-            <SwitchPrimitives.Thumb className="block h-2 w-2 rounded-full bg-white transition-transform duration-100 will-change-transform data-[state=checked]:translate-x-[14px] data-[state=unchecked]:translate-x-[2px] absolute" />
-          </SwitchPrimitives.Root>
+                Joint Mapping
+              </TabsTrigger>
+              <TabsTrigger 
+                value="metadata"
+                className="text-[10px] data-[state=active]:bg-[#5d7d9d] data-[state=active]:text-white text-[#9d9d9d]"
+              >
+                Metadata
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        {/* Joint Limit Warnings */}
-        {limitWarnings.length > 0 && (
-          <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d2e1e] border-b border-[#5d4e2e] text-[10px]">
-            <div className="flex items-start gap-1.5">
-              <AlertTriangle className="h-3 w-3 text-[#d4a46d] flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-0.5">
-                <div className="text-[#d4a46d] font-medium">Joint limit warnings:</div>
-                {limitWarnings.map((warning, idx) => (
-                  <div key={idx} className="text-[#d4a46d] font-mono text-[9px]">
-                    {warning.joint}: {warning.issue}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Mapping Table */}
+        {/* Tab Content */}
         <div className="flex-1 overflow-y-auto blender-scrollbar">
+          {activeTab === "mapping" ? (
+            <>
+              {/* Error Banner */}
+              {errors.length > 0 && (
+                <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d1e1e] border-b border-[#5d2e2e] text-[10px]">
+                  <div className="flex items-start gap-1.5">
+                    <AlertCircle className="h-3 w-3 text-[#d46d6d] flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-0.5">
+                      {errors.map((error, idx) => (
+                        <div key={idx} className="text-[#d46d6d]">
+                          {error}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Deg→Rad Toggle with Auto-convert and Undo */}
+              <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 bg-[#252525] border-b border-[#3d3d3d]">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-[#9d9d9d]">Deg→Rad</span>
+                  {autoConverted && degToRad && (
+                    <Button
+                      onClick={handleUndoConversion}
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-2 text-[9px] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                      title="Undo auto-conversion"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Undo
+                    </Button>
+                  )}
+                </div>
+                {/* Custom compact switch */}
+                <SwitchPrimitives.Root
+                  checked={degToRad}
+                  onCheckedChange={(checked) => {
+                    setDegToRad(checked);
+                    // Clear auto-converted flag if user manually toggles
+                    if (!checked || (checked && !autoConverted)) {
+                      setAutoConverted(false);
+                    }
+                  }}
+                  className="h-3 w-6 rounded-full bg-[#3d3d3d] data-[state=checked]:bg-[#5d7d9d] transition-colors cursor-pointer relative outline-none"
+                >
+                  <SwitchPrimitives.Thumb className="block h-2 w-2 rounded-full bg-white transition-transform duration-100 will-change-transform data-[state=checked]:translate-x-[14px] data-[state=unchecked]:translate-x-[2px] absolute" />
+                </SwitchPrimitives.Root>
+              </div>
+
+              {/* Joint Limit Warnings */}
+              {limitWarnings.length > 0 && (
+                <div className="flex-shrink-0 px-3 py-1.5 bg-[#3d2e1e] border-b border-[#5d4e2e] text-[10px]">
+                  <div className="flex items-start gap-1.5">
+                    <AlertTriangle className="h-3 w-3 text-[#d4a46d] flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-0.5">
+                      <div className="text-[#d4a46d] font-medium">Joint limit warnings:</div>
+                      {limitWarnings.map((warning, idx) => (
+                        <div key={idx} className="text-[#d4a46d] font-mono text-[9px]">
+                          {warning.joint}: {warning.issue}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mapping Table */}
           <table className="w-full text-[10px]">
             <thead className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d]">
               <tr>
@@ -908,25 +975,213 @@ export const JointMappingDialog = ({
               })}
             </tbody>
           </table>
+            </>
+          ) : (
+            /* Metadata View */
+            <div className="p-4 space-y-4">
+              {metadataLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#9d9d9d] mr-2" />
+                  <span className="text-[10px] text-[#9d9d9d]">Loading metadata...</span>
+                </div>
+              ) : metadataError ? (
+                <div className="flex items-center gap-2 p-3 bg-[#3d1e1e] border border-[#5d2e2e] rounded text-[10px] text-[#d46d6d]">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  <span>{metadataError}</span>
+                </div>
+              ) : metadata ? (
+                <div className="space-y-4">
+                  {/* Basic Info */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Basic Information</h3>
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div>
+                        <span className="text-[#9d9d9d]">Codebase Version:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.codebase_version}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Robot Type:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.robot_type}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">FPS:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.fps}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Chunk Size:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.chunks_size}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Statistics */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Statistics</h3>
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div>
+                        <span className="text-[#9d9d9d]">Total Episodes:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.total_episodes?.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Total Frames:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.total_frames?.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Total Tasks:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.total_tasks}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Data Size:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.data_files_size_in_mb} MB</span>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Video Size:</span>
+                        <span className="ml-2 text-[#d4d4d4] font-mono">{metadata.video_files_size_in_mb} MB</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Splits */}
+                  {metadata.splits && (
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Splits</h3>
+                      <div className="text-[10px]">
+                        {Object.entries(metadata.splits).map(([key, value]) => (
+                          <div key={key} className="mb-1">
+                            <span className="text-[#9d9d9d]">{key}:</span>
+                            <span className="ml-2 text-[#d4d4d4] font-mono">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Paths */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Paths</h3>
+                    <div className="space-y-1 text-[10px]">
+                      <div>
+                        <span className="text-[#9d9d9d]">Data Path:</span>
+                        <div className="ml-2 mt-1 text-[#d4d4d4] font-mono bg-[#1e1e1e] p-2 rounded border border-[#3d3d3d] break-all">
+                          {metadata.data_path}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[#9d9d9d]">Video Path:</span>
+                        <div className="ml-2 mt-1 text-[#d4d4d4] font-mono bg-[#1e1e1e] p-2 rounded border border-[#3d3d3d] break-all">
+                          {metadata.video_path}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Features */}
+                  {metadata.features && (
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-1">Features</h3>
+                      <div className="space-y-3">
+                        {Object.entries(metadata.features).map(([key, feature]: [string, any]) => (
+                          <div key={key} className="bg-[#1e1e1e] border border-[#3d3d3d] rounded p-2">
+                            <div className="text-[10px] font-semibold text-[#d4d4d4] mb-2">{key}</div>
+                            <div className="space-y-1 text-[9px] text-[#9d9d9d]">
+                              <div>
+                                <span className="text-[#9d9d9d]">Type:</span>
+                                <span className="ml-2 text-[#d4d4d4] font-mono">{feature.dtype}</span>
+                              </div>
+                              {feature.shape && (
+                                <div>
+                                  <span className="text-[#9d9d9d]">Shape:</span>
+                                  <span className="ml-2 text-[#d4d4d4] font-mono">[{feature.shape.join(", ")}]</span>
+                                </div>
+                              )}
+                              {feature.names && Array.isArray(feature.names) && feature.names.length > 0 && (
+                                <div>
+                                  <span className="text-[#9d9d9d]">Names:</span>
+                                  <div className="ml-2 mt-1 text-[#d4d4d4] font-mono">
+                                    {feature.names.join(", ")}
+                                  </div>
+                                </div>
+                              )}
+                              {feature.fps && (
+                                <div>
+                                  <span className="text-[#9d9d9d]">FPS:</span>
+                                  <span className="ml-2 text-[#d4d4d4] font-mono">{feature.fps}</span>
+                                </div>
+                              )}
+                              {feature.info && (
+                                <div className="mt-2 pt-2 border-t border-[#3d3d3d]">
+                                  <div className="text-[9px] text-[#9d9d9d] mb-1">Additional Info:</div>
+                                  {Object.entries(feature.info).map(([infoKey, infoValue]) => (
+                                    <div key={infoKey} className="ml-2">
+                                      <span className="text-[#9d9d9d]">{infoKey}:</span>
+                                      <span className="ml-2 text-[#d4d4d4] font-mono">{String(infoValue)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-[10px] text-[#9d9d9d]">
+                  No metadata available
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-t border-[#3d3d3d] bg-[#252525]">
-          <div className="text-[10px] text-[#9d9d9d]">
-            {mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length}/{datasetJoints.length}
-          </div>
-          <div className="flex gap-1.5">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              className="h-6 px-3 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#2d2d2d] hover:text-white"
-            >
-              Cancel
-            </Button>
-            {showTwoButtons ? (
-              <>
+        {/* Footer Actions - Only show for mapping tab */}
+        {activeTab === "mapping" && (
+          <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-t border-[#3d3d3d] bg-[#252525]">
+            <div className="text-[10px] text-[#9d9d9d]">
+              {mappings.filter((m) => m.urdfJoint && m.urdfJoint !== "?").length}/{datasetJoints.length}
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                onClick={onClose}
+                variant="outline"
+                className="h-6 px-3 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#2d2d2d] hover:text-white"
+              >
+                Cancel
+              </Button>
+              {showTwoButtons ? (
+                <>
+                  <Button
+                    onClick={handleApplyFirstEpisode}
+                    disabled={errors.length > 0 || hasTooManyJoints}
+                    className={cn(
+                      "h-6 px-3 text-[10px]",
+                      errors.length > 0 || hasTooManyJoints
+                        ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
+                        : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
+                    )}
+                  >
+                    {hasTooManyJoints ? "Nonvalid" : "Apply"}
+                  </Button>
+                  {totalEpisodesCount !== undefined && totalEpisodesCount > 0 && (
+                    <Button
+                      onClick={handleApplyToWholeDataset}
+                      disabled={errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset}
+                      className={cn(
+                        "h-6 px-3 text-[10px]",
+                        errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset
+                          ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
+                          : "bg-[#7d9d5d] text-white hover:bg-[#8dad6d]"
+                      )}
+                      title={!canApplyToWholeDataset ? `Loading episodes... (${totalEpisodesCount} discovered so far${expectedTotalEpisodes ? `/${expectedTotalEpisodes}` : ''})` : "Apply mappings to all episodes"}
+                    >
+                      Apply to Whole Dataset ({totalEpisodesCount} {totalEpisodesCount === 1 ? 'episode' : 'episodes'}{expectedTotalEpisodes && totalEpisodesCount ? ` - ${Math.round((totalEpisodesCount / expectedTotalEpisodes) * 100)}%` : ''}){!canApplyToWholeDataset ? '...' : ''}
+                    </Button>
+                  )}
+                </>
+              ) : (
                 <Button
-                  onClick={handleApplyFirstEpisode}
+                  onClick={handleApply}
                   disabled={errors.length > 0 || hasTooManyJoints}
                   className={cn(
                     "h-6 px-3 text-[10px]",
@@ -935,38 +1190,12 @@ export const JointMappingDialog = ({
                       : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
                   )}
                 >
-                  {hasTooManyJoints ? "Nonvalid" : "Apply"}
+                  {hasTooManyJoints ? "Nonvalid" : (applyToWholeDataset ? "Apply to Whole Dataset" : "Apply")}
                 </Button>
-                <Button
-                  onClick={handleApplyToWholeDataset}
-                  disabled={errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset}
-                  className={cn(
-                    "h-6 px-3 text-[10px]",
-                    errors.length > 0 || hasTooManyJoints || !canApplyToWholeDataset
-                      ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
-                      : "bg-[#7d9d5d] text-white hover:bg-[#8dad6d]"
-                  )}
-                  title={!canApplyToWholeDataset ? "Waiting for all episodes to finish loading..." : "Apply mappings to all episodes"}
-                >
-                  Apply to Whole Dataset
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={handleApply}
-                disabled={errors.length > 0 || hasTooManyJoints}
-                className={cn(
-                  "h-6 px-3 text-[10px]",
-                  errors.length > 0 || hasTooManyJoints
-                    ? "bg-[#3d3d3d] text-[#5d5d5d] cursor-not-allowed"
-                    : "bg-[#5d7d9d] text-white hover:bg-[#6d8dad]"
-                )}
-              >
-                {hasTooManyJoints ? "Nonvalid" : (applyToWholeDataset ? "Apply to Whole Dataset" : "Apply")}
-              </Button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   );
