@@ -30,6 +30,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 // Constants
@@ -533,6 +539,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       toast.info("Redo");
     }
   }, [historyIndex, editHistory]);
+
 
   // Keyboard shortcuts (Blender-like)
   useEffect(() => {
@@ -1629,18 +1636,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             </Tooltip>
           )}
           {/* Edit Mode Toggle */}
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant={isEditMode ? "default" : "ghost"}
-                className={cn(
-                  "h-6 w-6 p-0",
-                  isEditMode && hasChanges && "bg-orange-500 hover:bg-orange-600 border-orange-500/50"
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isEditMode) {
+          {isEditMode ? (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className={cn(
+                    "h-6 w-6 p-0",
+                    hasChanges && "bg-orange-500 hover:bg-orange-600 border-orange-500/50"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
                     // Check if there are changes before exiting
                     if (hasChanges && modifiedEpisode && onSaveEpisode) {
                       // Show exit confirmation dialog (Blender-like)
@@ -1652,28 +1659,72 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                       setSelectedPointIndex(null);
                       setTangentHandles(new Map());
                     }
-                  } else {
-                    // Enter edit mode - select first visible joint
-                    const firstVisibleJoint = jointNames.find(name => selectedJoints.has(name));
-                    if (firstVisibleJoint) {
-                      setIsEditMode(true);
-                      setEditingJoint(firstVisibleJoint);
-                    }
-                  }
-                }}
-                disabled={jointNames.length === 0}
-              >
-                {isEditMode ? (
+                  }}
+                >
                   <X className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Exit Edit Mode (Esc)</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <DropdownMenu>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      disabled={jointNames.length === 0}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit Curves</p>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent 
+                className="w-36 max-h-[200px] overflow-y-auto bg-[#282828] border-[#3d3d3d] p-0.5"
+                align="end"
+              >
+                {jointNames.length === 0 ? (
+                  <div className="text-[9px] text-[#9d9d9d] py-1 px-1.5 text-center">
+                    No joints
+                  </div>
                 ) : (
-                  <Pencil className="w-3.5 h-3.5" />
+                  jointNames.map((jointName) => {
+                    const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
+                    const isVisible = selectedJoints.has(jointName);
+                    
+                    return (
+                      <DropdownMenuItem
+                        key={jointName}
+                        onClick={() => handleJointSelect(jointName)}
+                        className={cn(
+                          "text-[9px] font-mono cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          "flex items-center gap-1 px-1.5 py-0.5"
+                        )}
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="flex-1 truncate">{jointName}</span>
+                        {!isVisible && (
+                          <Eye className="w-2.5 h-2.5 text-[#71717a]" />
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })
                 )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isEditMode ? "Exit Edit Mode (Esc)" : "Edit Curves"}</p>
-            </TooltipContent>
-          </Tooltip>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -1729,6 +1780,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   }
                 }}
               />
+              {/* Edit mode indicator overlay */}
+              {isEditMode && editingJoint && (
+                <div className="absolute top-2 left-2 pointer-events-none">
+                  <div className="text-[8px] font-mono text-[#9d9d9d] bg-[#09090b]/80 px-1.5 py-0.5 rounded">
+                    editing trajectory of joint <span style={{ color: jointColorMap.get(editingJoint) || JOINT_COLORS[0] }}>{editingJoint}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Joints Legend */}
@@ -1889,6 +1948,22 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       </DialogContent>
     </Dialog>
   );
+
+  // Joint Selection Handler
+  const handleJointSelect = useCallback((jointName: string) => {
+    // Make sure the joint is visible first
+    if (!selectedJoints.has(jointName)) {
+      const newSelected = new Set(selectedJoints);
+      newSelected.add(jointName);
+      setSelectedJoints(newSelected);
+    }
+    // Enter edit mode for the selected joint
+    setIsEditMode(true);
+    setEditingJoint(jointName);
+    setSelectedPointIndex(null);
+    setTangentHandles(new Map());
+  }, [selectedJoints]);
+
 
   // Exit Confirmation Dialog (Blender-like)
   const exitConfirmDialog = (
