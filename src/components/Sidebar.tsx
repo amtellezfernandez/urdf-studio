@@ -3726,11 +3726,11 @@ export const Sidebar = ({
           </div>
         )}
 
-        {/* Top Section - Recording Controls (height adjusts based on episodesViewHeight) */}
+        {/* Top Section - Recording Controls (shrinks when episode viewer grows) */}
         <div
           className="overflow-hidden flex flex-col p-1.5 border-b border-border/20"
           style={{
-            flex: `0 0 ${((episodesViewHeight ?? 0.4) * 100)}%`,
+            flex: `0 0 ${((1 - (episodesViewHeight ?? 0.4)) * 100)}%`,
             minHeight: '50px'
           }}
         >
@@ -4095,6 +4095,26 @@ export const Sidebar = ({
               </div>
             </BlenderPanel>
           </div>
+
+          {/* Collapse Button at Bottom of Top Section */}
+          {onToggleCollapse && (
+            <div className="flex-shrink-0 border-t border-border/30 flex items-center justify-center p-1.5">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={onToggleCollapse}
+                aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
+                title={isCollapsed ? "Show sidebar" : "Hide sidebar"}
+              >
+                {isCollapsed ? (
+                  <ChevronsRight className="w-4 h-4" />
+                ) : (
+                  <ChevronsLeft className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Horizontal Resizer */}
@@ -4111,18 +4131,18 @@ export const Sidebar = ({
           </div>
         )}
 
-        {/* Bottom Section - Placeholder for future content */}
+        {/* Bottom Section - Matches episode viewer height */}
         <div
-          className="overflow-hidden flex flex-col p-1.5"
+          className="overflow-hidden flex flex-col bg-background"
           style={{
-            flex: `0 0 ${((1 - (episodesViewHeight ?? 0.4)) * 100)}%`,
+            flex: `0 0 ${((episodesViewHeight ?? 0.4) * 100)}%`,
             minHeight: '50px'
           }}
         >
-          <div className="flex-1 overflow-y-auto blender-scrollbar">
-            <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70">
+          <div className="flex-1 min-h-0 flex items-center justify-center bg-background">
+            <div className="flex flex-col items-center gap-3 text-center px-6">
               {/* Placeholder for additional controls or information */}
-              <span>Additional Panel</span>
+              <span className="text-xs text-muted-foreground/70">Additional Panel</span>
             </div>
           </div>
         </div>
@@ -4135,26 +4155,6 @@ export const Sidebar = ({
         onOpenChange={setIsRerunViewerModalOpen}
         urdfContent={vizUrdf || originalUrdf}
       />
-
-      {/* Collapse Button at Bottom */}
-      {onToggleCollapse && (
-        <div className="flex-shrink-0 border-t border-border/30 flex items-center justify-center p-1.5">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={onToggleCollapse}
-            aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
-            title={isCollapsed ? "Show sidebar" : "Hide sidebar"}
-          >
-            {isCollapsed ? (
-              <ChevronsRight className="w-4 h-4" />
-            ) : (
-              <ChevronsLeft className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
-      )}
 
     </div>
   );
