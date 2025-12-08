@@ -1523,6 +1523,7 @@ export const Viewer3D = ({
   onJointSelect,
   onJointChange,
   onRobotJointsLoaded,
+  onRobotLoaded,
   onMotionDataNodesGenerated,
   onMotionFileChange,
   onPlayingChange,
@@ -1744,12 +1745,14 @@ export const Viewer3D = ({
   useEffect(() => {
     if (!robot) {
       onRobotBoundingBoxChange?.(null);
+      onRobotLoaded?.(null);
       return;
     }
 
     const box = new THREE.Box3().setFromObject(robot as any);
     onRobotBoundingBoxChange?.(box);
-  }, [robot, onRobotBoundingBoxChange]);
+    onRobotLoaded?.(robot);
+  }, [robot, onRobotBoundingBoxChange, onRobotLoaded]);
 
   // Apply joint values from props (skip if dragging)
   useEffect(() => {

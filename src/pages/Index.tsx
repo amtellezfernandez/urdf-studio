@@ -130,6 +130,7 @@ const Index = () => {
   // Object creation state
   const [showObjectCreator, setShowObjectCreator] = useState(false);
   const [robotBoundingBox, setRobotBoundingBox] = useState<THREE.Box3 | null>(null);
+  const [robot, setRobot] = useState<any>(null);
 
   // Joint Mapping state
   const [showMappingListPanel, setShowMappingListPanel] = useState(false);
@@ -1646,6 +1647,7 @@ const Index = () => {
                       collisionVisibility={collisionVisibility}
                       rotationPlaneVisible={rotationPlaneVisible}
                       onRobotBoundingBoxChange={setRobotBoundingBox}
+                      onRobotLoaded={setRobot}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1689,6 +1691,7 @@ const Index = () => {
                       collisionVisibility={collisionVisibility}
                       rotationPlaneVisible={rotationPlaneVisible}
                       onRobotBoundingBoxChange={setRobotBoundingBox}
+                      onRobotLoaded={setRobot}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1751,6 +1754,7 @@ const Index = () => {
                       collisionVisibility={collisionVisibility}
                       rotationPlaneVisible={rotationPlaneVisible}
                       onRobotBoundingBoxChange={setRobotBoundingBox}
+                      onRobotLoaded={setRobot}
                     />
                   </div>
                   {/* Vertical Resizer - always visible */}
@@ -1835,6 +1839,7 @@ const Index = () => {
             onUrdfChange={handleVizUrdfChange}
             collisionVisibility={collisionVisibility}
             onCollisionVisibilityChange={setCollisionVisibility}
+            robot={robot}
           />
 
           {/* Right Sidebar Resizer */}

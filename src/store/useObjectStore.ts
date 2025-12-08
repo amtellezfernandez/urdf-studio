@@ -7,6 +7,7 @@ export interface CreatedObject {
   position: THREE.Vector3;
   size: THREE.Vector3;
   color: string;
+  trackedJointName: string | null;
 }
 
 interface ObjectStore {
@@ -16,6 +17,7 @@ interface ObjectStore {
   removeObject: (id: string) => void;
   updateObjectPosition: (id: string, position: THREE.Vector3) => void;
   updateObjectSize: (id: string, size: THREE.Vector3) => void;
+  updateTrackedJoint: (id: string, jointName: string | null) => void;
   setSelectedObject: (id: string | null) => void;
   clearObjects: () => void;
 }
@@ -62,6 +64,14 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
     set((state) => ({
       objects: state.objects.map((obj) =>
         obj.id === id ? { ...obj, size: size.clone() } : obj
+      ),
+    }));
+  },
+
+  updateTrackedJoint: (id, jointName) => {
+    set((state) => ({
+      objects: state.objects.map((obj) =>
+        obj.id === id ? { ...obj, trackedJointName: jointName } : obj
       ),
     }));
   },

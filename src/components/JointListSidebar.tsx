@@ -241,44 +241,37 @@ export const RIGHT_SIDEBAR_MAX_WIDTH = 450;
 interface ObjectsViewProps {
   selectedJoint?: string | null;
   urdfContent?: string;
+  availableJoints: string[];
+  robot?: any;
 }
 
-const ObjectsView = ({ selectedJoint, urdfContent }: ObjectsViewProps) => {
+const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: ObjectsViewProps) => {
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
   const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
+  const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
   const removeObject = useObjectStore((state) => state.removeObject);
+  const jointValues = useJointStore((s) => s.jointValues);
 
-  // Parse joint origin from URDF
-  const getJointOrigin = (jointName: string): THREE.Vector3 | null => {
-    if (!urdfContent || !jointName) return null;
+  // Get world position of joint from the robot THREE.js object
+  const getJointWorldPosition = (jointName: string): THREE.Vector3 | null => {
+    if (!robot || !jointName) return null;
 
     try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-      const joints = xmlDoc.querySelectorAll("joint");
+      // Access the joint from the robot's joints map
+      const joint = robot.joints?.[jointName];
+      if (!joint) return null;
 
-      for (const joint of Array.from(joints)) {
-        const name = joint.getAttribute("name");
-        if (name === jointName) {
-          const origin = joint.querySelector("origin");
-          if (origin) {
-            const xyz = origin.getAttribute("xyz");
-            if (xyz) {
-              const [x, y, z] = xyz.split(" ").map(parseFloat);
-              return new THREE.Vector3(x, y, z);
-            }
-          }
-          // If no origin specified, it's at (0,0,0)
-          return new THREE.Vector3(0, 0, 0);
-        }
-      }
+      // Get the world position of the joint
+      const worldPosition = new THREE.Vector3();
+      joint.getWorldPosition(worldPosition);
+
+      return worldPosition;
     } catch (error) {
-      console.error("Error parsing joint origin:", error);
+      console.error("Error getting joint world position:", error);
+      return null;
     }
-
-    return null;
   };
 
   const calculateDistance = (objPos: THREE.Vector3, jointPos: THREE.Vector3): number => {
@@ -299,8 +292,8 @@ const ObjectsView = ({ selectedJoint, urdfContent }: ObjectsViewProps) => {
     <div className="space-y-2">
       {objects.map((obj) => {
         const isSelected = obj.id === selectedObjectId;
-        const jointOrigin = selectedJoint ? getJointOrigin(selectedJoint) : null;
-        const distance = jointOrigin ? calculateDistance(obj.position, jointOrigin) : null;
+        const trackedJointPos = obj.trackedJointName ? getJointWorldPosition(obj.trackedJointName) : null;
+        const distance = trackedJointPos ? calculateDistance(obj.position, trackedJointPos) : null;
 
         return (
           <div
@@ -385,19 +378,47 @@ const ObjectsView = ({ selectedJoint, urdfContent }: ObjectsViewProps) => {
               Size: {obj.size.x.toFixed(2)} × {obj.size.y.toFixed(2)} × {obj.size.z.toFixed(2)} m
             </div>
 
-            {/* Distance to selected joint */}
-            {selectedJoint && distance !== null && (
+            {/* Tracked joint selector */}
+            <div className="mt-2 pt-2 border-t border-border/30">
+              <div className="text-[10px] text-muted-foreground font-medium mb-1.5">Track Joint</div>
+              <Select
+                value={obj.trackedJointName || "none"}
+                onValueChange={(value) => {
+                  updateTrackedJoint(obj.id, value === "none" ? null : value);
+                }}
+              >
+                <SelectTrigger
+                  className="h-6 text-[10px] bg-background border-border/50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <SelectValue placeholder="Select joint" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border max-h-48">
+                  <SelectItem value="none" className="text-[10px]">
+                    None
+                  </SelectItem>
+                  {availableJoints.map((joint) => (
+                    <SelectItem key={joint} value={joint} className="text-[10px]">
+                      {joint}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Distance to tracked joint */}
+            {obj.trackedJointName && distance !== null && (
               <div className="mt-2 pt-2 border-t border-border/30">
                 <div className="text-[10px] text-muted-foreground/70 mb-1">
-                  Distance to joint <span className="font-medium text-foreground">{selectedJoint}</span>:
+                  Distance to <span className="font-medium text-foreground">{obj.trackedJointName}</span>:
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-1">
                   <div className="text-xs font-mono font-medium text-primary">
                     {distance.toFixed(4)} m
                   </div>
-                  {jointOrigin && (
+                  {trackedJointPos && (
                     <div className="text-[9px] text-muted-foreground/60">
-                      Joint at ({jointOrigin.x.toFixed(2)}, {jointOrigin.y.toFixed(2)}, {jointOrigin.z.toFixed(2)})
+                      Joint at ({trackedJointPos.x.toFixed(3)}, {trackedJointPos.y.toFixed(3)}, {trackedJointPos.z.toFixed(3)})
                     </div>
                   )}
                 </div>
@@ -439,6 +460,7 @@ interface JointListSidebarProps {
   onUrdfChange?: (newContent: string) => void;
   collisionVisibility?: CollisionVisibility;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
+  robot?: any;
 }
 
 export const JointListSidebar = ({
@@ -469,6 +491,7 @@ export const JointListSidebar = ({
   onUrdfChange,
   collisionVisibility = {},
   onCollisionVisibilityChange,
+  robot,
 }: JointListSidebarProps) => {
   const jointValues = useJointStore((s) => s.jointValues);
 
@@ -858,6 +881,8 @@ export const JointListSidebar = ({
               <ObjectsView
                 selectedJoint={selectedJoint}
                 urdfContent={urdfContent}
+                availableJoints={availableJoints}
+                robot={robot}
               />
             ) : (
               // Hierarchical view

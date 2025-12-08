@@ -67,6 +67,7 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
       position,
       size,
       color: "#3b82f6", // Blue color
+      trackedJointName: null,
     });
 
     onOpenChange(false);
