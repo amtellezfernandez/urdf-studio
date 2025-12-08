@@ -36,6 +36,7 @@ import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
+import type { Camera } from "@/types/camera";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -85,10 +86,36 @@ const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4;
 const MIN_HEADER_HEIGHT = 50;
 const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'] as const;
 
+const describeCameraView = (camera: Camera) => {
+  const euler = new THREE.Euler(...camera.pose.rpy, "ZYX");
+  const forward = new THREE.Vector3(1, 0, 0).applyEuler(euler).normalize();
+  const axisCandidates = [
+    { label: "+X", vector: new THREE.Vector3(1, 0, 0) },
+    { label: "-X", vector: new THREE.Vector3(-1, 0, 0) },
+    { label: "+Y", vector: new THREE.Vector3(0, 1, 0) },
+    { label: "-Y", vector: new THREE.Vector3(0, -1, 0) },
+    { label: "+Z", vector: new THREE.Vector3(0, 0, 1) },
+    { label: "-Z", vector: new THREE.Vector3(0, 0, -1) },
+  ];
+  let best = axisCandidates[0];
+  let maxDot = -Infinity;
+  for (const candidate of axisCandidates) {
+    const dot = forward.dot(candidate.vector);
+    if (dot > maxDot) {
+      maxDot = dot;
+      best = candidate;
+    }
+  }
+  const parentLink = camera.parent_link || "Robot";
+  return `${parentLink} – facing ${best.label}`;
+};
+
 const Index = () => {
   useTheme(); // Initialize dark mode
   const { gpuMode, setGPUMode } = useGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
+  const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
+  const selectCamera = useCameraStore((state) => state.selectCamera);
   const [urdfFile, setUrdfFile] = useState<File | null>(null);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
@@ -142,6 +169,7 @@ const Index = () => {
   // Camera creation state
   const [showCameraCreator, setShowCameraCreator] = useState(false);
   const [showCameraUpload, setShowCameraUpload] = useState(false);
+  const [showPovCameras, setShowPovCameras] = useState(false);
 
   // Joint Mapping state
   const [showMappingListPanel, setShowMappingListPanel] = useState(false);
@@ -1455,6 +1483,15 @@ const Index = () => {
                   >
                     3D Visualization
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setShowPovCameras(true)}
+                    className={cn(
+                      "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                      showPovCameras && "bg-[#3d3d3d] text-white"
+                    )}
+                  >
+                    POV Cameras
+                  </DropdownMenuItem>
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger
                       className={cn(
@@ -2048,6 +2085,58 @@ const Index = () => {
         githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
         robotName={robotName}
       />
+
+      {showPovCameras && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-5xl rounded-xl border border-border bg-[#101010]/95 p-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-border/50">
+              <div>
+                <div className="text-sm font-semibold text-foreground">POV Cameras Split View</div>
+                <p className="text-[11px] text-muted-foreground">
+                  All registered cameras render their POV simultaneously (up to 6).
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPovCameras(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+                aria-label="Close POV split view"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {cameras.slice(0, 6).map((camera, index) => (
+                <button
+                  key={camera.id}
+                  type="button"
+                  onClick={() => {
+                    selectCamera(camera.id);
+                    setShowPovCameras(false);
+                  }}
+                  className={cn(
+                    "flex flex-col justify-between gap-2 rounded-md border bg-[#181818] p-3 text-left transition hover:border-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    selectedCameraId === camera.id
+                      ? "border-primary/70"
+                      : "border-border/50"
+                  )}
+                >
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Camera {index + 1}</div>
+                  <div className="text-sm font-semibold text-foreground truncate">{camera.name}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{camera.parent_link}</div>
+                  <div className="text-[11px] text-muted-foreground/80">
+                    {describeCameraView(camera)}
+                  </div>
+                </button>
+              ))}
+            </div>
+            {cameras.length > 6 && (
+              <p className="mt-2 text-[10px] text-muted-foreground/60">
+                Only the first 6 cameras are displayed in split view.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Joint Mapping List Panel */}
       <MappingListPanel

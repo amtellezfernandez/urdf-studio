@@ -2349,6 +2349,13 @@ export const Viewer3D = ({
     controls.update();
   }, [robot]);
 
+  const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
+
+  useEffect(() => {
+    if (!selectedCameraId) return;
+    handleCameraViewChange(selectedCameraId);
+  }, [handleCameraViewChange, selectedCameraId]);
+
   // Fit to view function
   const fitToView = useCallback(() => {
     if (!controlsRef.current || !cameraRef.current || !robot || !sceneRef.current) return;
