@@ -6,6 +6,7 @@ import { STLLoader } from "three-stdlib";
 import URDFLoader from "urdf-loader";
 import { toast } from "sonner";
 import { useJointStore } from "@/store/useJointStore";
+import { useObjectStore } from "@/store/useObjectStore";
 import type { Node, Edge } from "reactflow";
 import { getJointLimits, type JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
@@ -38,6 +39,7 @@ interface Viewer3DProps {
   onFrameChange?: (currentFrame: number, totalFrames: number) => void;
   collisionVisibility?: CollisionVisibility;
   rotationPlaneVisible?: boolean;
+  onRobotBoundingBoxChange?: (boundingBox: THREE.Box3 | null) => void;
 }
 
 interface MeshFiles {
@@ -321,6 +323,212 @@ const CollisionGeometries = ({
   });
 
   return <group ref={collisionGroupRef} renderOrder={999} />;
+};
+
+// Component to render created objects and distance lines
+const CreatedObjects = ({
+  robot,
+  gpuMode = "high",
+}: {
+  robot: URDFRobot | null;
+  gpuMode?: GPUMode;
+}) => {
+  const objects = useObjectStore((state) => state.objects);
+  const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
+  const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
+  const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
+
+  const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
+  const dragStartRef = useRef<{ objectPos: THREE.Vector3; mousePos: THREE.Vector2; plane: THREE.Plane } | null>(null);
+  const raycaster = useRef(new THREE.Raycaster());
+  const mouse = useRef(new THREE.Vector2());
+
+  // Handle pointer down on cube
+  const handlePointerDown = useCallback((e: any, objectId: string, currentPosition: THREE.Vector3) => {
+    e.stopPropagation();
+    setSelectedObject(objectId);
+    setDraggingObjectId(objectId);
+
+    // Calculate drag plane (XY plane at cube's Z position)
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -currentPosition.z);
+
+    dragStartRef.current = {
+      objectPos: currentPosition.clone(),
+      mousePos: new THREE.Vector2(e.clientX, e.clientY),
+      plane,
+    };
+  }, [setSelectedObject]);
+
+  // Handle pointer move (dragging)
+  useEffect(() => {
+    if (!draggingObjectId || !dragStartRef.current) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!dragStartRef.current) return;
+
+      // Convert mouse position to normalized device coordinates
+      mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.current.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      // Update raycaster
+      const camera = (window as any).__viewer3dCamera;
+      if (!camera) return;
+
+      raycaster.current.setFromCamera(mouse.current, camera);
+
+      // Intersect with drag plane
+      const intersection = new THREE.Vector3();
+      raycaster.current.ray.intersectPlane(dragStartRef.current.plane, intersection);
+
+      if (intersection) {
+        updateObjectPosition(draggingObjectId, intersection);
+      }
+    };
+
+    const handlePointerUp = () => {
+      setDraggingObjectId(null);
+      dragStartRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [draggingObjectId, updateObjectPosition]);
+
+  // Calculate closest distance between cube and robot
+  const calculateDistance = useCallback((cubePos: THREE.Vector3, cubeSize: THREE.Vector3) => {
+    if (!robot) return null;
+
+    // Get all meshes from the robot
+    const robotMeshes: THREE.Mesh[] = [];
+    (robot as any).traverse((child: any) => {
+      if (child.isMesh) {
+        robotMeshes.push(child);
+      }
+    });
+
+    if (robotMeshes.length === 0) return null;
+
+    // Create cube bounding box
+    const cubeBox = new THREE.Box3(
+      new THREE.Vector3(
+        cubePos.x - cubeSize.x / 2,
+        cubePos.y - cubeSize.y / 2,
+        cubePos.z - cubeSize.z / 2
+      ),
+      new THREE.Vector3(
+        cubePos.x + cubeSize.x / 2,
+        cubePos.y + cubeSize.y / 2,
+        cubePos.z + cubeSize.z / 2
+      )
+    );
+
+    let minDistance = Infinity;
+    let closestPointOnRobot = new THREE.Vector3();
+    let closestPointOnCube = new THREE.Vector3();
+
+    // Find closest point on robot to cube
+    robotMeshes.forEach((mesh) => {
+      mesh.geometry.computeBoundingBox();
+      if (!mesh.geometry.boundingBox) return;
+
+      const robotBox = mesh.geometry.boundingBox.clone();
+      robotBox.applyMatrix4(mesh.matrixWorld);
+
+      // Simple distance between bounding boxes
+      const robotCenter = new THREE.Vector3();
+      robotBox.getCenter(robotCenter);
+      const cubeCenter = cubePos.clone();
+
+      const distance = robotCenter.distanceTo(cubeCenter);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPointOnRobot.copy(robotCenter);
+        closestPointOnCube.copy(cubeCenter);
+      }
+    });
+
+    return {
+      distance: minDistance,
+      pointOnRobot: closestPointOnRobot,
+      pointOnCube: closestPointOnCube,
+    };
+  }, [robot]);
+
+  return (
+    <group>
+      {objects.map((obj) => {
+        const isSelected = obj.id === selectedObjectId;
+        const distanceInfo = calculateDistance(obj.position, obj.size);
+
+        return (
+          <group key={obj.id}>
+            {/* Cube mesh */}
+            <mesh
+              position={[obj.position.x, obj.position.y, obj.position.z]}
+              onPointerDown={(e) => handlePointerDown(e, obj.id, obj.position)}
+            >
+              <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
+              <meshStandardMaterial
+                color={obj.color}
+                transparent={true}
+                opacity={isSelected ? 0.8 : 0.6}
+                emissive={isSelected ? obj.color : "#000000"}
+                emissiveIntensity={isSelected ? 0.3 : 0}
+              />
+            </mesh>
+
+            {/* Wireframe outline */}
+            <lineSegments
+              position={[obj.position.x, obj.position.y, obj.position.z]}
+            >
+              <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
+              <lineBasicMaterial color={isSelected ? "#ffffff" : "#aaaaaa"} linewidth={2} />
+            </lineSegments>
+
+            {/* Distance visualization line */}
+            {distanceInfo && robot && (
+              <>
+                <line>
+                  <bufferGeometry>
+                    <bufferAttribute
+                      attach="attributes-position"
+                      count={2}
+                      array={new Float32Array([
+                        distanceInfo.pointOnCube.x,
+                        distanceInfo.pointOnCube.y,
+                        distanceInfo.pointOnCube.z,
+                        distanceInfo.pointOnRobot.x,
+                        distanceInfo.pointOnRobot.y,
+                        distanceInfo.pointOnRobot.z,
+                      ])}
+                      itemSize={3}
+                    />
+                  </bufferGeometry>
+                  <lineBasicMaterial color="#ff00ff" linewidth={2} opacity={0.7} transparent />
+                </line>
+
+                {/* Distance label (using a sprite or simple text) */}
+                <mesh position={[
+                  (distanceInfo.pointOnCube.x + distanceInfo.pointOnRobot.x) / 2,
+                  (distanceInfo.pointOnCube.y + distanceInfo.pointOnRobot.y) / 2,
+                  (distanceInfo.pointOnCube.z + distanceInfo.pointOnRobot.z) / 2 + 0.05,
+                ]}>
+                  {/* Text helper for distance - we'll keep it simple with a small sphere for now */}
+                  <sphereGeometry args={[0.01, 8, 8]} />
+                  <meshBasicMaterial color="#ff00ff" />
+                </mesh>
+              </>
+            )}
+          </group>
+        );
+      })}
+    </group>
+  );
 };
 
 const URDFModel = ({
@@ -1378,6 +1586,7 @@ export const Viewer3D = ({
   onFrameChange,
   collisionVisibility = {},
   rotationPlaneVisible = false,
+  onRobotBoundingBoxChange,
 }: Viewer3DProps) => {
   // Use GPU mode hook for rendering
   const { gpuMode } = useGPUMode();
@@ -1586,6 +1795,17 @@ export const Viewer3D = ({
     setAvailableJointsStore,
     setStoreJointValues,
   ]);
+
+  // Calculate and send robot bounding box when robot loads
+  useEffect(() => {
+    if (!robot) {
+      onRobotBoundingBoxChange?.(null);
+      return;
+    }
+
+    const box = new THREE.Box3().setFromObject(robot as any);
+    onRobotBoundingBoxChange?.(box);
+  }, [robot, onRobotBoundingBoxChange]);
 
   // Apply joint values from props (skip if dragging)
   useEffect(() => {
@@ -2286,6 +2506,8 @@ export const Viewer3D = ({
             camera.up.set(0, 0, 1);
             cameraRef.current = camera as THREE.PerspectiveCamera;
             sceneRef.current = scene;
+            // Expose camera to window for object dragging
+            (window as any).__viewer3dCamera = camera;
             // Configure shadows based on GPU mode
             gl.shadowMap.enabled = gpuMode === "high";
             if (gpuMode === "high") {
@@ -2365,6 +2587,7 @@ export const Viewer3D = ({
                 robot={robot}
                 gpuMode={gpuMode}
               />
+              <CreatedObjects robot={robot} gpuMode={gpuMode} />
             </>
           ) : (
             <PlaceholderLamp gpuMode={gpuMode} />

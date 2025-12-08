@@ -10,6 +10,8 @@ import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { ExportDialog } from "@/components/ExportDialog";
 import { JointMappingDialog, type SavedMapping } from "@/components/JointMappingDialog";
 import { MappingListPanel } from "@/components/MappingListPanel";
+import { ObjectCreator } from "@/components/ObjectCreator";
+import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
 import { toast } from "sonner";
@@ -124,6 +126,10 @@ const Index = () => {
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
   const [debugMeshInfo, setDebugMeshInfo] = useState<DebugMeshInfo[]>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
+
+  // Object creation state
+  const [showObjectCreator, setShowObjectCreator] = useState(false);
+  const [robotBoundingBox, setRobotBoundingBox] = useState<THREE.Box3 | null>(null);
 
   // Joint Mapping state
   const [showMappingListPanel, setShowMappingListPanel] = useState(false);
@@ -1505,6 +1511,32 @@ const Index = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {originalUrdfContent && vizUrdfContent && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
+                    Create
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Objects
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => setShowObjectCreator(true)}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        Cube
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           <Sidebar
@@ -1613,6 +1645,7 @@ const Index = () => {
                       onFrameChange={handleFrameChange}
                       collisionVisibility={collisionVisibility}
                       rotationPlaneVisible={rotationPlaneVisible}
+                      onRobotBoundingBoxChange={setRobotBoundingBox}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1655,6 +1688,7 @@ const Index = () => {
                       onFrameChange={handleFrameChange}
                       collisionVisibility={collisionVisibility}
                       rotationPlaneVisible={rotationPlaneVisible}
+                      onRobotBoundingBoxChange={setRobotBoundingBox}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1716,6 +1750,7 @@ const Index = () => {
                       onFrameChange={handleFrameChange}
                       collisionVisibility={collisionVisibility}
                       rotationPlaneVisible={rotationPlaneVisible}
+                      onRobotBoundingBoxChange={setRobotBoundingBox}
                     />
                   </div>
                   {/* Vertical Resizer - always visible */}
@@ -1937,6 +1972,13 @@ const Index = () => {
           onApply={handleApplyMapping}
         />
       )}
+
+      {/* Object Creator Dialog */}
+      <ObjectCreator
+        open={showObjectCreator}
+        onOpenChange={setShowObjectCreator}
+        robotBoundingBox={robotBoundingBox}
+      />
     </div>
   );
 };
