@@ -3,7 +3,7 @@ import { JointListItem } from "@/components/JointListItem";
 import { JointControl } from "@/components/JointControl";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X } from "lucide-react";
+import { Search, X, Box, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
@@ -604,33 +604,44 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
   );
 };
 
-// Component for Objects view
-interface ObjectsViewProps {
+// Component for Elements view (Objects and Cameras)
+interface ElementsViewProps {
   selectedJoint?: string | null;
   urdfContent?: string;
   availableJoints: string[];
+  availableLinks?: string[];
   robot?: any;
+  onCameraSelect?: (cameraId: string) => void;
+  onJointSelect?: (jointName: string | null) => void;
+  setSelectedLink?: (linkName: string | null) => void;
 }
 
-const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: ObjectsViewProps) => {
+const ElementsView = ({ selectedJoint, urdfContent, availableJoints, availableLinks, robot, onCameraSelect, onJointSelect, setSelectedLink }: ElementsViewProps) => {
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
   const removeObject = useObjectStore((state) => state.removeObject);
+  
+  const cameras = useCameraStore((state) => state.cameras);
+  const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
+  const selectCamera = useCameraStore((state) => state.selectCamera);
+  const removeCamera = useCameraStore((state) => state.removeCamera);
 
+  const hasElements = objects.length > 0 || cameras.length > 0;
 
-  if (objects.length === 0) {
+  if (!hasElements) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-        No objects created yet.
+        No elements created yet.
         <br />
-        Use Create → Objects → Cube to add objects.
+        Use Create → Objects → Cube or Create → Camera to add elements.
       </div>
     );
   }
 
   return (
     <div className="space-y-0.5">
+      {/* Objects */}
       {objects.map((obj) => {
         const isSelected = obj.id === selectedObjectId;
 
@@ -651,13 +662,55 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
             }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-normal text-[#d4d4d4]">
-                {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {obj.id.split("-")[1]}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <Box className="h-3 w-3 text-[#9d9d9d]" />
+                <span className="text-[11px] font-normal text-[#d4d4d4]">
+                  {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {obj.id.split("-")[1]}
+                </span>
+              </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   removeObject(obj.id);
+                }}
+                className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      
+      {/* Cameras */}
+      {cameras.map((camera) => {
+        const isSelected = camera.id === selectedCameraId;
+
+        return (
+          <div
+            key={camera.id}
+            className={cn(
+              "px-2 py-1.5 border border-[#3d3d3d] rounded-sm transition-colors cursor-pointer",
+              isSelected
+                ? "bg-[#2a2a2a] border-[#4d4d4d]"
+                : "bg-[#1e1e1e] hover:bg-[#252525] hover:border-[#4d4d4d]"
+            )}
+            onClick={() => {
+              selectCamera(camera.id);
+              onCameraSelect?.(camera.id);
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Video className="h-3 w-3 text-[#9d9d9d]" />
+                <span className="text-[11px] font-normal text-[#d4d4d4] truncate">
+                  {camera.name}
+                </span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeCamera(camera.id);
                 }}
                 className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors"
               >
@@ -743,7 +796,7 @@ export const JointListSidebar = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "objects" | "cameras">("flat");
+  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "elements">("flat");
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
@@ -987,26 +1040,15 @@ export const JointListSidebar = ({
                 Links
               </button>
               <button
-                onClick={() => setViewMode("objects")}
+                onClick={() => setViewMode("elements")}
                 className={cn(
                   "text-xs font-medium transition-colors",
-                  viewMode === "objects"
+                  viewMode === "elements"
                     ? "text-primary cursor-default"
                     : "text-muted-foreground hover:text-foreground cursor-pointer"
                 )}
               >
-                Objects
-              </button>
-              <button
-                onClick={() => setViewMode("cameras")}
-                className={cn(
-                  "text-xs font-medium transition-colors",
-                  viewMode === "cameras"
-                    ? "text-primary cursor-default"
-                    : "text-muted-foreground hover:text-foreground cursor-pointer"
-                )}
-              >
-                Cameras
+                Elements
               </button>
               <div className="flex-1"></div>
             </div>
@@ -1135,23 +1177,21 @@ export const JointListSidebar = ({
                   ))}
                 </div>
               )
-            ) : viewMode === "objects" ? (
-              // Objects view
-              <ObjectsView
+            ) : viewMode === "elements" ? (
+              // Elements view (Objects and Cameras)
+              <ElementsView
                 selectedJoint={selectedJoint}
                 urdfContent={urdfContent}
                 availableJoints={availableJoints}
-                robot={robot}
-              />
-            ) : viewMode === "cameras" ? (
-              // Cameras view
-              <CameraList 
                 availableLinks={availableLinks}
+                robot={robot}
                 onCameraSelect={() => {
                   onJointSelect?.(null);
                   setSelectedLink(null);
                   useObjectStore.getState().setSelectedObject(null);
                 }}
+                onJointSelect={onJointSelect}
+                setSelectedLink={setSelectedLink}
               />
             ) : (
               // Hierarchical view

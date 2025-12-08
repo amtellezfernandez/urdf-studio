@@ -1,4 +1,4 @@
-import { X, Camera as CameraIcon } from "lucide-react";
+import { X, Video } from "lucide-react";
 import { useCameraStore } from "@/store/useCameraStore";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +45,7 @@ export const CameraList = ({ availableLinks, onCameraSelect }: CameraListProps) 
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
-                <CameraIcon className="h-3 w-3 text-[#9d9d9d]" />
+                <Video className="h-3 w-3 text-[#9d9d9d]" />
                 <span className="text-[11px] font-normal text-[#d4d4d4] truncate">
                   {camera.name}
                 </span>
