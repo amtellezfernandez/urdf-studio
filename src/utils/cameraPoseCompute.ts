@@ -90,9 +90,13 @@ export function computeLinkBoundingBox(
  * Auto-compute camera pose relative to parent link
  *
  * Algorithm:
- * 1. Compute parent link's bounding box
- * 2. Position camera in front of and above the link
- * 3. Orient camera to look forward (identity rotation in parent frame)
+ * 1. Compute parent link's bounding box in its local frame
+ * 2. Position camera in front of and above the link (in local coordinates)
+ * 3. Orient camera to look forward along +X axis (90° rotation around Z)
+ *
+ * Camera convention: Three.js cameras look down -Z axis
+ * Robot convention: +X is forward, +Y is left, +Z is up
+ * Solution: Rotate camera 90° around Z to align camera's -Z with robot's +X
  *
  * @param robot - The URDF robot object
  * @param parentLink - Name of the parent link
@@ -115,40 +119,41 @@ export function autoComputeCameraPose(
     return null;
   }
 
-  // Get bounding box dimensions in world space
-  const size = new THREE.Vector3();
-  bbox.getSize(size);
-
-  const center = new THREE.Vector3();
-  bbox.getCenter(center);
-
-  // Get the link object to transform from world to local coordinates
+  // Get the link object to work in local coordinates
   const linkObject = robot.links?.[parentLink] ?? robot.getObjectByName?.(parentLink);
   if (!linkObject) {
     return null;
   }
 
-  // Compute position: forward from the front face, up from center, centered laterally
-  // In world coordinates
-  const worldPosition = new THREE.Vector3(
-    bbox.max.x + marginForward,  // Front of the bounding box + margin
-    center.y + marginRight,      // Center Y (left-right)
-    center.z + marginUp          // Center Z + margin (up)
+  // Transform bounding box to local coordinates
+  linkObject.updateMatrixWorld(true);
+  const linkWorldMatrixInverse = linkObject.matrixWorld.clone().invert();
+
+  const localBBox = bbox.clone().applyMatrix4(linkWorldMatrixInverse);
+
+  const localSize = new THREE.Vector3();
+  localBBox.getSize(localSize);
+
+  const localCenter = new THREE.Vector3();
+  localBBox.getCenter(localCenter);
+
+  // Compute position in local coordinates:
+  // - Place camera at the front of the link (+X direction)
+  // - Center it left-right (Y axis)
+  // - Slightly above center (Z axis)
+  const localPosition = new THREE.Vector3(
+    localBBox.max.x + marginForward,  // Front of the link + margin
+    localCenter.y + marginRight,      // Center Y (left-right)
+    localCenter.z + marginUp          // Center Z + margin (up)
   );
 
-  // Transform world position to parent link's local coordinates
-  const linkWorldMatrix = new THREE.Matrix4();
-  linkObject.updateMatrixWorld(true);
-  linkWorldMatrix.copy(linkObject.matrixWorld);
-
-  const linkWorldMatrixInverse = linkWorldMatrix.clone().invert();
-  const localPosition = worldPosition.applyMatrix4(linkWorldMatrixInverse);
-
-  // Camera orientation: identity in parent frame
-  // This means the camera's +X axis points along the parent's +X axis (forward)
-  // Camera's +Y axis points along parent's +Y axis (right for camera, left for robot)
-  // Camera's +Z axis points along parent's +Z axis (up)
-  const localRotation: [number, number, number] = [0, 0, 0];
+  // Camera orientation: rotate 90° around Z axis to look along +X
+  // In URDF RPY convention (ZYX intrinsic order):
+  // - Roll (around X): 0
+  // - Pitch (around Y): 0
+  // - Yaw (around Z): 90° (π/2 radians)
+  // This makes the camera's -Z axis point along the link's +X axis (forward)
+  const localRotation: [number, number, number] = [0, 0, Math.PI / 2];
 
   return {
     xyz: [localPosition.x, localPosition.y, localPosition.z],

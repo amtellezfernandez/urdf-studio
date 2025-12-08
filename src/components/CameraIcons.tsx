@@ -70,8 +70,8 @@ const CameraIcon = ({ camera, robot, isSelected, onPointerDown, gpuMode = "high"
   useFrame(() => {
     if (!groupRef.current || !robot) return;
 
-    // Find the parent link in the robot
-    const parentLink = robot.joints[camera.parent_link];
+    // Find the parent link in the robot (cameras are attached to links, not joints)
+    const parentLink = (robot as any).links?.[camera.parent_link];
     if (!parentLink) {
       // If no parent link found, use world coordinates
       groupRef.current.position.set(
@@ -87,17 +87,14 @@ const CameraIcon = ({ camera, robot, isSelected, onPointerDown, gpuMode = "high"
       return;
     }
 
+    // Update parent link's world matrix to ensure it's current
+    parentLink.updateMatrixWorld(true);
+    
     // Get world transform of parent link
     const parentWorldTransform = new THREE.Matrix4();
-    let currentNode: any = parentLink;
+    parentWorldTransform.copy(parentLink.matrixWorld);
 
-    // Traverse up to get cumulative transform
-    while (currentNode) {
-      parentWorldTransform.premultiply(currentNode.matrixWorld);
-      currentNode = currentNode.parent;
-    }
-
-    // Apply camera's local pose
+    // Apply camera's local pose (relative to parent link)
     const localTransform = new THREE.Matrix4();
     const position = new THREE.Vector3(
       camera.pose.xyz[0],
@@ -112,7 +109,7 @@ const CameraIcon = ({ camera, robot, isSelected, onPointerDown, gpuMode = "high"
     localTransform.makeRotationFromEuler(rotation);
     localTransform.setPosition(position);
 
-    // Combine transforms
+    // Combine transforms: world = parentWorld * local
     const finalTransform = new THREE.Matrix4();
     finalTransform.copy(parentWorldTransform).multiply(localTransform);
 
