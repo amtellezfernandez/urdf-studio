@@ -9,11 +9,16 @@ import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore } from "@/store/useObjectStore";
+import { useCameraStore } from "@/store/useCameraStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections/parseJointHierarchy";
 import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";
 import { LinkControl } from "@/components/LinkEditor";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { CameraList } from "@/components/CameraList";
+import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
+import { NumberInput } from "@/components/ui/number-input";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import * as THREE from "three";
 
 // Recursive component to render hierarchy tree
@@ -238,6 +243,367 @@ export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 200;
 export const RIGHT_SIDEBAR_MAX_WIDTH = 450;
 
+// Object Editor Panel
+interface ObjectEditorPanelProps {
+  objectId: string;
+  availableJoints: string[];
+  robot?: any;
+}
+
+const ObjectEditorPanel = ({ objectId, availableJoints, robot }: ObjectEditorPanelProps) => {
+  const objects = useObjectStore((state) => state.objects);
+  const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
+  const updateObjectSize = useObjectStore((state) => state.updateObjectSize);
+  const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
+  const removeObject = useObjectStore((state) => state.removeObject);
+
+  const obj = objects.find((o) => o.id === objectId);
+  if (!obj) return null;
+
+  // Get world position of joint from the robot THREE.js object
+  const getJointWorldPosition = (jointName: string): THREE.Vector3 | null => {
+    if (!robot || !jointName) return null;
+    try {
+      const joint = robot.joints?.[jointName];
+      if (!joint) return null;
+      const worldPosition = new THREE.Vector3();
+      joint.getWorldPosition(worldPosition);
+      return worldPosition;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const trackedJointPos = obj.trackedJointName ? getJointWorldPosition(obj.trackedJointName) : null;
+  const distance = trackedJointPos ? obj.position.distanceTo(trackedJointPos) : null;
+
+  return (
+    <div className="p-1" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <BlenderPanel title={null} alwaysExpanded={true}>
+        <div className="space-y-1.5">
+          <BlenderPropertyRow label="Type">
+            <span className="text-[10px] text-[#d4d4d4]">{obj.type.charAt(0).toUpperCase() + obj.type.slice(1)}</span>
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Position X">
+            <NumberInput
+              value={obj.position.x}
+              onValueChange={(val) => {
+                const newPos = obj.position.clone();
+                newPos.x = val;
+                updateObjectPosition(obj.id, newPos);
+              }}
+              step={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Position Y">
+            <NumberInput
+              value={obj.position.y}
+              onValueChange={(val) => {
+                const newPos = obj.position.clone();
+                newPos.y = val;
+                updateObjectPosition(obj.id, newPos);
+              }}
+              step={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Position Z">
+            <NumberInput
+              value={obj.position.z}
+              onValueChange={(val) => {
+                const newPos = obj.position.clone();
+                newPos.z = val;
+                updateObjectPosition(obj.id, newPos);
+              }}
+              step={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Size X">
+            <NumberInput
+              value={obj.size.x}
+              onValueChange={(val) => {
+                const newSize = obj.size.clone();
+                newSize.x = val;
+                updateObjectSize(obj.id, newSize);
+              }}
+              step={0.01}
+              min={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Size Y">
+            <NumberInput
+              value={obj.size.y}
+              onValueChange={(val) => {
+                const newSize = obj.size.clone();
+                newSize.y = val;
+                updateObjectSize(obj.id, newSize);
+              }}
+              step={0.01}
+              min={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Size Z">
+            <NumberInput
+              value={obj.size.z}
+              onValueChange={(val) => {
+                const newSize = obj.size.clone();
+                newSize.z = val;
+                updateObjectSize(obj.id, newSize);
+              }}
+              step={0.01}
+              min={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Track Joint">
+            <Select
+              value={obj.trackedJointName || "none"}
+              onValueChange={(value) => {
+                updateTrackedJoint(obj.id, value === "none" ? null : value);
+              }}
+            >
+              <SelectTrigger className="h-6 text-[10px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d]">
+                <SelectItem value="none" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                  None
+                </SelectItem>
+                {availableJoints.map((joint) => (
+                  <SelectItem key={joint} value={joint} className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                    {joint}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </BlenderPropertyRow>
+
+          {obj.trackedJointName && distance !== null && (
+            <BlenderPropertyRow label="Distance">
+              <span className="text-[10px] text-[#d4d4d4] font-mono">{distance.toFixed(4)} m</span>
+            </BlenderPropertyRow>
+          )}
+
+          <div className="pt-1 border-t border-[#3d3d3d]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => removeObject(obj.id)}
+              className="h-6 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#3d3d3d] w-full"
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </BlenderPanel>
+    </div>
+  );
+};
+
+// Camera Editor Panel
+interface CameraEditorPanelProps {
+  cameraId: string;
+  availableLinks: string[];
+}
+
+const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps) => {
+  const cameras = useCameraStore((state) => state.cameras);
+  const updateCamera = useCameraStore((state) => state.updateCamera);
+  const removeCamera = useCameraStore((state) => state.removeCamera);
+
+  const camera = cameras.find((c) => c.id === cameraId);
+  if (!camera) return null;
+
+  const radToDeg = (rad: number) => (rad * 180) / Math.PI;
+  const degToRad = (deg: number) => (deg * Math.PI) / 180;
+
+  return (
+    <div className="p-1" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <BlenderPanel title={null} alwaysExpanded={true}>
+        <div className="space-y-1.5">
+          <BlenderPropertyRow label="Name">
+            <span className="text-[10px] text-[#d4d4d4]">{camera.name}</span>
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Parent Link">
+            <Select
+              value={camera.parent_link}
+              onValueChange={(value) => {
+                updateCamera(camera.id, { parent_link: value });
+              }}
+            >
+              <SelectTrigger className="h-6 text-[10px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d]">
+                {availableLinks.map((link) => (
+                  <SelectItem key={link} value={link} className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                    {link}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Position X">
+            <NumberInput
+              value={camera.pose.xyz[0]}
+              onValueChange={(val) => {
+                const newXyz: [number, number, number] = [val, camera.pose.xyz[1], camera.pose.xyz[2]];
+                updateCamera(camera.id, { pose: { ...camera.pose, xyz: newXyz } });
+              }}
+              step={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Position Y">
+            <NumberInput
+              value={camera.pose.xyz[1]}
+              onValueChange={(val) => {
+                const newXyz: [number, number, number] = [camera.pose.xyz[0], val, camera.pose.xyz[2]];
+                updateCamera(camera.id, { pose: { ...camera.pose, xyz: newXyz } });
+              }}
+              step={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Position Z">
+            <NumberInput
+              value={camera.pose.xyz[2]}
+              onValueChange={(val) => {
+                const newXyz: [number, number, number] = [camera.pose.xyz[0], camera.pose.xyz[1], val];
+                updateCamera(camera.id, { pose: { ...camera.pose, xyz: newXyz } });
+              }}
+              step={0.01}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Roll">
+            <NumberInput
+              value={radToDeg(camera.pose.rpy[0])}
+              onValueChange={(val) => {
+                const newRpy: [number, number, number] = [degToRad(val), camera.pose.rpy[1], camera.pose.rpy[2]];
+                updateCamera(camera.id, { pose: { ...camera.pose, rpy: newRpy } });
+              }}
+              step={1}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Pitch">
+            <NumberInput
+              value={radToDeg(camera.pose.rpy[1])}
+              onValueChange={(val) => {
+                const newRpy: [number, number, number] = [camera.pose.rpy[0], degToRad(val), camera.pose.rpy[2]];
+                updateCamera(camera.id, { pose: { ...camera.pose, rpy: newRpy } });
+              }}
+              step={1}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Yaw">
+            <NumberInput
+              value={radToDeg(camera.pose.rpy[2])}
+              onValueChange={(val) => {
+                const newRpy: [number, number, number] = [camera.pose.rpy[0], camera.pose.rpy[1], degToRad(val)];
+                updateCamera(camera.id, { pose: { ...camera.pose, rpy: newRpy } });
+              }}
+              step={1}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Width">
+            <NumberInput
+              value={camera.intrinsics.width}
+              onValueChange={(val) => {
+                updateCamera(camera.id, {
+                  intrinsics: { ...camera.intrinsics, width: Math.round(val) },
+                });
+              }}
+              step={1}
+              min={1}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="Height">
+            <NumberInput
+              value={camera.intrinsics.height}
+              onValueChange={(val) => {
+                updateCamera(camera.id, {
+                  intrinsics: { ...camera.intrinsics, height: Math.round(val) },
+                });
+              }}
+              step={1}
+              min={1}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <BlenderPropertyRow label="FOV">
+            <NumberInput
+              value={camera.intrinsics.fov_deg}
+              onValueChange={(val) => {
+                updateCamera(camera.id, {
+                  intrinsics: { ...camera.intrinsics, fov_deg: val },
+                });
+              }}
+              step={1}
+              min={1}
+              max={179}
+              compact
+              className="w-20"
+            />
+          </BlenderPropertyRow>
+
+          <div className="pt-1 border-t border-[#3d3d3d]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => removeCamera(camera.id)}
+              className="h-6 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] hover:bg-[#3d3d3d] w-full"
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </BlenderPanel>
+    </div>
+  );
+};
+
 // Component for Objects view
 interface ObjectsViewProps {
   selectedJoint?: string | null;
@@ -250,34 +616,8 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
-  const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
-  const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
   const removeObject = useObjectStore((state) => state.removeObject);
-  const jointValues = useJointStore((s) => s.jointValues);
 
-  // Get world position of joint from the robot THREE.js object
-  const getJointWorldPosition = (jointName: string): THREE.Vector3 | null => {
-    if (!robot || !jointName) return null;
-
-    try {
-      // Access the joint from the robot's joints map
-      const joint = robot.joints?.[jointName];
-      if (!joint) return null;
-
-      // Get the world position of the joint
-      const worldPosition = new THREE.Vector3();
-      joint.getWorldPosition(worldPosition);
-
-      return worldPosition;
-    } catch (error) {
-      console.error("Error getting joint world position:", error);
-      return null;
-    }
-  };
-
-  const calculateDistance = (objPos: THREE.Vector3, jointPos: THREE.Vector3): number => {
-    return objPos.distanceTo(jointPos);
-  };
 
   if (objects.length === 0) {
     return (
@@ -290,24 +630,27 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-0.5">
       {objects.map((obj) => {
         const isSelected = obj.id === selectedObjectId;
-        const trackedJointPos = obj.trackedJointName ? getJointWorldPosition(obj.trackedJointName) : null;
-        const distance = trackedJointPos ? calculateDistance(obj.position, trackedJointPos) : null;
 
         return (
           <div
             key={obj.id}
             className={cn(
-              "p-1.5 border border-[#3d3d3d] rounded transition-colors cursor-pointer",
+              "px-2 py-1.5 border border-[#3d3d3d] rounded-sm transition-colors cursor-pointer",
               isSelected
                 ? "bg-[#2a2a2a] border-[#4d4d4d]"
                 : "bg-[#1e1e1e] hover:bg-[#252525] hover:border-[#4d4d4d]"
             )}
-            onClick={() => setSelectedObject(obj.id)}
+            onClick={() => {
+              setSelectedObject(obj.id);
+              onJointSelect?.(null);
+              setSelectedLink(null);
+              useCameraStore.getState().selectCamera(null);
+            }}
           >
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between">
               <span className="text-[11px] font-normal text-[#d4d4d4]">
                 {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {obj.id.split("-")[1]}
               </span>
@@ -321,110 +664,6 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
                 <X className="h-3 w-3" />
               </button>
             </div>
-
-            {/* Position inputs */}
-            <div className="space-y-1 mb-1.5">
-              <div className="text-[9px] text-[#9d9d9d]">Position</div>
-              <div className="grid grid-cols-3 gap-1">
-                <div>
-                  <label className="text-[8px] text-[#7d7d7d]">X</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={obj.position.x.toFixed(3)}
-                    onChange={(e) => {
-                      const newPos = obj.position.clone();
-                      newPos.x = parseFloat(e.target.value) || 0;
-                      updateObjectPosition(obj.id, newPos);
-                    }}
-                    className="h-5 text-[10px] px-1 bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <div>
-                  <label className="text-[8px] text-[#7d7d7d]">Y</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={obj.position.y.toFixed(3)}
-                    onChange={(e) => {
-                      const newPos = obj.position.clone();
-                      newPos.y = parseFloat(e.target.value) || 0;
-                      updateObjectPosition(obj.id, newPos);
-                    }}
-                    className="h-5 text-[10px] px-1 bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <div>
-                  <label className="text-[8px] text-[#7d7d7d]">Z</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={obj.position.z.toFixed(3)}
-                    onChange={(e) => {
-                      const newPos = obj.position.clone();
-                      newPos.z = parseFloat(e.target.value) || 0;
-                      updateObjectPosition(obj.id, newPos);
-                    }}
-                    className="h-5 text-[10px] px-1 bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Size display */}
-            <div className="text-[9px] text-[#9d9d9d] mb-1.5">
-              {obj.size.x.toFixed(2)} × {obj.size.y.toFixed(2)} × {obj.size.z.toFixed(2)}
-            </div>
-
-            {/* Tracked joint selector */}
-            <div className="mt-1.5 pt-1.5 border-t border-[#3d3d3d]">
-              <div className="text-[9px] text-[#9d9d9d] mb-1">Track Joint</div>
-              <Select
-                value={obj.trackedJointName || "none"}
-                onValueChange={(value) => {
-                  updateTrackedJoint(obj.id, value === "none" ? null : value);
-                }}
-              >
-                <SelectTrigger
-                  className="h-5 text-[10px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <SelectValue placeholder="Select joint" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d] max-h-48">
-                  <SelectItem value="none" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
-                    None
-                  </SelectItem>
-                  {availableJoints.map((joint) => (
-                    <SelectItem key={joint} value={joint} className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
-                      {joint}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Distance to tracked joint */}
-            {obj.trackedJointName && distance !== null && (
-              <div className="mt-1.5 pt-1.5 border-t border-[#3d3d3d]">
-                <div className="text-[9px] text-[#9d9d9d] mb-1">
-                  Distance to <span className="text-[#d4d4d4]">{obj.trackedJointName}</span>:
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <div className="text-[10px] font-mono text-[#d4d4d4]">
-                    {distance.toFixed(4)} m
-                  </div>
-                  {trackedJointPos && (
-                    <div className="text-[8px] text-[#7d7d7d]">
-                      ({trackedJointPos.x.toFixed(3)}, {trackedJointPos.y.toFixed(3)}, {trackedJointPos.z.toFixed(3)})
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         );
       })}
@@ -506,6 +745,8 @@ export const JointListSidebar = ({
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "objects" | "cameras">("flat");
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
+  const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
+  const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const [visibleJoints, setVisibleJoints] = useState<Set<string>>(new Set(availableJoints));
 
   // Sync visibility state with availableJoints changes
@@ -846,7 +1087,9 @@ export const JointListSidebar = ({
                       )}
                       onClick={() => {
                         setSelectedLink(linkName);
-                        onJointSelect?.(null); // Clear joint selection when selecting link
+                        onJointSelect?.(null);
+                        useObjectStore.getState().setSelectedObject(null);
+                        useCameraStore.getState().selectCamera(null);
                       }}
                     >
                       <div className="flex items-center gap-1.5">
@@ -880,7 +1123,9 @@ export const JointListSidebar = ({
                       angleUnit={angleUnit}
                       onClick={() => {
                         onJointSelect?.(jointName);
-                        setSelectedLink(null); // Clear link selection when selecting joint
+                        setSelectedLink(null);
+                        useObjectStore.getState().setSelectedObject(null);
+                        useCameraStore.getState().selectCamera(null);
                       }}
                       onHover={onJointHover}
                       availableJoints={availableJoints}
@@ -900,7 +1145,14 @@ export const JointListSidebar = ({
               />
             ) : viewMode === "cameras" ? (
               // Cameras view
-              <CameraList availableLinks={availableLinks} />
+              <CameraList 
+                availableLinks={availableLinks}
+                onCameraSelect={() => {
+                  onJointSelect?.(null);
+                  setSelectedLink(null);
+                  useObjectStore.getState().setSelectedObject(null);
+                }}
+              />
             ) : (
               // Hierarchical view
               !hierarchyTree || filteredHierarchyJoints.length === 0 ? (
@@ -924,6 +1176,9 @@ export const JointListSidebar = ({
                   onJointHover={onJointHover}
                   onLinkSelect={(linkName) => {
                     setSelectedLink(linkName);
+                    onJointSelect?.(null);
+                    useObjectStore.getState().setSelectedObject(null);
+                    useCameraStore.getState().selectCamera(null);
                   }}
                   selectedLink={selectedLink}
                   availableJoints={availableJoints}
@@ -941,13 +1196,15 @@ export const JointListSidebar = ({
           <div className="flex-shrink-0 px-3 py-2 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-foreground">
-                {selectedJoint ? `Joint Editor (${selectedJoint})` : selectedLink ? `Link Editor (${selectedLink})` : "No Selection"}
+                {selectedJoint ? `Joint Editor (${selectedJoint})` : selectedLink ? `Link Editor (${selectedLink})` : selectedObjectId ? `Object Editor` : selectedCameraId ? `Camera Editor` : "No Selection"}
               </span>
-              {(selectedJoint || selectedLink) && (
+              {(selectedJoint || selectedLink || selectedObjectId || selectedCameraId) && (
                 <button
                   onClick={() => {
                     onJointSelect?.(null);
                     setSelectedLink(null);
+                    useObjectStore.getState().setSelectedObject(null);
+                    useCameraStore.getState().selectCamera(null);
                   }}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                   title="Close editor"
@@ -1025,9 +1282,20 @@ export const JointListSidebar = ({
                   alwaysExpanded={true}
                 />
               </div>
+            ) : selectedObjectId ? (
+              <ObjectEditorPanel
+                objectId={selectedObjectId}
+                availableJoints={availableJoints}
+                robot={robot}
+              />
+            ) : selectedCameraId ? (
+              <CameraEditorPanel
+                cameraId={selectedCameraId}
+                availableLinks={availableLinks || []}
+              />
             ) : (
               <div className="flex items-center justify-center h-full text-xs text-muted-foreground/50 p-4 text-center">
-                Select a joint or link to edit its properties
+                Select a joint, link, object, or camera to edit its properties
               </div>
             )}
           </div>
