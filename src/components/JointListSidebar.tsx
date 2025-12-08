@@ -8,10 +8,12 @@ import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
+import { useObjectStore } from "@/store/useObjectStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections/parseJointHierarchy";
 import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";
 import { LinkControl } from "@/components/LinkEditor";
 import type { CollisionVisibility } from "@/components/LinkEditor";
+import * as THREE from "three";
 
 // Recursive component to render hierarchy tree
 interface HierarchyTreeViewProps {
@@ -235,6 +237,179 @@ export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 200;
 export const RIGHT_SIDEBAR_MAX_WIDTH = 450;
 
+// Component for Objects view
+interface ObjectsViewProps {
+  selectedJoint?: string | null;
+  urdfContent?: string;
+}
+
+const ObjectsView = ({ selectedJoint, urdfContent }: ObjectsViewProps) => {
+  const objects = useObjectStore((state) => state.objects);
+  const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
+  const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
+  const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
+  const removeObject = useObjectStore((state) => state.removeObject);
+
+  // Parse joint origin from URDF
+  const getJointOrigin = (jointName: string): THREE.Vector3 | null => {
+    if (!urdfContent || !jointName) return null;
+
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+      const joints = xmlDoc.querySelectorAll("joint");
+
+      for (const joint of Array.from(joints)) {
+        const name = joint.getAttribute("name");
+        if (name === jointName) {
+          const origin = joint.querySelector("origin");
+          if (origin) {
+            const xyz = origin.getAttribute("xyz");
+            if (xyz) {
+              const [x, y, z] = xyz.split(" ").map(parseFloat);
+              return new THREE.Vector3(x, y, z);
+            }
+          }
+          // If no origin specified, it's at (0,0,0)
+          return new THREE.Vector3(0, 0, 0);
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing joint origin:", error);
+    }
+
+    return null;
+  };
+
+  const calculateDistance = (objPos: THREE.Vector3, jointPos: THREE.Vector3): number => {
+    return objPos.distanceTo(jointPos);
+  };
+
+  if (objects.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
+        No objects created yet.
+        <br />
+        Use Create → Objects → Cube to add objects.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {objects.map((obj) => {
+        const isSelected = obj.id === selectedObjectId;
+        const jointOrigin = selectedJoint ? getJointOrigin(selectedJoint) : null;
+        const distance = jointOrigin ? calculateDistance(obj.position, jointOrigin) : null;
+
+        return (
+          <div
+            key={obj.id}
+            className={cn(
+              "p-2 border rounded-sm transition-colors cursor-pointer",
+              isSelected
+                ? "bg-primary/10 border-primary/30"
+                : "bg-muted/5 border-border/30 hover:bg-muted/10"
+            )}
+            onClick={() => setSelectedObject(obj.id)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-foreground">
+                {obj.type === "cube" ? "📦" : "🟦"} {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {obj.id.split("-")[1]}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeObject(obj.id);
+                }}
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+
+            {/* Position inputs */}
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-muted-foreground font-medium">Position (m)</div>
+              <div className="grid grid-cols-3 gap-1">
+                <div>
+                  <label className="text-[9px] text-muted-foreground/70">X</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={obj.position.x.toFixed(3)}
+                    onChange={(e) => {
+                      const newPos = obj.position.clone();
+                      newPos.x = parseFloat(e.target.value) || 0;
+                      updateObjectPosition(obj.id, newPos);
+                    }}
+                    className="h-6 text-[10px] px-1"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground/70">Y</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={obj.position.y.toFixed(3)}
+                    onChange={(e) => {
+                      const newPos = obj.position.clone();
+                      newPos.y = parseFloat(e.target.value) || 0;
+                      updateObjectPosition(obj.id, newPos);
+                    }}
+                    className="h-6 text-[10px] px-1"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-muted-foreground/70">Z</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={obj.position.z.toFixed(3)}
+                    onChange={(e) => {
+                      const newPos = obj.position.clone();
+                      newPos.z = parseFloat(e.target.value) || 0;
+                      updateObjectPosition(obj.id, newPos);
+                    }}
+                    className="h-6 text-[10px] px-1"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Size display */}
+            <div className="mt-2 text-[10px] text-muted-foreground/70">
+              Size: {obj.size.x.toFixed(2)} × {obj.size.y.toFixed(2)} × {obj.size.z.toFixed(2)} m
+            </div>
+
+            {/* Distance to selected joint */}
+            {selectedJoint && distance !== null && (
+              <div className="mt-2 pt-2 border-t border-border/30">
+                <div className="text-[10px] text-muted-foreground/70 mb-1">
+                  Distance to joint <span className="font-medium text-foreground">{selectedJoint}</span>:
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xs font-mono font-medium text-primary">
+                    {distance.toFixed(4)} m
+                  </div>
+                  {jointOrigin && (
+                    <div className="text-[9px] text-muted-foreground/60">
+                      Joint at ({jointOrigin.x.toFixed(2)}, {jointOrigin.y.toFixed(2)}, {jointOrigin.z.toFixed(2)})
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 interface JointListSidebarProps {
   availableJoints: string[];
   jointLimits: JointLimits;
@@ -303,7 +478,7 @@ export const JointListSidebar = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy">("flat");
+  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "objects">("flat");
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
   const [visibleJoints, setVisibleJoints] = useState<Set<string>>(new Set(availableJoints));
 
@@ -544,6 +719,17 @@ export const JointListSidebar = ({
               >
                 Links
               </button>
+              <button
+                onClick={() => setViewMode("objects")}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  viewMode === "objects"
+                    ? "text-primary cursor-default"
+                    : "text-muted-foreground hover:text-foreground cursor-pointer"
+                )}
+              >
+                Objects
+              </button>
               <div className="flex-1"></div>
             </div>
           </div>
@@ -667,11 +853,17 @@ export const JointListSidebar = ({
                   ))}
                 </div>
               )
+            ) : viewMode === "objects" ? (
+              // Objects view
+              <ObjectsView
+                selectedJoint={selectedJoint}
+                urdfContent={urdfContent}
+              />
             ) : (
               // Hierarchical view
               !hierarchyTree || filteredHierarchyJoints.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-                  {!hierarchyTree 
+                  {!hierarchyTree
                     ? "Loading hierarchy..."
                     : searchQuery || typeFilter !== "all"
                     ? "No joints match the filters"

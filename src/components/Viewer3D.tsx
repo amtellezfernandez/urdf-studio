@@ -335,69 +335,13 @@ const CreatedObjects = ({
 }) => {
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
-  const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
   const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
 
-  const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
-  const dragStartRef = useRef<{ objectPos: THREE.Vector3; mousePos: THREE.Vector2; plane: THREE.Plane } | null>(null);
-  const raycaster = useRef(new THREE.Raycaster());
-  const mouse = useRef(new THREE.Vector2());
-
-  // Handle pointer down on cube
-  const handlePointerDown = useCallback((e: any, objectId: string, currentPosition: THREE.Vector3) => {
+  // Handle pointer down on cube (just for selection, no dragging)
+  const handlePointerDown = useCallback((e: any, objectId: string) => {
     e.stopPropagation();
     setSelectedObject(objectId);
-    setDraggingObjectId(objectId);
-
-    // Calculate drag plane (XY plane at cube's Z position)
-    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -currentPosition.z);
-
-    dragStartRef.current = {
-      objectPos: currentPosition.clone(),
-      mousePos: new THREE.Vector2(e.clientX, e.clientY),
-      plane,
-    };
   }, [setSelectedObject]);
-
-  // Handle pointer move (dragging)
-  useEffect(() => {
-    if (!draggingObjectId || !dragStartRef.current) return;
-
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!dragStartRef.current) return;
-
-      // Convert mouse position to normalized device coordinates
-      mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.current.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-      // Update raycaster
-      const camera = (window as any).__viewer3dCamera;
-      if (!camera) return;
-
-      raycaster.current.setFromCamera(mouse.current, camera);
-
-      // Intersect with drag plane
-      const intersection = new THREE.Vector3();
-      raycaster.current.ray.intersectPlane(dragStartRef.current.plane, intersection);
-
-      if (intersection) {
-        updateObjectPosition(draggingObjectId, intersection);
-      }
-    };
-
-    const handlePointerUp = () => {
-      setDraggingObjectId(null);
-      dragStartRef.current = null;
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-    };
-  }, [draggingObjectId, updateObjectPosition]);
 
   // Calculate closest distance between cube and robot
   const calculateDistance = useCallback((cubePos: THREE.Vector3, cubeSize: THREE.Vector3) => {
@@ -470,7 +414,7 @@ const CreatedObjects = ({
             {/* Cube mesh */}
             <mesh
               position={[obj.position.x, obj.position.y, obj.position.z]}
-              onPointerDown={(e) => handlePointerDown(e, obj.id, obj.position)}
+              onPointerDown={(e) => handlePointerDown(e, obj.id)}
             >
               <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
               <meshStandardMaterial
