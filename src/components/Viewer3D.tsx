@@ -325,6 +325,122 @@ const CollisionGeometries = ({
   return <group ref={collisionGroupRef} renderOrder={999} />;
 };
 
+// Component for a dynamic line that tracks a joint position
+const TrackingLine = ({
+  cubePos,
+  robot,
+  trackedJointName,
+  gpuMode = "high",
+}: {
+  cubePos: THREE.Vector3;
+  robot: URDFRobot | null;
+  trackedJointName: string | null;
+  gpuMode?: GPUMode;
+}) => {
+  const lineRef = useRef<THREE.Line>(null);
+
+  useFrame(() => {
+    if (!robot || !lineRef.current) return;
+
+    let targetPos: THREE.Vector3 | null = null;
+
+    // If there's a tracked joint, use its center position
+    if (trackedJointName) {
+      try {
+        const joint = (robot as any).joints?.[trackedJointName];
+        if (joint) {
+          // Update joint's world matrix to get current position
+          joint.updateWorldMatrix(true, true);
+          
+          // Get the world position of the joint
+          targetPos = new THREE.Vector3();
+          joint.getWorldPosition(targetPos);
+        }
+      } catch (error) {
+        console.error("Error getting joint world position:", error);
+      }
+    }
+
+    // If no tracked joint or joint not found, calculate closest point on robot
+    if (!targetPos) {
+      const robotMeshes: THREE.Mesh[] = [];
+      (robot as any).traverse((child: any) => {
+        if (child.isMesh) {
+          robotMeshes.push(child);
+        }
+      });
+
+      if (robotMeshes.length > 0) {
+        let minDistance = Infinity;
+        let closestPoint = new THREE.Vector3();
+
+        robotMeshes.forEach((mesh) => {
+          mesh.geometry.computeBoundingBox();
+          if (!mesh.geometry.boundingBox) return;
+
+          const robotBox = mesh.geometry.boundingBox.clone();
+          robotBox.applyMatrix4(mesh.matrixWorld);
+
+          const robotCenter = new THREE.Vector3();
+          robotBox.getCenter(robotCenter);
+          const cubeCenter = cubePos.clone();
+
+          const distance = robotCenter.distanceTo(cubeCenter);
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestPoint.copy(robotCenter);
+          }
+        });
+
+        targetPos = closestPoint;
+      } else {
+        return; // No robot meshes, don't draw line
+      }
+    }
+
+    // Update line geometry
+    const geometry = lineRef.current.geometry as THREE.BufferGeometry;
+    const positions = geometry.attributes.position as THREE.BufferAttribute;
+    if (positions && targetPos) {
+      positions.array[0] = cubePos.x;
+      positions.array[1] = cubePos.y;
+      positions.array[2] = cubePos.z;
+      positions.array[3] = targetPos.x;
+      positions.array[4] = targetPos.y;
+      positions.array[5] = targetPos.z;
+      positions.needsUpdate = true;
+    }
+  });
+
+  return (
+    <line ref={lineRef} renderOrder={1000}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={2}
+          array={new Float32Array([
+            cubePos.x,
+            cubePos.y,
+            cubePos.z,
+            cubePos.x,
+            cubePos.y,
+            cubePos.z,
+          ])}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <lineBasicMaterial 
+        color="#ff00ff" 
+        linewidth={2} 
+        opacity={0.7} 
+        transparent 
+        depthTest={false}
+        depthWrite={false}
+      />
+    </line>
+  );
+};
+
 // Component to render created objects and distance lines
 const CreatedObjects = ({
   robot,
@@ -343,71 +459,10 @@ const CreatedObjects = ({
     setSelectedObject(objectId);
   }, [setSelectedObject]);
 
-  // Calculate closest distance between cube and robot
-  const calculateDistance = useCallback((cubePos: THREE.Vector3, cubeSize: THREE.Vector3) => {
-    if (!robot) return null;
-
-    // Get all meshes from the robot
-    const robotMeshes: THREE.Mesh[] = [];
-    (robot as any).traverse((child: any) => {
-      if (child.isMesh) {
-        robotMeshes.push(child);
-      }
-    });
-
-    if (robotMeshes.length === 0) return null;
-
-    // Create cube bounding box
-    const cubeBox = new THREE.Box3(
-      new THREE.Vector3(
-        cubePos.x - cubeSize.x / 2,
-        cubePos.y - cubeSize.y / 2,
-        cubePos.z - cubeSize.z / 2
-      ),
-      new THREE.Vector3(
-        cubePos.x + cubeSize.x / 2,
-        cubePos.y + cubeSize.y / 2,
-        cubePos.z + cubeSize.z / 2
-      )
-    );
-
-    let minDistance = Infinity;
-    let closestPointOnRobot = new THREE.Vector3();
-    let closestPointOnCube = new THREE.Vector3();
-
-    // Find closest point on robot to cube
-    robotMeshes.forEach((mesh) => {
-      mesh.geometry.computeBoundingBox();
-      if (!mesh.geometry.boundingBox) return;
-
-      const robotBox = mesh.geometry.boundingBox.clone();
-      robotBox.applyMatrix4(mesh.matrixWorld);
-
-      // Simple distance between bounding boxes
-      const robotCenter = new THREE.Vector3();
-      robotBox.getCenter(robotCenter);
-      const cubeCenter = cubePos.clone();
-
-      const distance = robotCenter.distanceTo(cubeCenter);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestPointOnRobot.copy(robotCenter);
-        closestPointOnCube.copy(cubeCenter);
-      }
-    });
-
-    return {
-      distance: minDistance,
-      pointOnRobot: closestPointOnRobot,
-      pointOnCube: closestPointOnCube,
-    };
-  }, [robot]);
-
   return (
     <group>
       {objects.map((obj) => {
         const isSelected = obj.id === selectedObjectId;
-        const distanceInfo = calculateDistance(obj.position, obj.size);
 
         return (
           <group key={obj.id}>
@@ -434,39 +489,14 @@ const CreatedObjects = ({
               <lineBasicMaterial color={isSelected ? "#ffffff" : "#aaaaaa"} linewidth={2} />
             </lineSegments>
 
-            {/* Distance visualization line */}
-            {distanceInfo && robot && (
-              <>
-                <line>
-                  <bufferGeometry>
-                    <bufferAttribute
-                      attach="attributes-position"
-                      count={2}
-                      array={new Float32Array([
-                        distanceInfo.pointOnCube.x,
-                        distanceInfo.pointOnCube.y,
-                        distanceInfo.pointOnCube.z,
-                        distanceInfo.pointOnRobot.x,
-                        distanceInfo.pointOnRobot.y,
-                        distanceInfo.pointOnRobot.z,
-                      ])}
-                      itemSize={3}
-                    />
-                  </bufferGeometry>
-                  <lineBasicMaterial color="#ff00ff" linewidth={2} opacity={0.7} transparent />
-                </line>
-
-                {/* Distance label (using a sprite or simple text) */}
-                <mesh position={[
-                  (distanceInfo.pointOnCube.x + distanceInfo.pointOnRobot.x) / 2,
-                  (distanceInfo.pointOnCube.y + distanceInfo.pointOnRobot.y) / 2,
-                  (distanceInfo.pointOnCube.z + distanceInfo.pointOnRobot.z) / 2 + 0.05,
-                ]}>
-                  {/* Text helper for distance - we'll keep it simple with a small sphere for now */}
-                  <sphereGeometry args={[0.01, 8, 8]} />
-                  <meshBasicMaterial color="#ff00ff" />
-                </mesh>
-              </>
+            {/* Distance visualization line - points to tracked joint center or closest robot point */}
+            {robot && (
+              <TrackingLine
+                cubePos={obj.position}
+                robot={robot}
+                trackedJointName={obj.trackedJointName}
+                gpuMode={gpuMode}
+              />
             )}
           </group>
         );
