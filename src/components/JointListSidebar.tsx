@@ -300,34 +300,34 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
           <div
             key={obj.id}
             className={cn(
-              "p-2 border rounded-sm transition-colors cursor-pointer",
+              "p-1.5 border border-[#3d3d3d] rounded transition-colors cursor-pointer",
               isSelected
-                ? "bg-primary/10 border-primary/30"
-                : "bg-muted/5 border-border/30 hover:bg-muted/10"
+                ? "bg-[#2a2a2a] border-[#4d4d4d]"
+                : "bg-[#1e1e1e] hover:bg-[#252525] hover:border-[#4d4d4d]"
             )}
             onClick={() => setSelectedObject(obj.id)}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-foreground">
-                {obj.type === "cube" ? "📦" : "🟦"} {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {obj.id.split("-")[1]}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-normal text-[#d4d4d4]">
+                {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {obj.id.split("-")[1]}
               </span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   removeObject(obj.id);
                 }}
-                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+                className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors"
               >
                 <X className="h-3 w-3" />
               </button>
             </div>
 
             {/* Position inputs */}
-            <div className="space-y-1.5">
-              <div className="text-[10px] text-muted-foreground font-medium">Position (m)</div>
+            <div className="space-y-1 mb-1.5">
+              <div className="text-[9px] text-[#9d9d9d]">Position</div>
               <div className="grid grid-cols-3 gap-1">
                 <div>
-                  <label className="text-[9px] text-muted-foreground/70">X</label>
+                  <label className="text-[8px] text-[#7d7d7d]">X</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -337,12 +337,12 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
                       newPos.x = parseFloat(e.target.value) || 0;
                       updateObjectPosition(obj.id, newPos);
                     }}
-                    className="h-6 text-[10px] px-1"
+                    className="h-5 text-[10px] px-1 bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] text-muted-foreground/70">Y</label>
+                  <label className="text-[8px] text-[#7d7d7d]">Y</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -352,12 +352,12 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
                       newPos.y = parseFloat(e.target.value) || 0;
                       updateObjectPosition(obj.id, newPos);
                     }}
-                    className="h-6 text-[10px] px-1"
+                    className="h-5 text-[10px] px-1 bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] text-muted-foreground/70">Z</label>
+                  <label className="text-[8px] text-[#7d7d7d]">Z</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -367,7 +367,7 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
                       newPos.z = parseFloat(e.target.value) || 0;
                       updateObjectPosition(obj.id, newPos);
                     }}
-                    className="h-6 text-[10px] px-1"
+                    className="h-5 text-[10px] px-1 bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
@@ -375,13 +375,13 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
             </div>
 
             {/* Size display */}
-            <div className="mt-2 text-[10px] text-muted-foreground/70">
-              Size: {obj.size.x.toFixed(2)} × {obj.size.y.toFixed(2)} × {obj.size.z.toFixed(2)} m
+            <div className="text-[9px] text-[#9d9d9d] mb-1.5">
+              {obj.size.x.toFixed(2)} × {obj.size.y.toFixed(2)} × {obj.size.z.toFixed(2)}
             </div>
 
             {/* Tracked joint selector */}
-            <div className="mt-2 pt-2 border-t border-border/30">
-              <div className="text-[10px] text-muted-foreground font-medium mb-1.5">Track Joint</div>
+            <div className="mt-1.5 pt-1.5 border-t border-[#3d3d3d]">
+              <div className="text-[9px] text-[#9d9d9d] mb-1">Track Joint</div>
               <Select
                 value={obj.trackedJointName || "none"}
                 onValueChange={(value) => {
@@ -389,17 +389,17 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
                 }}
               >
                 <SelectTrigger
-                  className="h-6 text-[10px] bg-background border-border/50"
+                  className="h-5 text-[10px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <SelectValue placeholder="Select joint" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover border-border max-h-48">
-                  <SelectItem value="none" className="text-[10px]">
+                <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d] max-h-48">
+                  <SelectItem value="none" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                     None
                   </SelectItem>
                   {availableJoints.map((joint) => (
-                    <SelectItem key={joint} value={joint} className="text-[10px]">
+                    <SelectItem key={joint} value={joint} className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                       {joint}
                     </SelectItem>
                   ))}
@@ -409,17 +409,17 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
 
             {/* Distance to tracked joint */}
             {obj.trackedJointName && distance !== null && (
-              <div className="mt-2 pt-2 border-t border-border/30">
-                <div className="text-[10px] text-muted-foreground/70 mb-1">
-                  Distance to <span className="font-medium text-foreground">{obj.trackedJointName}</span>:
+              <div className="mt-1.5 pt-1.5 border-t border-[#3d3d3d]">
+                <div className="text-[9px] text-[#9d9d9d] mb-1">
+                  Distance to <span className="text-[#d4d4d4]">{obj.trackedJointName}</span>:
                 </div>
-                <div className="flex flex-col gap-1">
-                  <div className="text-xs font-mono font-medium text-primary">
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-[10px] font-mono text-[#d4d4d4]">
                     {distance.toFixed(4)} m
                   </div>
                   {trackedJointPos && (
-                    <div className="text-[9px] text-muted-foreground/60">
-                      Joint at ({trackedJointPos.x.toFixed(3)}, {trackedJointPos.y.toFixed(3)}, {trackedJointPos.z.toFixed(3)})
+                    <div className="text-[8px] text-[#7d7d7d]">
+                      ({trackedJointPos.x.toFixed(3)}, {trackedJointPos.y.toFixed(3)}, {trackedJointPos.z.toFixed(3)})
                     </div>
                   )}
                 </div>

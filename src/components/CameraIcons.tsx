@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '@/store/useCameraStore';
@@ -18,12 +18,6 @@ interface CameraIconsProps {
 export const CameraIcons = ({ robot, gpuMode = "high" }: CameraIconsProps) => {
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
-  const selectCamera = useCameraStore((state) => state.selectCamera);
-
-  const handlePointerDown = useCallback((e: any, cameraId: string) => {
-    e.stopPropagation();
-    selectCamera(cameraId);
-  }, [selectCamera]);
 
   return (
     <group>
@@ -33,7 +27,6 @@ export const CameraIcons = ({ robot, gpuMode = "high" }: CameraIconsProps) => {
           camera={camera}
           robot={robot}
           isSelected={camera.id === selectedCameraId}
-          onPointerDown={(e) => handlePointerDown(e, camera.id)}
           gpuMode={gpuMode}
         />
       ))}
@@ -58,156 +51,135 @@ interface CameraIconProps {
   };
   robot: URDFRobot | null;
   isSelected: boolean;
-  onPointerDown: (e: any) => void;
   gpuMode?: GPUMode;
 }
 
-const CameraIcon = ({ camera, robot, isSelected, onPointerDown, gpuMode = "high" }: CameraIconProps) => {
+const RPY_ORDER = 'ZYX' as const;
+const CAMERA_ROTATION: [number, number, number] = [0, Math.PI / 2, 0];
+
+const CameraIcon = ({ camera, robot, isSelected, gpuMode = "high" }: CameraIconProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const frustumRef = useRef<THREE.LineSegments>(null);
 
-  // Update camera position and rotation based on parent link
   useFrame(() => {
     if (!groupRef.current || !robot) return;
 
-    // Find the parent link in the robot (cameras are attached to links, not joints)
     const parentLink = (robot as any).links?.[camera.parent_link];
+    
     if (!parentLink) {
-      // If no parent link found, use world coordinates
-      groupRef.current.position.set(
-        camera.pose.xyz[0],
-        camera.pose.xyz[1],
-        camera.pose.xyz[2]
-      );
-      groupRef.current.rotation.set(
-        camera.pose.rpy[0],
-        camera.pose.rpy[1],
-        camera.pose.rpy[2]
+      // Fallback: use world coordinates
+      groupRef.current.position.set(...camera.pose.xyz);
+      groupRef.current.rotation.setFromEuler(
+        new THREE.Euler(...camera.pose.rpy, RPY_ORDER)
       );
       return;
     }
 
-    // Update parent link's world matrix to ensure it's current
+    // Update parent link transform
     parentLink.updateMatrixWorld(true);
-    
-    // Get world transform of parent link
-    const parentWorldTransform = new THREE.Matrix4();
-    parentWorldTransform.copy(parentLink.matrixWorld);
+    const parentWorldTransform = new THREE.Matrix4().copy(parentLink.matrixWorld);
 
-    // Apply camera's local pose (relative to parent link)
+    // Create local transform from camera pose
     const localTransform = new THREE.Matrix4();
-    const position = new THREE.Vector3(
-      camera.pose.xyz[0],
-      camera.pose.xyz[1],
-      camera.pose.xyz[2]
+    localTransform.makeRotationFromEuler(
+      new THREE.Euler(...camera.pose.rpy, RPY_ORDER)
     );
-    const rotation = new THREE.Euler(
-      camera.pose.rpy[0],
-      camera.pose.rpy[1],
-      camera.pose.rpy[2]
-    );
-    localTransform.makeRotationFromEuler(rotation);
-    localTransform.setPosition(position);
+    localTransform.setPosition(new THREE.Vector3(...camera.pose.xyz));
 
-    // Combine transforms: world = parentWorld * local
-    const finalTransform = new THREE.Matrix4();
-    finalTransform.copy(parentWorldTransform).multiply(localTransform);
+    // Combine: world = parentWorld * local
+    const finalTransform = parentWorldTransform.clone().multiply(localTransform);
+    
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    finalTransform.decompose(position, quaternion, scale);
 
-    // Extract position and rotation
-    const finalPosition = new THREE.Vector3();
-    const finalRotation = new THREE.Quaternion();
-    const finalScale = new THREE.Vector3();
-    finalTransform.decompose(finalPosition, finalRotation, finalScale);
-
-    groupRef.current.position.copy(finalPosition);
-    groupRef.current.quaternion.copy(finalRotation);
+    groupRef.current.position.copy(position);
+    groupRef.current.quaternion.copy(quaternion);
   });
 
-  // Create camera frustum geometry
-  const createFrustumGeometry = () => {
-    const fov = camera.intrinsics.fov_deg;
-    const aspect = camera.intrinsics.width / camera.intrinsics.height;
+  // Create frustum geometry
+  const frustumGeometry = (() => {
+    const { fov_deg: fov, width, height } = camera.intrinsics;
+    const aspect = width / height;
     const near = 0.05;
     const far = 0.3;
+    const fovRad = (fov * Math.PI) / 360;
 
-    // Calculate frustum dimensions at near and far planes
-    const nearHeight = 2 * Math.tan((fov * Math.PI) / 360) * near;
+    const nearHeight = 2 * Math.tan(fovRad) * near;
     const nearWidth = nearHeight * aspect;
-    const farHeight = 2 * Math.tan((fov * Math.PI) / 360) * far;
+    const farHeight = 2 * Math.tan(fovRad) * far;
     const farWidth = farHeight * aspect;
 
-    // Define frustum vertices
     const vertices = new Float32Array([
-      // Camera origin
-      0, 0, 0,
-      // Near plane corners
+      0, 0, 0, // origin
       -nearWidth / 2, nearHeight / 2, -near,
       nearWidth / 2, nearHeight / 2, -near,
       nearWidth / 2, -nearHeight / 2, -near,
       -nearWidth / 2, -nearHeight / 2, -near,
-      // Far plane corners
       -farWidth / 2, farHeight / 2, -far,
       farWidth / 2, farHeight / 2, -far,
       farWidth / 2, -farHeight / 2, -far,
       -farWidth / 2, -farHeight / 2, -far,
     ]);
 
-    // Define edges
     const indices = new Uint16Array([
-      // Lines from camera origin to near plane
-      0, 1, 0, 2, 0, 3, 0, 4,
-      // Near plane rectangle
-      1, 2, 2, 3, 3, 4, 4, 1,
-      // Lines from near to far plane
-      1, 5, 2, 6, 3, 7, 4, 8,
-      // Far plane rectangle
-      5, 6, 6, 7, 7, 8, 8, 5,
+      0, 1, 0, 2, 0, 3, 0, 4, // origin to near
+      1, 2, 2, 3, 3, 4, 4, 1, // near rectangle
+      1, 5, 2, 6, 3, 7, 4, 8, // near to far
+      5, 6, 6, 7, 7, 8, 8, 5, // far rectangle
     ]);
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-
     return geometry;
-  };
+  })();
 
-  const frustumGeometry = createFrustumGeometry();
+  const cameraColor = isSelected ? "#00ff00" : "#ffaa00";
 
   return (
-    <group ref={groupRef}>
-      {/* Camera frustum */}
+    <group ref={groupRef} renderOrder={10000}>
+      {/* Frustum: rotate from -Z (Three.js) to +X (robotics forward) */}
       <lineSegments
         ref={frustumRef}
         geometry={frustumGeometry}
-        onPointerDown={onPointerDown}
+        rotation={CAMERA_ROTATION}
+        raycast={() => null}
       >
         <lineBasicMaterial
-          color={isSelected ? "#00ff00" : "#ffaa00"}
+          color={cameraColor}
           linewidth={2}
           transparent
           opacity={isSelected ? 1.0 : 0.7}
+          depthTest={false}
+          depthWrite={false}
         />
       </lineSegments>
 
-      {/* Camera body (small box) */}
-      <mesh onPointerDown={onPointerDown}>
+      {/* Camera body */}
+      <mesh rotation={CAMERA_ROTATION} raycast={() => null}>
         <boxGeometry args={[0.04, 0.03, 0.03]} />
         <meshStandardMaterial
-          color={isSelected ? "#00ff00" : "#ffaa00"}
+          color={cameraColor}
           transparent
           opacity={isSelected ? 0.9 : 0.6}
-          emissive={isSelected ? "#00ff00" : "#000000"}
+          emissive={isSelected ? cameraColor : "#000000"}
           emissiveIntensity={isSelected ? 0.5 : 0}
+          depthTest={false}
+          depthWrite={false}
         />
       </mesh>
 
-      {/* Camera lens (small cylinder) */}
-      <mesh position={[0, 0, -0.02]} rotation={[Math.PI / 2, 0, 0]} onPointerDown={onPointerDown}>
+      {/* Camera lens */}
+      <mesh position={[0.02, 0, 0]} rotation={[0, Math.PI / 2, 0]} raycast={() => null}>
         <cylinderGeometry args={[0.01, 0.01, 0.02, 16]} />
-        <meshStandardMaterial
-          color="#333333"
-          transparent
+        <meshStandardMaterial 
+          color="#333333" 
+          transparent 
           opacity={0.8}
+          depthTest={false}
+          depthWrite={false}
         />
       </mesh>
     </group>

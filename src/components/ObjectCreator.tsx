@@ -75,117 +75,102 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-white">Create Cube</DialogTitle>
-          <DialogDescription className="text-[#a0a0a0]">
-            Define the size and position of the cube
-          </DialogDescription>
+      <DialogContent className="bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4] max-w-xs p-3">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="text-sm text-[#d4d4d4] font-normal">Create Cube</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-2.5">
           <div>
-            <h3 className="text-sm font-medium mb-3 text-white">Size (meters)</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label htmlFor="size-x" className="text-xs text-[#a0a0a0]">X</Label>
-                <Input
-                  id="size-x"
-                  type="number"
-                  step="0.01"
-                  value={sizeX}
-                  onChange={(e) => setSizeX(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="size-y" className="text-xs text-[#a0a0a0]">Y</Label>
-                <Input
-                  id="size-y"
-                  type="number"
-                  step="0.01"
-                  value={sizeY}
-                  onChange={(e) => setSizeY(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="size-z" className="text-xs text-[#a0a0a0]">Z</Label>
-                <Input
-                  id="size-z"
-                  type="number"
-                  step="0.01"
-                  value={sizeZ}
-                  onChange={(e) => setSizeZ(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-white"
-                />
-              </div>
+            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Size</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              <Input
+                id="size-x"
+                type="number"
+                step="0.01"
+                value={sizeX}
+                onChange={(e) => setSizeX(parseFloat(e.target.value) || 0)}
+                placeholder="X"
+                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+              />
+              <Input
+                id="size-y"
+                type="number"
+                step="0.01"
+                value={sizeY}
+                onChange={(e) => setSizeY(parseFloat(e.target.value) || 0)}
+                placeholder="Y"
+                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+              />
+              <Input
+                id="size-z"
+                type="number"
+                step="0.01"
+                value={sizeZ}
+                onChange={(e) => setSizeZ(parseFloat(e.target.value) || 0)}
+                placeholder="Z"
+                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+              />
             </div>
           </div>
 
           <div>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-medium text-white">Position (meters)</h3>
+            <div className="flex justify-between items-center mb-1">
+              <Label className="text-[10px] text-[#9d9d9d]">Position</Label>
               <Button
                 onClick={suggestPosition}
                 variant="outline"
                 size="sm"
-                className="h-6 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-[#a0a0a0] hover:text-white hover:bg-[#3d3d3d]"
+                className="h-5 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d] px-2 py-0"
               >
-                Suggest Position
+                Suggest
               </Button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label htmlFor="pos-x" className="text-xs text-[#a0a0a0]">X</Label>
-                <Input
-                  id="pos-x"
-                  type="number"
-                  step="0.01"
-                  value={posX}
-                  onChange={(e) => setPosX(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="pos-y" className="text-xs text-[#a0a0a0]">Y</Label>
-                <Input
-                  id="pos-y"
-                  type="number"
-                  step="0.01"
-                  value={posY}
-                  onChange={(e) => setPosY(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="pos-z" className="text-xs text-[#a0a0a0]">Z</Label>
-                <Input
-                  id="pos-z"
-                  type="number"
-                  step="0.01"
-                  value={posZ}
-                  onChange={(e) => setPosZ(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-white"
-                />
-              </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <Input
+                id="pos-x"
+                type="number"
+                step="0.01"
+                value={posX}
+                onChange={(e) => setPosX(parseFloat(e.target.value) || 0)}
+                placeholder="X"
+                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+              />
+              <Input
+                id="pos-y"
+                type="number"
+                step="0.01"
+                value={posY}
+                onChange={(e) => setPosY(parseFloat(e.target.value) || 0)}
+                placeholder="Y"
+                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+              />
+              <Input
+                id="pos-z"
+                type="number"
+                step="0.01"
+                value={posZ}
+                onChange={(e) => setPosZ(parseFloat(e.target.value) || 0)}
+                placeholder="Z"
+                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+              />
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-1.5 pt-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="h-8 text-xs bg-[#2a2a2a] border-[#3d3d3d] text-[#a0a0a0] hover:text-white hover:bg-[#3d3d3d]"
+            className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d] px-3"
           >
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
-            className="h-8 text-xs bg-[#0066cc] hover:bg-[#0052a3] text-white"
+            className="h-7 text-[11px] bg-[#3d3d3d] hover:bg-[#4d4d4d] text-[#d4d4d4] px-3"
           >
-            Create Cube
+            Create
           </Button>
         </div>
       </DialogContent>

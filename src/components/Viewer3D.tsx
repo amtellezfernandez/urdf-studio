@@ -13,12 +13,14 @@ import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import jointColors from "@/joint_colors.json";
 import { AxisGizmo3D } from "@/components/AxisGizmo3D";
 import { CustomAxesHelper } from "@/components/CustomAxesHelper";
+import { CameraIcons } from "@/components/CameraIcons";
+import { CameraViewButtons } from "@/components/CameraViewButtons";
+import { useCameraStore } from "@/store/useCameraStore";
 import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
-import { CameraIcons } from "@/components/CameraIcons";
 
 interface Viewer3DProps {
   urdfFile: File | null;
@@ -2290,6 +2292,63 @@ export const Viewer3D = ({
     controls.update();
   }, [robot]);
 
+  // Switch to camera view
+  const handleCameraViewChange = useCallback((cameraId: string) => {
+    if (!controlsRef.current || !cameraRef.current || !robot) return;
+
+    const cameras = useCameraStore.getState().cameras;
+    const camera = cameras.find((c) => c.id === cameraId);
+    if (!camera) return;
+
+    const controls = controlsRef.current;
+    const viewCamera = cameraRef.current;
+    const robotAny: any = robot;
+
+    // Get parent link
+    const parentLink = robotAny.links?.[camera.parent_link];
+    if (!parentLink) return;
+
+    // Update parent link transform
+    parentLink.updateMatrixWorld(true);
+    const parentWorldTransform = new THREE.Matrix4().copy(parentLink.matrixWorld);
+
+    // Create local transform from camera pose
+    const localTransform = new THREE.Matrix4();
+    const RPY_ORDER = 'ZYX' as const;
+    localTransform.makeRotationFromEuler(
+      new THREE.Euler(...camera.pose.rpy, RPY_ORDER)
+    );
+    localTransform.setPosition(new THREE.Vector3(...camera.pose.xyz));
+
+    // Combine: world = parentWorld * local
+    const finalTransform = parentWorldTransform.clone().multiply(localTransform);
+
+    const cameraPosition = new THREE.Vector3();
+    const cameraQuaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    finalTransform.decompose(cameraPosition, cameraQuaternion, scale);
+
+    // Camera forward direction: +X in robotics convention
+    // Three.js camera looks along -Z, so we need to rotate -90° around Y to align
+    const cameraRotation = new THREE.Quaternion();
+    cameraRotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+    const finalQuaternion = cameraQuaternion.clone().multiply(cameraRotation);
+
+    // Calculate forward direction (camera's +X in world space)
+    const forward = new THREE.Vector3(1, 0, 0);
+    forward.applyQuaternion(cameraQuaternion);
+
+    // Set camera position and look at a point in front of the camera
+    const lookAtDistance = 1.0;
+    const lookAtPoint = cameraPosition.clone().add(forward.multiplyScalar(lookAtDistance));
+
+    // Set Three.js camera orientation (it looks along -Z, so we rotate it)
+    viewCamera.position.copy(cameraPosition);
+    viewCamera.quaternion.copy(finalQuaternion);
+    controls.target.copy(lookAtPoint);
+    controls.update();
+  }, [robot]);
+
   // Fit to view function
   const fitToView = useCallback(() => {
     if (!controlsRef.current || !cameraRef.current || !robot || !sceneRef.current) return;
@@ -2566,7 +2625,6 @@ export const Viewer3D = ({
                 gpuMode={gpuMode}
               />
               <CreatedObjects robot={robot} gpuMode={gpuMode} />
-              <CameraIcons robot={robot} gpuMode={gpuMode} />
             </>
           ) : (
             <PlaceholderLamp gpuMode={gpuMode} />
@@ -2577,6 +2635,17 @@ export const Viewer3D = ({
           
           {/* Blender-style 3D axis gizmo */}
           <AxisGizmo3D onViewChange={setView} />
+          
+          {/* Camera icons visualization */}
+          {robot && <CameraIcons robot={robot} gpuMode={gpuMode} />}
+          
+          {/* Camera view buttons */}
+          {robot && (
+            <CameraViewButtons
+              robot={robot}
+              onCameraViewChange={handleCameraViewChange}
+            />
+          )}
           
           <OrbitControls
             ref={controlsRef}
