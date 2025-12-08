@@ -18,6 +18,7 @@ import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
+import { CameraIcons } from "@/components/CameraIcons";
 
 interface Viewer3DProps {
   urdfFile: File | null;
@@ -2565,6 +2566,7 @@ export const Viewer3D = ({
                 gpuMode={gpuMode}
               />
               <CreatedObjects robot={robot} gpuMode={gpuMode} />
+              <CameraIcons robot={robot} gpuMode={gpuMode} />
             </>
           ) : (
             <PlaceholderLamp gpuMode={gpuMode} />

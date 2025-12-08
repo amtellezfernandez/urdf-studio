@@ -11,6 +11,8 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { JointMappingDialog, type SavedMapping } from "@/components/JointMappingDialog";
 import { MappingListPanel } from "@/components/MappingListPanel";
 import { ObjectCreator } from "@/components/ObjectCreator";
+import { CameraCreator } from "@/components/CameraCreator";
+import { CameraConfigUpload } from "@/components/CameraConfigUpload";
 import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
@@ -23,7 +25,10 @@ import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
 import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
 import { updateLinkNameInURDF } from "@/urdf_corrections/updateLinkName";
 import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
+import { parseLinkNames } from "@/utils/parseLinks";
 import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
+import { useCameraStore } from "@/store/useCameraStore";
+import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
 import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
 import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
 import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
@@ -83,11 +88,13 @@ const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'co
 const Index = () => {
   useTheme(); // Initialize dark mode
   const { gpuMode, setGPUMode } = useGPUMode();
+  const cameras = useCameraStore((state) => state.cameras);
   const [urdfFile, setUrdfFile] = useState<File | null>(null);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
   const [jointValues, setJointValues] = useState<Record<string, number>>({});
   const [availableJoints, setAvailableJoints] = useState<string[]>([]);
+  const [availableLinks, setAvailableLinks] = useState<string[]>([]);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoadedFiles, setHasLoadedFiles] = useState(false);
@@ -131,6 +138,10 @@ const Index = () => {
   const [showObjectCreator, setShowObjectCreator] = useState(false);
   const [robotBoundingBox, setRobotBoundingBox] = useState<THREE.Box3 | null>(null);
   const [robot, setRobot] = useState<any>(null);
+
+  // Camera creation state
+  const [showCameraCreator, setShowCameraCreator] = useState(false);
+  const [showCameraUpload, setShowCameraUpload] = useState(false);
 
   // Joint Mapping state
   const [showMappingListPanel, setShowMappingListPanel] = useState(false);
@@ -219,11 +230,13 @@ const Index = () => {
       
       const parsedLimits = parseJointLimitsFromURDF(originalContent);
       const parsedAxes = parseJointAxesFromURDF(originalContent);
+      const parsedLinks = parseLinkNames(originalContent);
 
       setOriginalUrdfContent(originalContent);
       setJointLimits(parsedLimits);
       setJointAxes(parsedAxes);
       setOriginalJointAxes(parsedAxes);
+      setAvailableLinks(parsedLinks);
       setVizUrdfContent(originalContent);
       setOriginalVizUrdfContent(originalContent);
       setSavedVizUrdfContent(originalContent);
@@ -740,6 +753,50 @@ const Index = () => {
     updateUrdfFile(savedVizUrdfContent);
     toast.success("Reverted to last saved file");
   }, [savedVizUrdfContent, updateUrdfFile]);
+
+  const handleExportCamerasJSON = useCallback(() => {
+    if (cameras.length === 0) {
+      toast.error("No cameras to export");
+      return;
+    }
+
+    try {
+      const jsonContent = exportCamerasToJSON(cameras);
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "camera-config.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${cameras.length} camera(s) to JSON`);
+    } catch (error) {
+      toast.error("Failed to export cameras");
+      console.error(error);
+    }
+  }, [cameras]);
+
+  const handleExportCamerasYAML = useCallback(() => {
+    if (cameras.length === 0) {
+      toast.error("No cameras to export");
+      return;
+    }
+
+    try {
+      const yamlContent = exportCamerasToYAML(cameras);
+      const blob = new Blob([yamlContent], { type: "text/yaml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "camera-config.yaml";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${cameras.length} camera(s) to YAML`);
+    } catch (error) {
+      toast.error("Failed to export cameras");
+      console.error(error);
+    }
+  }, [cameras]);
 
   const deleteJointsFromURDF = useCallback((urdfContent: string, jointsToDelete: Set<string>): string => {
     if (jointsToDelete.size === 0) return urdfContent;
@@ -1535,6 +1592,47 @@ const Index = () => {
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                    >
+                      Camera
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
+                      <DropdownMenuItem
+                        onClick={() => setShowCameraCreator(true)}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        Add Camera
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setShowCameraUpload(true)}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        Upload Camera Config
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={handleExportCamerasJSON}
+                        disabled={cameras.length === 0}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          cameras.length === 0 && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        Export as JSON
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={handleExportCamerasYAML}
+                        disabled={cameras.length === 0}
+                        className={cn(
+                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                          cameras.length === 0 && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        Export as YAML
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1815,6 +1913,7 @@ const Index = () => {
           {/* Right Sidebar - Joint List */}
           <JointListSidebar
             availableJoints={availableJoints}
+            availableLinks={availableLinks}
             jointLimits={jointLimits}
             selectedJoint={selectedJoint}
             onJointSelect={setSelectedJoint}
@@ -1983,6 +2082,20 @@ const Index = () => {
         open={showObjectCreator}
         onOpenChange={setShowObjectCreator}
         robotBoundingBox={robotBoundingBox}
+      />
+
+      {/* Camera Creator Dialog */}
+      <CameraCreator
+        open={showCameraCreator}
+        onOpenChange={setShowCameraCreator}
+        availableLinks={availableLinks}
+        robot={robot}
+      />
+
+      {/* Camera Config Upload Dialog */}
+      <CameraConfigUpload
+        open={showCameraUpload}
+        onOpenChange={setShowCameraUpload}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections
 import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";
 import { LinkControl } from "@/components/LinkEditor";
 import type { CollisionVisibility } from "@/components/LinkEditor";
+import { CameraList } from "@/components/CameraList";
 import * as THREE from "three";
 
 // Recursive component to render hierarchy tree
@@ -433,6 +434,7 @@ const ObjectsView = ({ selectedJoint, urdfContent, availableJoints, robot }: Obj
 
 interface JointListSidebarProps {
   availableJoints: string[];
+  availableLinks?: string[];
   jointLimits: JointLimits;
   selectedJoint?: string | null;
   onJointSelect?: (jointName: string | null) => void;
@@ -465,6 +467,7 @@ interface JointListSidebarProps {
 
 export const JointListSidebar = ({
   availableJoints,
+  availableLinks = [],
   jointLimits,
   selectedJoint,
   onJointSelect,
@@ -501,7 +504,7 @@ export const JointListSidebar = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "objects">("flat");
+  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "objects" | "cameras">("flat");
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
   const [visibleJoints, setVisibleJoints] = useState<Set<string>>(new Set(availableJoints));
 
@@ -753,6 +756,17 @@ export const JointListSidebar = ({
               >
                 Objects
               </button>
+              <button
+                onClick={() => setViewMode("cameras")}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  viewMode === "cameras"
+                    ? "text-primary cursor-default"
+                    : "text-muted-foreground hover:text-foreground cursor-pointer"
+                )}
+              >
+                Cameras
+              </button>
               <div className="flex-1"></div>
             </div>
           </div>
@@ -884,6 +898,9 @@ export const JointListSidebar = ({
                 availableJoints={availableJoints}
                 robot={robot}
               />
+            ) : viewMode === "cameras" ? (
+              // Cameras view
+              <CameraList availableLinks={availableLinks} />
             ) : (
               // Hierarchical view
               !hierarchyTree || filteredHierarchyJoints.length === 0 ? (
