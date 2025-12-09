@@ -2329,14 +2329,13 @@ export const Viewer3D = ({
     finalTransform.decompose(cameraPosition, cameraQuaternion, scale);
 
     // Camera forward direction: +X in robotics convention
-    // Three.js camera looks along -Z, so we need to rotate -90° around Y to align
+    // Three.js camera looks along -Z, so rotate +90° around Y to align
     const cameraRotation = new THREE.Quaternion();
-    cameraRotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+    cameraRotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
     const finalQuaternion = cameraQuaternion.clone().multiply(cameraRotation);
 
-    // Calculate forward direction (camera's +X in world space)
-    const forward = new THREE.Vector3(1, 0, 0);
-    forward.applyQuaternion(cameraQuaternion);
+    // Calculate forward direction based on the final camera orientation (-Z in Three.js)
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(finalQuaternion);
 
     // Set camera position and look at a point in front of the camera
     const lookAtDistance = 1.0;

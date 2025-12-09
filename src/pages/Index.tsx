@@ -13,6 +13,7 @@ import { MappingListPanel } from "@/components/MappingListPanel";
 import { ObjectCreator } from "@/components/ObjectCreator";
 import { CameraCreator } from "@/components/CameraCreator";
 import { CameraConfigUpload } from "@/components/CameraConfigUpload";
+import { CameraPreview } from "@/components/CameraPreview";
 import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
@@ -36,7 +37,6 @@ import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { useTheme } from "@/hooks/use-theme";
 import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
-import type { Camera } from "@/types/camera";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -86,36 +86,11 @@ const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4;
 const MIN_HEADER_HEIGHT = 50;
 const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'] as const;
 
-const describeCameraView = (camera: Camera) => {
-  const euler = new THREE.Euler(...camera.pose.rpy, "ZYX");
-  const forward = new THREE.Vector3(1, 0, 0).applyEuler(euler).normalize();
-  const axisCandidates = [
-    { label: "+X", vector: new THREE.Vector3(1, 0, 0) },
-    { label: "-X", vector: new THREE.Vector3(-1, 0, 0) },
-    { label: "+Y", vector: new THREE.Vector3(0, 1, 0) },
-    { label: "-Y", vector: new THREE.Vector3(0, -1, 0) },
-    { label: "+Z", vector: new THREE.Vector3(0, 0, 1) },
-    { label: "-Z", vector: new THREE.Vector3(0, 0, -1) },
-  ];
-  let best = axisCandidates[0];
-  let maxDot = -Infinity;
-  for (const candidate of axisCandidates) {
-    const dot = forward.dot(candidate.vector);
-    if (dot > maxDot) {
-      maxDot = dot;
-      best = candidate;
-    }
-  }
-  const parentLink = camera.parent_link || "Robot";
-  return `${parentLink} – facing ${best.label}`;
-};
-
 const Index = () => {
   useTheme(); // Initialize dark mode
   const { gpuMode, setGPUMode } = useGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
-  const selectCamera = useCameraStore((state) => state.selectCamera);
   const [urdfFile, setUrdfFile] = useState<File | null>(null);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
@@ -2104,29 +2079,34 @@ const Index = () => {
                 Close
               </button>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {cameras.slice(0, 6).map((camera, index) => (
-                <button
+                <div
                   key={camera.id}
-                  type="button"
-                  onClick={() => {
-                    selectCamera(camera.id);
-                    setShowPovCameras(false);
-                  }}
                   className={cn(
-                    "flex flex-col justify-between gap-2 rounded-md border bg-[#181818] p-3 text-left transition hover:border-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex flex-col gap-2 rounded-lg border bg-gradient-to-b from-[#151515] to-[#0b0b0b] p-3 shadow-lg",
                     selectedCameraId === camera.id
-                      ? "border-primary/70"
+                      ? "border-primary/60 ring-2 ring-primary/20"
                       : "border-border/50"
                   )}
                 >
-                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Camera {index + 1}</div>
-                  <div className="text-sm font-semibold text-foreground truncate">{camera.name}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{camera.parent_link}</div>
-                  <div className="text-[11px] text-muted-foreground/80">
-                    {describeCameraView(camera)}
+                  <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span>Camera {index + 1}</span>
+                    <span className="text-[9px] text-muted-foreground/70">{camera.parent_link}</span>
                   </div>
-                </button>
+                  <div className="text-sm font-semibold text-foreground truncate">{camera.name}</div>
+                  <div className="h-48 w-full overflow-hidden rounded-md border border-border/40 bg-[#050505]">
+                    <CameraPreview
+                      urdfFile={urdfFile}
+                      meshFiles={meshFiles}
+                      camera={camera}
+                      gpuMode={gpuMode}
+                    />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground/80">
+                    Live preview rendered from the POV camera title and synced with the main model.
+                  </div>
+                </div>
               ))}
             </div>
             {cameras.length > 6 && (
