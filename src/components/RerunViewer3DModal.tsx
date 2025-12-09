@@ -14,7 +14,7 @@ import { toast } from "sonner";
 // Constants
 const RERUN_SERVER_URL = "http://127.0.0.1:9090";
 const RERUN_WS_PORT = 9876;
-const API_BASE_URL = "http://localhost:3001";
+const API_BASE_URL = "http://localhost:8000";
 
 interface Episode {
   id: string;
@@ -66,7 +66,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
     try {
       // Try to stop via API if available
       try {
-        await fetch(`${API_BASE_URL}/api/rerun-visualize`, {
+        await fetch(`${API_BASE_URL}/rerun/visualize`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -96,7 +96,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
 
     // Check if API is available
     try {
-      const apiCheck = await fetch(`${API_BASE_URL}/api/rerun-visualize`, {
+      const apiCheck = await fetch(`${API_BASE_URL}/rerun/visualize`, {
         method: "OPTIONS",
       });
       if (!apiCheck.ok && apiCheck.status !== 405) {
@@ -124,7 +124,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
       const recording = `lerobot/episode_${episode.number}`;
       setRecordingName(recording);
 
-      const response = await fetch(`${API_BASE_URL}/api/rerun-visualize`, {
+      const response = await fetch(`${API_BASE_URL}/rerun/visualize`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

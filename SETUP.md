@@ -4,30 +4,49 @@
 
 ### 1. Run Setup
 ```bash
-urdf-studio setup
+cd ~/URDFStudio
+npm run setup
 ```
 
 This will:
 - Show a beautiful banner
 - Install all dependencies
+- Set up Python virtual environment with Rerun SDK
 - Prompt you to configure HuggingFace authentication (optional)
-- Allow you to update or remove existing tokens
+- Prompt you to configure GitHub authentication (optional)
+
+### Optional: Enable PyRoki FK validation
+
+If you want to compare forward kinematics between the Three.js URDFLoader and [PyRoki](https://github.com/chungmin99/pyroki), install PyRoki into the local virtual environment:
+
+```bash
+cd ~/URDFStudio
+~/.local/bin/uv pip install --python .venv/bin/python3 "pyroki @ git+https://github.com/chungmin99/pyroki.git"
+```
+
+Once installed, the FK validation popup in the viewer will call into PyRoki via the existing Python environment.
 
 ### 2. Start URDF Studio
 ```bash
-urdf-studio
-# or
-urdf-studio start
+cd ~/URDFStudio
+npm run start
 ```
 
-The app will start with a beautiful banner and be available at `http://localhost:5173`
+This will start:
+- **Frontend**: `http://localhost:5173` (Vite + React)
+- **Backend API**: `http://localhost:8000` (FastAPI + Python)
+
+The integrated backend provides:
+- `GET  /health` – Health check (PyRoki, yourdfpy, Rerun status)
+- `POST /pyroki/fk` – Forward kinematics using PyRoki (with URDF caching)
+- `POST /rerun/visualize` – Rerun visualization (spawn or serve modes)
+- `POST /datasets/mix` – Mix multiple robot learning datasets
 
 ## Commands
 
-- `urdf-studio setup` - Install dependencies and configure HuggingFace
-- `urdf-studio start` - Start URDF Studio (default)
-- `urdf-studio` - Start URDF Studio (default)
-- `urdf-studio --help` - Show help message
+- `npm run setup` - Install dependencies and configure tokens
+- `npm run start` - Start URDF Studio (default)
+- `npm run dev` - Start Vite dev server only (for development)
 
 ## HuggingFace Token
 
@@ -41,4 +60,3 @@ When running setup:
   - Type "remove" to delete the token
 
 The token is automatically loaded when you start the app and is used for uploading and managing datasets on HuggingFace Spaces.
-

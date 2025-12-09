@@ -104,21 +104,41 @@ function main() {
   }
   
   log('');
-  log('  Running at', colors.reset);
+  log('  Frontend:', colors.reset);
   log(`  ${colors.pinkBright}${colors.underline}http://localhost:5173${colors.reset}`, colors.reset);
+  log('  Backend API:', colors.reset);
+  log(`  ${colors.pinkBright}${colors.underline}http://localhost:8000${colors.reset}`, colors.reset);
   log('');
   log('  Press Ctrl+C to stop', colors.gray);
   log('');
-  
-  // Start Rerun API server
-  const rerunApiScript = join(__dirname, 'rerun_api_server.js');
-  const rerunApiProcess = spawn('node', [rerunApiScript], {
-    cwd: rootDir,
-    env,
-    shell: true,
-    stdio: 'inherit',
-  });
-  
+
+  // Start Python FastAPI backend
+  const venvPython = join(rootDir, '.venv', 'bin', 'python3');
+  let pythonBackendProcess = null;
+
+  if (existsSync(venvPython)) {
+    pythonBackendProcess = spawn(venvPython, ['-m', 'uvicorn', 'backend.server:app', '--reload', '--port', '8000'], {
+      cwd: rootDir,
+      env,
+      shell: true,
+      stdio: 'pipe',
+    });
+
+    // Only show errors from Python backend
+    pythonBackendProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      if (output.includes('ERROR') || output.includes('Error') || output.includes('WARNING')) {
+        process.stdout.write(`[Backend] ${data}`);
+      }
+    });
+
+    pythonBackendProcess.stderr.on('data', (data) => {
+      process.stderr.write(`[Backend] ${data}`);
+    });
+  } else {
+    log('  ⚠ Python backend not started (run npm run setup first)', colors.yellow);
+  }
+
   // Start the dev server with filtered output
   const viteProcess = spawn('npm', ['run', 'dev'], {
     cwd: rootDir,
@@ -150,15 +170,19 @@ function main() {
     log('');
     log('  Stopping URDF Studio...', colors.gray);
     viteProcess.kill('SIGINT');
-    rerunApiProcess.kill('SIGINT');
+    if (pythonBackendProcess) {
+      pythonBackendProcess.kill('SIGINT');
+    }
     setTimeout(() => {
       process.exit(0);
     }, 500);
   });
-  
+
   process.on('SIGTERM', () => {
     viteProcess.kill('SIGTERM');
-    rerunApiProcess.kill('SIGTERM');
+    if (pythonBackendProcess) {
+      pythonBackendProcess.kill('SIGTERM');
+    }
     process.exit(0);
   });
 }

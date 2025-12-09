@@ -255,6 +255,34 @@ async function setupGitHub() {
   }
 }
 
+function findUv() {
+  // Check common installation locations for uv
+  const uvLocations = [
+    join(process.env.HOME || '', '.local', 'bin', 'uv'),
+    join(process.env.HOME || '', '.cargo', 'bin', 'uv'),
+    '/usr/local/bin/uv',
+    '/usr/bin/uv',
+  ];
+
+  for (const uvPath of uvLocations) {
+    if (existsSync(uvPath)) {
+      return uvPath;
+    }
+  }
+
+  // Try to find uv in PATH
+  try {
+    const result = execSync('command -v uv', { stdio: 'pipe', encoding: 'utf-8', shell: true }).trim();
+    if (result && existsSync(result)) {
+      return result;
+    }
+  } catch (e) {
+    // Not in PATH
+  }
+
+  return null;
+}
+
 async function checkRerun() {
   log('');
   logArrow('🔍 Setting up Python environment and Rerun');
@@ -264,9 +292,8 @@ async function checkRerun() {
   const venvPython = join(venvPath, 'bin', 'python3');
 
   // Check if uv is available
-  try {
-    execSync('uv --version', { stdio: 'pipe' });
-  } catch (e) {
+  const uvPath = findUv();
+  if (!uvPath) {
     log('✗ uv not found. Please install uv first:', colors.yellow);
     log('');
     logInfo('Install uv with:');
@@ -275,6 +302,8 @@ async function checkRerun() {
     logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
     return false;
   }
+
+  logSuccess(`Found uv at: ${uvPath}`);
 
   // Create virtual environment if it doesn't exist
   if (!existsSync(venvPath)) {
@@ -286,7 +315,7 @@ async function checkRerun() {
         // Fallback to any available python3
         pythonPath = 'python3';
       }
-      execSync(`uv venv --python ${pythonPath}`, { cwd: rootDir, stdio: 'inherit', shell: true });
+      execSync(`"${uvPath}" venv --python ${pythonPath}`, { cwd: rootDir, stdio: 'inherit', shell: true });
       logSuccess('Virtual environment created');
     } catch (e) {
       log('✗ Failed to create virtual environment', colors.yellow);
@@ -312,7 +341,7 @@ async function checkRerun() {
   // Install rerun-sdk in the virtual environment
   logInfo('Installing rerun-sdk in virtual environment...');
   try {
-    execSync(`uv pip install --python ${venvPython} rerun-sdk`, {
+    execSync(`"${uvPath}" pip install --python ${venvPython} rerun-sdk`, {
       cwd: rootDir,
       stdio: 'inherit',
       shell: true
@@ -329,7 +358,7 @@ async function checkRerun() {
   } catch (installError) {
     log('✗ Failed to install rerun-sdk', colors.yellow);
     logInfo('   You can try installing manually:');
-    logInfo('     uv pip install --python .venv/bin/python3 rerun-sdk');
+    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 rerun-sdk`);
     log('');
     logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
     return false;

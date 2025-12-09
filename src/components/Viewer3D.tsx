@@ -20,6 +20,18 @@ import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+
+const API_BASE_URL = "http://localhost:8000";
 
 interface Viewer3DProps {
   urdfFile: File | null;
@@ -503,11 +515,303 @@ const CreatedObjects = ({
           </group>
         );
       })}
-    </group>
-  );
-};
+      </group>
+    );
+  };
 
-const URDFModel = ({
+  interface FKLinkError {
+    linkName: string;
+    positionError: number;
+    rotationErrorDeg: number;
+  }
+  
+  interface FKValidationDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    urdfContent: string | null;
+    robot: URDFRobot | null;
+  }
+  
+  const FKValidationDialog = ({
+    open,
+    onOpenChange,
+    urdfContent,
+    robot,
+  }: FKValidationDialogProps) => {
+    const jointValues = useJointStore((s) => s.jointValues);
+    const [isChecking, setIsChecking] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [summary, setSummary] = useState<{
+      maxPositionError: number;
+      maxRotationErrorDeg: number;
+      perLink: FKLinkError[];
+    } | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const latestRequestId = useRef(0);
+  
+    const computeComparison = useCallback(async () => {
+      if (!open) return;
+      if (!urdfContent || !robot) {
+        setError("Missing URDF content or robot model for FK validation.");
+        return;
+      }
+  
+      const requestId = ++latestRequestId.current;
+      setIsChecking(true);
+      setError(null);
+  
+      try {
+        const response = await fetch(`${API_BASE_URL}/pyroki/fk`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            urdf: urdfContent,
+            joint_values: jointValues,
+          }),
+        });
+  
+        if (!response.ok) {
+          let message = "PyRoki FK API request failed";
+          try {
+            const data = await response.json();
+            message =
+              data.error || data.detail || data.message || message;
+          } catch {
+            // Ignore JSON parse errors
+          }
+          if (requestId === latestRequestId.current) {
+            setError(message);
+            setSummary(null);
+          }
+          return;
+        }
+  
+        const data = await response.json();
+        if (requestId !== latestRequestId.current) {
+          // A newer request finished after this one; ignore stale result
+          return;
+        }
+  
+        const links = Array.isArray(data.links) ? data.links : [];
+        const pyrokiByName: Record<
+          string,
+          { position: number[]; quaternion_wxyz: number[] }
+        > = {};
+        for (const link of links) {
+          if (
+            typeof link?.name === "string" &&
+            Array.isArray(link.position) &&
+            Array.isArray(link.quaternion_wxyz)
+          ) {
+            pyrokiByName[link.name] = {
+              position: link.position,
+              quaternion_wxyz: link.quaternion_wxyz,
+            };
+          }
+        }
+  
+        const robotAny: any = robot;
+        if (robotAny.updateMatrixWorld) {
+          robotAny.updateMatrixWorld(true);
+        }
+  
+        const rootScale =
+          robotAny?.scale && typeof robotAny.scale.x === "number"
+            ? robotAny.scale.x
+            : 1;
+  
+        const threeLinks = robotAny.links || {};
+        const linkNames = Object.keys(threeLinks);
+  
+        const tmpMatrix = new THREE.Matrix4();
+        const pos = new THREE.Vector3();
+        const quat = new THREE.Quaternion();
+        const scale = new THREE.Vector3();
+  
+        const perLink: FKLinkError[] = [];
+        let maxPositionError = 0;
+        let maxRotationErrorDeg = 0;
+  
+        for (const linkName of linkNames) {
+          const obj = threeLinks[linkName];
+          if (!obj || !obj.matrixWorld) continue;
+  
+          if (obj.updateMatrixWorld) {
+            obj.updateMatrixWorld(true);
+          }
+  
+          tmpMatrix.copy(obj.matrixWorld);
+          tmpMatrix.decompose(pos, quat, scale);
+  
+          const pyrokiLink = pyrokiByName[linkName];
+          if (!pyrokiLink) continue;
+  
+          const [px, py, pz] = pyrokiLink.position ?? [];
+          const [w, x, y, z] = pyrokiLink.quaternion_wxyz ?? [];
+          if (
+            typeof px !== "number" ||
+            typeof py !== "number" ||
+            typeof pz !== "number" ||
+            typeof w !== "number" ||
+            typeof x !== "number" ||
+            typeof y !== "number" ||
+            typeof z !== "number"
+          ) {
+            continue;
+          }
+  
+          // Account for global scaling applied to the URDF model.
+          const pxScene = px * rootScale;
+          const pyScene = py * rootScale;
+          const pzScene = pz * rootScale;
+  
+          const dx = pos.x - pxScene;
+          const dy = pos.y - pyScene;
+          const dz = pos.z - pzScene;
+          const positionError = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  
+          // Convert PyRoki quaternion (w,x,y,z) to Three.js (x,y,z,w)
+          const pyrokiQuat = new THREE.Quaternion(x, y, z, w);
+          const deltaQuat = quat.clone().invert().multiply(pyrokiQuat);
+          const clampedW = Math.min(1, Math.max(-1, deltaQuat.w));
+          const angleRad = 2 * Math.acos(clampedW);
+          const rotationErrorDeg = (angleRad * 180) / Math.PI;
+  
+          maxPositionError = Math.max(maxPositionError, positionError);
+          maxRotationErrorDeg = Math.max(maxRotationErrorDeg, rotationErrorDeg);
+  
+          perLink.push({
+            linkName,
+            positionError,
+            rotationErrorDeg,
+          });
+        }
+  
+        perLink.sort(
+          (a, b) => b.positionError - a.positionError || b.rotationErrorDeg - a.rotationErrorDeg
+        );
+  
+        setSummary({
+          maxPositionError,
+          maxRotationErrorDeg,
+          perLink,
+        });
+        setLastUpdated(new Date());
+      } catch (err) {
+        if (requestId === latestRequestId.current) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unknown error while running PyRoki FK comparison"
+          );
+          setSummary(null);
+        }
+      } finally {
+        if (requestId === latestRequestId.current) {
+          setIsChecking(false);
+        }
+      }
+    }, [open, urdfContent, robot, jointValues]);
+  
+    // Debounced real-time comparison while the dialog is open and joints change.
+    useEffect(() => {
+      if (!open) return;
+      const handle = setTimeout(() => {
+        void computeComparison();
+      }, 150);
+      return () => clearTimeout(handle);
+    }, [open, jointValues, computeComparison]);
+  
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>PyRoki vs URDFLoader FK</DialogTitle>
+            <DialogDescription>
+              Compare forward kinematics from PyRoki (Python) and the Three.js
+              URDFLoader in real time. Useful for catching axis flips, origin
+              offsets, and modeling inconsistencies.
+            </DialogDescription>
+          </DialogHeader>
+  
+          {error && (
+            <Alert variant="destructive" className="mb-3">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>PyRoki FK error</AlertTitle>
+              <AlertDescription className="whitespace-pre-wrap text-xs">
+                {error}
+              </AlertDescription>
+            </Alert>
+          )}
+  
+          {!error && summary && (
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span>
+                  Max position error:{" "}
+                  {(summary.maxPositionError * 1000).toFixed(2)} mm · Max rotation
+                  error: {summary.maxRotationErrorDeg.toFixed(2)}°
+                  {lastUpdated
+                    ? ` · Updated at ${lastUpdated.toLocaleTimeString()}`
+                    : null}
+                </span>
+              </div>
+  
+              <div className="border rounded-md p-2 max-h-40 overflow-auto text-xs">
+                <div className="font-medium mb-1 text-muted-foreground">
+                  Worst links (top 5 by position error)
+                </div>
+                {summary.perLink.length === 0 && (
+                  <div className="text-muted-foreground">
+                    No overlapping link names between PyRoki and URDFLoader.
+                  </div>
+                )}
+                {summary.perLink.slice(0, 5).map((item) => (
+                  <div
+                    key={item.linkName}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="font-mono mr-2 truncate">
+                      {item.linkName}
+                    </span>
+                    <span className="text-right">
+                      {(item.positionError * 1000).toFixed(2)} mm ·{" "}
+                      {item.rotationErrorDeg.toFixed(2)}°
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+  
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void computeComparison();
+              }}
+              disabled={isChecking || !urdfContent || !robot}
+            >
+              {isChecking ? "Recomputing..." : "Recompute now"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+  
+  const URDFModel = ({
   file,
   meshFiles,
   animationFrames,
@@ -1573,6 +1877,8 @@ export const Viewer3D = ({
   >(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [robot, setRobot] = useState<URDFRobot | null>(null);
+  const [urdfContent, setUrdfContent] = useState<string | null>(null);
+  const [isFkDialogOpen, setIsFkDialogOpen] = useState(false);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>(initialMeshFiles);
   const [isDraggingJoint, setIsDraggingJoint] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
@@ -1581,6 +1887,31 @@ export const Viewer3D = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const isShiftPressedRef = useRef<boolean>(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const fkAutoOpenedRef = useRef(false);
+  
+  // Read URDF content once per uploaded file (for PyRoki FK validation)
+  useEffect(() => {
+    if (!urdfFile) {
+      setUrdfContent(null);
+      fkAutoOpenedRef.current = false;
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setUrdfContent(text);
+    };
+    reader.readAsText(urdfFile);
+    fkAutoOpenedRef.current = false;
+  }, [urdfFile]);
+
+  // Auto-open FK validation dialog once when a new robot + URDF are ready
+  useEffect(() => {
+    if (!robot || !urdfContent || fkAutoOpenedRef.current) return;
+    fkAutoOpenedRef.current = true;
+    setIsFkDialogOpen(true);
+  }, [robot, urdfContent]);
   
   // Reset current frame when animation stops or frames change
   useEffect(() => {
@@ -2667,6 +2998,15 @@ export const Viewer3D = ({
             zoomSpeed={1.0}
           />
         </Canvas>
+
+        {robot && urdfContent && (
+          <FKValidationDialog
+            open={isFkDialogOpen}
+            onOpenChange={setIsFkDialogOpen}
+            urdfContent={urdfContent}
+            robot={robot}
+          />
+        )}
 
         {/* Camera POV button (mirror gizmo camera circle) */}
         {robot && cameras.length > 0 && (
