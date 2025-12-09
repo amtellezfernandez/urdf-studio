@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,6 +27,8 @@ import { convertURDFToMJCF } from "@/urdf_corrections/urdfToMJCF";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { cn } from "@/lib/utils";
 import { extractMeshReferencesFromURDF, fetchRepoContents } from "@/utils/github-repo";
+import { useCameraStore } from "@/store/useCameraStore";
+import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -55,6 +56,8 @@ export const ExportDialog = ({
   githubToken,
   robotName = "robot",
 }: ExportDialogProps) => {
+  const cameras = useCameraStore((state) => state.cameras);
+  const hasCameras = cameras.length > 0;
   const [isExporting, setIsExporting] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<FileSystemDirectoryHandle | null>(null);
   const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
@@ -81,6 +84,8 @@ export const ExportDialog = ({
     xacro: false,
     mujoco: false,
     meshes: true,
+    cameraJson: false,
+    cameraYaml: false,
   });
 
   // Robot File Version selection: allow both current AND/OR original
@@ -90,6 +95,17 @@ export const ExportDialog = ({
   // Base names for files (user can edit)
   const [currentBaseName, setCurrentBaseName] = useState(robotName);
   const [originalBaseName, setOriginalBaseName] = useState("");
+  const [cameraConfigBaseName, setCameraConfigBaseName] = useState("");
+  const defaultCameraBaseName = useMemo(() => {
+    const trimmedCurrent = currentBaseName.trim();
+    const trimmedRobot = robotName.trim();
+    const base = (trimmedCurrent || trimmedRobot || "robot").replace(/\s+/g, "_");
+    return `${base}_cameras`;
+  }, [currentBaseName, robotName]);
+  const cameraFilenameBase = useMemo(() => {
+    const trimmed = cameraConfigBaseName.trim();
+    return trimmed || defaultCameraBaseName || "camera_config";
+  }, [cameraConfigBaseName, defaultCameraBaseName]);
 
   // Extract version number from name (e.g., "robot_v4" -> { base: "robot", version: 4 })
   const extractVersion = (name: string): { base: string; version: number | null } => {
@@ -112,7 +128,7 @@ export const ExportDialog = ({
   useEffect(() => {
     if (isOpen) {
       const { base, version } = extractVersion(robotName);
-      
+
       if (version !== null) {
         // If loaded file has version (e.g., _v4), propose _v4 for original and _v5 for current
         setOriginalBaseName(makeVersionedName(base, version));
@@ -124,6 +140,29 @@ export const ExportDialog = ({
       }
     }
   }, [robotName, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && hasCameras && cameraConfigBaseName.trim() === "") {
+      setCameraConfigBaseName(defaultCameraBaseName);
+    }
+  }, [isOpen, hasCameras, cameraConfigBaseName, defaultCameraBaseName]);
+
+  useEffect(() => {
+    if (!hasCameras && cameraConfigBaseName !== "") {
+      setCameraConfigBaseName("");
+    }
+  }, [hasCameras, cameraConfigBaseName]);
+
+  useEffect(() => {
+    if (!hasCameras) {
+      setFormatSelections((prev) => {
+        if (!prev.cameraJson && !prev.cameraYaml) {
+          return prev;
+        }
+        return { ...prev, cameraJson: false, cameraYaml: false };
+      });
+    }
+  }, [hasCameras]);
 
   // Fetch GitHub repositories when dialog opens and token is available
   useEffect(() => {
@@ -402,6 +441,23 @@ export const ExportDialog = ({
       }
     }
 
+    if (hasCameras) {
+      if (formatSelections.cameraJson) {
+        structure.push({
+          path: `${basePath}${cameraFilenameBase}.json`,
+          name: `${cameraFilenameBase}.json`,
+          type: "file",
+        });
+      }
+      if (formatSelections.cameraYaml) {
+        structure.push({
+          path: `${basePath}${cameraFilenameBase}.yaml`,
+          name: `${cameraFilenameBase}.yaml`,
+          type: "file",
+        });
+      }
+    }
+
     if (formatSelections.meshes && getReferencedMeshes.length > 0) {
       structure.push({ path: `${basePath}meshes/`, name: "meshes/", type: "folder" });
       // Show first few mesh files as preview
@@ -416,7 +472,7 @@ export const ExportDialog = ({
     }
 
     return structure;
-  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedFolder, useSubfolder, subfolderName]);
+  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedFolder, useSubfolder, subfolderName, hasCameras, cameraFilenameBase]);
 
   // Generate GitHub folder structure preview
   const githubPreview = useMemo(() => {
@@ -457,6 +513,15 @@ export const ExportDialog = ({
       }
     }
 
+    if (hasCameras) {
+      if (formatSelections.cameraJson) {
+        structure.push({ path: `${basePath}${cameraFilenameBase}.json`, name: `${cameraFilenameBase}.json`, type: "file" });
+      }
+      if (formatSelections.cameraYaml) {
+        structure.push({ path: `${basePath}${cameraFilenameBase}.yaml`, name: `${cameraFilenameBase}.yaml`, type: "file" });
+      }
+    }
+
     if (formatSelections.meshes && getReferencedMeshes.length > 0) {
       structure.push({ path: `${basePath}meshes/`, name: "meshes/", type: "folder" });
       // Show first few mesh files as preview
@@ -471,9 +536,16 @@ export const ExportDialog = ({
     }
 
     return structure;
-  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedGitHubRepo, useNewGitHubFolder, newGitHubFolderName, selectedGitHubFolder]);
+  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedGitHubRepo, useNewGitHubFolder, newGitHubFolderName, selectedGitHubFolder, hasCameras, cameraFilenameBase]);
 
-  const downloadFile = async (content: string, filename: string, folderHandle?: FileSystemDirectoryHandle, useSubfolder?: boolean, subfolderName?: string) => {
+  const downloadFile = async (
+    content: string | Blob,
+    filename: string,
+    folderHandle?: FileSystemDirectoryHandle,
+    useSubfolder?: boolean,
+    subfolderName?: string,
+    mimeType = "application/xml"
+  ) => {
     if (folderHandle) {
       // Save to selected folder using File System Access API
       try {
@@ -495,7 +567,7 @@ export const ExportDialog = ({
       }
     } else {
       // Fallback to browser download
-      const blob = new Blob([content], { type: "application/xml" });
+      const blob = typeof content === "string" ? new Blob([content], { type: mimeType }) : content;
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -511,7 +583,7 @@ export const ExportDialog = ({
       .map(([format]) => format);
 
     if (selectedFormats.length === 0) {
-      toast.error("Please select at least one format to export");
+      toast.error("Please select at least one file type to export");
       return;
     }
 
@@ -648,6 +720,26 @@ export const ExportDialog = ({
           }
         }
         exportedFiles.push(`meshes/ (${getReferencedMeshes.length} files)`);
+      }
+
+      if (hasCameras) {
+        if (formatSelections.cameraJson) {
+          const filename = `${cameraFilenameBase}.json`;
+          const content = exportCamerasToJSON(cameras);
+          if (method === "download") {
+            await downloadFile(content, filename, selectedFolder || undefined, useSubfolder, subfolderName, "application/json");
+          }
+          exportedFiles.push(filename);
+        }
+
+        if (formatSelections.cameraYaml) {
+          const filename = `${cameraFilenameBase}.yaml`;
+          const content = exportCamerasToYAML(cameras);
+          if (method === "download") {
+            await downloadFile(content, filename, selectedFolder || undefined, useSubfolder, subfolderName, "text/yaml");
+          }
+          exportedFiles.push(filename);
+        }
       }
 
       if (method === "download") {
@@ -813,6 +905,62 @@ export const ExportDialog = ({
               </div>
             </div>
           </BlenderPanel>
+
+          {hasCameras && (
+            <BlenderPanel title="Camera Config" defaultOpen={true}>
+              <BlenderPropertyRow label="File Name">
+                <Input
+                  value={cameraConfigBaseName}
+                  onChange={(e) => setCameraConfigBaseName(e.target.value)}
+                  className="h-6 text-xs px-1.5"
+                  placeholder={defaultCameraBaseName}
+                />
+              </BlenderPropertyRow>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 py-0.5">
+                  <Checkbox
+                    id="camera-json"
+                    checked={formatSelections.cameraJson}
+                    onCheckedChange={(checked) =>
+                      setFormatSelections((prev) => ({ ...prev, cameraJson: checked as boolean }))
+                    }
+                    className="h-3 w-3 border-border data-[state=checked]:bg-muted data-[state=checked]:border-muted-foreground/50 data-[state=checked]:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                  <label
+                    htmlFor="camera-json"
+                    className={cn(
+                      "text-[10px] cursor-pointer select-none",
+                      !formatSelections.cameraJson && "text-muted-foreground/60"
+                    )}
+                  >
+                    JSON (.json)
+                  </label>
+                </div>
+                <div className="flex items-center gap-1.5 py-0.5">
+                  <Checkbox
+                    id="camera-yaml"
+                    checked={formatSelections.cameraYaml}
+                    onCheckedChange={(checked) =>
+                      setFormatSelections((prev) => ({ ...prev, cameraYaml: checked as boolean }))
+                    }
+                    className="h-3 w-3 border-border data-[state=checked]:bg-muted data-[state=checked]:border-muted-foreground/50 data-[state=checked]:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                  <label
+                    htmlFor="camera-yaml"
+                    className={cn(
+                      "text-[10px] cursor-pointer select-none",
+                      !formatSelections.cameraYaml && "text-muted-foreground/60"
+                    )}
+                  >
+                    YAML (.yaml)
+                  </label>
+                </div>
+              </div>
+              <div className="text-[9px] text-muted-foreground px-1 pt-0.5 italic">
+                Include camera poses you created or edited in this session alongside the robot files.
+              </div>
+            </BlenderPanel>
+          )}
 
           {/* Destination Selection */}
           <BlenderPanel title="Destination" defaultOpen={true}>
