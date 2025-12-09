@@ -45,6 +45,8 @@ import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 import { Badge } from "@/components/ui/badge";
 import { JointMappingDialog, type JointMapping } from "@/components/JointMappingDialog";
 import { getMappingForSource, saveMapping } from "@/utils/jointMappingUtils";
+import { useCameraStore } from "@/store/useCameraStore";
+import { EpisodeCameraPreview } from "@/components/EpisodeCameraPreview";
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
@@ -838,6 +840,18 @@ export const Sidebar = ({
   const storeJointValues = useJointStore((s) => s.jointValues);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const availableJointsStore = useJointStore((s) => s.availableJoints);
+  const cameras = useCameraStore((s) => s.cameras);
+  const [episodePreviewCameraId, setEpisodePreviewCameraId] = useState<string | null>(null);
+
+  // Keep a stable selection for episode playback camera previews
+  useEffect(() => {
+    if (episodePreviewCameraId && cameras.some((c) => c.id === episodePreviewCameraId)) return;
+    if (cameras.length > 0) {
+      setEpisodePreviewCameraId(cameras[0].id);
+    } else {
+      setEpisodePreviewCameraId(null);
+    }
+  }, [cameras, episodePreviewCameraId]);
   const velocityLimitEnabled = useJointStore((s) => s.velocityLimitEnabled);
   const setVelocityLimitEnabled = useJointStore((s) => s.setVelocityLimitEnabled);
   const globalMaxJointVelocity = useJointStore((s) => s.globalMaxJointVelocity);
@@ -4509,13 +4523,40 @@ export const Sidebar = ({
           className="overflow-hidden flex flex-col bg-background"
           style={{
             flex: `0 0 ${((episodesViewHeight ?? 0.4) * 100)}%`,
-            minHeight: '50px'
+            minHeight: '160px'
           }}
         >
-          <div className="flex-1 min-h-0 flex items-center justify-center bg-background">
-            <div className="flex flex-col items-center gap-3 text-center px-6">
-              {/* Placeholder for additional controls or information */}
-              <span className="text-xs text-muted-foreground/70">Additional Panel</span>
+          <div className="flex-1 min-h-0 flex flex-col gap-2 p-2">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-foreground">Episode camera monitor</span>
+                <span className="text-[11px] text-muted-foreground">Fixed frame; image updates during playback.</span>
+              </div>
+              <Select
+                value={episodePreviewCameraId ?? undefined}
+                onValueChange={(value) => setEpisodePreviewCameraId(value)}
+                disabled={cameras.length === 0}
+              >
+                <SelectTrigger className="h-8 w-36 text-xs">
+                  <SelectValue placeholder="Choose camera" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cameras.map((cam) => (
+                    <SelectItem key={cam.id} value={cam.id}>
+                      {cam.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 min-h-[160px]">
+              <EpisodeCameraPreview
+                urdfContent={vizUrdf || originalUrdf || null}
+                meshFiles={meshFiles}
+                cameraId={episodePreviewCameraId}
+                gpuMode="low"
+              />
             </div>
           </div>
         </div>
@@ -4573,5 +4614,3 @@ export const Sidebar = ({
     </div>
   );
 };
-
-
