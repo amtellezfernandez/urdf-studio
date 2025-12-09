@@ -2350,6 +2350,15 @@ export const Viewer3D = ({
 
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const cameras = useCameraStore((state) => state.cameras);
+  const selectCamera = useCameraStore((state) => state.selectCamera);
+  const [isCameraMenuOpen, setIsCameraMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isCameraMenuOpen) return;
+    const handleClick = () => setIsCameraMenuOpen(false);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [isCameraMenuOpen]);
 
   useEffect(() => {
     if (!selectedCameraId) return;
@@ -2671,18 +2680,42 @@ export const Viewer3D = ({
         {/* Camera POV button (mirror gizmo camera circle) */}
         {robot && cameras.length > 0 && (
           <div className="absolute top-4 right-4 z-20">
-            <button
-              type="button"
-              className="px-3 py-1 text-xs rounded border border-border/60 bg-background/90 text-foreground shadow-sm hover:bg-muted transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                const cameraId = selectedCameraId ?? cameras[0]?.id;
-                if (!cameraId) return;
-                handleCameraViewChange(cameraId);
-              }}
-            >
-              Camera POV
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                className="px-3 py-1 text-xs rounded border border-border/60 bg-background/90 text-foreground shadow-sm hover:bg-muted transition-colors flex items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsCameraMenuOpen((prev) => !prev);
+                }}
+              >
+                {cameras.find((c) => c.id === selectedCameraId)?.name ?? cameras[0].name}
+                <span className="text-[10px] text-muted-foreground">▼</span>
+              </button>
+              {isCameraMenuOpen && (
+                <div
+                  className="absolute right-0 mt-1 w-44 bg-background/95 border border-border/70 rounded shadow-md text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {cameras.map((camera) => (
+                    <button
+                      key={camera.id}
+                      className={cn(
+                        "w-full text-left px-3 py-1 hover:bg-muted transition-colors",
+                        selectedCameraId === camera.id && "bg-muted/70 font-medium"
+                      )}
+                      onClick={() => {
+                        setIsCameraMenuOpen(false);
+                        selectCamera(camera.id);
+                        handleCameraViewChange(camera.id);
+                      }}
+                    >
+                      {camera.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
