@@ -13,7 +13,6 @@ import { MappingListPanel } from "@/components/MappingListPanel";
 import { ObjectCreator } from "@/components/ObjectCreator";
 import { CameraCreator } from "@/components/CameraCreator";
 import { CameraConfigUpload } from "@/components/CameraConfigUpload";
-import { CameraPreview } from "@/components/CameraPreview";
 import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
@@ -2066,10 +2065,8 @@ const Index = () => {
           <div className="w-full max-w-5xl rounded-xl border border-border bg-[#101010]/95 p-4 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-border/50">
               <div>
-                <div className="text-sm font-semibold text-foreground">POV Cameras Split View</div>
-                <p className="text-[11px] text-muted-foreground">
-                  All registered cameras render their POV simultaneously (up to 6).
-                </p>
+                <div className="text-sm font-semibold text-foreground">POV Cameras</div>
+                <p className="text-[11px] text-muted-foreground">Camera definitions (preview removed).</p>
               </div>
               <button
                 onClick={() => setShowPovCameras(false)}
@@ -2080,7 +2077,7 @@ const Index = () => {
               </button>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {cameras.slice(0, 6).map((camera, index) => (
+              {cameras.map((camera, index) => (
                 <div
                   key={camera.id}
                   className={cn(
@@ -2095,25 +2092,15 @@ const Index = () => {
                     <span className="text-[9px] text-muted-foreground/70">{camera.parent_link}</span>
                   </div>
                   <div className="text-sm font-semibold text-foreground truncate">{camera.name}</div>
-                  <div className="h-48 w-full overflow-hidden rounded-md border border-border/40 bg-[#050505]">
-                    <CameraPreview
-                      urdfFile={urdfFile}
-                      meshFiles={meshFiles}
-                      camera={camera}
-                      gpuMode={gpuMode}
-                    />
-                  </div>
-                  <div className="text-[10px] text-muted-foreground/80">
-                    Live preview rendered from the POV camera title and synced with the main model.
+                  <div className="w-full rounded-md border border-border/40 bg-[#0b0b0b] p-3 text-[11px] text-muted-foreground">
+                    <div>Parent link: <span className="text-foreground">{camera.parent_link}</span></div>
+                    <div>Pose xyz: {camera.pose.xyz.join(", ")}</div>
+                    <div>Pose rpy: {camera.pose.rpy.join(", ")}</div>
+                    <div>Intrinsics: {camera.intrinsics.width}×{camera.intrinsics.height}, FOV {camera.intrinsics.fov_deg}°</div>
                   </div>
                 </div>
               ))}
             </div>
-            {cameras.length > 6 && (
-              <p className="mt-2 text-[10px] text-muted-foreground/60">
-                Only the first 6 cameras are displayed in split view.
-              </p>
-            )}
           </div>
         </div>
       )}
