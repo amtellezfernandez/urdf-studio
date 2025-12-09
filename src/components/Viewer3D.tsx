@@ -2349,6 +2349,7 @@ export const Viewer3D = ({
   }, [robot]);
 
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
+  const cameras = useCameraStore((state) => state.cameras);
 
   useEffect(() => {
     if (!selectedCameraId) return;
@@ -2666,6 +2667,24 @@ export const Viewer3D = ({
             zoomSpeed={1.0}
           />
         </Canvas>
+
+        {/* Camera POV button (mirror gizmo camera circle) */}
+        {robot && cameras.length > 0 && (
+          <div className="absolute top-4 right-4 z-20">
+            <button
+              type="button"
+              className="px-3 py-1 text-xs rounded border border-border/60 bg-background/90 text-foreground shadow-sm hover:bg-muted transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                const cameraId = selectedCameraId ?? cameras[0]?.id;
+                if (!cameraId) return;
+                handleCameraViewChange(cameraId);
+              }}
+            >
+              Camera POV
+            </button>
+          </div>
+        )}
 
         {!urdfFile && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
