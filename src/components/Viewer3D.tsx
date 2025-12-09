@@ -14,7 +14,6 @@ import jointColors from "@/joint_colors.json";
 import { AxisGizmo3D } from "@/components/AxisGizmo3D";
 import { CustomAxesHelper } from "@/components/CustomAxesHelper";
 import { CameraIcons } from "@/components/CameraIcons";
-import { CameraViewButtons } from "@/components/CameraViewButtons";
 import { useCameraStore } from "@/store/useCameraStore";
 import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import { parseEpisodeJson } from "@/utils/episodeFormat";
@@ -2654,14 +2653,6 @@ export const Viewer3D = ({
           
           {/* Camera icons visualization */}
           {robot && <CameraIcons robot={robot} gpuMode={gpuMode} />}
-          
-          {/* Camera view buttons */}
-          {robot && (
-            <CameraViewButtons
-              robot={robot}
-              onCameraViewChange={handleCameraViewChange}
-            />
-          )}
           
           <OrbitControls
             ref={controlsRef}
