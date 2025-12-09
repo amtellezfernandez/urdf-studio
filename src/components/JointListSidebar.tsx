@@ -39,6 +39,7 @@ interface HierarchyTreeViewProps {
   onLinkSelect?: (linkName: string | null) => void;
   selectedLink?: string | null;
   availableJoints: string[];
+  colorJointNames: string[];
   visibleJoints: Set<string>;
   onVisibilityToggle: (jointName: string) => void;
 }
@@ -56,6 +57,7 @@ const HierarchyTreeView = ({
   onLinkSelect,
   selectedLink,
   availableJoints,
+  colorJointNames,
   visibleJoints,
   onVisibilityToggle,
 }: HierarchyTreeViewProps) => {
@@ -194,6 +196,7 @@ const HierarchyTreeView = ({
                     }}
                     onHover={undefined} // Disable hover activation in hierarchy view
                     availableJoints={availableJoints}
+                    colorJointNames={colorJointNames}
                     isVisible={visibleJoints.has(joint.jointName)}
                     onVisibilityToggle={onVisibilityToggle}
                     hideColorSquare={true}
@@ -755,10 +758,12 @@ interface JointListSidebarProps {
   collisionVisibility?: CollisionVisibility;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
   robot?: any;
+  episodeJointNames?: string[];
 }
 
 export const JointListSidebar = ({
   availableJoints,
+  episodeJointNames = [],
   availableLinks = [],
   jointLimits,
   selectedJoint,
@@ -829,6 +834,13 @@ export const JointListSidebar = ({
       window.removeEventListener('episodeViewer:jointVisibilityChange' as any, handleVisibilityChange);
     };
   }, []);
+
+  const colorJointNames = useMemo(() => {
+    if (episodeJointNames && episodeJointNames.length > 0) {
+      return episodeJointNames;
+    }
+    return availableJoints;
+  }, [episodeJointNames, availableJoints]);
 
   const handleVisibilityToggle = (jointName: string) => {
     const isVisible = visibleJoints.has(jointName);
@@ -1171,6 +1183,7 @@ export const JointListSidebar = ({
                       }}
                       onHover={onJointHover}
                       availableJoints={availableJoints}
+                      colorJointNames={colorJointNames}
                       isVisible={visibleJoints.has(jointName)}
                       onVisibilityToggle={handleVisibilityToggle}
                     />
@@ -1222,6 +1235,7 @@ export const JointListSidebar = ({
                   }}
                   selectedLink={selectedLink}
                   availableJoints={availableJoints}
+                  colorJointNames={colorJointNames}
                   visibleJoints={visibleJoints}
                   onVisibilityToggle={handleVisibilityToggle}
                 />

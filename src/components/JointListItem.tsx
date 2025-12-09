@@ -71,6 +71,7 @@ interface JointListItemProps {
   onClick?: () => void;
   isSelected?: boolean;
   availableJoints?: string[];
+  colorJointNames?: string[];
   isVisible?: boolean;
   onVisibilityToggle?: (jointName: string) => void;
   hideColorSquare?: boolean;
@@ -88,6 +89,7 @@ export const JointListItem = ({
   onClick,
   isSelected = false,
   availableJoints = [],
+  colorJointNames,
   isVisible = true,
   onVisibilityToggle,
   hideColorSquare = false,
@@ -327,9 +329,11 @@ export const JointListItem = ({
     ? (jointColors as Record<string, string>)[jointInfo.type] || jointColors.light_gray
     : jointColors.light_gray;
 
+  const colorReferenceJoints = colorJointNames?.length ? colorJointNames : availableJoints;
+
   // Get joint color from 3D editor color scheme (based on sorted joint names)
-  const jointEditorColor = availableJoints.length > 0
-    ? getJointColor(jointName, availableJoints)
+  const jointEditorColor = colorReferenceJoints.length > 0
+    ? getJointColor(jointName, colorReferenceJoints)
     : jointTypeColor;
 
   // Determine square color - grey if hidden, otherwise use editor color

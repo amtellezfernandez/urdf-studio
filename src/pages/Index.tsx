@@ -178,6 +178,27 @@ const Index = () => {
     isRerunViewerOpen: boolean;
   } | null>(null);
 
+  const episodeJointNames = useMemo(() => {
+    if (!viewerEpisode) return [];
+
+    const metadata = viewerEpisode.metadata as { joint_names?: unknown } | undefined;
+    const metadataNames = Array.isArray(metadata?.joint_names)
+      ? (metadata.joint_names as unknown[])
+          .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+      : [];
+
+    const frameNames =
+      viewerEpisode.frames.length > 0
+        ? Object.keys(viewerEpisode.frames[0].jointPositions)
+        : [];
+
+    const combined = (metadataNames.length > 0 ? metadataNames : frameNames).filter(
+      (name): name is string => typeof name === "string" && name.length > 0
+    );
+
+    return Array.from(new Set(combined)).sort();
+  }, [viewerEpisode]);
+
   const handleEpisodeSaveHandlerChange = useCallback(
     (handler?: EpisodeSaveHandler) => {
       setEpisodeSaveHandler(() => handler);
@@ -1942,6 +1963,7 @@ const Index = () => {
           {/* Right Sidebar - Joint List */}
           <JointListSidebar
             availableJoints={availableJoints}
+            episodeJointNames={episodeJointNames}
             availableLinks={availableLinks}
             jointLimits={jointLimits}
             selectedJoint={selectedJoint}
