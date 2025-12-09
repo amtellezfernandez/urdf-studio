@@ -5,6 +5,7 @@ import URDFLoader from "urdf-loader";
 import { STLLoader } from "three-stdlib";
 import { useCameraStore } from "@/store/useCameraStore";
 import { useJointStore } from "@/store/useJointStore";
+import { useObjectStore, type CreatedObject } from "@/store/useObjectStore";
 import type { GPUMode } from "@/hooks/use-gpu-mode";
 
 type MeshFiles = Record<string, Blob>;
@@ -14,6 +15,47 @@ const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
   Math.PI / 2
 );
 
+const PreviewObjects = ({
+  objects,
+  gpuMode = "high",
+}: {
+  objects: CreatedObject[];
+  gpuMode?: GPUMode;
+}) => {
+  return (
+    <group>
+      {objects.map((obj) => (
+        <group
+          key={obj.id}
+          position={[obj.position.x, obj.position.y, obj.position.z]}
+        >
+          <mesh>
+            <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
+            {gpuMode === "low" ? (
+              <meshBasicMaterial color={obj.color} opacity={0.65} transparent />
+            ) : (
+              <meshStandardMaterial
+                color={obj.color}
+                opacity={0.65}
+                transparent
+                metalness={0.15}
+                roughness={0.6}
+                emissive={obj.color}
+                emissiveIntensity={0.05}
+              />
+            )}
+          </mesh>
+
+          <lineSegments>
+            <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
+            <lineBasicMaterial color="#bfbfbf" linewidth={1} />
+          </lineSegments>
+        </group>
+      ))}
+    </group>
+  );
+};
+
 const JointValueSync = ({ robot }: { robot: any | null }) => {
   useFrame(() => {
     if (!robot?.setJointValue) return;
@@ -21,6 +63,8 @@ const JointValueSync = ({ robot }: { robot: any | null }) => {
     for (const [jointName, value] of Object.entries(values)) {
       robot.setJointValue(jointName, value);
     }
+    // Keep world matrices up to date so dependent helpers (e.g., camera pose) see movement
+    robot.updateMatrixWorld?.(true);
   });
   return null;
 };
@@ -40,6 +84,7 @@ const CameraPoseController = ({
     [cameras, cameraId]
   );
   const previewCamera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
+  const invalidate = useThree((state) => state.invalidate);
 
   // Sync projection with intrinsics and scene size
   useEffect(() => {
@@ -58,24 +103,34 @@ const CameraPoseController = ({
   useFrame(() => {
     if (!cameraConfig) return;
 
+    // Ensure robot world transforms are fresh before sampling link pose
+    if (robot?.updateMatrixWorld) {
+      robot.updateMatrixWorld(true);
+    }
+
+    const resolveParentLink = () => {
+      if (!robot) return null;
+      const direct = robot.links?.[cameraConfig.parent_link];
+      if (direct) return direct;
+
+      const byName =
+        robot.getObjectByName?.(cameraConfig.parent_link) ??
+        robot.getObjectByName?.(decodeURIComponent(cameraConfig.parent_link));
+      return byName ?? null;
+    };
+
     const applyPose = (position: THREE.Vector3, baseQuat: THREE.Quaternion) => {
       const finalQuat = baseQuat.clone().multiply(rotationCorrection);
       previewCamera.position.copy(position);
       previewCamera.quaternion.copy(finalQuat);
       const lookDir = new THREE.Vector3(0, 0, -1).applyQuaternion(finalQuat);
       previewCamera.lookAt(position.clone().add(lookDir));
+      previewCamera.updateMatrixWorld();
+      invalidate();
     };
 
-    if (!robot) {
-      const fallbackQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(...cameraConfig.pose.rpy, "ZYX")
-      );
-      applyPose(new THREE.Vector3(...cameraConfig.pose.xyz), fallbackQuat);
-      return;
-    }
-
-    const parentLink = robot.links?.[cameraConfig.parent_link];
-    if (!parentLink) {
+    const parentLink = resolveParentLink();
+    if (!robot || !parentLink) {
       const fallbackQuat = new THREE.Quaternion().setFromEuler(
         new THREE.Euler(...cameraConfig.pose.rpy, "ZYX")
       );
@@ -118,6 +173,7 @@ export const EpisodeCameraPreview = ({
   gpuMode = "high",
 }: EpisodeCameraPreviewProps) => {
   const cameras = useCameraStore((s) => s.cameras);
+  const objects = useObjectStore((s) => s.objects);
   const cameraConfig = useMemo(
     () => cameras.find((c) => c.id === cameraId) ?? cameras[0],
     [cameras, cameraId]
@@ -219,11 +275,6 @@ export const EpisodeCameraPreview = ({
       const scale = maxDim > 0 && isFinite(maxDim) ? Math.min(2 / maxDim, 2) : 1;
       robot.scale.setScalar(scale);
 
-      const scaledBox = new THREE.Box3().setFromObject(robot);
-      const sphere = new THREE.Sphere();
-      scaledBox.getBoundingSphere(sphere);
-      setSceneRadius(isFinite(sphere.radius) ? sphere.radius : null);
-
       setRobot(robot);
     } catch (error) {
       setRobot(null);
@@ -241,6 +292,40 @@ export const EpisodeCameraPreview = ({
     groupRef.current.clear();
     if (robot) groupRef.current.add(robot);
   }, [robot]);
+
+  useEffect(() => {
+    const combinedBox = new THREE.Box3().makeEmpty();
+
+    if (robot) {
+      const robotBox = new THREE.Box3().setFromObject(robot);
+      if (!robotBox.isEmpty()) {
+        combinedBox.copy(robotBox);
+      }
+    }
+
+    objects.forEach((obj) => {
+      const halfSize = obj.size.clone().multiplyScalar(0.5);
+      const objBox = new THREE.Box3(
+        obj.position.clone().sub(halfSize),
+        obj.position.clone().add(halfSize)
+      );
+
+      if (combinedBox.isEmpty()) {
+        combinedBox.copy(objBox);
+      } else {
+        combinedBox.union(objBox);
+      }
+    });
+
+    if (combinedBox.isEmpty()) {
+      setSceneRadius(null);
+      return;
+    }
+
+    const sphere = new THREE.Sphere();
+    combinedBox.getBoundingSphere(sphere);
+    setSceneRadius(Number.isFinite(sphere.radius) ? sphere.radius : null);
+  }, [robot, objects]);
 
   if (!cameraConfig) {
     return (
@@ -294,6 +379,7 @@ export const EpisodeCameraPreview = ({
         <directionalLight position={[5, 5, 5]} intensity={0.8} />
         <directionalLight position={[-5, 5, -5]} intensity={0.4} />
         <group ref={groupRef} />
+        <PreviewObjects objects={objects} gpuMode={gpuMode} />
         <JointValueSync robot={robot} />
         <CameraPoseController robot={robot} cameraId={cameraConfig.id} sceneRadius={sceneRadius} />
       </Canvas>
