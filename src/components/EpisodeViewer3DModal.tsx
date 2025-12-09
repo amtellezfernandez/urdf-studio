@@ -1686,6 +1686,63 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
+          {/* Joint Switcher (edit mode) */}
+          {isEditMode && jointNames.length > 0 && (
+            <DropdownMenu>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 flex items-center gap-1 text-xs"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: editingJoint ? jointColorMap.get(editingJoint) || JOINT_COLORS[0] : "#71717a" }}
+                      />
+                      <span className="truncate max-w-[90px]">
+                        {editingJoint || "Select joint"}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Change joint</p>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent
+                className="w-40 max-h-[220px] overflow-y-auto bg-[#282828] border-[#3d3d3d] p-0.5"
+                align="end"
+              >
+                {jointNames.map((jointName) => {
+                  const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
+                  const isCurrent = jointName === editingJoint;
+                  return (
+                    <DropdownMenuItem
+                      key={jointName}
+                      onClick={() => handleJointSelect(jointName)}
+                      className={cn(
+                        "text-[10px] font-mono cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                        "flex items-center gap-1 px-1.5 py-0.5",
+                        isCurrent && "bg-[#3d3d3d]/60 text-white"
+                      )}
+                    >
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="flex-1 truncate">{jointName}</span>
+                      {isCurrent && (
+                        <span className="text-[8px] uppercase text-orange-400">editing</span>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {/* Edit Mode Toggle */}
           {isEditMode ? (
             <Tooltip delayDuration={0}>

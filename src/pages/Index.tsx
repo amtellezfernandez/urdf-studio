@@ -71,6 +71,16 @@ interface DebugMeshInfo {
   registeredPaths: string[];
 }
 
+type ViewerEpisode = {
+  id: string;
+  number: number;
+  frames: Array<{ timestamp: number; jointPositions: Record<string, number> }>;
+  createdAt: number;
+  metadata?: unknown;
+};
+
+type EpisodeSaveHandler = (episode: ViewerEpisode, saveAsNew: boolean, newName?: string) => void;
+
 // Constants
 const DEFAULT_URDF_FILENAME = "robot.urdf";
 const AXIS_NAMES: Record<RotationAxis, string> = {
@@ -125,10 +135,10 @@ const Index = () => {
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [viewerSplitView, setViewerSplitView] = useState(false);
-  const [viewerEpisode, setViewerEpisode] = useState<{ id: string; number: number; frames: Array<{ timestamp: number; jointPositions: Record<string, number> }>; createdAt: number; metadata?: unknown } | null>(null);
+  const [viewerEpisode, setViewerEpisode] = useState<ViewerEpisode | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
-  const [episodeSaveHandler, setEpisodeSaveHandler] = useState<((episode: unknown, saveAsNew: boolean, newName?: string) => void) | undefined>(undefined);
+  const [episodeSaveHandler, setEpisodeSaveHandler] = useState<EpisodeSaveHandler | undefined>(undefined);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
@@ -167,6 +177,13 @@ const Index = () => {
     hasEpisodes: boolean;
     isRerunViewerOpen: boolean;
   } | null>(null);
+
+  const handleEpisodeSaveHandlerChange = useCallback(
+    (handler?: EpisodeSaveHandler) => {
+      setEpisodeSaveHandler(() => handler);
+    },
+    []
+  );
 
   const createUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
     const vizFilename = createVizFilename(filename);
@@ -1691,6 +1708,7 @@ const Index = () => {
               setViewerEpisode(episode);
             }}
             onViewerOpenChange={setIsViewerOpen}
+            onEpisodeSaveHandlerChange={handleEpisodeSaveHandlerChange}
             episodesViewHeight={recordingViewHeight}
             onEpisodesResizeStart={handleEpisodesResizeStart}
             onDatasetActionsReady={handleDatasetActionsReady}

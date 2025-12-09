@@ -93,6 +93,9 @@ interface SidebarProps {
   onViewerSplitViewChange?: (splitView: boolean) => void;
   onViewerEpisodeChange?: (episode: Episode | null) => void;
   onViewerOpenChange?: (open: boolean) => void;
+  onEpisodeSaveHandlerChange?: (
+    handler: ((episode: Episode, saveAsNew: boolean, newName?: string) => void) | undefined
+  ) => void;
   onDatasetActionsReady?: (actions: {
     loadFromLocal: () => void;
     loadFromHuggingFace: () => void;
@@ -826,6 +829,7 @@ export const Sidebar = ({
   onViewerSplitViewChange,
   onViewerEpisodeChange,
   onViewerOpenChange,
+  onEpisodeSaveHandlerChange,
   onDatasetActionsReady,
   episodesViewHeight = 0.4,
   onEpisodesResizeStart,
@@ -1038,6 +1042,154 @@ export const Sidebar = ({
   const [isRerunViewerModalOpen, setIsRerunViewerModalOpen] = useState(false);
   // Track dataset sources for future mixing
   const [datasetSources, setDatasetSources] = useState<Array<{ type: 'hf' | 'local' | 'github' | 'recorded'; name: string; timestamp: number }>>([]);
+
+  const cloneEpisodeFrames = (frames: RecordedFrame[]) =>
+    frames.map((frame) => ({
+      timestamp: frame.timestamp,
+      jointPositions: { ...frame.jointPositions },
+    }));
+
+  const resolveJointNames = (metadata: EpisodeMetadata | undefined, frames: RecordedFrame[]) => {
+    if (Array.isArray(metadata?.joint_names) && metadata.joint_names.length > 0) {
+      return metadata.joint_names as string[];
+    }
+    return Array.from(new Set(frames.flatMap((frame) => Object.keys(frame.jointPositions))));
+  };
+
+  const handleEpisodeSave = useCallback(
+    (episodeToSave: Episode, saveAsNew: boolean, newName?: string) => {
+      if (!episodeToSave || episodeToSave.frames.length === 0) {
+        toast.error("Episode has no frames to save");
+        return;
+      }
+
+      const trimmedName = newName?.trim();
+      let savedEpisode: Episode | null = null;
+      let errorMessage: string | null = null;
+
+      setEpisodes((prevEpisodes) => {
+        if (saveAsNew) {
+          const newEpisodeNumber = prevEpisodes.length + 1;
+          const now = Date.now();
+          const newEpisode: Episode = {
+            id: `episode-${now}-${Math.random().toString(36).slice(2, 10)}`,
+            number: newEpisodeNumber,
+            frames: cloneEpisodeFrames(episodeToSave.frames),
+            createdAt: now,
+            metadata: {
+              ...episodeToSave.metadata,
+              episodeNumber: newEpisodeNumber,
+              episode_index: newEpisodeNumber - 1,
+              joint_names: resolveJointNames(episodeToSave.metadata, episodeToSave.frames),
+              num_frames: episodeToSave.frames.length,
+              createdAt: now,
+              additional: {
+                ...episodeToSave.metadata?.additional,
+                sourceType: episodeToSave.metadata?.additional?.sourceType ?? "edited",
+                sourceName:
+                  trimmedName ||
+                  episodeToSave.metadata?.additional?.sourceName ||
+                  `Episode ${newEpisodeNumber} (edited)`,
+                parentEpisodeId: episodeToSave.id,
+                isEdited: true,
+                lastEditedAt: now,
+              },
+            },
+          };
+
+          const appended = [...prevEpisodes, newEpisode];
+          const normalized = renumberEpisodes(appended);
+          savedEpisode = normalized.find((ep) => ep.id === newEpisode.id) ?? newEpisode;
+          return normalized;
+        }
+
+        const targetIndex = prevEpisodes.findIndex((ep) => ep.id === episodeToSave.id);
+        if (targetIndex === -1) {
+          errorMessage = "Episode no longer exists";
+          return prevEpisodes;
+        }
+
+        const nextEpisodes = [...prevEpisodes];
+        const existing = nextEpisodes[targetIndex];
+        const now = Date.now();
+        const mergedMetadata: EpisodeMetadata | undefined =
+          existing.metadata || episodeToSave.metadata
+            ? {
+                ...existing.metadata,
+                ...episodeToSave.metadata,
+                episodeNumber: existing.number,
+                episode_index: existing.number - 1,
+                joint_names: resolveJointNames(
+                  episodeToSave.metadata ?? existing.metadata,
+                  episodeToSave.frames
+                ),
+                num_frames: episodeToSave.frames.length,
+                createdAt: existing.metadata?.createdAt ?? existing.createdAt,
+                additional: {
+                  ...existing.metadata?.additional,
+                  ...episodeToSave.metadata?.additional,
+                  sourceType:
+                    existing.metadata?.additional?.sourceType ??
+                    episodeToSave.metadata?.additional?.sourceType ??
+                    "edited",
+                  sourceName:
+                    trimmedName ||
+                    existing.metadata?.additional?.sourceName ||
+                    `Episode ${existing.number} (edited)`,
+                  parentEpisodeId:
+                    existing.metadata?.additional?.parentEpisodeId ?? episodeToSave.id,
+                  isEdited: true,
+                  lastEditedAt: now,
+                },
+              }
+            : undefined;
+
+        const updatedEpisode: Episode = {
+          ...existing,
+          frames: cloneEpisodeFrames(episodeToSave.frames),
+          metadata: mergedMetadata,
+        };
+
+        nextEpisodes[targetIndex] = updatedEpisode;
+        savedEpisode = updatedEpisode;
+        return nextEpisodes;
+      });
+
+      if (errorMessage) {
+        toast.error(errorMessage);
+        return;
+      }
+
+      if (savedEpisode) {
+        onViewerSplitViewChange?.(true);
+        onViewerOpenChange?.(true);
+        onViewerEpisodeChange?.(savedEpisode);
+
+        if (saveAsNew) {
+          setCurrentPlayingEpisodeIndex(savedEpisode.number - 1);
+        }
+
+        toast.success(
+          saveAsNew
+            ? `Saved ${trimmedName || `Episode ${savedEpisode.number}`}`
+            : `Episode ${savedEpisode.number} updated`
+        );
+      }
+    },
+    [
+      onViewerEpisodeChange,
+      onViewerOpenChange,
+      onViewerSplitViewChange,
+      setEpisodes,
+      setCurrentPlayingEpisodeIndex,
+    ]
+  );
+
+  useEffect(() => {
+    if (!onEpisodeSaveHandlerChange) return;
+    onEpisodeSaveHandlerChange(handleEpisodeSave);
+    return () => onEpisodeSaveHandlerChange(undefined);
+  }, [handleEpisodeSave, onEpisodeSaveHandlerChange]);
   
   // Mapping dialog state for Hugging Face loading
   const [showHfMappingDialog, setShowHfMappingDialog] = useState(false);
