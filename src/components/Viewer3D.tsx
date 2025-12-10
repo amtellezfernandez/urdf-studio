@@ -924,6 +924,7 @@ const CreatedObjects = ({
   isPlaying,
   onRobotLoaded,
   selectedJoint,
+  selectedLink,
   onSelectPart,
   onJointChange,
   onDragActiveChange,
@@ -941,6 +942,7 @@ const CreatedObjects = ({
   isPlaying: boolean;
   onRobotLoaded: (robot: any) => void;
   selectedJoint?: string | null;
+  selectedLink?: string | null;
   onSelectPart?: (payload: {
     linkName?: string;
     jointName?: string | null;
@@ -1530,10 +1532,13 @@ const CreatedObjects = ({
     if (selectedJoint) {
       const ln = getLinkNameForJoint(selectedJoint);
       if (ln) highlightLink(ln, selectedJoint);
+    } else if (selectedLink) {
+      // Highlight the selected link directly
+      highlightLink(selectedLink);
     } else {
       clearHighlights();
     }
-  }, [selectedJoint, jointLimits]);
+  }, [selectedJoint, selectedLink, jointLimits]);
 
   // Document-level pointer event handlers for dragging
   useEffect(() => {
@@ -3119,6 +3124,7 @@ export const Viewer3D = ({
                 isPlaying={isPlaying}
                 onRobotLoaded={setRobot}
                 selectedJoint={selectedJoint}
+                selectedLink={selectedLink}
                 jointLimits={jointLimits}
                 jointAxes={jointAxes}
                 gpuMode={gpuMode}
