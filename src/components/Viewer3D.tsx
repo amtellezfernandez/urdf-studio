@@ -243,8 +243,7 @@ const CollisionGeometries = ({
           } else if (meshEl) {
             // For mesh collision geometries, load the mesh file
             const filename = meshEl.getAttribute("filename");
-            const scaleStr = meshEl.getAttribute("scale");
-            const scale = scaleStr?.split(" ").map(parseFloat) || [1, 1, 1];
+            // No scaling - use mesh geometry as-is
 
             if (filename) {
               // Try to find the mesh file
@@ -258,7 +257,7 @@ const CollisionGeometries = ({
                 stlLoader.load(
                   blobUrl,
                   (geometry) => {
-                    geometry.scale(scale[0], scale[1], scale[2]);
+                    // No geometry scaling applied
                     const loadedMesh = new THREE.Mesh(geometry, collisionMaterial.clone());
                     loadedMesh.renderOrder = 999;
                     applyLinkTransform(loadedMesh, linkName, xyz, rpy);
@@ -893,12 +892,7 @@ const CreatedObjects = ({
         if (robotAny.updateMatrixWorld) {
           robotAny.updateMatrixWorld(true);
         }
-  
-        const rootScale =
-          robotAny?.scale && typeof robotAny.scale.x === "number"
-            ? robotAny.scale.x
-            : 1;
-  
+
         const threeLinks = robotAny.links || {};
         const linkNames = Object.keys(threeLinks);
   
@@ -939,10 +933,10 @@ const CreatedObjects = ({
             continue;
           }
   
-          // Account for global scaling applied to the URDF model.
-          const pxScene = px * rootScale;
-          const pyScene = py * rootScale;
-          const pzScene = pz * rootScale;
+          // PyRoki coordinates are directly in Three.js scene coordinates (meters)
+          const pxScene = px;
+          const pyScene = py;
+          const pzScene = pz;
   
           const dx = pos.x - pxScene;
           const dy = pos.y - pyScene;
@@ -1119,47 +1113,85 @@ const CreatedObjects = ({
                   </div>
                 )}
                 {summary.perLink.slice(0, 10).map((item) => (
-                  <div key={item.linkName} className="mb-2">
+                  <div key={item.linkName} className="mb-3 border border-border rounded p-2">
                     <div
-                      className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-1 rounded"
+                      className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-1 rounded mb-2"
                       onClick={() => setExpandedLink(expandedLink === item.linkName ? null : item.linkName)}
                     >
                       <span className="font-mono mr-2 truncate flex items-center gap-1">
                         <span className="text-muted-foreground">{expandedLink === item.linkName ? '▼' : '▶'}</span>
-                        {item.linkName}
+                        <span className="font-semibold">{item.linkName}</span>
                       </span>
-                      <span className="text-right whitespace-nowrap">
-                        {(item.positionError * 1000).toFixed(2)} mm ·{" "}
+                      <span className="text-right whitespace-nowrap text-xs">
+                        Δ {(item.positionError * 1000).toFixed(2)} mm ·{" "}
                         {item.rotationErrorDeg.toFixed(2)}°
                       </span>
                     </div>
 
-                    {expandedLink === item.linkName && (
-                      <div className="ml-4 mt-1 p-2 bg-muted/30 rounded text-[10px] space-y-1">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <div className="font-semibold text-emerald-600 mb-1">PyRoki</div>
-                            <div className="font-mono">
-                              Pos: ({item.pyrokiPosition.x.toFixed(4)}, {item.pyrokiPosition.y.toFixed(4)}, {item.pyrokiPosition.z.toFixed(4)})
-                            </div>
-                            <div className="font-mono">
-                              Quat: ({item.pyrokiQuat.w.toFixed(4)}, {item.pyrokiQuat.x.toFixed(4)}, {item.pyrokiQuat.y.toFixed(4)}, {item.pyrokiQuat.z.toFixed(4)})
-                            </div>
+                    {/* Always show coordinates */}
+                    <div className="ml-4 text-[10px] space-y-1">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="font-semibold text-emerald-600 mb-0.5">PyRoki (m)</div>
+                          <div className="font-mono text-[9px] leading-tight">
+                            x: {item.pyrokiPosition.x.toFixed(4)}
                           </div>
-                          <div>
-                            <div className="font-semibold text-blue-600 mb-1">URDFLoader</div>
-                            <div className="font-mono">
-                              Pos: ({item.urdfPosition.x.toFixed(4)}, {item.urdfPosition.y.toFixed(4)}, {item.urdfPosition.z.toFixed(4)})
-                            </div>
-                            <div className="font-mono">
-                              Quat: ({item.urdfQuat.w.toFixed(4)}, {item.urdfQuat.x.toFixed(4)}, {item.urdfQuat.y.toFixed(4)}, {item.urdfQuat.z.toFixed(4)})
-                            </div>
+                          <div className="font-mono text-[9px] leading-tight">
+                            y: {item.pyrokiPosition.y.toFixed(4)}
+                          </div>
+                          <div className="font-mono text-[9px] leading-tight">
+                            z: {item.pyrokiPosition.z.toFixed(4)}
                           </div>
                         </div>
-                        <div className="pt-1 border-t border-border mt-1">
-                          <div className="font-semibold text-destructive">Δ Error</div>
-                          <div>Position: {(item.positionError * 1000).toFixed(4)} mm</div>
-                          <div>Rotation: {item.rotationErrorDeg.toFixed(4)}°</div>
+                        <div>
+                          <div className="font-semibold text-blue-600 mb-0.5">Three.js (m)</div>
+                          <div className="font-mono text-[9px] leading-tight">
+                            x: {item.urdfPosition.x.toFixed(4)}
+                          </div>
+                          <div className="font-mono text-[9px] leading-tight">
+                            y: {item.urdfPosition.y.toFixed(4)}
+                          </div>
+                          <div className="font-mono text-[9px] leading-tight">
+                            z: {item.urdfPosition.z.toFixed(4)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded view shows quaternions */}
+                    {expandedLink === item.linkName && (
+                      <div className="ml-4 mt-2 p-2 bg-muted/30 rounded text-[10px] space-y-1">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="font-semibold text-emerald-600 mb-1">PyRoki Quat</div>
+                            <div className="font-mono text-[9px]">
+                              w: {item.pyrokiQuat.w.toFixed(4)}
+                            </div>
+                            <div className="font-mono text-[9px]">
+                              x: {item.pyrokiQuat.x.toFixed(4)}
+                            </div>
+                            <div className="font-mono text-[9px]">
+                              y: {item.pyrokiQuat.y.toFixed(4)}
+                            </div>
+                            <div className="font-mono text-[9px]">
+                              z: {item.pyrokiQuat.z.toFixed(4)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-blue-600 mb-1">Three.js Quat</div>
+                            <div className="font-mono text-[9px]">
+                              w: {item.urdfQuat.w.toFixed(4)}
+                            </div>
+                            <div className="font-mono text-[9px]">
+                              x: {item.urdfQuat.x.toFixed(4)}
+                            </div>
+                            <div className="font-mono text-[9px]">
+                              y: {item.urdfQuat.y.toFixed(4)}
+                            </div>
+                            <div className="font-mono text-[9px]">
+                              z: {item.urdfQuat.z.toFixed(4)}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1311,11 +1343,8 @@ const CreatedObjects = ({
           const mesh = new THREE.Mesh(geometry, defaultMaterial);
           mesh.castShadow = !isLowGPU;
           mesh.receiveShadow = !isLowGPU;
-          
-          // Apply slight scale to visual meshes to reduce apparent collisions
-          // Visual meshes often include tolerances/padding that cause overlaps
-          // A 1% scale reduction helps visualize actual clearances
-          mesh.scale.setScalar(0.99);
+
+          // No scaling applied - use URDF geometry as-is
 
           onComplete(mesh);
         },
@@ -1362,26 +1391,17 @@ const CreatedObjects = ({
           }
           groupRef.current.add(robot);
 
-          // Keep URDF Z-up to match imported animation data axes; no rotation
+          // PyRoki coordinate system: 1 Three.js unit = 1 meter
+          // Robot at world origin with no transforms
+          robot.position.set(0, 0, 0);
+          robot.rotation.set(0, 0, 0);
+          // No scaling applied to robot
 
-          // Scale to fit within a reasonable view size, but don't fix position
+          // Calculate bounding box for camera positioning only
           const box = new THREE.Box3().setFromObject(robot);
-          const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-
-          if (maxDim > 0 && isFinite(maxDim)) {
-            const scale = 2 / maxDim;
-            robot.scale.setScalar(scale);
-            // After scaling, recalculate center for camera positioning
-            box.setFromObject(robot);
-            box.getCenter(center);
-          } else {
-            robot.scale.setScalar(1);
-          }
 
           // Store robot center for camera positioning (don't move the robot itself)
-          // The robot will remain at its natural position, allowing free movement
           (robot as any).userData.boundingBoxCenter = center.clone();
           (robot as any).userData.isURDFRobot = true;
 
@@ -2463,11 +2483,10 @@ export const Viewer3D = ({
 
       const jointValues = useJointStore.getState().jointValues;
 
-      // Get robot scale to convert from Three.js scene coordinates to URDF coordinates
-      const robotScale = robotAny?.scale && typeof robotAny.scale.x === "number" ? robotAny.scale.x : 1;
-
-      // Calculate target position based on IK mode (in Three.js scene coordinates)
-      let targetPositionScene: [number, number, number];
+      // Calculate target position based on IK mode
+      // Three.js scene coordinates = PyRoki URDF coordinates (meters)
+      // Robot is at origin with scale=1, so no transformation needed
+      let targetPosition: [number, number, number];
       if (obj.ikTargetType === "orbit") {
         // Calculate position on orbit based on phase
         const radius = obj.orbitRadius ?? 0.3;
@@ -2482,26 +2501,18 @@ export const Viewer3D = ({
         const z = y * Math.sin(inclinationRad);
         const yAdjusted = y * Math.cos(inclinationRad);
 
-        targetPositionScene = [
+        targetPosition = [
           obj.position.x + x,
           obj.position.y + yAdjusted,
           obj.position.z + z
         ];
       } else {
-        // Punctual mode: use cube center position
-        targetPositionScene = [obj.position.x, obj.position.y, obj.position.z];
+        // Punctual mode: use cube center position directly
+        targetPosition = [obj.position.x, obj.position.y, obj.position.z];
       }
 
-      // Convert from Three.js scene coordinates to URDF coordinates by dividing by scale
-      // PyRoki works in the URDF's native coordinate system (unscaled)
-      const targetPosition: [number, number, number] = [
-        targetPositionScene[0] / robotScale,
-        targetPositionScene[1] / robotScale,
-        targetPositionScene[2] / robotScale
-      ];
-
-      const normalizedQuat = effQuat.clone().normalize();
-      const { w, x, y, z } = normalizedQuat;
+      // Use end-effector orientation directly (no transformation needed)
+      const { w, x, y, z } = effQuat;
       const targetRotation = [
         [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
         [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],

@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { Trash2, X } from "lucide-react";
 import {
