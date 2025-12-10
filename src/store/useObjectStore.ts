@@ -9,6 +9,10 @@ export interface CreatedObject {
   color: string;
   trackedJointName: string | null;
   isIkTarget: boolean;
+  ikTargetType?: "punctual" | "orbit";
+  orbitRadius?: number;
+  orbitInclination?: number; // in degrees
+  orbitPhase?: number; // current position on orbit (0-360 degrees)
 }
 
 interface ObjectStore {
@@ -20,6 +24,8 @@ interface ObjectStore {
   updateObjectSize: (id: string, size: THREE.Vector3) => void;
   updateTrackedJoint: (id: string, jointName: string | null) => void;
   updateObjectIkTarget: (id: string, isIkTarget: boolean) => void;
+  updateIkTargetType: (id: string, ikTargetType: "punctual" | "orbit") => void;
+  updateOrbitParams: (id: string, params: { radius?: number; inclination?: number; phase?: number }) => void;
   setSelectedObject: (id: string | null) => void;
   clearObjects: () => void;
 }
@@ -38,6 +44,10 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
       position: object.position.clone(),
       size: object.size.clone(),
       isIkTarget: object.isIkTarget ?? false,
+      ikTargetType: object.ikTargetType ?? "punctual",
+      orbitRadius: object.orbitRadius ?? 0.3,
+      orbitInclination: object.orbitInclination ?? 45,
+      orbitPhase: object.orbitPhase ?? 0,
     };
 
     set((state) => ({
@@ -84,6 +94,28 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
       objects: state.objects.map((obj) =>
         obj.id === id ? { ...obj, isIkTarget } : obj
       ),
+    }));
+  },
+
+  updateIkTargetType: (id, ikTargetType) => {
+    set((state) => ({
+      objects: state.objects.map((obj) =>
+        obj.id === id ? { ...obj, ikTargetType } : obj
+      ),
+    }));
+  },
+
+  updateOrbitParams: (id, params) => {
+    set((state) => ({
+      objects: state.objects.map((obj) => {
+        if (obj.id !== id) return obj;
+        return {
+          ...obj,
+          orbitRadius: params.radius !== undefined ? params.radius : obj.orbitRadius,
+          orbitInclination: params.inclination !== undefined ? params.inclination : obj.orbitInclination,
+          orbitPhase: params.phase !== undefined ? params.phase : obj.orbitPhase,
+        };
+      }),
     }));
   },
 

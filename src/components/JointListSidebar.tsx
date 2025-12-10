@@ -321,6 +321,8 @@ const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }:
   const updateObjectSize = useObjectStore((state) => state.updateObjectSize);
   const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
   const updateObjectIkTarget = useObjectStore((state) => state.updateObjectIkTarget);
+  const updateIkTargetType = useObjectStore((state) => state.updateIkTargetType);
+  const updateOrbitParams = useObjectStore((state) => state.updateOrbitParams);
   const removeObject = useObjectStore((state) => state.removeObject);
 
   const obj = objects.find((o) => o.id === objectId);
@@ -517,6 +519,68 @@ const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }:
               </span>
             </div>
           </BlenderPropertyRow>
+
+          {obj.isIkTarget && (
+            <>
+              <BlenderPropertyRow label="IK Mode">
+                <Select
+                  value={obj.ikTargetType ?? "punctual"}
+                  onValueChange={(value: "punctual" | "orbit") => updateIkTargetType(obj.id, value)}
+                >
+                  <SelectTrigger className="h-6 text-[10px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d]">
+                    <SelectItem value="punctual" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                      Punctual
+                    </SelectItem>
+                    <SelectItem value="orbit" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                      Orbit
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </BlenderPropertyRow>
+
+              {obj.ikTargetType === "orbit" && (
+                <>
+                  <BlenderPropertyRow label="Orbit Radius">
+                    <NumberInput
+                      value={obj.orbitRadius ?? 0.3}
+                      onValueChange={(val) => updateOrbitParams(obj.id, { radius: val })}
+                      step={0.01}
+                      min={0.01}
+                      compact
+                      className="w-20"
+                    />
+                  </BlenderPropertyRow>
+
+                  <BlenderPropertyRow label="Inclination">
+                    <NumberInput
+                      value={obj.orbitInclination ?? 45}
+                      onValueChange={(val) => updateOrbitParams(obj.id, { inclination: val })}
+                      step={5}
+                      min={-90}
+                      max={90}
+                      compact
+                      className="w-20"
+                    />
+                  </BlenderPropertyRow>
+
+                  <BlenderPropertyRow label="Orbit Phase">
+                    <NumberInput
+                      value={obj.orbitPhase ?? 0}
+                      onValueChange={(val) => updateOrbitParams(obj.id, { phase: val % 360 })}
+                      step={15}
+                      min={0}
+                      max={360}
+                      compact
+                      className="w-20"
+                    />
+                  </BlenderPropertyRow>
+                </>
+              )}
+            </>
+          )}
 
           <div className="pt-1 border-t border-[#3d3d3d]">
             <Button

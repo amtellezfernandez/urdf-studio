@@ -439,6 +439,101 @@ const TrackingLine = ({
   );
 };
 
+// Component to render orbit visualization
+const OrbitVisualization = ({
+  centerPosition,
+  radius,
+  inclination,
+  phase,
+  color,
+}: {
+  centerPosition: THREE.Vector3;
+  radius: number;
+  inclination: number;
+  phase: number;
+  color: string;
+}) => {
+  const orbitPoints = useMemo(() => {
+    const points: THREE.Vector3[] = [];
+    const segments = 64;
+    const inclinationRad = (inclination * Math.PI) / 180;
+
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      const z = y * Math.sin(inclinationRad);
+      const yAdjusted = y * Math.cos(inclinationRad);
+
+      points.push(new THREE.Vector3(x, yAdjusted, z));
+    }
+
+    return points;
+  }, [radius, inclination]);
+
+  // Calculate current position on orbit based on phase
+  const orbitTargetPosition = useMemo(() => {
+    const phaseRad = (phase * Math.PI) / 180;
+    const inclinationRad = (inclination * Math.PI) / 180;
+
+    const x = Math.cos(phaseRad) * radius;
+    const y = Math.sin(phaseRad) * radius;
+    const z = y * Math.sin(inclinationRad);
+    const yAdjusted = y * Math.cos(inclinationRad);
+
+    return new THREE.Vector3(
+      centerPosition.x + x,
+      centerPosition.y + yAdjusted,
+      centerPosition.z + z
+    );
+  }, [centerPosition, radius, inclination, phase]);
+
+  return (
+    <group position={[centerPosition.x, centerPosition.y, centerPosition.z]}>
+      {/* Orbit circle */}
+      <line>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={orbitPoints.length}
+            array={new Float32Array(orbitPoints.flatMap((p) => [p.x, p.y, p.z]))}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color={color} opacity={0.6} transparent linewidth={2} />
+      </line>
+
+      {/* Target point on orbit */}
+      <mesh position={[
+        orbitTargetPosition.x - centerPosition.x,
+        orbitTargetPosition.y - centerPosition.y,
+        orbitTargetPosition.z - centerPosition.z
+      ]}>
+        <sphereGeometry args={[0.02, 16, 16]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+
+      {/* Line from center to target point */}
+      <line>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={2}
+            array={new Float32Array([
+              0, 0, 0,
+              orbitTargetPosition.x - centerPosition.x,
+              orbitTargetPosition.y - centerPosition.y,
+              orbitTargetPosition.z - centerPosition.z
+            ])}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color={color} opacity={0.4} transparent linewidth={1} />
+      </line>
+    </group>
+  );
+};
+
 // Component to render created objects and distance lines
 const CreatedObjects = ({
   robot,
@@ -510,6 +605,17 @@ const CreatedObjects = ({
                 trackedJointName={obj.trackedJointName || null}
                 endEffectorLink={endEffectorLink}
                 gpuMode={gpuMode}
+              />
+            )}
+
+            {/* Orbit visualization for orbit IK mode */}
+            {obj.isIkTarget && obj.ikTargetType === "orbit" && (
+              <OrbitVisualization
+                centerPosition={obj.position}
+                radius={obj.orbitRadius ?? 0.3}
+                inclination={obj.orbitInclination ?? 45}
+                phase={obj.orbitPhase ?? 0}
+                color={targetTint}
               />
             )}
           </group>
@@ -2330,7 +2436,33 @@ export const Viewer3D = ({
       }
 
       const jointValues = useJointStore.getState().jointValues;
-      const targetPosition = [obj.position.x, obj.position.y, obj.position.z];
+
+      // Calculate target position based on IK mode
+      let targetPosition: [number, number, number];
+      if (obj.ikTargetType === "orbit") {
+        // Calculate position on orbit based on phase
+        const radius = obj.orbitRadius ?? 0.3;
+        const inclination = obj.orbitInclination ?? 45;
+        const phase = obj.orbitPhase ?? 0;
+
+        const phaseRad = (phase * Math.PI) / 180;
+        const inclinationRad = (inclination * Math.PI) / 180;
+
+        const x = Math.cos(phaseRad) * radius;
+        const y = Math.sin(phaseRad) * radius;
+        const z = y * Math.sin(inclinationRad);
+        const yAdjusted = y * Math.cos(inclinationRad);
+
+        targetPosition = [
+          obj.position.x + x,
+          obj.position.y + yAdjusted,
+          obj.position.z + z
+        ];
+      } else {
+        // Punctual mode: use cube center position
+        targetPosition = [obj.position.x, obj.position.y, obj.position.z];
+      }
+
       const targetWxyz = [effQuat.w, effQuat.x, effQuat.y, effQuat.z];
 
       setIkDialogOpen(true);
