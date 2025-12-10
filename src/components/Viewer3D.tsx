@@ -50,6 +50,7 @@ interface Viewer3DProps {
   rotationPlaneVisible?: boolean;
   onRobotBoundingBoxChange?: (boundingBox: THREE.Box3 | null) => void;
   endEffectorLink?: string | null;
+  onIkApplied?: (values: Record<string, number>) => void;
 }
 
 interface MeshFiles {
@@ -455,10 +456,12 @@ const TrackingLine = ({
 const CreatedObjects = ({
   robot,
   gpuMode = "high",
+  dragMode = "move-joints",
   onIkTargetClick,
 }: {
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
+  dragMode?: "move-joints" | "click-to-place" | "drag-handle";
   onIkTargetClick?: (obj: CreatedObject) => void;
 }) => {
   const objects = useObjectStore((state) => state.objects);
@@ -470,10 +473,13 @@ const CreatedObjects = ({
     e.stopPropagation();
     const targetObj = objects.find((o) => o.id === objectId);
     setSelectedObject(objectId);
+    if (dragMode !== "click-to-place") {
+      return; // IK targeting only allowed in click-to-place mode
+    }
     if (targetObj?.isIkTarget && onIkTargetClick) {
       onIkTargetClick(targetObj);
     }
-  }, [objects, onIkTargetClick, setSelectedObject]);
+  }, [objects, onIkTargetClick, setSelectedObject, dragMode]);
 
   return (
     <group>
@@ -567,11 +573,11 @@ const CreatedObjects = ({
 
     return (
       <div className="fixed top-4 right-4 z-40 w-96 rounded-lg border border-border bg-background/95 shadow-2xl">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-foreground">IK Solution</span>
-            {targetName && (
-              <span className="text-[11px] text-muted-foreground">Target: {targetName}</span>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground">IK Solution</span>
+          {targetName && (
+            <span className="text-[11px] text-muted-foreground">Target: {targetName}</span>
             )}
           </div>
           <button
@@ -2125,6 +2131,7 @@ export const Viewer3D = ({
   rotationPlaneVisible = false,
   onRobotBoundingBoxChange,
   endEffectorLink = null,
+  onIkApplied,
 }: Viewer3DProps) => {
   // Use GPU mode hook for rendering
   const { gpuMode } = useGPUMode();
@@ -2301,6 +2308,10 @@ export const Viewer3D = ({
 
   const solveIkForObject = useCallback(
     async (obj: CreatedObject) => {
+      if (dragMode !== "click-to-place") {
+        return; // Only allow IK trigger in click-to-place mode
+      }
+
       if (!robot || !urdfContent) {
         toast.error("Load a robot and URDF before solving IK.");
         return;
@@ -2371,7 +2382,7 @@ export const Viewer3D = ({
         setIsIkRunning(false);
       }
     },
-    [endEffectorLink, robot, urdfContent]
+    [dragMode, endEffectorLink, robot, urdfContent]
   );
 
   // Global joint store
@@ -3377,6 +3388,7 @@ export const Viewer3D = ({
               <CreatedObjects
                 robot={robot}
                 gpuMode={gpuMode}
+                dragMode={dragMode}
                 onIkTargetClick={solveIkForObject}
               />
             </>
@@ -3426,6 +3438,7 @@ export const Viewer3D = ({
           onApply={() => {
             if (ikResult) {
               setStoreJointValues(ikResult.solution);
+              onIkApplied?.(ikResult.solution);
               toast.success("Applied IK solution");
             }
           }}

@@ -521,6 +521,10 @@ const Index = () => {
     });
   }, [setStoreJointValue]);
 
+  const handleIkApplied = useCallback((values: Record<string, number>) => {
+    setJointValues(values);
+  }, []);
+
 
   const handleVizUrdfChange = useCallback((newContent: string) => {
     updateUrdfFile(newContent);
@@ -1801,6 +1805,7 @@ const Index = () => {
                       onRobotBoundingBoxChange={setRobotBoundingBox}
                       onRobotLoaded={setRobot}
                       endEffectorLink={endEffectorLink}
+                      onIkApplied={handleIkApplied}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1848,6 +1853,7 @@ const Index = () => {
                       onRobotBoundingBoxChange={setRobotBoundingBox}
                       onRobotLoaded={setRobot}
                       endEffectorLink={endEffectorLink}
+                      onIkApplied={handleIkApplied}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1914,6 +1920,7 @@ const Index = () => {
                       onRobotBoundingBoxChange={setRobotBoundingBox}
                       onRobotLoaded={setRobot}
                       endEffectorLink={endEffectorLink}
+                      onIkApplied={handleIkApplied}
                     />
                   </div>
                   {/* Vertical Resizer - always visible */}
