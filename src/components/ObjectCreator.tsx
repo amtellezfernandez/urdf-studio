@@ -24,6 +24,7 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
   const [posX, setPosX] = useState(0);
   const [posY, setPosY] = useState(0);
   const [posZ, setPosZ] = useState(0);
+  const [isIkTarget, setIsIkTarget] = useState(false);
 
   // Suggest a non-colliding position
   const suggestPosition = () => {
@@ -68,6 +69,7 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
       size,
       color: "#3b82f6", // Blue color
       trackedJointName: null,
+      isIkTarget,
     });
 
     onOpenChange(false);
@@ -156,6 +158,16 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
               />
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between py-1 border-t border-[#3d3d3d]">
+          <Label className="text-[10px] text-[#9d9d9d]">Mark as IK target</Label>
+          <input
+            type="checkbox"
+            checked={isIkTarget}
+            onChange={(e) => setIsIkTarget(e.target.checked)}
+            className="h-4 w-4 accent-[#3d3d3d] bg-[#1e1e1e] border-[#3d3d3d]"
+          />
         </div>
 
         <div className="flex justify-end gap-1.5 pt-2">

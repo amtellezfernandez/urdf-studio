@@ -319,6 +319,7 @@ const ObjectEditorPanel = ({ objectId, availableJoints, robot }: ObjectEditorPan
   const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
   const updateObjectSize = useObjectStore((state) => state.updateObjectSize);
   const updateTrackedJoint = useObjectStore((state) => state.updateTrackedJoint);
+  const updateObjectIkTarget = useObjectStore((state) => state.updateObjectIkTarget);
   const removeObject = useObjectStore((state) => state.removeObject);
 
   const obj = objects.find((o) => o.id === objectId);
@@ -464,6 +465,20 @@ const ObjectEditorPanel = ({ objectId, availableJoints, robot }: ObjectEditorPan
               <span className="text-[10px] text-[#d4d4d4] font-mono">{distance.toFixed(4)} m</span>
             </BlenderPropertyRow>
           )}
+
+          <BlenderPropertyRow label="IK Target">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={obj.isIkTarget}
+                onChange={(e) => updateObjectIkTarget(obj.id, e.target.checked)}
+                className="h-3.5 w-3.5 accent-[#3d3d3d] bg-[#1e1e1e] border-[#3d3d3d]"
+              />
+              <span className="text-[10px] text-[#d4d4d4]">
+                Click cube in viewer to solve IK
+              </span>
+            </div>
+          </BlenderPropertyRow>
 
           <div className="pt-1 border-t border-[#3d3d3d]">
             <Button

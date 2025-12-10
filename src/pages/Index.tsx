@@ -1800,6 +1800,7 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                       onRobotBoundingBoxChange={setRobotBoundingBox}
                       onRobotLoaded={setRobot}
+                      endEffectorLink={endEffectorLink}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1846,6 +1847,7 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                       onRobotBoundingBoxChange={setRobotBoundingBox}
                       onRobotLoaded={setRobot}
+                      endEffectorLink={endEffectorLink}
                     />
                   </div>
                   {/* Editor in bottom half */}
@@ -1911,6 +1913,7 @@ const Index = () => {
                       rotationPlaneVisible={rotationPlaneVisible}
                       onRobotBoundingBoxChange={setRobotBoundingBox}
                       onRobotLoaded={setRobot}
+                      endEffectorLink={endEffectorLink}
                     />
                   </div>
                   {/* Vertical Resizer - always visible */}

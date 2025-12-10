@@ -6,7 +6,7 @@ import { STLLoader } from "three-stdlib";
 import URDFLoader from "urdf-loader";
 import { toast } from "sonner";
 import { useJointStore } from "@/store/useJointStore";
-import { useObjectStore } from "@/store/useObjectStore";
+import { useObjectStore, type CreatedObject } from "@/store/useObjectStore";
 import type { Node, Edge } from "reactflow";
 import { getJointLimits, type JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
@@ -49,6 +49,7 @@ interface Viewer3DProps {
   collisionVisibility?: CollisionVisibility;
   rotationPlaneVisible?: boolean;
   onRobotBoundingBoxChange?: (boundingBox: THREE.Box3 | null) => void;
+  endEffectorLink?: string | null;
 }
 
 interface MeshFiles {
@@ -454,9 +455,11 @@ const TrackingLine = ({
 const CreatedObjects = ({
   robot,
   gpuMode = "high",
+  onIkTargetClick,
 }: {
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
+  onIkTargetClick?: (obj: CreatedObject) => void;
 }) => {
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
@@ -465,13 +468,19 @@ const CreatedObjects = ({
   // Handle pointer down on cube (just for selection, no dragging)
   const handlePointerDown = useCallback((e: any, objectId: string) => {
     e.stopPropagation();
+    const targetObj = objects.find((o) => o.id === objectId);
     setSelectedObject(objectId);
-  }, [setSelectedObject]);
+    if (targetObj?.isIkTarget && onIkTargetClick) {
+      onIkTargetClick(targetObj);
+    }
+  }, [objects, onIkTargetClick, setSelectedObject]);
 
   return (
     <group>
       {objects.map((obj) => {
         const isSelected = obj.id === selectedObjectId;
+        const baseColor = obj.color || "#3b82f6";
+        const targetTint = obj.isIkTarget ? "#facc15" : baseColor;
 
         return (
           <group key={obj.id}>
@@ -482,11 +491,11 @@ const CreatedObjects = ({
             >
               <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
               <meshStandardMaterial
-                color={obj.color}
+                color={targetTint}
                 transparent={true}
                 opacity={isSelected ? 0.8 : 0.6}
-                emissive={isSelected ? obj.color : "#000000"}
-                emissiveIntensity={isSelected ? 0.3 : 0}
+                emissive={isSelected || obj.isIkTarget ? targetTint : "#000000"}
+                emissiveIntensity={isSelected ? 0.3 : obj.isIkTarget ? 0.15 : 0}
               />
             </mesh>
 
@@ -495,7 +504,7 @@ const CreatedObjects = ({
               position={[obj.position.x, obj.position.y, obj.position.z]}
             >
               <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
-              <lineBasicMaterial color={isSelected ? "#ffffff" : "#aaaaaa"} linewidth={2} />
+              <lineBasicMaterial color={isSelected ? "#ffffff" : obj.isIkTarget ? "#facc15" : "#aaaaaa"} linewidth={2} />
             </lineSegments>
 
             {/* Distance visualization line - points to tracked joint center or closest robot point */}
@@ -511,6 +520,138 @@ const CreatedObjects = ({
         );
       })}
       </group>
+    );
+  };
+
+  interface IkDiagnostics {
+    termination_reason: string;
+    termination_flags: boolean[];
+    iterations: number;
+    cost: number;
+    lambda_final: number;
+    validity: string;
+    stability: string;
+    degeneracy: string;
+    branch_maybe: boolean;
+    branch_metric: number;
+    branch_message: string;
+  }
+
+  interface IkResponsePayload {
+    solution: Record<string, number>;
+    diagnostics: IkDiagnostics;
+    metadata: {
+      target_link: string;
+      actuated_joint_names?: string[];
+    };
+  }
+
+  const IKResultDialog = ({
+    open,
+    running,
+    error,
+    result,
+    targetName,
+    onClose,
+    onApply,
+  }: {
+    open: boolean;
+    running: boolean;
+    error: string | null;
+    result: IkResponsePayload | null;
+    targetName: string | null;
+    onClose: () => void;
+    onApply: () => void;
+  }) => {
+    if (!open) return null;
+
+    return (
+      <div className="fixed top-4 right-4 z-40 w-96 rounded-lg border border-border bg-background/95 shadow-2xl">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-foreground">IK Solution</span>
+            {targetName && (
+              <span className="text-[11px] text-muted-foreground">Target: {targetName}</span>
+            )}
+          </div>
+          <button
+            className="text-muted-foreground hover:text-foreground text-xs"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="p-3 space-y-2">
+          {running && (
+            <div className="text-[12px] text-muted-foreground">Solving IK...</div>
+          )}
+          {error && (
+            <div className="text-[12px] text-destructive">{error}</div>
+          )}
+          {result && (
+            <>
+              <div className="grid grid-cols-2 gap-2 text-[12px]">
+                <div className="p-2 rounded border border-border/60">
+                  <div className="text-[11px] text-muted-foreground">Validity</div>
+                  <div className="font-semibold">{result.diagnostics.validity}</div>
+                </div>
+                <div className="p-2 rounded border border-border/60">
+                  <div className="text-[11px] text-muted-foreground">Stability</div>
+                  <div className="font-semibold">{result.diagnostics.stability}</div>
+                </div>
+                <div className="p-2 rounded border border-border/60">
+                  <div className="text-[11px] text-muted-foreground">Degeneracy</div>
+                  <div className="font-semibold">{result.diagnostics.degeneracy}</div>
+                </div>
+                <div className="p-2 rounded border border-border/60">
+                  <div className="text-[11px] text-muted-foreground">Branch</div>
+                  <div className="font-semibold">
+                    {result.diagnostics.branch_maybe ? "Possible switch" : "Likely expected"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground">
+                {result.diagnostics.branch_message}
+              </div>
+
+              <div className="text-[11px] text-muted-foreground">
+                Cost: {result.diagnostics.cost.toFixed(5)} | Iterations: {result.diagnostics.iterations} | λ:{" "}
+                {result.diagnostics.lambda_final.toFixed(3)} | Termination: {result.diagnostics.termination_reason}
+              </div>
+
+              <div className="max-h-40 overflow-y-auto border border-border/50 rounded">
+                <table className="w-full text-[11px]">
+                  <thead className="sticky top-0 bg-background">
+                    <tr className="text-left text-muted-foreground/80">
+                      <th className="px-2 py-1 font-normal">Joint</th>
+                      <th className="px-2 py-1 font-normal">Value (rad)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(result.solution).map(([joint, value]) => (
+                      <tr key={joint} className="odd:bg-muted/30">
+                        <td className="px-2 py-1 whitespace-nowrap">{joint}</td>
+                        <td className="px-2 py-1 font-mono">{value.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" size="sm" onClick={onClose}>
+                  Dismiss
+                </Button>
+                <Button size="sm" onClick={onApply}>
+                  Apply to robot
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -1983,6 +2124,7 @@ export const Viewer3D = ({
   collisionVisibility = {},
   rotationPlaneVisible = false,
   onRobotBoundingBoxChange,
+  endEffectorLink = null,
 }: Viewer3DProps) => {
   // Use GPU mode hook for rendering
   const { gpuMode } = useGPUMode();
@@ -2003,6 +2145,11 @@ export const Viewer3D = ({
   const isShiftPressedRef = useRef<boolean>(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const fkAutoOpenedRef = useRef(false);
+  const [ikResult, setIkResult] = useState<IkResponsePayload | null>(null);
+  const [ikError, setIkError] = useState<string | null>(null);
+  const [ikDialogOpen, setIkDialogOpen] = useState(false);
+  const [ikTargetName, setIkTargetName] = useState<string | null>(null);
+  const [isIkRunning, setIsIkRunning] = useState(false);
 
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
@@ -2151,6 +2298,81 @@ export const Viewer3D = ({
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
+
+  const solveIkForObject = useCallback(
+    async (obj: CreatedObject) => {
+      if (!robot || !urdfContent) {
+        toast.error("Load a robot and URDF before solving IK.");
+        return;
+      }
+      if (!endEffectorLink) {
+        toast.error("Select an end-effector link to target.");
+        return;
+      }
+
+      const robotAny: any = robot;
+      const effObj =
+        robotAny?.links?.[endEffectorLink] ??
+        robotAny?.getObjectByName?.(endEffectorLink) ??
+        robotAny?.getObjectByName?.(decodeURIComponent(endEffectorLink));
+
+      const effQuat = new THREE.Quaternion();
+      if (effObj) {
+        effObj.updateMatrixWorld(true);
+        const tmpPos = new THREE.Vector3();
+        const tmpScale = new THREE.Vector3();
+        effObj.matrixWorld.decompose(tmpPos, effQuat, tmpScale);
+      } else {
+        effQuat.set(0, 0, 0, 1);
+      }
+
+      const jointValues = useJointStore.getState().jointValues;
+      const targetPosition = [obj.position.x, obj.position.y, obj.position.z];
+      const targetWxyz = [effQuat.w, effQuat.x, effQuat.y, effQuat.z];
+
+      setIkDialogOpen(true);
+      setIkResult(null);
+      setIkError(null);
+      setIkTargetName(obj.id);
+      setIsIkRunning(true);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            urdf: urdfContent,
+            joint_values: jointValues,
+            target_link: endEffectorLink,
+            target_position: targetPosition,
+            target_wxyz: targetWxyz,
+          }),
+        });
+
+        if (!response.ok) {
+          let message = "IK solve failed";
+          try {
+            const data = await response.json();
+            message = data.detail || data.error || message;
+          } catch {
+            // ignore
+          }
+          setIkError(message);
+          setIkResult(null);
+          return;
+        }
+
+        const data = (await response.json()) as IkResponsePayload;
+        setIkResult(data);
+      } catch (err) {
+        setIkError(err instanceof Error ? err.message : "Unknown IK error");
+        setIkResult(null);
+      } finally {
+        setIsIkRunning(false);
+      }
+    },
+    [endEffectorLink, robot, urdfContent]
+  );
 
   // Global joint store
   const storeJointValues = useJointStore((s) => s.jointValues);
@@ -3152,7 +3374,11 @@ export const Viewer3D = ({
                 robot={robot}
                 gpuMode={gpuMode}
               />
-              <CreatedObjects robot={robot} gpuMode={gpuMode} />
+              <CreatedObjects
+                robot={robot}
+                gpuMode={gpuMode}
+                onIkTargetClick={solveIkForObject}
+              />
             </>
           ) : (
             <PlaceholderLamp gpuMode={gpuMode} />
@@ -3189,6 +3415,21 @@ export const Viewer3D = ({
             robot={robot}
           />
         )}
+
+        <IKResultDialog
+          open={ikDialogOpen}
+          running={isIkRunning}
+          error={ikError}
+          result={ikResult}
+          targetName={ikTargetName}
+          onClose={() => setIkDialogOpen(false)}
+          onApply={() => {
+            if (ikResult) {
+              setStoreJointValues(ikResult.solution);
+              toast.success("Applied IK solution");
+            }
+          }}
+        />
 
         {/* Drag Mode button in Utils section */}
         {robot && (

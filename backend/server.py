@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 import yourdfpy  # type: ignore
 from jax import numpy as jnp  # type: ignore
 from pyroki import Robot  # type: ignore
+import pyroki as pk  # type: ignore
 
 
 class FKRequest(BaseModel):
@@ -47,6 +48,40 @@ class FKLink(BaseModel):
 
 class FKResponse(BaseModel):
     links: List[FKLink]
+    metadata: Dict[str, Any]
+
+
+class IKRequest(BaseModel):
+    urdf: str = Field(..., description="URDF XML as a string.")
+    joint_values: Dict[str, float] = Field(
+        default_factory=dict, description="Mapping joint_name -> value (radians)."
+    )
+    target_link: str = Field(..., description="End-effector link name.")
+    target_position: List[float] = Field(
+        ..., description="Target position [x, y, z] in meters."
+    )
+    target_wxyz: Optional[List[float]] = Field(
+        default=None, description="Target orientation [w, x, y, z]. Defaults to identity."
+    )
+
+
+class IKDiagnostics(BaseModel):
+    termination_reason: str
+    termination_flags: List[bool]
+    iterations: int
+    cost: float
+    lambda_final: float
+    validity: str
+    stability: str
+    degeneracy: str
+    branch_maybe: bool
+    branch_metric: float
+    branch_message: str
+
+
+class IKResponse(BaseModel):
+    solution: Dict[str, float]
+    diagnostics: IKDiagnostics
     metadata: Dict[str, Any]
 
 
@@ -238,6 +273,140 @@ def pyroki_fk(req: FKRequest) -> FKResponse:
         "all_link_names": names,
     }
     return FKResponse(links=links, metadata=metadata)
+
+
+@app.post("/pyroki/ik", response_model=IKResponse)
+def pyroki_ik(req: IKRequest) -> IKResponse:
+    """
+    Single-target inverse kinematics via PyRoki + JAXLS.
+    Returns the solved configuration and basic diagnostics.
+    """
+    entry = _get_or_create_robot(req.urdf)
+    robot = entry.robot
+
+    target_link = req.target_link
+    if target_link not in robot.links.names:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target link '{target_link}' not found in URDF (available: {robot.links.names})",
+        )
+
+    if len(req.target_position) != 3:
+        raise HTTPException(status_code=400, detail="target_position must have length 3")
+    if req.target_wxyz is not None and len(req.target_wxyz) != 4:
+        raise HTTPException(status_code=400, detail="target_wxyz must have length 4 when provided")
+
+    # Build initial configuration from provided joint map.
+    cfg_start = _build_cfg(robot, req.joint_values)
+
+    import jax  # Local import to keep startup light
+    import jaxlie
+    import jaxls
+    from jax import numpy as jnp
+
+    joint_var = robot.joint_var_cls(0)
+    target_idx = robot.links.names.index(target_link)
+
+    target_wxyz = req.target_wxyz or [1.0, 0.0, 0.0, 0.0]
+    target_pose = jaxlie.SE3.from_rotation_and_translation(
+        jaxlie.SO3(jnp.array(target_wxyz, dtype=jnp.float32)),
+        jnp.array(req.target_position, dtype=jnp.float32),
+    )
+
+    # Costs: pose + joint limits + mild rest bias to stay near seed.
+    costs = [
+        pk.costs.pose_cost_analytic_jac(
+            robot,
+            joint_var,
+            target_pose,
+            jnp.array(target_idx, dtype=jnp.int32),
+            pos_weight=50.0,
+            ori_weight=10.0,
+        ),
+        pk.costs.limit_cost(
+            robot,
+            joint_var,
+            weight=100.0,
+        ),
+        pk.costs.rest_cost(
+            joint_var,
+            rest_pose=cfg_start,
+            weight=0.5,
+        ),
+    ]
+
+    problem = jaxls.LeastSquaresProblem(costs, [joint_var]).analyze()
+
+    initial_vals = jaxls.VarValues.make([joint_var.with_value(cfg_start)])  # type: ignore[arg-type]
+    vals, summary = problem.solve(
+        initial_vals=initial_vals,
+        linear_solver="dense_cholesky",
+        trust_region=jaxls.TrustRegionConfig(lambda_initial=1.0),
+        verbose=False,
+        return_summary=True,
+    )
+
+    cfg_solution = jnp.array(vals[joint_var])
+
+    residual_vec = problem.compute_residual_vector(vals)
+    cost = float(jnp.sum(residual_vec**2))
+
+    term_flags = [bool(x) for x in summary.termination_criteria.tolist()]
+    termination_reason = (
+        "cost"
+        if term_flags[0]
+        else "gradient"
+        if term_flags[1]
+        else "parameters"
+        if term_flags[2]
+        else "max_iterations"
+        if term_flags[3]
+        else "unknown"
+    )
+
+    lambda_final = float(summary.lambda_history[int(summary.iterations)])
+    gradient_mag = float(summary.termination_deltas[1])
+    param_delta = float(summary.termination_deltas[2])
+
+    validity = "valid" if not (cost != cost or cost == float("inf")) and any(term_flags[:3]) else "invalid"
+    stability = "stable" if validity == "valid" and not term_flags[3] else "unstable"
+    degeneracy = "degenerate" if gradient_mag > 1e-2 or lambda_final > 1e3 or param_delta > 1e-1 else "well-conditioned"
+
+    diff = jnp.abs(cfg_solution - cfg_start)
+    max_diff = float(jnp.max(diff))
+    branch_maybe = bool(max_diff > 1.5)  # Heuristic: large jump implies unexpected branch
+    branch_message = (
+        f"Large configuration jump detected (max Δ={max_diff:.3f} rad) vs seed; solver may have taken a different branch."
+        if branch_maybe
+        else "Configuration stayed near the seed; branch change unlikely."
+    )
+
+    solution_map = {
+        name: float(cfg_solution[i])
+        for i, name in enumerate(robot.joints.actuated_names)
+    }
+
+    diagnostics = IKDiagnostics(
+        termination_reason=termination_reason,
+        termination_flags=term_flags,
+        iterations=int(summary.iterations),
+        cost=cost,
+        lambda_final=lambda_final,
+        validity=validity,
+        stability=stability,
+        degeneracy=degeneracy,
+        branch_maybe=branch_maybe,
+        branch_metric=max_diff,
+        branch_message=branch_message,
+    )
+
+    metadata: Dict[str, Any] = {
+        "urdf_hash": entry.urdf_hash,
+        "actuated_joint_names": list(robot.joints.actuated_names),
+        "target_link": target_link,
+    }
+
+    return IKResponse(solution=solution_map, diagnostics=diagnostics, metadata=metadata)
 
 
 @app.post("/rerun/visualize", response_model=RerunVisualizeResponse)
