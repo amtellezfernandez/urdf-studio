@@ -1994,7 +1994,7 @@ export const Viewer3D = ({
   const fkAutoOpenedRef = useRef(false);
 
   // Drag mode state
-  const [dragMode, setDragMode] = useState<'move-joints' | 'drag-end-effector'>('move-joints');
+  const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
 
   // Read URDF content once per uploaded file (for PyRoki FK validation)
@@ -2650,9 +2650,23 @@ export const Viewer3D = ({
     };
   }, [isDragModeMenuOpen]);
 
+  // Helper function to get drag mode display name
+  const getDragModeDisplayName = (mode: typeof dragMode) => {
+    switch (mode) {
+      case 'move-joints':
+        return 'Move Joints';
+      case 'click-to-place':
+        return 'Click-to-place';
+      case 'drag-handle':
+        return 'Drag Handle';
+      default:
+        return 'Move Joints';
+    }
+  };
+
   // Log drag mode changes (for debugging - modes don't have functionality yet)
   useEffect(() => {
-    console.log(`[Drag Mode] Switched to: ${dragMode === 'move-joints' ? 'Move Joints' : 'Drag End-Effector'}`);
+    console.log(`[Drag Mode] Switched to: ${getDragModeDisplayName(dragMode)}`);
   }, [dragMode]);
 
   // Notify when animation frames change
@@ -3149,7 +3163,7 @@ export const Viewer3D = ({
                 }}
               >
                 <span className="text-muted-foreground text-[10px]">Utils:</span>
-                {dragMode === 'move-joints' ? 'Move Joints' : 'Drag End-Effector'}
+                {getDragModeDisplayName(dragMode)}
                 <span className="text-[10px] text-muted-foreground">▼</span>
               </button>
               {isDragModeMenuOpen && (
@@ -3172,14 +3186,26 @@ export const Viewer3D = ({
                   <button
                     className={cn(
                       "w-full text-left px-3 py-1.5 hover:bg-muted transition-colors",
-                      dragMode === 'drag-end-effector' && "bg-muted/70 font-medium"
+                      dragMode === 'click-to-place' && "bg-muted/70 font-medium"
                     )}
                     onClick={() => {
                       setIsDragModeMenuOpen(false);
-                      setDragMode('drag-end-effector');
+                      setDragMode('click-to-place');
                     }}
                   >
-                    Drag End-Effector
+                    Click-to-place
+                  </button>
+                  <button
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 hover:bg-muted transition-colors",
+                      dragMode === 'drag-handle' && "bg-muted/70 font-medium"
+                    )}
+                    onClick={() => {
+                      setIsDragModeMenuOpen(false);
+                      setDragMode('drag-handle');
+                    }}
+                  >
+                    Drag Handle
                   </button>
                 </div>
               )}
