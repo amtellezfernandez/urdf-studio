@@ -1998,11 +1998,13 @@ export const Viewer3D = ({
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
+  const [selectedLink, setSelectedLink] = useState<string | null>(null);
 
   // Read URDF content once per uploaded file (for PyRoki FK validation)
   useEffect(() => {
     if (!urdfFile) {
       setUrdfContent(null);
+      setSelectedLink(null);
       fkAutoOpenedRef.current = false;
       return;
     }
@@ -3001,13 +3003,15 @@ export const Viewer3D = ({
                   })}
                 </div>
 
-                {/* Selected Joint Section - Compact (Second) */}
+                {/* Selected Joint/Link Section - Compact (Second) */}
                 <div className="pt-1.5 border-t border-border/15">
                   <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
-                    Selected Joint
+                    {dragMode === 'move-joints' ? 'Selected Joint' : 'Selected Link'}
                   </div>
                   <div className="text-[11px] text-foreground font-medium truncate">
-                    {selectedJoint || "None"}
+                    {dragMode === 'move-joints'
+                      ? (selectedJoint || "None")
+                      : (selectedLink || "None")}
                   </div>
                 </div>
               </div>
@@ -3095,9 +3099,10 @@ export const Viewer3D = ({
                 playbackSpeed={playbackSpeed}
                 rotationPlaneVisible={rotationPlaneVisible}
                 dragMode={dragMode}
-                onSelectPart={({ jointName }) =>
-                  onJointSelect?.(jointName ?? null)
-                }
+                onSelectPart={({ jointName, linkName }) => {
+                  setSelectedLink(linkName ?? null);
+                  onJointSelect?.(jointName ?? null);
+                }}
                 onJointChange={(j, v) => {
                   if (onJointChange) {
                     onJointChange(j, v);
