@@ -3025,58 +3025,19 @@ export const Viewer3D = ({
             );
           } else {
             // Links panel for drag-handle and click-to-place modes
-            const linkNames = robot ? Object.keys(robot.links || {}) : [];
-            const totalLinks = linkNames.length;
-
             return (
               <div className="absolute top-4 left-4 z-10 w-48 bg-background/98 backdrop-blur-sm rounded border border-border/40 shadow-md">
                 {/* Header - Compact */}
                 <div className="px-2 py-1 border-b border-border/20">
                   <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight uppercase">
-                    Links ({totalLinks})
+                    Selected Link
                   </div>
                 </div>
 
                 {/* Content - Compact */}
-                <div className="p-1.5 space-y-1.5">
-                  {/* Links List - Scrollable */}
-                  <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                    {linkNames.map((linkName) => {
-                      const isSelected = selectedLink === linkName;
-
-                      return (
-                        <div
-                          key={linkName}
-                          className={cn(
-                            "flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer transition-colors",
-                            isSelected
-                              ? "bg-primary/15 border border-primary/30"
-                              : "hover:bg-muted/15 border border-transparent"
-                          )}
-                        >
-                          <div
-                            className="w-2 h-2 rounded-sm border flex-shrink-0"
-                            style={{
-                              borderColor: jointColors.light_gray,
-                              backgroundColor: hexToRgba(jointColors.light_gray, 0.25)
-                            }}
-                          />
-                          <span className="text-[11px] text-foreground font-medium flex-1 truncate">
-                            {linkName}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Selected Link Section - Compact (Second) */}
-                  <div className="pt-1.5 border-t border-border/15">
-                    <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
-                      Selected Link
-                    </div>
-                    <div className="text-[11px] text-foreground font-medium truncate">
-                      {selectedLink || "None"}
-                    </div>
+                <div className="p-1.5">
+                  <div className="text-[11px] text-foreground font-medium truncate">
+                    {selectedLink || "None"}
                   </div>
                 </div>
               </div>
