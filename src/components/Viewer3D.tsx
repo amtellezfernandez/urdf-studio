@@ -341,11 +341,13 @@ const TrackingLine = ({
   cubePos,
   robot,
   trackedJointName,
+  endEffectorLink,
   gpuMode = "high",
 }: {
   cubePos: THREE.Vector3;
   robot: URDFRobot | null;
   trackedJointName: string | null;
+  endEffectorLink?: string | null;
   gpuMode?: GPUMode;
 }) => {
   const lineRef = useRef<THREE.Line>(null);
@@ -370,49 +372,32 @@ const TrackingLine = ({
       } catch (error) {
         console.error("Error getting joint world position:", error);
       }
-    }
-
-    // If no tracked joint or joint not found, calculate closest point on robot
-    if (!targetPos) {
-      const robotMeshes: THREE.Mesh[] = [];
-      (robot as any).traverse((child: any) => {
-        if (child.isMesh) {
-          robotMeshes.push(child);
+    } else if (endEffectorLink) {
+      // Otherwise use end-effector link center
+      try {
+        const robotAny: any = robot;
+        const link =
+          robotAny?.links?.[endEffectorLink] ??
+          robotAny?.getObjectByName?.(endEffectorLink) ??
+          robotAny?.getObjectByName?.(decodeURIComponent(endEffectorLink));
+        if (link) {
+          link.updateMatrixWorld(true);
+          const pos = new THREE.Vector3();
+          link.getWorldPosition(pos);
+          targetPos = pos;
         }
-      });
-
-      if (robotMeshes.length > 0) {
-        let minDistance = Infinity;
-        let closestPoint = new THREE.Vector3();
-
-        robotMeshes.forEach((mesh) => {
-          mesh.geometry.computeBoundingBox();
-          if (!mesh.geometry.boundingBox) return;
-
-          const robotBox = mesh.geometry.boundingBox.clone();
-          robotBox.applyMatrix4(mesh.matrixWorld);
-
-          const robotCenter = new THREE.Vector3();
-          robotBox.getCenter(robotCenter);
-          const cubeCenter = cubePos.clone();
-
-          const distance = robotCenter.distanceTo(cubeCenter);
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestPoint.copy(robotCenter);
-          }
-        });
-
-        targetPos = closestPoint;
-      } else {
-        return; // No robot meshes, don't draw line
+      } catch (error) {
+        console.error("Error getting link world position:", error);
       }
     }
+
+    // If still no target position, skip drawing
+    if (!targetPos) return;
 
     // Update line geometry
     const geometry = lineRef.current.geometry as THREE.BufferGeometry;
     const positions = geometry.attributes.position as THREE.BufferAttribute;
-    if (positions && targetPos) {
+    if (positions) {
       positions.array[0] = cubePos.x;
       positions.array[1] = cubePos.y;
       positions.array[2] = cubePos.z;
@@ -457,11 +442,13 @@ const CreatedObjects = ({
   robot,
   gpuMode = "high",
   dragMode = "move-joints",
+  endEffectorLink = null,
   onIkTargetClick,
 }: {
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
   dragMode?: "move-joints" | "click-to-place" | "drag-handle";
+  endEffectorLink?: string | null;
   onIkTargetClick?: (obj: CreatedObject) => void;
 }) => {
   const objects = useObjectStore((state) => state.objects);
@@ -514,11 +501,12 @@ const CreatedObjects = ({
             </lineSegments>
 
             {/* Distance visualization line - points to tracked joint center or closest robot point */}
-            {robot && (
+            {robot && endEffectorLink && (obj.trackedJointName || endEffectorLink) && (
               <TrackingLine
                 cubePos={obj.position}
                 robot={robot}
-                trackedJointName={obj.trackedJointName}
+                trackedJointName={obj.trackedJointName || null}
+                endEffectorLink={endEffectorLink}
                 gpuMode={gpuMode}
               />
             )}
@@ -3389,6 +3377,7 @@ export const Viewer3D = ({
                 robot={robot}
                 gpuMode={gpuMode}
                 dragMode={dragMode}
+                endEffectorLink={endEffectorLink}
                 onIkTargetClick={solveIkForObject}
               />
             </>

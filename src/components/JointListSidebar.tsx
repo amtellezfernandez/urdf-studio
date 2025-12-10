@@ -312,9 +312,10 @@ interface ObjectEditorPanelProps {
   objectId: string;
   availableJoints: string[];
   robot?: any;
+  endEffectorLink?: string | null;
 }
 
-const ObjectEditorPanel = ({ objectId, availableJoints, robot }: ObjectEditorPanelProps) => {
+const ObjectEditorPanel = ({ objectId, availableJoints, robot, endEffectorLink }: ObjectEditorPanelProps) => {
   const objects = useObjectStore((state) => state.objects);
   const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
   const updateObjectSize = useObjectStore((state) => state.updateObjectSize);
@@ -339,7 +340,27 @@ const ObjectEditorPanel = ({ objectId, availableJoints, robot }: ObjectEditorPan
     }
   };
 
-  const trackedJointPos = obj.trackedJointName ? getJointWorldPosition(obj.trackedJointName) : null;
+  const getLinkWorldPosition = (linkName: string): THREE.Vector3 | null => {
+    if (!robot || !linkName) return null;
+    try {
+      const link =
+        robot.links?.[linkName] ??
+        robot.getObjectByName?.(linkName) ??
+        robot.getObjectByName?.(decodeURIComponent(linkName));
+      if (!link) return null;
+      link.updateMatrixWorld(true);
+      const pos = new THREE.Vector3();
+      link.getWorldPosition(pos);
+      return pos;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const effectiveTargetName = obj.trackedJointName ?? endEffectorLink ?? null;
+  const trackedJointPos = effectiveTargetName
+    ? getJointWorldPosition(effectiveTargetName) ?? getLinkWorldPosition(effectiveTargetName)
+    : null;
   const distance = trackedJointPos ? obj.position.distanceTo(trackedJointPos) : null;
 
   return (
@@ -439,15 +460,32 @@ const ObjectEditorPanel = ({ objectId, availableJoints, robot }: ObjectEditorPan
 
           <BlenderPropertyRow label="Track Joint">
             <Select
-              value={obj.trackedJointName || "none"}
+              value={
+                obj.trackedJointName
+                  ? obj.trackedJointName
+                  : endEffectorLink
+                    ? "__end_effector__"
+                    : "none"
+              }
               onValueChange={(value) => {
-                updateTrackedJoint(obj.id, value === "none" ? null : value);
+                if (value === "none") {
+                  updateTrackedJoint(obj.id, null);
+                } else if (value === "__end_effector__") {
+                  updateTrackedJoint(obj.id, null); // default to end-effector
+                } else {
+                  updateTrackedJoint(obj.id, value);
+                }
               }}
             >
               <SelectTrigger className="h-6 text-[10px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d]">
+                {endEffectorLink && (
+                  <SelectItem value="__end_effector__" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                    Use end-effector ({endEffectorLink})
+                  </SelectItem>
+                )}
                 <SelectItem value="none" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                   None
                 </SelectItem>
@@ -1471,6 +1509,7 @@ export const JointListSidebar = ({
                 objectId={selectedObjectId}
                 availableJoints={availableJoints}
                 robot={robot}
+                endEffectorLink={endEffectorLink}
               />
             ) : selectedCameraId ? (
               <CameraEditorPanel
