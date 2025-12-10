@@ -125,34 +125,32 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
     };
   }, []);
 
-  // VERIFICATION: World axes alignment - MUST match axesHelper exactly
-  // ===================================================================
+  // VERIFICATION: ROS REP-103 / URDF Standard Coordinate System
+  // ============================================================
   // Scene setup: scene.up.set(0, 0, 1) - Z is UP
-  // axesHelper shows world axes at origin:
-  //   - X axis = RED, points in +X direction (horizontal, right)
-  //   - Y axis = GREEN, points in +Y direction (horizontal, forward)
-  //   - Z axis = BLUE, points in +Z direction (vertical, up)
-  // Grid: rotation={[Math.PI/2, 0, 0]} - lies in XY plane (horizontal floor)
-  // 
-  // CylinderGeometry is created along Y-axis by default (vertical in default Three.js)
-  // But with scene.up = Z, Y is horizontal
-  // 
-  // For X axis (red, horizontal, +X direction):
-  //   - Cylinder along Y needs to rotate to point along X
-  //   - Rotate -90° around Z: cylinder along Y -> points in +X direction
-  //   - Arrow head at end should point in +X (same rotation)
+  // ROS REP-103 standard for robot coordinate frames:
+  //   - X axis = RED, points FORWARD (robot's front direction)
+  //   - Y axis = GREEN, points LEFT (robot's left side)
+  //   - Z axis = BLUE, points UP (vertical, gravity opposite)
   //
-  // For Y axis (green, horizontal, +Y direction):
-  //   - Cylinder is already along Y, no rotation needed
-  //   - Arrow head at end should point in +Y
+  // This is a right-handed coordinate system where:
+  //   - X × Y = Z (cross product verification)
+  //   - Forward × Left = Up ✓
   //
-  // For Z axis (blue, vertical, +Z direction):
-  //   - Rotate 90° around X: cylinder along Y -> points in +Z direction
-  //   - Arrow head at end should point in +Z (same rotation)
+  // CylinderGeometry is created along Y-axis by default
+  //
+  // For X axis (red, forward):
+  //   - Rotate cylinder to point along +X
+  //
+  // For Y axis (green, left):
+  //   - Rotate cylinder to point along +Y
+  //
+  // For Z axis (blue, up):
+  //   - Rotate cylinder to point along +Z
 
   return (
     <group ref={groupRef} renderOrder={9999}>
-      {/* X-axis (Coral) - Horizontal, pointing in +X direction (right) */}
+      {/* X-axis (Red) - FORWARD direction per ROS REP-103 */}
       <group>
         <mesh position={[axisLength / 2, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={materials.x}>
           <cylinderGeometry args={[axisRadius, axisRadius, axisLength, 16]} />
@@ -160,14 +158,14 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
         <mesh position={[axisLength, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={materials.x}>
           <coneGeometry args={[arrowRadius, arrowLength, 16]} />
         </mesh>
-        {/* Solid ball at positive end (with text inside) - X positive = right view */}
-        <mesh 
-          position={[labelDistance, 0, 0]} 
+        {/* Solid ball at positive end - X positive = FRONT view (looking from behind) */}
+        <mesh
+          position={[labelDistance, 0, 0]}
           renderOrder={999}
           material={materials.x}
           onPointerDown={(e) => {
             e.stopPropagation();
-            onViewChange?.('right');
+            onViewChange?.('front');
           }}
           onPointerOver={(e) => {
             e.stopPropagation();
@@ -180,13 +178,13 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
         >
           <sphereGeometry args={[ballRadius, 16, 16]} />
         </mesh>
-        {/* Transparent ball at negative end - X negative = left view */}
-        <mesh 
+        {/* Transparent ball at negative end - X negative = BACK view (looking from front) */}
+        <mesh
           position={[-axisLength, 0, 0]}
           material={materials.xTransparent}
           onPointerDown={(e) => {
             e.stopPropagation();
-            onViewChange?.('left');
+            onViewChange?.('back');
           }}
           onPointerOver={(e) => {
             e.stopPropagation();
@@ -215,7 +213,7 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
         </group>
       </group>
 
-      {/* Y-axis (Mint) - Horizontal, pointing in +Y direction (forward) */}
+      {/* Y-axis (Green) - LEFT direction per ROS REP-103 */}
       <group>
         <mesh position={[0, axisLength / 2, 0]} material={materials.y}>
           <cylinderGeometry args={[axisRadius, axisRadius, axisLength, 16]} />
@@ -223,14 +221,14 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
         <mesh position={[0, axisLength + arrowLength / 2, 0]} material={materials.y}>
           <coneGeometry args={[arrowRadius, arrowLength, 16]} />
         </mesh>
-        {/* Solid ball at positive end (with text inside) - Y positive = front view */}
-        <mesh 
-          position={[0, labelDistance, 0]} 
+        {/* Solid ball at positive end - Y positive = LEFT view (looking from robot's right) */}
+        <mesh
+          position={[0, labelDistance, 0]}
           renderOrder={999}
           material={materials.y}
           onPointerDown={(e) => {
             e.stopPropagation();
-            onViewChange?.('front');
+            onViewChange?.('left');
           }}
           onPointerOver={(e) => {
             e.stopPropagation();
@@ -243,13 +241,13 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
         >
           <sphereGeometry args={[ballRadius, 16, 16]} />
         </mesh>
-        {/* Transparent ball at negative end - Y negative = back view */}
-        <mesh 
+        {/* Transparent ball at negative end - Y negative = RIGHT view (looking from robot's left) */}
+        <mesh
           position={[0, -axisLength, 0]}
           material={materials.yTransparent}
           onPointerDown={(e) => {
             e.stopPropagation();
-            onViewChange?.('back');
+            onViewChange?.('right');
           }}
           onPointerOver={(e) => {
             e.stopPropagation();
@@ -278,7 +276,7 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
         </group>
       </group>
 
-      {/* Z-axis (Sky Blue) - Vertical, pointing in +Z direction (up) */}
+      {/* Z-axis (Blue) - UP direction per ROS REP-103 */}
       <group>
         <mesh position={[0, 0, axisLength / 2]} rotation={[Math.PI / 2, 0, 0]} material={materials.z}>
           <cylinderGeometry args={[axisRadius, axisRadius, axisLength, 16]} />

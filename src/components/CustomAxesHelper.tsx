@@ -10,10 +10,12 @@ const DOT_SIZE = 0.01;
 const LINE_WIDTH = 1;
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
+// ROS REP-103 / URDF Standard Coordinate System
+// X = forward (red), Y = left (green), Z = up (blue)
 const AXES: Array<{ color: number; direction: THREE.Vector3 }> = [
-  { color: 0xBE2C41, direction: new THREE.Vector3(1, 0, 0) }, // X (red/pink - 190, 44, 65)
-  { color: 0x6DA424, direction: new THREE.Vector3(0, 1, 0) }, // Y (green - 109, 164, 36)
-  { color: 0x3464AD, direction: new THREE.Vector3(0, 0, 1) }, // Z (blue - 52, 100, 173)
+  { color: 0xBE2C41, direction: new THREE.Vector3(1, 0, 0) }, // X forward (red - 190, 44, 65)
+  { color: 0x6DA424, direction: new THREE.Vector3(0, 1, 0) }, // Y left (green - 109, 164, 36)
+  { color: 0x3464AD, direction: new THREE.Vector3(0, 0, 1) }, // Z up (blue - 52, 100, 173)
 ];
 
 const createPositiveLine = (direction: THREE.Vector3, color: number, length: number) => {
@@ -42,8 +44,12 @@ const createNegativeDots = (direction: THREE.Vector3, color: number, length: num
 };
 
 /**
- * Custom axes helper that extends in both directions
- * Positive direction: solid lines (like axesHelper)
+ * Custom axes helper following ROS REP-103 / URDF standard
+ * X-axis (RED): forward direction
+ * Y-axis (GREEN): left direction
+ * Z-axis (BLUE): upward direction
+ *
+ * Positive direction: solid lines
  * Negative direction: dots of the same color
  */
 export const CustomAxesHelper = ({ size = 10 }: CustomAxesHelperProps) => {

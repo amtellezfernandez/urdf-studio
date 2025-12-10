@@ -20,13 +20,6 @@ import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -523,6 +516,10 @@ const CreatedObjects = ({
     linkName: string;
     positionError: number;
     rotationErrorDeg: number;
+    pyrokiPosition: { x: number; y: number; z: number };
+    urdfPosition: { x: number; y: number; z: number };
+    pyrokiQuat: { w: number; x: number; y: number; z: number };
+    urdfQuat: { w: number; x: number; y: number; z: number };
   }
   
   interface FKValidationDialogProps {
@@ -548,6 +545,15 @@ const CreatedObjects = ({
     } | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const latestRequestId = useRef(0);
+
+    // Draggable state
+    const [position, setPosition] = useState({ x: 100, y: 100 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    // Expanded link state for showing detailed values
+    const [expandedLink, setExpandedLink] = useState<string | null>(null);
   
     const computeComparison = useCallback(async () => {
       if (!open) return;
@@ -674,18 +680,29 @@ const CreatedObjects = ({
   
           // Convert PyRoki quaternion (w,x,y,z) to Three.js (x,y,z,w)
           const pyrokiQuat = new THREE.Quaternion(x, y, z, w);
-          const deltaQuat = quat.clone().invert().multiply(pyrokiQuat);
-          const clampedW = Math.min(1, Math.max(-1, deltaQuat.w));
-          const angleRad = 2 * Math.acos(clampedW);
+
+          // Compute dot product to handle quaternion sign ambiguity
+          // q and -q represent the same rotation, so use shortest path
+          const dot = quat.x * pyrokiQuat.x + quat.y * pyrokiQuat.y +
+                      quat.z * pyrokiQuat.z + quat.w * pyrokiQuat.w;
+
+          // Use absolute value of dot product for shortest angular distance
+          const absDot = Math.abs(dot);
+          const clampedDot = Math.min(1, Math.max(-1, absDot));
+          const angleRad = 2 * Math.acos(clampedDot);
           const rotationErrorDeg = (angleRad * 180) / Math.PI;
   
           maxPositionError = Math.max(maxPositionError, positionError);
           maxRotationErrorDeg = Math.max(maxRotationErrorDeg, rotationErrorDeg);
-  
+
           perLink.push({
             linkName,
             positionError,
             rotationErrorDeg,
+            pyrokiPosition: { x: pxScene, y: pyScene, z: pzScene },
+            urdfPosition: { x: pos.x, y: pos.y, z: pos.z },
+            pyrokiQuat: { w, x, y, z },
+            urdfQuat: { w: quat.w, x: quat.x, y: quat.y, z: quat.z },
           });
         }
   
@@ -723,19 +740,80 @@ const CreatedObjects = ({
       }, 150);
       return () => clearTimeout(handle);
     }, [open, jointValues, computeComparison]);
+
+    // Drag handlers
+    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!panelRef.current) return;
+      const rect = panelRef.current.getBoundingClientRect();
+      setIsDragging(true);
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+    };
+
+    useEffect(() => {
+      if (!isDragging) return;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        setPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y,
+        });
+      };
+
+      const handleMouseUp = () => {
+        setIsDragging(false);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }, [isDragging, dragOffset]);
+
+    if (!open) return null;
   
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>PyRoki vs URDFLoader FK</DialogTitle>
-            <DialogDescription>
-              Compare forward kinematics from PyRoki (Python) and the Three.js
-              URDFLoader in real time. Useful for catching axis flips, origin
-              offsets, and modeling inconsistencies.
-            </DialogDescription>
-          </DialogHeader>
-  
+      <div
+        ref={panelRef}
+        className="fixed bg-background border rounded-lg shadow-lg z-50"
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          width: '600px',
+          maxWidth: '90vw',
+          maxHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Draggable header */}
+        <div
+          className="flex items-center justify-between p-3 border-b cursor-move select-none bg-muted/50"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">PyRoki vs URDFLoader FK</h3>
+            <p className="text-xs text-muted-foreground">
+              Compare forward kinematics in real time
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0"
+            onClick={() => onOpenChange(false)}
+          >
+            ✕
+          </Button>
+        </div>
+
+        {/* Content area */}
+        <div className="p-4 overflow-auto flex-1">
           {error && (
             <Alert variant="destructive" className="mb-3">
               <AlertCircle className="h-4 w-4" />
@@ -745,7 +823,7 @@ const CreatedObjects = ({
               </AlertDescription>
             </Alert>
           )}
-  
+
           {!error && summary && (
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -759,34 +837,67 @@ const CreatedObjects = ({
                     : null}
                 </span>
               </div>
-  
-              <div className="border rounded-md p-2 max-h-40 overflow-auto text-xs">
-                <div className="font-medium mb-1 text-muted-foreground">
-                  Worst links (top 5 by position error)
+
+              <div className="border rounded-md p-2 max-h-96 overflow-auto text-xs">
+                <div className="font-medium mb-2 text-muted-foreground">
+                  Link Comparison (top 10 by position error)
                 </div>
                 {summary.perLink.length === 0 && (
                   <div className="text-muted-foreground">
                     No overlapping link names between PyRoki and URDFLoader.
                   </div>
                 )}
-                {summary.perLink.slice(0, 5).map((item) => (
-                  <div
-                    key={item.linkName}
-                    className="flex items-center justify-between"
-                  >
-                    <span className="font-mono mr-2 truncate">
-                      {item.linkName}
-                    </span>
-                    <span className="text-right">
-                      {(item.positionError * 1000).toFixed(2)} mm ·{" "}
-                      {item.rotationErrorDeg.toFixed(2)}°
-                    </span>
+                {summary.perLink.slice(0, 10).map((item) => (
+                  <div key={item.linkName} className="mb-2">
+                    <div
+                      className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-1 rounded"
+                      onClick={() => setExpandedLink(expandedLink === item.linkName ? null : item.linkName)}
+                    >
+                      <span className="font-mono mr-2 truncate flex items-center gap-1">
+                        <span className="text-muted-foreground">{expandedLink === item.linkName ? '▼' : '▶'}</span>
+                        {item.linkName}
+                      </span>
+                      <span className="text-right whitespace-nowrap">
+                        {(item.positionError * 1000).toFixed(2)} mm ·{" "}
+                        {item.rotationErrorDeg.toFixed(2)}°
+                      </span>
+                    </div>
+
+                    {expandedLink === item.linkName && (
+                      <div className="ml-4 mt-1 p-2 bg-muted/30 rounded text-[10px] space-y-1">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="font-semibold text-emerald-600 mb-1">PyRoki</div>
+                            <div className="font-mono">
+                              Pos: ({item.pyrokiPosition.x.toFixed(4)}, {item.pyrokiPosition.y.toFixed(4)}, {item.pyrokiPosition.z.toFixed(4)})
+                            </div>
+                            <div className="font-mono">
+                              Quat: ({item.pyrokiQuat.w.toFixed(4)}, {item.pyrokiQuat.x.toFixed(4)}, {item.pyrokiQuat.y.toFixed(4)}, {item.pyrokiQuat.z.toFixed(4)})
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-blue-600 mb-1">URDFLoader</div>
+                            <div className="font-mono">
+                              Pos: ({item.urdfPosition.x.toFixed(4)}, {item.urdfPosition.y.toFixed(4)}, {item.urdfPosition.z.toFixed(4)})
+                            </div>
+                            <div className="font-mono">
+                              Quat: ({item.urdfQuat.w.toFixed(4)}, {item.urdfQuat.x.toFixed(4)}, {item.urdfQuat.y.toFixed(4)}, {item.urdfQuat.z.toFixed(4)})
+                            </div>
+                          </div>
+                        </div>
+                        <div className="pt-1 border-t border-border mt-1">
+                          <div className="font-semibold text-destructive">Δ Error</div>
+                          <div>Position: {(item.positionError * 1000).toFixed(4)} mm</div>
+                          <div>Rotation: {item.rotationErrorDeg.toFixed(4)}°</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
-  
+
           <div className="mt-4 flex justify-end gap-2">
             <Button
               variant="outline"
@@ -798,16 +909,9 @@ const CreatedObjects = ({
             >
               {isChecking ? "Recomputing..." : "Recompute now"}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Close
-            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
     );
   };
   
@@ -1888,7 +1992,11 @@ export const Viewer3D = ({
   const isShiftPressedRef = useRef<boolean>(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const fkAutoOpenedRef = useRef(false);
-  
+
+  // Drag mode state
+  const [dragMode, setDragMode] = useState<'move-joints' | 'drag-end-effector'>('move-joints');
+  const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
+
   // Read URDF content once per uploaded file (for PyRoki FK validation)
   useEffect(() => {
     if (!urdfFile) {
@@ -2528,6 +2636,25 @@ export const Viewer3D = ({
     };
   }, [handleRun, handleMotionDataUpload, handlePlayEpisode, handleStopAnimation, handleClearAnimation, handleSetFrame, playbackSpeed]);
 
+  // Close drag mode menu when clicking outside
+  useEffect(() => {
+    if (!isDragModeMenuOpen) return;
+
+    const handleClickOutside = () => {
+      setIsDragModeMenuOpen(false);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isDragModeMenuOpen]);
+
+  // Log drag mode changes (for debugging - modes don't have functionality yet)
+  useEffect(() => {
+    console.log(`[Drag Mode] Switched to: ${dragMode === 'move-joints' ? 'Move Joints' : 'Drag End-Effector'}`);
+  }, [dragMode]);
+
   // Notify when animation frames change
   useEffect(() => {
     onAnimationFramesChange?.(animationFrames !== null && animationFrames.length > 0);
@@ -2591,20 +2718,20 @@ export const Viewer3D = ({
     let cameraPosition: THREE.Vector3;
     
     // Set camera position based on view direction
-    // In Z-up coordinate system (URDF standard):
-    // X = right, Y = forward, Z = up
+    // ROS REP-103 / URDF Standard Coordinate System:
+    // X = forward (red), Y = left (green), Z = up (blue)
     switch (direction) {
-      case 'front': // Looking from +Y direction
-        cameraPosition = new THREE.Vector3(center.x, center.y + distance, center.z);
-        break;
-      case 'back': // Looking from -Y direction
-        cameraPosition = new THREE.Vector3(center.x, center.y - distance, center.z);
-        break;
-      case 'right': // Looking from +X direction
+      case 'front': // Looking from behind robot (+X direction)
         cameraPosition = new THREE.Vector3(center.x + distance, center.y, center.z);
         break;
-      case 'left': // Looking from -X direction
+      case 'back': // Looking from front of robot (-X direction)
         cameraPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
+        break;
+      case 'left': // Looking from robot's right side (-Y direction)
+        cameraPosition = new THREE.Vector3(center.x, center.y - distance, center.z);
+        break;
+      case 'right': // Looking from robot's left side (+Y direction)
+        cameraPosition = new THREE.Vector3(center.x, center.y + distance, center.z);
         break;
       case 'top': // Looking from +Z direction
         cameraPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
@@ -2884,7 +3011,8 @@ export const Viewer3D = ({
             alpha: false
           }}
           onCreated={({ scene, camera, gl }) => {
-            // Use Z-up like Plotly/URDF
+            // ROS REP-103 / URDF Standard: Z-up coordinate system
+            // X=forward (red), Y=left (green), Z=up (blue)
             scene.up.set(0, 0, 1);
             camera.up.set(0, 0, 1);
             cameraRef.current = camera as THREE.PerspectiveCamera;
@@ -3006,6 +3134,57 @@ export const Viewer3D = ({
             urdfContent={urdfContent}
             robot={robot}
           />
+        )}
+
+        {/* Drag Mode button in Utils section */}
+        {robot && (
+          <div className="absolute top-4 right-48 z-20">
+            <div className="relative">
+              <button
+                type="button"
+                className="px-3 py-1 text-xs rounded border border-border/60 bg-background/90 text-foreground shadow-sm hover:bg-muted transition-colors flex items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDragModeMenuOpen((prev) => !prev);
+                }}
+              >
+                <span className="text-muted-foreground text-[10px]">Utils:</span>
+                {dragMode === 'move-joints' ? 'Move Joints' : 'Drag End-Effector'}
+                <span className="text-[10px] text-muted-foreground">▼</span>
+              </button>
+              {isDragModeMenuOpen && (
+                <div
+                  className="absolute right-0 mt-1 w-48 bg-background/95 border border-border/70 rounded shadow-md text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 hover:bg-muted transition-colors",
+                      dragMode === 'move-joints' && "bg-muted/70 font-medium"
+                    )}
+                    onClick={() => {
+                      setIsDragModeMenuOpen(false);
+                      setDragMode('move-joints');
+                    }}
+                  >
+                    Move Joints
+                  </button>
+                  <button
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 hover:bg-muted transition-colors",
+                      dragMode === 'drag-end-effector' && "bg-muted/70 font-medium"
+                    )}
+                    onClick={() => {
+                      setIsDragModeMenuOpen(false);
+                      setDragMode('drag-end-effector');
+                    }}
+                  >
+                    Drag End-Effector
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Camera POV button (mirror gizmo camera circle) */}
