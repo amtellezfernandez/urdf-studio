@@ -103,6 +103,7 @@ const Index = () => {
   const [urdfFile, setUrdfFile] = useState<File | null>(null);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
+  const [selectedLink, setSelectedLink] = useState<string | null>(null);
   const [jointValues, setJointValues] = useState<Record<string, number>>({});
   const [availableJoints, setAvailableJoints] = useState<string[]>([]);
   const [availableLinks, setAvailableLinks] = useState<string[]>([]);
@@ -1782,10 +1783,12 @@ const Index = () => {
                       urdfFile={urdfFile}
                       initialMeshFiles={meshFiles}
                       selectedJoint={hoveredJoint || selectedJoint}
+                      selectedLink={selectedLink}
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
                       onJointSelect={setSelectedJoint}
+                      onLinkSelect={setSelectedLink}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
                       onMotionFileChange={setMotionDataFile}
@@ -1826,10 +1829,12 @@ const Index = () => {
                       urdfFile={urdfFile}
                       initialMeshFiles={meshFiles}
                       selectedJoint={hoveredJoint || selectedJoint}
+                      selectedLink={selectedLink}
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
                       onJointSelect={setSelectedJoint}
+                      onLinkSelect={setSelectedLink}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
                       onMotionFileChange={setMotionDataFile}
@@ -1889,10 +1894,12 @@ const Index = () => {
                       urdfFile={urdfFile}
                       initialMeshFiles={meshFiles}
                       selectedJoint={hoveredJoint || selectedJoint}
+                      selectedLink={selectedLink}
                       jointValues={jointValues}
                       jointLimits={jointLimits}
                       jointAxes={jointAxes}
                       onJointSelect={setSelectedJoint}
+                      onLinkSelect={setSelectedLink}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
                       onMotionFileChange={setMotionDataFile}
@@ -1967,7 +1974,9 @@ const Index = () => {
             availableLinks={availableLinks}
             jointLimits={jointLimits}
             selectedJoint={selectedJoint}
+            selectedLink={selectedLink}
             onJointSelect={setSelectedJoint}
+            onLinkSelect={setSelectedLink}
             hoveredJoint={hoveredJoint}
             onJointHover={setHoveredJoint}
             deletedJoints={deletedJoints}
@@ -1985,6 +1994,7 @@ const Index = () => {
             onJointLinkChange={handleJointLinkChange}
             angleUnit={angleUnit}
             onAngleUnitChange={setAngleUnit}
+            meshFiles={meshFiles}
             onLinkNameChange={handleLinkNameChange}
             onUrdfChange={handleVizUrdfChange}
             collisionVisibility={collisionVisibility}

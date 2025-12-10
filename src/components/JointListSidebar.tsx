@@ -74,10 +74,21 @@ const HierarchyTreeView = ({
     if (visitedLinks.has(linkName) || depth > 100) {
       return null;
     }
-    
+
     // Create a new set for this branch to track visited links
     const branchVisitedLinks = new Set(visitedLinks);
     branchVisitedLinks.add(linkName);
+
+    const isSelected = selectedLink === linkName;
+    const linkColor = "#4a9eff"; // Blue color for links
+
+    // Helper to convert hex to rgba
+    const hexToRgba = (hex: string, alpha: number) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
 
     try {
       const joints = hierarchyTree.linkToJoints.get(linkName) || [];
@@ -85,17 +96,34 @@ const HierarchyTreeView = ({
         // Leaf link - just show the link
         return (
           <div key={`link-${linkName}-${depth}`} className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
-            <div 
+            <div
               className={cn(
                 "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-                selectedLink === linkName && "bg-primary/10"
+                isSelected && "hover:bg-muted/30"
               )}
+              style={
+                isSelected
+                  ? {
+                      backgroundColor: hexToRgba(linkColor, 0.15),
+                    }
+                  : undefined
+              }
               onClick={() => {
                 onLinkSelect?.(linkName);
                 onJointSelect?.(null); // Clear joint selection when selecting link
               }}
             >
-              <span className="text-[10px] text-muted-foreground/60">
+              <span
+                className={cn(
+                  "text-[10px]",
+                  isSelected ? "" : "text-muted-foreground/60"
+                )}
+                style={
+                  isSelected
+                    ? { color: linkColor }
+                    : undefined
+                }
+              >
                 🔗 {linkName}
               </span>
             </div>
@@ -130,17 +158,34 @@ const HierarchyTreeView = ({
                 />
               </>
             )}
-            <div 
+            <div
               className={cn(
                 "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-                selectedLink === linkName && "bg-primary/10"
+                isSelected && "hover:bg-muted/30"
               )}
+              style={
+                isSelected
+                  ? {
+                      backgroundColor: hexToRgba(linkColor, 0.15),
+                    }
+                  : undefined
+              }
               onClick={() => {
                 onLinkSelect?.(linkName);
                 onJointSelect?.(null); // Clear joint selection when selecting link
               }}
             >
-              <span className="text-[10px] text-muted-foreground/60">
+              <span
+                className={cn(
+                  "text-[10px]",
+                  isSelected ? "" : "text-muted-foreground/60"
+                )}
+                style={
+                  isSelected
+                    ? { color: linkColor }
+                    : undefined
+                }
+              >
                 🔗 {linkName}
               </span>
             </div>
@@ -732,7 +777,9 @@ interface JointListSidebarProps {
   availableLinks?: string[];
   jointLimits: JointLimits;
   selectedJoint?: string | null;
+  selectedLink?: string | null;
   onJointSelect?: (jointName: string | null) => void;
+  onLinkSelect?: (linkName: string | null) => void;
   onJointHover?: (jointName: string | null) => void;
   hoveredJoint?: string | null;
   deletedJoints?: Set<string>;
@@ -767,7 +814,9 @@ export const JointListSidebar = ({
   availableLinks = [],
   jointLimits,
   selectedJoint,
+  selectedLink: selectedLinkProp,
   onJointSelect,
+  onLinkSelect,
   onJointHover,
   hoveredJoint,
   deletedJoints = new Set(),
@@ -802,7 +851,13 @@ export const JointListSidebar = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "elements">("flat");
-  const [selectedLink, setSelectedLink] = useState<string | null>(null);
+
+  // Use selectedLink from props instead of local state
+  const selectedLink = selectedLinkProp ?? null;
+  const setSelectedLink = (linkName: string | null) => {
+    onLinkSelect?.(linkName);
+  };
+
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const [visibleJoints, setVisibleJoints] = useState<Set<string>>(new Set(availableJoints));
@@ -1132,26 +1187,58 @@ export const JointListSidebar = ({
                 </div>
               ) : (
                 <div className="space-y-0.5">
-                  {filteredLinks.map((linkName) => (
-                    <div
-                      key={linkName}
-                      className={cn(
-                        "px-1.5 py-1.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/10",
-                        selectedLink === linkName && "bg-primary/10 border-primary/30"
-                      )}
-                      onClick={() => {
-                        setSelectedLink(linkName);
-                        onJointSelect?.(null);
-                        useObjectStore.getState().setSelectedObject(null);
-                        useCameraStore.getState().selectCamera(null);
-                      }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-muted-foreground/60">🔗</span>
-                        <span className="text-xs font-medium text-foreground">{linkName}</span>
+                  {filteredLinks.map((linkName) => {
+                    const isSelected = selectedLink === linkName;
+                    const linkColor = "#4a9eff"; // Blue color for links
+
+                    // Helper to convert hex to rgba
+                    const hexToRgba = (hex: string, alpha: number) => {
+                      const r = parseInt(hex.slice(1, 3), 16);
+                      const g = parseInt(hex.slice(3, 5), 16);
+                      const b = parseInt(hex.slice(5, 7), 16);
+                      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                    };
+
+                    return (
+                      <div
+                        key={linkName}
+                        className={cn(
+                          "px-1.5 py-1.5 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border/10",
+                          isSelected && "hover:bg-muted/30"
+                        )}
+                        style={
+                          isSelected
+                            ? {
+                                backgroundColor: hexToRgba(linkColor, 0.15),
+                              }
+                            : undefined
+                        }
+                        onClick={() => {
+                          setSelectedLink(linkName);
+                          onJointSelect?.(null);
+                          useObjectStore.getState().setSelectedObject(null);
+                          useCameraStore.getState().selectCamera(null);
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground/60">🔗</span>
+                          <span
+                            className={cn(
+                              "text-xs font-medium",
+                              isSelected ? "" : "text-foreground"
+                            )}
+                            style={
+                              isSelected
+                                ? { color: linkColor }
+                                : undefined
+                            }
+                          >
+                            {linkName}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             ) : viewMode === "flat" ? (

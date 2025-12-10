@@ -30,10 +30,12 @@ interface Viewer3DProps {
   urdfFile: File | null;
   initialMeshFiles?: MeshFiles;
   selectedJoint?: string | null;
+  selectedLink?: string | null;
   jointValues?: Record<string, number>;
   jointLimits?: JointLimits;
   jointAxes?: JointAxisMap;
   onJointSelect?: (jointName: string | null) => void;
+  onLinkSelect?: (linkName: string | null) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onRobotJointsLoaded?: (
     joints: string[],
@@ -1959,10 +1961,12 @@ export const Viewer3D = ({
   urdfFile,
   initialMeshFiles = {},
   selectedJoint = null,
+  selectedLink: selectedLinkProp = null,
   jointValues = {},
   jointLimits = {},
   jointAxes = {},
   onJointSelect,
+  onLinkSelect,
   onJointChange,
   onRobotJointsLoaded,
   onRobotLoaded,
@@ -1998,13 +2002,15 @@ export const Viewer3D = ({
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
-  const [selectedLink, setSelectedLink] = useState<string | null>(null);
+
+  // Use selectedLink from props
+  const selectedLink = selectedLinkProp;
 
   // Read URDF content once per uploaded file (for PyRoki FK validation)
   useEffect(() => {
     if (!urdfFile) {
       setUrdfContent(null);
-      setSelectedLink(null);
+      onLinkSelect?.(null);
       fkAutoOpenedRef.current = false;
       return;
     }
@@ -3159,7 +3165,7 @@ export const Viewer3D = ({
                 rotationPlaneVisible={rotationPlaneVisible}
                 dragMode={dragMode}
                 onSelectPart={({ jointName, linkName }) => {
-                  setSelectedLink(linkName ?? null);
+                  onLinkSelect?.(linkName ?? null);
                   onJointSelect?.(jointName ?? null);
                 }}
                 onJointChange={(j, v) => {
