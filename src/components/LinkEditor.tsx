@@ -49,6 +49,8 @@ interface LinkEditorProps {
   meshFiles?: Record<string, Blob>;
   collisionVisibility?: CollisionVisibility;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
+  endEffectorLink?: string | null;
+  onMarkAsEndEffector?: (linkName: string | null) => void;
 }
 
 export const LinkEditor = ({
@@ -61,6 +63,8 @@ export const LinkEditor = ({
   meshFiles = {},
   collisionVisibility = {},
   onCollisionVisibilityChange,
+  endEffectorLink,
+  onMarkAsEndEffector,
 }: LinkEditorProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingLinkName, setEditingLinkName] = useState<string | null>(null);
@@ -277,6 +281,8 @@ export const LinkEditor = ({
                   onCollisionVisibilityChange?.(newVisibility);
                 }}
                 alwaysExpanded={true}
+                endEffectorLink={endEffectorLink}
+                onMarkAsEndEffector={onMarkAsEndEffector}
               />
             ) : (
               <div className="flex items-center justify-center h-32 text-xs text-muted-foreground/70">
@@ -302,6 +308,8 @@ interface LinkControlProps {
   collisionVisibility?: { [index: number]: boolean };
   onCollisionVisibilityChange?: (index: number, visible: boolean) => void;
   alwaysExpanded?: boolean;
+  endEffectorLink?: string | null;
+  onMarkAsEndEffector?: (linkName: string | null) => void;
 }
 
 export const LinkControl = ({
@@ -316,6 +324,8 @@ export const LinkControl = ({
   collisionVisibility = {},
   onCollisionVisibilityChange,
   alwaysExpanded = false,
+  endEffectorLink,
+  onMarkAsEndEffector,
 }: LinkControlProps) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(linkData.name);
@@ -436,6 +446,31 @@ export const LinkControl = ({
         alwaysExpanded={alwaysExpanded}
         className={alwaysExpanded ? "mb-0" : ""}
       >
+        {/* End Effector Button */}
+        {onMarkAsEndEffector && (
+          <div className="px-1 pt-0.5 pb-1 border-b border-border/15">
+            <Button
+              variant={endEffectorLink === linkData.name ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (endEffectorLink === linkData.name) {
+                  onMarkAsEndEffector(null);
+                  toast.success("End effector unmarked");
+                } else {
+                  onMarkAsEndEffector(linkData.name);
+                  toast.success(`Marked "${linkData.name}" as end effector`);
+                }
+              }}
+              className={cn(
+                "h-6 px-2 text-[10px] w-full",
+                endEffectorLink === linkData.name && "bg-primary text-primary-foreground"
+              )}
+            >
+              {endEffectorLink === linkData.name ? "✓ End Effector" : "Mark as End Effector"}
+            </Button>
+          </div>
+        )}
+
         {/* Section Selector */}
         <div className="flex items-center gap-0.5 px-1 py-0.5 mb-0.5 border-b border-border/15">
           <button

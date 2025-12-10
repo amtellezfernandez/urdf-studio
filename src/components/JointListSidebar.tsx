@@ -42,6 +42,7 @@ interface HierarchyTreeViewProps {
   colorJointNames: string[];
   visibleJoints: Set<string>;
   onVisibilityToggle: (jointName: string) => void;
+  endEffectorLink?: string | null;
 }
 
 const HierarchyTreeView = ({
@@ -60,6 +61,7 @@ const HierarchyTreeView = ({
   colorJointNames,
   visibleJoints,
   onVisibilityToggle,
+  endEffectorLink,
 }: HierarchyTreeViewProps) => {
   if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
     return (
@@ -113,19 +115,26 @@ const HierarchyTreeView = ({
                 onJointSelect?.(null); // Clear joint selection when selecting link
               }}
             >
-              <span
-                className={cn(
-                  "text-[10px]",
-                  isSelected ? "" : "text-muted-foreground/60"
+              <div className="flex items-center gap-1">
+                <span
+                  className={cn(
+                    "text-[10px] flex-1",
+                    isSelected ? "" : "text-muted-foreground/60"
+                  )}
+                  style={
+                    isSelected
+                      ? { color: linkColor }
+                      : undefined
+                  }
+                >
+                  🔗 {linkName}
+                </span>
+                {endEffectorLink === linkName && (
+                  <span className="text-[7px] px-0.5 py-0 bg-primary/20 text-primary rounded font-medium">
+                    EE
+                  </span>
                 )}
-                style={
-                  isSelected
-                    ? { color: linkColor }
-                    : undefined
-                }
-              >
-                🔗 {linkName}
-              </span>
+              </div>
             </div>
           </div>
         );
@@ -175,19 +184,26 @@ const HierarchyTreeView = ({
                 onJointSelect?.(null); // Clear joint selection when selecting link
               }}
             >
-              <span
-                className={cn(
-                  "text-[10px]",
-                  isSelected ? "" : "text-muted-foreground/60"
+              <div className="flex items-center gap-1">
+                <span
+                  className={cn(
+                    "text-[10px] flex-1",
+                    isSelected ? "" : "text-muted-foreground/60"
+                  )}
+                  style={
+                    isSelected
+                      ? { color: linkColor }
+                      : undefined
+                  }
+                >
+                  🔗 {linkName}
+                </span>
+                {endEffectorLink === linkName && (
+                  <span className="text-[7px] px-0.5 py-0 bg-primary/20 text-primary rounded font-medium">
+                    EE
+                  </span>
                 )}
-                style={
-                  isSelected
-                    ? { color: linkColor }
-                    : undefined
-                }
-              >
-                🔗 {linkName}
-              </span>
+              </div>
             </div>
           </div>
           {/* Joints connected from this link */}
@@ -806,6 +822,8 @@ interface JointListSidebarProps {
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
   robot?: any;
   episodeJointNames?: string[];
+  endEffectorLink?: string | null;
+  onMarkAsEndEffector?: (linkName: string | null) => void;
 }
 
 export const JointListSidebar = ({
@@ -841,6 +859,8 @@ export const JointListSidebar = ({
   collisionVisibility = {},
   onCollisionVisibilityChange,
   robot,
+  endEffectorLink,
+  onMarkAsEndEffector,
 }: JointListSidebarProps) => {
   const jointValues = useJointStore((s) => s.jointValues);
 
@@ -1224,7 +1244,7 @@ export const JointListSidebar = ({
                           <span className="text-[10px] text-muted-foreground/60">🔗</span>
                           <span
                             className={cn(
-                              "text-xs font-medium",
+                              "text-xs font-medium flex-1",
                               isSelected ? "" : "text-foreground"
                             )}
                             style={
@@ -1235,6 +1255,11 @@ export const JointListSidebar = ({
                           >
                             {linkName}
                           </span>
+                          {endEffectorLink === linkName && (
+                            <span className="text-[8px] px-1 py-0.5 bg-primary/20 text-primary rounded font-medium">
+                              EE
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -1325,6 +1350,7 @@ export const JointListSidebar = ({
                   colorJointNames={colorJointNames}
                   visibleJoints={visibleJoints}
                   onVisibilityToggle={handleVisibilityToggle}
+                  endEffectorLink={endEffectorLink}
                 />
               )
             )}
@@ -1421,6 +1447,8 @@ export const JointListSidebar = ({
                     }
                   }}
                   alwaysExpanded={true}
+                  endEffectorLink={endEffectorLink}
+                  onMarkAsEndEffector={onMarkAsEndEffector}
                 />
               </div>
             ) : selectedObjectId ? (

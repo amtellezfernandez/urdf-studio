@@ -104,6 +104,7 @@ const Index = () => {
   const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
+  const [endEffectorLink, setEndEffectorLink] = useState<string | null>(null);
   const [jointValues, setJointValues] = useState<Record<string, number>>({});
   const [availableJoints, setAvailableJoints] = useState<string[]>([]);
   const [availableLinks, setAvailableLinks] = useState<string[]>([]);
@@ -1999,6 +2000,8 @@ const Index = () => {
             onUrdfChange={handleVizUrdfChange}
             collisionVisibility={collisionVisibility}
             onCollisionVisibilityChange={setCollisionVisibility}
+            endEffectorLink={endEffectorLink}
+            onMarkAsEndEffector={setEndEffectorLink}
             robot={robot}
           />
 
