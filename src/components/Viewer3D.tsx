@@ -931,6 +931,7 @@ const CreatedObjects = ({
   gpuMode = "high",
   playbackSpeed = 1.0,
   rotationPlaneVisible = false,
+  dragMode = 'move-joints',
 }: {
   file: File;
   meshFiles: MeshFiles;
@@ -950,6 +951,7 @@ const CreatedObjects = ({
   gpuMode?: GPUMode;
   playbackSpeed?: number;
   rotationPlaneVisible?: boolean;
+  dragMode?: 'move-joints' | 'click-to-place' | 'drag-handle';
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<any>(null);
@@ -1642,16 +1644,16 @@ const CreatedObjects = ({
     }
     onSelectPart?.({ linkName, jointName });
 
-    // Start joint drag if joint found
-    if (jointName) {
+    // Start joint drag if joint found and in 'move-joints' mode
+    if (jointName && dragMode === 'move-joints') {
       const joint: any = robot.joints?.[jointName];
       if (joint) {
         // Get joint limits from parsed URDF data
         const limits = getJointLimits(jointLimits, jointName);
-        
+
         // Read current angle directly from joint
         const currentAngle = typeof joint.angle === "number" ? joint.angle : 0;
-        
+
         // Store drag start state using world/floor reference (vertical movement)
         dragStartRef.current = {
           y: e.clientY, // Use Y for vertical mouse movement
@@ -1659,7 +1661,7 @@ const CreatedObjects = ({
           lower: limits.lower,
           upper: limits.upper
         };
-        
+
       draggingJointRef.current = jointName;
       lastPointerRef.current = { x: e.clientX, y: e.clientY };
       setIsDragging(true);
@@ -3092,6 +3094,7 @@ export const Viewer3D = ({
                 gpuMode={gpuMode}
                 playbackSpeed={playbackSpeed}
                 rotationPlaneVisible={rotationPlaneVisible}
+                dragMode={dragMode}
                 onSelectPart={({ jointName }) =>
                   onJointSelect?.(jointName ?? null)
                 }
