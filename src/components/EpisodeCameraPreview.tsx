@@ -24,34 +24,68 @@ const PreviewObjects = ({
 }) => {
   return (
     <group>
-      {objects.map((obj) => (
-        <group
-          key={obj.id}
-          position={[obj.position.x, obj.position.y, obj.position.z]}
-        >
-          <mesh>
-            <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
-            {gpuMode === "low" ? (
-              <meshBasicMaterial color={obj.color} opacity={0.65} transparent />
-            ) : (
-              <meshStandardMaterial
-                color={obj.color}
-                opacity={0.65}
-                transparent
-                metalness={0.15}
-                roughness={0.6}
-                emissive={obj.color}
-                emissiveIntensity={0.05}
-              />
-            )}
-          </mesh>
+      {objects.map((obj) => {
+        const baseColor = obj.color || "#3b82f6";
+        const fillColor = obj.isIkTarget ? "#facc15" : baseColor;
+        const outlineColor = obj.isIkTarget ? "#facc15" : "#bfbfbf";
+        const radius = Math.max(obj.size.x, obj.size.y, obj.size.z) * 0.5;
 
-          <lineSegments>
-            <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
-            <lineBasicMaterial color="#bfbfbf" linewidth={1} />
-          </lineSegments>
-        </group>
-      ))}
+        return (
+          <group
+            key={obj.id}
+            position={[obj.position.x, obj.position.y, obj.position.z]}
+          >
+            {obj.type === "point" ? (
+              <>
+                <mesh>
+                  <sphereGeometry args={[radius, 14, 10]} />
+                  {gpuMode === "low" ? (
+                    <meshBasicMaterial color={fillColor} opacity={0.85} transparent />
+                  ) : (
+                    <meshStandardMaterial
+                      color={fillColor}
+                      opacity={0.85}
+                      transparent
+                      metalness={0.15}
+                      roughness={0.6}
+                      emissive={fillColor}
+                      emissiveIntensity={0.08}
+                    />
+                  )}
+                </mesh>
+                <lineSegments>
+                  <edgesGeometry args={[new THREE.SphereGeometry(radius, 12, 8)]} />
+                  <lineBasicMaterial color={outlineColor} linewidth={1} />
+                </lineSegments>
+              </>
+            ) : (
+              <>
+                <mesh>
+                  <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
+                  {gpuMode === "low" ? (
+                    <meshBasicMaterial color={fillColor} opacity={0.65} transparent />
+                  ) : (
+                    <meshStandardMaterial
+                      color={fillColor}
+                      opacity={0.65}
+                      transparent
+                      metalness={0.15}
+                      roughness={0.6}
+                      emissive={fillColor}
+                      emissiveIntensity={0.05}
+                    />
+                  )}
+                </mesh>
+
+                <lineSegments>
+                  <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
+                  <lineBasicMaterial color={outlineColor} linewidth={1} />
+                </lineSegments>
+              </>
+            )}
+          </group>
+        );
+      })}
     </group>
   );
 };

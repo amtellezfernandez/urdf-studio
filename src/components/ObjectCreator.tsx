@@ -1,30 +1,60 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import * as THREE from "three";
 import { useObjectStore } from "@/store/useObjectStore";
+import { cn } from "@/lib/utils";
 
 interface ObjectCreatorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   robotBoundingBox?: THREE.Box3 | null;
+  defaultType?: "cube" | "point";
 }
 
-export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCreatorProps) {
+const DEFAULT_CUBE_SIZE = 0.1;
+const DEFAULT_POINT_SIZE = 0.02;
+
+export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultType = "cube" }: ObjectCreatorProps) {
   const addObject = useObjectStore((state) => state.addObject);
 
+  const [objectType, setObjectType] = useState<"cube" | "point">(defaultType);
   // Default size for the cube
-  const [sizeX, setSizeX] = useState(0.1);
-  const [sizeY, setSizeY] = useState(0.1);
-  const [sizeZ, setSizeZ] = useState(0.1);
+  const [sizeX, setSizeX] = useState(DEFAULT_CUBE_SIZE);
+  const [sizeY, setSizeY] = useState(DEFAULT_CUBE_SIZE);
+  const [sizeZ, setSizeZ] = useState(DEFAULT_CUBE_SIZE);
 
   // Default position
   const [posX, setPosX] = useState(0);
   const [posY, setPosY] = useState(0);
   const [posZ, setPosZ] = useState(0);
   const [isIkTarget, setIsIkTarget] = useState(false);
+
+  // Reset defaults when dialog opens or when caller requests a different type
+  useEffect(() => {
+    if (!open) return;
+    setObjectType(defaultType);
+    if (defaultType === "point") {
+      setSizeX(DEFAULT_POINT_SIZE);
+      setSizeY(DEFAULT_POINT_SIZE);
+      setSizeZ(DEFAULT_POINT_SIZE);
+    } else {
+      setSizeX(DEFAULT_CUBE_SIZE);
+      setSizeY(DEFAULT_CUBE_SIZE);
+      setSizeZ(DEFAULT_CUBE_SIZE);
+    }
+  }, [open, defaultType]);
+
+  // Keep size in sync when switching types inside the dialog
+  useEffect(() => {
+    if (objectType === "point") {
+      setSizeX(DEFAULT_POINT_SIZE);
+      setSizeY(DEFAULT_POINT_SIZE);
+      setSizeZ(DEFAULT_POINT_SIZE);
+    }
+  }, [objectType]);
 
   // Suggest a non-colliding position
   const suggestPosition = () => {
@@ -61,13 +91,16 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
 
   const handleCreate = () => {
     const position = new THREE.Vector3(posX, posY, posZ);
-    const size = new THREE.Vector3(sizeX, sizeY, sizeZ);
+    const size =
+      objectType === "point"
+        ? new THREE.Vector3(DEFAULT_POINT_SIZE, DEFAULT_POINT_SIZE, DEFAULT_POINT_SIZE)
+        : new THREE.Vector3(sizeX, sizeY, sizeZ);
 
     addObject({
-      type: "cube",
+      type: objectType,
       position,
       size,
-      color: "#3b82f6", // Blue color
+      color: objectType === "point" ? "#f472b6" : "#3b82f6", // make points easier to spot
       trackedJointName: null,
       isIkTarget,
     });
@@ -79,41 +112,71 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox }: ObjectCr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4] max-w-xs p-3">
         <DialogHeader className="pb-2">
-          <DialogTitle className="text-sm text-[#d4d4d4] font-normal">Create Cube</DialogTitle>
+          <DialogTitle className="text-sm text-[#d4d4d4] font-normal">Create Object</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2.5">
           <div>
-            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Size</Label>
-            <div className="grid grid-cols-3 gap-1.5">
-              <Input
-                id="size-x"
-                type="number"
-                step="0.01"
-                value={sizeX}
-                onChange={(e) => setSizeX(parseFloat(e.target.value) || 0)}
-                placeholder="X"
-                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-              />
-              <Input
-                id="size-y"
-                type="number"
-                step="0.01"
-                value={sizeY}
-                onChange={(e) => setSizeY(parseFloat(e.target.value) || 0)}
-                placeholder="Y"
-                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-              />
-              <Input
-                id="size-z"
-                type="number"
-                step="0.01"
-                value={sizeZ}
-                onChange={(e) => setSizeZ(parseFloat(e.target.value) || 0)}
-                placeholder="Z"
-                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-              />
+            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Type</Label>
+            <div className="grid grid-cols-2 gap-1">
+              {(["cube", "point"] as const).map((type) => (
+                <Button
+                  key={type}
+                  variant={objectType === type ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setObjectType(type)}
+                  className={cn(
+                    "h-7 text-[11px] px-2",
+                    objectType === type
+                      ? "bg-[#3d3d3d] text-white"
+                      : "bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4]"
+                  )}
+                >
+                  {type === "cube" ? "Cube" : "Point"}
+                </Button>
+              ))}
             </div>
+          </div>
+
+          <div>
+            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">
+              {objectType === "point" ? "Size (fixed)" : "Size"}
+            </Label>
+            {objectType === "cube" ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                <Input
+                  id="size-x"
+                  type="number"
+                  step="0.01"
+                  value={sizeX}
+                  onChange={(e) => setSizeX(parseFloat(e.target.value) || 0)}
+                  placeholder="X"
+                  className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                />
+                <Input
+                  id="size-y"
+                  type="number"
+                  step="0.01"
+                  value={sizeY}
+                  onChange={(e) => setSizeY(parseFloat(e.target.value) || 0)}
+                  placeholder="Y"
+                  className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                />
+                <Input
+                  id="size-z"
+                  type="number"
+                  step="0.01"
+                  value={sizeZ}
+                  onChange={(e) => setSizeZ(parseFloat(e.target.value) || 0)}
+                  placeholder="Z"
+                  className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                />
+              </div>
+            ) : (
+              <div className="text-[11px] text-[#d4d4d4] px-2 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded">
+                Points use a fixed {DEFAULT_POINT_SIZE} m size.
+              </div>
+            )}
           </div>
 
           <div>

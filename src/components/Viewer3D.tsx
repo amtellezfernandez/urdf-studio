@@ -574,28 +574,54 @@ const CreatedObjects = ({
 
         return (
           <group key={obj.id}>
-            {/* Cube mesh */}
-            <mesh
-              position={[obj.position.x, obj.position.y, obj.position.z]}
-              onPointerDown={(e) => handlePointerDown(e, obj.id)}
-            >
-              <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
-              <meshStandardMaterial
-                color={targetTint}
-                transparent={true}
-                opacity={isSelected ? 0.8 : 0.6}
-                emissive={isSelected || obj.isIkTarget ? targetTint : "#000000"}
-                emissiveIntensity={isSelected ? 0.3 : obj.isIkTarget ? 0.15 : 0}
-              />
-            </mesh>
+            {/* Geometry */}
+            {obj.type === "point" ? (
+              <>
+                <mesh
+                  position={[obj.position.x, obj.position.y, obj.position.z]}
+                  onPointerDown={(e) => handlePointerDown(e, obj.id)}
+                >
+                  <sphereGeometry args={[Math.max(obj.size.x, obj.size.y, obj.size.z) * 0.5, 18, 12]} />
+                  <meshStandardMaterial
+                    color={targetTint}
+                    transparent={true}
+                    opacity={isSelected ? 0.95 : 0.85}
+                    emissive={isSelected || obj.isIkTarget ? targetTint : "#000000"}
+                    emissiveIntensity={isSelected ? 0.4 : obj.isIkTarget ? 0.2 : 0}
+                    metalness={0.1}
+                    roughness={0.5}
+                  />
+                </mesh>
+                <lineSegments position={[obj.position.x, obj.position.y, obj.position.z]}>
+                  <edgesGeometry args={[new THREE.SphereGeometry(Math.max(obj.size.x, obj.size.y, obj.size.z) * 0.5, 12, 8)]} />
+                  <lineBasicMaterial color={isSelected ? "#ffffff" : obj.isIkTarget ? "#facc15" : "#aaaaaa"} linewidth={2} />
+                </lineSegments>
+              </>
+            ) : (
+              <>
+                <mesh
+                  position={[obj.position.x, obj.position.y, obj.position.z]}
+                  onPointerDown={(e) => handlePointerDown(e, obj.id)}
+                >
+                  <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
+                  <meshStandardMaterial
+                    color={targetTint}
+                    transparent={true}
+                    opacity={isSelected ? 0.8 : 0.6}
+                    emissive={isSelected || obj.isIkTarget ? targetTint : "#000000"}
+                    emissiveIntensity={isSelected ? 0.3 : obj.isIkTarget ? 0.15 : 0}
+                  />
+                </mesh>
 
-            {/* Wireframe outline */}
-            <lineSegments
-              position={[obj.position.x, obj.position.y, obj.position.z]}
-            >
-              <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
-              <lineBasicMaterial color={isSelected ? "#ffffff" : obj.isIkTarget ? "#facc15" : "#aaaaaa"} linewidth={2} />
-            </lineSegments>
+                {/* Wireframe outline */}
+                <lineSegments
+                  position={[obj.position.x, obj.position.y, obj.position.z]}
+                >
+                  <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
+                  <lineBasicMaterial color={isSelected ? "#ffffff" : obj.isIkTarget ? "#facc15" : "#aaaaaa"} linewidth={2} />
+                </lineSegments>
+              </>
+            )}
 
             {/* Distance visualization line - points to tracked joint center or closest robot point */}
             {robot && endEffectorLink && (obj.trackedJointName || endEffectorLink) && (

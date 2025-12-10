@@ -3,7 +3,7 @@ import * as THREE from "three";
 
 export interface CreatedObject {
   id: string;
-  type: "cube";
+  type: "cube" | "point";
   position: THREE.Vector3;
   size: THREE.Vector3;
   color: string;
@@ -30,6 +30,7 @@ interface ObjectStore {
   clearObjects: () => void;
 }
 
+const POINT_SIZE = 0.02;
 let objectIdCounter = 0;
 
 export const useObjectStore = create<ObjectStore>((set, get) => ({
@@ -38,11 +39,15 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
 
   addObject: (object) => {
     const id = `object-${objectIdCounter++}`;
+    const resolvedSize =
+      object.type === "point"
+        ? new THREE.Vector3(POINT_SIZE, POINT_SIZE, POINT_SIZE)
+        : object.size.clone();
     const newObject: CreatedObject = {
       ...object,
       id,
       position: object.position.clone(),
-      size: object.size.clone(),
+      size: resolvedSize,
       isIkTarget: object.isIkTarget ?? false,
       ikTargetType: object.ikTargetType ?? "punctual",
       orbitRadius: object.orbitRadius ?? 0.3,
@@ -75,9 +80,11 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
 
   updateObjectSize: (id, size) => {
     set((state) => ({
-      objects: state.objects.map((obj) =>
-        obj.id === id ? { ...obj, size: size.clone() } : obj
-      ),
+      objects: state.objects.map((obj) => {
+        if (obj.id !== id) return obj;
+        if (obj.type === "point") return obj; // Points keep a fixed size
+        return { ...obj, size: size.clone() };
+      }),
     }));
   },
 

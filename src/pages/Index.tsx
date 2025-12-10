@@ -149,6 +149,7 @@ const Index = () => {
 
   // Object creation state
   const [showObjectCreator, setShowObjectCreator] = useState(false);
+  const [objectCreatorType, setObjectCreatorType] = useState<"cube" | "point">("cube");
   const [robotBoundingBox, setRobotBoundingBox] = useState<THREE.Box3 | null>(null);
   const [robot, setRobot] = useState<any>(null);
 
@@ -1640,10 +1641,22 @@ const Index = () => {
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
                       <DropdownMenuItem
-                        onClick={() => setShowObjectCreator(true)}
+                        onClick={() => {
+                          setObjectCreatorType("cube");
+                          setShowObjectCreator(true);
+                        }}
                         className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                       >
                         Cube
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setObjectCreatorType("point");
+                          setShowObjectCreator(true);
+                        }}
+                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                      >
+                        Point
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
@@ -2203,6 +2216,7 @@ const Index = () => {
       <ObjectCreator
         open={showObjectCreator}
         onOpenChange={setShowObjectCreator}
+        defaultType={objectCreatorType}
         robotBoundingBox={robotBoundingBox}
       />
 

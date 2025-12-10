@@ -306,6 +306,7 @@ const HierarchyTreeView = ({
 export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 200;
 export const RIGHT_SIDEBAR_MAX_WIDTH = 450;
+const POINT_SIZE = 0.02;
 
 // Object Editor Panel
 interface ObjectEditorPanelProps {
@@ -327,6 +328,8 @@ const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }:
 
   const obj = objects.find((o) => o.id === objectId);
   if (!obj) return null;
+
+  const isPoint = obj.type === "point";
 
   // Get world position of joint from the robot THREE.js object
   const getJointWorldPosition = (jointName: string): THREE.Vector3 | null => {
@@ -415,50 +418,58 @@ const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }:
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Size X">
-            <NumberInput
-              value={obj.size.x}
-              onValueChange={(val) => {
-                const newSize = obj.size.clone();
-                newSize.x = val;
-                updateObjectSize(obj.id, newSize);
-              }}
-              step={0.01}
-              min={0.01}
-              compact
-              className="w-20"
-            />
-          </BlenderPropertyRow>
+          {isPoint ? (
+            <BlenderPropertyRow label="Size">
+              <span className="text-[10px] text-[#d4d4d4]">Fixed at {POINT_SIZE} m</span>
+            </BlenderPropertyRow>
+          ) : (
+            <>
+              <BlenderPropertyRow label="Size X">
+                <NumberInput
+                  value={obj.size.x}
+                  onValueChange={(val) => {
+                    const newSize = obj.size.clone();
+                    newSize.x = val;
+                    updateObjectSize(obj.id, newSize);
+                  }}
+                  step={0.01}
+                  min={0.01}
+                  compact
+                  className="w-20"
+                />
+              </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Size Y">
-            <NumberInput
-              value={obj.size.y}
-              onValueChange={(val) => {
-                const newSize = obj.size.clone();
-                newSize.y = val;
-                updateObjectSize(obj.id, newSize);
-              }}
-              step={0.01}
-              min={0.01}
-              compact
-              className="w-20"
-            />
-          </BlenderPropertyRow>
+              <BlenderPropertyRow label="Size Y">
+                <NumberInput
+                  value={obj.size.y}
+                  onValueChange={(val) => {
+                    const newSize = obj.size.clone();
+                    newSize.y = val;
+                    updateObjectSize(obj.id, newSize);
+                  }}
+                  step={0.01}
+                  min={0.01}
+                  compact
+                  className="w-20"
+                />
+              </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Size Z">
-            <NumberInput
-              value={obj.size.z}
-              onValueChange={(val) => {
-                const newSize = obj.size.clone();
-                newSize.z = val;
-                updateObjectSize(obj.id, newSize);
-              }}
-              step={0.01}
-              min={0.01}
-              compact
-              className="w-20"
-            />
-          </BlenderPropertyRow>
+              <BlenderPropertyRow label="Size Z">
+                <NumberInput
+                  value={obj.size.z}
+                  onValueChange={(val) => {
+                    const newSize = obj.size.clone();
+                    newSize.z = val;
+                    updateObjectSize(obj.id, newSize);
+                  }}
+                  step={0.01}
+                  min={0.01}
+                  compact
+                  className="w-20"
+                />
+              </BlenderPropertyRow>
+            </>
+          )}
 
           <BlenderPropertyRow label="Track Link">
             <Select
@@ -515,7 +526,7 @@ const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }:
                 className="h-3.5 w-3.5 accent-[#3d3d3d] bg-[#1e1e1e] border-[#3d3d3d]"
               />
               <span className="text-[10px] text-[#d4d4d4]">
-                Click cube in viewer to solve IK
+                Click object in viewer to solve IK
               </span>
             </div>
           </BlenderPropertyRow>
@@ -815,7 +826,7 @@ const ElementsView = ({ selectedJoint, urdfContent, availableJoints, availableLi
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
         No elements created yet.
         <br />
-        Use Create → Objects → Cube or Create → Camera to add elements.
+        {"Use Create -> Objects -> Cube/Point or Create -> Camera to add elements."}
       </div>
     );
   }
@@ -1591,3 +1602,4 @@ export const JointListSidebar = ({
     </div>
   );
 };
+
