@@ -63,6 +63,10 @@ class IKRequest(BaseModel):
     target_wxyz: Optional[List[float]] = Field(
         default=None, description="Target orientation [w, x, y, z]. Defaults to identity."
     )
+    target_rotation: Optional[List[List[float]]] = Field(
+        default=None,
+        description="Target orientation as 3x3 rotation matrix (row-major). Overrides target_wxyz when provided.",
+    )
 
 
 class IKDiagnostics(BaseModel):
@@ -295,6 +299,12 @@ def pyroki_ik(req: IKRequest) -> IKResponse:
         raise HTTPException(status_code=400, detail="target_position must have length 3")
     if req.target_wxyz is not None and len(req.target_wxyz) != 4:
         raise HTTPException(status_code=400, detail="target_wxyz must have length 4 when provided")
+    if req.target_rotation is not None:
+        if len(req.target_rotation) != 3 or any(len(row) != 3 for row in req.target_rotation):
+            raise HTTPException(
+                status_code=400,
+                detail="target_rotation must be a 3x3 matrix when provided (row-major).",
+            )
 
     # Build initial configuration from provided joint map.
     cfg_start = _build_cfg(robot, req.joint_values)
@@ -307,11 +317,20 @@ def pyroki_ik(req: IKRequest) -> IKResponse:
     joint_var = robot.joint_var_cls(0)
     target_idx = robot.links.names.index(target_link)
 
-    target_wxyz = req.target_wxyz or [1.0, 0.0, 0.0, 0.0]
-    target_pose = jaxlie.SE3.from_rotation_and_translation(
-        jaxlie.SO3(jnp.array(target_wxyz, dtype=jnp.float32)),
-        jnp.array(req.target_position, dtype=jnp.float32),
-    )
+    position = jnp.array(req.target_position, dtype=jnp.float32)
+
+    if req.target_rotation is not None:
+        rotation_matrix = jnp.array(req.target_rotation, dtype=jnp.float32)
+        target_pose = jaxlie.SE3.from_rotation_and_translation(
+            jaxlie.SO3.from_matrix(rotation_matrix),
+            position,
+        )
+    else:
+        target_wxyz = req.target_wxyz or [1.0, 0.0, 0.0, 0.0]
+        target_pose = jaxlie.SE3.from_rotation_and_translation(
+            jaxlie.SO3(jnp.array(target_wxyz, dtype=jnp.float32)),
+            position,
+        )
 
     # Costs: pose + joint limits + mild rest bias to stay near seed.
     costs = [

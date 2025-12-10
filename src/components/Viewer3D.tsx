@@ -2463,8 +2463,11 @@ export const Viewer3D = ({
 
       const jointValues = useJointStore.getState().jointValues;
 
-      // Calculate target position based on IK mode
-      let targetPosition: [number, number, number];
+      // Get robot scale to convert from Three.js scene coordinates to URDF coordinates
+      const robotScale = robotAny?.scale && typeof robotAny.scale.x === "number" ? robotAny.scale.x : 1;
+
+      // Calculate target position based on IK mode (in Three.js scene coordinates)
+      let targetPositionScene: [number, number, number];
       if (obj.ikTargetType === "orbit") {
         // Calculate position on orbit based on phase
         const radius = obj.orbitRadius ?? 0.3;
@@ -2479,17 +2482,32 @@ export const Viewer3D = ({
         const z = y * Math.sin(inclinationRad);
         const yAdjusted = y * Math.cos(inclinationRad);
 
-        targetPosition = [
+        targetPositionScene = [
           obj.position.x + x,
           obj.position.y + yAdjusted,
           obj.position.z + z
         ];
       } else {
         // Punctual mode: use cube center position
-        targetPosition = [obj.position.x, obj.position.y, obj.position.z];
+        targetPositionScene = [obj.position.x, obj.position.y, obj.position.z];
       }
 
-      const targetWxyz = [effQuat.w, effQuat.x, effQuat.y, effQuat.z];
+      // Convert from Three.js scene coordinates to URDF coordinates by dividing by scale
+      // PyRoki works in the URDF's native coordinate system (unscaled)
+      const targetPosition: [number, number, number] = [
+        targetPositionScene[0] / robotScale,
+        targetPositionScene[1] / robotScale,
+        targetPositionScene[2] / robotScale
+      ];
+
+      const normalizedQuat = effQuat.clone().normalize();
+      const { w, x, y, z } = normalizedQuat;
+      const targetRotation = [
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+      ];
+      const targetWxyz = [w, x, y, z];
 
       setIkDialogOpen(true);
       setIkResult(null);
@@ -2506,6 +2524,7 @@ export const Viewer3D = ({
             joint_values: jointValues,
             target_link: endEffectorLink,
             target_position: targetPosition,
+            target_rotation: targetRotation,
             target_wxyz: targetWxyz,
           }),
         });
