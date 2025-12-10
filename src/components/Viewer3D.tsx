@@ -36,6 +36,8 @@ interface Viewer3DProps {
   jointAxes?: JointAxisMap;
   onJointSelect?: (jointName: string | null) => void;
   onLinkSelect?: (linkName: string | null) => void;
+   onJointHover?: (jointName: string | null) => void;
+   onLinkHover?: (linkName: string | null) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onRobotJointsLoaded?: (
     joints: string[],
@@ -2107,6 +2109,8 @@ export const Viewer3D = ({
   jointAxes = {},
   onJointSelect,
   onLinkSelect,
+  onJointHover,
+  onLinkHover,
   onJointChange,
   onRobotJointsLoaded,
   onRobotLoaded,
@@ -3353,8 +3357,9 @@ export const Viewer3D = ({
                 rotationPlaneVisible={rotationPlaneVisible}
                 dragMode={dragMode}
                 onSelectPart={({ jointName, linkName }) => {
-                  onLinkSelect?.(linkName ?? null);
-                  onJointSelect?.(jointName ?? null);
+                  // Highlight only; do not open editor from 3D interactions
+                  onLinkHover?.(linkName ?? null);
+                  onJointHover?.(jointName ?? null);
                 }}
                 onJointChange={(j, v) => {
                   if (onJointChange) {

@@ -310,12 +310,12 @@ export const RIGHT_SIDEBAR_MAX_WIDTH = 450;
 // Object Editor Panel
 interface ObjectEditorPanelProps {
   objectId: string;
-  availableJoints: string[];
+  availableLinks: string[];
   robot?: any;
   endEffectorLink?: string | null;
 }
 
-const ObjectEditorPanel = ({ objectId, availableJoints, robot, endEffectorLink }: ObjectEditorPanelProps) => {
+const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }: ObjectEditorPanelProps) => {
   const objects = useObjectStore((state) => state.objects);
   const updateObjectPosition = useObjectStore((state) => state.updateObjectPosition);
   const updateObjectSize = useObjectStore((state) => state.updateObjectSize);
@@ -458,7 +458,7 @@ const ObjectEditorPanel = ({ objectId, availableJoints, robot, endEffectorLink }
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Track Joint">
+          <BlenderPropertyRow label="Track Link">
             <Select
               value={
                 obj.trackedJointName
@@ -489,9 +489,9 @@ const ObjectEditorPanel = ({ objectId, availableJoints, robot, endEffectorLink }
                 <SelectItem value="none" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                   None
                 </SelectItem>
-                {availableJoints.map((joint) => (
-                  <SelectItem key={joint} value={joint} className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
-                    {joint}
+                {availableLinks.map((link) => (
+                  <SelectItem key={link} value={link} className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
+                    {link}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1507,7 +1507,7 @@ export const JointListSidebar = ({
             ) : selectedObjectId ? (
               <ObjectEditorPanel
                 objectId={selectedObjectId}
-                availableJoints={availableJoints}
+                availableLinks={availableLinks || []}
                 robot={robot}
                 endEffectorLink={endEffectorLink}
               />

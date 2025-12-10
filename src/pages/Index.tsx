@@ -1794,6 +1794,7 @@ const Index = () => {
                       jointAxes={jointAxes}
                       onJointSelect={setSelectedJoint}
                       onLinkSelect={setSelectedLink}
+                      onJointHover={setHoveredJoint}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
                       onMotionFileChange={setMotionDataFile}
@@ -1842,6 +1843,7 @@ const Index = () => {
                       jointAxes={jointAxes}
                       onJointSelect={setSelectedJoint}
                       onLinkSelect={setSelectedLink}
+                      onJointHover={setHoveredJoint}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
                       onMotionFileChange={setMotionDataFile}
@@ -1909,6 +1911,7 @@ const Index = () => {
                       jointAxes={jointAxes}
                       onJointSelect={setSelectedJoint}
                       onLinkSelect={setSelectedLink}
+                      onJointHover={setHoveredJoint}
                       onJointChange={handleJointChange}
                       onRobotJointsLoaded={handleRobotJointsLoaded}
                       onMotionFileChange={setMotionDataFile}
