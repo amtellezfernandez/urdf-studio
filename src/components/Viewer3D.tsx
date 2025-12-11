@@ -3047,15 +3047,21 @@ export const Viewer3D = ({
 
   const handleIkDragSolved = useCallback(
     (solution: Record<string, number>) => {
+      console.log("[Viewer3D] IK solution received:", solution);
       (window as any).__viewer3dHasManualJointChanges = true;
       const robotAny: any = robot;
       if (robotAny?.setJointValues) {
+        console.log("[Viewer3D] Applying via setJointValues");
         robotAny.setJointValues(solution);
       } else if (robotAny?.setJointValue) {
+        console.log("[Viewer3D] Applying via setJointValue");
         for (const [name, value] of Object.entries(solution)) {
           robotAny.setJointValue(name, value);
         }
+      } else {
+        console.error("[Viewer3D] Robot has no setJointValues or setJointValue method!");
       }
+      console.log("[Viewer3D] Updating store with solution");
       setStoreJointValues(solution);
       onIkApplied?.(solution);
     },

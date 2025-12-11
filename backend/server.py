@@ -313,6 +313,7 @@ def _get_or_create_ik_solver(entry: RobotEntry, target_link: str, target_idx: in
             target_position
         )
 
+        # Simplified costs for SPEED - only pose and limits
         costs = [
             pk.costs.pose_cost_analytic_jac(
                 robot,
@@ -320,21 +321,17 @@ def _get_or_create_ik_solver(entry: RobotEntry, target_link: str, target_idx: in
                 target_pose,
                 jnp.array(target_idx, dtype=jnp.int32),
                 pos_weight=100.0,
-                ori_weight=5.0,
+                ori_weight=1.0,  # Even lower orientation weight for speed
             ),
             pk.costs.limit_cost(
                 robot,
                 joint_var,
                 weight=50.0,
             ),
-            pk.costs.rest_cost(
-                joint_var,
-                rest_pose=cfg_start,
-                weight=0.1,
-            ),
+            # Removed rest_cost for maximum speed during interactive dragging
         ]
 
-        # The entire .analyze() and .solve() gets JIT-compiled!
+        # Ultra-fast solver config - sacrifices accuracy for speed
         sol = (
             jaxls.LeastSquaresProblem(costs, [joint_var])
             .analyze()
@@ -343,15 +340,15 @@ def _get_or_create_ik_solver(entry: RobotEntry, target_link: str, target_idx: in
                 verbose=False,
                 linear_solver="dense_cholesky",
                 trust_region=jaxls.TrustRegionConfig(
-                    lambda_initial=0.1,
-                    lambda_min=1e-10,
-                    lambda_max=1e8,
+                    lambda_initial=0.01,  # Very aggressive start
+                    lambda_min=1e-12,
+                    lambda_max=1e6,
                 ),
                 termination=jaxls.TerminationConfig(
-                    max_iterations=10,
-                    cost_tolerance=1e-4,
-                    gradient_tolerance=1e-4,
-                    parameter_tolerance=1e-4,
+                    max_iterations=3,       # Only 3 iterations for real-time!
+                    cost_tolerance=1e-3,    # Very relaxed
+                    gradient_tolerance=1e-3,
+                    parameter_tolerance=1e-3,
                 ),
             )
         )

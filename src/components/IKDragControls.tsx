@@ -30,8 +30,10 @@ export const IKDragControls = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const lastIkCallRef = useRef<number>(0);
-  const ikThrottleMs = 30; // Call IK max every 30ms for very smooth response
+  const ikThrottleMs = 16; // Call IK max every 16ms (~60fps) for ultra-smooth response
   const abortControllerRef = useRef<AbortController | null>(null);
+  const latestJointValuesRef = useRef<Record<string, number>>(currentJointValues);
+  const lastIkErrorRef = useRef<string | null>(null);
   const pendingTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane());
   const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
@@ -49,6 +51,11 @@ export const IKDragControls = ({
 
   // Find the end effector link in the robot
   const endEffectorObject = useRef<THREE.Object3D | null>(null);
+
+  // Keep the latest joint seed values available for IK solves while dragging
+  useEffect(() => {
+    latestJointValuesRef.current = currentJointValues;
+  }, [currentJointValues]);
 
   useEffect(() => {
     if (!robot || !endEffectorLink) {
@@ -101,36 +108,64 @@ export const IKDragControls = ({
       abortControllerRef.current = controller;
 
       try {
-        const payload = {
+        const basePayload = {
           urdf: urdfContent,
-          joint_values: currentJointValues,
+          joint_values: latestJointValuesRef.current,
           target_link: endEffectorLink,
           target_position: [position.x, position.y, position.z],
-          target_wxyz: [quaternion.w, quaternion.x, quaternion.y, quaternion.z],
         };
-        console.log("[IK] Sending request:", payload.target_position);
 
-        const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
+        // Try strict orientation first, then fall back to position-only solve
+        const payloads = [
+          {
+            ...basePayload,
+            target_wxyz: [quaternion.w, quaternion.x, quaternion.y, quaternion.z],
+            ignore_orientation: false,
+          },
+          {
+            ...basePayload,
+            target_wxyz: null,
+            ignore_orientation: true,
+          },
+        ];
 
-        if (!response.ok) {
-          console.error("[IK] Request failed:", response.statusText);
-          return;
+        let solved = false;
+        let lastError: string | null = null;
+
+        for (const payload of payloads) {
+          const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            try {
+              const msg = await response.json();
+              lastError = msg?.detail || msg?.error || response.statusText;
+            } catch {
+              lastError = response.statusText;
+            }
+            continue;
+          }
+
+          const data = await response.json();
+
+          if (data?.solution) {
+            onIkSolved(data.solution);
+            solved = true;
+            lastError = null;
+            lastIkErrorRef.current = null;
+            break;
+          }
+
+          lastError = "IK solve returned no solution";
         }
 
-        const data = await response.json();
-        console.log("[IK] Response:", data);
-
-        // Check if solution is valid
-        if (data.diagnostics?.validity === "valid" && data.solution) {
-          console.log("[IK] Solution valid, applying:", data.solution);
-          onIkSolved(data.solution);
-        } else {
-          console.warn("[IK] Solution invalid:", data.diagnostics);
+        if (!solved && lastError && lastIkErrorRef.current !== lastError) {
+          lastIkErrorRef.current = lastError;
+          console.warn("[IK] Drag handle solve failed:", lastError);
         }
       } catch (error: any) {
         if (error.name !== "AbortError") {
@@ -138,22 +173,19 @@ export const IKDragControls = ({
         }
       }
     },
-    [urdfContent, currentJointValues, endEffectorLink, onIkSolved]
+    [urdfContent, endEffectorLink, onIkSolved]
   );
 
   // Pointer event handlers for direct dragging
   const handlePointerDown = useCallback(
     (event: ThreeEvent<PointerEvent>) => {
-      console.log("[IK] PointerDown event fired");
       if (!enabled || !targetMeshRef.current) {
-        console.log("[IK] PointerDown ignored - enabled:", enabled, "hasMesh:", !!targetMeshRef.current);
         return;
       }
 
       event.stopPropagation();
       (event.target as any).setPointerCapture(event.pointerId);
 
-      console.log("[IK] Starting drag, disabling OrbitControls");
       setIsDragging(true);
       onDragStateChange?.(true);
 
@@ -176,7 +208,6 @@ export const IKDragControls = ({
       raycaster.ray.intersectPlane(dragPlaneRef.current, intersection);
       if (intersection) {
         dragOffsetRef.current.subVectors(targetMeshRef.current.position, intersection);
-        console.log("[IK] Drag offset:", dragOffsetRef.current.toArray());
       }
     },
     [enabled, camera, gl, raycaster, onDragStateChange]
@@ -206,7 +237,6 @@ export const IKDragControls = ({
           position: targetMeshRef.current.position.clone(),
           quaternion: targetMeshRef.current.quaternion.clone(),
         };
-        console.log("[IK] Queued position:", targetMeshRef.current.position.toArray());
       }
     },
     [isDragging, camera, gl, raycaster]
@@ -233,7 +263,6 @@ export const IKDragControls = ({
     if (now - lastIkCallRef.current >= ikThrottleMs) {
       lastIkCallRef.current = now;
       const { position, quaternion } = pendingTargetRef.current;
-      console.log("[IK] Solving for position:", position.toArray());
       solveIk(position.clone(), quaternion.clone());
       pendingTargetRef.current = null;
     }
@@ -258,11 +287,8 @@ export const IKDragControls = ({
   }, [enabled, onDragStateChange]);
 
   if (!enabled || !endEffectorObject.current) {
-    console.log("[IK] Component hidden - enabled:", enabled, "hasEndEffector:", !!endEffectorObject.current);
     return null;
   }
-
-  console.log("[IK] Component rendering, isDragging:", isDragging);
 
   return (
     <mesh
@@ -270,14 +296,8 @@ export const IKDragControls = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerEnter={() => {
-        console.log("[IK] Pointer entered sphere");
-        setIsHovered(true);
-      }}
-      onPointerLeave={() => {
-        console.log("[IK] Pointer left sphere");
-        setIsHovered(false);
-      }}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
       renderOrder={999}
     >
       <sphereGeometry args={[0.02]} />
