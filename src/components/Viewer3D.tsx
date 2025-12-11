@@ -531,7 +531,6 @@ const OrbitVisualization = ({
   inclination,
   phase,
   color,
-  onTargetClick,
   onPrimaryOrbitClick,
   onSecondaryOrbitClick,
   secondaryPhaseOffsetDeg = 180,
@@ -541,7 +540,6 @@ const OrbitVisualization = ({
   inclination: number;
   phase: number;
   color: string;
-  onTargetClick?: () => void;
   onPrimaryOrbitClick?: () => void;
   onSecondaryOrbitClick?: () => void;
   secondaryPhaseOffsetDeg?: number;
@@ -758,13 +756,11 @@ const OrbitVisualization = ({
 const CreatedObjects = ({
   robot,
   gpuMode = "high",
-  dragMode = "move-joints",
   endEffectorLink = null,
   onIkTargetClick,
 }: {
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
-  dragMode?: "move-joints" | "click-to-place" | "drag-handle";
   endEffectorLink?: string | null;
   onIkTargetClick?: (obj: CreatedObject) => void;
 }) => {
@@ -787,7 +783,7 @@ const CreatedObjects = ({
         onIkTargetClick(targetObj);
       }
     }
-  }, [objects, onIkTargetClick, setSelectedObject, updateOrbitTargetPoint, dragMode]);
+  }, [objects, onIkTargetClick, setSelectedObject, updateOrbitTargetPoint]);
 
   return (
     <group>
@@ -867,9 +863,6 @@ const CreatedObjects = ({
                 phase={obj.orbitPhase ?? 0}
                 secondaryPhaseOffsetDeg={obj.orbitSecondaryOffset ?? 180}
                 color={targetTint}
-                onTargetClick={() => {
-                  // Not used anymore - replaced by specific orbit point clicks
-                }}
                 onPrimaryOrbitClick={() => {
                   setSelectedObject(obj.id);
                   updateOrbitTargetPoint(obj.id, "primary");
@@ -918,16 +911,20 @@ const CreatedObjects = ({
     error,
     result,
     targetName,
+    isOrbitTarget,
     onClose,
     onApply,
+    onFollowOrbit,
   }: {
     open: boolean;
     running: boolean;
     error: string | null;
     result: IkResponsePayload | null;
     targetName: string | null;
+    isOrbitTarget: boolean;
     onClose: () => void;
     onApply: () => void;
+    onFollowOrbit?: () => void;
   }) => {
     if (!open) return null;
 
@@ -1013,6 +1010,11 @@ const CreatedObjects = ({
                 <Button size="sm" onClick={onApply}>
                   Apply to robot
                 </Button>
+                {isOrbitTarget && onFollowOrbit && (
+                  <Button size="sm" variant="default" onClick={onFollowOrbit}>
+                    Follow Orbit
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -2553,6 +2555,12 @@ export const Viewer3D = ({
   const endEffectorPoseAbortRef = useRef<AbortController | null>(null);
   const initialPoseRef = useRef<Record<string, number>>({});
 
+  // Orbit following state
+  const [isFollowingOrbit, setIsFollowingOrbit] = useState(false);
+  const [orbitFollowProgress, setOrbitFollowProgress] = useState(0);
+  const orbitFollowAnimationRef = useRef<number | null>(null);
+  const orbitFollowAbortRef = useRef<boolean>(false);
+
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
@@ -2856,6 +2864,174 @@ export const Viewer3D = ({
     },
     [dragMode, endEffectorLink, robot, urdfContent]
   );
+
+  // Follow orbit incrementally using previous IK solution as seed
+  const followOrbitIncremental = useCallback(
+    async (targetObjectId: string) => {
+      const targetObj = useObjectStore.getState().objects.find((o) => o.id === targetObjectId);
+      if (!targetObj || targetObj.ikTargetType !== "orbit") {
+        toast.error("Target is not an orbit");
+        return;
+      }
+
+      if (!robot || !urdfContent || !endEffectorLink) {
+        toast.error("Missing robot, URDF, or end-effector link");
+        return;
+      }
+
+      if (!ikResult) {
+        toast.error("No IK solution to start from");
+        return;
+      }
+
+      const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
+
+      // Determine which point was clicked and calculate the arc to traverse
+      const basePhase = targetObj.orbitPhase ?? 0;
+      const secondaryOffset = targetObj.orbitSecondaryOffset ?? 180;
+      const clickedPoint = targetObj.orbitTargetPoint; // "primary", "secondary", or "center"
+
+      if (clickedPoint === "center" || !clickedPoint) {
+        toast.error("Please click on a primary or secondary orbit point first");
+        return;
+      }
+
+      const primaryPhase = normalizeDeg(basePhase);
+      const secondaryPhase = normalizeDeg(basePhase + secondaryOffset);
+      const startPhase = clickedPoint === "primary" ? primaryPhase : secondaryPhase;
+      const destinationPhase = clickedPoint === "primary" ? secondaryPhase : primaryPhase;
+
+      // Choose the shortest arc between the two points (matches the solid segment in the visualization)
+      const clockwiseDelta = normalizeDeg(destinationPhase - startPhase);
+      const counterClockwiseDelta = clockwiseDelta === 0 ? 360 : 360 - clockwiseDelta;
+      const useClockwise = clockwiseDelta <= counterClockwiseDelta;
+      const arcLength = clockwiseDelta === 0 ? 360 : useClockwise ? clockwiseDelta : counterClockwiseDelta;
+      const direction = useClockwise ? 1 : -1;
+
+      // Stop any existing orbit following
+      if (orbitFollowAnimationRef.current) {
+        cancelAnimationFrame(orbitFollowAnimationRef.current);
+        clearTimeout(orbitFollowAnimationRef.current);
+      }
+      orbitFollowAbortRef.current = false;
+
+      setIsFollowingOrbit(true);
+      setOrbitFollowProgress(0);
+      toast.success(`Following orbit from ${clickedPoint} point...`);
+
+      const radius = targetObj.orbitRadius ?? 0.3;
+      const inclination = targetObj.orbitInclination ?? 45;
+      const inclinationRad = (inclination * Math.PI) / 180;
+
+      // Use slightly denser sampling for smoother motion and clamp to a reasonable max
+      const desiredStepDeg = 1;
+      const totalSteps = Math.max(2, Math.min(360, Math.round(arcLength / desiredStepDeg) + 1));
+      const stepIntervalMs = 45; // throttle IK calls to avoid hammering backend
+
+      const phaseSamples = new Array(totalSteps).fill(0).map((_, idx) => {
+        const t = totalSteps <= 1 ? 1 : idx / (totalSteps - 1);
+        return normalizeDeg(startPhase + direction * arcLength * t);
+      });
+
+      let currentJointValues = { ...ikResult.solution };
+
+      const computeTargetPosition = (phaseDeg: number): [number, number, number] => {
+        const phaseRad = (phaseDeg * Math.PI) / 180;
+        const x = Math.cos(phaseRad) * radius;
+        const y = Math.sin(phaseRad) * radius;
+        const z = y * Math.sin(inclinationRad);
+        const yAdjusted = y * Math.cos(inclinationRad);
+
+        return [
+          targetObj.position.x + x,
+          targetObj.position.y + yAdjusted,
+          targetObj.position.z + z,
+        ];
+      };
+
+      const stepOrbit = async (stepIndex: number) => {
+        if (orbitFollowAbortRef.current) {
+          setIsFollowingOrbit(false);
+          orbitFollowAnimationRef.current = null;
+          toast.info("Orbit following stopped");
+          return;
+        }
+
+        const phaseDeg = phaseSamples[stepIndex];
+        const targetPosition = computeTargetPosition(phaseDeg);
+
+        try {
+          // Use current joint values as seed for next IK
+          const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              urdf: urdfContent,
+              joint_values: currentJointValues,
+              target_link: endEffectorLink,
+              target_position: targetPosition,
+              ignore_orientation: true,
+            }),
+          });
+
+          if (response.ok) {
+            const data = (await response.json()) as IkResponsePayload;
+            currentJointValues = data.solution;
+
+            // Apply to robot
+            setStoreJointValues(data.solution);
+            onIkApplied?.(data.solution);
+          } else {
+            console.error("IK failed at step", stepIndex);
+          }
+        } catch (err) {
+          console.error("Error during orbit following:", err);
+          setIsFollowingOrbit(false);
+          orbitFollowAnimationRef.current = null;
+          toast.error("Orbit following failed");
+          return;
+        }
+
+        const nextStep = stepIndex + 1;
+        setOrbitFollowProgress(Math.min(100, (nextStep / totalSteps) * 100));
+
+        if (nextStep < totalSteps) {
+          orbitFollowAnimationRef.current = window.setTimeout(() => {
+            void stepOrbit(nextStep);
+          }, stepIntervalMs);
+        } else {
+          setIsFollowingOrbit(false);
+          orbitFollowAnimationRef.current = null;
+          toast.success("Completed orbit arc");
+        }
+      };
+
+      // Start the orbit following
+      void stepOrbit(0);
+    },
+    [robot, urdfContent, endEffectorLink, ikResult, onIkApplied]
+  );
+
+  // Stop orbit following
+  const stopOrbitFollow = useCallback(() => {
+    orbitFollowAbortRef.current = true;
+    if (orbitFollowAnimationRef.current) {
+      cancelAnimationFrame(orbitFollowAnimationRef.current);
+      clearTimeout(orbitFollowAnimationRef.current);
+      orbitFollowAnimationRef.current = null;
+    }
+    setIsFollowingOrbit(false);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (orbitFollowAnimationRef.current) {
+        cancelAnimationFrame(orbitFollowAnimationRef.current);
+        clearTimeout(orbitFollowAnimationRef.current);
+      }
+    };
+  }, []);
 
   // Global joint store
   const storeJointValues = useJointStore((s) => s.jointValues);
@@ -4104,7 +4280,6 @@ export const Viewer3D = ({
               <CreatedObjects
                 robot={robot}
                 gpuMode={gpuMode}
-                dragMode={dragMode}
                 endEffectorLink={endEffectorLink}
                 onIkTargetClick={solveIkForObject}
               />
@@ -4151,12 +4326,22 @@ export const Viewer3D = ({
           error={ikError}
           result={ikResult}
           targetName={ikTargetName}
+          isOrbitTarget={
+            ikTargetName
+              ? useObjectStore.getState().objects.find((o) => o.id === ikTargetName)?.ikTargetType === "orbit"
+              : false
+          }
           onClose={() => setIkDialogOpen(false)}
           onApply={() => {
             if (ikResult) {
               setStoreJointValues(ikResult.solution);
               onIkApplied?.(ikResult.solution);
               toast.success("Applied IK solution");
+            }
+          }}
+          onFollowOrbit={() => {
+            if (ikTargetName && ikResult) {
+              followOrbitIncremental(ikTargetName);
             }
           }}
         />
@@ -4232,6 +4417,19 @@ export const Viewer3D = ({
             >
               Reset Pose
             </button>
+
+            {isFollowingOrbit && (
+              <button
+                type="button"
+                className="px-3 py-1 text-xs rounded border border-orange-500/60 bg-orange-500/10 text-orange-600 shadow-sm hover:bg-orange-500/20 transition-colors flex items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stopOrbitFollow();
+                }}
+              >
+                Stop Orbit ({orbitFollowProgress.toFixed(0)}%)
+              </button>
+            )}
           </div>
         )}
 
