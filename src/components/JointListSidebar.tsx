@@ -1411,21 +1411,6 @@ export const JointListSidebar = ({
                 )}
               </div>
             </div>
-
-            {/* Persistent selection summary */}
-            <div className="rounded border border-border/40 bg-muted/10 px-2 py-1.5 space-y-0.5">
-              <div className="text-[10px] text-muted-foreground">Selected Link</div>
-              <div className="text-xs text-foreground truncate">{selectedLink ?? "None"}</div>
-              <div className="text-[10px] text-muted-foreground pt-1">Associated Joint</div>
-              <div className="text-xs text-foreground truncate">
-                {selectedJoint ?? "None"}
-                {selectedJoint && jointLimits[selectedJoint]?.type ? (
-                  <span className="text-[10px] text-muted-foreground ml-1">
-                    ({jointLimits[selectedJoint]?.type})
-                  </span>
-                ) : null}
-              </div>
-            </div>
           </div>
 
           {/* Scrollable Joint List */}
