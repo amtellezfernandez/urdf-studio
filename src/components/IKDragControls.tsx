@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { TransformControls } from "@react-three/drei";
 import * as THREE from "three";
-import { useThree, useFrame } from "@react-three/fiber";
+import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 
 interface IKDragControlsProps {
   robot: any; // URDFRobot
@@ -26,14 +25,16 @@ export const IKDragControls = ({
   mode = "translate",
   onDragStateChange,
 }: IKDragControlsProps) => {
-  const transformRef = useRef<any>(null);
-  const targetRef = useRef<THREE.Group>(null);
-  const { camera, gl } = useThree();
+  const targetMeshRef = useRef<THREE.Mesh>(null);
+  const { camera, gl, raycaster, pointer } = useThree();
   const [isDragging, setIsDragging] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const lastIkCallRef = useRef<number>(0);
   const ikThrottleMs = 30; // Call IK max every 30ms for very smooth response
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
+  const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane());
+  const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // Find the end effector link in the robot
   const endEffectorObject = useRef<THREE.Object3D | null>(null);
@@ -61,9 +62,9 @@ export const IKDragControls = ({
     endEffectorObject.current = link;
   }, [robot, endEffectorLink]);
 
-  // Update target position to match end effector
-  useEffect(() => {
-    if (!endEffectorObject.current || !targetRef.current || isDragging) return;
+  // Update target position to match end effector (runs on joint changes and initially)
+  useFrame(() => {
+    if (!endEffectorObject.current || !targetMeshRef.current || isDragging) return;
 
     const link = endEffectorObject.current;
     link.updateMatrixWorld(true);
@@ -73,9 +74,9 @@ export const IKDragControls = ({
     const scale = new THREE.Vector3();
     link.matrixWorld.decompose(pos, quat, scale);
 
-    targetRef.current.position.copy(pos);
-    targetRef.current.quaternion.copy(quat);
-  }, [currentJointValues, isDragging]);
+    targetMeshRef.current.position.copy(pos);
+    targetMeshRef.current.quaternion.copy(quat);
+  });
 
   // Solve IK when target is moved - uses current joint values as seed for fast convergence
   const solveIk = useCallback(
@@ -124,6 +125,71 @@ export const IKDragControls = ({
     [urdfContent, currentJointValues, endEffectorLink, onIkSolved]
   );
 
+  // Pointer event handlers for direct dragging
+  const handlePointerDown = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      if (!enabled || !targetMeshRef.current) return;
+
+      event.stopPropagation();
+      (event.target as any).setPointerCapture(event.pointerId);
+
+      setIsDragging(true);
+      onDragStateChange?.(true);
+
+      // Create a drag plane perpendicular to the camera view
+      const cameraDirection = new THREE.Vector3();
+      camera.getWorldDirection(cameraDirection);
+      dragPlaneRef.current.setFromNormalAndCoplanarPoint(
+        cameraDirection,
+        targetMeshRef.current.position
+      );
+
+      // Calculate offset from plane intersection to sphere center
+      const intersection = new THREE.Vector3();
+      raycaster.ray.intersectPlane(dragPlaneRef.current, intersection);
+      if (intersection) {
+        dragOffsetRef.current.subVectors(targetMeshRef.current.position, intersection);
+      }
+    },
+    [enabled, camera, raycaster, onDragStateChange]
+  );
+
+  const handlePointerMove = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      if (!isDragging || !targetMeshRef.current) return;
+
+      event.stopPropagation();
+
+      // Find intersection with drag plane
+      const intersection = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(dragPlaneRef.current, intersection)) {
+        // Apply offset and update position
+        intersection.add(dragOffsetRef.current);
+        targetMeshRef.current.position.copy(intersection);
+
+        // Queue for IK solving
+        pendingTargetRef.current = {
+          position: targetMeshRef.current.position.clone(),
+          quaternion: targetMeshRef.current.quaternion.clone(),
+        };
+      }
+    },
+    [isDragging, raycaster]
+  );
+
+  const handlePointerUp = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      if (!isDragging) return;
+
+      event.stopPropagation();
+      (event.target as any).releasePointerCapture(event.pointerId);
+
+      setIsDragging(false);
+      onDragStateChange?.(false);
+    },
+    [isDragging, onDragStateChange]
+  );
+
   // Use frame loop to throttle IK calls during dragging
   useFrame(() => {
     if (!isDragging || !pendingTargetRef.current) return;
@@ -136,36 +202,6 @@ export const IKDragControls = ({
       pendingTargetRef.current = null;
     }
   });
-
-  // Handle drag events
-  useEffect(() => {
-    if (!transformRef.current) return;
-
-    const controls = transformRef.current;
-
-    const onDraggingChanged = (event: any) => {
-      setIsDragging(event.value);
-      onDragStateChange?.(event.value);
-    };
-
-    const onChange = () => {
-      if (targetRef.current) {
-        // Queue the target for IK solving (will be throttled by useFrame)
-        pendingTargetRef.current = {
-          position: targetRef.current.position.clone(),
-          quaternion: targetRef.current.quaternion.clone(),
-        };
-      }
-    };
-
-    controls.addEventListener("dragging-changed", onDraggingChanged);
-    controls.addEventListener("change", onChange);
-
-    return () => {
-      controls.removeEventListener("dragging-changed", onDraggingChanged);
-      controls.removeEventListener("change", onChange);
-    };
-  }, []);
 
   // Cleanup abort controller on unmount
   useEffect(() => {
@@ -180,6 +216,7 @@ export const IKDragControls = ({
   useEffect(() => {
     if (!enabled) {
       setIsDragging(false);
+      setIsHovered(false);
       onDragStateChange?.(false);
     }
   }, [enabled, onDragStateChange]);
@@ -189,28 +226,21 @@ export const IKDragControls = ({
   }
 
   return (
-    <group ref={targetRef}>
-      <TransformControls
-        ref={transformRef}
-        camera={camera}
-        gl={gl}
-        mode={mode}
-        size={0.8}
-        showX
-        showY
-        showZ
-      >
-        {/* Visual indicator sphere at the end effector */}
-        <mesh>
-          <sphereGeometry args={[0.02]} />
-          <meshBasicMaterial
-            color={isDragging ? "#ff6b6b" : "#4dabf7"}
-            transparent
-            opacity={0.7}
-            depthTest={false}
-          />
-        </mesh>
-      </TransformControls>
-    </group>
+    <mesh
+      ref={targetMeshRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
+    >
+      <sphereGeometry args={[0.02]} />
+      <meshBasicMaterial
+        color={isDragging ? "#ff6b6b" : isHovered ? "#5bc0de" : "#4dabf7"}
+        transparent
+        opacity={isDragging ? 0.9 : isHovered ? 0.8 : 0.7}
+        depthTest={false}
+      />
+    </mesh>
   );
 };
