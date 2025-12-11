@@ -36,6 +36,17 @@ export const IKDragControls = ({
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane());
   const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
+  // Debug initial props
+  useEffect(() => {
+    console.log("[IK] Component mounted with props:", {
+      enabled,
+      endEffectorLink,
+      hasRobot: !!robot,
+      hasUrdf: !!urdfContent,
+      jointCount: Object.keys(currentJointValues).length,
+    });
+  }, []);
+
   // Find the end effector link in the robot
   const endEffectorObject = useRef<THREE.Object3D | null>(null);
 
@@ -90,35 +101,40 @@ export const IKDragControls = ({
       abortControllerRef.current = controller;
 
       try {
+        const payload = {
+          urdf: urdfContent,
+          joint_values: currentJointValues,
+          target_link: endEffectorLink,
+          target_position: [position.x, position.y, position.z],
+          target_wxyz: [quaternion.w, quaternion.x, quaternion.y, quaternion.z],
+        };
+        console.log("[IK] Sending request:", payload.target_position);
+
         const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            urdf: urdfContent,
-            joint_values: currentJointValues,
-            target_link: endEffectorLink,
-            target_position: [position.x, position.y, position.z],
-            target_wxyz: [quaternion.w, quaternion.x, quaternion.y, quaternion.z],
-          }),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         });
 
         if (!response.ok) {
-          console.error("IK request failed:", response.statusText);
+          console.error("[IK] Request failed:", response.statusText);
           return;
         }
 
         const data = await response.json();
+        console.log("[IK] Response:", data);
 
         // Check if solution is valid
         if (data.diagnostics?.validity === "valid" && data.solution) {
+          console.log("[IK] Solution valid, applying:", data.solution);
           onIkSolved(data.solution);
         } else {
-          console.warn("IK solution invalid:", data.diagnostics);
+          console.warn("[IK] Solution invalid:", data.diagnostics);
         }
       } catch (error: any) {
         if (error.name !== "AbortError") {
-          console.error("IK solve error:", error);
+          console.error("[IK] Solve error:", error);
         }
       }
     },
@@ -128,11 +144,16 @@ export const IKDragControls = ({
   // Pointer event handlers for direct dragging
   const handlePointerDown = useCallback(
     (event: ThreeEvent<PointerEvent>) => {
-      if (!enabled || !targetMeshRef.current) return;
+      console.log("[IK] PointerDown event fired");
+      if (!enabled || !targetMeshRef.current) {
+        console.log("[IK] PointerDown ignored - enabled:", enabled, "hasMesh:", !!targetMeshRef.current);
+        return;
+      }
 
       event.stopPropagation();
       (event.target as any).setPointerCapture(event.pointerId);
 
+      console.log("[IK] Starting drag, disabling OrbitControls");
       setIsDragging(true);
       onDragStateChange?.(true);
 
@@ -144,14 +165,21 @@ export const IKDragControls = ({
         targetMeshRef.current.position
       );
 
+      // Update raycaster with current pointer position
+      const rect = gl.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+
       // Calculate offset from plane intersection to sphere center
       const intersection = new THREE.Vector3();
       raycaster.ray.intersectPlane(dragPlaneRef.current, intersection);
       if (intersection) {
         dragOffsetRef.current.subVectors(targetMeshRef.current.position, intersection);
+        console.log("[IK] Drag offset:", dragOffsetRef.current.toArray());
       }
     },
-    [enabled, camera, raycaster, onDragStateChange]
+    [enabled, camera, gl, raycaster, onDragStateChange]
   );
 
   const handlePointerMove = useCallback(
@@ -159,6 +187,12 @@ export const IKDragControls = ({
       if (!isDragging || !targetMeshRef.current) return;
 
       event.stopPropagation();
+
+      // Update raycaster with current pointer position
+      const rect = gl.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
 
       // Find intersection with drag plane
       const intersection = new THREE.Vector3();
@@ -172,9 +206,10 @@ export const IKDragControls = ({
           position: targetMeshRef.current.position.clone(),
           quaternion: targetMeshRef.current.quaternion.clone(),
         };
+        console.log("[IK] Queued position:", targetMeshRef.current.position.toArray());
       }
     },
-    [isDragging, raycaster]
+    [isDragging, camera, gl, raycaster]
   );
 
   const handlePointerUp = useCallback(
@@ -198,6 +233,7 @@ export const IKDragControls = ({
     if (now - lastIkCallRef.current >= ikThrottleMs) {
       lastIkCallRef.current = now;
       const { position, quaternion } = pendingTargetRef.current;
+      console.log("[IK] Solving for position:", position.toArray());
       solveIk(position.clone(), quaternion.clone());
       pendingTargetRef.current = null;
     }
@@ -222,8 +258,11 @@ export const IKDragControls = ({
   }, [enabled, onDragStateChange]);
 
   if (!enabled || !endEffectorObject.current) {
+    console.log("[IK] Component hidden - enabled:", enabled, "hasEndEffector:", !!endEffectorObject.current);
     return null;
   }
+
+  console.log("[IK] Component rendering, isDragging:", isDragging);
 
   return (
     <mesh
@@ -231,8 +270,15 @@ export const IKDragControls = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerEnter={() => setIsHovered(true)}
-      onPointerLeave={() => setIsHovered(false)}
+      onPointerEnter={() => {
+        console.log("[IK] Pointer entered sphere");
+        setIsHovered(true);
+      }}
+      onPointerLeave={() => {
+        console.log("[IK] Pointer left sphere");
+        setIsHovered(false);
+      }}
+      renderOrder={999}
     >
       <sphereGeometry args={[0.02]} />
       <meshBasicMaterial
