@@ -31,11 +31,13 @@ export const IKDragControls = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const lastIkCallRef = useRef<number>(0);
-  const ikThrottleMs = 16; // Call IK max every 16ms (~60fps) for ultra-smooth response
+  const ikThrottleMs = 60; // Call IK at most once every 60ms to avoid spamming and keep responses smooth
   const abortControllerRef = useRef<AbortController | null>(null);
   const latestJointValuesRef = useRef<Record<string, number>>(currentJointValues);
   const lastIkErrorRef = useRef<string | null>(null);
   const pendingTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
+  const queuedTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
+  const isSolvingRef = useRef(false);
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane());
   const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
@@ -100,11 +102,6 @@ export const IKDragControls = ({
   // Solve IK when target is moved - uses current joint values as seed for fast convergence
   const solveIk = useCallback(
     async (position: THREE.Vector3, quaternion: THREE.Quaternion) => {
-      // Cancel previous IK call if still running
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -271,15 +268,31 @@ export const IKDragControls = ({
 
   // Use frame loop to throttle IK calls during dragging
   useFrame(() => {
-    if (!isDragging || !pendingTargetRef.current) return;
+    if (!isDragging) return;
 
-    const now = Date.now();
-    if (now - lastIkCallRef.current >= ikThrottleMs) {
-      lastIkCallRef.current = now;
-      const { position, quaternion } = pendingTargetRef.current;
-      solveIk(position.clone(), quaternion.clone());
+    // Always keep the most recent target; drop older ones to avoid backlog
+    if (pendingTargetRef.current) {
+      queuedTargetRef.current = pendingTargetRef.current;
       pendingTargetRef.current = null;
     }
+
+    if (isSolvingRef.current || !queuedTargetRef.current) return;
+
+    const now = performance.now();
+    if (now - lastIkCallRef.current < ikThrottleMs) return;
+
+    const { position, quaternion } = queuedTargetRef.current;
+    queuedTargetRef.current = null;
+    isSolvingRef.current = true;
+    lastIkCallRef.current = now;
+
+    solveIk(position.clone(), quaternion.clone())
+      .catch(() => {
+        /* errors handled inside solveIk */
+      })
+      .finally(() => {
+        isSolvingRef.current = false;
+      });
   });
 
   // Cleanup abort controller on unmount

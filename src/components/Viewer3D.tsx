@@ -2562,10 +2562,16 @@ export const Viewer3D = ({
   const [orbitFollowProgress, setOrbitFollowProgress] = useState(0);
   const orbitFollowAnimationRef = useRef<number | null>(null);
   const orbitFollowAbortRef = useRef<boolean>(false);
+  const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
 
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
+
+  // Reset IK smoothing state when the robot or drag mode changes
+  useEffect(() => {
+    lastIkAppliedRef.current = null;
+  }, [urdfFile, endEffectorLink, dragMode]);
 
   // Use selectedLink from props
   const selectedLink = selectedLinkProp;
@@ -3047,23 +3053,45 @@ export const Viewer3D = ({
 
   const handleIkDragSolved = useCallback(
     (solution: Record<string, number>) => {
+      const SMOOTH_ALPHA = 0.35; // blend factor to damp sudden IK jumps
+      const previous = lastIkAppliedRef.current;
+      const blended: Record<string, number> = {};
+
+      if (previous) {
+        // Blend towards new solution to avoid flicker between IK branches
+        for (const [joint, value] of Object.entries(solution)) {
+          const prevVal = previous[joint] ?? value;
+          blended[joint] = prevVal + (value - prevVal) * SMOOTH_ALPHA;
+        }
+        // Keep any joints that were in the previous state but not present in the new solution
+        for (const [joint, prevVal] of Object.entries(previous)) {
+          if (!(joint in blended)) {
+            blended[joint] = prevVal;
+          }
+        }
+      } else {
+        Object.assign(blended, solution);
+      }
+
+      lastIkAppliedRef.current = blended;
+
       console.log("[Viewer3D] IK solution received:", solution);
       (window as any).__viewer3dHasManualJointChanges = true;
       const robotAny: any = robot;
       if (robotAny?.setJointValues) {
         console.log("[Viewer3D] Applying via setJointValues");
-        robotAny.setJointValues(solution);
+        robotAny.setJointValues(blended);
       } else if (robotAny?.setJointValue) {
         console.log("[Viewer3D] Applying via setJointValue");
-        for (const [name, value] of Object.entries(solution)) {
+        for (const [name, value] of Object.entries(blended)) {
           robotAny.setJointValue(name, value);
         }
       } else {
         console.error("[Viewer3D] Robot has no setJointValues or setJointValue method!");
       }
       console.log("[Viewer3D] Updating store with solution");
-      setStoreJointValues(solution);
-      onIkApplied?.(solution);
+      setStoreJointValues(blended);
+      onIkApplied?.(blended);
     },
     [robot, setStoreJointValues, onIkApplied]
   );
