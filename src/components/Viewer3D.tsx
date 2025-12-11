@@ -556,6 +556,11 @@ const OrbitVisualization = ({
     return points;
   }, [radius, inclination]);
 
+  const orbitPositions = useMemo(
+    () => new Float32Array(orbitPoints.flatMap((p) => [p.x, p.y, p.z])),
+    [orbitPoints]
+  );
+
   // Calculate current position on orbit based on phase
   const orbitTargetPosition = useMemo(() => {
     const phaseRad = (phase * Math.PI) / 180;
@@ -573,15 +578,39 @@ const OrbitVisualization = ({
     );
   }, [centerPosition, radius, inclination, phase]);
 
+  const targetOffset = useMemo(
+    () => [
+      orbitTargetPosition.x - centerPosition.x,
+      orbitTargetPosition.y - centerPosition.y,
+      orbitTargetPosition.z - centerPosition.z,
+    ],
+    [orbitTargetPosition, centerPosition]
+  );
+
+  const radiusLinePositions = useMemo(
+    () => new Float32Array([0, 0, 0, ...targetOffset]),
+    [targetOffset]
+  );
+
+  // Force geometry rebuild when orbit params move so the viewer updates immediately
+  const orbitGeometryKey = useMemo(
+    () => `${radius}-${inclination}`,
+    [radius, inclination]
+  );
+  const radiusLineKey = useMemo(
+    () => `${orbitGeometryKey}-${phase}-${targetOffset.join("|")}`,
+    [orbitGeometryKey, phase, targetOffset]
+  );
+
   return (
     <group position={[centerPosition.x, centerPosition.y, centerPosition.z]}>
       {/* Orbit circle */}
-      <line>
+      <line key={`orbit-${orbitGeometryKey}`}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
             count={orbitPoints.length}
-            array={new Float32Array(orbitPoints.flatMap((p) => [p.x, p.y, p.z]))}
+            array={orbitPositions}
             itemSize={3}
           />
         </bufferGeometry>
@@ -589,27 +618,18 @@ const OrbitVisualization = ({
       </line>
 
       {/* Target point on orbit */}
-      <mesh position={[
-        orbitTargetPosition.x - centerPosition.x,
-        orbitTargetPosition.y - centerPosition.y,
-        orbitTargetPosition.z - centerPosition.z
-      ]}>
+      <mesh position={targetOffset}>
         <sphereGeometry args={[0.02, 16, 16]} />
         <meshBasicMaterial color={color} />
       </mesh>
 
       {/* Line from center to target point */}
-      <line>
+      <line key={`orbit-radius-${radiusLineKey}`}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
             count={2}
-            array={new Float32Array([
-              0, 0, 0,
-              orbitTargetPosition.x - centerPosition.x,
-              orbitTargetPosition.y - centerPosition.y,
-              orbitTargetPosition.z - centerPosition.z
-            ])}
+            array={radiusLinePositions}
             itemSize={3}
           />
         </bufferGeometry>
