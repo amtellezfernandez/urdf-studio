@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import * as THREE from "three";
 import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
+import { toast } from "sonner";
 
 interface IKDragControlsProps {
   robot: any; // URDFRobot
@@ -115,15 +116,26 @@ export const IKDragControls = ({
           target_position: [position.x, position.y, position.z],
         };
 
+        // Convert quaternion to rotation matrix for the API
+        const { w, x, y, z } = quaternion;
+        const targetRotation = [
+          [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+          [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+          [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ];
+        const targetWxyz = [w, x, y, z];
+
         // Try strict orientation first, then fall back to position-only solve
         const payloads = [
           {
             ...basePayload,
-            target_wxyz: [quaternion.w, quaternion.x, quaternion.y, quaternion.z],
+            target_rotation: targetRotation,
+            target_wxyz: targetWxyz,
             ignore_orientation: false,
           },
           {
             ...basePayload,
+            target_rotation: null,
             target_wxyz: null,
             ignore_orientation: true,
           },
@@ -166,10 +178,12 @@ export const IKDragControls = ({
         if (!solved && lastError && lastIkErrorRef.current !== lastError) {
           lastIkErrorRef.current = lastError;
           console.warn("[IK] Drag handle solve failed:", lastError);
+          toast.error(lastError);
         }
       } catch (error: any) {
         if (error.name !== "AbortError") {
           console.error("[IK] Solve error:", error);
+          toast.error("IK solve failed. Is the IK server running?");
         }
       }
     },
@@ -300,7 +314,7 @@ export const IKDragControls = ({
       onPointerLeave={() => setIsHovered(false)}
       renderOrder={999}
     >
-      <sphereGeometry args={[0.02]} />
+      <sphereGeometry args={[0.035]} />
       <meshBasicMaterial
         color={isDragging ? "#ff6b6b" : isHovered ? "#5bc0de" : "#4dabf7"}
         transparent
