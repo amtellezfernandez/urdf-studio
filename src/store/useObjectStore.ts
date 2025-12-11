@@ -14,6 +14,7 @@ export interface CreatedObject {
   orbitInclination?: number; // in degrees
   orbitPhase?: number; // current position on orbit (0-360 degrees)
   orbitSecondaryOffset?: number; // degrees offset between orbit markers
+  orbitTargetPoint?: "center" | "primary" | "secondary"; // which point to use for IK
 }
 
 interface ObjectStore {
@@ -27,6 +28,7 @@ interface ObjectStore {
   updateObjectIkTarget: (id: string, isIkTarget: boolean) => void;
   updateIkTargetType: (id: string, ikTargetType: "punctual" | "orbit") => void;
   updateOrbitParams: (id: string, params: { radius?: number; inclination?: number; phase?: number; secondaryOffset?: number }) => void;
+  updateOrbitTargetPoint: (id: string, targetPoint: "center" | "primary" | "secondary") => void;
   setSelectedObject: (id: string | null) => void;
   clearObjects: () => void;
 }
@@ -55,6 +57,7 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
       orbitInclination: object.orbitInclination ?? 45,
       orbitPhase: object.orbitPhase ?? 0,
       orbitSecondaryOffset: object.orbitSecondaryOffset ?? 180,
+      orbitTargetPoint: object.orbitTargetPoint ?? "primary",
     };
 
     set((state) => ({
@@ -126,6 +129,14 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
           orbitSecondaryOffset: params.secondaryOffset !== undefined ? params.secondaryOffset : obj.orbitSecondaryOffset,
         };
       }),
+    }));
+  },
+
+  updateOrbitTargetPoint: (id, targetPoint) => {
+    set((state) => ({
+      objects: state.objects.map((obj) =>
+        obj.id === id ? { ...obj, orbitTargetPoint: targetPoint } : obj
+      ),
     }));
   },
 

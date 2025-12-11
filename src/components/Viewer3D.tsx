@@ -532,6 +532,8 @@ const OrbitVisualization = ({
   phase,
   color,
   onTargetClick,
+  onPrimaryOrbitClick,
+  onSecondaryOrbitClick,
   secondaryPhaseOffsetDeg = 180,
 }: {
   centerPosition: THREE.Vector3;
@@ -540,6 +542,8 @@ const OrbitVisualization = ({
   phase: number;
   color: string;
   onTargetClick?: () => void;
+  onPrimaryOrbitClick?: () => void;
+  onSecondaryOrbitClick?: () => void;
   secondaryPhaseOffsetDeg?: number;
 }) => {
   const TWO_PI = Math.PI * 2;
@@ -710,12 +714,12 @@ const OrbitVisualization = ({
         </lineSegments>
       )}
 
-      {/* Target point on orbit */}
+      {/* Primary target point on orbit */}
       <mesh
         position={targetOffset}
         onPointerDown={(e) => {
           e.stopPropagation();
-          onTargetClick?.();
+          onPrimaryOrbitClick?.();
         }}
       >
         <sphereGeometry args={[0.01, 16, 16]} />
@@ -727,7 +731,7 @@ const OrbitVisualization = ({
         position={secondaryTargetOffset}
         onPointerDown={(e) => {
           e.stopPropagation();
-          onTargetClick?.();
+          onSecondaryOrbitClick?.();
         }}
       >
         <sphereGeometry args={[0.01, 16, 16]} />
@@ -767,16 +771,23 @@ const CreatedObjects = ({
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const setSelectedObject = useObjectStore((state) => state.setSelectedObject);
+  const updateOrbitTargetPoint = useObjectStore((state) => state.updateOrbitTargetPoint);
 
   // Handle pointer down on cube (just for selection, no dragging)
   const handlePointerDown = useCallback((e: any, objectId: string) => {
     e.stopPropagation();
     const targetObj = objects.find((o) => o.id === objectId);
     setSelectedObject(objectId);
-    if (targetObj?.isIkTarget && onIkTargetClick) {
-      onIkTargetClick(targetObj);
+    if (targetObj?.isIkTarget) {
+      // If it's an orbit target, set to use center position
+      if (targetObj.ikTargetType === "orbit") {
+        updateOrbitTargetPoint(objectId, "center");
+      }
+      if (onIkTargetClick) {
+        onIkTargetClick(targetObj);
+      }
     }
-  }, [objects, onIkTargetClick, setSelectedObject, dragMode]);
+  }, [objects, onIkTargetClick, setSelectedObject, updateOrbitTargetPoint, dragMode]);
 
   return (
     <group>
@@ -857,7 +868,16 @@ const CreatedObjects = ({
                 secondaryPhaseOffsetDeg={obj.orbitSecondaryOffset ?? 180}
                 color={targetTint}
                 onTargetClick={() => {
+                  // Not used anymore - replaced by specific orbit point clicks
+                }}
+                onPrimaryOrbitClick={() => {
                   setSelectedObject(obj.id);
+                  updateOrbitTargetPoint(obj.id, "primary");
+                  onIkTargetClick?.(obj);
+                }}
+                onSecondaryOrbitClick={() => {
+                  setSelectedObject(obj.id);
+                  updateOrbitTargetPoint(obj.id, "secondary");
                   onIkTargetClick?.(obj);
                 }}
               />
@@ -2697,6 +2717,14 @@ export const Viewer3D = ({
         return;
       }
 
+      // Fetch the latest object from the store to get updated orbitTargetPoint
+      const latestObj = useObjectStore.getState().objects.find((o) => o.id === obj.id);
+      if (!latestObj) {
+        toast.error("IK target object not found.");
+        return;
+      }
+      const targetObj = latestObj;
+
       const robotAny: any = robot;
       const effObj =
         robotAny?.links?.[endEffectorLink] ??
@@ -2719,11 +2747,15 @@ export const Viewer3D = ({
       // Three.js scene coordinates = PyRoki URDF coordinates (meters)
       // Robot is at origin with scale=1, so no transformation needed
       let targetPosition: [number, number, number];
-      if (obj.ikTargetType === "orbit") {
-        // Calculate position on orbit based on phase
-        const radius = obj.orbitRadius ?? 0.3;
-        const inclination = obj.orbitInclination ?? 45;
-        const phase = obj.orbitPhase ?? 0;
+      if (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") {
+        // Calculate position on orbit based on which point was clicked
+        const radius = targetObj.orbitRadius ?? 0.3;
+        const inclination = targetObj.orbitInclination ?? 45;
+        const basePhase = targetObj.orbitPhase ?? 0;
+
+        // Use secondary offset if secondary point was clicked
+        const secondaryOffset = targetObj.orbitTargetPoint === "secondary" ? (targetObj.orbitSecondaryOffset ?? 180) : 0;
+        const phase = basePhase + secondaryOffset;
 
         const phaseRad = (phase * Math.PI) / 180;
         const inclinationRad = (inclination * Math.PI) / 180;
@@ -2734,13 +2766,13 @@ export const Viewer3D = ({
         const yAdjusted = y * Math.cos(inclinationRad);
 
         targetPosition = [
-          obj.position.x + x,
-          obj.position.y + yAdjusted,
-          obj.position.z + z
+          targetObj.position.x + x,
+          targetObj.position.y + yAdjusted,
+          targetObj.position.z + z
         ];
       } else {
-        // Punctual mode: use cube center position directly
-        targetPosition = [obj.position.x, obj.position.y, obj.position.z];
+        // Punctual mode or center of orbit: use cube center position directly
+        targetPosition = [targetObj.position.x, targetObj.position.y, targetObj.position.z];
       }
 
       // Use end-effector orientation directly (no transformation needed)
@@ -2751,12 +2783,13 @@ export const Viewer3D = ({
         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
       ];
       const targetWxyz = [w, x, y, z];
-      const orientationOptional = obj.ikTargetType !== "orbit" && obj.type === "point";
+      // Orientation is optional for orbit points (not center) and point types
+      const orientationOptional = (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") || (targetObj.ikTargetType !== "orbit" && targetObj.type === "point");
 
       setIkDialogOpen(true);
       setIkResult(null);
       setIkError(null);
-      setIkTargetName(obj.id);
+      setIkTargetName(targetObj.id);
       setIsIkRunning(true);
 
       try {
@@ -3917,9 +3950,37 @@ export const Viewer3D = ({
             {ikTargetName && (() => {
               const targetObj = ikObjects.find((o) => o.id === ikTargetName);
               if (!targetObj || !endEffectorPose.three) return null;
-              const dx = endEffectorPose.three.position[0] - targetObj.position.x;
-              const dy = endEffectorPose.three.position[1] - targetObj.position.y;
-              const dz = endEffectorPose.three.position[2] - targetObj.position.z;
+
+              // Calculate actual target position based on which point was clicked
+              let targetX = targetObj.position.x;
+              let targetY = targetObj.position.y;
+              let targetZ = targetObj.position.z;
+
+              if (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") {
+                const radius = targetObj.orbitRadius ?? 0.3;
+                const inclination = targetObj.orbitInclination ?? 45;
+                const basePhase = targetObj.orbitPhase ?? 0;
+
+                // Use secondary offset if secondary point was clicked
+                const secondaryOffset = targetObj.orbitTargetPoint === "secondary" ? (targetObj.orbitSecondaryOffset ?? 180) : 0;
+                const phase = basePhase + secondaryOffset;
+
+                const phaseRad = (phase * Math.PI) / 180;
+                const inclinationRad = (inclination * Math.PI) / 180;
+
+                const x = Math.cos(phaseRad) * radius;
+                const y = Math.sin(phaseRad) * radius;
+                const z = y * Math.sin(inclinationRad);
+                const yAdjusted = y * Math.cos(inclinationRad);
+
+                targetX = targetObj.position.x + x;
+                targetY = targetObj.position.y + yAdjusted;
+                targetZ = targetObj.position.z + z;
+              }
+
+              const dx = endEffectorPose.three.position[0] - targetX;
+              const dy = endEffectorPose.three.position[1] - targetY;
+              const dz = endEffectorPose.three.position[2] - targetZ;
               const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
               return (
                 <div className="text-[10px] text-amber-400">
