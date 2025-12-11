@@ -14,6 +14,7 @@ import jointColors from "@/joint_colors.json";
 import { AxisGizmo3D } from "@/components/AxisGizmo3D";
 import { CustomAxesHelper } from "@/components/CustomAxesHelper";
 import { CameraIcons } from "@/components/CameraIcons";
+import { IKDragControls } from "@/components/IKDragControls";
 import { useCameraStore } from "@/store/useCameraStore";
 import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import { parseEpisodeJson } from "@/utils/episodeFormat";
@@ -2530,6 +2531,7 @@ export const Viewer3D = ({
   const [isFkDialogOpen, setIsFkDialogOpen] = useState(false);
   const [meshFiles, setMeshFiles] = useState<MeshFiles>(initialMeshFiles);
   const [isDraggingJoint, setIsDraggingJoint] = useState(false);
+  const [isIkHandleDragging, setIsIkHandleDragging] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const controlsRef = useRef<any>(null);
@@ -3037,6 +3039,43 @@ export const Viewer3D = ({
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
 
+  const ikDragEnabled = dragMode === "drag-handle" && !!robot && !!urdfContent && !!endEffectorLink;
+  const liveIkSeedValues = useMemo(
+    () => getLiveRobotJoints(robot, storeJointValues),
+    [robot, storeJointValues]
+  );
+
+  const handleIkDragSolved = useCallback(
+    (solution: Record<string, number>) => {
+      (window as any).__viewer3dHasManualJointChanges = true;
+      const robotAny: any = robot;
+      if (robotAny?.setJointValues) {
+        robotAny.setJointValues(solution);
+      } else if (robotAny?.setJointValue) {
+        for (const [name, value] of Object.entries(solution)) {
+          robotAny.setJointValue(name, value);
+        }
+      }
+      setStoreJointValues(solution);
+      onIkApplied?.(solution);
+    },
+    [robot, setStoreJointValues, onIkApplied]
+  );
+
+  const handleIkDragStateChange = useCallback((dragging: boolean) => {
+    setIsIkHandleDragging(dragging);
+    if (dragging) {
+      (window as any).__viewer3dHasManualJointChanges = true;
+    }
+  }, []);
+
+  // Reset IK drag state when mode changes or handle is hidden
+  useEffect(() => {
+    if (!ikDragEnabled && isIkHandleDragging) {
+      setIsIkHandleDragging(false);
+    }
+  }, [ikDragEnabled, isIkHandleDragging]);
+
   // Keep EE pose aligned between Three.js and PyRoki (base_link/world frame)
   useEffect(() => {
     if (!robot || !urdfContent || !endEffectorLink) {
@@ -3255,7 +3294,7 @@ export const Viewer3D = ({
 
   // Apply joint values from props (skip if dragging)
   useEffect(() => {
-    if (!robot || isDraggingJoint) return;
+    if (!robot || isDraggingJoint || isIkHandleDragging) return;
     const r: any = robot as any;
     if (typeof r.setJointValue !== "function") return;
     for (const [jointName, value] of Object.entries(jointValues)) {
@@ -3263,7 +3302,7 @@ export const Viewer3D = ({
         r.setJointValue(jointName, value);
       }
     }
-  }, [robot, jointValues, isDraggingJoint]);
+  }, [robot, jointValues, isDraggingJoint, isIkHandleDragging]);
 
   const resetPose = useCallback(() => {
     if (!robot) return;
@@ -3285,7 +3324,7 @@ export const Viewer3D = ({
 
   // Apply joint values from global store (authoritative for live slider moves, skip if dragging)
   useEffect(() => {
-    if (!robot || isDraggingJoint) return;
+    if (!robot || isDraggingJoint || isIkHandleDragging) return;
     const r: any = robot as any;
     if (typeof r.setJointValue !== "function") return;
     let hasChanges = false;
@@ -3305,7 +3344,7 @@ export const Viewer3D = ({
       // Use window property to communicate with URDFModel's animation loop
       (window as any).__viewer3dHasManualJointChanges = true;
     }
-  }, [robot, storeJointValues, isDraggingJoint, isPlaying]);
+  }, [robot, storeJointValues, isDraggingJoint, isIkHandleDragging, isPlaying]);
 
   const handleMotionDataUpload = (e: React.ChangeEvent<HTMLInputElement> | File) => {
     const file = e instanceof File ? e : e.target.files?.[0];
@@ -4275,6 +4314,17 @@ export const Viewer3D = ({
                 robot={robot}
                 gpuMode={gpuMode}
               />
+              {ikDragEnabled && urdfContent && endEffectorLink && (
+                <IKDragControls
+                  robot={robot}
+                  endEffectorLink={endEffectorLink!}
+                  urdfContent={urdfContent!}
+                  currentJointValues={liveIkSeedValues}
+                  onIkSolved={handleIkDragSolved}
+                  onDragStateChange={handleIkDragStateChange}
+                  enabled={ikDragEnabled}
+                />
+              )}
               <CreatedObjects
                 robot={robot}
                 gpuMode={gpuMode}
@@ -4298,7 +4348,7 @@ export const Viewer3D = ({
           <OrbitControls
             ref={controlsRef}
             makeDefault
-            enabled={!isDraggingJoint}
+            enabled={!isDraggingJoint && !isIkHandleDragging}
             enablePan={true}
             enableRotate={true}
             enableZoom={true}
