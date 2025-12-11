@@ -2911,7 +2911,6 @@ export const Viewer3D = ({
       // Stop any existing orbit following
       if (orbitFollowAnimationRef.current) {
         cancelAnimationFrame(orbitFollowAnimationRef.current);
-        clearTimeout(orbitFollowAnimationRef.current);
       }
       orbitFollowAbortRef.current = false;
 
@@ -2922,18 +2921,12 @@ export const Viewer3D = ({
       const radius = targetObj.orbitRadius ?? 0.3;
       const inclination = targetObj.orbitInclination ?? 45;
       const inclinationRad = (inclination * Math.PI) / 180;
+      const totalSteps = Math.max(1, Math.round(arcLength)); // 1 degree per step
+      const minStepIntervalMs = 45;
 
-      // Use slightly denser sampling for smoother motion and clamp to a reasonable max
-      const desiredStepDeg = 1;
-      const totalSteps = Math.max(2, Math.min(360, Math.round(arcLength / desiredStepDeg) + 1));
-      const stepIntervalMs = 45; // throttle IK calls to avoid hammering backend
-
-      const phaseSamples = new Array(totalSteps).fill(0).map((_, idx) => {
-        const t = totalSteps <= 1 ? 1 : idx / (totalSteps - 1);
-        return normalizeDeg(startPhase + direction * arcLength * t);
-      });
-
+      let currentStep = 0;
       let currentJointValues = { ...ikResult.solution };
+      let lastTimestamp = performance.now();
 
       const computeTargetPosition = (phaseDeg: number): [number, number, number] => {
         const phaseRad = (phaseDeg * Math.PI) / 180;
@@ -2949,7 +2942,7 @@ export const Viewer3D = ({
         ];
       };
 
-      const stepOrbit = async (stepIndex: number) => {
+      const stepOrbit = async (timestamp: number) => {
         if (orbitFollowAbortRef.current) {
           setIsFollowingOrbit(false);
           orbitFollowAnimationRef.current = null;
@@ -2957,8 +2950,17 @@ export const Viewer3D = ({
           return;
         }
 
-        const phaseDeg = phaseSamples[stepIndex];
-        const targetPosition = computeTargetPosition(phaseDeg);
+        // Throttle the IK calls to avoid hammering the backend
+        if (timestamp - lastTimestamp < minStepIntervalMs && currentStep !== 0) {
+          orbitFollowAnimationRef.current = requestAnimationFrame(stepOrbit);
+          return;
+        }
+        lastTimestamp = timestamp;
+
+        // Calculate current phase along the chosen arc
+        const t = totalSteps <= 1 ? 1 : currentStep / (totalSteps - 1); // cover the full arc including the end point
+        const currentPhase = normalizeDeg(startPhase + direction * arcLength * t);
+        const targetPosition = computeTargetPosition(currentPhase);
 
         try {
           // Use current joint values as seed for next IK
@@ -2982,7 +2984,7 @@ export const Viewer3D = ({
             setStoreJointValues(data.solution);
             onIkApplied?.(data.solution);
           } else {
-            console.error("IK failed at step", stepIndex);
+            console.error("IK failed at step", currentStep);
           }
         } catch (err) {
           console.error("Error during orbit following:", err);
@@ -2992,13 +2994,11 @@ export const Viewer3D = ({
           return;
         }
 
-        const nextStep = stepIndex + 1;
-        setOrbitFollowProgress(Math.min(100, (nextStep / totalSteps) * 100));
+        currentStep++;
+        setOrbitFollowProgress(Math.min(100, (currentStep / totalSteps) * 100));
 
-        if (nextStep < totalSteps) {
-          orbitFollowAnimationRef.current = window.setTimeout(() => {
-            void stepOrbit(nextStep);
-          }, stepIntervalMs);
+        if (currentStep < totalSteps) {
+          orbitFollowAnimationRef.current = requestAnimationFrame(stepOrbit);
         } else {
           setIsFollowingOrbit(false);
           orbitFollowAnimationRef.current = null;
@@ -3007,7 +3007,7 @@ export const Viewer3D = ({
       };
 
       // Start the orbit following
-      void stepOrbit(0);
+      orbitFollowAnimationRef.current = requestAnimationFrame(stepOrbit);
     },
     [robot, urdfContent, endEffectorLink, ikResult, onIkApplied]
   );
@@ -3017,7 +3017,6 @@ export const Viewer3D = ({
     orbitFollowAbortRef.current = true;
     if (orbitFollowAnimationRef.current) {
       cancelAnimationFrame(orbitFollowAnimationRef.current);
-      clearTimeout(orbitFollowAnimationRef.current);
       orbitFollowAnimationRef.current = null;
     }
     setIsFollowingOrbit(false);
@@ -3028,7 +3027,6 @@ export const Viewer3D = ({
     return () => {
       if (orbitFollowAnimationRef.current) {
         cancelAnimationFrame(orbitFollowAnimationRef.current);
-        clearTimeout(orbitFollowAnimationRef.current);
       }
     };
   }, []);
