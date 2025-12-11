@@ -72,6 +72,92 @@ interface URDFRobot {
   scale: THREE.Vector3;
 }
 
+type LinkPose = {
+  position: [number, number, number];
+  quaternion: [number, number, number, number]; // w, x, y, z
+};
+
+type EndEffectorPoseState = {
+  pyroki: LinkPose | null;
+  three: LinkPose | null;
+  positionError: number | null;
+  rotationErrorDeg: number | null;
+  error: string | null;
+  lastUpdated: number | null;
+  loading: boolean;
+};
+
+const safeDecode = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const extractLinkPose = (robot: URDFRobot | null, linkName: string): LinkPose | null => {
+  if (!robot) return null;
+  const robotAny: any = robot;
+  const link =
+    robotAny?.links?.[linkName] ??
+    robotAny?.getObjectByName?.(linkName) ??
+    robotAny?.getObjectByName?.(safeDecode(linkName));
+
+  if (!link || !link.matrixWorld) return null;
+  if (typeof link.updateMatrixWorld === "function") {
+    link.updateMatrixWorld(true);
+  }
+
+  const pos = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  link.matrixWorld.decompose(pos, quat, scale);
+
+  return {
+    position: [pos.x, pos.y, pos.z],
+    quaternion: [quat.w, quat.x, quat.y, quat.z],
+  };
+};
+
+const positionDistance = (a: [number, number, number], b: [number, number, number]) => {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+};
+
+const quaternionAngularErrorDeg = (
+  pyrokiWxyz: [number, number, number, number],
+  threeWxyz: [number, number, number, number]
+) => {
+  const qPy = new THREE.Quaternion(pyrokiWxyz[1], pyrokiWxyz[2], pyrokiWxyz[3], pyrokiWxyz[0]);
+  const qThree = new THREE.Quaternion(threeWxyz[1], threeWxyz[2], threeWxyz[3], threeWxyz[0]);
+  const delta = qPy.clone().invert().multiply(qThree);
+  const angle = 2 * Math.acos(Math.min(1, Math.max(-1, delta.w)));
+  return (angle * 180) / Math.PI;
+};
+
+const toZeroIfTiny = (value: number | null, epsilon: number) => {
+  if (value === null) return null;
+  return Math.abs(value) <= epsilon ? 0 : value;
+};
+
+const getLiveRobotJoints = (robot: URDFRobot | null, fallback: Record<string, number>) => {
+  if (!robot) return fallback;
+  const robotAny: any = robot;
+  const joints = robotAny.joints || {};
+  const result: Record<string, number> = {};
+  for (const name of Object.keys(joints)) {
+    const j = joints[name];
+    const val = typeof j?.angle === "number" ? j.angle : typeof j?.jointValue === "number" ? j.jointValue : undefined;
+    if (typeof val === "number" && !Number.isNaN(val)) {
+      result[name] = val;
+    }
+  }
+  // Fallback to provided map if we missed anything
+  return Object.keys(result).length > 0 ? result : fallback;
+};
+
 // Component to render collision geometries from URDF
 const CollisionGeometries = ({
   urdfFile,
@@ -2301,6 +2387,17 @@ export const Viewer3D = ({
   const [ikDialogOpen, setIkDialogOpen] = useState(false);
   const [ikTargetName, setIkTargetName] = useState<string | null>(null);
   const [isIkRunning, setIsIkRunning] = useState(false);
+  const [endEffectorPose, setEndEffectorPose] = useState<EndEffectorPoseState>({
+    pyroki: null,
+    three: null,
+    positionError: null,
+    rotationErrorDeg: null,
+    error: null,
+    lastUpdated: null,
+    loading: false,
+  });
+  const endEffectorPoseRequestId = useRef(0);
+  const endEffectorPoseAbortRef = useRef<AbortController | null>(null);
 
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
@@ -2481,7 +2578,7 @@ export const Viewer3D = ({
         effQuat.set(0, 0, 0, 1);
       }
 
-      const jointValues = useJointStore.getState().jointValues;
+      const jointValues = getLiveRobotJoints(robot, useJointStore.getState().jointValues);
 
       // Calculate target position based on IK mode
       // Three.js scene coordinates = PyRoki URDF coordinates (meters)
@@ -2519,6 +2616,7 @@ export const Viewer3D = ({
         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
       ];
       const targetWxyz = [w, x, y, z];
+      const orientationOptional = obj.ikTargetType !== "orbit" && obj.type === "point";
 
       setIkDialogOpen(true);
       setIkResult(null);
@@ -2527,33 +2625,59 @@ export const Viewer3D = ({
       setIsIkRunning(true);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            urdf: urdfContent,
-            joint_values: jointValues,
-            target_link: endEffectorLink,
-            target_position: targetPosition,
-            target_rotation: targetRotation,
-            target_wxyz: targetWxyz,
-          }),
+        const basePayload: any = {
+          urdf: urdfContent,
+          joint_values: jointValues,
+          target_link: endEffectorLink,
+          target_position: targetPosition,
+        };
+
+        const tryPayloads: any[] = [];
+        if (orientationOptional) {
+          tryPayloads.push({
+            ...basePayload,
+            target_rotation: null,
+            target_wxyz: null,
+            ignore_orientation: true,
+          });
+        }
+        tryPayloads.push({
+          ...basePayload,
+          target_rotation: targetRotation,
+          target_wxyz: targetWxyz,
         });
 
-        if (!response.ok) {
-          let message = "IK solve failed";
-          try {
-            const data = await response.json();
-            message = data.detail || data.error || message;
-          } catch {
-            // ignore
+        let data: IkResponsePayload | null = null;
+        let lastError: string | null = null;
+
+        for (const payload of tryPayloads) {
+          const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            try {
+              const msg = (await response.json()).detail || (await response.json()).error;
+              lastError = msg || "IK solve failed";
+            } catch {
+              lastError = "IK solve failed";
+            }
+            continue;
           }
-          setIkError(message);
+
+          data = (await response.json()) as IkResponsePayload;
+          lastError = null;
+          break;
+        }
+
+        if (!data) {
+          setIkError(lastError || "IK solve failed");
           setIkResult(null);
           return;
         }
 
-        const data = (await response.json()) as IkResponsePayload;
         setIkResult(data);
       } catch (err) {
         setIkError(err instanceof Error ? err.message : "Unknown IK error");
@@ -2570,6 +2694,139 @@ export const Viewer3D = ({
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
+
+  // Keep EE pose aligned between Three.js and PyRoki (base_link/world frame)
+  useEffect(() => {
+    if (!robot || !urdfContent || !endEffectorLink) {
+      setEndEffectorPose({
+        pyroki: null,
+        three: null,
+        positionError: null,
+        rotationErrorDeg: null,
+        error: null,
+        lastUpdated: null,
+        loading: false,
+      });
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      const requestId = ++endEffectorPoseRequestId.current;
+      endEffectorPoseAbortRef.current?.abort();
+      const controller = new AbortController();
+      endEffectorPoseAbortRef.current = controller;
+
+      const baseThreePose = extractLinkPose(robot, endEffectorLink);
+      if (!baseThreePose) {
+        setEndEffectorPose({
+          pyroki: null,
+          three: null,
+          positionError: null,
+          rotationErrorDeg: null,
+          error: "End-effector link not found in scene",
+          lastUpdated: null,
+          loading: false,
+        });
+        return;
+      }
+
+      setEndEffectorPose((prev) => ({
+        ...prev,
+        three: baseThreePose,
+        loading: true,
+        error: null,
+      }));
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/pyroki/fk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            urdf: urdfContent,
+            joint_values: getLiveRobotJoints(robot, storeJointValues),
+          }),
+          signal: controller.signal,
+        });
+
+        const payload = await response
+          .json()
+          .catch(() => ({ error: "Failed to parse PyRoki FK response" }));
+
+        if (!response.ok) {
+          const message =
+            (payload as any)?.error ||
+            (payload as any)?.detail ||
+            "PyRoki FK request failed";
+          throw new Error(message);
+        }
+
+        if (controller.signal.aborted || requestId !== endEffectorPoseRequestId.current) {
+          return;
+        }
+
+        const links = Array.isArray((payload as any).links) ? (payload as any).links : [];
+        const pyrokiLink = links.find((l: any) => l?.name === endEffectorLink);
+
+        const pyrokiPose: LinkPose | null =
+          pyrokiLink &&
+          Array.isArray(pyrokiLink.position) &&
+          pyrokiLink.position.length >= 3 &&
+          Array.isArray(pyrokiLink.quaternion_wxyz) &&
+          pyrokiLink.quaternion_wxyz.length >= 4
+            ? {
+                position: [
+                  Number(pyrokiLink.position[0]) || 0,
+                  Number(pyrokiLink.position[1]) || 0,
+                  Number(pyrokiLink.position[2]) || 0,
+                ],
+                quaternion: [
+                  Number(pyrokiLink.quaternion_wxyz[0]) || 0,
+                  Number(pyrokiLink.quaternion_wxyz[1]) || 0,
+                  Number(pyrokiLink.quaternion_wxyz[2]) || 0,
+                  Number(pyrokiLink.quaternion_wxyz[3]) || 0,
+                ],
+              }
+            : null;
+
+        // Re-sample Three.js pose at the same moment we receive PyRoki data
+        const syncedThreePose = extractLinkPose(robot, endEffectorLink) ?? baseThreePose;
+
+        const posError = pyrokiPose ? positionDistance(pyrokiPose.position, syncedThreePose.position) : null;
+        const rotError = pyrokiPose
+          ? quaternionAngularErrorDeg(pyrokiPose.quaternion, syncedThreePose.quaternion)
+          : null;
+
+        setEndEffectorPose({
+          pyroki: pyrokiPose,
+          three: syncedThreePose,
+          positionError: toZeroIfTiny(posError !== null && Number.isFinite(posError) ? posError : null, 1e-6),
+          rotationErrorDeg: toZeroIfTiny(
+            rotError !== null && Number.isFinite(rotError) ? rotError : null,
+            1e-4
+          ),
+          error: pyrokiPose ? null : "End-effector missing in PyRoki FK output",
+          lastUpdated: Date.now(),
+          loading: false,
+        });
+      } catch (err) {
+        if (controller.signal.aborted || requestId !== endEffectorPoseRequestId.current) return;
+        setEndEffectorPose({
+          pyroki: null,
+          three: baseThreePose,
+          positionError: null,
+          rotationErrorDeg: null,
+          error: err instanceof Error ? err.message : "Failed to fetch PyRoki FK",
+          lastUpdated: null,
+          loading: false,
+        });
+      }
+    }, 150);
+
+    return () => {
+      clearTimeout(timeoutId);
+      endEffectorPoseAbortRef.current?.abort();
+    };
+  }, [robot, urdfContent, endEffectorLink, storeJointValues]);
   
   // Track current frame for display
   const currentFrameIndexRef = useRef<number>(0);
@@ -3462,6 +3719,65 @@ export const Viewer3D = ({
             );
           }
         })()}
+
+        {endEffectorLink && (
+          <div className="absolute bottom-4 left-4 z-20 w-72 bg-background/95 backdrop-blur-sm rounded border border-border/40 shadow-md p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-semibold uppercase tracking-tight text-muted-foreground/80">
+                End Effector
+              </div>
+              <div className="text-[10px] text-muted-foreground/70 text-right">
+                PyRoki = base_link = Three world
+              </div>
+            </div>
+            <div className="text-xs font-semibold text-foreground truncate">{endEffectorLink}</div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-foreground">
+              <div>
+                <div className="text-[10px] uppercase text-muted-foreground">PyRoki (m)</div>
+                {endEffectorPose.pyroki ? (
+                  <div className="font-mono leading-tight space-y-0.5">
+                    <div>x: {endEffectorPose.pyroki.position[0].toFixed(4)}</div>
+                    <div>y: {endEffectorPose.pyroki.position[1].toFixed(4)}</div>
+                    <div>z: {endEffectorPose.pyroki.position[2].toFixed(4)}</div>
+                    <div className="text-[10px] text-muted-foreground">wxyz: {endEffectorPose.pyroki.quaternion.map((v) => v.toFixed(3)).join(", ")}</div>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground">Unavailable</div>
+                )}
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-muted-foreground">Three.js (m)</div>
+                {endEffectorPose.three ? (
+                  <div className="font-mono leading-tight space-y-0.5">
+                    <div>x: {endEffectorPose.three.position[0].toFixed(4)}</div>
+                    <div>y: {endEffectorPose.three.position[1].toFixed(4)}</div>
+                    <div>z: {endEffectorPose.three.position[2].toFixed(4)}</div>
+                    <div className="text-[10px] text-muted-foreground">wxyz: {endEffectorPose.three.quaternion.map((v) => v.toFixed(3)).join(", ")}</div>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground">Unavailable</div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>
+                FK mismatch:{" "}
+                {endEffectorPose.positionError !== null
+                  ? `${endEffectorPose.positionError.toFixed(4)} m`
+                  : "--"}
+                {endEffectorPose.rotationErrorDeg !== null
+                  ? ` | rot ${endEffectorPose.rotationErrorDeg.toFixed(3)}°`
+                  : ""}
+              </span>
+              {endEffectorPose.loading && <span className="text-[10px]">Updating…</span>}
+            </div>
+            {endEffectorPose.error && (
+              <div className="text-[10px] text-amber-500">
+                {endEffectorPose.error}
+              </div>
+            )}
+          </div>
+        )}
 
         <Canvas
           camera={{ position: [1.5, 1.5, 0.8], fov: 50 }}

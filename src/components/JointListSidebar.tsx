@@ -43,6 +43,7 @@ interface HierarchyTreeViewProps {
   visibleJoints: Set<string>;
   onVisibilityToggle: (jointName: string) => void;
   endEffectorLink?: string | null;
+  robot?: any; // Three.js robot object for getting link coordinates
 }
 
 const HierarchyTreeView = ({
@@ -62,6 +63,7 @@ const HierarchyTreeView = ({
   visibleJoints,
   onVisibilityToggle,
   endEffectorLink,
+  robot,
 }: HierarchyTreeViewProps) => {
   if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
     return (
@@ -94,14 +96,38 @@ const HierarchyTreeView = ({
 
     try {
       const joints = hierarchyTree.linkToJoints.get(linkName) || [];
+      const isEE = endEffectorLink === linkName;
+
+      // Get link coordinates if this is the EE
+      let linkCoordinates: { position: { x: number; y: number; z: number }; quaternion: { w: number; x: number; y: number; z: number } } | null = null;
+      if (isEE && robot) {
+        try {
+          const linkObj = robot.links?.[linkName] ?? robot.getObjectByName?.(linkName);
+          if (linkObj) {
+            linkObj.updateMatrixWorld?.(true);
+            const position = new THREE.Vector3();
+            const quaternion = new THREE.Quaternion();
+            const scale = new THREE.Vector3();
+            linkObj.matrixWorld.decompose(position, quaternion, scale);
+            linkCoordinates = {
+              position: { x: position.x, y: position.y, z: position.z },
+              quaternion: { w: quaternion.w, x: quaternion.x, y: quaternion.y, z: quaternion.z },
+            };
+          }
+        } catch (error) {
+          console.error("Error getting link coordinates:", error);
+        }
+      }
+
       if (joints.length === 0) {
         // Leaf link - just show the link
         return (
           <div key={`link-${linkName}-${depth}`} className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
             <div
               className={cn(
-                "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-                isSelected && "hover:bg-muted/30"
+                "px-1.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
+                isSelected && "hover:bg-muted/30",
+                isEE ? "py-1" : "py-0.5"
               )}
               style={
                 isSelected
@@ -118,7 +144,8 @@ const HierarchyTreeView = ({
               <div className="flex items-center gap-1">
                 <span
                   className={cn(
-                    "text-[10px] flex-1",
+                    isEE ? "text-[11px] font-semibold" : "text-[10px]",
+                    "flex-1",
                     isSelected ? "" : "text-muted-foreground/60"
                   )}
                   style={
@@ -129,12 +156,32 @@ const HierarchyTreeView = ({
                 >
                   🔗 {linkName}
                 </span>
-                {endEffectorLink === linkName && (
-                  <span className="text-[7px] px-0.5 py-0 bg-primary/20 text-primary rounded font-medium">
+                {isEE && (
+                  <span className="text-[8px] px-1 py-0.5 bg-primary/20 text-primary rounded font-semibold">
                     EE
                   </span>
                 )}
               </div>
+
+              {/* Show coordinates for EE link */}
+              {isEE && linkCoordinates && (
+                <div className="mt-1 pt-1 border-t border-border/30 space-y-0.5">
+                  <div className="text-[9px] font-mono text-emerald-600">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">x:</span>
+                      <span>{linkCoordinates.position.x.toFixed(4)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">y:</span>
+                      <span>{linkCoordinates.position.y.toFixed(4)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">z:</span>
+                      <span>{linkCoordinates.position.z.toFixed(4)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );

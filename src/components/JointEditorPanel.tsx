@@ -44,6 +44,7 @@ interface JointEditorPanelProps {
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   onTypeChange?: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
   onClose?: () => void;
+  robot?: any; // Three.js robot object for getting link coordinates
 }
 
 export const JointEditorPanel = ({
@@ -62,6 +63,7 @@ export const JointEditorPanel = ({
   onLinkChange,
   onTypeChange,
   onClose,
+  robot,
 }: JointEditorPanelProps) => {
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
@@ -225,6 +227,30 @@ export const JointEditorPanel = ({
     }
   }, [jointInfo?.lower, jointInfo?.upper, jointInfo?.type]);
 
+  // Get child link coordinates
+  const linkCoordinates = useMemo(() => {
+    if (!robot || !jointLinks.childLink) return null;
+
+    const linkObj = robot.links?.[jointLinks.childLink] ?? robot.getObjectByName?.(jointLinks.childLink);
+    if (!linkObj) return null;
+
+    try {
+      linkObj.updateMatrixWorld?.(true);
+      const position = new (window as any).THREE.Vector3();
+      const quaternion = new (window as any).THREE.Quaternion();
+      const scale = new (window as any).THREE.Vector3();
+      linkObj.matrixWorld.decompose(position, quaternion, scale);
+
+      return {
+        position: { x: position.x, y: position.y, z: position.z },
+        quaternion: { w: quaternion.w, x: quaternion.x, y: quaternion.y, z: quaternion.z },
+      };
+    } catch (error) {
+      console.error("Error getting link coordinates:", error);
+      return null;
+    }
+  }, [robot, jointLinks.childLink, currentValue]); // Re-compute when joint value changes
+
   if (!jointName) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground/70 p-4">
@@ -259,8 +285,72 @@ export const JointEditorPanel = ({
         )}
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {/* Tabs */}
+      <Tabs defaultValue="coordinates" className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="mx-3 mt-2">
+          <TabsTrigger value="coordinates" className="text-xs">Coordinates</TabsTrigger>
+          <TabsTrigger value="properties" className="text-xs">Properties</TabsTrigger>
+        </TabsList>
+
+        {/* Coordinates Tab */}
+        <TabsContent value="coordinates" className="flex-1 overflow-y-auto p-3 space-y-2 mt-0">
+          {jointLinks.childLink && (
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Link: {jointLinks.childLink}
+              </div>
+
+              {linkCoordinates ? (
+                <>
+                  <div className="space-y-1 bg-muted/20 rounded p-2">
+                    <div className="text-[10px] font-semibold text-emerald-600 mb-1">Position (meters)</div>
+                    <BlenderPropertyRow label="X">
+                      <div className="font-mono text-xs">{linkCoordinates.position.x.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                    <BlenderPropertyRow label="Y">
+                      <div className="font-mono text-xs">{linkCoordinates.position.y.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                    <BlenderPropertyRow label="Z">
+                      <div className="font-mono text-xs">{linkCoordinates.position.z.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                  </div>
+
+                  <div className="space-y-1 bg-muted/20 rounded p-2">
+                    <div className="text-[10px] font-semibold text-blue-600 mb-1">Orientation (Quaternion)</div>
+                    <BlenderPropertyRow label="W">
+                      <div className="font-mono text-xs">{linkCoordinates.quaternion.w.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                    <BlenderPropertyRow label="X">
+                      <div className="font-mono text-xs">{linkCoordinates.quaternion.x.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                    <BlenderPropertyRow label="Y">
+                      <div className="font-mono text-xs">{linkCoordinates.quaternion.y.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                    <BlenderPropertyRow label="Z">
+                      <div className="font-mono text-xs">{linkCoordinates.quaternion.z.toFixed(6)}</div>
+                    </BlenderPropertyRow>
+                  </div>
+
+                  <div className="text-[10px] text-muted-foreground italic p-2 bg-muted/10 rounded">
+                    These coordinates are in world space (meters). With robot at origin and scale=1, these match PyRoki FK coordinates directly.
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-muted-foreground italic">
+                  Link coordinates not available
+                </div>
+              )}
+            </div>
+          )}
+          {!jointLinks.childLink && (
+            <div className="text-xs text-muted-foreground italic">
+              No child link for this joint
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Properties Tab */}
+        <TabsContent value="properties" className="flex-1 overflow-y-auto p-3 space-y-2 mt-0">
         {/* Value Slider */}
         <BlenderPropertyRow label="Value">
           <div className="flex items-center gap-2">
@@ -566,7 +656,8 @@ export const JointEditorPanel = ({
             </Button>
           </div>
         )}
-      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

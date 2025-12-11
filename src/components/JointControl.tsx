@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { Settings, Trash2, ChevronRight } from "lucide-react";
 import {
@@ -48,6 +49,7 @@ interface JointControlProps {
   onNameChange?: (oldName: string, newName: string) => void;
   alwaysExpanded?: boolean;
   hideValueDisplay?: boolean;
+  robot?: any; // Three.js robot object for getting link coordinates
 }
 
 
@@ -126,6 +128,7 @@ export const JointControl = ({
   onNameChange,
   alwaysExpanded = false,
   hideValueDisplay = false,
+  robot,
 }: JointControlProps) => {
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;

@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useCallback, useMemo, startTransition } from "react";
+import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
 import { JointListSidebar, DEFAULT_RIGHT_SIDEBAR_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH } from "@/components/JointListSidebar";
 import { Viewer3D } from "@/components/Viewer3D";
@@ -95,6 +95,62 @@ const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4;
 const MIN_HEADER_HEIGHT = 50;
 const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'] as const;
 
+// Find the deepest leaf link in a URDF (PyRoki default EE heuristic)
+const findDeepestLeafLink = (urdfContent: string): string | null => {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+    if (xmlDoc.querySelector("parsererror")) return null;
+
+    const linkNames = Array.from(xmlDoc.querySelectorAll("link"))
+      .map((el) => el.getAttribute("name"))
+      .filter((name): name is string => !!name);
+    if (linkNames.length === 0) return null;
+
+    const parentToChildren = new Map<string, string[]>();
+    const childLinks = new Set<string>();
+    const parentLinks = new Set<string>();
+
+    xmlDoc.querySelectorAll("joint").forEach((joint) => {
+      const parentLink = joint.querySelector("parent")?.getAttribute("link");
+      const childLink = joint.querySelector("child")?.getAttribute("link");
+      if (parentLink && childLink) {
+        parentLinks.add(parentLink);
+        childLinks.add(childLink);
+        const list = parentToChildren.get(parentLink) || [];
+        list.push(childLink);
+        parentToChildren.set(parentLink, list);
+      }
+    });
+
+    // Root = a parent that is never a child, fallback to first link
+    const root =
+      Array.from(parentLinks).find((name) => !childLinks.has(name)) ??
+      linkNames.find((name) => !childLinks.has(name)) ??
+      linkNames[0];
+
+    const visited = new Set<string>();
+    let best: { link: string; depth: number } | null = null;
+
+    const dfs = (link: string, depth: number) => {
+      if (visited.has(link)) return;
+      visited.add(link);
+      const children = parentToChildren.get(link) || [];
+      if (children.length === 0) {
+        if (!best || depth > best.depth) {
+          best = { link, depth };
+        }
+      }
+      children.forEach((child) => dfs(child, depth + 1));
+    };
+
+    dfs(root, 0);
+    return best?.link ?? null;
+  } catch {
+    return null;
+  }
+};
+
 const Index = () => {
   useTheme(); // Initialize dark mode
   const { gpuMode, setGPUMode } = useGPUMode();
@@ -180,6 +236,16 @@ const Index = () => {
     hasEpisodes: boolean;
     isRerunViewerOpen: boolean;
   } | null>(null);
+
+  // Auto-select deepest leaf as end-effector when none is set (PyRoki default)
+  useEffect(() => {
+    if (!vizUrdfContent) return;
+    if (endEffectorLink && availableLinks.includes(endEffectorLink)) return;
+    const candidate = findDeepestLeafLink(vizUrdfContent);
+    if (candidate) {
+      setEndEffectorLink(candidate);
+    }
+  }, [vizUrdfContent, endEffectorLink, availableLinks]);
 
   const episodeJointNames = useMemo(() => {
     if (!viewerEpisode) return [];
@@ -274,6 +340,7 @@ const Index = () => {
       const parsedLimits = parseJointLimitsFromURDF(originalContent);
       const parsedAxes = parseJointAxesFromURDF(originalContent);
       const parsedLinks = parseLinkNames(originalContent);
+      const autoEndEffector = findDeepestLeafLink(originalContent);
 
       setOriginalUrdfContent(originalContent);
       setJointLimits(parsedLimits);
@@ -286,6 +353,7 @@ const Index = () => {
       setUrdfFile(createUrdfFile(originalContent, urdfFilename));
       // Clear selection when loading new URDF - let user choose what to select
       setSelectedJoint(null);
+      setEndEffectorLink(autoEndEffector);
 
       const stlFiles = Array.from(fileList).filter(file => 
         file.name.toLowerCase().endsWith('.stl')
