@@ -2405,6 +2405,7 @@ export const Viewer3D = ({
 
   // Use selectedLink from props
   const selectedLink = selectedLinkProp;
+  const ikObjects = useObjectStore((state) => state.objects);
 
   // Read URDF content once per uploaded file (for PyRoki FK validation)
   useEffect(() => {
@@ -3771,6 +3772,19 @@ export const Viewer3D = ({
               </span>
               {endEffectorPose.loading && <span className="text-[10px]">Updating…</span>}
             </div>
+            {ikTargetName && (() => {
+              const targetObj = ikObjects.find((o) => o.id === ikTargetName);
+              if (!targetObj || !endEffectorPose.three) return null;
+              const dx = endEffectorPose.three.position[0] - targetObj.position.x;
+              const dy = endEffectorPose.three.position[1] - targetObj.position.y;
+              const dz = endEffectorPose.three.position[2] - targetObj.position.z;
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              return (
+                <div className="text-[10px] text-amber-400">
+                  EE vs IK target ({ikTargetName}): {dist.toFixed(4)} m
+                </div>
+              );
+            })()}
             {endEffectorPose.error && (
               <div className="text-[10px] text-amber-500">
                 {endEffectorPose.error}
