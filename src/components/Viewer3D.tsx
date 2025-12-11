@@ -3763,115 +3763,104 @@ export const Viewer3D = ({
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
           };
 
-          // Show joints panel in 'move-joints' mode, links panel in other modes
-          if (dragMode === 'move-joints') {
-            // Count joints by type
-            const totalJoints = Object.keys(jointLimits || {}).length;
-            const typeCounts: Record<string, number> = {};
+          // Always show joints panel regardless of drag mode
+          // Count joints by type
+          const totalJoints = Object.keys(jointLimits || {}).length;
+          const typeCounts: Record<string, number> = {};
 
-            Object.values(jointLimits || {}).forEach(j => {
-              const type = j?.type || "continuous";
-              typeCounts[type] = (typeCounts[type] || 0) + 1;
-            });
+          Object.values(jointLimits || {}).forEach(j => {
+            const type = j?.type || "continuous";
+            typeCounts[type] = (typeCounts[type] || 0) + 1;
+          });
 
-            // Get all joint types that exist in the robot, ordered by importance (most common first)
-            const typeOrder: string[] = ["revolute", "continuous", "prismatic", "fixed", "planar", "floating", "mimic"];
-            const existingTypes = Object.keys(typeCounts).sort((a, b) => {
-              const aIndex = typeOrder.indexOf(a);
-              const bIndex = typeOrder.indexOf(b);
-              if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-              if (aIndex === -1) return 1;
-              if (bIndex === -1) return -1;
-              return aIndex - bIndex;
-            });
+          // Get all joint types that exist in the robot, ordered by importance (most common first)
+          const typeOrder: string[] = ["revolute", "continuous", "prismatic", "fixed", "planar", "floating", "mimic"];
+          const existingTypes = Object.keys(typeCounts).sort((a, b) => {
+            const aIndex = typeOrder.indexOf(a);
+            const bIndex = typeOrder.indexOf(b);
+            if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+            if (aIndex === -1) return 1;
+            if (bIndex === -1) return -1;
+            return aIndex - bIndex;
+          });
 
-            return (
-            <div className="absolute top-4 left-4 z-10 w-48 bg-background/98 backdrop-blur-sm rounded border border-border/40 shadow-md">
-              {/* Header - Compact */}
-              <div className="px-2 py-1 border-b border-border/20">
-                <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight uppercase">
-                  Joint Types ({totalJoints})
+          return (
+          <div className="absolute top-4 left-4 z-10 w-48 bg-background/98 backdrop-blur-sm rounded border border-border/40 shadow-md">
+            {/* Header - Compact */}
+            <div className="px-2 py-1 border-b border-border/20">
+              <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight uppercase">
+                Joint Types ({totalJoints})
+              </div>
+            </div>
+
+            {/* Content - Compact */}
+            <div className="p-1.5 space-y-1.5">
+              {/* Joint Types List - Compact (First) */}
+              <div className="space-y-0.5">
+                {existingTypes.map((type) => {
+                  const count = typeCounts[type];
+                  const color = (jointColors as Record<string, string>)[type] || jointColors.light_gray;
+                  const isFixed = type === "fixed";
+                  const typeJoints = Object.entries(jointLimits || {})
+                    .filter(([_, info]) => (info?.type || "continuous") === type)
+                    .map(([name]) => name);
+                  const isSelected = selectedJoint && typeJoints.includes(selectedJoint);
+
+                  return (
+                    <div
+                      key={type}
+                      className={cn(
+                        "flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer transition-colors",
+                        isSelected
+                          ? "bg-primary/15 border border-primary/30"
+                          : "hover:bg-muted/15 border border-transparent"
+                      )}
+                      onClick={() => {
+                        if (typeJoints.length > 0 && onJointSelect) {
+                          onJointSelect(typeJoints[0]);
+                        }
+                      }}
+                    >
+                      <div
+                        className="w-2 h-2 rounded-sm border flex-shrink-0"
+                        style={{
+                          borderColor: color,
+                          backgroundColor: isFixed ? color : hexToRgba(color, 0.25)
+                        }}
+                      />
+                      <span className="text-[11px] text-foreground font-medium capitalize flex-1 truncate">
+                        {getJointTypeLabel(type)}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground/70 flex-shrink-0">
+                        ({count})
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Selected Link Section - Compact (Second) */}
+              <div className="pt-1.5 border-t border-border/15">
+                <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
+                  Selected Link
+                </div>
+                <div className="text-[11px] text-foreground font-medium truncate">
+                  {selectedLink || "None"}
                 </div>
               </div>
 
-              {/* Content - Compact */}
-              <div className="p-1.5 space-y-1.5">
-                {/* Joint Types List - Compact (First) */}
-                <div className="space-y-0.5">
-                  {existingTypes.map((type) => {
-                    const count = typeCounts[type];
-                    const color = (jointColors as Record<string, string>)[type] || jointColors.light_gray;
-                    const isFixed = type === "fixed";
-                    const typeJoints = Object.entries(jointLimits || {})
-                      .filter(([_, info]) => (info?.type || "continuous") === type)
-                      .map(([name]) => name);
-                    const isSelected = selectedJoint && typeJoints.includes(selectedJoint);
-                    
-                    return (
-                      <div
-                        key={type}
-                        className={cn(
-                          "flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer transition-colors",
-                          isSelected 
-                            ? "bg-primary/15 border border-primary/30" 
-                            : "hover:bg-muted/15 border border-transparent"
-                        )}
-                        onClick={() => {
-                          if (typeJoints.length > 0 && onJointSelect) {
-                            onJointSelect(typeJoints[0]);
-                          }
-                        }}
-                      >
-                        <div 
-                          className="w-2 h-2 rounded-sm border flex-shrink-0"
-                          style={{ 
-                            borderColor: color,
-                            backgroundColor: isFixed ? color : hexToRgba(color, 0.25)
-                          }}
-                        />
-                        <span className="text-[11px] text-foreground font-medium capitalize flex-1 truncate">
-                          {getJointTypeLabel(type)}
-                        </span>
-                        <span className="text-[9px] text-muted-foreground/70 flex-shrink-0">
-                          ({count})
-                        </span>
-                      </div>
-                    );
-                  })}
+              {/* Associated Joint Section - Compact (Third) */}
+              <div className="pt-1.5 border-t border-border/15">
+                <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
+                  Associated Joint
                 </div>
-
-                {/* Selected Joint Section - Compact (Second) */}
-                <div className="pt-1.5 border-t border-border/15">
-                  <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
-                    Selected Joint
-                  </div>
-                  <div className="text-[11px] text-foreground font-medium truncate">
-                    {selectedJoint || "None"}
-                  </div>
+                <div className="text-[11px] text-foreground font-medium truncate">
+                  {selectedJoint || "None"}
                 </div>
               </div>
             </div>
-            );
-          } else {
-            // Links panel for drag-handle and click-to-place modes
-            return (
-              <div className="absolute top-4 left-4 z-10 w-48 bg-background/98 backdrop-blur-sm rounded border border-border/40 shadow-md">
-                {/* Header - Compact */}
-                <div className="px-2 py-1 border-b border-border/20">
-                  <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight uppercase">
-                    Selected Link
-                  </div>
-                </div>
-
-                {/* Content - Compact */}
-                <div className="p-1.5">
-                  <div className="text-[11px] text-foreground font-medium truncate">
-                    {selectedLink || "None"}
-                  </div>
-                </div>
-              </div>
-            );
-          }
+          </div>
+          );
         })()}
 
         {endEffectorLink && (
@@ -4028,7 +4017,9 @@ export const Viewer3D = ({
                 rotationPlaneVisible={rotationPlaneVisible}
                 dragMode={dragMode}
                 onSelectPart={({ jointName, linkName }) => {
-                  // Highlight only; do not open editor from 3D interactions
+                  // Update selection and highlight
+                  onLinkSelect?.(linkName ?? null);
+                  onJointSelect?.(jointName ?? null);
                   onLinkHover?.(linkName ?? null);
                   onJointHover?.(jointName ?? null);
                 }}

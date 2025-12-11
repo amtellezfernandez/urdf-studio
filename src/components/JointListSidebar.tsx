@@ -1130,6 +1130,15 @@ export const JointListSidebar = ({
     return Array.from(types).sort();
   }, [jointLimits]);
 
+  const jointTypeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    Object.values(jointLimits).forEach(j => {
+      const t = j?.type || "unknown";
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return counts;
+  }, [jointLimits]);
+
   // Parse hierarchical structure
   const jointHierarchy = useMemo(() => {
     if (!urdfContent) return null;
@@ -1380,6 +1389,43 @@ export const JointListSidebar = ({
                 </span>
               </div>
             )}
+
+            {/* Joint type summary (always visible) */}
+            <div className="rounded border border-border/40 bg-muted/10 px-2 py-1.5 space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>Joint Types</span>
+                <span>{Object.keys(jointLimits).length}</span>
+              </div>
+              <div className="flex flex-wrap gap-1 text-[11px]">
+                {jointTypes.length === 0 ? (
+                  <span className="text-muted-foreground">None</span>
+                ) : (
+                  jointTypes.map((type) => (
+                    <span
+                      key={type}
+                      className="px-1.5 py-0.5 rounded border border-border/50 bg-background/60 text-foreground"
+                    >
+                      {type} ({jointTypeCounts[type] ?? 0})
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Persistent selection summary */}
+            <div className="rounded border border-border/40 bg-muted/10 px-2 py-1.5 space-y-0.5">
+              <div className="text-[10px] text-muted-foreground">Selected Link</div>
+              <div className="text-xs text-foreground truncate">{selectedLink ?? "None"}</div>
+              <div className="text-[10px] text-muted-foreground pt-1">Associated Joint</div>
+              <div className="text-xs text-foreground truncate">
+                {selectedJoint ?? "None"}
+                {selectedJoint && jointLimits[selectedJoint]?.type ? (
+                  <span className="text-[10px] text-muted-foreground ml-1">
+                    ({jointLimits[selectedJoint]?.type})
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           {/* Scrollable Joint List */}
