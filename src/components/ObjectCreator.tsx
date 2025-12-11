@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import * as THREE from "three";
 import { useObjectStore } from "@/store/useObjectStore";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,10 @@ interface ObjectCreatorProps {
 
 const DEFAULT_CUBE_SIZE = 0.1;
 const DEFAULT_POINT_SIZE = 0.02;
+const DEFAULT_ORBIT_RADIUS = 0.3;
+const DEFAULT_ORBIT_INCLINATION = 45;
+const DEFAULT_ORBIT_PHASE = 0;
+const DEFAULT_ORBIT_OFFSET = 180;
 
 export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultType = "cube" }: ObjectCreatorProps) {
   const addObject = useObjectStore((state) => state.addObject);
@@ -31,6 +35,11 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
   const [posY, setPosY] = useState(0);
   const [posZ, setPosZ] = useState(0);
   const [isIkTarget, setIsIkTarget] = useState(false);
+  const [ikTargetType, setIkTargetType] = useState<"punctual" | "orbit">("punctual");
+  const [orbitRadius, setOrbitRadius] = useState(DEFAULT_ORBIT_RADIUS);
+  const [orbitInclination, setOrbitInclination] = useState(DEFAULT_ORBIT_INCLINATION);
+  const [orbitPhase, setOrbitPhase] = useState(DEFAULT_ORBIT_PHASE);
+  const [orbitOffset, setOrbitOffset] = useState(DEFAULT_ORBIT_OFFSET);
 
   // Reset defaults when dialog opens or when caller requests a different type
   useEffect(() => {
@@ -45,6 +54,12 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
       setSizeY(DEFAULT_CUBE_SIZE);
       setSizeZ(DEFAULT_CUBE_SIZE);
     }
+    setIsIkTarget(false);
+    setIkTargetType("punctual");
+    setOrbitRadius(DEFAULT_ORBIT_RADIUS);
+    setOrbitInclination(DEFAULT_ORBIT_INCLINATION);
+    setOrbitPhase(DEFAULT_ORBIT_PHASE);
+    setOrbitOffset(DEFAULT_ORBIT_OFFSET);
   }, [open, defaultType]);
 
   // Keep size in sync when switching types inside the dialog
@@ -96,6 +111,17 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
         ? new THREE.Vector3(DEFAULT_POINT_SIZE, DEFAULT_POINT_SIZE, DEFAULT_POINT_SIZE)
         : new THREE.Vector3(sizeX, sizeY, sizeZ);
 
+    const orbitProps =
+      isIkTarget && ikTargetType === "orbit"
+        ? {
+            orbitRadius,
+            orbitInclination,
+            orbitPhase,
+            orbitSecondaryOffset: orbitOffset,
+            ikTargetType: "orbit" as const,
+          }
+        : { ikTargetType: "punctual" as const };
+
     addObject({
       type: objectType,
       position,
@@ -103,6 +129,7 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
       color: objectType === "point" ? "#f472b6" : "#3b82f6", // make points easier to spot
       trackedJointName: null,
       isIkTarget,
+      ...orbitProps,
     });
 
     onOpenChange(false);
@@ -110,140 +137,222 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4] max-w-xs p-3">
-        <DialogHeader className="pb-2">
-          <DialogTitle className="text-sm text-[#d4d4d4] font-normal">Create Object</DialogTitle>
+      <DialogContent className="bg-[#181818] border-[#303030] text-[#d4d4d4] max-w-sm p-3">
+        <DialogHeader className="pb-1">
+          <DialogTitle className="text-sm text-[#e5e5e5] font-semibold">Create Object</DialogTitle>
+          <DialogDescription className="text-[11px] text-[#8a8a8a]">
+            Minimal controls to drop a cube or point and prep IK/orbit.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2.5">
-          <div>
-            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Type</Label>
-            <div className="grid grid-cols-2 gap-1">
-              {(["cube", "point"] as const).map((type) => (
-                <Button
-                  key={type}
-                  variant={objectType === type ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setObjectType(type)}
-                  className={cn(
-                    "h-7 text-[11px] px-2",
-                    objectType === type
-                      ? "bg-[#3d3d3d] text-white"
-                      : "bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4]"
-                  )}
-                >
-                  {type === "cube" ? "Cube" : "Point"}
-                </Button>
-              ))}
-            </div>
+          <div className="flex gap-1.5">
+            {(["cube", "point"] as const).map((type) => (
+              <button
+                key={type}
+                className={cn(
+                  "flex-1 rounded-sm border px-2.5 py-2 text-left text-[12px] transition-colors",
+                  objectType === type
+                    ? "border-[#4a4a4a] bg-[#222] text-[#f1f1f1]"
+                    : "border-[#333] bg-[#1a1a1a] text-[#cfcfcf] hover:border-[#444]"
+                )}
+                onClick={() => setObjectType(type)}
+              >
+                <div className="font-semibold">{type === "cube" ? "Cube" : "Point"}</div>
+                <div className="text-[10px] text-[#8a8a8a]">
+                  {type === "cube" ? "Box with size" : "Tiny marker"}
+                </div>
+              </button>
+            ))}
           </div>
 
-          <div>
-            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">
-              {objectType === "point" ? "Size (fixed)" : "Size"}
-            </Label>
-            {objectType === "cube" ? (
+          {objectType === "cube" ? (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-[#9d9d9d]">Size (m)</Label>
               <div className="grid grid-cols-3 gap-1.5">
-                <Input
-                  id="size-x"
-                  type="number"
-                  step="0.01"
+                <NumberInput
                   value={sizeX}
-                  onChange={(e) => setSizeX(parseFloat(e.target.value) || 0)}
-                  placeholder="X"
-                  className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                  onValueChange={setSizeX}
+                  step={0.01}
+                  min={0.005}
+                  compact
+                  className="w-full"
+                  aria-label="Size X"
                 />
-                <Input
-                  id="size-y"
-                  type="number"
-                  step="0.01"
+                <NumberInput
                   value={sizeY}
-                  onChange={(e) => setSizeY(parseFloat(e.target.value) || 0)}
-                  placeholder="Y"
-                  className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                  onValueChange={setSizeY}
+                  step={0.01}
+                  min={0.005}
+                  compact
+                  className="w-full"
+                  aria-label="Size Y"
                 />
-                <Input
-                  id="size-z"
-                  type="number"
-                  step="0.01"
+                <NumberInput
                   value={sizeZ}
-                  onChange={(e) => setSizeZ(parseFloat(e.target.value) || 0)}
-                  placeholder="Z"
-                  className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                  onValueChange={setSizeZ}
+                  step={0.01}
+                  min={0.005}
+                  compact
+                  className="w-full"
+                  aria-label="Size Z"
                 />
               </div>
-            ) : (
-              <div className="text-[11px] text-[#d4d4d4] px-2 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded">
-                Points use a fixed {DEFAULT_POINT_SIZE} m size.
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="rounded border border-[#3d3d3d] bg-[#1a1a1a] px-3 py-2 text-[11px] text-[#d4d4d4]">
+              Point size is fixed at {DEFAULT_POINT_SIZE} m to keep targets easy to spot.
+            </div>
+          )}
 
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <Label className="text-[10px] text-[#9d9d9d]">Position</Label>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-[#9d9d9d]">Position (m)</Label>
               <Button
                 onClick={suggestPosition}
                 variant="outline"
                 size="sm"
-                className="h-5 text-[10px] bg-[#1e1e1e] border-[#3d3d3d] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d] px-2 py-0"
+                className="h-6 text-[10px] bg-[#161616] border-[#3a3a3a] text-[#9d9d9d] hover:text-[#e0e0e0] hover:bg-[#2a2a2a] px-2 py-0"
               >
                 Suggest
               </Button>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
-              <Input
-                id="pos-x"
-                type="number"
-                step="0.01"
+              <NumberInput
                 value={posX}
-                onChange={(e) => setPosX(parseFloat(e.target.value) || 0)}
-                placeholder="X"
-                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                onValueChange={setPosX}
+                step={0.01}
+                compact
+                className="w-full"
+                aria-label="Position X"
               />
-              <Input
-                id="pos-y"
-                type="number"
-                step="0.01"
+              <NumberInput
                 value={posY}
-                onChange={(e) => setPosY(parseFloat(e.target.value) || 0)}
-                placeholder="Y"
-                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                onValueChange={setPosY}
+                step={0.01}
+                compact
+                className="w-full"
+                aria-label="Position Y"
               />
-              <Input
-                id="pos-z"
-                type="number"
-                step="0.01"
+              <NumberInput
                 value={posZ}
-                onChange={(e) => setPosZ(parseFloat(e.target.value) || 0)}
-                placeholder="Z"
-                className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
+                onValueChange={setPosZ}
+                step={0.01}
+                compact
+                className="w-full"
+                aria-label="Position Z"
               />
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between py-1 border-t border-[#3d3d3d]">
-          <Label className="text-[10px] text-[#9d9d9d]">Mark as IK target</Label>
-          <input
-            type="checkbox"
-            checked={isIkTarget}
-            onChange={(e) => setIsIkTarget(e.target.checked)}
-            className="h-4 w-4 accent-[#3d3d3d] bg-[#1e1e1e] border-[#3d3d3d]"
-          />
+          <div className="rounded border border-[#323232] bg-[#141414] p-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-[10px] text-[#9d9d9d]">IK Target</Label>
+                <div className="text-[11px] text-[#9d9d9d]">Enable to use this object for IK.</div>
+              </div>
+              <button
+                onClick={() => setIsIkTarget((v) => !v)}
+                className={cn(
+                  "h-7 px-3 rounded-sm border text-[11px] transition-colors",
+                  isIkTarget
+                    ? "border-[#4a4a4a] bg-[#222] text-[#f1f1f1]"
+                    : "border-[#3a3a3a] bg-[#1a1a1a] text-[#cfcfcf] hover:border-[#4a4a4a]"
+                )}
+              >
+                {isIkTarget ? "On" : "Off"}
+              </button>
+            </div>
+
+            {isIkTarget && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(["punctual", "orbit"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      className={cn(
+                        "rounded-sm border px-3 py-2 text-left text-[11px] transition-colors",
+                        ikTargetType === mode
+                          ? "border-[#4a4a4a] bg-[#222] text-[#f1f1f1]"
+                          : "border-[#3a3a3a] bg-[#111] text-[#cfcfcf] hover:border-[#4a4a4a]"
+                      )}
+                      onClick={() => setIkTargetType(mode)}
+                    >
+                      <div className="text-xs font-semibold capitalize">{mode}</div>
+                      <div className="text-[10px] text-[#9d9d9d]">
+                        {mode === "punctual" ? "Use the exact position" : "Follow a small orbit path"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {ikTargetType === "orbit" && (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-[#9d9d9d]">Radius (m)</Label>
+                      <NumberInput
+                        value={orbitRadius}
+                        onValueChange={setOrbitRadius}
+                        step={0.01}
+                        min={0.01}
+                        compact
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-[#9d9d9d]">Inclination (°)</Label>
+                      <NumberInput
+                        value={orbitInclination}
+                        onValueChange={setOrbitInclination}
+                        step={5}
+                        min={-90}
+                        max={90}
+                        compact
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-[#9d9d9d]">Phase (°)</Label>
+                      <NumberInput
+                        value={orbitPhase}
+                        onValueChange={(val) => setOrbitPhase(((val % 360) + 360) % 360)}
+                        step={15}
+                        min={0}
+                        max={360}
+                        compact
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-[#9d9d9d]">Arc Offset (°)</Label>
+                      <NumberInput
+                        value={orbitOffset}
+                        onValueChange={(val) => setOrbitOffset(((val % 360) + 360) % 360)}
+                        step={15}
+                        min={0}
+                        max={360}
+                        compact
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-1.5 pt-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#9d9d9d] hover:text-[#d4d4d4] hover:bg-[#3d3d3d] px-3"
+            className="h-8 text-[11px] bg-[#161616] border-[#3a3a3a] text-[#a0a0a0] hover:text-[#e0e0e0] hover:bg-[#2a2a2a] px-3"
           >
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
-            className="h-7 text-[11px] bg-[#3d3d3d] hover:bg-[#4d4d4d] text-[#d4d4d4] px-3"
+            className="h-8 text-[11px] bg-[#2d2d2d] hover:bg-[#3a3a3a] text-[#e0e0e0] border border-[#3a3a3a] px-3"
           >
             Create
           </Button>

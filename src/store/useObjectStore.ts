@@ -13,6 +13,7 @@ export interface CreatedObject {
   orbitRadius?: number;
   orbitInclination?: number; // in degrees
   orbitPhase?: number; // current position on orbit (0-360 degrees)
+  orbitSecondaryOffset?: number; // degrees offset between orbit markers
 }
 
 interface ObjectStore {
@@ -25,7 +26,7 @@ interface ObjectStore {
   updateTrackedJoint: (id: string, jointName: string | null) => void;
   updateObjectIkTarget: (id: string, isIkTarget: boolean) => void;
   updateIkTargetType: (id: string, ikTargetType: "punctual" | "orbit") => void;
-  updateOrbitParams: (id: string, params: { radius?: number; inclination?: number; phase?: number }) => void;
+  updateOrbitParams: (id: string, params: { radius?: number; inclination?: number; phase?: number; secondaryOffset?: number }) => void;
   setSelectedObject: (id: string | null) => void;
   clearObjects: () => void;
 }
@@ -53,6 +54,7 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
       orbitRadius: object.orbitRadius ?? 0.3,
       orbitInclination: object.orbitInclination ?? 45,
       orbitPhase: object.orbitPhase ?? 0,
+      orbitSecondaryOffset: object.orbitSecondaryOffset ?? 180,
     };
 
     set((state) => ({
@@ -121,6 +123,7 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
           orbitRadius: params.radius !== undefined ? params.radius : obj.orbitRadius,
           orbitInclination: params.inclination !== undefined ? params.inclination : obj.orbitInclination,
           orbitPhase: params.phase !== undefined ? params.phase : obj.orbitPhase,
+          orbitSecondaryOffset: params.secondaryOffset !== undefined ? params.secondaryOffset : obj.orbitSecondaryOffset,
         };
       }),
     }));

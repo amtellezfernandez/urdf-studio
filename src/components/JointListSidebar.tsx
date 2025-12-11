@@ -635,6 +635,18 @@ const ObjectEditorPanel = ({ objectId, availableLinks, robot, endEffectorLink }:
                       className="w-20"
                     />
                   </BlenderPropertyRow>
+
+                  <BlenderPropertyRow label="Arc Offset">
+                    <NumberInput
+                      value={obj.orbitSecondaryOffset ?? 180}
+                      onValueChange={(val) => updateOrbitParams(obj.id, { secondaryOffset: ((val % 360) + 360) % 360 })}
+                      step={15}
+                      min={0}
+                      max={360}
+                      compact
+                      className="w-20"
+                    />
+                  </BlenderPropertyRow>
                 </>
               )}
             </>

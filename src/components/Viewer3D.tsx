@@ -531,35 +531,88 @@ const OrbitVisualization = ({
   inclination,
   phase,
   color,
+  onTargetClick,
+  secondaryPhaseOffsetDeg = 180,
 }: {
   centerPosition: THREE.Vector3;
   radius: number;
   inclination: number;
   phase: number;
   color: string;
+  onTargetClick?: () => void;
+  secondaryPhaseOffsetDeg?: number;
 }) => {
-  const orbitPoints = useMemo(() => {
-    const points: THREE.Vector3[] = [];
-    const segments = 64;
-    const inclinationRad = (inclination * Math.PI) / 180;
+  const TWO_PI = Math.PI * 2;
+  const inclinationRad = (inclination * Math.PI) / 180;
 
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
+  const normalizeAngle = (a: number) => ((a % TWO_PI) + TWO_PI) % TWO_PI;
+  const primaryRad = normalizeAngle((phase * Math.PI) / 180);
+  const secondaryRad = normalizeAngle(((phase + secondaryPhaseOffsetDeg) * Math.PI) / 180);
+
+  const getPoint = useCallback(
+    (angle: number) => {
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius;
       const z = y * Math.sin(inclinationRad);
       const yAdjusted = y * Math.cos(inclinationRad);
+      return new THREE.Vector3(x, yAdjusted, z);
+    },
+    [radius, inclinationRad]
+  );
 
-      points.push(new THREE.Vector3(x, yAdjusted, z));
+  const { solidPositions, hashedPositions } = useMemo(() => {
+    const sampleArc = (start: number, end: number, segments: number) => {
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = segments === 0 ? 0 : i / segments;
+        const angle = start + (end - start) * t;
+        pts.push(getPoint(angle));
+      }
+      return pts;
+    };
+
+    const rawDiff = (secondaryRad - primaryRad + TWO_PI) % TWO_PI;
+    if (rawDiff < 1e-5) {
+      const fullPoints = sampleArc(0, TWO_PI, 96);
+      return {
+        solidPositions: new Float32Array(fullPoints.flatMap((p) => [p.x, p.y, p.z])),
+        hashedPositions: new Float32Array(),
+      };
     }
 
-    return points;
-  }, [radius, inclination]);
+    const diff = rawDiff;
+    const usePrimaryToSecondary = diff <= Math.PI && diff > 0;
 
-  const orbitPositions = useMemo(
-    () => new Float32Array(orbitPoints.flatMap((p) => [p.x, p.y, p.z])),
-    [orbitPoints]
-  );
+    const solidStart = usePrimaryToSecondary ? primaryRad : secondaryRad;
+    const solidEnd = usePrimaryToSecondary ? secondaryRad : primaryRad;
+    const solidLength = usePrimaryToSecondary ? diff : TWO_PI - diff;
+    const hashedStart = solidEnd;
+    const hashedLength = Math.max(0, TWO_PI - solidLength);
+
+    const solidSegCount = Math.max(12, Math.round((solidLength / TWO_PI) * 64));
+    const solidPoints = sampleArc(solidStart, solidEnd, solidSegCount);
+    const solidFlat = new Float32Array(solidPoints.flatMap((p) => [p.x, p.y, p.z]));
+
+    const hashedFlat = (() => {
+      if (hashedLength <= 0.0001) return new Float32Array();
+      const dashSegments = Math.max(8, Math.round((hashedLength / TWO_PI) * 48));
+      const dashStep = hashedLength / dashSegments;
+      const dashFill = 0.55; // fraction of each dash step that is visible
+      const positions: number[] = [];
+
+      for (let i = 0; i < dashSegments; i += 2) {
+        const startA = hashedStart + dashStep * i;
+        const endA = startA + dashStep * dashFill;
+        const p1 = getPoint(startA);
+        const p2 = getPoint(endA);
+        positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+      }
+
+      return new Float32Array(positions);
+    })();
+
+    return { solidPositions: solidFlat, hashedPositions: hashedFlat };
+  }, [getPoint, primaryRad, secondaryRad, TWO_PI]);
 
   // Calculate current position on orbit based on phase
   const orbitTargetPosition = useMemo(() => {
@@ -578,6 +631,22 @@ const OrbitVisualization = ({
     );
   }, [centerPosition, radius, inclination, phase]);
 
+  const secondaryTargetPosition = useMemo(() => {
+    const phaseRad = ((phase + secondaryPhaseOffsetDeg) * Math.PI) / 180;
+    const inclinationRad = (inclination * Math.PI) / 180;
+
+    const x = Math.cos(phaseRad) * radius;
+    const y = Math.sin(phaseRad) * radius;
+    const z = y * Math.sin(inclinationRad);
+    const yAdjusted = y * Math.cos(inclinationRad);
+
+    return new THREE.Vector3(
+      centerPosition.x + x,
+      centerPosition.y + yAdjusted,
+      centerPosition.z + z
+    );
+  }, [centerPosition, radius, inclination, phase, secondaryPhaseOffsetDeg]);
+
   const targetOffset = useMemo(
     () => [
       orbitTargetPosition.x - centerPosition.x,
@@ -587,6 +656,15 @@ const OrbitVisualization = ({
     [orbitTargetPosition, centerPosition]
   );
 
+  const secondaryTargetOffset = useMemo(
+    () => [
+      secondaryTargetPosition.x - centerPosition.x,
+      secondaryTargetPosition.y - centerPosition.y,
+      secondaryTargetPosition.z - centerPosition.z,
+    ],
+    [secondaryTargetPosition, centerPosition]
+  );
+
   const radiusLinePositions = useMemo(
     () => new Float32Array([0, 0, 0, ...targetOffset]),
     [targetOffset]
@@ -594,8 +672,8 @@ const OrbitVisualization = ({
 
   // Force geometry rebuild when orbit params move so the viewer updates immediately
   const orbitGeometryKey = useMemo(
-    () => `${radius}-${inclination}`,
-    [radius, inclination]
+    () => `${radius}-${inclination}-${phase}-${secondaryPhaseOffsetDeg}`,
+    [radius, inclination, phase, secondaryPhaseOffsetDeg]
   );
   const radiusLineKey = useMemo(
     () => `${orbitGeometryKey}-${phase}-${targetOffset.join("|")}`,
@@ -609,17 +687,50 @@ const OrbitVisualization = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            count={orbitPoints.length}
-            array={orbitPositions}
+            count={solidPositions.length / 3}
+            array={solidPositions}
             itemSize={3}
           />
         </bufferGeometry>
         <lineBasicMaterial color={color} opacity={0.6} transparent linewidth={2} />
       </line>
 
+      {/* Hashed (dashed) part */}
+      {hashedPositions.length > 0 && (
+        <lineSegments key={`orbit-hash-${orbitGeometryKey}`}>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              count={hashedPositions.length / 3}
+              array={hashedPositions}
+              itemSize={3}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color={color} opacity={0.35} transparent linewidth={1} />
+        </lineSegments>
+      )}
+
       {/* Target point on orbit */}
-      <mesh position={targetOffset}>
-        <sphereGeometry args={[0.02, 16, 16]} />
+      <mesh
+        position={targetOffset}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onTargetClick?.();
+        }}
+      >
+        <sphereGeometry args={[0.01, 16, 16]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+
+      {/* Secondary marker on orbit */}
+      <mesh
+        position={secondaryTargetOffset}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onTargetClick?.();
+        }}
+      >
+        <sphereGeometry args={[0.01, 16, 16]} />
         <meshBasicMaterial color={color} />
       </mesh>
 
@@ -662,9 +773,6 @@ const CreatedObjects = ({
     e.stopPropagation();
     const targetObj = objects.find((o) => o.id === objectId);
     setSelectedObject(objectId);
-    if (dragMode !== "click-to-place") {
-      return; // IK targeting only allowed in click-to-place mode
-    }
     if (targetObj?.isIkTarget && onIkTargetClick) {
       onIkTargetClick(targetObj);
     }
@@ -746,7 +854,12 @@ const CreatedObjects = ({
                 radius={obj.orbitRadius ?? 0.3}
                 inclination={obj.orbitInclination ?? 45}
                 phase={obj.orbitPhase ?? 0}
+                secondaryPhaseOffsetDeg={obj.orbitSecondaryOffset ?? 180}
                 color={targetTint}
+                onTargetClick={() => {
+                  setSelectedObject(obj.id);
+                  onIkTargetClick?.(obj);
+                }}
               />
             )}
           </group>
@@ -2418,6 +2531,7 @@ export const Viewer3D = ({
   });
   const endEffectorPoseRequestId = useRef(0);
   const endEffectorPoseAbortRef = useRef<AbortController | null>(null);
+  const initialPoseRef = useRef<Record<string, number>>({});
 
   // Drag mode state
   const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
@@ -2906,6 +3020,7 @@ export const Viewer3D = ({
         angles[j] = typeof jointObj?.angle === "number" ? jointObj.angle : 0;
       }
     });
+    initialPoseRef.current = { ...angles };
     // Update external callback
     onRobotJointsLoaded?.(joints, angles);
     // Update global store
@@ -2942,6 +3057,24 @@ export const Viewer3D = ({
       }
     }
   }, [robot, jointValues, isDraggingJoint]);
+
+  const resetPose = useCallback(() => {
+    if (!robot) return;
+    const resetValues = { ...initialPoseRef.current };
+    if (Object.keys(resetValues).length === 0) return;
+    const robotAny: any = robot;
+    if (typeof robotAny.setJointValue === "function") {
+      for (const [name, value] of Object.entries(resetValues)) {
+        robotAny.setJointValue(name, value);
+      }
+    }
+    setStoreJointValues(resetValues);
+    if (onJointChange) {
+      for (const [name, value] of Object.entries(resetValues)) {
+        onJointChange(name, value);
+      }
+    }
+  }, [robot, onJointChange, setStoreJointValues]);
 
   // Apply joint values from global store (authoritative for live slider moves, skip if dragging)
   useEffect(() => {
@@ -3976,9 +4109,9 @@ export const Viewer3D = ({
           }}
         />
 
-        {/* Drag Mode button in Utils section */}
+        {/* Drag Mode and Reset Pose buttons in Utils section */}
         {robot && (
-          <div className="absolute top-4 right-48 z-20">
+          <div className="absolute top-4 right-48 z-20 flex items-center gap-2">
             <div className="relative">
               <button
                 type="button"
@@ -4036,6 +4169,17 @@ export const Viewer3D = ({
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              className="px-3 py-1 text-xs rounded border border-border/60 bg-background/90 text-foreground shadow-sm hover:bg-muted transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                resetPose();
+              }}
+            >
+              Reset Pose
+            </button>
           </div>
         )}
 
