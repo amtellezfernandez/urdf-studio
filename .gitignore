@@ -2,3 +2,4 @@ node_modules
 .urdf-studio-config.json
 .venv
 pyroki/
+amd-hackathon/

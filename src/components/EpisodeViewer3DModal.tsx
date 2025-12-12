@@ -17,6 +17,7 @@ import {
   Pencil,
   X,
   Save,
+  Sparkles,
   Undo2,
   Redo2,
   Play,
@@ -119,6 +120,35 @@ const calculateFrameFromMouse = (
 const updateViewerFrame = (frame: number) => {
   (window as any).viewer3dSetFrame?.(frame);
   (window as any).viewer3dStopAnimation?.();
+};
+
+// Simple moving-average smoother for joint trajectories
+const smoothSeries = (values: number[], windowSize = 5, passes = 2) => {
+  if (values.length < 3) return values.slice();
+  const size = Math.max(3, windowSize | 1); // ensure odd window
+  const radius = Math.floor(size / 2);
+  let current = values.slice();
+
+  for (let pass = 0; pass < passes; pass++) {
+    const next = current.map((value, idx) => {
+      // Keep endpoints untouched to preserve start/end poses
+      if (idx === 0 || idx === current.length - 1) return values[idx];
+
+      let sum = 0;
+      let weightSum = 0;
+      for (let offset = -radius; offset <= radius; offset++) {
+        const target = idx + offset;
+        if (target < 0 || target >= current.length) continue;
+        const weight = offset === 0 ? 2 : 1;
+        sum += current[target] * weight;
+        weightSum += weight;
+      }
+      return weightSum > 0 ? sum / weightSum : value;
+    });
+    current = next;
+  }
+
+  return current;
 };
 
 // Helper to smooth curve around a point using Catmull-Rom spline
@@ -590,6 +620,40 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       toast.info("Redo");
     }
   }, [historyIndex, editHistory]);
+
+  const handleSmoothTrajectory = useCallback(() => {
+    if (!isEditMode || !editingJoint || !modifiedEpisode) {
+      toast.error("Enter edit mode and pick a joint to smooth");
+      return;
+    }
+
+    const values = modifiedEpisode.frames.map(
+      (frame) => frame.jointPositions[editingJoint] ?? 0
+    );
+
+    // Adaptive odd window: 3–9 samples depending on episode length
+    const adaptiveWindow = Math.min(
+      9,
+      Math.max(3, Math.floor(values.length / 20) * 2 + 1)
+    );
+    const smoothed = smoothSeries(values, adaptiveWindow, 2);
+
+    const newFrames = modifiedEpisode.frames.map((frame, idx) => ({
+      ...frame,
+      jointPositions: {
+        ...frame.jointPositions,
+        [editingJoint]: smoothed[idx],
+      },
+    }));
+
+    const newEpisode = { ...modifiedEpisode, frames: newFrames };
+    setModifiedEpisode(newEpisode);
+    pushToHistory(newEpisode);
+    setSelectedPointIndex(null);
+    setDraggingHandle(null);
+    setTangentHandles(new Map());
+    toast.success(`Smoothed ${editingJoint} trajectory`);
+  }, [isEditMode, editingJoint, modifiedEpisode, pushToHistory]);
 
 
   // Keyboard shortcuts (Blender-like)
@@ -1655,6 +1719,26 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Redo (Ctrl+Shift+Z)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSmoothTrajectory();
+                    }}
+                    disabled={!editingJoint || !modifiedEpisode}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 mr-1" />
+                    <span className="text-xs">Smooth</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Smooth current joint curve</p>
                 </TooltipContent>
               </Tooltip>
             </>
