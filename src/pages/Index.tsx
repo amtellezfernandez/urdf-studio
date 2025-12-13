@@ -30,7 +30,6 @@ import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
 import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
 import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { useTheme } from "@/hooks/use-theme";
-import { useJointStore } from "@/store/useJointStore";
 import type { FileWithPath } from "@/types/file";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
 import {
@@ -59,12 +58,12 @@ import {
   SIDEBAR_RESIZER_WIDTH,
   VIEWER_RESIZER_HEIGHT,
 } from "@/pages/index/constants";
-import { findDeepestLeafLink } from "@/pages/index/utils";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useDatasetActions } from "@/features/dataset/useDatasetActions";
 import { useCameraPanels } from "@/features/camera/useCameraPanels";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
+import { useUrdfSelection } from "@/features/urdf-selection";
 import { useLayout } from "@/features/layout";
 
 const Index = () => {
@@ -72,12 +71,24 @@ const Index = () => {
   const { gpuMode, setGPUMode } = useGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
-  const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
-  const [selectedLink, setSelectedLink] = useState<string | null>(null);
-  const [endEffectorLink, setEndEffectorLink] = useState<string | null>(null);
-  const [jointValues, setJointValues] = useState<Record<string, number>>({});
+  const {
+    selectedJoint,
+    setSelectedJoint,
+    selectedLink,
+    setSelectedLink,
+    hoveredJoint,
+    setHoveredJoint,
+    endEffectorLink,
+    setEndEffectorLink,
+    deletedJoints,
+    toggleDeletedJoint,
+    jointValues,
+    setJointValue: setStoreJointValue,
+    setJointValues,
+    clearSelection,
+    setContext: setSelectionContext,
+  } = useUrdfSelection();
   const [availableJoints, setAvailableJoints] = useState<string[]>([]);
-  const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const {
     urdfFile,
     meshFiles,
@@ -106,10 +117,9 @@ const Index = () => {
     updateUrdfFile,
     loadFilesFromFolder,
   } = useUrdfLoader({
-    onClearSelection: () => setSelectedJoint(null),
+    onClearSelection: clearSelection,
     onAutoSelectEndEffector: setEndEffectorLink,
   });
-  const [deletedJoints, setDeletedJoints] = useState<Set<string>>(new Set());
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
   const {
@@ -155,7 +165,6 @@ const Index = () => {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<EpisodeSaveHandler | undefined>(undefined);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
-  const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
 
   // Object creation state
   const {
@@ -189,15 +198,10 @@ const Index = () => {
 
   const { datasetActions, handleDatasetActionsReady } = useDatasetActions();
 
-  // Auto-select deepest leaf as end-effector when none is set (PyRoki default)
+  // Keep selection context in sync for auto end-effector selection and validity checks
   useEffect(() => {
-    if (!vizUrdfContent) return;
-    if (endEffectorLink && availableLinks.includes(endEffectorLink)) return;
-    const candidate = findDeepestLeafLink(vizUrdfContent);
-    if (candidate) {
-      setEndEffectorLink(candidate);
-    }
-  }, [vizUrdfContent, endEffectorLink, availableLinks]);
+    setSelectionContext({ vizUrdfContent, availableLinks });
+  }, [vizUrdfContent, availableLinks, setSelectionContext]);
 
   const episodeJointNames = useMemo(() => {
     if (!viewerEpisode) return [];
@@ -228,16 +232,12 @@ const Index = () => {
   );
 
   const handleJointChange = useCallback((jointName: string, value: number) => {
-    const limited = setStoreJointValue(jointName, value);
-    setJointValues((prev) => {
-      if (prev[jointName] === limited) return prev;
-      return { ...prev, [jointName]: limited };
-    });
+    setStoreJointValue(jointName, value);
   }, [setStoreJointValue]);
 
   const handleIkApplied = useCallback((values: Record<string, number>) => {
     setJointValues(values);
-  }, []);
+  }, [setJointValues]);
 
 
   const handleVizUrdfChange = useCallback((newContent: string) => {
@@ -682,18 +682,14 @@ const Index = () => {
   }, [vizUrdfContent]);
 
   const handleDeleteJoint = useCallback((jointName: string) => {
-    setDeletedJoints((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(jointName)) {
-        newSet.delete(jointName);
-        toast.success(`Joint "${jointName}" will be included in exported URDF`);
-      } else {
-        newSet.add(jointName);
-        toast.success(`Joint "${jointName}" will be removed from exported URDF`);
-      }
-      return newSet;
-    });
-  }, []);
+    const willRemove = !deletedJoints.has(jointName);
+    toggleDeletedJoint(jointName);
+    toast.success(
+      willRemove
+        ? `Joint "${jointName}" will be removed from exported URDF`
+        : `Joint "${jointName}" will be included in exported URDF`
+    );
+  }, [deletedJoints, toggleDeletedJoint]);
 
   const handleRotateRobot = useCallback((axis: RotationAxis) => {
     if (!vizUrdfContent) {
@@ -718,7 +714,7 @@ const Index = () => {
       setJointValues(angles);
       // Don't automatically select a joint - let user choose what to select
     });
-  }, []);
+  }, [setJointValues]);
 
   const handleEpisodesResizeStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
