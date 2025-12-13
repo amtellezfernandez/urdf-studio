@@ -11,7 +11,7 @@ import { Search, X, ChevronDown, ChevronRight, Network, Eye, EyeOff } from "luci
 import { cn } from "@/lib/utils";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/features/urdf";
-import { RAD_TO_DEG } from "@/utils/angleConversions";
+import { RAD_TO_DEG } from "@/lib/angleConversions";
 
 interface JointsWindowProps {
   availableJoints: string[];

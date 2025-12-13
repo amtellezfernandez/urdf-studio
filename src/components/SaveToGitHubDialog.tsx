@@ -21,7 +21,7 @@ import {
   checkFileExists,
   checkAssetsFolderExists,
   generateCommitMessage,
-} from "@/utils/github-repo";
+} from "@/features/urdf";
 
 interface SaveToGitHubDialogProps {
   isOpen: boolean;

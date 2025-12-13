@@ -1,2 +1,2 @@
-// Deprecated path: prefer importing from "@/features/urdf"
+/** @deprecated Use "@/features/urdf/parseLinkNames" */
 export { parseLinkNames } from "@/features/urdf/parseLinkNames";

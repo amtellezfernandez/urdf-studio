@@ -24,7 +24,7 @@ import {
   convertGitHubFilesToFileList,
   type URDFCandidate,
   type GitHubFile,
-} from "@/utils/github-repo";
+} from "@/features/urdf";
 
 interface FolderUploadScreenProps {
   onFolderSelected: (files: FileList) => void;
@@ -721,4 +721,3 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
     </div>
   );
 });
-

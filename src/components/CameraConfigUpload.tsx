@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { useCameraStore } from "@/store/useCameraStore";
-import { parseCameraConfig } from "@/utils/cameraConfig";
+import { parseCameraConfig } from "@/features/camera";
 import { toast } from "sonner";
 
 interface CameraConfigUploadProps {

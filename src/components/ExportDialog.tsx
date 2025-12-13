@@ -22,12 +22,11 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { convertURDFToMJCF, convertURDFToXacro } from "@/features/urdf";
+import { convertURDFToMJCF, convertURDFToXacro, extractMeshReferencesFromURDF, fetchRepoContents } from "@/features/urdf";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { cn } from "@/lib/utils";
-import { extractMeshReferencesFromURDF, fetchRepoContents } from "@/utils/github-repo";
 import { useCameraStore } from "@/store/useCameraStore";
-import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
+import { exportCamerasToJSON, exportCamerasToYAML } from "@/features/camera";
 
 interface ExportDialogProps {
   isOpen: boolean;

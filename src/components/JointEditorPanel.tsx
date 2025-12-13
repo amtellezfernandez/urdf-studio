@@ -25,7 +25,7 @@ import type { JointAxisInfo, JointLimitInfo } from "@/features/urdf";
 import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
-import { DEG_TO_RAD, RAD_TO_DEG } from "@/utils/angleConversions";
+import { DEG_TO_RAD, RAD_TO_DEG } from "@/lib/angleConversions";
 
 interface JointEditorPanelProps {
   jointName: string | null;

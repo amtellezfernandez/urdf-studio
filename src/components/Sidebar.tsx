@@ -20,13 +20,16 @@ import { URDFComparison } from "@/components/URDFComparison";
 import { type CollisionVisibility } from "@/components/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { cn } from "@/lib/utils";
-import { parseEpisodeCsv } from "@/utils/episodeCsv";
 import {
+  parseEpisodeCsv,
   parseEpisodeJson,
   serializeEpisodeJson,
   serializeEpisodeCollectionJson,
   type EpisodeJsonEpisode,
-} from "@/utils/episodeFormat";
+  type EpisodeMetadata,
+  getMappingForSource,
+  saveMapping,
+} from "@/features/dataset";
 import {
   Tooltip,
   TooltipContent,
@@ -43,7 +46,6 @@ import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 import { Badge } from "@/components/ui/badge";
 import { JointMappingDialog } from "@/components/JointMappingDialog";
-import { getMappingForSource, saveMapping } from "@/utils/jointMappingUtils";
 import { useCameraStore } from "@/store/useCameraStore";
 import { EpisodeCameraPreview } from "@/components/EpisodeCameraPreview";
 import type { JointMapping } from "@/features/types";
@@ -117,7 +119,6 @@ interface RecordedFrame {
   jointPositions: Record<string, number>;
 }
 
-import type { EpisodeMetadata } from "@/utils/episodeTypes";
 
 interface Episode {
   id: string;

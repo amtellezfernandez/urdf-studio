@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { JointLimitInfo } from "@/features/urdf";
 import jointColors from "@/joint_colors.json";
-import { getJointColor } from "@/utils/jointColors";
+import { getJointColor } from "@/features/urdf";
 
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";

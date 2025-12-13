@@ -13,7 +13,7 @@ import { ObjectCreator } from "@/components/ObjectCreator";
 import { CameraCreator } from "@/components/CameraCreator";
 import { CameraConfigUpload } from "@/components/CameraConfigUpload";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
-import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
+import { deleteMapping, getSavedMappings, saveMapping, useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
 import {
   canonicalizeUrdf,
@@ -28,7 +28,7 @@ import {
   rotateUrdf,
 } from "@/features/urdf";
 import { useCameraStore } from "@/store/useCameraStore";
-import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
+import { exportCamerasToJSON, exportCamerasToYAML, useCameraPanels } from "@/features/camera";
 import { useTheme } from "@/hooks/use-theme";
 import type { FileWithPath } from "@/types/file";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
@@ -60,8 +60,6 @@ import {
   VIEWER_RESIZER_HEIGHT,
 } from "@/pages/index/constants";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
-import { useDatasetActions } from "@/features/dataset/useDatasetActions";
-import { useCameraPanels } from "@/features/camera/useCameraPanels";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
 import { useUrdfSelection } from "@/features/urdf-selection";
