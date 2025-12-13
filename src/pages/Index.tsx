@@ -12,8 +12,7 @@ import { MappingListPanel } from "@/components/MappingListPanel";
 import { ObjectCreator } from "@/components/ObjectCreator";
 import { CameraCreator } from "@/components/CameraCreator";
 import { CameraConfigUpload } from "@/components/CameraConfigUpload";
-import { useGPUMode } from "@/hooks/use-gpu-mode";
-import { deleteMapping, getSavedMappings, saveMapping, useDatasetActions } from "@/features/dataset";
+import { useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
 import {
   canonicalizeUrdf,
@@ -28,8 +27,7 @@ import {
   rotateUrdf,
 } from "@/features/urdf";
 import { useCameraStore } from "@/store/useCameraStore";
-import { exportCamerasToJSON, exportCamerasToYAML, useCameraPanels } from "@/features/camera";
-import { useTheme } from "@/hooks/use-theme";
+import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/types/file";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
 import {
@@ -52,7 +50,6 @@ import type {
   DebugMeshInfo,
   ViewerEpisode,
   EpisodeSaveHandler,
-  SavedMapping,
 } from "@/features/types";
 import {
   AXIS_NAMES,
@@ -64,10 +61,11 @@ import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
 import { useUrdfSelection } from "@/features/urdf-selection";
 import { useLayout } from "@/features/layout";
+import { useExportHandlers, useJointMappingPersistence } from "@/features/export";
+import { useThemeAndGPUMode } from "@/features/theme-gpu";
 
 const Index = () => {
-  useTheme(); // Initialize dark mode
-  const { gpuMode, setGPUMode } = useGPUMode();
+  const { gpuMode, setGPUMode } = useThemeAndGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const {
@@ -157,13 +155,42 @@ const Index = () => {
   } = useLayout();
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
-  const [showExportDialog, setShowExportDialog] = useState(false);
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [viewerEpisode, setViewerEpisode] = useState<ViewerEpisode | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<EpisodeSaveHandler | undefined>(undefined);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
+  const {
+    isExportDialogOpen,
+    openExportDialog,
+    closeExportDialog,
+    handleSave,
+    handleRevert,
+    canRevert,
+    exportCamerasAsJSON,
+    exportCamerasAsYAML,
+    hasCamerasToExport,
+  } = useExportHandlers({
+    vizUrdfContent,
+    savedVizUrdfContent,
+    updateUrdfFile,
+    setSavedVizUrdfContent,
+    cameras,
+  });
+  const {
+    mappingDialogData,
+    selectedMapping,
+    showMappingDialog,
+    showMappingListPanel,
+    savedMappings,
+    openMappingList,
+    closeMappingList,
+    selectMapping,
+    deleteMappingById,
+    applyMapping,
+    closeMappingDialog,
+  } = useJointMappingPersistence();
 
   // Object creation state
   const {
@@ -185,15 +212,6 @@ const Index = () => {
     showPovCameras,
     setShowPovCameras,
   } = useCameraPanels();
-
-  // Joint Mapping state
-  const [showMappingListPanel, setShowMappingListPanel] = useState(false);
-  const [showMappingDialog, setShowMappingDialog] = useState(false);
-  const [selectedMapping, setSelectedMapping] = useState<SavedMapping | undefined>(undefined);
-  const [mappingDialogData, setMappingDialogData] = useState<{
-    datasetJoints: string[];
-    jointRanges: Record<string, { min: number; max: number }>;
-  } | null>(null);
 
   const { datasetActions, handleDatasetActionsReady } = useDatasetActions();
 
@@ -513,70 +531,6 @@ const Index = () => {
     toast.success("Reset to original loaded file");
   }, [originalVizUrdfContent, updateUrdfFile]);
 
-  const handleSave = useCallback(() => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content to save");
-      return;
-    }
-
-    setSavedVizUrdfContent(vizUrdfContent);
-    toast.success("Changes saved");
-  }, [vizUrdfContent]);
-
-  const handleRevert = useCallback(() => {
-    if (!savedVizUrdfContent) {
-      toast.error("No saved URDF content found");
-      return;
-    }
-
-    updateUrdfFile(savedVizUrdfContent);
-    toast.success("Reverted to last saved file");
-  }, [savedVizUrdfContent, updateUrdfFile]);
-
-  const handleExportCamerasJSON = useCallback(() => {
-    if (cameras.length === 0) {
-      toast.error("No cameras to export");
-      return;
-    }
-
-    try {
-      const jsonContent = exportCamerasToJSON(cameras);
-      const blob = new Blob([jsonContent], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "camera-config.json";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Exported ${cameras.length} camera(s) to JSON`);
-    } catch (error) {
-      toast.error("Failed to export cameras");
-      console.error(error);
-    }
-  }, [cameras]);
-
-  const handleExportCamerasYAML = useCallback(() => {
-    if (cameras.length === 0) {
-      toast.error("No cameras to export");
-      return;
-    }
-
-    try {
-      const yamlContent = exportCamerasToYAML(cameras);
-      const blob = new Blob([yamlContent], { type: "text/yaml" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "camera-config.yaml";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Exported ${cameras.length} camera(s) to YAML`);
-    } catch (error) {
-      toast.error("Failed to export cameras");
-      console.error(error);
-    }
-  }, [cameras]);
-
   const deleteJointsFromURDF = useCallback((urdfContent: string, jointsToDelete: Set<string>): string => {
     if (jointsToDelete.size === 0) return urdfContent;
     
@@ -760,109 +714,6 @@ const Index = () => {
     [vizUrdfContent, originalVizUrdfContent]
   );
 
-  // Joint Mapping handlers
-  const handleOpenMappingList = useCallback(() => {
-    setShowMappingListPanel(true);
-  }, []);
-
-  const handleSelectMapping = useCallback((mapping: SavedMapping) => {
-    // Extract dataset joints from the saved mapping
-    const datasetJoints = mapping.mappings.map(m => m.datasetJoint);
-    
-    // Use stored joint ranges if available, otherwise create empty ranges
-    const jointRanges: Record<string, { min: number; max: number }> = mapping.jointRanges || {};
-    
-    // Ensure all dataset joints have ranges (even if empty)
-    datasetJoints.forEach(joint => {
-      if (!jointRanges[joint]) {
-        jointRanges[joint] = { min: 0, max: 0 };
-      }
-    });
-
-    // Set up dialog data
-    setMappingDialogData({
-      datasetJoints,
-      jointRanges,
-    });
-    setSelectedMapping(mapping);
-    setShowMappingListPanel(false);
-    setShowMappingDialog(true);
-  }, []);
-
-  const handleDeleteMappingById = useCallback((id: string) => {
-    deleteMapping(id);
-    toast.success("Mapping deleted");
-    // Force re-render by toggling the panel
-    setShowMappingListPanel(false);
-    setTimeout(() => setShowMappingListPanel(true), 0);
-  }, []);
-
-  const handleApplyMapping = useCallback((mappings: any[], degToRad: boolean) => {
-    // This will be called from the dialog when editing an existing mapping
-    if (selectedMapping && mappingDialogData) {
-      // Build offset map from new mappings (per dataset joint)
-      const newOffsets: Record<string, number> = {};
-      const newMapping: Record<string, string> = {}; // dataset joint -> URDF joint
-      mappings.forEach(m => {
-        if (m.urdfJoint && m.urdfJoint !== "?") {
-          newMapping[m.datasetJoint] = m.urdfJoint;
-          if (m.offset !== undefined) {
-            newOffsets[m.datasetJoint] = m.offset;
-          }
-        }
-      });
-      
-      // Compare with old mapping to detect structural changes
-      const oldMapping: Record<string, string> = {};
-      const oldOffsets: Record<string, number> = {};
-      selectedMapping.mappings.forEach((m: any) => {
-        if (m.urdfJoint && m.urdfJoint !== "?") {
-          oldMapping[m.datasetJoint] = m.urdfJoint;
-          if (m.offset !== undefined) {
-            oldOffsets[m.datasetJoint] = m.offset;
-          }
-        }
-      });
-      
-      // Check if mapping structure changed (connections or degToRad)
-      const mappingStructureChanged = 
-        selectedMapping.degToRad !== degToRad ||
-        JSON.stringify(oldMapping) !== JSON.stringify(newMapping);
-      
-      // Save the updated mapping with joint ranges
-      saveMapping(selectedMapping.source, mappings, degToRad, mappingDialogData.jointRanges);
-      
-      // Notify Sidebar to update episodes from this mapping source
-      window.dispatchEvent(new CustomEvent('mapping:updated', {
-        detail: {
-          mappingSource: selectedMapping.source,
-          newOffsets,
-          newMapping,
-          oldOffsets,
-          oldMapping,
-          oldDegToRad: selectedMapping.degToRad,
-          newDegToRad: degToRad,
-          mappingStructureChanged, // Flag indicating if structure changed (needs full reload)
-        }
-      }));
-      
-      toast.success(mappingStructureChanged
-        ? "Joint mapping updated - episodes will be reloaded"
-        : "Joint mapping updated");
-      setShowMappingDialog(false);
-      setMappingDialogData(null);
-      setSelectedMapping(undefined);
-      
-      // Refresh the mapping list panel if it was open
-      if (showMappingListPanel) {
-        setShowMappingListPanel(false);
-        setTimeout(() => setShowMappingListPanel(true), 0);
-      }
-    } else {
-      toast.success("Joint mapping applied");
-    }
-  }, [selectedMapping, mappingDialogData, showMappingListPanel]);
-
   // Show upload screen if no files loaded yet
   if (!hasLoadedFiles) {
     return <FolderUploadScreen onFolderSelected={loadFilesFromFolder} />;
@@ -896,7 +747,7 @@ const Index = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-56 bg-[#282828] border-[#3d3d3d]">
                     <DropdownMenuItem
-                      onClick={() => setShowExportDialog(true)}
+                      onClick={openExportDialog}
                       className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                     >
                       Export
@@ -909,10 +760,10 @@ const Index = () => {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleRevert}
-                      disabled={!savedVizUrdfContent || savedVizUrdfContent === vizUrdfContent}
+                      disabled={!canRevert}
                       className={cn(
                         "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                        (!savedVizUrdfContent || savedVizUrdfContent === vizUrdfContent) && "opacity-50 cursor-not-allowed"
+                        !canRevert && "opacity-50 cursor-not-allowed"
                       )}
                       title="Reloads the last saved file"
                     >
@@ -1151,7 +1002,7 @@ const Index = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
                   <DropdownMenuItem
-                    onClick={handleOpenMappingList}
+                    onClick={openMappingList}
                     className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                   >
                     Joint Mappings
@@ -1258,21 +1109,21 @@ const Index = () => {
                         Upload Camera Config
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={handleExportCamerasJSON}
-                        disabled={cameras.length === 0}
+                        onClick={exportCamerasAsJSON}
+                        disabled={!hasCamerasToExport}
                         className={cn(
                           "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          cameras.length === 0 && "opacity-50 cursor-not-allowed"
+                          !hasCamerasToExport && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         Export as JSON
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={handleExportCamerasYAML}
-                        disabled={cameras.length === 0}
+                        onClick={exportCamerasAsYAML}
+                        disabled={!hasCamerasToExport}
                         className={cn(
                           "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          cameras.length === 0 && "opacity-50 cursor-not-allowed"
+                          !hasCamerasToExport && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         Export as YAML
@@ -1709,8 +1560,8 @@ const Index = () => {
       )}
       {/* Export Dialog - Always available, even when on 3D viewer */}
       <ExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
+        isOpen={isExportDialogOpen}
+        onClose={closeExportDialog}
         urdfContent={getExportUrdfContent()}
         meshFiles={meshFiles}
         githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
@@ -1765,28 +1616,24 @@ const Index = () => {
       {/* Joint Mapping List Panel */}
       <MappingListPanel
         isOpen={showMappingListPanel}
-        onClose={() => setShowMappingListPanel(false)}
-        mappings={getSavedMappings()}
-        onSelectMapping={handleSelectMapping}
-        onDeleteMapping={handleDeleteMappingById}
+        onClose={closeMappingList}
+        mappings={savedMappings}
+        onSelectMapping={selectMapping}
+        onDeleteMapping={deleteMappingById}
       />
 
       {/* Joint Mapping Dialog */}
       {mappingDialogData && (
         <JointMappingDialog
           isOpen={showMappingDialog}
-          onClose={() => {
-            setShowMappingDialog(false);
-            setMappingDialogData(null);
-            setSelectedMapping(undefined);
-          }}
+          onClose={closeMappingDialog}
           datasetJoints={mappingDialogData.datasetJoints}
           urdfJoints={availableJoints}
           jointRanges={mappingDialogData.jointRanges}
           existingMapping={selectedMapping}
           source={selectedMapping?.source}
           jointLimits={jointLimits}
-          onApply={handleApplyMapping}
+          onApply={applyMapping}
         />
       )}
 
