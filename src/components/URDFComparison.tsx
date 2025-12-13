@@ -26,9 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
-import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
-import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
+import { canonicalizeUrdf, normalizeAxes, prettifyUrdf, compareUrdfs } from "@/features/urdf-editor";
 import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
 import { convertURDFToXacro } from "@/urdf_corrections/urdfToXacro";
 import { convertURDFToMJCF } from "@/urdf_corrections/urdfToMJCF";
@@ -231,42 +229,54 @@ export const URDFComparison = ({
   // URDF Utility Handlers
   const handleCanonicalOrder = () => {
     const currentContent = isEditing ? editedVizUrdf : vizUrdf;
-    const result = canonicalOrderURDF(currentContent);
-    if (isEditing) {
-      setEditedVizUrdf(result);
-    } else {
-      onVizUrdfChange?.(result);
+    const result = canonicalizeUrdf(currentContent);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to reorder URDF");
+      return;
     }
-    toast.success("URDF elements reordered to canonical format");
+    if (isEditing) {
+      setEditedVizUrdf(result.content);
+    } else {
+      onVizUrdfChange?.(result.content);
+    }
+    toast.success(result.message ?? "URDF elements reordered to canonical format");
   };
 
   const handlePrettyPrint = () => {
     const currentContent = isEditing ? editedVizUrdf : vizUrdf;
-    const result = prettyPrintURDF(currentContent);
-    if (isEditing) {
-      setEditedVizUrdf(result);
-    } else {
-      onVizUrdfChange?.(result);
+    const result = prettifyUrdf(currentContent);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to format URDF");
+      return;
     }
-    toast.success("URDF formatted with consistent indentation");
+    if (isEditing) {
+      setEditedVizUrdf(result.content);
+    } else {
+      onVizUrdfChange?.(result.content);
+    }
+    toast.success(result.message ?? "URDF formatted with consistent indentation");
   };
 
   const handleNormalizeAxes = () => {
     const currentContent = isEditing ? editedVizUrdf : vizUrdf;
-    const result = normalizeJointAxes(currentContent);
+    const result = normalizeAxes(currentContent);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to normalize joint axes");
+      return;
+    }
     if (isEditing) {
-      setEditedVizUrdf(result.urdfContent);
+      setEditedVizUrdf(result.content);
     } else {
-      onVizUrdfChange?.(result.urdfContent);
+      onVizUrdfChange?.(result.content);
     }
 
-    if (result.errors.length > 0) {
-      toast.warning(`Normalized axes with ${result.errors.length} error(s) fixed`);
-      result.errors.forEach(err => {
+    if (result.issues.length > 0) {
+      toast.warning(`Normalized axes with ${result.issues.length} error(s) fixed`);
+      result.issues.forEach(err => {
         console.warn(`Joint "${err.jointName}" (${err.jointType}): ${err.issue}`);
       });
     } else if (result.corrections.length > 0) {
-      toast.success(`Normalized ${result.corrections.length} joint axis(es)`);
+      toast.success(result.message ?? `Normalized ${result.corrections.length} joint axis(es)`);
       result.corrections.forEach(correction => {
         console.info(`Joint "${correction.jointName}": ${correction.reason}`);
       });
@@ -345,6 +355,16 @@ export const URDFComparison = ({
     }
   }, [isEditing, editedVizUrdf, getExportUrdf, vizUrdf, formattedViz]);
 
+  const comparisonTarget = useMemo(
+    () => (isEditing ? editedVizUrdf : (getExportUrdf ? getExportUrdf() : vizUrdf)),
+    [editedVizUrdf, getExportUrdf, isEditing, vizUrdf]
+  );
+
+  const comparison = useMemo(
+    () => compareUrdfs(originalUrdf, comparisonTarget),
+    [originalUrdf, comparisonTarget]
+  );
+
   // Get displayed content based on format
   const getOriginalContent = () => {
     switch (originalFormat) {
@@ -413,6 +433,24 @@ export const URDFComparison = ({
           "flex flex-col gap-2 flex-1 min-h-0",
           inline && "overflow-hidden"
         )}>
+
+          <div className="flex items-center gap-2 px-1 mt-1">
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-sm border",
+                comparison.areEqual
+                  ? "text-green-500 border-green-500/40 bg-green-500/5"
+                  : "text-amber-500 border-amber-500/40 bg-amber-500/5"
+              )}
+            >
+              {comparison.areEqual ? "In Sync" : "Differences"}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {comparison.areEqual
+                ? "Normalized contents match"
+                : `${comparison.differenceCount} differing line(s) after canonical formatting`}
+            </span>
+          </div>
 
           {/* Content Area */}
           <div className="flex-1 grid gap-2 min-h-0 mt-2" style={{
@@ -715,4 +753,3 @@ export const URDFComparison = ({
     </Dialog>
   );
 };
-

@@ -17,18 +17,18 @@ import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
 import { toast } from "sonner";
-import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
-import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/parseJointAxis";
-import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
-import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
-import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
-import { updateLinkNameInURDF } from "@/urdf_corrections/updateLinkName";
-import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
-import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
+import {
+  canonicalizeUrdf,
+  changeJointAxis,
+  changeJointType,
+  normalizeAxes,
+  prettifyUrdf,
+  renameJoint,
+  renameLink,
+  rotateUrdf,
+} from "@/features/urdf-editor";
 import { useCameraStore } from "@/store/useCameraStore";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
-import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
-import { normalizeJointAxes } from "@/urdf_corrections/normalizeJointAxes";
 import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
 import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { useTheme } from "@/hooks/use-theme";
@@ -307,17 +307,21 @@ const Index = () => {
   }, [vizUrdfContent, updateUrdfFile]);
 
   const handleLinkNameChange = useCallback((oldName: string, newName: string) => {
-    if (newName === oldName || !vizUrdfContent) return;
+    if (newName === oldName) return;
+    if (!vizUrdfContent) {
+      toast.error("No URDF content available");
+      return;
+    }
 
     try {
-      const updatedContent = updateLinkNameInURDF(vizUrdfContent, oldName, newName);
-      if (updatedContent === vizUrdfContent) {
-        toast.error(`Link "${newName}" already exists or "${oldName}" not found`);
+      const result = renameLink(vizUrdfContent, oldName, newName);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to update link name");
         return;
       }
 
-      updateUrdfFile(updatedContent);
-      toast.success(`Renamed link "${oldName}" to "${newName}"`);
+      updateUrdfFile(result.content);
+      toast.success(result.message ?? `Renamed link "${oldName}" to "${newName}"`);
     } catch (error) {
       console.error("Error updating link name:", error);
       toast.error("Failed to update link name");
@@ -330,21 +334,26 @@ const Index = () => {
       return;
     }
 
-    // Update the URDF content immediately
-    const updatedContent = updateJointAxisInURDF(vizUrdfContent, jointName, axis);
-    
+    const result = changeJointAxis(vizUrdfContent, jointName, axis);
+    if (!result.success) {
+      toast.error(result.error ?? `Unable to update axis for joint "${jointName}"`);
+      return;
+    }
+
     // Immediately update all state synchronously for consistency with other handlers
     // This ensures immediate UI updates without deferred transitions that could cause conflicts
-    setVizUrdfContent(updatedContent);
-    const limits = parseJointLimitsFromURDF(updatedContent);
-    setJointLimits(limits);
-    const axes = parseJointAxesFromURDF(updatedContent);
-    setJointAxes(axes);
-    setUrdfFile(createUrdfFile(updatedContent));
+    setVizUrdfContent(result.content);
+    if (result.jointLimits) {
+      setJointLimits(result.jointLimits);
+    }
+    if (result.jointAxes) {
+      setJointAxes(result.jointAxes);
+    }
+    setUrdfFile(createUrdfFile(result.content));
     setUrdfContentVersion(prev => prev + 1); // Force reload of 3D viewer and sidebar
     
-    toast.success(`Updated axis for joint "${jointName}"`);
-  }, [vizUrdfContent, createUrdfFile]);
+    toast.success(result.message ?? `Updated axis for joint "${jointName}"`);
+  }, [vizUrdfContent, createUrdfFile, setJointAxes, setJointLimits]);
 
   const handleResetAxis = useCallback((jointName: string) => {
     if (!originalJointAxes[jointName]) {
@@ -361,25 +370,36 @@ const Index = () => {
       toast.error("No URDF content available");
       return;
     }
-    const updatedContent = updateJointTypeInURDF(vizUrdfContent, jointName, newType, lowerLimit, upperLimit);
-    updateUrdfFile(updatedContent);
+    const result = changeJointType(vizUrdfContent, jointName, newType, lowerLimit, upperLimit);
+    if (!result.success) {
+      toast.error(result.error ?? `Failed to update joint "${jointName}"`);
+      return;
+    }
+
+    updateUrdfFile(result.content);
+    if (result.jointLimits) {
+      setJointLimits(result.jointLimits);
+    }
+    if (result.jointAxes) {
+      setJointAxes(result.jointAxes);
+    }
     const limitMsg = lowerLimit !== undefined && upperLimit !== undefined
       ? ` with limits [${lowerLimit.toFixed(2)}, ${upperLimit.toFixed(2)}]`
       : "";
-    toast.success(`Updated joint "${jointName}" type to ${newType}${limitMsg}`);
-  }, [vizUrdfContent, updateUrdfFile]);
+    toast.success(result.message ?? `Updated joint "${jointName}" type to ${newType}${limitMsg}`);
+  }, [vizUrdfContent, updateUrdfFile, setJointAxes, setJointLimits]);
 
   const handleJointNameChange = useCallback((oldName: string, newName: string) => {
     if (!vizUrdfContent) {
       toast.error("No URDF content available");
       return;
     }
-    const updatedContent = updateJointNameInURDF(vizUrdfContent, oldName, newName);
-    if (updatedContent === vizUrdfContent) {
-      toast.error(`Failed to rename joint "${oldName}" to "${newName}". The name may already exist or be invalid.`);
+    const result = renameJoint(vizUrdfContent, oldName, newName);
+    if (!result.success) {
+      toast.error(result.error ?? `Failed to rename joint "${oldName}" to "${newName}". The name may already exist or be invalid.`);
       return;
     }
-    updateUrdfFile(updatedContent);
+    updateUrdfFile(result.content);
 
     // Update availableJoints to reflect the new name
     setAvailableJoints(prev => prev.map(name => name === oldName ? newName : name));
@@ -389,7 +409,7 @@ const Index = () => {
       setSelectedJoint(newName);
     }
 
-    toast.success(`Renamed joint "${oldName}" to "${newName}"`);
+    toast.success(result.message ?? `Renamed joint "${oldName}" to "${newName}"`);
   }, [vizUrdfContent, updateUrdfFile, selectedJoint]);
 
   const handleJointLinkChange = useCallback((jointName: string, parentLink: string, childLink: string) => {
@@ -563,30 +583,42 @@ const Index = () => {
   // URDF Utility Handlers
   const handleCanonicalOrder = useCallback(() => {
     if (!vizUrdfContent) return;
-    const result = canonicalOrderURDF(vizUrdfContent);
-    handleVizUrdfChange(result);
-    toast.success("URDF elements reordered to canonical format");
+    const result = canonicalizeUrdf(vizUrdfContent);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to reorder URDF");
+      return;
+    }
+    handleVizUrdfChange(result.content);
+    toast.success(result.message ?? "URDF elements reordered to canonical format");
   }, [vizUrdfContent, handleVizUrdfChange]);
 
   const handlePrettyPrint = useCallback(() => {
     if (!vizUrdfContent) return;
-    const result = prettyPrintURDF(vizUrdfContent);
-    handleVizUrdfChange(result);
-    toast.success("URDF formatted with consistent indentation");
+    const result = prettifyUrdf(vizUrdfContent);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to format URDF");
+      return;
+    }
+    handleVizUrdfChange(result.content);
+    toast.success(result.message ?? "URDF formatted with consistent indentation");
   }, [vizUrdfContent, handleVizUrdfChange]);
 
   const handleNormalizeAxes = useCallback(() => {
     if (!vizUrdfContent) return;
-    const result = normalizeJointAxes(vizUrdfContent);
-    handleVizUrdfChange(result.urdfContent);
+    const result = normalizeAxes(vizUrdfContent);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to normalize joint axes");
+      return;
+    }
+    handleVizUrdfChange(result.content);
 
-    if (result.errors.length > 0) {
-      toast.warning(`Normalized axes with ${result.errors.length} error(s) fixed`);
-      result.errors.forEach(err => {
+    if (result.issues.length > 0) {
+      toast.warning(`Normalized axes with ${result.issues.length} error(s) fixed`);
+      result.issues.forEach(err => {
         console.warn(`Joint "${err.jointName}" (${err.jointType}): ${err.issue}`);
       });
     } else if (result.corrections.length > 0) {
-      toast.success(`Normalized ${result.corrections.length} joint axis(es)`);
+      toast.success(result.message ?? `Normalized ${result.corrections.length} joint axis(es)`);
       result.corrections.forEach(correction => {
         console.info(`Joint "${correction.jointName}": ${correction.reason}`);
       });
@@ -643,15 +675,15 @@ const Index = () => {
       return;
     }
 
-    const rotatedContent = rotateRobot90Degrees(vizUrdfContent, axis);
+    const result = rotateUrdf(vizUrdfContent, axis);
 
-    if (rotatedContent === vizUrdfContent) {
-      toast.error("Failed to rotate robot");
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to rotate robot");
       return;
     }
 
-    updateUrdfFile(rotatedContent);
-    toast.success(`Robot rotated 90° around ${AXIS_NAMES[axis]}-axis`);
+    updateUrdfFile(result.content);
+    toast.success(result.message ?? `Robot rotated 90° around ${AXIS_NAMES[axis]}-axis`);
   }, [vizUrdfContent, updateUrdfFile]);
 
   const handleMotionDataUpload = useCallback((file: File) => {
