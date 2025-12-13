@@ -22,10 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import type { JointLimitInfo } from "@/urdf_corrections/parseJointLimits";
-import type { JointAxisInfo } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
-import { getJointLinks } from "@/urdf_corrections/getJointLinks";
+import { getJointLinks, type JointAxisInfo, type JointLimitInfo } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/utils/angleConversions";
 
@@ -1057,4 +1055,3 @@ export const JointControl = ({
     </div>
   );
 };
-

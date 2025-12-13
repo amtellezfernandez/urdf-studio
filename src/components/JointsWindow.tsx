@@ -9,9 +9,8 @@ import { BlenderPanel } from "@/components/ui/blender-panel";
 import { JointControl } from "@/components/JointControl";
 import { Search, X, ChevronDown, ChevronRight, Network, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
-import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
-import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections/parseJointHierarchy";
+import type { JointAxisMap, JointLimits } from "@/features/urdf";
+import { parseJointHierarchy, type JointHierarchyNode } from "@/features/urdf";
 import { RAD_TO_DEG } from "@/utils/angleConversions";
 
 interface JointsWindowProps {
@@ -596,4 +595,3 @@ export const JointsWindow = ({
     </div>
   );
 };
-

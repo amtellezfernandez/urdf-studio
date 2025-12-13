@@ -1,3 +1,2 @@
-export * from "./urdfEditorActions";
-export * from "./urdfDiffUtils";
-
+// Compatibility re-export: prefer importing from "@/features/urdf"
+export * from "../urdf";

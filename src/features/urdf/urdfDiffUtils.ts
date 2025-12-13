@@ -1,5 +1,5 @@
-import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
-import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
+import { canonicalOrderURDF } from "./canonicalOrdering";
+import { prettyPrintURDF } from "./prettyPrintURDF";
 
 export interface UrdfComparisonResult {
   normalizedOriginal: string;
@@ -48,4 +48,3 @@ const countLineDifferences = (a: string, b: string): number => {
 
   return diffCount;
 };
-

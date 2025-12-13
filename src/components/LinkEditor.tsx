@@ -6,29 +6,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { Search, X, Plus, Trash2, Calculator, AlertTriangle, Eye, EyeOff, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";
-import { 
-  addVisualToLink, 
-  addCollisionToLink, 
+import {
+  addCollisionToLink,
   addInertialToLink,
-  updateVisualInLink,
+  addVisualToLink,
+  combineMeshBounds,
+  computeCylinderDiagnostics,
+  computeMeshBounds,
+  computePCA,
+  computeRotationToAxis,
+  computeSphereDiagnostics,
+  findMeshFile,
+  parseLinkData,
+  removeCollisionFromLink,
+  removeInertialFromLink,
+  removeVisualFromLink,
+  type CylinderDiagnostics,
+  type LinkData,
+  type SphereDiagnostics,
   updateCollisionInLink,
   updateInertialInLink,
-  removeVisualFromLink,
-  removeCollisionFromLink,
-  removeInertialFromLink
-} from "@/urdf_corrections/updateLinkData";
-import { 
-  computeMeshBounds, 
-  combineMeshBounds,
-  computePCA, 
-  computeRotationToAxis,
-  findMeshFile,
-  computeCylinderDiagnostics,
-  computeSphereDiagnostics,
-  type CylinderDiagnostics,
-  type SphereDiagnostics
-} from "@/urdf_corrections/computeMeshGeometry";
+  updateVisualInLink,
+} from "@/features/urdf";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 

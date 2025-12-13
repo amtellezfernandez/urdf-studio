@@ -1,24 +1,14 @@
-import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
-import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
-import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
-import { updateLinkNameInURDF } from "@/urdf_corrections/updateLinkName";
-import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
-import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
-import { prettyPrintURDF } from "@/urdf_corrections/prettyPrintURDF";
-import {
-  normalizeJointAxes,
-  type AxisCorrection,
-  type AxisError,
-} from "@/urdf_corrections/normalizeJointAxes";
-import {
-  parseJointAxesFromURDF,
-  type JointAxisMap,
-} from "@/urdf_corrections/parseJointAxis";
-import {
-  parseJointLimitsFromURDF,
-  type JointLimits,
-} from "@/urdf_corrections/parseJointLimits";
 import type { RotationAxis } from "@/features/types";
+import { canonicalOrderURDF } from "./canonicalOrdering";
+import { normalizeJointAxes, type AxisCorrection, type AxisError } from "./normalizeJointAxes";
+import { parseJointAxesFromURDF, type JointAxisMap } from "./parseJointAxis";
+import { parseJointLimitsFromURDF, type JointLimits } from "./parseJointLimits";
+import { prettyPrintURDF } from "./prettyPrintURDF";
+import { rotateRobot90Degrees } from "./rotateRobot";
+import { updateJointAxisInURDF } from "./updateJointAxis";
+import { updateJointNameInURDF } from "./updateJointName";
+import { updateJointTypeInURDF } from "./updateJointType";
+import { updateLinkNameInURDF } from "./updateLinkName";
 
 export interface UrdfEditResult {
   success: boolean;

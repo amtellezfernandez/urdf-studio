@@ -22,8 +22,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { convertURDFToXacro } from "@/urdf_corrections/urdfToXacro";
-import { convertURDFToMJCF } from "@/urdf_corrections/urdfToMJCF";
+import { convertURDFToMJCF, convertURDFToXacro } from "@/features/urdf";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { cn } from "@/lib/utils";
 import { extractMeshReferencesFromURDF, fetchRepoContents } from "@/utils/github-repo";

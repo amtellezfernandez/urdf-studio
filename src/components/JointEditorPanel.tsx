@@ -21,10 +21,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { JointLimitInfo } from "@/urdf_corrections/parseJointLimits";
-import type { JointAxisInfo } from "@/urdf_corrections/parseJointAxis";
+import type { JointAxisInfo, JointLimitInfo } from "@/features/urdf";
 import { useJointStore } from "@/store/useJointStore";
-import { getJointLinks } from "@/urdf_corrections/getJointLinks";
+import { getJointLinks } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/utils/angleConversions";
 

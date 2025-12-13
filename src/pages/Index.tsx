@@ -19,16 +19,16 @@ import {
   canonicalizeUrdf,
   changeJointAxis,
   changeJointType,
+  fixMeshPaths,
   normalizeAxes,
+  parseURDF,
   prettifyUrdf,
   renameJoint,
   renameLink,
   rotateUrdf,
-} from "@/features/urdf-editor";
+} from "@/features/urdf";
 import { useCameraStore } from "@/store/useCameraStore";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
-import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
-import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { useTheme } from "@/hooks/use-theme";
 import type { FileWithPath } from "@/types/file";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";

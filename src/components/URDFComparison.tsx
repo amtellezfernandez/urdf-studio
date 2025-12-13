@@ -12,7 +12,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { X, ChevronDown, Info, Copy, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { URDFSyntaxHighlighter } from "./URDFSyntaxHighlighter";
-import { parseURDF } from "@/urdf_corrections/urdfParser";
 import { cn } from "@/lib/utils";
 import { SaveToGitHubDialog } from "@/components/SaveToGitHubDialog";
 import {
@@ -26,10 +25,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { canonicalizeUrdf, normalizeAxes, prettifyUrdf, compareUrdfs } from "@/features/urdf-editor";
-import { fixMeshPaths } from "@/urdf_corrections/fixMeshPaths";
-import { convertURDFToXacro } from "@/urdf_corrections/urdfToXacro";
-import { convertURDFToMJCF } from "@/urdf_corrections/urdfToMJCF";
+import {
+  canonicalizeUrdf,
+  compareUrdfs,
+  convertURDFToMJCF,
+  convertURDFToXacro,
+  fixMeshPaths,
+  normalizeAxes,
+  parseURDF,
+  prettifyUrdf,
+} from "@/features/urdf";
 
 interface URDFComparisonProps {
   originalUrdf: string;

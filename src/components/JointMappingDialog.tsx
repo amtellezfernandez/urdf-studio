@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { X, AlertCircle, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
+import type { JointLimits } from "@/features/urdf";
 import type { JointMapping, SavedMapping } from "@/features/types";
 
 interface JointMappingDialogProps {

@@ -15,8 +15,7 @@ import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play
 import { useJointStore } from "@/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
-import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
-import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
+import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import { URDFComparison } from "@/components/URDFComparison";
 import { type CollisionVisibility } from "@/components/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";

@@ -1,10 +1,14 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import type { FileWithPath } from "@/types/file";
-import { createVizFilename } from "@/urdf_corrections/addJointColors";
-import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
-import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/parseJointAxis";
-import { parseLinkNames } from "@/utils/parseLinks";
+import {
+  createVizFilename,
+  parseJointAxesFromURDF,
+  parseJointLimitsFromURDF,
+  parseLinkNames,
+  type JointAxisMap,
+  type JointLimits,
+} from "@/features/urdf";
 import { findDeepestLeafLink } from "@/pages/index/utils";
 import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/pages/index/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/features/types";
