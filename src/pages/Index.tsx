@@ -17,7 +17,6 @@ import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
 import { toast } from "sonner";
-import { createVizFilename } from "@/urdf_corrections/addJointColors";
 import { parseJointLimitsFromURDF, type JointLimits } from "@/urdf_corrections/parseJointLimits";
 import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { updateJointAxisInURDF } from "@/urdf_corrections/updateJointAxis";
@@ -25,7 +24,6 @@ import { updateJointTypeInURDF } from "@/urdf_corrections/updateJointType";
 import { updateJointNameInURDF } from "@/urdf_corrections/updateJointName";
 import { updateLinkNameInURDF } from "@/urdf_corrections/updateLinkName";
 import { rotateRobot90Degrees } from "@/urdf_corrections/rotateRobot";
-import { parseLinkNames } from "@/utils/parseLinks";
 import { canonicalOrderURDF } from "@/urdf_corrections/canonicalOrdering";
 import { useCameraStore } from "@/store/useCameraStore";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/utils/cameraConfig";
@@ -48,132 +46,70 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-// Types
-interface MeshFiles {
-  [key: string]: Blob;
-}
-
-type RotationAxis = "x" | "y" | "z";
-type UrdfViewMode = "original" | "modified" | "split";
-type AngleUnit = "rad" | "deg";
-
-interface WindowWithViewerHandlers extends Window {
-  viewer3dUploadMotionData?: (file: File) => void;
-  viewer3dPlayAnimation?: () => void;
-  viewer3dSetFrame?: (frame: number) => void;
-}
-
-interface DebugMeshInfo {
-  filename: string;
-  webkitRelativePath: string;
-  found: boolean;
-  urdfReference?: string;
-  registeredPaths: string[];
-}
-
-type ViewerEpisode = {
-  id: string;
-  number: number;
-  frames: Array<{ timestamp: number; jointPositions: Record<string, number> }>;
-  createdAt: number;
-  metadata?: unknown;
-};
-
-type EpisodeSaveHandler = (episode: ViewerEpisode, saveAsNew: boolean, newName?: string) => void;
-
-// Constants
-const DEFAULT_URDF_FILENAME = "robot.urdf";
-const AXIS_NAMES: Record<RotationAxis, string> = {
-  x: "X",
-  y: "Y",
-  z: "Z",
-} as const;
-
-const SIDEBAR_RESIZER_WIDTH = 8;
-const VIEWER_RESIZER_HEIGHT = 4;
-const DEFAULT_RECORDING_VIEW_HEIGHT = 0.4;
-const MIN_HEADER_HEIGHT = 50;
-const COMMON_MESH_FOLDERS = ['meshes', 'mesh', 'assets', 'models', 'visual', 'collision'] as const;
-
-// Find the deepest leaf link in a URDF (PyRoki default EE heuristic)
-const findDeepestLeafLink = (urdfContent: string): string | null => {
-  try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-    if (xmlDoc.querySelector("parsererror")) return null;
-
-    const linkNames = Array.from(xmlDoc.querySelectorAll("link"))
-      .map((el) => el.getAttribute("name"))
-      .filter((name): name is string => !!name);
-    if (linkNames.length === 0) return null;
-
-    const parentToChildren = new Map<string, string[]>();
-    const childLinks = new Set<string>();
-    const parentLinks = new Set<string>();
-
-    xmlDoc.querySelectorAll("joint").forEach((joint) => {
-      const parentLink = joint.querySelector("parent")?.getAttribute("link");
-      const childLink = joint.querySelector("child")?.getAttribute("link");
-      if (parentLink && childLink) {
-        parentLinks.add(parentLink);
-        childLinks.add(childLink);
-        const list = parentToChildren.get(parentLink) || [];
-        list.push(childLink);
-        parentToChildren.set(parentLink, list);
-      }
-    });
-
-    // Root = a parent that is never a child, fallback to first link
-    const root =
-      Array.from(parentLinks).find((name) => !childLinks.has(name)) ??
-      linkNames.find((name) => !childLinks.has(name)) ??
-      linkNames[0];
-
-    const visited = new Set<string>();
-    let best: { link: string; depth: number } | null = null;
-
-    const dfs = (link: string, depth: number) => {
-      if (visited.has(link)) return;
-      visited.add(link);
-      const children = parentToChildren.get(link) || [];
-      if (children.length === 0) {
-        if (!best || depth > best.depth) {
-          best = { link, depth };
-        }
-      }
-      children.forEach((child) => dfs(child, depth + 1));
-    };
-
-    dfs(root, 0);
-    return best?.link ?? null;
-  } catch {
-    return null;
-  }
-};
+import type {
+  MeshFiles,
+  RotationAxis,
+  UrdfViewMode,
+  AngleUnit,
+  WindowWithViewerHandlers,
+  DebugMeshInfo,
+  ViewerEpisode,
+  EpisodeSaveHandler,
+} from "@/pages/index/types";
+import {
+  AXIS_NAMES,
+  DEFAULT_RECORDING_VIEW_HEIGHT,
+  MIN_HEADER_HEIGHT,
+  SIDEBAR_RESIZER_WIDTH,
+  VIEWER_RESIZER_HEIGHT,
+} from "@/pages/index/constants";
+import { findDeepestLeafLink } from "@/pages/index/utils";
+import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
+import { useDatasetActions } from "@/features/dataset/useDatasetActions";
+import { useCameraPanels } from "@/features/camera/useCameraPanels";
 
 const Index = () => {
   useTheme(); // Initialize dark mode
   const { gpuMode, setGPUMode } = useGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
-  const [urdfFile, setUrdfFile] = useState<File | null>(null);
-  const [meshFiles, setMeshFiles] = useState<MeshFiles>({});
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
   const [endEffectorLink, setEndEffectorLink] = useState<string | null>(null);
   const [jointValues, setJointValues] = useState<Record<string, number>>({});
   const [availableJoints, setAvailableJoints] = useState<string[]>([]);
-  const [availableLinks, setAvailableLinks] = useState<string[]>([]);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasLoadedFiles, setHasLoadedFiles] = useState(false);
-  const [jointLimits, setJointLimits] = useState<JointLimits>({});
-  const [jointAxes, setJointAxes] = useState<JointAxisMap>({});
-  const [originalUrdfContent, setOriginalUrdfContent] = useState<string>("");
-  const [vizUrdfContent, setVizUrdfContent] = useState<string>("");
-  const [originalJointAxes, setOriginalJointAxes] = useState<JointAxisMap>({});
-  const [originalVizUrdfContent, setOriginalVizUrdfContent] = useState<string>("");
-  const [savedVizUrdfContent, setSavedVizUrdfContent] = useState<string>("");
+  const {
+    urdfFile,
+    meshFiles,
+    isLoading,
+    hasLoadedFiles,
+    jointLimits,
+    jointAxes,
+    originalJointAxes,
+    availableLinks,
+    originalUrdfContent,
+    vizUrdfContent,
+    originalVizUrdfContent,
+    savedVizUrdfContent,
+    debugMeshInfo,
+    unmatchedURDFRefs,
+    showDebugDialog,
+    setShowDebugDialog,
+    setSavedVizUrdfContent,
+    setOriginalVizUrdfContent,
+    setJointLimits,
+    setJointAxes,
+    setOriginalJointAxes,
+    setVizUrdfContent,
+    setUrdfFile,
+    createUrdfFile,
+    updateUrdfFile,
+    loadFilesFromFolder,
+  } = useUrdfLoader({
+    onClearSelection: () => setSelectedJoint(null),
+    onAutoSelectEndEffector: setEndEffectorLink,
+  });
   const [deletedJoints, setDeletedJoints] = useState<Set<string>>(new Set());
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
@@ -197,11 +133,8 @@ const Index = () => {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<EpisodeSaveHandler | undefined>(undefined);
-  const [showDebugDialog, setShowDebugDialog] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
-  const [debugMeshInfo, setDebugMeshInfo] = useState<DebugMeshInfo[]>([]);
-  const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
 
   // Object creation state
   const [showObjectCreator, setShowObjectCreator] = useState(false);
@@ -210,9 +143,14 @@ const Index = () => {
   const [robot, setRobot] = useState<any>(null);
 
   // Camera creation state
-  const [showCameraCreator, setShowCameraCreator] = useState(false);
-  const [showCameraUpload, setShowCameraUpload] = useState(false);
-  const [showPovCameras, setShowPovCameras] = useState(false);
+  const {
+    showCameraCreator,
+    setShowCameraCreator,
+    showCameraUpload,
+    setShowCameraUpload,
+    showPovCameras,
+    setShowPovCameras,
+  } = useCameraPanels();
 
   // Joint Mapping state
   const [showMappingListPanel, setShowMappingListPanel] = useState(false);
@@ -223,19 +161,7 @@ const Index = () => {
     jointRanges: Record<string, { min: number; max: number }>;
   } | null>(null);
 
-  // Dataset actions from Sidebar
-  const [datasetActions, setDatasetActions] = useState<{
-    loadFromLocal: () => void;
-    loadFromHuggingFace: () => void;
-    exportToLocal: () => void;
-    exportToHuggingFace: () => void;
-    openRerunViewer: () => void;
-    isImportingFromHF: boolean;
-    isExportingDataset: boolean;
-    isUploadingToHF: boolean;
-    hasEpisodes: boolean;
-    isRerunViewerOpen: boolean;
-  } | null>(null);
+  const { datasetActions, handleDatasetActionsReady } = useDatasetActions();
 
   // Auto-select deepest leaf as end-effector when none is set (PyRoki default)
   useEffect(() => {
@@ -274,313 +200,6 @@ const Index = () => {
     },
     []
   );
-
-  const createUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
-    const vizFilename = createVizFilename(filename);
-    const uniqueFilename = timestamp 
-      ? `${vizFilename.replace('.urdf', '')}_${timestamp}.urdf`
-      : vizFilename;
-    const blob = new Blob([content], { type: "application/xml" });
-    return new File([blob], uniqueFilename, { type: "application/xml" });
-  }, []);
-
-  const updateUrdfFile = useCallback((content: string, filename = DEFAULT_URDF_FILENAME) => {
-    setVizUrdfContent(content);
-    setJointLimits(parseJointLimitsFromURDF(content));
-    setJointAxes(parseJointAxesFromURDF(content));
-    setUrdfFile(createUrdfFile(content, filename));
-  }, [createUrdfFile]);
-
-  // Extract all mesh file references from URDF
-  const extractMeshReferencesFromURDF = useCallback((urdfContent: string): string[] => {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-    const meshReferences = new Set<string>();
-    
-    // Find all mesh elements in visual and collision geometries
-    const meshElements = xmlDoc.querySelectorAll("mesh");
-    meshElements.forEach((mesh) => {
-      const filename = mesh.getAttribute("filename");
-      if (filename) {
-        // Remove any package:// prefix and normalize
-        const normalizedFilename = filename
-          .replace(/^package:\/\/[^/]+\//, "")
-          .replace(/^file:\/\//, "")
-          .trim();
-        if (normalizedFilename) {
-          meshReferences.add(normalizedFilename);
-        }
-      }
-    });
-    
-    return Array.from(meshReferences);
-  }, []);
-
-  const loadFilesFromFolder = async (fileList: FileList) => {
-    try {
-      setIsLoading(true);
-
-      const urdfFiles = Array.from(fileList).filter(file => 
-        file.name.toLowerCase().endsWith('.urdf')
-      );
-
-      if (urdfFiles.length === 0) {
-        throw new Error("No URDF file found in selected folder");
-      }
-
-      // Ensure only one URDF file is used - if multiple found, use the first and warn
-      if (urdfFiles.length > 1) {
-        console.warn(`Multiple URDF files found (${urdfFiles.length}), using only the first one: ${urdfFiles[0].name}`);
-      }
-
-      const urdfFile = urdfFiles[0];
-      const originalContent = await urdfFile.text();
-      const urdfFilename = urdfFile.name;
-      
-      const parsedLimits = parseJointLimitsFromURDF(originalContent);
-      const parsedAxes = parseJointAxesFromURDF(originalContent);
-      const parsedLinks = parseLinkNames(originalContent);
-      const autoEndEffector = findDeepestLeafLink(originalContent);
-
-      setOriginalUrdfContent(originalContent);
-      setJointLimits(parsedLimits);
-      setJointAxes(parsedAxes);
-      setOriginalJointAxes(parsedAxes);
-      setAvailableLinks(parsedLinks);
-      setVizUrdfContent(originalContent);
-      setOriginalVizUrdfContent(originalContent);
-      setSavedVizUrdfContent(originalContent);
-      setUrdfFile(createUrdfFile(originalContent, urdfFilename));
-      // Clear selection when loading new URDF - let user choose what to select
-      setSelectedJoint(null);
-      setEndEffectorLink(autoEndEffector);
-
-      const stlFiles = Array.from(fileList).filter(file => 
-        file.name.toLowerCase().endsWith('.stl')
-      );
-
-      const meshes: MeshFiles = {};
-      const blobCache = new Map<string, Blob>();
-      
-      await Promise.all(
-        stlFiles.map(async (file) => {
-          try {
-            const fileWithPath = file as FileWithPath;
-            const relativePath = fileWithPath.webkitRelativePath || file.name;
-            const filename = file.name;
-            
-            let blob = blobCache.get(filename);
-            if (!blob) {
-              blob = new Blob([await file.arrayBuffer()]);
-              blobCache.set(filename, blob);
-            }
-            
-            // Normalize path (remove leading/trailing slashes)
-            const normalizedPath = relativePath.replace(/^\/+|\/+$/g, '');
-            const pathParts = normalizedPath.split('/').filter(Boolean); // Filter out empty parts
-            
-            // Store blob with multiple path variations to match URDF references
-            // This ensures compatibility with different path formats in URDF files
-            // The URDF loader will try: exact path, filename, path without first folder, etc.
-            
-            // 1. Just filename (always store)
-            meshes[filename] = blob;
-            
-            // 2. Full relative path (normalized) - this is the primary key
-            // Example: "assets/base_motor_holder_so101_v1.stl"
-            meshes[normalizedPath] = blob;
-            
-            // 3. Relative path with leading slash
-            // Example: "/assets/base_motor_holder_so101_v1.stl"
-            meshes[`/${normalizedPath}`] = blob;
-            
-            // 4. Store original relativePath if different from normalized
-            if (relativePath !== normalizedPath) {
-              meshes[relativePath] = blob;
-              // Also store without leading slash
-              const noLeadingSlash = relativePath.replace(/^\/+/, '');
-              if (noLeadingSlash !== relativePath && noLeadingSlash !== normalizedPath) {
-                meshes[noLeadingSlash] = blob;
-              }
-            }
-            
-            // 5. For paths with folders, create variations
-            if (pathParts.length > 1) {
-              // Last folder + filename (e.g., "assets/base_motor_holder_so101_v1.stl" -> "assets/base_motor_holder_so101_v1.stl")
-              // This is already stored as normalizedPath, but ensure it's there
-              const lastFolderAndFile = `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
-              if (lastFolderAndFile !== normalizedPath) {
-                meshes[lastFolderAndFile] = blob;
-                meshes[`/${lastFolderAndFile}`] = blob;
-              }
-              
-              // All suffixes starting from each folder level
-              // For "robot/assets/base_motor_holder_so101_v1.stl":
-              // - "robot/assets/base_motor_holder_so101_v1.stl"
-              // - "assets/base_motor_holder_so101_v1.stl"
-              // - "base_motor_holder_so101_v1.stl"
-              for (let i = 0; i < pathParts.length; i++) {
-                const suffixPath = pathParts.slice(i).join('/');
-                meshes[suffixPath] = blob;
-                meshes[`/${suffixPath}`] = blob;
-              }
-              
-              // Also try without the first folder (common pattern in URDF files)
-              // For "robot/assets/base_motor_holder_so101_v1.stl" -> "assets/base_motor_holder_so101_v1.stl"
-              if (pathParts.length > 1) {
-                const withoutFirst = pathParts.slice(1).join('/');
-                meshes[withoutFirst] = blob;
-                meshes[`/${withoutFirst}`] = blob;
-              }
-            }
-            
-            // 6. URL decoded variations (in case URDF has encoded paths)
-            try {
-              const decodedPath = decodeURIComponent(normalizedPath);
-              if (decodedPath !== normalizedPath) {
-                meshes[decodedPath] = blob;
-                meshes[`/${decodedPath}`] = blob;
-              }
-            } catch {
-              // Ignore decode errors
-            }
-            
-            // 7. Try common mesh folder patterns
-            for (const folder of COMMON_MESH_FOLDERS) {
-              meshes[`${folder}/${filename}`] = blob;
-              meshes[`/${folder}/${filename}`] = blob;
-            }
-            
-            if (import.meta.env.DEV) {
-              console.log(`Mesh ${filename} registered with webkitRelativePath: "${relativePath}" (normalized: "${normalizedPath}")`);
-            }
-          } catch (err) {
-            if (import.meta.env.DEV) {
-              console.warn(`Failed to load mesh: ${file.name}`, err);
-            }
-          }
-        })
-      );
-      
-      setMeshFiles(meshes);
-      setHasLoadedFiles(true);
-      
-      // Extract mesh references from URDF and check matches
-      const urdfMeshReferences = extractMeshReferencesFromURDF(originalContent);
-      
-      // Check which STL files match URDF references
-      const debugInfo: DebugMeshInfo[] = [];
-      
-      for (const file of stlFiles) {
-        const fileWithPath = file as FileWithPath;
-        const relativePath = fileWithPath.webkitRelativePath || file.name;
-        const filename = file.name;
-        
-        // Get all registered paths for this file
-        const fileBlob = meshes[filename];
-        const registeredPaths = Object.keys(meshes).filter(key => meshes[key] === fileBlob);
-        
-        // Check if any URDF reference matches this file
-        let found = false;
-        let matchedReference: string | undefined;
-        
-        for (const urdfRef of urdfMeshReferences) {
-          // Try to match URDF reference with registered paths
-          // The URDF loader tries multiple variations, so we should check all of them
-          const refFilename = urdfRef.split("/").pop() || urdfRef;
-          const pathVariations = [
-            urdfRef, // Full path as-is
-            refFilename, // Just filename
-            urdfRef.replace(/^.*?\//, ""), // Remove first folder
-            urdfRef.replace(/^package:\/\/[^/]+\//, ""), // Remove ROS package prefix
-          ];
-          
-          // Add URL decoded variations (handle errors)
-          try {
-            pathVariations.push(decodeURIComponent(urdfRef));
-            pathVariations.push(decodeURIComponent(refFilename));
-          } catch {
-            // Ignore decode errors
-          }
-          
-          // Normalize variations (remove leading/trailing slashes for comparison)
-          const normalizedVariations = pathVariations
-            .filter(Boolean)
-            .map(v => v.replace(/^\/+|\/+$/g, ''));
-          
-          // Check if any registered path matches any variation
-          const matchingPath = registeredPaths.find(p => {
-            const normalizedPath = p.replace(/^\/+|\/+$/g, '');
-            return normalizedVariations.some(v => 
-              normalizedPath === v || 
-              normalizedPath.endsWith('/' + v) || 
-              normalizedPath === v.replace(/^\//, '')
-            );
-          });
-          
-          if (matchingPath) {
-            found = true;
-            matchedReference = urdfRef;
-            break;
-          }
-        }
-        
-        debugInfo.push({
-          filename,
-          webkitRelativePath: relativePath,
-          found,
-          urdfReference: matchedReference,
-          registeredPaths: registeredPaths.slice(0, 20), // Limit to first 20 paths
-        });
-      }
-      
-      // Check for URDF references that don't match any file
-      const unmatchedRefs = urdfMeshReferences.filter(ref => {
-        return !debugInfo.some(info => info.urdfReference === ref);
-      });
-      
-      setDebugMeshInfo(debugInfo);
-      setUnmatchedURDFRefs(unmatchedRefs);
-      setShowDebugDialog(true);
-      
-      // Log mesh paths in development mode for debugging
-      if (import.meta.env.DEV) {
-        console.log(`Loaded ${stlFiles.length} mesh files with ${Object.keys(meshes).length} total path variations`);
-        console.log(`URDF references: ${urdfMeshReferences.length} total, ${debugInfo.filter(m => m.found).length} matched, ${unmatchedRefs.length} unmatched`);
-        if (unmatchedRefs.length > 0) {
-          console.warn('Unmatched URDF references:', unmatchedRefs);
-        }
-        // Group paths by filename for clearer logging
-        const pathsByFile = new Map<string, string[]>();
-        for (const file of stlFiles) {
-          const fileWithPath = file as FileWithPath;
-          const relativePath = fileWithPath.webkitRelativePath || file.name;
-          const pathsForFile = Object.keys(meshes).filter(key => {
-            // Find all keys that point to this file's blob
-            const fileBlob = meshes[file.name];
-            return meshes[key] === fileBlob;
-          });
-          pathsByFile.set(file.name, pathsForFile);
-        }
-        pathsByFile.forEach((paths, filename) => {
-          console.log(`  ${filename}: ${paths.length} path variations`);
-          console.log(`    Primary: ${paths[0] || 'N/A'}`);
-          if (paths.length > 1) {
-            console.log(`    Others: ${paths.slice(1, 10).join(', ')}${paths.length > 10 ? '...' : ''}`);
-          }
-        });
-      }
-      
-      toast.success(`Loaded ${urdfFilename} with ${stlFiles.length} mesh files`);
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error("Failed to load robot files:", error);
-      }
-      toast.error(error instanceof Error ? error.message : "Failed to load robot files");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleJointChange = useCallback((jointName: string, value: number) => {
     const limited = setStoreJointValue(jointName, value);
@@ -1335,21 +954,6 @@ const Index = () => {
       toast.success("Joint mapping applied");
     }
   }, [selectedMapping, mappingDialogData, showMappingListPanel]);
-
-  const handleDatasetActionsReady = useCallback((actions: {
-    loadFromLocal: () => void;
-    loadFromHuggingFace: () => void;
-    exportToLocal: () => void;
-    exportToHuggingFace: () => void;
-    openRerunViewer: () => void;
-    isImportingFromHF: boolean;
-    isExportingDataset: boolean;
-    isUploadingToHF: boolean;
-    hasEpisodes: boolean;
-    isRerunViewerOpen: boolean;
-  }) => {
-    setDatasetActions(actions);
-  }, []);
 
   // Show upload screen if no files loaded yet
   if (!hasLoadedFiles) {

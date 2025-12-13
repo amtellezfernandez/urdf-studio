@@ -1,0 +1,1 @@
+Place shared types/interfaces used across feature slices here to avoid duplication (episodes, mesh files, mapping shapes, window handlers, etc.). Prefer re-exporting from this folder instead of redefining in components.
