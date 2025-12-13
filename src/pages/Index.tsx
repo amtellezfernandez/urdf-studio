@@ -13,7 +13,6 @@ import { MappingListPanel } from "@/components/MappingListPanel";
 import { ObjectCreator } from "@/components/ObjectCreator";
 import { CameraCreator } from "@/components/CameraCreator";
 import { CameraConfigUpload } from "@/components/CameraConfigUpload";
-import * as THREE from "three";
 import { useGPUMode } from "@/hooks/use-gpu-mode";
 import { getSavedMappings, deleteMapping, saveMapping } from "@/utils/jointMappingUtils";
 import { toast } from "sonner";
@@ -67,6 +66,7 @@ import { findDeepestLeafLink } from "@/pages/index/utils";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useDatasetActions } from "@/features/dataset/useDatasetActions";
 import { useCameraPanels } from "@/features/camera/useCameraPanels";
+import { useObjectCreatorStore } from "@/features/object-creator";
 
 const Index = () => {
   useTheme(); // Initialize dark mode
@@ -137,9 +137,14 @@ const Index = () => {
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
 
   // Object creation state
-  const [showObjectCreator, setShowObjectCreator] = useState(false);
-  const [objectCreatorType, setObjectCreatorType] = useState<"cube" | "point">("cube");
-  const [robotBoundingBox, setRobotBoundingBox] = useState<THREE.Box3 | null>(null);
+  const {
+    isOpen: objectCreatorOpen,
+    type: objectCreatorType,
+    open: openObjectCreator,
+    close: closeObjectCreator,
+    robotBoundingBox,
+    setRobotBoundingBox,
+  } = useObjectCreatorStore();
   const [robot, setRobot] = useState<any>(null);
 
   // Camera creation state
@@ -1346,8 +1351,7 @@ const Index = () => {
                     <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
                       <DropdownMenuItem
                         onClick={() => {
-                          setObjectCreatorType("cube");
-                          setShowObjectCreator(true);
+                          openObjectCreator("cube");
                         }}
                         className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                       >
@@ -1355,8 +1359,7 @@ const Index = () => {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
-                          setObjectCreatorType("point");
-                          setShowObjectCreator(true);
+                          openObjectCreator("point");
                         }}
                         className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
                       >
@@ -1918,8 +1921,8 @@ const Index = () => {
 
       {/* Object Creator Dialog */}
       <ObjectCreator
-        open={showObjectCreator}
-        onOpenChange={setShowObjectCreator}
+        open={objectCreatorOpen}
+        onOpenChange={(open) => (open ? openObjectCreator() : closeObjectCreator())}
         defaultType={objectCreatorType}
         robotBoundingBox={robotBoundingBox}
       />

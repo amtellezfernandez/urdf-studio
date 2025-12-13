@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
 import { useJointStore } from "@/store/useJointStore";
-import { useObjectStore } from "@/store/useObjectStore";
+import { useObjectStore } from "@/features/object-creator";
 import { useCameraStore } from "@/store/useCameraStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/urdf_corrections/parseJointHierarchy";
 import { parseLinkData, type LinkData } from "@/urdf_corrections/parseLinkData";

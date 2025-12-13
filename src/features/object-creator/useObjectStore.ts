@@ -148,3 +148,4 @@ export const useObjectStore = create<ObjectStore>((set, get) => ({
     set({ objects: [], selectedObjectId: null });
   },
 }));
+

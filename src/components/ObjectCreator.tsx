@@ -4,8 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import * as THREE from "three";
-import { useObjectStore } from "@/store/useObjectStore";
+import { useObjectStore } from "@/features/object-creator";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_ORBIT_INCLINATION,
+  DEFAULT_ORBIT_OFFSET,
+  DEFAULT_ORBIT_PHASE,
+  DEFAULT_ORBIT_RADIUS,
+  DEFAULT_POINT_SIZE,
+  DEFAULT_CUBE_SIZE,
+  getDefaultSize,
+  suggestPositionFromBoundingBox,
+} from "@/features/object-creator";
 
 interface ObjectCreatorProps {
   open: boolean;
@@ -13,13 +23,6 @@ interface ObjectCreatorProps {
   robotBoundingBox?: THREE.Box3 | null;
   defaultType?: "cube" | "point";
 }
-
-const DEFAULT_CUBE_SIZE = 0.1;
-const DEFAULT_POINT_SIZE = 0.02;
-const DEFAULT_ORBIT_RADIUS = 0.3;
-const DEFAULT_ORBIT_INCLINATION = 45;
-const DEFAULT_ORBIT_PHASE = 0;
-const DEFAULT_ORBIT_OFFSET = 180;
 
 export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultType = "cube" }: ObjectCreatorProps) {
   const addObject = useObjectStore((state) => state.addObject);
@@ -46,13 +49,15 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
     if (!open) return;
     setObjectType(defaultType);
     if (defaultType === "point") {
-      setSizeX(DEFAULT_POINT_SIZE);
-      setSizeY(DEFAULT_POINT_SIZE);
-      setSizeZ(DEFAULT_POINT_SIZE);
+      const defaultSize = getDefaultSize("point");
+      setSizeX(defaultSize.x);
+      setSizeY(defaultSize.y);
+      setSizeZ(defaultSize.z);
     } else {
-      setSizeX(DEFAULT_CUBE_SIZE);
-      setSizeY(DEFAULT_CUBE_SIZE);
-      setSizeZ(DEFAULT_CUBE_SIZE);
+      const defaultSize = getDefaultSize("cube");
+      setSizeX(defaultSize.x);
+      setSizeY(defaultSize.y);
+      setSizeZ(defaultSize.z);
     }
     setIsIkTarget(false);
     setIkTargetType("punctual");
@@ -65,43 +70,19 @@ export function ObjectCreator({ open, onOpenChange, robotBoundingBox, defaultTyp
   // Keep size in sync when switching types inside the dialog
   useEffect(() => {
     if (objectType === "point") {
-      setSizeX(DEFAULT_POINT_SIZE);
-      setSizeY(DEFAULT_POINT_SIZE);
-      setSizeZ(DEFAULT_POINT_SIZE);
+      const defaultSize = getDefaultSize("point");
+      setSizeX(defaultSize.x);
+      setSizeY(defaultSize.y);
+      setSizeZ(defaultSize.z);
     }
   }, [objectType]);
 
   // Suggest a non-colliding position
   const suggestPosition = () => {
-    if (!robotBoundingBox || robotBoundingBox.isEmpty()) {
-      // No robot loaded, use default position
-      setPosX(0.5);
-      setPosY(0.5);
-      setPosZ(0.5);
-      return;
-    }
-
-    // Get robot bounds
-    const robotMax = robotBoundingBox.max;
-    const robotMin = robotBoundingBox.min;
-    const robotCenter = new THREE.Vector3();
-    robotBoundingBox.getCenter(robotCenter);
-    const robotSize = new THREE.Vector3();
-    robotBoundingBox.getSize(robotSize);
-
-    // Place cube at a safe distance from robot
-    const offset = Math.max(robotSize.x, robotSize.y, robotSize.z) * 0.5 + 0.3;
-
-    // Position to the right of the robot
-    const suggestedPos = new THREE.Vector3(
-      robotMax.x + offset,
-      robotCenter.y,
-      robotCenter.z
-    );
-
-    setPosX(parseFloat(suggestedPos.x.toFixed(3)));
-    setPosY(parseFloat(suggestedPos.y.toFixed(3)));
-    setPosZ(parseFloat(suggestedPos.z.toFixed(3)));
+    const pos = suggestPositionFromBoundingBox(robotBoundingBox);
+    setPosX(pos.x);
+    setPosY(pos.y);
+    setPosZ(pos.z);
   };
 
   const handleCreate = () => {

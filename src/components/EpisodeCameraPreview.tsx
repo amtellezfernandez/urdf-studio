@@ -5,7 +5,7 @@ import URDFLoader from "urdf-loader";
 import { STLLoader } from "three-stdlib";
 import { useCameraStore } from "@/store/useCameraStore";
 import { useJointStore } from "@/store/useJointStore";
-import { useObjectStore, type CreatedObject } from "@/store/useObjectStore";
+import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import type { GPUMode } from "@/hooks/use-gpu-mode";
 
 type MeshFiles = Record<string, Blob>;

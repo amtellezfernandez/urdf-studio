@@ -6,7 +6,7 @@ import { STLLoader } from "three-stdlib";
 import URDFLoader from "urdf-loader";
 import { toast } from "sonner";
 import { useJointStore } from "@/store/useJointStore";
-import { useObjectStore, type CreatedObject } from "@/store/useObjectStore";
+import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import type { Node, Edge } from "reactflow";
 import { getJointLimits, type JointLimits } from "@/urdf_corrections/parseJointLimits";
 import type { JointAxisMap } from "@/urdf_corrections/parseJointAxis";
