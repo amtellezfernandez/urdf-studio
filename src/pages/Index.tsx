@@ -1,7 +1,7 @@
 import type React from "react";
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
-import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
-import { JointListSidebar, DEFAULT_RIGHT_SIDEBAR_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH } from "@/components/JointListSidebar";
+import { Sidebar } from "@/components/Sidebar";
+import { JointListSidebar } from "@/components/JointListSidebar";
 import { Viewer3D } from "@/components/Viewer3D";
 import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
@@ -56,8 +56,6 @@ import type {
 } from "@/pages/index/types";
 import {
   AXIS_NAMES,
-  DEFAULT_RECORDING_VIEW_HEIGHT,
-  MIN_HEADER_HEIGHT,
   SIDEBAR_RESIZER_WIDTH,
   VIEWER_RESIZER_HEIGHT,
 } from "@/pages/index/constants";
@@ -67,6 +65,7 @@ import { useDatasetActions } from "@/features/dataset/useDatasetActions";
 import { useCameraPanels } from "@/features/camera/useCameraPanels";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
+import { useLayout } from "@/features/layout";
 
 const Index = () => {
   useTheme(); // Initialize dark mode
@@ -131,10 +130,22 @@ const Index = () => {
     handlePlayAnimation,
     handleFrameChange,
   } = useUrdfViewer();
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH);
-  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  const {
+    sidebarWidth,
+    setSidebarWidth,
+    isSidebarCollapsed,
+    setIsSidebarCollapsed,
+    rightSidebarWidth,
+    setRightSidebarWidth,
+    isRightSidebarCollapsed,
+    recordingViewHeight,
+    setRecordingViewHeight,
+    clampRecordingViewHeight,
+    handleSidebarToggle,
+    handleSidebarResizeStart,
+    handleRightSidebarResizeStart,
+    handleViewerResizeStart,
+  } = useLayout();
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -142,7 +153,6 @@ const Index = () => {
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [viewerEpisode, setViewerEpisode] = useState<ViewerEpisode | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
   const [episodeSaveHandler, setEpisodeSaveHandler] = useState<EpisodeSaveHandler | undefined>(undefined);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
   const [hoveredJoint, setHoveredJoint] = useState<string | null>(null);
@@ -709,138 +719,6 @@ const Index = () => {
       // Don't automatically select a joint - let user choose what to select
     });
   }, []);
-
-  const clampSidebarWidth = useCallback(
-    (width: number) => Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)),
-    []
-  );
-
-  const handleSidebarToggle = useCallback(() => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      if (!next) {
-        setSidebarWidth((current) => clampSidebarWidth(current));
-      }
-      return next;
-    });
-  }, [clampSidebarWidth]);
-
-  const handleSidebarResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const startX = event.clientX;
-      const startWidth = sidebarWidth;
-      const originalCursor = document.body.style.cursor;
-      const originalUserSelect = document.body.style.userSelect;
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const nextWidth = clampSidebarWidth(startWidth + delta);
-        setSidebarWidth(nextWidth);
-      };
-
-      const handlePointerUp = () => {
-        document.body.style.cursor = originalCursor;
-        document.body.style.userSelect = originalUserSelect;
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-    },
-    [sidebarWidth, clampSidebarWidth]
-  );
-
-  const clampRightSidebarWidth = useCallback(
-    (width: number) => Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, width)),
-    []
-  );
-
-  const handleRightSidebarResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const startX = event.clientX;
-      const startWidth = rightSidebarWidth;
-      const originalCursor = document.body.style.cursor;
-      const originalUserSelect = document.body.style.userSelect;
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        // For right sidebar, dragging left should increase width, dragging right should decrease
-        const delta = startX - moveEvent.clientX;
-        const nextWidth = clampRightSidebarWidth(startWidth + delta);
-        setRightSidebarWidth(nextWidth);
-      };
-
-      const handlePointerUp = () => {
-        document.body.style.cursor = originalCursor;
-        document.body.style.userSelect = originalUserSelect;
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-    },
-    [rightSidebarWidth, clampRightSidebarWidth]
-  );
-
-  const clampRecordingViewHeight = useCallback((height: number, containerHeight: number) => {
-    const minRatio = containerHeight > 0 ? MIN_HEADER_HEIGHT / containerHeight : 0.08;
-    return Math.min(0.95, Math.max(minRatio, height));
-  }, []);
-
-  const handleViewerResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const startY = event.clientY;
-      const container = event.currentTarget.closest('.flex.flex-col.h-full') as HTMLElement;
-      if (!container) return;
-
-      const containerHeight = container.clientHeight;
-      const startHeight = recordingViewHeight;
-      const originalCursor = document.body.style.cursor;
-      const originalUserSelect = document.body.style.userSelect;
-
-      document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const delta = moveEvent.clientY - startY;
-        const deltaRatio = delta / containerHeight;
-        // Dragging up (negative delta) should make recording view smaller
-        // Dragging down (positive delta) should make recording view bigger
-        const nextHeight = clampRecordingViewHeight(startHeight - deltaRatio, containerHeight);
-        setRecordingViewHeight(nextHeight);
-      };
-
-      const handlePointerUp = () => {
-        document.body.style.cursor = originalCursor;
-        document.body.style.userSelect = originalUserSelect;
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-    },
-    [recordingViewHeight, clampRecordingViewHeight]
-  );
 
   const handleEpisodesResizeStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
