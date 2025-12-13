@@ -18,7 +18,7 @@ import {
   parseJointLimitsFromURDF,
   type JointLimits,
 } from "@/urdf_corrections/parseJointLimits";
-import type { RotationAxis } from "@/pages/index/types";
+import type { RotationAxis } from "@/features/types";
 
 export interface UrdfEditResult {
   success: boolean;
@@ -225,4 +225,3 @@ export const normalizeAxes = (urdfContent: string): NormalizeAxesResult => {
     jointAxes: parseJointAxesFromURDF(result.urdfContent),
   };
 };
-

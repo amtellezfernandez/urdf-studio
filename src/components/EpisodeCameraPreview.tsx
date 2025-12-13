@@ -7,8 +7,7 @@ import { useCameraStore } from "@/store/useCameraStore";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import type { GPUMode } from "@/hooks/use-gpu-mode";
-
-type MeshFiles = Record<string, Blob>;
+import type { MeshFiles } from "@/features/types";
 
 const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
   new THREE.Vector3(0, 1, 0),

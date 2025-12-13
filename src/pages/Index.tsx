@@ -7,7 +7,7 @@ import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { ExportDialog } from "@/components/ExportDialog";
-import { JointMappingDialog, type SavedMapping } from "@/components/JointMappingDialog";
+import { JointMappingDialog } from "@/components/JointMappingDialog";
 import { MappingListPanel } from "@/components/MappingListPanel";
 import { ObjectCreator } from "@/components/ObjectCreator";
 import { CameraCreator } from "@/components/CameraCreator";
@@ -52,7 +52,8 @@ import type {
   DebugMeshInfo,
   ViewerEpisode,
   EpisodeSaveHandler,
-} from "@/pages/index/types";
+  SavedMapping,
+} from "@/features/types";
 import {
   AXIS_NAMES,
   SIDEBAR_RESIZER_WIDTH,

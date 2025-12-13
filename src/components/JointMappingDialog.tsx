@@ -14,22 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { X, AlertCircle, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { JointLimits } from "@/urdf_corrections/parseJointLimits";
-
-export interface JointMapping {
-  datasetJoint: string;
-  urdfJoint: string;
-  offset?: number; // Offset transformation to apply to all values for this joint
-  inverted?: boolean; // Whether the joint axis is inverted/flipped
-}
-
-export interface SavedMapping {
-  id: string;
-  source: string;
-  mappings: JointMapping[];
-  degToRad: boolean;
-  timestamp: number;
-  jointRanges?: Record<string, { min: number; max: number }>; // Store ranges for editing with alerts
-}
+import type { JointMapping, SavedMapping } from "@/features/types";
 
 interface JointMappingDialogProps {
   isOpen: boolean;

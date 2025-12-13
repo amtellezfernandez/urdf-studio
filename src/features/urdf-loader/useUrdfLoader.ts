@@ -7,7 +7,7 @@ import { parseJointAxesFromURDF, type JointAxisMap } from "@/urdf_corrections/pa
 import { parseLinkNames } from "@/utils/parseLinks";
 import { findDeepestLeafLink } from "@/pages/index/utils";
 import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/pages/index/constants";
-import type { DebugMeshInfo, MeshFiles } from "@/pages/index/types";
+import type { DebugMeshInfo, MeshFiles } from "@/features/types";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;

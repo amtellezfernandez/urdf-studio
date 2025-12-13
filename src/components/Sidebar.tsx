@@ -43,10 +43,11 @@ import {
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/components/RerunViewer3DModal";
 import { Badge } from "@/components/ui/badge";
-import { JointMappingDialog, type JointMapping } from "@/components/JointMappingDialog";
+import { JointMappingDialog } from "@/components/JointMappingDialog";
 import { getMappingForSource, saveMapping } from "@/utils/jointMappingUtils";
 import { useCameraStore } from "@/store/useCameraStore";
 import { EpisodeCameraPreview } from "@/components/EpisodeCameraPreview";
+import type { JointMapping } from "@/features/types";
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;

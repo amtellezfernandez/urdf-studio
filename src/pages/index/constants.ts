@@ -1,4 +1,4 @@
-import type { RotationAxis } from "./types";
+import type { RotationAxis } from "@/features/types";
 
 export const DEFAULT_URDF_FILENAME = "robot.urdf";
 

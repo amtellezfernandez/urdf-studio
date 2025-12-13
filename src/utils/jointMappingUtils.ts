@@ -1,4 +1,4 @@
-import type { SavedMapping, JointMapping } from "@/components/JointMappingDialog";
+import type { SavedMapping, JointMapping } from "@/features/types";
 
 const STORAGE_KEY = "urdf-studio-joint-mappings";
 

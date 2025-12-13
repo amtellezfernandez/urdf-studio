@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { CollisionVisibility } from "@/components/LinkEditor";
-import type { WindowWithViewerHandlers } from "@/pages/index/types";
+import type { WindowWithViewerHandlers } from "@/features/types";
 
 export const useUrdfViewer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,4 +47,3 @@ export const useUrdfViewer = () => {
     handleFrameChange,
   };
 };
-

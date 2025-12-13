@@ -21,6 +21,7 @@ import { parseEpisodeJson } from "@/utils/episodeFormat";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
+import type { MeshFiles } from "@/features/types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -54,10 +55,6 @@ interface Viewer3DProps {
   onRobotBoundingBoxChange?: (boundingBox: THREE.Box3 | null) => void;
   endEffectorLink?: string | null;
   onIkApplied?: (values: Record<string, number>) => void;
-}
-
-interface MeshFiles {
-  [key: string]: Blob;
 }
 
 interface AnimationFrame {
