@@ -3,7 +3,6 @@ import { useState, useCallback, useMemo, startTransition, useEffect } from "reac
 import { Sidebar, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/Sidebar";
 import { JointListSidebar, DEFAULT_RIGHT_SIDEBAR_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH } from "@/components/JointListSidebar";
 import { Viewer3D } from "@/components/Viewer3D";
-import type { CollisionVisibility } from "@/components/LinkEditor";
 import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
@@ -67,6 +66,7 @@ import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useDatasetActions } from "@/features/dataset/useDatasetActions";
 import { useCameraPanels } from "@/features/camera/useCameraPanels";
 import { useObjectCreatorStore } from "@/features/object-creator";
+import { useUrdfViewer } from "@/features/urdf-viewer";
 
 const Index = () => {
   useTheme(); // Initialize dark mode
@@ -113,22 +113,33 @@ const Index = () => {
   const [deletedJoints, setDeletedJoints] = useState<Set<string>>(new Set());
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hasAnimationFrames, setHasAnimationFrames] = useState(false);
-  const [currentFrame, setCurrentFrame] = useState(0);
-  const [totalFrames, setTotalFrames] = useState(0);
+  const {
+    isPlaying,
+    setIsPlaying,
+    hasAnimationFrames,
+    setHasAnimationFrames,
+    currentFrame,
+    setCurrentFrame,
+    totalFrames,
+    rotationPlaneVisible,
+    setRotationPlaneVisible,
+    collisionVisibility,
+    setCollisionVisibility,
+    viewerSplitView,
+    setViewerSplitView,
+    handleMotionDataUpload,
+    handlePlayAnimation,
+    handleFrameChange,
+  } = useUrdfViewer();
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
-  const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
-  const [rotationPlaneVisible, setRotationPlaneVisible] = useState(false);
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
-  const [viewerSplitView, setViewerSplitView] = useState(false);
   const [viewerEpisode, setViewerEpisode] = useState<ViewerEpisode | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
@@ -690,19 +701,6 @@ const Index = () => {
     updateUrdfFile(result.content);
     toast.success(result.message ?? `Robot rotated 90° around ${AXIS_NAMES[axis]}-axis`);
   }, [vizUrdfContent, updateUrdfFile]);
-
-  const handleMotionDataUpload = useCallback((file: File) => {
-    (window as WindowWithViewerHandlers).viewer3dUploadMotionData?.(file);
-  }, []);
-
-  const handlePlayAnimation = useCallback(() => {
-    (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.();
-  }, []);
-
-  const handleFrameChange = useCallback((frame: number, total: number) => {
-    setCurrentFrame(frame);
-    setTotalFrames(total);
-  }, []);
 
   const handleRobotJointsLoaded = useCallback((joints: string[], angles: Record<string, number>) => {
     startTransition(() => {
