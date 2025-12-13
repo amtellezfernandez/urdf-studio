@@ -15,7 +15,7 @@ import { parse } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
-const pythonScript = join(rootDir, 'scripts', 'rerun_viewer.py');
+const pythonScript = join(rootDir, 'backend', 'scripts', 'rerun_viewer.py');
 
 const PORT = 3001;
 
@@ -348,7 +348,7 @@ const server = http.createServer((req, res) => {
         }
 
         // Check if Python script exists
-        const datasetMixerScript = join(rootDir, 'scripts', 'dataset_mixer.py');
+        const datasetMixerScript = join(rootDir, 'backend', 'scripts', 'dataset_mixer.py');
         if (!existsSync(datasetMixerScript)) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Dataset mixer script not found' }));
