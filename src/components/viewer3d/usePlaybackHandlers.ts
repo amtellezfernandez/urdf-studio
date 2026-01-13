@@ -109,6 +109,7 @@ export const usePlaybackHandlers = ({
       const currentFrameIdx = animationController.currentFrameIndexRef.current ?? 0;
       const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
 
+      animationController.setManualFrameTime(normalizedTime);
       animationController.setPreserveFrameTime(normalizedTime);
 
       if (onFrameChange && currentFrameIdx >= 0) {

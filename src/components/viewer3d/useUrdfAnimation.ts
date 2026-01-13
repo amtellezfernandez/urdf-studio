@@ -183,20 +183,13 @@ export const useUrdfAnimation = ({
       // Not playing and no manual frame time, so we're stopped
       shouldApplyAnimation = false;
 
-      // If we were playing and just stopped, keep the current frame
-      if (animationStartTime.current !== 0) {
-        const elapsed = Date.now() - animationStartTime.current;
-        const normalizedElapsed = elapsed * playbackSpeed;
-        currentTime = firstTimestamp + normalizedElapsed;
-
-        if (currentTime > normalizedLastTimestamp) {
-          currentTime = normalizedLastTimestamp;
-        }
-        animationController.manualFrameTimeRef.current = currentTime;
-      } else {
-        currentTime = firstTimestamp;
-        animationController.manualFrameTimeRef.current = currentTime;
-      }
+      const frozenIndex = Math.max(
+        0,
+        Math.min(animationController.currentFrameIndexRef.current, animationFrames.length - 1)
+      );
+      currentTime = firstTimestamp + frozenIndex * normalizedFrameDuration;
+      animationController.manualFrameTimeRef.current = currentTime;
+      animationController.isPausedRef.current = true;
     }
 
     // Determine current frame index based on normalized time
