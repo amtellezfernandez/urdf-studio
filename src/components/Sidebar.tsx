@@ -51,6 +51,11 @@ import { EpisodeCameraPreview } from "@/components/EpisodeCameraPreview";
 import type { JointMapping } from "@/features/types";
 import { viewerPlayback } from "@/features/viewerPlayback";
 import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
+import {
+  findNextPlayableEpisodeIndex,
+  getPlaybackEndAction,
+  type PlaybackMode,
+} from "@/features/playback/episodeCoordinator";
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
@@ -201,27 +206,6 @@ const toAnimationFrames = (episode: Episode) =>
     timestamp: frame.timestamp,
     joints: frame.jointPositions,
   }));
-
-const getEpisodeDurationMs = (episode: Episode) =>
-  episode.frames.length > 0
-    ? episode.frames[episode.frames.length - 1].timestamp
-    : DEFAULT_PLAYBACK_DURATION_MS;
-
-const findNextPlayableEpisodeIndex = (
-  episodes: Episode[],
-  startIndex: number
-) => {
-  if (episodes.length === 0) return null;
-  const normalizedStart =
-    ((startIndex % episodes.length) + episodes.length) % episodes.length;
-  for (let offset = 0; offset < episodes.length; offset += 1) {
-    const candidate = (normalizedStart + offset) % episodes.length;
-    if (episodes[candidate]?.frames.length > 0) {
-      return candidate;
-    }
-  }
-  return null;
-};
 
 const FALLBACK_JOINTS = ["1", "2", "3", "4", "5"];
 type HFSpaceVisibility = "public" | "private";
@@ -727,8 +711,6 @@ const computeFieldStats = (
     };
   }
 };
-const PLAYBACK_GAP_MS = 100;
-const DEFAULT_PLAYBACK_DURATION_MS = 1000;
 
 const sanitizeFilename = (name: string) => {
   const cleaned = Array.from(name, (char) => {
@@ -1044,16 +1026,16 @@ export const Sidebar = ({
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [currentRecordingEpisodeId, setCurrentRecordingEpisodeId] = useState<string | null>(null);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(null);
   const [currentPlayingEpisodeIndex, setCurrentPlayingEpisodeIndex] = useState<number | null>(null);
   const [recordingFps, setRecordingFps] = useState<number>(30); // Default FPS for recording
   const [recordingStats, setRecordingStats] = useState<{ frames: number; seconds: number }>({ frames: 0, seconds: 0 });
   const hfIdentityRef = useRef<HfIdentity | null>(null);
   const recordingStartTime = useRef<number>(0);
   const recordingIntervalRef = useRef<number | null>(null);
-  const playbackTimeoutRef = useRef<number | null>(null);
   const isPlayingAllRef = useRef<boolean>(false);
   const currentLoadedEpisodeRef = useRef<number | null>(null); // Track which episode is currently loaded in Viewer3D
-  const playbackSessionIdRef = useRef<number>(0); // Track playback sessions to prevent race conditions
+  const previousViewerPlayingRef = useRef<boolean>(false);
   const playbackSpeed = useViewerPlaybackStore((state) => state.playbackSpeed);
   const setPlaybackSpeed = useViewerPlaybackStore((state) => state.setPlaybackSpeed);
   const [rerunViewerModalEpisode, setRerunViewerModalEpisode] = useState<Episode | null>(null);
@@ -1265,12 +1247,9 @@ export const Sidebar = ({
       // Stop all playback
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
+      setPlaybackMode(null);
       setCurrentPlayingEpisodeIndex(null);
       currentLoadedEpisodeRef.current = null;
-      if (playbackTimeoutRef.current) {
-        clearTimeout(playbackTimeoutRef.current);
-        playbackTimeoutRef.current = null;
-      }
       // Stop 3D viewer animation
       viewerPlayback.stopAnimation();
       viewerPlayback.playAnimation(false);
@@ -1482,13 +1461,8 @@ export const Sidebar = ({
     viewerPlayback.stopAnimation();
     setIsPlayingAll(false);
     isPlayingAllRef.current = false;
+    setPlaybackMode(null);
     setCurrentPlayingEpisodeIndex(null);
-    
-    // Clear any playback timeout
-    if (playbackTimeoutRef.current) {
-      clearTimeout(playbackTimeoutRef.current);
-      playbackTimeoutRef.current = null;
-    }
     
     // Reset frame counters to beginning
     viewerPlayback.setFrame(0);
@@ -3649,11 +3623,8 @@ export const Sidebar = ({
     if (isCurrentlyPlaying || isPlayingAllRef.current || willBeEmpty) {
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
+      setPlaybackMode(null);
       setCurrentPlayingEpisodeIndex(null);
-      if (playbackTimeoutRef.current) {
-        clearTimeout(playbackTimeoutRef.current);
-        playbackTimeoutRef.current = null;
-      }
       viewerPlayback.stopAnimation();
       viewerPlayback.playAnimation(false);
       if (willBeEmpty) {
@@ -3745,17 +3716,9 @@ export const Sidebar = ({
   const stopAllPlayback = useCallback(() => {
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
-
-    // Increment session ID to invalidate any pending async operations from previous playback
-    playbackSessionIdRef.current += 1;
-
-    if (playbackTimeoutRef.current) {
-      clearTimeout(playbackTimeoutRef.current);
-      playbackTimeoutRef.current = null;
-    }
+    setPlaybackMode(null);
 
     viewerPlayback.stopAnimation();
-    viewerPlayback.clearAnimation();
 
     // CRITICAL: Clear the loaded episode ref so that when resuming playback,
     // setEpisodeAndFrame knows it needs to reload the episode frames
@@ -3794,35 +3757,6 @@ export const Sidebar = ({
     }
   }, [stopAllPlayback, onFrameChange, episodes]);
   
-  // Helper to start playback in Viewer3D
-  // viewer3dPlayAnimation is a toggle, so we need to ensure it's in the right state
-  const startViewer3DPlayback = useCallback(() => {
-    // Ensure we have frames loaded before trying to play
-    // If no frames are loaded, load them from the current episode
-    const currentIndex = currentPlayingEpisodeIndex;
-    if (currentIndex !== null && currentIndex >= 0 && currentIndex < episodes.length) {
-      const episode = episodes[currentIndex];
-      if (episode && episode.frames && episode.frames.length > 0) {
-        // Check if this episode is already loaded
-        if (currentLoadedEpisodeRef.current !== currentIndex) {
-          // Episode not loaded, load it first
-          const frames = toAnimationFrames(episode);
-          viewerPlayback.playEpisode(frames);
-          // viewer3dPlayEpisode starts playback automatically
-          return;
-        }
-      }
-    }
-    
-    // If frames should already be loaded, just start/resume playback
-    // Force play (true) to ensure playback starts
-    viewerPlayback.stopAnimation();
-    // Small delay to ensure stop is processed, then start
-    setTimeout(() => {
-      viewerPlayback.playAnimation(true);
-    }, 10);
-  }, [episodes, currentPlayingEpisodeIndex]);
-
   // Helper function to set episode and frame consistently
   // This ensures all playback operations use the same logic regardless of speed
   const setEpisodeAndFrame = useCallback((episodeIndex: number, frameIndex: number) => {
@@ -3860,270 +3794,51 @@ export const Sidebar = ({
     setCurrentPlayingEpisodeIndex(episodeIndex);
   }, [episodes, onFrameChange]);
 
-  // Play a single episode in loop (not all episodes)
-  const playSingleEpisodeLoop = useCallback((episodeIndex: number) => {
-    if (!isPlayingAllRef.current || episodes.length === 0) {
-      isPlayingAllRef.current = false;
-      setIsPlayingAll(false);
-      setCurrentPlayingEpisodeIndex(null);
-      return;
-    }
+  const playEpisode = useCallback(
+    (episode: Episode) => {
+      if (!episode || !episode.frames || episode.frames.length === 0) {
+        toast.error("Episode has no frames or no longer exists");
+        stopAllPlayback();
+        return;
+      }
 
-    const episode = episodes[episodeIndex];
-    if (!episode || !episode.frames || episode.frames.length === 0) {
-      isPlayingAllRef.current = false;
-      setIsPlayingAll(false);
-      setCurrentPlayingEpisodeIndex(null);
-      viewerPlayback.stopAnimation();
-      viewerPlayback.playAnimation(false);
-      return;
-    }
+      const episodeIndex = episodes.findIndex((ep) => ep.id === episode.id);
+      if (episodeIndex === -1) {
+        toast.info("Episode no longer exists - stopping playback");
+        stopAllPlayback();
+        return;
+      }
 
-    if (playbackTimeoutRef.current) {
-      clearTimeout(playbackTimeoutRef.current);
-      playbackTimeoutRef.current = null;
-    }
+      const isCurrentlyPlaying =
+        currentPlayingEpisodeIndex === episodeIndex && isPlayingAll;
 
-    // Always start from frame 0 - forget where we stopped
-    const frameToUse = 0;
-    
-    // Use consistent helper function
-    setEpisodeAndFrame(episodeIndex, frameToUse);
-    
-    // Start playing
-    viewerPlayback.playAnimation(true);
-
-    // Calculate duration and adjust for playback speed
-    const baseDuration = getEpisodeDurationMs(episode);
-    const speedAdjustedDuration = baseDuration / playbackSpeed;
-    const duration = speedAdjustedDuration + PLAYBACK_GAP_MS;
-
-    playbackTimeoutRef.current = window.setTimeout(() => {
-      // Loop the same episode
-      if (isPlayingAllRef.current && episodes.length > 0) {
-        playSingleEpisodeLoop(episodeIndex);
-      } else {
-        isPlayingAllRef.current = false;
+      if (isCurrentlyPlaying) {
         setIsPlayingAll(false);
-        setCurrentPlayingEpisodeIndex(null);
+        isPlayingAllRef.current = false;
+        viewerPlayback.stopAnimation();
+        return;
       }
-    }, duration);
-  }, [episodes, playbackSpeed, setEpisodeAndFrame]);
 
-  const playEpisode = useCallback((episode: Episode) => {
-    if (!episode || !episode.frames || episode.frames.length === 0) {
-      toast.error("Episode has no frames or no longer exists");
-      // Stop playback if episode is invalid
-      setIsPlayingAll(false);
-      isPlayingAllRef.current = false;
-      setCurrentPlayingEpisodeIndex(null);
-      viewerPlayback.stopAnimation();
-      viewerPlayback.playAnimation(false);
-      return;
-    }
-
-    // Find the episode index and validate it still exists
-    const episodeIndex = episodes.findIndex((ep) => ep.id === episode.id);
-    if (episodeIndex === -1) {
-      // Episode was deleted, stop playback
-      toast.info("Episode no longer exists - stopping playback");
-      setIsPlayingAll(false);
-      isPlayingAllRef.current = false;
-      setCurrentPlayingEpisodeIndex(null);
-      viewerPlayback.stopAnimation();
-      viewerPlayback.playAnimation(false);
-      return;
-    }
-
-    // Check if this episode is currently playing
-    const isCurrentlyPlaying = currentPlayingEpisodeIndex === episodeIndex && isPlayingAll;
-
-    if (isCurrentlyPlaying) {
-      // Pause playback but keep current episode and frame so we can resume from where we left off
-      setIsPlayingAll(false);
-      isPlayingAllRef.current = false;
-      if (playbackTimeoutRef.current) {
-        clearTimeout(playbackTimeoutRef.current);
-        playbackTimeoutRef.current = null;
-      }
-      viewerPlayback.stopAnimation();
-      viewerPlayback.playAnimation(false);
-    } else {
-      // Ensure viewer is open and split view is enabled when playing an episode
       onViewerSplitViewChange?.(true);
       onViewerOpenChange?.(true);
       onViewerEpisodeChange?.(episode);
-      
-      // Activate global play when playing individual episode (but loop just this one)
+
+      setPlaybackMode("single");
       setIsPlayingAll(true);
       isPlayingAllRef.current = true;
-      
-      // Start looping this single episode from frame 0
-      playSingleEpisodeLoop(episodeIndex);
-    }
-  }, [episodes, playSingleEpisodeLoop, currentPlayingEpisodeIndex, isPlayingAll, onViewerSplitViewChange, onViewerOpenChange, onViewerEpisodeChange]);
 
-  const playEpisodeSequentially = useCallback(
-    (startIndex: number, resumeFrame?: number) => {
-      // Double-check state consistency - ensure ref and state are in sync
-      if (!isPlayingAllRef.current) {
-        setIsPlayingAll(false);
-        setCurrentPlayingEpisodeIndex(null);
-        return;
-      }
-      
-      if (episodes.length === 0) {
-        isPlayingAllRef.current = false;
-        setIsPlayingAll(false);
-        setCurrentPlayingEpisodeIndex(null);
-        return;
-      }
-
-      const playableIndex = findNextPlayableEpisodeIndex(episodes, startIndex);
-
-      if (playableIndex === null) {
-        toast.error("No episodes with frames to play");
-        isPlayingAllRef.current = false;
-        setIsPlayingAll(false);
-        setCurrentPlayingEpisodeIndex(null);
-        return;
-      }
-
-      const episode = episodes[playableIndex];
-      if (!episode || !episode.frames || episode.frames.length === 0) {
-        isPlayingAllRef.current = false;
-        setIsPlayingAll(false);
-        setCurrentPlayingEpisodeIndex(null);
-        viewerPlayback.stopAnimation();
-        viewerPlayback.playAnimation(false);
-        toast.info("Stopped playback - episode no longer exists");
-        return;
-      }
-
-      if (playbackTimeoutRef.current) {
-        clearTimeout(playbackTimeoutRef.current);
-        playbackTimeoutRef.current = null;
-      }
-
-      // Always start from the provided frame (usually 0 after stop)
-      let frameToUse = resumeFrame !== undefined ? resumeFrame : 0;
-      
-      // Safety check: ensure frameToUse is valid
-      if (episode.frames.length > 0) {
-        frameToUse = Math.max(0, Math.min(frameToUse, episode.frames.length - 1));
-      } else {
-        frameToUse = 0;
-      }
-      
-      // Use consistent helper function
-      // Since stopAllPlayback now clears currentLoadedEpisodeRef, setEpisodeAndFrame
-      // will properly reload the episode and set the frame without flickering
-      setEpisodeAndFrame(playableIndex, frameToUse);
-
-      // Ensure state is set to playing before starting animation
-      // This prevents the button from showing wrong state
-      if (!isPlayingAllRef.current) {
-        isPlayingAllRef.current = true;
-        setIsPlayingAll(true);
-      }
-
-      // setEpisodeAndFrame handles both reloading and frame positioning
-      // No need for redundant reload here - it would cause flickering
-
-      // Calculate remaining duration from current frame to end of episode
-      // This ensures that if we resume from the middle, we only wait for the remaining part
-      // We treat the stopped position as if we've already played up to that point
-      let remainingDuration = DEFAULT_PLAYBACK_DURATION_MS; // Fallback default
-
-      if (episode.frames.length > 0) {
-        const startTimestamp = episode.frames[0].timestamp;
-        const endTimestamp = episode.frames[episode.frames.length - 1].timestamp;
-        const totalFrames = episode.frames.length;
-
-        if (frameToUse > 0 && frameToUse < totalFrames) {
-          // Resuming from middle of episode - calculate remaining time
-          // Use normalized frame duration to match Viewer3D's calculation
-          // normalizedFrameDuration = (endTimestamp - startTimestamp) / (totalFrames - 1)
-          // To reach the last frame (index totalFrames - 1), we need to play through
-          // (totalFrames - 1 - frameToUse) intervals
-          const animationDuration = endTimestamp - startTimestamp;
-          if (animationDuration > 0 && totalFrames > 1) {
-            const normalizedFrameDuration = animationDuration / (totalFrames - 1);
-            const remainingFrames = totalFrames - 1 - frameToUse;
-            // Calculate time needed to play through remaining intervals to reach last frame
-            // Add a small buffer (half a frame duration) to ensure the last frame is displayed
-            remainingDuration = remainingFrames * normalizedFrameDuration + (normalizedFrameDuration / 2);
-          } else {
-            remainingDuration = endTimestamp - startTimestamp;
-          }
-
-          // Ensure we have a valid positive duration
-          if (remainingDuration <= 0) {
-            // If we're at or past the end, stop immediately (don't try to play)
-            remainingDuration = PLAYBACK_GAP_MS;
-          }
-        } else if (frameToUse === 0) {
-          // Starting from frame 0, use full episode duration
-          // Use normalized frame duration to match Viewer3D's calculation
-          // To reach the last frame (index totalFrames - 1), we need to play through
-          // (totalFrames - 1) intervals, plus a small buffer to ensure last frame displays
-          const animationDuration = endTimestamp - startTimestamp;
-          if (animationDuration > 0 && totalFrames > 1) {
-            const normalizedFrameDuration = animationDuration / (totalFrames - 1);
-            // Play through all intervals (totalFrames - 1) to reach last frame
-            // Add a small buffer (half a frame duration) to ensure the last frame is displayed
-            remainingDuration = (totalFrames - 1) * normalizedFrameDuration + (normalizedFrameDuration / 2);
-          } else {
-            remainingDuration = endTimestamp - startTimestamp;
-          }
-
-          // Ensure minimum duration to prevent immediate timeout
-          if (remainingDuration <= 0) {
-            remainingDuration = DEFAULT_PLAYBACK_DURATION_MS;
-          }
-        }
-      }
-
-      // CRITICAL: Adjust duration for playback speed
-      // If playing at 2x speed, episode finishes in half the time
-      // If playing at 0.5x speed, episode takes twice as long
-      const speedAdjustedDuration = remainingDuration / playbackSpeed;
-
-      // Ensure duration is always positive and reasonable
-      // Add buffer to ensure the last frame is actually displayed before stopping
-      const duration = Math.max(PLAYBACK_GAP_MS, speedAdjustedDuration + PLAYBACK_GAP_MS);
-
-      // Capture session ID to detect if playback was stopped/restarted during timeout
-      const sessionId = playbackSessionIdRef.current;
-
-      playbackTimeoutRef.current = window.setTimeout(() => {
-        // Check if this playback session is still valid
-        if (sessionId !== playbackSessionIdRef.current) return;
-
-        // Double-check that playback is still active (prevents race conditions)
-        if (!isPlayingAllRef.current || episodes.length === 0) {
-          isPlayingAllRef.current = false;
-          setIsPlayingAll(false);
-          setCurrentPlayingEpisodeIndex(null);
-          return;
-        }
-        
-        // Stop at end of current episode (no auto-advance to next episode)
-        // User must click "Next Episode" button to play the next episode
-        stopAllPlayback();
-        // Reset frame to 0 when episode finishes
-        // Reload the episode first (since stopAllPlayback clears frames), then set frame to 0
-        if (episodes[playableIndex] && episodes[playableIndex].frames && episodes[playableIndex].frames.length > 0) {
-          const finishedEpisode = episodes[playableIndex];
-          const frames = toAnimationFrames(finishedEpisode);
-          viewerPlayback.playEpisode(frames, { autoplay: false, startFrame: 0 });
-          onFrameChange?.(0);
-        }
-        // Keep currentPlayingEpisodeIndex so user can see which episode just finished
-        // and can click "Next Episode" to continue
-      }, duration);
+      setEpisodeAndFrame(episodeIndex, 0);
     },
-    [episodes, onFrameChange, playbackSpeed, setEpisodeAndFrame, stopAllPlayback]
+    [
+      currentPlayingEpisodeIndex,
+      episodes,
+      isPlayingAll,
+      onViewerOpenChange,
+      onViewerEpisodeChange,
+      onViewerSplitViewChange,
+      setEpisodeAndFrame,
+      stopAllPlayback,
+    ]
   );
 
   const playAllEpisodes = useCallback((overrideFrame?: number) => {
@@ -4137,27 +3852,70 @@ export const Sidebar = ({
       return;
     }
 
-    // Increment session ID to mark this as a new playback session
-    // This invalidates any pending operations from previous sessions
-    playbackSessionIdRef.current += 1;
-
+    setPlaybackMode("all");
     setIsPlayingAll(true);
     isPlayingAllRef.current = true;
 
-    const startIndex = currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
-    // Use overrideFrame if provided, otherwise use currentFrame to preserve where playback stopped
-    const startFrame = overrideFrame !== undefined ? overrideFrame : (currentFrame ?? 0);
+    const startIndex =
+      currentPlayingEpisodeIndex !== null ? currentPlayingEpisodeIndex : 0;
+    const startFrame =
+      overrideFrame !== undefined ? overrideFrame : (currentFrame ?? 0);
 
-    playEpisodeSequentially(startIndex, startFrame);
-  }, [episodes, isPlayingAll, playEpisodeSequentially, currentPlayingEpisodeIndex, stopAllPlayback, currentFrame]);
+    setEpisodeAndFrame(startIndex, startFrame);
+  }, [
+    currentFrame,
+    currentPlayingEpisodeIndex,
+    episodes,
+    isPlayingAll,
+    setEpisodeAndFrame,
+    stopAllPlayback,
+  ]);
 
-  // Cleanup recording interval and playback timeout on unmount
+  useEffect(() => {
+    const wasPlaying = previousViewerPlayingRef.current;
+    previousViewerPlayingRef.current = isPlaying;
+
+    if (!wasPlaying || isPlaying) {
+      return;
+    }
+    if (!isPlayingAllRef.current) {
+      return;
+    }
+
+    const action = getPlaybackEndAction({
+      mode: playbackMode,
+      currentFrame: currentFrame ?? 0,
+      totalFrames: totalFrames ?? 0,
+      currentEpisodeIndex: currentPlayingEpisodeIndex,
+      episodes,
+    });
+
+    if (action.type === "advance") {
+      setPlaybackMode("all");
+      setIsPlayingAll(true);
+      isPlayingAllRef.current = true;
+      setEpisodeAndFrame(action.nextIndex, 0);
+      return;
+    }
+
+    if (action.type === "stop") {
+      stopAllPlayback();
+    }
+  }, [
+    currentFrame,
+    currentPlayingEpisodeIndex,
+    episodes,
+    isPlaying,
+    playbackMode,
+    setEpisodeAndFrame,
+    stopAllPlayback,
+    totalFrames,
+  ]);
+
+  // Cleanup recording interval on unmount
   useEffect(() => {
     return () => {
       clearRecordingInterval();
-      if (playbackTimeoutRef.current) {
-        clearTimeout(playbackTimeoutRef.current);
-      }
     };
   }, [clearRecordingInterval]);
 
@@ -4331,8 +4089,6 @@ export const Sidebar = ({
                     setCurrentPlayingEpisodeIndex(nextIndex);
                     // Update frame callback to ensure UI reflects frame 0
                     onFrameChange?.(0);
-                    
-                    viewerPlayback.stopAnimation();
                   }}
                   disabled={episodes.length === 0}
                   title="Next Episode"
