@@ -30,6 +30,7 @@ import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
 import { ViewerLayout } from "@/pages/index/ViewerLayout";
 import { RightSidebarPanel } from "@/pages/index/RightSidebarPanel";
 import { LeftSidebarPanel } from "@/pages/index/LeftSidebarPanel";
+import { LoadingScreen } from "@/pages/index/LoadingScreen";
 
 import type {
   MeshFiles,
@@ -706,12 +707,7 @@ const Index = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Loading robot...</span>
-          </div>
-        </div>
+        <LoadingScreen />
       ) : (
         <>
           <TopNavBar
