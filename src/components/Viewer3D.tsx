@@ -4274,7 +4274,7 @@ export const Viewer3D = ({
             )}
           </mesh>
 
-          {urdfFile ? (
+          {urdfFile && (
             <>
               <URDFModel
                 file={urdfFile}
