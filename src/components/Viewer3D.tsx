@@ -17,7 +17,6 @@ import { CameraIcons } from "@/components/CameraIcons";
 import { IKDragControls } from "@/components/IKDragControls";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
-import { applyJointValues } from "@/lib/urdf-joints";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
 import type { MeshFiles } from "@/features/types";
 import type { IkResponsePayload } from "@/components/viewer3d/ik-types";
