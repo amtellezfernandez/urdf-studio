@@ -21,7 +21,11 @@ import {
 } from "@/features/urdf";
 import { toast } from "sonner";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
-import { formatVector3, parseVector3 } from "@/components/link-editor/sizeUtils";
+import {
+  formatVector3,
+  parseVector3,
+  updateVector3Value,
+} from "@/components/link-editor/sizeUtils";
 
 interface CollisionControlProps {
   linkName: string;
@@ -248,9 +252,10 @@ export const CollisionControl = ({
   };
 
   const handleOriginChange = (field: "xyz" | "rpy", index: number, value: number) => {
-    const newOrigin = { ...origin };
-    newOrigin[field][index] = value;
-    setOrigin(newOrigin);
+    setOrigin((prev) => ({
+      ...prev,
+      [field]: updateVector3Value(prev[field], index, value),
+    }));
     setCalculationInfo(null);
     scheduleUpdate();
   };

@@ -4,7 +4,11 @@ import { NumberInput } from "@/components/ui/number-input";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { updateVisualInLink, type LinkData, type VisualData } from "@/features/urdf";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
-import { formatVector3, parseVector3 } from "@/components/link-editor/sizeUtils";
+import {
+  formatVector3,
+  parseVector3,
+  updateVector3Value,
+} from "@/components/link-editor/sizeUtils";
 
 interface VisualControlProps {
   linkName: string;
@@ -59,9 +63,10 @@ export const VisualControl = ({
   };
 
   const handleOriginChange = (field: "xyz" | "rpy", index: number, value: number) => {
-    const newOrigin = { ...origin };
-    newOrigin[field][index] = value;
-    setOrigin(newOrigin);
+    setOrigin((prev) => ({
+      ...prev,
+      [field]: updateVector3Value(prev[field], index, value),
+    }));
     scheduleUpdate();
   };
 

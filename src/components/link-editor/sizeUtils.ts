@@ -6,3 +6,13 @@ export const parseVector3 = (value: string): [number, number, number] => {
 export const formatVector3 = (value: [number, number, number]): string => {
   return `${value[0]} ${value[1]} ${value[2]}`;
 };
+
+export const updateVector3Value = (
+  values: [number, number, number],
+  index: number,
+  value: number
+): [number, number, number] => {
+  const next = [...values] as [number, number, number];
+  next[index] = value;
+  return next;
+};

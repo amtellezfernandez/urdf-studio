@@ -7,6 +7,7 @@ import { AlertTriangle, Calculator } from "lucide-react";
 import { updateInertialInLink, type InertialData } from "@/features/urdf";
 import { toast } from "sonner";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
+import { updateVector3Value } from "@/components/link-editor/sizeUtils";
 
 interface InertialControlProps {
   linkName: string;
@@ -80,9 +81,10 @@ export const InertialControl = ({
   };
 
   const handleOriginChange = (field: "xyz" | "rpy", index: number, value: number) => {
-    const newOrigin = { ...origin };
-    newOrigin[field][index] = value;
-    setOrigin(newOrigin);
+    setOrigin((prev) => ({
+      ...prev,
+      [field]: updateVector3Value(prev[field], index, value),
+    }));
     scheduleUpdate();
   };
 
