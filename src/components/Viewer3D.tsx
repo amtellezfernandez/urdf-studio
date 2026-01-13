@@ -19,19 +19,13 @@ import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { applyJointValues } from "@/lib/urdf-joints";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
-import type { MeshFiles, WindowWithViewerHandlers } from "@/features/types";
+import type { MeshFiles } from "@/features/types";
 import type { IkResponsePayload } from "@/components/viewer3d/ik-types";
 import {
-  extractLinkPose,
   getDragModeDisplayName,
-  getLiveRobotJoints,
-  positionDistance,
-  quaternionAngularErrorDeg,
   resolveJointScalarValue,
   setEmissiveColor,
-  toZeroIfTiny,
   type DragMode,
-  type LinkPose,
 } from "@/components/viewer3d/viewer3d-helpers";
 import { CollisionGeometries } from "@/components/viewer3d/CollisionGeometries";
 import { TrackingLine } from "@/components/viewer3d/TrackingLine";
@@ -42,7 +36,15 @@ import { useOrbitControlsBindings } from "@/components/viewer3d/useOrbitControls
 import { useMotionDataUpload } from "@/components/viewer3d/useMotionDataUpload";
 import { usePlaybackHandlers } from "@/components/viewer3d/usePlaybackHandlers";
 import { useViewerCameraControls } from "@/components/viewer3d/useViewerCameraControls";
-import { convertMotionFramesToNodes } from "@/components/viewer3d/convertMotionFramesToNodes";
+import { usePlaybackNotifications } from "@/components/viewer3d/usePlaybackNotifications";
+import { useViewerWindowBindings } from "@/components/viewer3d/useViewerWindowBindings";
+import { useEndEffectorPoseSync } from "@/components/viewer3d/useEndEffectorPoseSync";
+import { useMeshFilesState } from "@/components/viewer3d/useMeshFilesState";
+import { useRobotBoundingBoxSync } from "@/components/viewer3d/useRobotBoundingBoxSync";
+import { useRobotCameraCentering } from "@/components/viewer3d/useRobotCameraCentering";
+import { useRobotJointSync } from "@/components/viewer3d/useRobotJointSync";
+import { useUrdfFileContent } from "@/components/viewer3d/useUrdfFileContent";
+import { useDragModeEffects } from "@/components/viewer3d/useDragModeEffects";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -79,16 +81,6 @@ interface Viewer3DProps {
   endEffectorLink?: string | null;
   onIkApplied?: (values: Record<string, number>) => void;
 }
-
-type EndEffectorPoseState = {
-  pyroki: LinkPose | null;
-  three: LinkPose | null;
-  positionError: number | null;
-  rotationErrorDeg: number | null;
-  error: string | null;
-  lastUpdated: number | null;
-  loading: boolean;
-};
 
 // Component to render orbit visualization
 const OrbitVisualization = ({
@@ -1755,39 +1747,38 @@ export const Viewer3D = ({
 }: Viewer3DProps) => {
   // Use GPU mode hook for rendering
   const { gpuMode } = useGPUMode();
-  const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
+  const [, setMotionDataFile] = useState<File | null>(null);
   const [animationFrames, setAnimationFrames] = useState<
     AnimationFrame[] | null
   >(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [robot, setRobot] = useState<URDFRobot | null>(null);
-  const [urdfContent, setUrdfContent] = useState<string | null>(null);
   const [isFkDialogOpen, setIsFkDialogOpen] = useState(false);
-  const [meshFiles, setMeshFiles] = useState<MeshFiles>(initialMeshFiles);
+  const { meshFiles } = useMeshFilesState(initialMeshFiles);
   const [isDraggingJoint, setIsDraggingJoint] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const fkAutoOpenedRef = useRef(false);
   const animationController = useAnimationController();
   const storeJointValues = useJointStore((s) => s.jointValues);
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
-  const [endEffectorPose, setEndEffectorPose] = useState<EndEffectorPoseState>({
-    pyroki: null,
-    three: null,
-    positionError: null,
-    rotationErrorDeg: null,
-    error: null,
-    lastUpdated: null,
-    loading: false,
+  const { urdfContent } = useUrdfFileContent({
+    urdfFile,
+    robot,
+    onLinkSelect,
+    onAutoOpenFk: () => setIsFkDialogOpen(true),
   });
-  const endEffectorPoseRequestId = useRef(0);
-  const endEffectorPoseAbortRef = useRef<AbortController | null>(null);
-  const initialPoseRef = useRef<Record<string, number>>({});
+  const endEffectorPose = useEndEffectorPoseSync({
+    robot,
+    urdfContent,
+    endEffectorLink,
+    storeJointValues,
+    apiBaseUrl: API_BASE_URL,
+  });
 
   // Drag mode state
   const [dragMode, setDragMode] = useState<DragMode>("move-joints");
@@ -1824,314 +1815,23 @@ export const Viewer3D = ({
   const selectedLink = selectedLinkProp;
   const ikObjects = useObjectStore((state) => state.objects);
 
-  // Read URDF content once per uploaded file (for PyRoki FK validation)
-  useEffect(() => {
-    if (!urdfFile) {
-      setUrdfContent(null);
-      onLinkSelect?.(null);
-      fkAutoOpenedRef.current = false;
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      setUrdfContent(text);
-    };
-    reader.readAsText(urdfFile);
-    fkAutoOpenedRef.current = false;
-  }, [urdfFile, onLinkSelect]);
-
-  // Auto-open FK validation dialog once when a new robot + URDF are ready
-  useEffect(() => {
-    if (!robot || !urdfContent || fkAutoOpenedRef.current) return;
-    fkAutoOpenedRef.current = true;
-    setIsFkDialogOpen(true);
-  }, [robot, urdfContent]);
-  
-  // Reset current frame when animation stops or frames change
-  useEffect(() => {
-    if (!isPlaying || !animationFrames) {
-      setCurrentFrame(0);
-    }
-  }, [isPlaying, animationFrames]);
-
   useOrbitControlsBindings({ controlsRef, robot });
-
-  // Keep EE pose aligned between Three.js and PyRoki (base_link/world frame)
-  useEffect(() => {
-    if (!robot || !urdfContent || !endEffectorLink) {
-      setEndEffectorPose({
-        pyroki: null,
-        three: null,
-        positionError: null,
-        rotationErrorDeg: null,
-        error: null,
-        lastUpdated: null,
-        loading: false,
-      });
-      return;
-    }
-
-    const timeoutId = setTimeout(async () => {
-      const requestId = ++endEffectorPoseRequestId.current;
-      endEffectorPoseAbortRef.current?.abort();
-      const controller = new AbortController();
-      endEffectorPoseAbortRef.current = controller;
-
-      const baseThreePose = extractLinkPose(robot, endEffectorLink);
-      if (!baseThreePose) {
-        setEndEffectorPose({
-          pyroki: null,
-          three: null,
-          positionError: null,
-          rotationErrorDeg: null,
-          error: "End-effector link not found in scene",
-          lastUpdated: null,
-          loading: false,
-        });
-        return;
-      }
-
-      setEndEffectorPose((prev) => ({
-        ...prev,
-        three: baseThreePose,
-        loading: true,
-        error: null,
-      }));
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/pyroki/fk`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            urdf: urdfContent,
-            joint_values: getLiveRobotJoints(robot, storeJointValues),
-          }),
-          signal: controller.signal,
-        });
-
-        const payload = (await response
-          .json()
-          .catch(() => ({ error: "Failed to parse PyRoki FK response" }))) as {
-          error?: unknown;
-          detail?: unknown;
-          links?: unknown;
-        };
-
-        if (!response.ok) {
-          const message =
-            (typeof payload.error === "string" && payload.error) ||
-            (typeof payload.detail === "string" && payload.detail) ||
-            "PyRoki FK request failed";
-          throw new Error(message);
-        }
-
-        if (controller.signal.aborted || requestId !== endEffectorPoseRequestId.current) {
-          return;
-        }
-
-        const links = Array.isArray(payload.links) ? payload.links : [];
-        const pyrokiLink = links.find((link) => {
-          const name = (link as { name?: unknown }).name;
-          return typeof name === "string" && name === endEffectorLink;
-        }) as { position?: unknown; quaternion_wxyz?: unknown } | undefined;
-
-        const pyrokiPose: LinkPose | null =
-          pyrokiLink &&
-          Array.isArray(pyrokiLink.position) &&
-          pyrokiLink.position.length >= 3 &&
-          Array.isArray(pyrokiLink.quaternion_wxyz) &&
-          pyrokiLink.quaternion_wxyz.length >= 4
-            ? {
-                position: [
-                  Number(pyrokiLink.position[0]) || 0,
-                  Number(pyrokiLink.position[1]) || 0,
-                  Number(pyrokiLink.position[2]) || 0,
-                ],
-                quaternion: [
-                  Number(pyrokiLink.quaternion_wxyz[0]) || 0,
-                  Number(pyrokiLink.quaternion_wxyz[1]) || 0,
-                  Number(pyrokiLink.quaternion_wxyz[2]) || 0,
-                  Number(pyrokiLink.quaternion_wxyz[3]) || 0,
-                ],
-              }
-            : null;
-
-        // Re-sample Three.js pose at the same moment we receive PyRoki data
-        const syncedThreePose = extractLinkPose(robot, endEffectorLink) ?? baseThreePose;
-
-        const posError = pyrokiPose ? positionDistance(pyrokiPose.position, syncedThreePose.position) : null;
-        const rotError = pyrokiPose
-          ? quaternionAngularErrorDeg(pyrokiPose.quaternion, syncedThreePose.quaternion)
-          : null;
-
-        setEndEffectorPose({
-          pyroki: pyrokiPose,
-          three: syncedThreePose,
-          positionError: toZeroIfTiny(posError !== null && Number.isFinite(posError) ? posError : null, 1e-6),
-          rotationErrorDeg: toZeroIfTiny(
-            rotError !== null && Number.isFinite(rotError) ? rotError : null,
-            1e-4
-          ),
-          error: pyrokiPose ? null : "End-effector missing in PyRoki FK output",
-          lastUpdated: Date.now(),
-          loading: false,
-        });
-      } catch (err) {
-        if (controller.signal.aborted || requestId !== endEffectorPoseRequestId.current) return;
-        setEndEffectorPose({
-          pyroki: null,
-          three: baseThreePose,
-          positionError: null,
-          rotationErrorDeg: null,
-          error: err instanceof Error ? err.message : "Failed to fetch PyRoki FK",
-          lastUpdated: null,
-          loading: false,
-        });
-      }
-    }, 150);
-
-    return () => {
-      clearTimeout(timeoutId);
-      endEffectorPoseAbortRef.current?.abort();
-    };
-  }, [robot, urdfContent, endEffectorLink, storeJointValues]);
   
-  // Track current frame for display
-  const currentFrameIndexRef = useRef<number>(0);
-
-  // Update mesh files when initialMeshFiles changes
-  useEffect(() => {
-    if (Object.keys(initialMeshFiles).length > 0) {
-      setMeshFiles(initialMeshFiles);
-    }
-  }, [initialMeshFiles]);
-
-
-  // Position camera to center on robot when it first loads
-  useEffect(() => {
-    if (!robot || !controlsRef.current) return;
-    
-    const controls = controlsRef.current;
-    const camera = controls.object as THREE.PerspectiveCamera;
-    const robotAny = robot;
-    
-    // Get robot's bounding box center (stored when robot was loaded)
-    const robotCenter = robotAny.userData?.boundingBoxCenter || new THREE.Vector3(0, 0, 0);
-    
-    // Calculate camera position relative to robot center
-    // Position between X and Y axes, slightly elevated
-    const cameraOffset = new THREE.Vector3(1.5, 1.5, 0.8);
-    camera.position.copy(robotCenter).add(cameraOffset);
-    
-    // Set controls target to robot center (not origin)
-    controls.target.copy(robotCenter);
-    controls.update();
-  }, [robot]);
-
-  // Notify host about available joints and their current angles when robot is ready
-  useEffect(() => {
-    if (!robot) return;
-    const allJoints = Object.keys(robot.joints ?? {});
-    // Include all joints (including fixed) but exclude non-joint items like "imu_site_frame"
-    // Fixed joints need to be visible so users can change their type back
-    const joints = allJoints.filter((j) => {
-      const jointObj = robot.joints?.[j];
-      // Include all joint types (including fixed), but exclude sensor frames
-      return jointObj &&
-             (typeof resolveJointScalarValue(jointObj) === "number" || jointObj.jointType === "fixed") &&
-             !j.toLowerCase().includes('imu') &&
-             !j.toLowerCase().includes('site') &&
-             !j.toLowerCase().includes('frame');
-    });
-    const angles: Record<string, number> = {};
-    joints.forEach((j) => {
-      const jointObj = robot.joints?.[j];
-      // Fixed joints always have angle 0, other joints use their actual angle
-      if (jointObj.jointType === "fixed") {
-        angles[j] = 0;
-      } else {
-        const value = resolveJointScalarValue(jointObj);
-        angles[j] = typeof value === "number" ? value : 0;
-      }
-    });
-    initialPoseRef.current = { ...angles };
-    // Update external callback
-    onRobotJointsLoaded?.(joints, angles);
-    // Update global store
-    setAvailableJointsStore(joints);
-    setStoreJointValues(angles);
-  }, [
+  useRobotCameraCentering({ robot, controlsRef });
+  useRobotBoundingBoxSync({ robot, onRobotBoundingBoxChange, onRobotLoaded });
+  const { resetPose } = useRobotJointSync({
     robot,
-    onRobotJointsLoaded,
-    setAvailableJointsStore,
-    setStoreJointValues,
-  ]);
-
-  // Calculate and send robot bounding box when robot loads
-  useEffect(() => {
-    if (!robot) {
-      onRobotBoundingBoxChange?.(null);
-      onRobotLoaded?.(null);
-      return;
-    }
-
-    const box = new THREE.Box3().setFromObject(robot);
-    onRobotBoundingBoxChange?.(box);
-    onRobotLoaded?.(robot);
-  }, [robot, onRobotBoundingBoxChange, onRobotLoaded]);
-
-  // Apply joint values from props (skip if dragging)
-  useEffect(() => {
-    if (!robot || isDraggingJoint || isIkHandleDragging) return;
-    applyJointValues(robot, jointValues);
-  }, [robot, jointValues, isDraggingJoint, isIkHandleDragging]);
-
-  const resetPose = useCallback(() => {
-    if (!robot) return;
-    const resetValues = { ...initialPoseRef.current };
-    if (Object.keys(resetValues).length === 0) return;
-    applyJointValues(robot, resetValues, { filter: false });
-    setStoreJointValues(resetValues);
-    if (onJointChange) {
-      for (const [name, value] of Object.entries(resetValues)) {
-        onJointChange(name, value);
-      }
-    }
-  }, [robot, onJointChange, setStoreJointValues]);
-
-  // Apply joint values from global store (authoritative for live slider moves, skip if dragging)
-  useEffect(() => {
-    if (!robot || isDraggingJoint || isIkHandleDragging) return;
-    const r = robot;
-    if (typeof r.setJointValues !== "function" && typeof r.setJointValue !== "function") return;
-    let hasChanges = false;
-    const nextValues: Record<string, number> = {};
-    for (const [jointName, value] of Object.entries(storeJointValues)) {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        nextValues[jointName] = value;
-        // Check if the value differs from current robot joint value
-        const currentValue = resolveJointScalarValue(r.joints?.[jointName]);
-        if (typeof currentValue === "number" && Math.abs(currentValue - value) > 0.001) {
-          hasChanges = true;
-        }
-      }
-    }
-    applyJointValues(r, nextValues, { filter: false });
-    // Mark manual changes if we're not playing and values actually changed
-    // This allows slider changes to also prevent animation from overwriting manual changes
-    if (hasChanges && !isPlaying) {
-      animationController.markManualJointChange();
-    }
-  }, [
-    animationController,
-    robot,
+    jointValues,
     storeJointValues,
+    setStoreJointValues,
+    setAvailableJointsStore,
+    onRobotJointsLoaded,
+    onJointChange,
     isDraggingJoint,
     isIkHandleDragging,
     isPlaying,
-  ]);
+    animationController,
+  });
 
   const { handleMotionDataUpload } = useMotionDataUpload({
     robot,
@@ -2172,76 +1872,34 @@ export const Viewer3D = ({
     sceneRef,
   });
 
-  // Expose handlers for external use (e.g., from Sidebar)
-  useEffect(() => {
-    (window as WindowWithViewerHandlers).viewer3dPlayAnimation = handleRun;
-    (window as WindowWithViewerHandlers).viewer3dUploadMotionData = handleMotionDataUpload;
-    (window as WindowWithViewerHandlers).viewer3dPlayEpisode = handlePlayEpisode;
-    (window as WindowWithViewerHandlers).viewer3dStopAnimation = handleStopAnimation;
-    (window as WindowWithViewerHandlers).viewer3dClearAnimation = handleClearAnimation;
-    (window as WindowWithViewerHandlers).viewer3dSetFrame = handleSetFrame;
-    (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed = setPlaybackSpeed;
-    (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed = () => playbackSpeed;
-    return () => {
-      delete (window as WindowWithViewerHandlers).viewer3dPlayAnimation;
-      delete (window as WindowWithViewerHandlers).viewer3dUploadMotionData;
-      delete (window as WindowWithViewerHandlers).viewer3dPlayEpisode;
-      delete (window as WindowWithViewerHandlers).viewer3dStopAnimation;
-      delete (window as WindowWithViewerHandlers).viewer3dClearAnimation;
-      delete (window as WindowWithViewerHandlers).viewer3dSetFrame;
-      delete (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed;
-      delete (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed;
-    };
-  }, [handleRun, handleMotionDataUpload, handlePlayEpisode, handleStopAnimation, handleClearAnimation, handleSetFrame, playbackSpeed]);
+  useViewerWindowBindings({
+    handleRun,
+    handleMotionDataUpload,
+    handlePlayEpisode,
+    handleStopAnimation,
+    handleClearAnimation,
+    handleSetFrame,
+    setPlaybackSpeed,
+    playbackSpeed,
+  });
 
-  // Close drag mode menu when clicking outside
-  useEffect(() => {
-    if (!isDragModeMenuOpen) return;
+  useDragModeEffects({
+    dragMode,
+    isDragModeMenuOpen,
+    setIsDragModeMenuOpen,
+  });
 
-    const handleClickOutside = () => {
-      setIsDragModeMenuOpen(false);
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [isDragModeMenuOpen]);
-
-  // Log drag mode changes (for debugging - modes don't have functionality yet)
-  useEffect(() => {
-    console.log(`[Drag Mode] Switched to: ${getDragModeDisplayName(dragMode)}`);
-  }, [dragMode]);
-
-  // Notify when animation frames change
-  useEffect(() => {
-    onAnimationFramesChange?.(animationFrames !== null && animationFrames.length > 0);
-  }, [animationFrames, onAnimationFramesChange]);
-
-  useEffect(() => {
-    if (!onMotionDataNodesGenerated) return;
-    if (!animationFrames || animationFrames.length === 0) {
-      onMotionDataNodesGenerated([], []);
-      return;
-    }
-    const { nodes, edges } = convertMotionFramesToNodes({
-      frames: animationFrames,
-      onJointChange,
-    });
-    onMotionDataNodesGenerated(nodes, edges);
-  }, [animationFrames, onJointChange, onMotionDataNodesGenerated]);
-
-  // Notify when playing state changes
-  useEffect(() => {
-    onPlayingChange?.(isPlaying);
-  }, [isPlaying, onPlayingChange]);
-
-  // Notify when frame changes
-  useEffect(() => {
-    if (animationFrames && animationFrames.length > 0) {
-      onFrameChange?.(currentFrame, animationFrames.length);
-    }
-  }, [currentFrame, animationFrames, onFrameChange]);
+  usePlaybackNotifications({
+    animationFrames,
+    isPlaying,
+    currentFrame,
+    setCurrentFrame,
+    onAnimationFramesChange,
+    onMotionDataNodesGenerated,
+    onPlayingChange,
+    onFrameChange,
+    onJointChange,
+  });
 
   return (
     <div className="h-full flex flex-col">
