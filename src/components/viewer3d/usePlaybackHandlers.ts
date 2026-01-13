@@ -100,20 +100,17 @@ export const usePlaybackHandlers = ({
 
   const handleStopAnimation = useCallback(() => {
     if (animationFrames && animationFrames.length > 0) {
-      const firstTimestamp = animationFrames[0].timestamp;
-      const lastTimestamp = animationFrames[animationFrames.length - 1].timestamp;
-      const animationDuration = lastTimestamp - firstTimestamp;
-      const normalizedFrameDuration =
-        animationDuration / Math.max(1, animationFrames.length - 1);
-
       const currentFrameIdx = animationController.currentFrameIndexRef.current ?? 0;
-      const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
+      const clampedIndex = Math.max(0, Math.min(currentFrameIdx, animationFrames.length - 1));
+      const targetFrame = animationFrames[clampedIndex];
+      const targetTimestamp = targetFrame?.timestamp ?? animationFrames[0].timestamp;
 
-      animationController.setManualFrameTime(normalizedTime);
-      animationController.setPreserveFrameTime(normalizedTime);
+      animationController.setCurrentFrameIndex(clampedIndex);
+      animationController.setManualFrameTime(targetTimestamp);
+      animationController.setPreserveFrameTime(targetTimestamp);
 
-      if (onFrameChange && currentFrameIdx >= 0) {
-        onFrameChange(currentFrameIdx);
+      if (onFrameChange) {
+        onFrameChange(clampedIndex);
       }
     }
 

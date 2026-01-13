@@ -69,20 +69,36 @@ export const useUrdfAnimation = ({
 
     let currentTime: number;
     let shouldApplyAnimation = false; // Flag to determine if we should apply animation values
+    const resolveFrameIndex = (timestamp: number) => {
+      if (timestamp <= firstTimestamp) return 0;
+      if (timestamp >= lastTimestamp) return animationFrames.length - 1;
+
+      let low = 0;
+      let high = animationFrames.length - 1;
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        if (animationFrames[mid].timestamp < timestamp) {
+          low = mid + 1;
+        } else {
+          high = mid;
+        }
+      }
+      return low;
+    };
+    const clampTimestamp = (timestamp: number) =>
+      Math.max(firstTimestamp, Math.min(timestamp, lastTimestamp));
 
     // Check for preserved frame time from stop handler (set when stopping to preserve position)
     // This MUST be checked first to prevent jumping to frame 0 when stopping
     const preservedFrameTime = animationController.preserveFrameTimeRef.current;
     if (preservedFrameTime !== null && preservedFrameTime !== undefined) {
       // Use preserved frame time and convert to normalized time
-      const frameIndex = Math.round((preservedFrameTime - firstTimestamp) / normalizedFrameDuration);
-      const clampedFrameIndex = Math.max(
-        0,
-        Math.min(frameIndex, animationFrames.length - 1)
-      );
+      const clampedTime = clampTimestamp(preservedFrameTime);
+      const clampedFrameIndex = resolveFrameIndex(clampedTime);
       const normalizedTime = firstTimestamp + clampedFrameIndex * normalizedFrameDuration;
       currentTime = normalizedTime;
-      animationController.manualFrameTimeRef.current = normalizedTime;
+      animationController.manualFrameTimeRef.current =
+        animationFrames[clampedFrameIndex]?.timestamp ?? clampedTime;
       // Update frame index immediately to prevent wrong frame from being displayed
       animationController.currentFrameIndexRef.current = clampedFrameIndex;
       // Immediately update frame callback with correct frame to prevent UI flicker
@@ -101,17 +117,13 @@ export const useUrdfAnimation = ({
     if (manualFrameTime !== null && manualFrameTime !== undefined) {
       // When manually setting a frame, find the frame index from the timestamp
       // Then convert to normalized time for uniform playback
-      let targetFrameIndex = animationFrames.length - 1;
-      for (let i = 0; i < animationFrames.length; i++) {
-        if (animationFrames[i].timestamp >= manualFrameTime) {
-          targetFrameIndex = i;
-          break;
-        }
-      }
+      const clampedTime = clampTimestamp(manualFrameTime);
+      const targetFrameIndex = resolveFrameIndex(clampedTime);
       // Convert to normalized time
       const normalizedTime = firstTimestamp + targetFrameIndex * normalizedFrameDuration;
       currentTime = normalizedTime;
-      animationController.manualFrameTimeRef.current = normalizedTime;
+      animationController.manualFrameTimeRef.current =
+        animationFrames[targetFrameIndex]?.timestamp ?? clampedTime;
       // Update frame index immediately (only notify if it changed)
       const previousFrameIndex = animationController.currentFrameIndexRef.current;
       if (previousFrameIndex !== targetFrameIndex) {
@@ -164,7 +176,7 @@ export const useUrdfAnimation = ({
       if (currentTime > normalizedLastTimestamp) {
         const lastFrameIndex = animationFrames.length - 1;
         animationController.currentFrameIndexRef.current = lastFrameIndex;
-        animationController.manualFrameTimeRef.current = normalizedLastTimestamp;
+        animationController.manualFrameTimeRef.current = lastTimestamp;
         currentTime = normalizedLastTimestamp;
         shouldApplyAnimation = true;
         // Stop playback at the end
@@ -188,7 +200,8 @@ export const useUrdfAnimation = ({
         Math.min(animationController.currentFrameIndexRef.current, animationFrames.length - 1)
       );
       currentTime = firstTimestamp + frozenIndex * normalizedFrameDuration;
-      animationController.manualFrameTimeRef.current = currentTime;
+      animationController.manualFrameTimeRef.current =
+        animationFrames[frozenIndex]?.timestamp ?? firstTimestamp;
       animationController.isPausedRef.current = true;
     }
 
