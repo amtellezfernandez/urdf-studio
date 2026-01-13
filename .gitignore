@@ -3,3 +3,7 @@ node_modules
 .venv
 pyroki/
 amd-hackathon/
+dist/
+**/__pycache__/
+*.pyc
+*.pyo
