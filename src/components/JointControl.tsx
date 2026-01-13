@@ -26,7 +26,7 @@ import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks, type JointAxisInfo, type JointLimitInfo } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/lib/angleConversions";
-import type { URDFRobotLike } from "@/features/types";
+import type { URDFRobot } from "urdf-loader";
 
 interface JointControlProps {
   jointName: string;
@@ -48,7 +48,7 @@ interface JointControlProps {
   onNameChange?: (oldName: string, newName: string) => void;
   alwaysExpanded?: boolean;
   hideValueDisplay?: boolean;
-  robot?: URDFRobotLike | null; // Three.js robot object for getting link coordinates
+  robot?: URDFRobot | null; // Three.js robot object for getting link coordinates
 }
 
 

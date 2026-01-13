@@ -10,7 +10,7 @@
  */
 
 import * as THREE from "three";
-import type { URDFRobotLike } from "@/features/types";
+import type { URDFRobot } from "urdf-loader";
 
 export interface CameraPoseConfig {
   xyz: [number, number, number];
@@ -26,7 +26,7 @@ export interface AutoComputeOptions {
 /**
  * Compute bounding box for a specific link in the robot
  */
-export function computeLinkBoundingBox(robot: URDFRobotLike | null, linkName: string): THREE.Box3 | null {
+export function computeLinkBoundingBox(robot: URDFRobot | null, linkName: string): THREE.Box3 | null {
   if (!robot) return null;
 
   // Get the link object from the robot
@@ -102,7 +102,7 @@ export function computeLinkBoundingBox(robot: URDFRobotLike | null, linkName: st
  * @returns Camera pose in parent link's coordinate frame
  */
 export function autoComputeCameraPose(
-  robot: URDFRobotLike | null,
+  robot: URDFRobot | null,
   parentLink: string,
   options: AutoComputeOptions = {},
 ): CameraPoseConfig | null {
@@ -148,7 +148,7 @@ export function autoComputeCameraPose(
  * Auto-compute camera pose with default settings
  * Positions camera at the center of the link
  */
-export function autoComputeCameraPoseDefault(robot: URDFRobotLike | null, parentLink: string): CameraPoseConfig | null {
+export function autoComputeCameraPoseDefault(robot: URDFRobot | null, parentLink: string): CameraPoseConfig | null {
   return autoComputeCameraPose(robot, parentLink);
 }
 

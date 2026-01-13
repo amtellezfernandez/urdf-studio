@@ -1,20 +1,20 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import URDFLoader from "urdf-loader";
+import URDFLoader, { type URDFRobot } from "urdf-loader";
 import { STLLoader } from "three-stdlib";
 import { useCameraStore } from "@/store/useCameraStore";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import type { GPUMode } from "@/hooks/use-gpu-mode";
-import type { MeshFiles, URDFRobotLike } from "@/features/types";
+import type { MeshFiles } from "@/features/types";
 
 const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
   new THREE.Vector3(0, 1, 0),
   Math.PI / 2
 );
 
-type PreviewRobot = URDFRobotLike;
+type PreviewRobot = URDFRobot;
 
 const PreviewObjects = ({
   objects,

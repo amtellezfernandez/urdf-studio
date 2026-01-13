@@ -27,7 +27,7 @@ import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/lib/angleConversions";
-import type { URDFRobotLike } from "@/features/types";
+import type { URDFRobot } from "urdf-loader";
 
 interface JointEditorPanelProps {
   jointName: string | null;
@@ -45,7 +45,7 @@ interface JointEditorPanelProps {
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   onTypeChange?: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
   onClose?: () => void;
-  robot?: URDFRobotLike | null; // Three.js robot object for getting link coordinates
+  robot?: URDFRobot | null; // Three.js robot object for getting link coordinates
 }
 
 export const JointEditorPanel = ({

@@ -33,20 +33,6 @@ export interface WindowWithViewerHandlers extends Window {
   __viewer3dCamera?: THREE.Camera;
 }
 
-export interface URDFJointLike extends THREE.Object3D {
-  angle?: number;
-  jointValue?: number | number[];
-  setJointValue?: (value: number) => void;
-}
-
-export interface URDFRobotLike extends THREE.Object3D {
-  links?: Record<string, THREE.Object3D>;
-  joints?: Record<string, URDFJointLike>;
-  getJointValue?: (jointName: string) => number | undefined;
-  setJointValue?: (jointName: string, value: number) => void;
-  setJointValues?: (values: Record<string, number>) => void;
-}
-
 export interface DebugMeshInfo {
   filename: string;
   webkitRelativePath: string;

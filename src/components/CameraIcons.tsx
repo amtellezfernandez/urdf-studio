@@ -3,10 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '@/store/useCameraStore';
 import type { GPUMode } from '@/hooks/use-gpu-mode';
-import type { URDFRobotLike } from "@/features/types";
+import type { URDFRobot } from 'urdf-loader';
 
 interface CameraIconsProps {
-  robot: URDFRobotLike | null;
+  robot: URDFRobot | null;
   gpuMode?: GPUMode;
 }
 
@@ -44,7 +44,7 @@ interface CameraIconProps {
       fov_deg: number;
     };
   };
-  robot: URDFRobotLike | null;
+  robot: URDFRobot | null;
   isSelected: boolean;
   gpuMode?: GPUMode;
 }

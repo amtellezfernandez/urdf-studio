@@ -29,6 +29,7 @@ import {
 import { useCameraStore } from "@/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/types/file";
+import type { URDFRobot } from "urdf-loader";
 import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -50,7 +51,6 @@ import type {
   DebugMeshInfo,
   ViewerEpisode,
   EpisodeSaveHandler,
-  URDFRobotLike,
 } from "@/features/types";
 import {
   AXIS_NAMES,
@@ -202,7 +202,7 @@ const Index = () => {
     robotBoundingBox,
     setRobotBoundingBox,
   } = useObjectCreatorStore();
-  const [robot, setRobot] = useState<URDFRobotLike | null>(null);
+  const [robot, setRobot] = useState<URDFRobot | null>(null);
 
   // Camera creation state
   const {

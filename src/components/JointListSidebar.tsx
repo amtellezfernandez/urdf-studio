@@ -11,7 +11,7 @@ import { useObjectStore } from "@/features/object-creator";
 import { useCameraStore } from "@/store/useCameraStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/features/urdf";
 import { parseLinkData, type LinkData } from "@/features/urdf";
-import type { URDFRobotLike } from "@/features/types";
+import type { URDFRobot } from "urdf-loader";
 import { LinkControl } from "@/components/LinkEditor";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { CameraList } from "@/components/CameraList";
@@ -43,7 +43,7 @@ interface HierarchyTreeViewProps {
   visibleJoints: Set<string>;
   onVisibilityToggle: (jointName: string) => void;
   endEffectorLink?: string | null;
-  robot?: URDFRobotLike | null; // Three.js robot object for getting link coordinates
+  robot?: URDFRobot | null; // Three.js robot object for getting link coordinates
 }
 
 const HierarchyTreeView = ({
@@ -359,7 +359,7 @@ const POINT_SIZE = 0.02;
 interface ObjectEditorPanelProps {
   objectId: string;
   availableLinks: string[];
-  robot?: URDFRobotLike | null;
+  robot?: URDFRobot | null;
   endEffectorLink?: string | null;
 }
 
@@ -861,7 +861,7 @@ interface ElementsViewProps {
   urdfContent?: string;
   availableJoints: string[];
   availableLinks?: string[];
-  robot?: URDFRobotLike | null;
+  robot?: URDFRobot | null;
   onCameraSelect?: (cameraId: string) => void;
   onJointSelect?: (jointName: string | null) => void;
   setSelectedLink?: (linkName: string | null) => void;
@@ -1007,7 +1007,7 @@ interface JointListSidebarProps {
   onUrdfChange?: (newContent: string) => void;
   collisionVisibility?: CollisionVisibility;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
-  robot?: URDFRobotLike | null;
+  robot?: URDFRobot | null;
   episodeJointNames?: string[];
   endEffectorLink?: string | null;
   onMarkAsEndEffector?: (linkName: string | null) => void;

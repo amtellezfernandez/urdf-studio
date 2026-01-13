@@ -2,10 +2,10 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import * as THREE from "three";
 import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import { toast } from "sonner";
-import type { URDFRobotLike } from "@/features/types";
+import type { URDFRobot } from "urdf-loader";
 
 interface IKDragControlsProps {
-  robot: URDFRobotLike | null; // URDFRobot
+  robot: URDFRobot | null; // URDFRobot
   endEffectorLink: string;
   urdfContent: string;
   currentJointValues: Record<string, number>;

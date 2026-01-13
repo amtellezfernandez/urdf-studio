@@ -4,7 +4,7 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { STLLoader } from "three-stdlib";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import URDFLoader from "urdf-loader";
+import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
 import { toast } from "sonner";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
@@ -20,7 +20,7 @@ import { parseEpisodeCsv, parseEpisodeJson } from "@/features/dataset";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
-import type { MeshFiles, WindowWithViewerHandlers, URDFJointLike, URDFRobotLike } from "@/features/types";
+import type { MeshFiles, WindowWithViewerHandlers } from "@/features/types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -61,9 +61,6 @@ interface AnimationFrame {
   timestamp: number;
   joints: Record<string, number>;
 }
-
-type URDFJoint = URDFJointLike;
-type URDFRobot = URDFRobotLike;
 
 type LinkPose = {
   position: [number, number, number];
@@ -161,12 +158,12 @@ const toZeroIfTiny = (value: number | null, epsilon: number) => {
 
 const getLiveRobotJoints = (robot: URDFRobot | null, fallback: Record<string, number>) => {
   if (!robot) return fallback;
-  const robotAny = robot;
-  const joints = robotAny.joints || {};
+  const joints = robot.joints || {};
   const result: Record<string, number> = {};
   for (const name of Object.keys(joints)) {
     const j = joints[name];
-    const val = typeof j?.angle === "number" ? j.angle : typeof j?.jointValue === "number" ? j.jointValue : undefined;
+    const jointValue = Array.isArray(j?.jointValue) ? j.jointValue[0] : j?.jointValue;
+    const val = typeof j?.angle === "number" ? j.angle : typeof jointValue === "number" ? jointValue : undefined;
     if (typeof val === "number" && !Number.isNaN(val)) {
       result[name] = val;
     }
@@ -3293,8 +3290,8 @@ export const Viewer3D = ({
     const joints = allJoints.filter((j) => {
       const jointObj = robot.joints?.[j];
       // Include all joint types (including fixed), but exclude sensor frames
-      return jointObj && 
-             (typeof jointObj.angle === "number" || jointObj.type === 'fixed') &&
+      return jointObj &&
+             (typeof jointObj.angle === "number" || jointObj.jointType === "fixed") &&
              !j.toLowerCase().includes('imu') &&
              !j.toLowerCase().includes('site') &&
              !j.toLowerCase().includes('frame');
@@ -3303,7 +3300,7 @@ export const Viewer3D = ({
     joints.forEach((j) => {
       const jointObj = robot.joints?.[j];
       // Fixed joints always have angle 0, other joints use their actual angle
-      if (jointObj.type === 'fixed') {
+      if (jointObj.jointType === "fixed") {
         angles[j] = 0;
       } else {
         angles[j] = typeof jointObj?.angle === "number" ? jointObj.angle : 0;
@@ -3373,7 +3370,7 @@ export const Viewer3D = ({
     for (const [jointName, value] of Object.entries(storeJointValues)) {
       if (typeof value === "number" && !Number.isNaN(value)) {
         // Check if the value differs from current robot joint value
-        const rawValue = r.joints?.[jointName]?.jointValue ?? r.getJointValue?.(jointName);
+        const rawValue = r.joints?.[jointName]?.jointValue;
         const currentValue = Array.isArray(rawValue) ? rawValue[0] : rawValue;
         if (typeof currentValue === "number" && Math.abs(currentValue - value) > 0.001) {
           hasChanges = true;

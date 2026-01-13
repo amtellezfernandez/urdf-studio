@@ -3,11 +3,11 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useCameraStore } from "@/store/useCameraStore";
-import type { URDFRobotLike } from "@/features/types";
 import type { Camera } from "@/types/camera";
+import type { URDFRobot } from "urdf-loader";
 
 interface CameraViewButtonsProps {
-  robot: URDFRobotLike | null;
+  robot: URDFRobot | null;
   onCameraViewChange?: (cameraId: string) => void;
 }
 
