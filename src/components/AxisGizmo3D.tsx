@@ -7,6 +7,12 @@ interface AxisGizmo3DProps {
   onViewChange?: (direction: 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right') => void;
 }
 
+const AXIS_COLORS = {
+  x: "#BE2C41", // X axis - red/pink (190, 44, 65)
+  y: "#6DA424", // Y axis - green (109, 164, 36)
+  z: "#3464AD", // Z axis - blue (52, 100, 173)
+};
+
 /**
  * Blender-style 3D axis gizmo showing X (coral), Y (mint), Z (sky blue) axes
  * Positioned on the right side of the viewport (to the right of the lateral bar)
@@ -64,13 +70,6 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
     groupRef.current.scale.setScalar(scale);
   });
 
-  // Axis colors matching specified RGB values
-  const colors = {
-    x: "#BE2C41", // X axis - red/pink (190, 44, 65)
-    y: "#6DA424", // Y axis - green (109, 164, 36)
-    z: "#3464AD", // Z axis - blue (52, 100, 173)
-  };
-  
   // Size parameters (bigger)
   const axisLength = 0.32;
   const axisRadius = 0.016;
@@ -82,36 +81,36 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
   // Memoize materials to prevent recreation on re-renders
   const materials = useMemo(() => {
     const xMaterial = new THREE.MeshBasicMaterial({ 
-      color: colors.x, 
+      color: AXIS_COLORS.x, 
       depthTest: false, 
       depthWrite: false 
     });
     const yMaterial = new THREE.MeshBasicMaterial({ 
-      color: colors.y, 
+      color: AXIS_COLORS.y, 
       depthTest: false, 
       depthWrite: false 
     });
     const zMaterial = new THREE.MeshBasicMaterial({ 
-      color: colors.z, 
+      color: AXIS_COLORS.z, 
       depthTest: false, 
       depthWrite: false 
     });
     const xTransparentMaterial = new THREE.MeshBasicMaterial({ 
-      color: colors.x, 
+      color: AXIS_COLORS.x, 
       transparent: true, 
       opacity: 0.3, 
       depthTest: false, 
       depthWrite: false 
     });
     const yTransparentMaterial = new THREE.MeshBasicMaterial({ 
-      color: colors.y, 
+      color: AXIS_COLORS.y, 
       transparent: true, 
       opacity: 0.3, 
       depthTest: false, 
       depthWrite: false 
     });
     const zTransparentMaterial = new THREE.MeshBasicMaterial({ 
-      color: colors.z, 
+      color: AXIS_COLORS.z, 
       transparent: true, 
       opacity: 0.3, 
       depthTest: false, 

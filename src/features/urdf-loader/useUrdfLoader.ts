@@ -73,6 +73,8 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
     return Array.from(meshReferences);
   }, []);
 
+  const { onAutoSelectEndEffector, onClearSelection } = options;
+
   const loadFilesFromFolder = useCallback(
     async (fileList: FileList) => {
       try {
@@ -109,8 +111,8 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         setSavedVizUrdfContent(originalContent);
         setUrdfFile(createUrdfFile(originalContent, urdfFilename));
 
-        options.onClearSelection?.();
-        options.onAutoSelectEndEffector?.(autoEndEffector);
+        onClearSelection?.();
+        onAutoSelectEndEffector?.(autoEndEffector);
 
         const stlFiles = Array.from(fileList).filter((file) => file.name.toLowerCase().endsWith(".stl"));
         const meshes: MeshFiles = {};
@@ -287,7 +289,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         setIsLoading(false);
       }
     },
-    [createUrdfFile, extractMeshReferencesFromURDF, options.onAutoSelectEndEffector, options.onClearSelection]
+    [createUrdfFile, extractMeshReferencesFromURDF, onAutoSelectEndEffector, onClearSelection]
   );
 
   return {

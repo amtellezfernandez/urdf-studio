@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { STLLoader } from "three-stdlib";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader from "urdf-loader";
 import { toast } from "sonner";
 import { useJointStore } from "@/store/useJointStore";
@@ -19,7 +20,7 @@ import { parseEpisodeCsv, parseEpisodeJson } from "@/features/dataset";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
-import type { MeshFiles } from "@/features/types";
+import type { MeshFiles, WindowWithViewerHandlers, URDFJointLike, URDFRobotLike } from "@/features/types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -61,13 +62,8 @@ interface AnimationFrame {
   joints: Record<string, number>;
 }
 
-interface URDFRobot {
-  joints: Record<string, any>;
-  setJointValue: (jointName: string, value: number) => void;
-  setJointValues: (values: Record<string, number>) => void;
-  position: THREE.Vector3;
-  scale: THREE.Vector3;
-}
+type URDFJoint = URDFJointLike;
+type URDFRobot = URDFRobotLike;
 
 type LinkPose = {
   position: [number, number, number];
@@ -84,6 +80,10 @@ type EndEffectorPoseState = {
   loading: boolean;
 };
 
+type MouseButtonsWithOriginal = OrbitControlsImpl["mouseButtons"] & {
+  _originalMiddle?: THREE.MOUSE;
+};
+
 const safeDecode = (value: string) => {
   try {
     return decodeURIComponent(value);
@@ -92,9 +92,29 @@ const safeDecode = (value: string) => {
   }
 };
 
+const getDragModeDisplayName = (mode: 'move-joints' | 'click-to-place' | 'drag-handle') => {
+  switch (mode) {
+    case 'move-joints':
+      return 'Move Joints';
+    case 'click-to-place':
+      return 'Click-to-place';
+    case 'drag-handle':
+      return 'Drag Handle';
+    default:
+      return 'Move Joints';
+  }
+};
+
+const setEmissiveColor = (material: THREE.Material, color: number) => {
+  const emissiveMaterial = material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial | THREE.MeshPhongMaterial;
+  if (emissiveMaterial.emissive) {
+    emissiveMaterial.emissive.setHex(color);
+  }
+};
+
 const extractLinkPose = (robot: URDFRobot | null, linkName: string): LinkPose | null => {
   if (!robot) return null;
-  const robotAny: any = robot;
+  const robotAny = robot;
   const link =
     robotAny?.links?.[linkName] ??
     robotAny?.getObjectByName?.(linkName) ??
@@ -141,7 +161,7 @@ const toZeroIfTiny = (value: number | null, epsilon: number) => {
 
 const getLiveRobotJoints = (robot: URDFRobot | null, fallback: Record<string, number>) => {
   if (!robot) return fallback;
-  const robotAny: any = robot;
+  const robotAny = robot;
   const joints = robotAny.joints || {};
   const result: Record<string, number> = {};
   for (const name of Object.keys(joints)) {
@@ -189,17 +209,27 @@ const CollisionGeometries = ({
 
     // Clear existing collision geometries
     collisionMeshesRef.current.forEach(({ mesh }) => {
-      if (mesh.material) (mesh.material as any).dispose();
-      if (mesh.geometry) mesh.geometry.dispose();
+      const material = mesh.material;
+      if (Array.isArray(material)) {
+        material.forEach((mat) => mat.dispose());
+      } else {
+        material.dispose();
+      }
+      mesh.geometry?.dispose();
       collisionGroupRef.current?.remove(mesh);
     });
     collisionMeshesRef.current.clear();
 
     while (collisionGroupRef.current.children.length > 0) {
       const child = collisionGroupRef.current.children[0];
-      if (child instanceof THREE.Mesh && (child as any).userData?.isCollisionGeometry) {
-        (child as any).material?.dispose();
-        (child as any).geometry?.dispose();
+      if (child instanceof THREE.Mesh && child.userData?.isCollisionGeometry) {
+        const material = child.material;
+        if (Array.isArray(material)) {
+          material.forEach((mat) => mat.dispose());
+        } else {
+          material.dispose();
+        }
+        child.geometry?.dispose();
       }
       collisionGroupRef.current.remove(child);
     }
@@ -214,10 +244,8 @@ const CollisionGeometries = ({
       if (!robotElement) return;
 
       // Update robot matrix world to get current link positions
-      const robotObject = robot as any;
-      if (robotObject.updateMatrixWorld) {
-        robotObject.updateMatrixWorld(true);
-      }
+      const robotObject = robot;
+      robotObject?.updateMatrixWorld(true);
 
       const links = xmlDoc.querySelectorAll("link");
       const isLowGPU = gpuMode === "low";
@@ -344,8 +372,8 @@ const CollisionGeometries = ({
                     const loadedMesh = new THREE.Mesh(geometry, collisionMaterial.clone());
                     loadedMesh.renderOrder = 999;
                     applyLinkTransform(loadedMesh, linkName, xyz, rpy);
-                    (loadedMesh as any).userData.isCollisionGeometry = true;
-                    (loadedMesh as any).userData.linkName = linkName;
+                    loadedMesh.userData.isCollisionGeometry = true;
+                    loadedMesh.userData.linkName = linkName;
                     collisionGroupRef.current?.add(loadedMesh);
                     // Store reference for frame updates
                     const meshKey = `${linkName}_${index}`;
@@ -366,8 +394,8 @@ const CollisionGeometries = ({
           if (mesh) {
             mesh.renderOrder = 999;
             applyLinkTransform(mesh, linkName, xyz, rpy);
-            (mesh as any).userData.isCollisionGeometry = true;
-            (mesh as any).userData.linkName = linkName;
+            mesh.userData.isCollisionGeometry = true;
+            mesh.userData.linkName = linkName;
             collisionGroupRef.current.add(mesh);
             // Store reference for frame updates
             const meshKey = `${linkName}_${index}`;
@@ -384,10 +412,8 @@ const CollisionGeometries = ({
   useFrame(() => {
     if (!collisionGroupRef.current || !robot) return;
 
-    const robotObject = robot as any;
-    if (robotObject.updateMatrixWorld) {
-      robotObject.updateMatrixWorld(true);
-    }
+    const robotObject = robot;
+    robotObject.updateMatrixWorld?.(true);
 
     // Update each collision mesh transform based on its link's current world position
     collisionMeshesRef.current.forEach(({ mesh, linkName, localXyz, localRpy }) => {
@@ -444,7 +470,7 @@ const TrackingLine = ({
     // If there's a tracked joint, use its center position
     if (trackedJointName) {
       try {
-        const joint = (robot as any).joints?.[trackedJointName];
+        const joint = robot?.joints?.[trackedJointName];
         if (joint) {
           // Update joint's world matrix to get current position
           joint.updateWorldMatrix(true, true);
@@ -459,7 +485,7 @@ const TrackingLine = ({
     } else if (endEffectorLink) {
       // Otherwise use end-effector link center
       try {
-        const robotAny: any = robot;
+        const robotAny = robot;
         const link =
           robotAny?.links?.[endEffectorLink] ??
           robotAny?.getObjectByName?.(endEffectorLink) ??
@@ -767,7 +793,7 @@ const CreatedObjects = ({
   const updateOrbitTargetPoint = useObjectStore((state) => state.updateOrbitTargetPoint);
 
   // Handle pointer down on cube (just for selection, no dragging)
-  const handlePointerDown = useCallback((e: any, objectId: string) => {
+  const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>, objectId: string) => {
     e.stopPropagation();
     const targetObj = objects.find((o) => o.id === objectId);
     setSelectedObject(objectId);
@@ -1126,7 +1152,7 @@ const CreatedObjects = ({
           }
         }
   
-        const robotAny: any = robot;
+        const robotAny = robot;
         if (robotAny.updateMatrixWorld) {
           robotAny.updateMatrixWorld(true);
         }
@@ -1497,12 +1523,14 @@ const CreatedObjects = ({
   dragMode?: 'move-joints' | 'click-to-place' | 'drag-handle';
 }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const robotRef = useRef<any>(null);
+  const robotRef = useRef<URDFRobot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const animationStartTime = useRef<number>(0);
   const manualFrameTimeRef = useRef<number | null>(null); // For manual frame navigation
   const blobUrlsRef = useRef<string[]>([]);
+  const storeJointValues = useJointStore((s) => s.jointValues);
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
+  const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const previewJointValue = useJointStore((s) => s.previewJointValue);
   const currentFrameIndexRef = useRef<number>(0);
@@ -1519,6 +1547,7 @@ const CreatedObjects = ({
   useEffect(() => {
     if (!file) return;
 
+    const blobUrls = blobUrlsRef.current;
     const loader = new URDFLoader();
 
     // Custom mesh loader that uses the uploaded files
@@ -1621,7 +1650,7 @@ const CreatedObjects = ({
           return;
         }
         
-        const robot = loader.parse(content) as any;
+        const robot = loader.parse(content) as URDFRobot;
         if (groupRef.current && robot) {
           // Clear previous model
           while (groupRef.current.children.length > 0) {
@@ -1640,8 +1669,8 @@ const CreatedObjects = ({
           const center = box.getCenter(new THREE.Vector3());
 
           // Store robot center for camera positioning (don't move the robot itself)
-          (robot as any).userData.boundingBoxCenter = center.clone();
-          (robot as any).userData.isURDFRobot = true;
+          robot.userData.boundingBoxCenter = center.clone();
+          robot.userData.isURDFRobot = true;
 
           robotRef.current = robot;
           onRobotLoaded(robot);
@@ -1657,9 +1686,9 @@ const CreatedObjects = ({
 
     // Cleanup blob URLs on unmount
     return () => {
-      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      blobUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [file, meshFiles, onRobotLoaded]);
+  }, [file, meshFiles, onRobotLoaded, gpuMode]);
 
   // Animation loop
   useFrame(() => {
@@ -1685,7 +1714,7 @@ const CreatedObjects = ({
 
     // Check for preserved frame time from stop handler (set when stopping to preserve position)
     // This MUST be checked first to prevent jumping to frame 0 when stopping
-    const preservedFrameTime = (window as any).__viewer3dPreserveFrameTime;
+    const preservedFrameTime = (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
     if (preservedFrameTime !== undefined && preservedFrameTime !== null) {
       // Use preserved frame time and convert to normalized time
       const frameIndex = Math.round((preservedFrameTime - firstTimestamp) / normalizedFrameDuration);
@@ -1694,21 +1723,21 @@ const CreatedObjects = ({
       currentTime = normalizedTime;
       manualFrameTimeRef.current = normalizedTime;
       // Update frame index immediately to prevent wrong frame from being displayed
-      (window as any).__viewer3dCurrentFrameIndex = clampedFrameIndex;
+      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedFrameIndex;
       currentFrameIndexRef.current = clampedFrameIndex;
       // Immediately update frame callback with correct frame to prevent UI flicker
       if (onFrameChange) {
         onFrameChange(clampedFrameIndex);
       }
       // Clear the window property after using it
-      delete (window as any).__viewer3dPreserveFrameTime;
+      delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
       shouldApplyAnimation = true;
       // Set a flag to skip the normal frame update logic below
-      (window as any).__viewer3dSkipFrameUpdate = true;
+      (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate = true;
     }
     
     // Check for manual frame time from window (set by handleSetFrame or timeline scrubbing)
-    const manualFrameTime = (window as any).__viewer3dManualFrameTime;
+    const manualFrameTime = (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
     if (manualFrameTime !== undefined && manualFrameTime !== null) {
       // When manually setting a frame, find the frame index from the timestamp
       // Then convert to normalized time for uniform playback
@@ -1724,7 +1753,7 @@ const CreatedObjects = ({
       currentTime = normalizedTime;
       manualFrameTimeRef.current = normalizedTime;
       // Update frame index immediately
-      (window as any).__viewer3dCurrentFrameIndex = targetFrameIndex;
+      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = targetFrameIndex;
       currentFrameIndexRef.current = targetFrameIndex;
       // Immediately update frame callback to prevent UI from showing wrong frame
       if (onFrameChange) {
@@ -1739,19 +1768,19 @@ const CreatedObjects = ({
         // This prevents the frame from jumping when manually set
       }
       // Clear the window property after using it
-      delete (window as any).__viewer3dManualFrameTime;
+      delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
       shouldApplyAnimation = true; // Apply when manually setting frame
       // Set pause flag to prevent interpolation
-      (window as any).__viewer3dIsPaused = true;
+      (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
       // Set flag to skip normal frame update
-      (window as any).__viewer3dSkipFrameUpdate = true;
+      (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate = true;
     } else if (manualFrameTimeRef.current !== null) {
       // Use stored manual frame time (paused at a specific frame)
       currentTime = manualFrameTimeRef.current;
       // Calculate frame index from stored time to keep it consistent
       const storedFrameIndex = Math.round((currentTime - firstTimestamp) / normalizedFrameDuration);
       const clampedStoredIndex = Math.max(0, Math.min(storedFrameIndex, animationFrames.length - 1));
-      (window as any).__viewer3dCurrentFrameIndex = clampedStoredIndex;
+      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedStoredIndex;
       // If we start playing from a paused state, update start time and clear manual frame
       if (isPlaying) {
         // The stored time is already normalized, so use it directly
@@ -1759,29 +1788,29 @@ const CreatedObjects = ({
         manualFrameTimeRef.current = null;
         shouldApplyAnimation = true;
         // Clear pause flag when starting to play
-        delete (window as any).__viewer3dIsPaused;
+        delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
       } else {
         // Paused with manual frame time - stay at this exact frame (no interpolation)
         shouldApplyAnimation = true;
         // Store a flag to indicate we're paused so we don't interpolate
-        (window as any).__viewer3dIsPaused = true;
+        (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
         // Set flag to skip normal frame update to prevent recalculation
-        (window as any).__viewer3dSkipFrameUpdate = true;
+        (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate = true;
       }
     } else if (isPlaying) {
       // Normal playback - use normalized timing for uniform playback
       shouldApplyAnimation = true;
       // Clear pause flag when playing
-      delete (window as any).__viewer3dIsPaused;
+      delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
       // Clear manual joint changes flag when playing - allow animation to take control
       hasManualJointChangesRef.current = false;
-      delete (window as any).__viewer3dHasManualJointChanges;
+      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
       
       // Check if we need to reset animation start time (when starting from last frame)
-      const shouldResetStartTime = (window as any).__viewer3dResetAnimationStartTime;
+      const shouldResetStartTime = (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime;
       if (shouldResetStartTime) {
         animationStartTime.current = 0;
-        delete (window as any).__viewer3dResetAnimationStartTime;
+        delete (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime;
       }
       
       if (animationStartTime.current === 0) {
@@ -1801,12 +1830,12 @@ const CreatedObjects = ({
           currentTime = normalizedLastTimestamp;
           // Calculate and set the last frame index immediately
           const lastFrameIndex = animationFrames.length - 1;
-          (window as any).__viewer3dCurrentFrameIndex = lastFrameIndex;
+          (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = lastFrameIndex;
           currentFrameIndexRef.current = lastFrameIndex;
           // Store the last frame time so we stay at this position
           manualFrameTimeRef.current = normalizedLastTimestamp;
           // Set pause flag to prevent interpolation
-          (window as any).__viewer3dIsPaused = true;
+          (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
           // Update frame callback immediately to reflect last frame
           if (onFrameChange) {
             onFrameChange(lastFrameIndex);
@@ -1814,7 +1843,7 @@ const CreatedObjects = ({
           // Stop playback using the window-based handler (will preserve last frame position)
           // Use requestAnimationFrame to ensure this happens after current frame is applied
           requestAnimationFrame(() => {
-            (window as any).viewer3dStopAnimation?.();
+            (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
           });
         } else {
           currentTime = calculatedTime;
@@ -1825,7 +1854,7 @@ const CreatedObjects = ({
     } else {
       // Paused and no manual frame time - preserve current position
       // Use current frame index if available to prevent jumping to frame 0/1
-      const currentFrameIdx = (window as any).__viewer3dCurrentFrameIndex;
+      const currentFrameIdx = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
       if (currentFrameIdx !== undefined && currentFrameIdx !== null && currentFrameIdx >= 0) {
         // Use the current frame index to calculate normalized time
         const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
@@ -1849,11 +1878,11 @@ const CreatedObjects = ({
         // No animation start time and no current frame index - stay at frame 0
         currentTime = firstTimestamp;
         manualFrameTimeRef.current = currentTime;
-        (window as any).__viewer3dCurrentFrameIndex = 0;
+        (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = 0;
         shouldApplyAnimation = true;
       }
       // Set pause flag
-      (window as any).__viewer3dIsPaused = true;
+      (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
     }
     
     // Find the appropriate frame or interpolate
@@ -1878,12 +1907,12 @@ const CreatedObjects = ({
     // Update current frame index for display (update every frame change)
     // Also store it globally so stop handler can access it
     // Always keep the global ref updated
-    (window as any).__viewer3dCurrentFrameIndex = frameIndex;
+    (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = frameIndex;
     
     // Skip frame update if we just preserved the frame position (to prevent flicker)
-    const skipUpdate = (window as any).__viewer3dSkipFrameUpdate;
+    const skipUpdate = (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate;
     if (skipUpdate) {
-      delete (window as any).__viewer3dSkipFrameUpdate;
+      delete (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate;
       // Frame was already updated when preserving position
     } else if (currentFrameIndexRef.current !== frameIndex) {
       currentFrameIndexRef.current = frameIndex;
@@ -1908,7 +1937,7 @@ const CreatedObjects = ({
     // Interpolate between frames using normalized timing
     // This ensures smooth interpolation even with uneven original timestamps
     // When paused, don't interpolate - use exact frame values
-    const isPaused = !isPlaying && (window as any).__viewer3dIsPaused;
+    const isPaused = !isPlaying && (window as WindowWithViewerHandlers).__viewer3dIsPaused;
     let t = 0;
     if (!isPaused && normalizedFrameDuration > 0 && frameIndex < animationFrames.length - 1) {
       // Calculate interpolation factor based on normalized time position within the frame interval
@@ -1926,10 +1955,10 @@ const CreatedObjects = ({
     }
 
     // Check for manual joint changes flag from window (set by slider changes or dragging)
-    if ((window as any).__viewer3dHasManualJointChanges) {
+    if ((window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges) {
       hasManualJointChangesRef.current = true;
       // Clear the window property after reading it
-      delete (window as any).__viewer3dHasManualJointChanges;
+      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
     }
     
     // When paused and manual changes have been made, don't apply animation values
@@ -1969,21 +1998,21 @@ const CreatedObjects = ({
   // ===== Selection & Highlight Helpers =====
   const highlightedMeshesRef = useRef<THREE.Mesh[]>([]);
 
-  const clearHighlights = () => {
+  const clearHighlights = useCallback(() => {
     highlightedMeshesRef.current.forEach((mesh) => {
-      const mat = mesh.material as any;
-      if (mat && mat.emissive !== undefined) {
-        mat.emissive.setHex(0x000000);
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => {
+        setEmissiveColor(material, 0x000000);
         // Note: We keep the cloned material to avoid issues with material sharing
         // The material clone is already in place, just reset emissive
-      }
+      });
     });
     highlightedMeshesRef.current = [];
-  };
+  }, []);
 
-  const highlightLink = (linkName: string, jointName?: string | null) => {
+  const highlightLink = useCallback((linkName: string, jointName?: string | null) => {
     clearHighlights();
-    const robot: any = robotRef.current;
+    const robot = robotRef.current;
     if (!robot) return;
     const link = robot.links?.[linkName] ?? robot.getObjectByName?.(linkName);
     if (!link) return;
@@ -2006,18 +2035,24 @@ const CreatedObjects = ({
     // Custom traversal that stops when encountering another link
     const traverseLinkOnly = (obj: THREE.Object3D) => {
       // If this is a mesh, highlight it
-      if ((obj as any).isMesh) {
-        const mat = (obj as any).material;
-        if (mat && mat.emissive !== undefined) {
-          // Clone material if it hasn't been cloned yet to avoid affecting other meshes
-          if (!mat.userData.isHighlighted) {
-            const clonedMat = mat.clone();
-            (obj as any).material = clonedMat;
-            clonedMat.userData.isHighlighted = true;
-            clonedMat.userData.originalMesh = obj;
+      if (obj instanceof THREE.Mesh) {
+        const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+        const hasEmissive = materials.some((material) => "emissive" in material);
+        if (hasEmissive) {
+          const needsClone = materials.some((material) => !material.userData.isHighlighted);
+          if (needsClone) {
+            const clonedMaterials = materials.map((material) => material.clone());
+            obj.material = Array.isArray(obj.material) ? clonedMaterials : clonedMaterials[0];
+            clonedMaterials.forEach((material) => {
+              material.userData.isHighlighted = true;
+              material.userData.originalMesh = obj;
+            });
           }
-          (obj as any).material.emissive.setHex(highlightColor);
-          highlightedMeshesRef.current.push(obj as THREE.Mesh);
+          const activeMaterials = Array.isArray(obj.material) ? obj.material : [obj.material];
+          activeMaterials.forEach((material) => {
+            setEmissiveColor(material, highlightColor);
+          });
+          highlightedMeshesRef.current.push(obj);
         }
       }
       
@@ -2032,16 +2067,16 @@ const CreatedObjects = ({
     };
     
     traverseLinkOnly(link);
-  };
+  }, [clearHighlights, jointLimits]);
 
   const getLinkNameForJoint = (jointName: string): string | null => {
-    const robot: any = robotRef.current;
+    const robot = robotRef.current;
     if (!robot) return null;
-    const joint: any = robot.joints?.[jointName];
+    const joint = robot.joints?.[jointName];
     if (!joint) return null;
     const linkNames = new Set(Object.keys(robot.links || {}));
-    for (const child of joint.children || []) {
-      if (linkNames.has((child as any).name)) return (child as any).name;
+    for (const child of joint.children ?? []) {
+      if (linkNames.has(child.name)) return child.name;
     }
     return null;
   };
@@ -2054,7 +2089,7 @@ const CreatedObjects = ({
 
   // Highlight when external selection changes
   useEffect(() => {
-    const robot: any = robotRef.current;
+    const robot = robotRef.current;
     if (!robot) return;
     if (selectedJoint) {
       const ln = getLinkNameForJoint(selectedJoint);
@@ -2065,7 +2100,7 @@ const CreatedObjects = ({
     } else {
       clearHighlights();
     }
-  }, [selectedJoint, selectedLink, jointLimits]);
+  }, [selectedJoint, selectedLink, highlightLink, clearHighlights]);
 
   // Document-level pointer event handlers for dragging
   useEffect(() => {
@@ -2078,8 +2113,8 @@ const CreatedObjects = ({
       if (!dragStart) return;
       
       lastPointerRef.current = { x: e.clientX, y: e.clientY };
-      const robot: any = robotRef.current;
-      const joint: any = robot.joints?.[jointName];
+      const robot = robotRef.current;
+      const joint = robot.joints?.[jointName];
       if (!joint) return;
       
       // Use world/floor reference: vertical mouse movement controls joint angle
@@ -2152,9 +2187,9 @@ const CreatedObjects = ({
     };
   }, [isDragging, onJointChange, onDragActiveChange, previewJointValue, setStoreJointValue]);
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
-    const robot: any = robotRef.current;
+    const robot = robotRef.current;
     if (!robot) return;
     let obj: THREE.Object3D | null = e.object as THREE.Object3D;
     const linkNames = new Set(Object.keys(robot.links || {}));
@@ -2168,8 +2203,8 @@ const CreatedObjects = ({
     }
     let jointName: string | null = null;
     if (linkName) {
-      for (const [jName, jObj] of Object.entries<any>(robot.joints || {})) {
-        if ((jObj.children || []).some((c: any) => c.name === linkName)) {
+      for (const [jName, jObj] of Object.entries(robot.joints ?? {})) {
+        if ((jObj.children ?? []).some((child) => child.name === linkName)) {
           jointName = jName;
           break;
         }
@@ -2180,7 +2215,7 @@ const CreatedObjects = ({
 
     // Start joint drag if joint found and in 'move-joints' mode
     if (jointName && dragMode === 'move-joints') {
-      const joint: any = robot.joints?.[jointName];
+      const joint = robot.joints?.[jointName];
       if (joint) {
         // Get joint limits from parsed URDF data
         const limits = getJointLimits(jointLimits, jointName);
@@ -2240,7 +2275,7 @@ const RotationPlane = ({
   jointLimits,
   gpuMode = "high",
 }: {
-  robot: any;
+  robot: URDFRobot | null;
   jointName: string;
   axis: [number, number, number];
   jointLimits?: JointLimits;
@@ -2249,11 +2284,12 @@ const RotationPlane = ({
   const planeRef = useRef<THREE.Mesh>(null);
   const [position, setPosition] = useState<THREE.Vector3>(new THREE.Vector3());
   const [rotation, setRotation] = useState<THREE.Euler>(new THREE.Euler());
+  const [axisX, axisY, axisZ] = axis;
 
   // Calculate axis vector and color reactively when axis changes
   const axisVec = useMemo(() => {
-    return new THREE.Vector3(axis[0], axis[1], axis[2]).normalize();
-  }, [axis[0], axis[1], axis[2]]);
+    return new THREE.Vector3(axisX, axisY, axisZ).normalize();
+  }, [axisX, axisY, axisZ]);
   
   // Determine color based on axis direction (X=red, Y=green, Z=blue) - reactive to axis changes
   const { planeColor, isNegative } = useMemo(() => {
@@ -2313,7 +2349,7 @@ const RotationPlane = ({
   useFrame(() => {
     if (!robot || !planeRef.current) return;
 
-    const joint: any = robot.joints?.[jointName];
+    const joint = robot.joints?.[jointName];
     if (!joint) return;
 
     // Get joint position in world space
@@ -2500,7 +2536,7 @@ export const Viewer3D = ({
   const [isIkHandleDragging, setIsIkHandleDragging] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
-  const controlsRef = useRef<any>(null);
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const isShiftPressedRef = useRef<boolean>(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -2510,6 +2546,10 @@ export const Viewer3D = ({
   const [ikDialogOpen, setIkDialogOpen] = useState(false);
   const [ikTargetName, setIkTargetName] = useState<string | null>(null);
   const [isIkRunning, setIsIkRunning] = useState(false);
+  const storeJointValues = useJointStore((s) => s.jointValues);
+  const setStoreJointValues = useJointStore((s) => s.setJointValues);
+  const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
+  const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const [endEffectorPose, setEndEffectorPose] = useState<EndEffectorPoseState>({
     pyroki: null,
     three: null,
@@ -2559,7 +2599,7 @@ export const Viewer3D = ({
     };
     reader.readAsText(urdfFile);
     fkAutoOpenedRef.current = false;
-  }, [urdfFile]);
+  }, [urdfFile, onLinkSelect]);
 
   // Auto-open FK validation dialog once when a new robot + URDF are ready
   useEffect(() => {
@@ -2584,15 +2624,16 @@ export const Viewer3D = ({
       const controls = controlsRef.current;
       // @react-three/drei OrbitControls exposes the underlying Three.js controls
       // The ref should point to the actual OrbitControls instance
-      const threeControls = controls as any;
+      const threeControls = controls as OrbitControlsImpl | null;
       
       // Set default mouse button configuration (Blender-style)
       // LEFT: rotate, MIDDLE: zoom (default), RIGHT: pan
       if (threeControls && threeControls.mouseButtons) {
+        const mouseButtons = threeControls.mouseButtons as MouseButtonsWithOriginal;
         // Default: MMB zooms (DOLLY) if not already set
-        if (threeControls.mouseButtons._originalMiddle === undefined) {
-          threeControls.mouseButtons._originalMiddle = threeControls.mouseButtons.MIDDLE ?? THREE.MOUSE.DOLLY;
-          threeControls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+        if (mouseButtons._originalMiddle === undefined) {
+          mouseButtons._originalMiddle = mouseButtons.MIDDLE ?? THREE.MOUSE.DOLLY;
+          mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
         }
       }
     }, 100); // Small delay to ensure controls are initialized
@@ -2605,19 +2646,20 @@ export const Viewer3D = ({
     const updateMMBBehavior = (shouldPan: boolean) => {
       if (!controlsRef.current) return;
       
-      const threeControls = controlsRef.current as any;
+      const threeControls = controlsRef.current;
       if (threeControls && threeControls.mouseButtons) {
+        const mouseButtons = threeControls.mouseButtons as MouseButtonsWithOriginal;
         // Store original MMB behavior if not already stored
-        if (threeControls.mouseButtons._originalMiddle === undefined) {
-          threeControls.mouseButtons._originalMiddle = threeControls.mouseButtons.MIDDLE ?? THREE.MOUSE.DOLLY;
+        if (mouseButtons._originalMiddle === undefined) {
+          mouseButtons._originalMiddle = mouseButtons.MIDDLE ?? THREE.MOUSE.DOLLY;
         }
         
         // Set MMB behavior based on Shift state
         if (shouldPan) {
-          threeControls.mouseButtons.MIDDLE = THREE.MOUSE.PAN;
+          mouseButtons.MIDDLE = THREE.MOUSE.PAN;
         } else {
-          const originalMiddle = threeControls.mouseButtons._originalMiddle ?? THREE.MOUSE.DOLLY;
-          threeControls.mouseButtons.MIDDLE = originalMiddle;
+          const originalMiddle = mouseButtons._originalMiddle ?? THREE.MOUSE.DOLLY;
+          mouseButtons.MIDDLE = originalMiddle;
         }
       }
     };
@@ -2707,7 +2749,7 @@ export const Viewer3D = ({
       }
       const targetObj = latestObj;
 
-      const robotAny: any = robot;
+      const robotAny = robot;
       const effObj =
         robotAny?.links?.[endEffectorLink] ??
         robotAny?.getObjectByName?.(endEffectorLink) ??
@@ -2775,14 +2817,14 @@ export const Viewer3D = ({
       setIsIkRunning(true);
 
       try {
-        const basePayload: any = {
+        const basePayload: Record<string, unknown> = {
           urdf: urdfContent,
           joint_values: jointValues,
           target_link: endEffectorLink,
           target_position: targetPosition,
         };
 
-        const tryPayloads: any[] = [];
+        const tryPayloads: Array<Record<string, unknown>> = [];
         if (orientationOptional) {
           tryPayloads.push({
             ...basePayload,
@@ -2983,7 +3025,7 @@ export const Viewer3D = ({
       // Start the orbit following
       orbitFollowAnimationRef.current = requestAnimationFrame(stepOrbit);
     },
-    [robot, urdfContent, endEffectorLink, ikResult, onIkApplied]
+    [robot, urdfContent, endEffectorLink, ikResult, onIkApplied, setStoreJointValues]
   );
 
   // Stop orbit following
@@ -3004,12 +3046,6 @@ export const Viewer3D = ({
       }
     };
   }, []);
-
-  // Global joint store
-  const storeJointValues = useJointStore((s) => s.jointValues);
-  const setStoreJointValues = useJointStore((s) => s.setJointValues);
-  const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
-  const setStoreJointValue = useJointStore((s) => s.setJointValue);
 
   const ikDragEnabled = dragMode === "drag-handle" && !!robot && !!urdfContent && !!endEffectorLink;
   const liveIkSeedValues = useMemo(
@@ -3042,8 +3078,8 @@ export const Viewer3D = ({
       lastIkAppliedRef.current = blended;
 
       console.log("[Viewer3D] IK solution received:", solution);
-      (window as any).__viewer3dHasManualJointChanges = true;
-      const robotAny: any = robot;
+      (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
+      const robotAny = robot;
       if (robotAny?.setJointValues) {
         console.log("[Viewer3D] Applying via setJointValues");
         robotAny.setJointValues(blended);
@@ -3065,7 +3101,7 @@ export const Viewer3D = ({
   const handleIkDragStateChange = useCallback((dragging: boolean) => {
     setIsIkHandleDragging(dragging);
     if (dragging) {
-      (window as any).__viewer3dHasManualJointChanges = true;
+      (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
     }
   }, []);
 
@@ -3129,14 +3165,18 @@ export const Viewer3D = ({
           signal: controller.signal,
         });
 
-        const payload = await response
+        const payload = (await response
           .json()
-          .catch(() => ({ error: "Failed to parse PyRoki FK response" }));
+          .catch(() => ({ error: "Failed to parse PyRoki FK response" }))) as {
+          error?: unknown;
+          detail?: unknown;
+          links?: unknown;
+        };
 
         if (!response.ok) {
           const message =
-            (payload as any)?.error ||
-            (payload as any)?.detail ||
+            (typeof payload.error === "string" && payload.error) ||
+            (typeof payload.detail === "string" && payload.detail) ||
             "PyRoki FK request failed";
           throw new Error(message);
         }
@@ -3145,8 +3185,11 @@ export const Viewer3D = ({
           return;
         }
 
-        const links = Array.isArray((payload as any).links) ? (payload as any).links : [];
-        const pyrokiLink = links.find((l: any) => l?.name === endEffectorLink);
+        const links = Array.isArray(payload.links) ? payload.links : [];
+        const pyrokiLink = links.find((link) => {
+          const name = (link as { name?: unknown }).name;
+          return typeof name === "string" && name === endEffectorLink;
+        }) as { position?: unknown; quaternion_wxyz?: unknown } | undefined;
 
         const pyrokiPose: LinkPose | null =
           pyrokiLink &&
@@ -3226,7 +3269,7 @@ export const Viewer3D = ({
     
     const controls = controlsRef.current;
     const camera = controls.object as THREE.PerspectiveCamera;
-    const robotAny: any = robot as any;
+    const robotAny = robot;
     
     // Get robot's bounding box center (stored when robot was loaded)
     const robotCenter = robotAny.userData?.boundingBoxCenter || new THREE.Vector3(0, 0, 0);
@@ -3244,11 +3287,11 @@ export const Viewer3D = ({
   // Notify host about available joints and their current angles when robot is ready
   useEffect(() => {
     if (!robot) return;
-    const allJoints = Object.keys((robot as any).joints || {});
+    const allJoints = Object.keys(robot.joints ?? {});
     // Include all joints (including fixed) but exclude non-joint items like "imu_site_frame"
     // Fixed joints need to be visible so users can change their type back
     const joints = allJoints.filter((j) => {
-      const jointObj: any = (robot as any).joints?.[j];
+      const jointObj = robot.joints?.[j];
       // Include all joint types (including fixed), but exclude sensor frames
       return jointObj && 
              (typeof jointObj.angle === "number" || jointObj.type === 'fixed') &&
@@ -3258,7 +3301,7 @@ export const Viewer3D = ({
     });
     const angles: Record<string, number> = {};
     joints.forEach((j) => {
-      const jointObj: any = (robot as any).joints?.[j];
+      const jointObj = robot.joints?.[j];
       // Fixed joints always have angle 0, other joints use their actual angle
       if (jointObj.type === 'fixed') {
         angles[j] = 0;
@@ -3287,7 +3330,7 @@ export const Viewer3D = ({
       return;
     }
 
-    const box = new THREE.Box3().setFromObject(robot as any);
+    const box = new THREE.Box3().setFromObject(robot);
     onRobotBoundingBoxChange?.(box);
     onRobotLoaded?.(robot);
   }, [robot, onRobotBoundingBoxChange, onRobotLoaded]);
@@ -3295,11 +3338,10 @@ export const Viewer3D = ({
   // Apply joint values from props (skip if dragging)
   useEffect(() => {
     if (!robot || isDraggingJoint || isIkHandleDragging) return;
-    const r: any = robot as any;
-    if (typeof r.setJointValue !== "function") return;
+    if (typeof robot.setJointValue !== "function") return;
     for (const [jointName, value] of Object.entries(jointValues)) {
       if (typeof value === "number" && !Number.isNaN(value)) {
-        r.setJointValue(jointName, value);
+        robot.setJointValue(jointName, value);
       }
     }
   }, [robot, jointValues, isDraggingJoint, isIkHandleDragging]);
@@ -3308,7 +3350,7 @@ export const Viewer3D = ({
     if (!robot) return;
     const resetValues = { ...initialPoseRef.current };
     if (Object.keys(resetValues).length === 0) return;
-    const robotAny: any = robot;
+    const robotAny = robot;
     if (typeof robotAny.setJointValue === "function") {
       for (const [name, value] of Object.entries(resetValues)) {
         robotAny.setJointValue(name, value);
@@ -3325,14 +3367,15 @@ export const Viewer3D = ({
   // Apply joint values from global store (authoritative for live slider moves, skip if dragging)
   useEffect(() => {
     if (!robot || isDraggingJoint || isIkHandleDragging) return;
-    const r: any = robot as any;
+    const r = robot;
     if (typeof r.setJointValue !== "function") return;
     let hasChanges = false;
     for (const [jointName, value] of Object.entries(storeJointValues)) {
       if (typeof value === "number" && !Number.isNaN(value)) {
         // Check if the value differs from current robot joint value
-        const currentValue = r.joints?.[jointName]?.jointValue ?? r.getJointValue?.(jointName);
-        if (currentValue !== undefined && Math.abs(currentValue - value) > 0.001) {
+        const rawValue = r.joints?.[jointName]?.jointValue ?? r.getJointValue?.(jointName);
+        const currentValue = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+        if (typeof currentValue === "number" && Math.abs(currentValue - value) > 0.001) {
           hasChanges = true;
         }
         r.setJointValue(jointName, value);
@@ -3342,21 +3385,11 @@ export const Viewer3D = ({
     // This allows slider changes to also prevent animation from overwriting manual changes
     if (hasChanges && !isPlaying) {
       // Use window property to communicate with URDFModel's animation loop
-      (window as any).__viewer3dHasManualJointChanges = true;
+      (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
     }
   }, [robot, storeJointValues, isDraggingJoint, isIkHandleDragging, isPlaying]);
 
-  const handleMotionDataUpload = (e: React.ChangeEvent<HTMLInputElement> | File) => {
-    const file = e instanceof File ? e : e.target.files?.[0];
-    if (file) {
-      setMotionDataFile(file);
-      parseMotionDataFile(file);
-      onMotionFileChange?.(file);
-      toast.success(`Motion data file uploaded: ${file.name}`);
-    }
-  };
-
-  const parseMotionDataFile = (file: File) => {
+  const parseMotionDataFile = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
@@ -3391,7 +3424,7 @@ export const Viewer3D = ({
         return;
       }
 
-      const robotAny: any = robot as any;
+      const robotAny = robot;
       const robotJointKeys: string[] = robotAny
         ? Object.keys(robotAny.joints || {})
         : [];
@@ -3465,12 +3498,11 @@ export const Viewer3D = ({
 
       if (robot && frames.length > 0) {
         const firstFrame = frames[0].joints;
-        const robotAnyInstance = robot as any;
-        if (robotAnyInstance.setJointValues) {
-          robotAnyInstance.setJointValues(firstFrame);
-        } else if (robotAnyInstance.setJointValue) {
+        if (robot.setJointValues) {
+          robot.setJointValues(firstFrame);
+        } else if (robot.setJointValue) {
           for (const [jointName, value] of Object.entries(firstFrame)) {
-            robotAnyInstance.setJointValue(jointName, value);
+            robot.setJointValue(jointName, value);
           }
         }
         setStoreJointValues(firstFrame);
@@ -3484,7 +3516,17 @@ export const Viewer3D = ({
     };
 
     reader.readAsText(file);
-  };
+  }, [robot, setAnimationFrames, setIsPlaying, setStoreJointValues]);
+
+  const handleMotionDataUpload = useCallback((e: React.ChangeEvent<HTMLInputElement> | File) => {
+    const file = e instanceof File ? e : e.target.files?.[0];
+    if (file) {
+      setMotionDataFile(file);
+      parseMotionDataFile(file);
+      onMotionFileChange?.(file);
+      toast.success(`Motion data file uploaded: ${file.name}`);
+    }
+  }, [onMotionFileChange, parseMotionDataFile]);
 
   // Convert imported animation frames to nodes
   const convertMotionFramesToNodes = (frames: AnimationFrame[]) => {
@@ -3559,7 +3601,7 @@ export const Viewer3D = ({
     
     // If we're starting to play and we're at the last frame, reset to frame 0 first
     if (newPlayingState && !isPlaying) {
-      const currentFrameIdx = (window as any).__viewer3dCurrentFrameIndex;
+      const currentFrameIdx = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
       const lastFrameIdx = animationFrames.length - 1;
       
       if (currentFrameIdx !== undefined && currentFrameIdx !== null && currentFrameIdx >= lastFrameIdx) {
@@ -3572,11 +3614,11 @@ export const Viewer3D = ({
         // Use window properties to communicate with the animation loop
         // Set manual frame time to first frame
         const normalizedFirstTime = firstTimestamp;
-        (window as any).__viewer3dManualFrameTime = normalizedFirstTime;
-        (window as any).__viewer3dCurrentFrameIndex = 0;
-        (window as any).__viewer3dResetAnimationStartTime = true; // Flag to reset animation start time
+        (window as WindowWithViewerHandlers).__viewer3dManualFrameTime = normalizedFirstTime;
+        (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = 0;
+        (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime = true; // Flag to reset animation start time
         // Clear any preserved frame time that might keep us at the last frame
-        delete (window as any).__viewer3dPreserveFrameTime;
+        delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
         
         // Update frame callback immediately
         if (onFrameChange) {
@@ -3589,13 +3631,13 @@ export const Viewer3D = ({
     onPlayingChange?.(newPlayingState);
     // Clear pause flag when starting to play
     if (newPlayingState) {
-      delete (window as any).__viewer3dIsPaused;
+      delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
       // Clear manual joint changes flag when starting to play - allow animation to take control
       // Use window property since URDFModel manages the actual ref
-      delete (window as any).__viewer3dHasManualJointChanges;
+      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
     } else {
       // Set pause flag when pausing
-      (window as any).__viewer3dIsPaused = true;
+      (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
     }
   }, [animationFrames, robot, isPlaying, onFrameChange, onPlayingChange]);
 
@@ -3617,10 +3659,10 @@ export const Viewer3D = ({
       setIsPlaying(true);
       onPlayingChange?.(true);
       // Clear pause flag when starting to play
-      delete (window as any).__viewer3dIsPaused;
+      delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
       // Clear manual joint changes flag when starting to play - allow animation to take control
       // Note: hasManualJointChangesRef is in URDFModel, so we use window property
-      delete (window as any).__viewer3dHasManualJointChanges;
+      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
     }, 10);
   }, [onPlayingChange]);
 
@@ -3635,13 +3677,13 @@ export const Viewer3D = ({
       const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
       
       // Get current frame index from the ref (set by animation loop)
-      const currentFrameIdx = (window as any).__viewer3dCurrentFrameIndex ?? 0;
+      const currentFrameIdx = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex ?? 0;
       
       // Calculate normalized time for current frame
       const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
       
       // Store it immediately so the animation loop can use it right away
-      (window as any).__viewer3dPreserveFrameTime = normalizedTime;
+      (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime = normalizedTime;
       
       // Also immediately update the frame callback to prevent UI from showing wrong frame
       if (onFrameChange && currentFrameIdx >= 0) {
@@ -3652,7 +3694,7 @@ export const Viewer3D = ({
     setIsPlaying(false);
     onPlayingChange?.(false);
     // Set pause flag to prevent interpolation when stopped
-    (window as any).__viewer3dIsPaused = true;
+    (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
   }, [onPlayingChange, animationFrames, onFrameChange]);
 
   // Handler to clear animation frames and release robot for manual control
@@ -3661,10 +3703,10 @@ export const Viewer3D = ({
     onPlayingChange?.(false);
     setAnimationFrames(null);
     // Clear all animation-related flags
-    (window as any).__viewer3dIsPaused = true;
-    delete (window as any).__viewer3dPreserveFrameTime;
-    delete (window as any).__viewer3dManualFrameTime;
-    delete (window as any).__viewer3dCurrentFrameIndex;
+    (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
+    delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
+    delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
+    delete (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
   }, [onPlayingChange]);
 
   // Handler to set a specific frame index (Blender-style frame navigation)
@@ -3678,7 +3720,7 @@ export const Viewer3D = ({
     onPlayingChange?.(false);
     
     // Set pause flag to prevent interpolation when frame is manually set
-    (window as any).__viewer3dIsPaused = true;
+    (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
     
     // Clamp frame index to valid range
     const clampedIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));
@@ -3686,10 +3728,10 @@ export const Viewer3D = ({
     
     // Set manual frame time to jump to this frame
     if (targetFrame) {
-      (window as any).__viewer3dManualFrameTime = targetFrame.timestamp;
+      (window as WindowWithViewerHandlers).__viewer3dManualFrameTime = targetFrame.timestamp;
       
       // Immediately update frame index to prevent it from going to frame 1
-      (window as any).__viewer3dCurrentFrameIndex = clampedIndex;
+      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedIndex;
       
       // Update frame change callback immediately
       if (onFrameChange) {
@@ -3700,24 +3742,24 @@ export const Viewer3D = ({
 
   // Expose handlers for external use (e.g., from Sidebar)
   useEffect(() => {
-    (window as any).viewer3dPlayAnimation = handleRun;
-    (window as any).viewer3dUploadMotionData = handleMotionDataUpload;
-    (window as any).viewer3dPlayEpisode = handlePlayEpisode;
-    (window as any).viewer3dStopAnimation = handleStopAnimation;
-    (window as any).viewer3dClearAnimation = handleClearAnimation;
-    (window as any).viewer3dSetFrame = handleSetFrame;
-    (window as any).viewer3dSetPlaybackSpeed = setPlaybackSpeed;
-    (window as any).viewer3dGetPlaybackSpeed = () => playbackSpeed;
+    (window as WindowWithViewerHandlers).viewer3dPlayAnimation = handleRun;
+    (window as WindowWithViewerHandlers).viewer3dUploadMotionData = handleMotionDataUpload;
+    (window as WindowWithViewerHandlers).viewer3dPlayEpisode = handlePlayEpisode;
+    (window as WindowWithViewerHandlers).viewer3dStopAnimation = handleStopAnimation;
+    (window as WindowWithViewerHandlers).viewer3dClearAnimation = handleClearAnimation;
+    (window as WindowWithViewerHandlers).viewer3dSetFrame = handleSetFrame;
+    (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed = setPlaybackSpeed;
+    (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed = () => playbackSpeed;
     return () => {
-      delete (window as any).viewer3dPlayAnimation;
-      delete (window as any).viewer3dUploadMotionData;
-      delete (window as any).viewer3dPlayEpisode;
-      delete (window as any).viewer3dStopAnimation;
-      delete (window as any).viewer3dClearAnimation;
-      delete (window as any).viewer3dSetFrame;
-      delete (window as any).viewer3dSetPlaybackSpeed;
-      delete (window as any).viewer3dGetPlaybackSpeed;
-      delete (window as any).__viewer3dManualFrameTime;
+      delete (window as WindowWithViewerHandlers).viewer3dPlayAnimation;
+      delete (window as WindowWithViewerHandlers).viewer3dUploadMotionData;
+      delete (window as WindowWithViewerHandlers).viewer3dPlayEpisode;
+      delete (window as WindowWithViewerHandlers).viewer3dStopAnimation;
+      delete (window as WindowWithViewerHandlers).viewer3dClearAnimation;
+      delete (window as WindowWithViewerHandlers).viewer3dSetFrame;
+      delete (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed;
+      delete (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed;
+      delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
     };
   }, [handleRun, handleMotionDataUpload, handlePlayEpisode, handleStopAnimation, handleClearAnimation, handleSetFrame, playbackSpeed]);
 
@@ -3734,20 +3776,6 @@ export const Viewer3D = ({
       document.removeEventListener('click', handleClickOutside);
     };
   }, [isDragModeMenuOpen]);
-
-  // Helper function to get drag mode display name
-  const getDragModeDisplayName = (mode: typeof dragMode) => {
-    switch (mode) {
-      case 'move-joints':
-        return 'Move Joints';
-      case 'click-to-place':
-        return 'Click-to-place';
-      case 'drag-handle':
-        return 'Drag Handle';
-      default:
-        return 'Move Joints';
-    }
-  };
 
   // Log drag mode changes (for debugging - modes don't have functionality yet)
   useEffect(() => {
@@ -3777,7 +3805,7 @@ export const Viewer3D = ({
     
     const controls = controlsRef.current;
     const camera = cameraRef.current;
-    const robotAny: any = robot;
+    const robotAny = robot;
     const scene = sceneRef.current;
     
     // Try to find robot in scene and get bounding box
@@ -3858,7 +3886,7 @@ export const Viewer3D = ({
 
     const controls = controlsRef.current;
     const viewCamera = cameraRef.current;
-    const robotAny: any = robot;
+    const robotAny = robot;
 
     // Get parent link
     const parentLink = robotAny.links?.[camera.parent_link];
@@ -3927,7 +3955,7 @@ export const Viewer3D = ({
     
     const controls = controlsRef.current;
     const camera = cameraRef.current;
-    const robotAny: any = robot;
+    const robotAny = robot;
     const scene = sceneRef.current;
     
     // Try to find robot in scene and get bounding box
@@ -4228,7 +4256,7 @@ export const Viewer3D = ({
             cameraRef.current = camera as THREE.PerspectiveCamera;
             sceneRef.current = scene;
             // Expose camera to window for object dragging
-            (window as any).__viewer3dCamera = camera;
+            (window as WindowWithViewerHandlers).__viewer3dCamera = camera;
             // Configure shadows based on GPU mode
             gl.shadowMap.enabled = gpuMode === "high";
             if (gpuMode === "high") {

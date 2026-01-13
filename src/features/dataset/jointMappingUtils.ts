@@ -2,6 +2,8 @@ import type { JointMapping, SavedMapping } from "@/features/types";
 
 const STORAGE_KEY = "urdf-studio-joint-mappings";
 
+type EpisodeMetadata = Record<string, unknown>;
+
 /**
  * Compute global min/max joint ranges across all episodes
  */
@@ -126,7 +128,7 @@ export const applyMapping = (jointPositions: Record<string, number>, mappings: J
 /**
  * Apply mapping to all episodes
  */
-export const applyMappingToEpisodes = <T extends { frames: Array<{ jointPositions: Record<string, number> }> }>(
+export const applyMappingToEpisodes = <T extends { frames: Array<{ jointPositions: Record<string, number> }>; metadata?: EpisodeMetadata }>(
   episodes: T[],
   mappings: JointMapping[],
   degToRad: boolean,
@@ -139,7 +141,7 @@ export const applyMappingToEpisodes = <T extends { frames: Array<{ jointPosition
       jointPositions: applyMapping(frame.jointPositions, mappings, degToRad),
     })),
     metadata: {
-      ...(episode as any).metadata,
+      ...(episode.metadata ?? {}),
       jointMapping: {
         source,
         appliedAt: Date.now(),
@@ -156,15 +158,17 @@ export const applyMappingToEpisodes = <T extends { frames: Array<{ jointPosition
 /**
  * Extract dataset source from episode metadata
  */
-export const extractDatasetSource = (episode: { metadata?: any }): string | undefined => {
+export const extractDatasetSource = (episode: { metadata?: EpisodeMetadata }): string | undefined => {
   if (!episode.metadata) return undefined;
+
+  const pickString = (value: unknown) => (typeof value === "string" && value.length > 0 ? value : undefined);
 
   // Try various metadata fields that might contain the source
   return (
-    episode.metadata.source ||
-    episode.metadata.dataset_name ||
-    episode.metadata.repo_id ||
-    episode.metadata.datasetSource ||
+    pickString(episode.metadata.source) ||
+    pickString(episode.metadata.dataset_name) ||
+    pickString(episode.metadata.repo_id) ||
+    pickString(episode.metadata.datasetSource) ||
     undefined
   );
 };

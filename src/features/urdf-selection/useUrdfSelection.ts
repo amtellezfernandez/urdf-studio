@@ -105,6 +105,7 @@ export const useUrdfSelection = () => {
       hoveredLink,
       endEffectorLink,
       deletedJoints,
+      toggleDeletedJoint,
       clearSelection,
       jointValues,
       setJointValue,

@@ -37,6 +37,31 @@ interface JointMappingDialogProps {
   datasetPath?: string; // Dataset path for loading meta/info.json
 }
 
+interface DatasetFeature {
+  dtype?: string;
+  shape?: number[];
+  names?: string[];
+  description?: string;
+  fps?: number;
+  info?: Record<string, unknown>;
+}
+
+interface DatasetMetadata {
+  codebase_version?: string;
+  robot_type?: string;
+  fps?: number;
+  chunks_size?: number;
+  total_episodes?: number;
+  total_frames?: number;
+  total_tasks?: number;
+  data_files_size_in_mb?: number;
+  video_files_size_in_mb?: number;
+  splits?: Record<string, number | string>;
+  data_path?: string;
+  video_path?: string;
+  features?: Record<string, DatasetFeature>;
+}
+
 export const JointMappingDialog = ({
   isOpen,
   onClose,
@@ -68,7 +93,7 @@ export const JointMappingDialog = ({
   const [offsetInputValues, setOffsetInputValues] = useState<Record<string, string>>({}); // Raw input values for free editing
   const [jointInversions, setJointInversions] = useState<Record<string, boolean>>({}); // Track which joints are inverted
   const [activeTab, setActiveTab] = useState<"mapping" | "metadata">("mapping");
-  const [metadata, setMetadata] = useState<any>(null);
+  const [metadata, setMetadata] = useState<DatasetMetadata | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   
@@ -104,7 +129,7 @@ export const JointMappingDialog = ({
             throw new Error(`Failed to load metadata: ${response.statusText}`);
           }
           
-          const data = await response.json();
+          const data = (await response.json()) as DatasetMetadata;
           setMetadata(data);
         } catch (error) {
           console.error("Failed to load metadata:", error);
@@ -412,7 +437,7 @@ export const JointMappingDialog = ({
     }
 
     return errors;
-  }, [mappings, urdfJoints, hasTooManyJoints, datasetJoints.length, urdfJoints.length]);
+  }, [mappings, urdfJoints]);
 
   useEffect(() => {
     setErrors(validationErrors);
@@ -1065,7 +1090,7 @@ export const JointMappingDialog = ({
                     <div className="space-y-1">
                       <h3 className="text-[10px] font-semibold text-[#d4d4d4] border-b border-[#3d3d3d] pb-0.5">Features</h3>
                       <div className="space-y-1.5">
-                        {Object.entries(metadata.features).map(([key, feature]: [string, any]) => (
+                        {Object.entries(metadata.features).map(([key, feature]) => (
                           <div key={key} className="bg-[#1e1e1e] border border-[#3d3d3d] rounded p-1.5">
                             <div className="text-[9px] font-semibold text-[#d4d4d4] mb-1">{key}</div>
                             <div className="space-y-0.5 text-[8px] text-[#9d9d9d]">

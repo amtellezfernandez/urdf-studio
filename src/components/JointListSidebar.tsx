@@ -11,6 +11,7 @@ import { useObjectStore } from "@/features/object-creator";
 import { useCameraStore } from "@/store/useCameraStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/features/urdf";
 import { parseLinkData, type LinkData } from "@/features/urdf";
+import type { URDFRobotLike } from "@/features/types";
 import { LinkControl } from "@/components/LinkEditor";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { CameraList } from "@/components/CameraList";
@@ -42,7 +43,7 @@ interface HierarchyTreeViewProps {
   visibleJoints: Set<string>;
   onVisibilityToggle: (jointName: string) => void;
   endEffectorLink?: string | null;
-  robot?: any; // Three.js robot object for getting link coordinates
+  robot?: URDFRobotLike | null; // Three.js robot object for getting link coordinates
 }
 
 const HierarchyTreeView = ({
@@ -358,7 +359,7 @@ const POINT_SIZE = 0.02;
 interface ObjectEditorPanelProps {
   objectId: string;
   availableLinks: string[];
-  robot?: any;
+  robot?: URDFRobotLike | null;
   endEffectorLink?: string | null;
 }
 
@@ -860,7 +861,7 @@ interface ElementsViewProps {
   urdfContent?: string;
   availableJoints: string[];
   availableLinks?: string[];
-  robot?: any;
+  robot?: URDFRobotLike | null;
   onCameraSelect?: (cameraId: string) => void;
   onJointSelect?: (jointName: string | null) => void;
   setSelectedLink?: (linkName: string | null) => void;
@@ -1006,7 +1007,7 @@ interface JointListSidebarProps {
   onUrdfChange?: (newContent: string) => void;
   collisionVisibility?: CollisionVisibility;
   onCollisionVisibilityChange?: (visibility: CollisionVisibility) => void;
-  robot?: any;
+  robot?: URDFRobotLike | null;
   episodeJointNames?: string[];
   endEffectorLink?: string | null;
   onMarkAsEndEffector?: (linkName: string | null) => void;
@@ -1090,9 +1091,9 @@ export const JointListSidebar = ({
       });
     };
 
-    window.addEventListener('episodeViewer:jointVisibilityChange' as any, handleVisibilityChange);
+    window.addEventListener('episodeViewer:jointVisibilityChange', handleVisibilityChange);
     return () => {
-      window.removeEventListener('episodeViewer:jointVisibilityChange' as any, handleVisibilityChange);
+      window.removeEventListener('episodeViewer:jointVisibilityChange', handleVisibilityChange);
     };
   }, []);
 
@@ -1691,4 +1692,3 @@ export const JointListSidebar = ({
     </div>
   );
 };
-

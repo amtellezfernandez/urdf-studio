@@ -209,7 +209,7 @@ export const FolderUploadScreen = memo(({ onFolderSelected }: FolderUploadScreen
     } finally {
       setIsLoadingGithub(false);
     }
-  }, [githubUrl, githubToken, onFolderSelected]);
+  }, [githubUrl, githubToken, onFolderSelected, addRecentRepo]);
 
   const handleUrdfSelect = useCallback(
     async (candidate: URDFCandidate): Promise<void> => {

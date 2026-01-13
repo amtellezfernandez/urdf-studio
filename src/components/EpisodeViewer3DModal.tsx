@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import type { WindowWithViewerHandlers } from "@/features/types";
 
 // Constants
 const CANVAS_PADDING = 40;
@@ -60,7 +61,7 @@ interface Episode {
   number: number;
   frames: RecordedFrame[];
   createdAt: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 interface EpisodeViewer3DModalProps {
@@ -118,8 +119,8 @@ const calculateFrameFromMouse = (
 // because the parent's onSetGlobalFrame will call stopAllPlayback() which clears frames,
 // and calling viewer3dPlayAnimation with cleared frames would trigger "upload data first" error
 const updateViewerFrame = (frame: number) => {
-  (window as any).viewer3dSetFrame?.(frame);
-  (window as any).viewer3dStopAnimation?.();
+  (window as WindowWithViewerHandlers).viewer3dSetFrame?.(frame);
+  (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
 };
 
 // Simple moving-average smoother for joint trajectories
@@ -446,9 +447,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     };
 
-    window.addEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
+    window.addEventListener('viewer3d:frameUpdate', handleFrameUpdate);
     return () => {
-      window.removeEventListener('viewer3d:frameUpdate' as any, handleFrameUpdate);
+      window.removeEventListener('viewer3d:frameUpdate', handleFrameUpdate);
     };
   }, [open, currentEpisodeIndex, isPlayingAll]);
 
@@ -522,7 +523,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setNewEpisodeName("");
     setShowExitConfirmDialog(false);
     setLastSaveChoice(null);
-  }, [episode?.id]);
+  }, [episode]);
 
   // Listen for joint visibility toggles from joint list sidebar
   useEffect(() => {
@@ -545,9 +546,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       });
     };
 
-    window.addEventListener('jointVisibilityToggle' as any, handleJointVisibilityToggle);
+    window.addEventListener('jointVisibilityToggle', handleJointVisibilityToggle);
     return () => {
-      window.removeEventListener('jointVisibilityToggle' as any, handleJointVisibilityToggle);
+      window.removeEventListener('jointVisibilityToggle', handleJointVisibilityToggle);
     };
   }, []);
 
@@ -890,7 +891,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       left: { x: leftHandleX, y: leftHandleY, value: leftHandleValue, length: leftLength },
       right: { x: rightHandleX, y: rightHandleY, value: rightHandleValue, length: rightLength }
     };
-  }, [isEditMode, editingJoint, modifiedEpisode]);
+  }, [editingJoint, modifiedEpisode]);
 
   // Handle curve editing - click to select point (Photoshop-style: dragging creates handles)
   const handleCurveClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1225,7 +1226,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     
     const totalFrames = episode.frames.length;
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
-    const effectiveSpeed = (window as any).viewer3dGetPlaybackSpeed?.() ?? 1.0;
+    const effectiveSpeed = (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed?.() ?? 1.0;
     const frameDuration = totalFrames > 1 
       ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
       : 0;
@@ -1453,7 +1454,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {

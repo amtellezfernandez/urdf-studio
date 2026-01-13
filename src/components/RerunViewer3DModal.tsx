@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2, Play, Eye, Monitor, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import type { EpisodeMetadata } from "@/features/dataset";
 
 // Constants
 const RERUN_SERVER_URL = "http://127.0.0.1:9090";
@@ -24,7 +25,15 @@ interface Episode {
     jointPositions: Record<string, number>;
   }>;
   createdAt: number;
-  metadata?: any;
+  metadata?: EpisodeMetadata;
+}
+
+interface RerunStartResponse {
+  success?: boolean;
+  stderr?: string;
+  pid?: number;
+  message?: string;
+  error?: string;
 }
 
 interface RerunViewer3DModalProps {
@@ -41,7 +50,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
   urdfContent,
 }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const pythonProcessRef = useRef<any>(null);
+  const pythonProcessRef = useRef<RerunStartResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isServerRunning, setIsServerRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -211,9 +220,9 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
           toast.success("Rerun desktop viewer should open shortly. If it doesn't appear, check that the Rerun viewer application is installed.");
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error starting Rerun visualization:", err);
-      const errorMessage = err.message || "An error occurred while starting Rerun";
+      const errorMessage = err instanceof Error ? err.message : "An error occurred while starting Rerun";
       setError(errorMessage);
       setIsLoading(false);
       toast.error(errorMessage);

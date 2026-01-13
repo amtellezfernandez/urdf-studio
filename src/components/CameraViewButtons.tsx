@@ -3,9 +3,11 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useCameraStore } from "@/store/useCameraStore";
+import type { URDFRobotLike } from "@/features/types";
+import type { Camera } from "@/types/camera";
 
 interface CameraViewButtonsProps {
-  robot: any;
+  robot: URDFRobotLike | null;
   onCameraViewChange?: (cameraId: string) => void;
 }
 
@@ -107,7 +109,7 @@ const CameraButton = ({
   hoverMaterial, 
   onCameraViewChange 
 }: {
-  camera: any;
+  camera: Camera;
   yOffset: number;
   buttonRadius: number;
   material: THREE.Material;

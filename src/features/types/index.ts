@@ -7,10 +7,44 @@ export type RotationAxis = "x" | "y" | "z";
 export type UrdfViewMode = "original" | "modified" | "split";
 export type AngleUnit = "rad" | "deg";
 
+import type * as THREE from "three";
+
+type DirectoryPickerOptions = FileSystemGetDirectoryOptions & {
+  mode?: "read" | "readwrite";
+};
+
 export interface WindowWithViewerHandlers extends Window {
   viewer3dUploadMotionData?: (file: File) => void;
-  viewer3dPlayAnimation?: () => void;
+  viewer3dPlayAnimation?: (forceState?: boolean) => void;
   viewer3dSetFrame?: (frame: number) => void;
+  viewer3dStopAnimation?: () => void;
+  viewer3dClearAnimation?: () => void;
+  viewer3dPlayEpisode?: (frames: Array<{ timestamp: number; joints: Record<string, number> }>) => void;
+  viewer3dSetPlaybackSpeed?: (speed: number) => void;
+  viewer3dGetPlaybackSpeed?: () => number;
+  showDirectoryPicker?: (options?: DirectoryPickerOptions) => Promise<FileSystemDirectoryHandle>;
+  __viewer3dManualFrameTime?: number;
+  __viewer3dCurrentFrameIndex?: number;
+  __viewer3dPreserveFrameTime?: number;
+  __viewer3dResetAnimationStartTime?: boolean;
+  __viewer3dIsPaused?: boolean;
+  __viewer3dHasManualJointChanges?: boolean;
+  __viewer3dSkipFrameUpdate?: boolean;
+  __viewer3dCamera?: THREE.Camera;
+}
+
+export interface URDFJointLike extends THREE.Object3D {
+  angle?: number;
+  jointValue?: number | number[];
+  setJointValue?: (value: number) => void;
+}
+
+export interface URDFRobotLike extends THREE.Object3D {
+  links?: Record<string, THREE.Object3D>;
+  joints?: Record<string, URDFJointLike>;
+  getJointValue?: (jointName: string) => number | undefined;
+  setJointValue?: (jointName: string, value: number) => void;
+  setJointValues?: (values: Record<string, number>) => void;
 }
 
 export interface DebugMeshInfo {
@@ -26,7 +60,7 @@ export type ViewerEpisode = {
   number: number;
   frames: Array<{ timestamp: number; jointPositions: Record<string, number> }>;
   createdAt: number;
-  metadata?: unknown;
+  metadata?: Record<string, unknown>;
 };
 
 export type EpisodeSaveHandler = (

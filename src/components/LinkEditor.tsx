@@ -22,7 +22,10 @@ import {
   removeInertialFromLink,
   removeVisualFromLink,
   type CylinderDiagnostics,
+  type CollisionData,
+  type InertialData,
   type LinkData,
+  type VisualData,
   type SphereDiagnostics,
   updateCollisionInLink,
   updateInertialInLink,
@@ -636,7 +639,7 @@ export const LinkControl = ({
 // Visual Control Component
 interface VisualControlProps {
   linkName: string;
-  visual: any;
+  visual: VisualData;
   index: number;
   linkData: LinkData;
   urdfContent?: string;
@@ -799,7 +802,7 @@ const VisualControl = ({ linkName, visual, index, linkData, urdfContent, onMater
 // Collision Control Component
 interface CollisionControlProps {
   linkName: string;
-  collision: any;
+  collision: CollisionData;
   index: number;
   urdfContent?: string;
   onUrdfChange?: (newContent: string) => void;
@@ -861,7 +864,7 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
         setSelectedVisualMeshIndex(matchingIndex);
       }
     }
-  }, [collisionKey, visualMeshInfo]);
+  }, [collisionKey, visualMeshInfo, collision.geometry.type, collision.geometry.params, collision.origin]);
 
   const updateURDF = () => {
     if (!urdfContent || !onUrdfChange) return;
@@ -1694,7 +1697,7 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
 // Inertial Control Component
 interface InertialControlProps {
   linkName: string;
-  inertial: any;
+  inertial: InertialData;
   urdfContent?: string;
   onUrdfChange?: (newContent: string) => void;
 }

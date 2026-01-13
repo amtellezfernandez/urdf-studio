@@ -26,6 +26,7 @@ import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks, type JointAxisInfo, type JointLimitInfo } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/lib/angleConversions";
+import type { URDFRobotLike } from "@/features/types";
 
 interface JointControlProps {
   jointName: string;
@@ -47,7 +48,7 @@ interface JointControlProps {
   onNameChange?: (oldName: string, newName: string) => void;
   alwaysExpanded?: boolean;
   hideValueDisplay?: boolean;
-  robot?: any; // Three.js robot object for getting link coordinates
+  robot?: URDFRobotLike | null; // Three.js robot object for getting link coordinates
 }
 
 
@@ -238,7 +239,7 @@ export const JointControl = ({
   }, [jointAxis?.xyz]);
   
   // Find matching preset for current axis
-  const getAxisPreset = (): string => {
+  const getAxisPreset = useCallback((): string => {
     if (!jointAxis?.xyz) return "Custom";
     const [x, y, z] = jointAxis.xyz;
     const tolerance = 0.001;
@@ -252,13 +253,13 @@ export const JointControl = ({
       }
     }
     return "Custom";
-  };
+  }, [jointAxis?.xyz]);
 
   const [selectedPreset, setSelectedPreset] = useState<string>(getAxisPreset());
 
   useEffect(() => {
     setSelectedPreset(getAxisPreset());
-  }, [jointAxis?.xyz]);
+  }, [getAxisPreset]);
 
   const handleAxisPresetChange = (preset: string) => {
     setSelectedPreset(preset);

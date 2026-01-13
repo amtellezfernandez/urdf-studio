@@ -1,7 +1,7 @@
 import { Handle, Position } from "reactflow";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useJointStore, type JointParameter } from "@/store/useJointStore";
 import { X } from "lucide-react";
 
@@ -42,7 +42,10 @@ export const NodeCard = ({ id, data }: NodeCardProps) => {
 
   // Get state from store
   const nodeState = getNodeState(id);
-  const localJoints = nodeState?.joints || data.joints || [];
+  const localJoints = useMemo(
+    () => nodeState?.joints || data.joints || [],
+    [nodeState?.joints, data.joints]
+  );
 
   // Sync external joint values into store (only when focused for live URDF updates)
   useEffect(() => {

@@ -2,9 +2,10 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import * as THREE from "three";
 import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import { toast } from "sonner";
+import type { URDFRobotLike } from "@/features/types";
 
 interface IKDragControlsProps {
-  robot: any; // URDFRobot
+  robot: URDFRobotLike | null; // URDFRobot
   endEffectorLink: string;
   urdfContent: string;
   currentJointValues: Record<string, number>;
@@ -50,7 +51,7 @@ export const IKDragControls = ({
       hasUrdf: !!urdfContent,
       jointCount: Object.keys(currentJointValues).length,
     });
-  }, []);
+  }, [enabled, endEffectorLink, robot, urdfContent, currentJointValues]);
 
   // Find the end effector link in the robot
   const endEffectorObject = useRef<THREE.Object3D | null>(null);
@@ -66,7 +67,7 @@ export const IKDragControls = ({
       return;
     }
 
-    const robotAny: any = robot;
+    const robotAny = robot;
     const safeDecode = (value: string) => {
       try {
         return decodeURIComponent(value);
@@ -177,8 +178,10 @@ export const IKDragControls = ({
           console.warn("[IK] Drag handle solve failed:", lastError);
           toast.error(lastError);
         }
-      } catch (error: any) {
-        if (error.name !== "AbortError") {
+      } catch (error: unknown) {
+        const isAbort =
+          error instanceof DOMException && error.name === "AbortError";
+        if (!isAbort) {
           console.error("[IK] Solve error:", error);
           toast.error("IK solve failed. Is the IK server running?");
         }
@@ -195,7 +198,12 @@ export const IKDragControls = ({
       }
 
       event.stopPropagation();
-      (event.target as any).setPointerCapture(event.pointerId);
+      const target = event.target;
+      if (target instanceof Element && "setPointerCapture" in target) {
+        (target as Element & { setPointerCapture: (id: number) => void }).setPointerCapture(
+          event.pointerId
+        );
+      }
 
       setIsDragging(true);
       onDragStateChange?.(true);
@@ -258,7 +266,12 @@ export const IKDragControls = ({
       if (!isDragging) return;
 
       event.stopPropagation();
-      (event.target as any).releasePointerCapture(event.pointerId);
+      const target = event.target;
+      if (target instanceof Element && "releasePointerCapture" in target) {
+        (target as Element & { releasePointerCapture: (id: number) => void }).releasePointerCapture(
+          event.pointerId
+        );
+      }
 
       setIsDragging(false);
       onDragStateChange?.(false);

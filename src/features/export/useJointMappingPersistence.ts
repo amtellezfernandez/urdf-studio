@@ -15,7 +15,10 @@ export const useJointMappingPersistence = () => {
   const [mappingDialogData, setMappingDialogData] = useState<MappingDialogData | null>(null);
   const [mappingListVersion, setMappingListVersion] = useState(0);
 
-  const savedMappings = useMemo(() => getSavedMappings(), [mappingListVersion]);
+  const savedMappings = useMemo(() => {
+    void mappingListVersion; // Trigger refresh when the list changes.
+    return getSavedMappings();
+  }, [mappingListVersion]);
 
   const openMappingList = useCallback(() => {
     setMappingListVersion((prev) => prev + 1);

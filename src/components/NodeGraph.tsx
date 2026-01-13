@@ -7,6 +7,7 @@ import ReactFlow, {
   type Connection,
   type Edge,
   type Node,
+  type NodeProps,
   EdgeProps,
   getBezierPath,
   EdgeLabelRenderer,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Square, X, Download } from "lucide-react";
 import { useJointStore, type JointParameter } from "@/store/useJointStore";
 import { toast } from "sonner";
+import type { WindowWithViewerHandlers } from "@/features/types";
 
 interface RecordedFrame {
   timestamp: number;
@@ -24,7 +26,7 @@ interface RecordedFrame {
 }
 
 const nodeTypes = {
-  customNode: (props: any) => <NodeCard {...props} id={props.id} />,
+  customNode: (props: NodeProps<NodeData>) => <NodeCard {...props} id={props.id} />,
 };
 
 // Custom edge component with delete button
@@ -93,7 +95,7 @@ interface NodeGraphProps {
   jointValues?: Record<string, number>;
   onSelectJoint?: (jointName: string | null) => void;
   availableJoints?: string[];
-  initialMotionNodes?: Node[];
+  initialMotionNodes?: Node<NodeData>[];
   initialMotionEdges?: Edge[];
 }
 
@@ -102,7 +104,7 @@ const initialNodes: Node<NodeData>[] = [];
 const initialEdges: Edge[] = [];
 
 export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJoint, availableJoints, initialMotionNodes = [], initialMotionEdges = [] }: NodeGraphProps = {}) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
@@ -184,9 +186,9 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
 
     nodes.forEach((node) => {
       const existingState = getNodeState(node.id);
-      if (!existingState && (node.data as any)?.type === 'joint') {
+      if (!existingState && node.data?.type === 'joint') {
         // Use existing joints from node data if available, otherwise seed from store
-        const existingJoints = (node.data as any)?.joints;
+        const existingJoints = node.data?.joints;
         const joints = existingJoints && existingJoints.length > 0
           ? existingJoints
           : availableJointsStore.map((name) => ({
@@ -268,7 +270,7 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
     const timestamp = Date.now();
     const seededJoints: JointParameter[] = (availableJointsStore || []).map((name) => ({
       name,
-      value: typeof storeJointValues[name] === 'number' ? (storeJointValues as any)[name] : 0,
+      value: typeof storeJointValues[name] === 'number' ? storeJointValues[name] : 0,
     }));
 
     // Use provided position or fallback to mouse position or default
@@ -290,10 +292,10 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
   // Recording functions
   const startRecording = useCallback(() => {
     // Stop all replay/playback
-    (window as any).viewer3dStopAnimation?.();
+    (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
     
     // Reset frame counters to beginning
-    (window as any).viewer3dSetFrame?.(0);
+    (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
     
     // Start recording
     setIsRecording(true);
@@ -432,10 +434,10 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
         onNodeClick={(_, node) => {
           const prevFocused = focusedNodeId;
           setFocusedNodeId(node.id);
-          if ((node.data as any)?.type === 'joint') {
+          if (node.data?.type === 'joint') {
             // Get the latest joints from store
             const nodeState = getNodeState(node.id);
-            const joints = nodeState?.joints || (node.data as any)?.joints as JointParameter[] | undefined;
+            const joints = nodeState?.joints || node.data?.joints;
             if (joints && joints.length > 0) {
               // Only apply pose if switching from a different node
               if (prevFocused !== node.id) {

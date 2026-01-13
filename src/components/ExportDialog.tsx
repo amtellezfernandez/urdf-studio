@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel"
 import { cn } from "@/lib/utils";
 import { useCameraStore } from "@/store/useCameraStore";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/features/camera";
+import type { WindowWithViewerHandlers } from "@/features/types";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -162,41 +163,14 @@ export const ExportDialog = ({
     }
   }, [hasCameras]);
 
-  // Fetch GitHub repositories when dialog opens and token is available
-  useEffect(() => {
-    if (isOpen && githubToken) {
-      fetchGitHubRepos();
-    }
-  }, [isOpen, githubToken]);
-
-  // Fetch GitHub folders when repository is selected
-  useEffect(() => {
-    if (selectedGitHubRepo && githubToken) {
-      fetchGitHubFolders();
-      // Reset folder selection when repo changes
-      setSelectedGitHubFolder("");
-      setUseNewGitHubFolder(true);
-      setNewGitHubFolderName("");
-    } else {
-      setGithubFolders([]);
-      setSelectedGitHubFolder("");
-      setUseNewGitHubFolder(true);
-      setNewGitHubFolderName("");
-    }
-  }, [selectedGitHubRepo, githubToken]);
-
-  // Update subfolder name when robot name changes
-  useEffect(() => {
-    if (isOpen && !subfolderName) {
-      setSubfolderName(currentBaseName);
-    }
-  }, [isOpen, currentBaseName]);
-
-  const fetchGitHubRepos = async () => {
+  const fetchGitHubRepos = useCallback(async () => {
     if (!githubToken) return;
     
     setIsLoadingRepos(true);
     try {
+      type GitHubRepoResponse = { name: string; full_name: string; owner: { login: string } };
+      type GitHubOrgResponse = { login: string };
+
       // Fetch user repos
       const userReposResponse = await fetch("https://api.github.com/user/repos?per_page=100&affiliation=owner", {
         headers: {
@@ -209,7 +183,7 @@ export const ExportDialog = ({
         throw new Error("Failed to fetch user repositories");
       }
 
-      const userRepos: any[] = await userReposResponse.json();
+      const userRepos = (await userReposResponse.json()) as GitHubRepoResponse[];
       
       // Fetch organizations
       const orgsResponse = await fetch("https://api.github.com/user/orgs", {
@@ -219,7 +193,7 @@ export const ExportDialog = ({
         },
       });
 
-      const orgs: any[] = orgsResponse.ok ? await orgsResponse.json() : [];
+      const orgs = orgsResponse.ok ? ((await orgsResponse.json()) as GitHubOrgResponse[]) : [];
       
       // Fetch repos for each organization
       const orgReposPromises = orgs.map(async (org) => {
@@ -230,7 +204,7 @@ export const ExportDialog = ({
           },
         });
         if (response.ok) {
-          const repos: any[] = await response.json();
+          const repos = (await response.json()) as GitHubRepoResponse[];
           return repos.map((repo) => ({
             owner: org.login,
             name: repo.name,
@@ -262,9 +236,9 @@ export const ExportDialog = ({
     } finally {
       setIsLoadingRepos(false);
     }
-  };
+  }, [githubToken]);
 
-  const fetchGitHubFolders = async () => {
+  const fetchGitHubFolders = useCallback(async () => {
     if (!selectedGitHubRepo || !githubToken) {
       setGithubFolders([]);
       return;
@@ -305,7 +279,37 @@ export const ExportDialog = ({
     } finally {
       setIsLoadingFolders(false);
     }
-  };
+  }, [selectedGitHubRepo, githubToken]);
+
+  // Fetch GitHub repositories when dialog opens and token is available
+  useEffect(() => {
+    if (isOpen && githubToken) {
+      fetchGitHubRepos();
+    }
+  }, [isOpen, githubToken, fetchGitHubRepos]);
+
+  // Fetch GitHub folders when repository is selected
+  useEffect(() => {
+    if (selectedGitHubRepo && githubToken) {
+      fetchGitHubFolders();
+      // Reset folder selection when repo changes
+      setSelectedGitHubFolder("");
+      setUseNewGitHubFolder(true);
+      setNewGitHubFolderName("");
+    } else {
+      setGithubFolders([]);
+      setSelectedGitHubFolder("");
+      setUseNewGitHubFolder(true);
+      setNewGitHubFolderName("");
+    }
+  }, [selectedGitHubRepo, githubToken, fetchGitHubFolders]);
+
+  // Update subfolder name when robot name changes
+  useEffect(() => {
+    if (isOpen && !subfolderName) {
+      setSubfolderName(currentBaseName);
+    }
+  }, [isOpen, currentBaseName, subfolderName]);
 
   const handleSelectFolder = async () => {
     try {
@@ -315,13 +319,15 @@ export const ExportDialog = ({
         return;
       }
 
-      const directoryHandle = await (window as any).showDirectoryPicker({
+      const directoryHandle = await (window as WindowWithViewerHandlers).showDirectoryPicker({
         mode: "readwrite",
       });
       setSelectedFolder(directoryHandle);
       toast.success("Folder selected");
-    } catch (error: any) {
-      if (error.name !== "AbortError") {
+    } catch (error: unknown) {
+      const isAbort =
+        error instanceof DOMException && error.name === "AbortError";
+      if (!isAbort) {
         console.error("Error selecting folder:", error);
         toast.error("Failed to select folder");
       }
@@ -470,7 +476,7 @@ export const ExportDialog = ({
     }
 
     return structure;
-  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedFolder, useSubfolder, subfolderName, hasCameras, cameraFilenameBase]);
+  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedFolder, useSubfolder, subfolderName, hasCameras, cameraFilenameBase, originalUrdfContent]);
 
   // Generate GitHub folder structure preview
   const githubPreview = useMemo(() => {
@@ -534,7 +540,7 @@ export const ExportDialog = ({
     }
 
     return structure;
-  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedGitHubRepo, useNewGitHubFolder, newGitHubFolderName, selectedGitHubFolder, hasCameras, cameraFilenameBase]);
+  }, [exportCurrent, exportOriginal, formatSelections, currentBaseName, originalBaseName, getReferencedMeshes, selectedGitHubRepo, useNewGitHubFolder, newGitHubFolderName, selectedGitHubFolder, hasCameras, cameraFilenameBase, originalUrdfContent]);
 
   const downloadFile = async (
     content: string | Blob,

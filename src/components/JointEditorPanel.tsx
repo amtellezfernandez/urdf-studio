@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import * as THREE from "three";
 import { CustomSlider } from "@/components/ui/custom-slider";
 import { NumberInput } from "@/components/ui/number-input";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { useJointStore } from "@/store/useJointStore";
 import { getJointLinks } from "@/features/urdf";
 import { JOINT_TYPES, AXIS_PRESETS } from "@/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/lib/angleConversions";
+import type { URDFRobotLike } from "@/features/types";
 
 interface JointEditorPanelProps {
   jointName: string | null;
@@ -43,7 +45,7 @@ interface JointEditorPanelProps {
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   onTypeChange?: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
   onClose?: () => void;
-  robot?: any; // Three.js robot object for getting link coordinates
+  robot?: URDFRobotLike | null; // Three.js robot object for getting link coordinates
 }
 
 export const JointEditorPanel = ({
@@ -165,7 +167,7 @@ export const JointEditorPanel = ({
   }, [jointAxis?.xyz]);
 
   // Find matching preset for current axis
-  const getAxisPreset = (): string => {
+  const getAxisPreset = useCallback((): string => {
     if (!jointAxis?.xyz) return "Custom";
     const [x, y, z] = jointAxis.xyz;
     const tolerance = 0.001;
@@ -179,13 +181,13 @@ export const JointEditorPanel = ({
       }
     }
     return "Custom";
-  };
+  }, [jointAxis?.xyz]);
 
   const [selectedPreset, setSelectedPreset] = useState<string>(getAxisPreset());
 
   useEffect(() => {
     setSelectedPreset(getAxisPreset());
-  }, [jointAxis?.xyz]);
+  }, [getAxisPreset]);
 
   const handleAxisPresetChange = (preset: string) => {
     if (!jointName) return;
@@ -228,6 +230,8 @@ export const JointEditorPanel = ({
 
   // Get child link coordinates
   const linkCoordinates = useMemo(() => {
+    void currentValue; // Recompute when joint value changes.
+
     if (!robot || !jointLinks.childLink) return null;
 
     const linkObj = robot.links?.[jointLinks.childLink] ?? robot.getObjectByName?.(jointLinks.childLink);
@@ -235,9 +239,9 @@ export const JointEditorPanel = ({
 
     try {
       linkObj.updateMatrixWorld?.(true);
-      const position = new (window as any).THREE.Vector3();
-      const quaternion = new (window as any).THREE.Quaternion();
-      const scale = new (window as any).THREE.Vector3();
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
       linkObj.matrixWorld.decompose(position, quaternion, scale);
 
       return {
@@ -248,7 +252,7 @@ export const JointEditorPanel = ({
       console.error("Error getting link coordinates:", error);
       return null;
     }
-  }, [robot, jointLinks.childLink, currentValue]); // Re-compute when joint value changes
+  }, [robot, jointLinks.childLink, currentValue]);
 
   if (!jointName) {
     return (

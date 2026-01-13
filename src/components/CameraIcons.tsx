@@ -3,15 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '@/store/useCameraStore';
 import type { GPUMode } from '@/hooks/use-gpu-mode';
-
-interface URDFRobot {
-  joints: Record<string, any>;
-  position: THREE.Vector3;
-  scale: THREE.Vector3;
-}
+import type { URDFRobotLike } from "@/features/types";
 
 interface CameraIconsProps {
-  robot: URDFRobot | null;
+  robot: URDFRobotLike | null;
   gpuMode?: GPUMode;
 }
 
@@ -49,7 +44,7 @@ interface CameraIconProps {
       fov_deg: number;
     };
   };
-  robot: URDFRobot | null;
+  robot: URDFRobotLike | null;
   isSelected: boolean;
   gpuMode?: GPUMode;
 }
@@ -64,7 +59,7 @@ const CameraIcon = ({ camera, robot, isSelected, gpuMode = "high" }: CameraIconP
   useFrame(() => {
     if (!groupRef.current || !robot) return;
 
-    const parentLink = (robot as any).links?.[camera.parent_link];
+    const parentLink = robot.links?.[camera.parent_link];
     
     if (!parentLink) {
       // Fallback: use world coordinates

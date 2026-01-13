@@ -7,12 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCameraStore } from "@/store/useCameraStore";
 import { autoComputeCameraPoseDefault } from "@/features/camera";
 import { Sparkles } from "lucide-react";
+import type { URDFRobotLike } from "@/features/types";
 
 interface CameraCreatorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   availableLinks: string[];
-  robot?: any; // Robot object for auto-computation
+  robot?: URDFRobotLike | null; // Robot object for auto-computation
 }
 
 export function CameraCreator({ open, onOpenChange, availableLinks, robot }: CameraCreatorProps) {

@@ -36,6 +36,13 @@ export interface RobotDescriptionStructure {
   assetsPath?: string;
 }
 
+interface GitHubTreeEntry {
+  path: string;
+  type: "blob" | "tree";
+  size?: number;
+  sha?: string;
+}
+
 /**
  * Parse GitHub repository URL
  * Supports formats:
@@ -183,14 +190,12 @@ export async function fetchRepoContents(
         if (!rootResponse.ok) {
           throw new Error("Repository or path not found");
         }
-        const rootData = await rootResponse.json();
+        const rootData = (await rootResponse.json()) as { tree?: GitHubTreeEntry[] };
         if (!rootData.tree || !Array.isArray(rootData.tree)) {
           throw new Error("Invalid tree response from GitHub API");
         }
         // Filter to only include files that start with the path
-        const filteredTree = rootData.tree.filter((entry: any) => 
-          entry.path.startsWith(path)
-        );
+        const filteredTree = rootData.tree.filter((entry) => entry.path.startsWith(path));
         return convertTreeToFiles(filteredTree, path);
       }
       throw new Error("Repository or path not found");
@@ -236,7 +241,7 @@ export async function fetchRepoContents(
 /**
  * Convert GitHub Trees API response to GitHubFile array
  */
-function convertTreeToFiles(treeEntries: any[], pathPrefix: string = ""): GitHubFile[] {
+function convertTreeToFiles(treeEntries: GitHubTreeEntry[], pathPrefix: string = ""): GitHubFile[] {
   const files: GitHubFile[] = [];
   const directories = new Set<string>();
 
@@ -1169,7 +1174,7 @@ export async function uploadFileToGitHub(
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-  const body: any = {
+  const body: { message: string; content: string; sha?: string } = {
     message,
     content: base64Content,
   };

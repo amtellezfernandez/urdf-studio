@@ -77,9 +77,10 @@ export const URDFComparison = ({
   const [modifiedFormat, setModifiedFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
 
   // Parse URDF content in real-time
+  const activeUrdf = isEditing ? editedVizUrdf : vizUrdf;
+
   const parseInfo = useMemo(() => {
-    const contentToParse = isEditing ? editedVizUrdf : vizUrdf;
-    const parsed = parseURDF(contentToParse);
+    const parsed = parseURDF(activeUrdf);
     
     if (!parsed.isValid) {
       return {
@@ -105,7 +106,7 @@ export const URDFComparison = ({
       materials,
       robotName,
     };
-  }, [isEditing ? editedVizUrdf : vizUrdf, isEditing]);
+  }, [activeUrdf]);
 
   // Parse original URDF
   const originalParseInfo = useMemo(() => {

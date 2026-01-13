@@ -3,7 +3,7 @@ export interface EpisodeFrame {
   joints: Record<string, number>;
 }
 
-export interface EpisodeMetadata {
+export interface EpisodeMetadata extends Record<string, unknown> {
   episodeNumber?: number;
   episode_index?: number;
   task_index?: number;

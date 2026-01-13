@@ -149,7 +149,14 @@ export const EpisodeSelectionDialog = ({
         </DialogHeader>
 
         <div className="space-y-6">
-          <RadioGroup value={selectionType} onValueChange={(v) => setSelectionType(v as any)}>
+          <RadioGroup
+            value={selectionType}
+            onValueChange={(value) => {
+              if (value === "specific" || value === "all") {
+                setSelectionType(value);
+              }
+            }}
+          >
             {/* Import All Mode */}
             <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
               <RadioGroupItem value="all" id="all" className="mt-1" />

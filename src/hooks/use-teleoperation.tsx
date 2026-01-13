@@ -26,7 +26,7 @@ export interface TeleoperationData {
   timestamp?: number;
 
   // Additional metadata
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -149,21 +149,6 @@ export function useTeleoperation(config: TeleoperationConfig = { enabled: false 
   }, [updateData]);
 
   /**
-   * Connect based on configuration
-   */
-  const connect = useCallback(() => {
-    if (!config.enabled) return;
-
-    disconnect(); // Disconnect any existing connection
-
-    if (config.sourceType === 'websocket' && config.websocketUrl) {
-      connectWebSocket(config.websocketUrl);
-    } else if (config.sourceType === 'http' && config.httpUrl) {
-      connectHttpPolling(config.httpUrl, config.pollingInterval);
-    }
-  }, [config, connectWebSocket, connectHttpPolling]);
-
-  /**
    * Disconnect from all sources
    */
   const disconnect = useCallback(() => {
@@ -181,6 +166,21 @@ export function useTeleoperation(config: TeleoperationConfig = { enabled: false 
 
     setIsConnected(false);
   }, []);
+
+  /**
+   * Connect based on configuration
+   */
+  const connect = useCallback(() => {
+    if (!config.enabled) return;
+
+    disconnect(); // Disconnect any existing connection
+
+    if (config.sourceType === 'websocket' && config.websocketUrl) {
+      connectWebSocket(config.websocketUrl);
+    } else if (config.sourceType === 'http' && config.httpUrl) {
+      connectHttpPolling(config.httpUrl, config.pollingInterval);
+    }
+  }, [config, connectWebSocket, connectHttpPolling, disconnect]);
 
   /**
    * Auto-connect when config changes

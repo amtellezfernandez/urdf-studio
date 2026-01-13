@@ -48,7 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import { JointMappingDialog } from "@/components/JointMappingDialog";
 import { useCameraStore } from "@/store/useCameraStore";
 import { EpisodeCameraPreview } from "@/components/EpisodeCameraPreview";
-import type { JointMapping } from "@/features/types";
+import type { JointMapping, WindowWithViewerHandlers } from "@/features/types";
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
@@ -122,6 +122,10 @@ interface RecordedFrame {
   jointPositions: Record<string, number>;
 }
 
+type HfIdentity = {
+  name: string;
+  fullname?: string;
+};
 
 interface Episode {
   id: string;
@@ -397,7 +401,7 @@ const computeV3Stats = (
   flattenedRows: Array<Record<string, unknown>>,
   episodeIndexToTasks: Map<number, string[]>,
   tasksSet: Set<string>
-): Record<string, any> => {
+): Record<string, unknown> => {
   const frameIndices = flattenedRows.map((row) => row.frame_index as number);
   const timestamps = flattenedRows.map((row) => row.timestamp as number);
   const episodeIndices = flattenedRows.map((row) => row.episode_index as number);
@@ -924,7 +928,7 @@ export const Sidebar = ({
   }, [hfToken]);
 
   const fetchHfIdentity = useCallback(
-    async (token: string) => {
+    async (token: string): Promise<HfIdentity> => {
       if (hfIdentityRef.current) return hfIdentityRef.current;
       const response = await fetch("https://huggingface.co/api/whoami-v2", {
         headers: {
@@ -936,7 +940,7 @@ export const Sidebar = ({
         const message = await response.text();
         throw new Error(message || "Failed to fetch Hugging Face profile");
       }
-      const data = await response.json();
+      const data = (await response.json()) as HfIdentity;
       hfIdentityRef.current = data;
       return data;
     },
@@ -1041,7 +1045,7 @@ export const Sidebar = ({
   const [currentPlayingEpisodeIndex, setCurrentPlayingEpisodeIndex] = useState<number | null>(null);
   const [recordingFps, setRecordingFps] = useState<number>(30); // Default FPS for recording
   const [recordingStats, setRecordingStats] = useState<{ frames: number; seconds: number }>({ frames: 0, seconds: 0 });
-  const hfIdentityRef = useRef<{ name: string; fullname?: string } | null>(null);
+  const hfIdentityRef = useRef<HfIdentity | null>(null);
   const recordingStartTime = useRef<number>(0);
   const recordingIntervalRef = useRef<number | null>(null);
   const playbackTimeoutRef = useRef<number | null>(null);
@@ -1265,10 +1269,10 @@ export const Sidebar = ({
         playbackTimeoutRef.current = null;
       }
       // Stop 3D viewer animation
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
+      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
       // Reset frame to 0
-      (window as any).viewer3dSetFrame?.(0);
+      (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
     }
   }, [episodes.length]);
 
@@ -1472,7 +1476,7 @@ export const Sidebar = ({
 
   const startRecording = useCallback(() => {
     // Stop all replay/playback
-    (window as any).viewer3dStopAnimation?.();
+    (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
     setIsPlayingAll(false);
     isPlayingAllRef.current = false;
     setCurrentPlayingEpisodeIndex(null);
@@ -1484,7 +1488,7 @@ export const Sidebar = ({
     }
     
     // Reset frame counters to beginning
-    (window as any).viewer3dSetFrame?.(0);
+    (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
     onFrameChange?.(0);
     
     // Ensure robot movement is enabled when starting recording
@@ -1612,7 +1616,7 @@ export const Sidebar = ({
     toast.success(
       `Stopped recording. Episode ${recordedEpisodeNumber} saved with ${framesToPersist.length} frames`
     );
-  }, [clearRecordingInterval, currentRecordingEpisodeId, episodes.length, setEpisodes]);
+  }, [clearRecordingInterval, currentRecordingEpisodeId, episodes.length, setEpisodes, getJointOrderForFrames, recordingFps, robotBaseName]);
 
   const loadEpisodesFromDataFile = useCallback(
     async (file: File, options?: { suppressToast?: boolean; sourceName?: string }) => {
@@ -1866,7 +1870,12 @@ export const Sidebar = ({
                     entry.name.endsWith(".parquet")
                 );
 
-                const episodeSummariesMap = new Map<number, any>();
+                type EpisodeSummary = {
+                  episode_index: number;
+                  tasks?: number[];
+                } & Record<string, unknown>;
+
+                const episodeSummariesMap = new Map<number, EpisodeSummary>();
                 if (episodesEntry) {
                   try {
                     const episodesContent = await episodesEntry.async("text");
@@ -1968,7 +1977,7 @@ export const Sidebar = ({
                   episodesAdded += 1;
 
                   const summary = episodeSummariesMap.get(episodeIndex);
-                  const tasks = summary?.tasks ?? [];
+                  const tasks = Array.isArray(summary?.tasks) ? summary.tasks : [];
                   const taskNames = tasks
                     .map((taskIdx: number) => taskIndexToName.get(taskIdx))
                     .filter((name: string | undefined) => name !== undefined) as string[];
@@ -2327,7 +2336,7 @@ export const Sidebar = ({
       const token = await ensureHfToken();
       if (!token) return;
 
-      let identity: any = null;
+      let identity: HfIdentity | null = null;
       try {
         identity = await fetchHfIdentity(token);
       } catch (error) {
@@ -2460,7 +2469,7 @@ export const Sidebar = ({
     } finally {
       setIsExportingDataset(false);
     }
-  }, [episodes, robotBaseName, robotName, getJointOrderForFrames, availableJointsStore]);
+  }, [episodes, robotBaseName, robotName, availableJointsStore]);
 
   // Helper function to export current episodes as blob for dataset mixing
   const exportCurrentEpisodesAsBlob = useCallback(async (): Promise<Blob> => {
@@ -2491,7 +2500,7 @@ export const Sidebar = ({
       const token = await ensureHfToken();
       if (token === null) return;
 
-      let identity: any = null;
+      let identity: HfIdentity | null = null;
       if (token) {
         try {
           identity = await fetchHfIdentity(token);
@@ -3580,6 +3589,7 @@ export const Sidebar = ({
     episodes.length,
     hfToken,
     isImportingFromHFDataset,
+    onVizUrdfChange,
     setEpisodes,
   ]);
 
@@ -3615,6 +3625,7 @@ export const Sidebar = ({
     isImportingFromHFDataset,
     isExportingDataset,
     isUploadingToHF,
+    episodes,
     episodes.length,
     currentPlayingEpisodeIndex,
     isRerunViewerModalOpen,
@@ -3640,11 +3651,11 @@ export const Sidebar = ({
         clearTimeout(playbackTimeoutRef.current);
         playbackTimeoutRef.current = null;
       }
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
+      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
       if (willBeEmpty) {
         // Reset frame to 0 when deleting the last episode
-        (window as any).viewer3dSetFrame?.(0);
+        (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
       }
       if (isCurrentlyPlaying) {
         toast.info("Stopped playback - episode deleted");
@@ -3731,7 +3742,7 @@ export const Sidebar = ({
   const stopAllPlayback = useCallback(() => {
     // CRITICAL: Capture current frame position BEFORE clearing anything
     // This ensures we can resume from where we stopped, even after 1000+ stop/start cycles
-    const currentFrameIndex = (window as any).__viewer3dCurrentFrameIndex;
+    const currentFrameIndex = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
     if (currentFrameIndex !== undefined && currentFrameIndex !== null && onFrameChange) {
       // Update parent's currentFrame state so playback resumes from this position
       onFrameChange(currentFrameIndex);
@@ -3748,8 +3759,8 @@ export const Sidebar = ({
       playbackTimeoutRef.current = null;
     }
 
-    (window as any).viewer3dStopAnimation?.();
-    (window as any).viewer3dClearAnimation?.();
+    (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+    (window as WindowWithViewerHandlers).viewer3dClearAnimation?.();
 
     // CRITICAL: Clear the loaded episode ref so that when resuming playback,
     // setEpisodeAndFrame knows it needs to reload the episode frames
@@ -3757,11 +3768,11 @@ export const Sidebar = ({
     currentLoadedEpisodeRef.current = null;
 
     // DO NOT reset frame to 0 - we already captured and preserved the position above
-    // (window as any).viewer3dSetFrame?.(0);
+    // (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
 
     // Clear any preserved frame state
-    delete (window as any).__viewer3dPreserveFrameTime;
-    delete (window as any).__viewer3dManualFrameTime;
+    delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
+    delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
   }, [onFrameChange]);
 
   // Complete reset of all playback state - used when all episodes finish
@@ -3786,8 +3797,8 @@ export const Sidebar = ({
       const firstEpisode = episodes[0];
       if (firstEpisode && firstEpisode.frames && firstEpisode.frames.length > 0) {
         const frames = toAnimationFrames(firstEpisode);
-        (window as any).viewer3dPlayEpisode?.(frames);
-        (window as any).viewer3dSetFrame?.(0);
+        (window as WindowWithViewerHandlers).viewer3dPlayEpisode?.(frames);
+        (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
       }
     }
   }, [stopAllPlayback, onFrameChange, episodes]);
@@ -3805,7 +3816,7 @@ export const Sidebar = ({
         if (currentLoadedEpisodeRef.current !== currentIndex) {
           // Episode not loaded, load it first
           const frames = toAnimationFrames(episode);
-          (window as any).viewer3dPlayEpisode?.(frames);
+          (window as WindowWithViewerHandlers).viewer3dPlayEpisode?.(frames);
           // viewer3dPlayEpisode will start playback automatically after 10ms
           return;
         }
@@ -3814,10 +3825,10 @@ export const Sidebar = ({
     
     // If frames should already be loaded, just start/resume playback
     // Force play (true) to ensure playback starts
-    (window as any).viewer3dStopAnimation?.();
+    (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
     // Small delay to ensure stop is processed, then start
     setTimeout(() => {
-      (window as any).viewer3dPlayAnimation?.(true);
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(true);
     }, 10);
   }, [episodes, currentPlayingEpisodeIndex]);
 
@@ -3833,7 +3844,7 @@ export const Sidebar = ({
     
     // Always use the same order: speed -> episode (only if different) -> frame -> update state
     // Set speed first and ensure it's applied before setting frame
-    (window as any).viewer3dSetPlaybackSpeed?.(playbackSpeed);
+    (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed?.(playbackSpeed);
     
     // Only reload episode if it's different from what's currently loaded
     // This prevents frame resets when resuming the same episode
@@ -3849,10 +3860,10 @@ export const Sidebar = ({
 
       // CRITICAL: Set frame index BEFORE reloading to prevent flicker at frame 0
       // The useFrame hook checks __viewer3dCurrentFrameIndex when frames are loaded
-      (window as any).__viewer3dCurrentFrameIndex = clampedFrame;
+      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedFrame;
 
       // viewer3dPlayEpisode loads the episode and automatically starts playback after 10ms
-      (window as any).viewer3dPlayEpisode?.(frames);
+      (window as WindowWithViewerHandlers).viewer3dPlayEpisode?.(frames);
       currentLoadedEpisodeRef.current = episodeIndex;
 
       // If we need to start from a specific frame (not frame 0), set it after frames load
@@ -3864,7 +3875,7 @@ export const Sidebar = ({
           if (sessionId !== playbackSessionIdRef.current) return;
 
           if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
-            (window as any).viewer3dSetFrame?.(clampedFrame);
+            (window as WindowWithViewerHandlers).viewer3dSetFrame?.(clampedFrame);
             onFrameChange?.(clampedFrame);
             // Ensure playback continues from this position
             if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
@@ -3873,7 +3884,7 @@ export const Sidebar = ({
                 if (sessionId !== playbackSessionIdRef.current) return;
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
                   // Force play (true) to ensure playback continues after setting frame
-                  (window as any).viewer3dPlayAnimation?.(true);
+                  (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(true);
                 }
               }, 20);
             }
@@ -3904,7 +3915,7 @@ export const Sidebar = ({
           // Ensure we're setting a valid frame index before calling
           if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
             const wasPlaying = isPlayingAllRef.current;
-            (window as any).viewer3dSetFrame?.(clampedFrame);
+            (window as WindowWithViewerHandlers).viewer3dSetFrame?.(clampedFrame);
             onFrameChange?.(clampedFrame);
             // viewer3dSetFrame stops playback, so resume if we were playing
             if (wasPlaying && isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
@@ -3913,7 +3924,7 @@ export const Sidebar = ({
                 if (sessionId !== playbackSessionIdRef.current) return;
                 if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
                   // Force play (true) since viewer3dSetFrame stopped playback
-                  (window as any).viewer3dPlayAnimation?.(true);
+                  (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(true);
                 }
               }, 50); // Increased delay to ensure state is updated
             }
@@ -3939,8 +3950,8 @@ export const Sidebar = ({
       isPlayingAllRef.current = false;
       setIsPlayingAll(false);
       setCurrentPlayingEpisodeIndex(null);
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
+      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
       return;
     }
 
@@ -3956,7 +3967,7 @@ export const Sidebar = ({
     setEpisodeAndFrame(episodeIndex, frameToUse);
     
     // Start playing
-    (window as any).viewer3dPlayAnimation?.(true);
+    (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(true);
 
     // Calculate duration and adjust for playback speed
     const baseDuration = getEpisodeDurationMs(episode);
@@ -3973,7 +3984,7 @@ export const Sidebar = ({
         setCurrentPlayingEpisodeIndex(null);
       }
     }, duration);
-  }, [episodes, currentPlayingEpisodeIndex, playbackSpeed, setEpisodeAndFrame]);
+  }, [episodes, playbackSpeed, setEpisodeAndFrame]);
 
   const playEpisode = useCallback((episode: Episode) => {
     if (!episode || !episode.frames || episode.frames.length === 0) {
@@ -3982,8 +3993,8 @@ export const Sidebar = ({
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
       setCurrentPlayingEpisodeIndex(null);
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
+      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
       return;
     }
 
@@ -3995,8 +4006,8 @@ export const Sidebar = ({
       setIsPlayingAll(false);
       isPlayingAllRef.current = false;
       setCurrentPlayingEpisodeIndex(null);
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
+      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
       return;
     }
 
@@ -4011,8 +4022,8 @@ export const Sidebar = ({
         clearTimeout(playbackTimeoutRef.current);
         playbackTimeoutRef.current = null;
       }
-      (window as any).viewer3dStopAnimation?.();
-      (window as any).viewer3dPlayAnimation?.(false);
+      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
     } else {
       // Ensure viewer is open and split view is enabled when playing an episode
       onViewerSplitViewChange?.(true);
@@ -4059,8 +4070,8 @@ export const Sidebar = ({
         isPlayingAllRef.current = false;
         setIsPlayingAll(false);
         setCurrentPlayingEpisodeIndex(null);
-        (window as any).viewer3dStopAnimation?.();
-        (window as any).viewer3dPlayAnimation?.(false);
+        (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+        (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
         toast.info("Stopped playback - episode no longer exists");
         return;
       }
@@ -4182,32 +4193,32 @@ export const Sidebar = ({
           const finishedEpisode = episodes[playableIndex];
           const frames = toAnimationFrames(finishedEpisode);
           // Reload episode frames - viewer3dPlayEpisode will auto-start after 10ms
-          (window as any).viewer3dPlayEpisode?.(frames);
+          (window as WindowWithViewerHandlers).viewer3dPlayEpisode?.(frames);
           // Stop playback immediately and repeatedly to catch auto-start
           // Then set frame to 0 once stopped
-          (window as any).viewer3dStopAnimation?.();
+          (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
           setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
-            (window as any).viewer3dSetFrame?.(0);
+            (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+            (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
             onFrameChange?.(0);
           }, 5);
           setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
+            (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
           }, 12); // Right before auto-start (10ms)
           setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
-            (window as any).viewer3dSetFrame?.(0);
+            (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+            (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
             onFrameChange?.(0);
           }, 25); // Right after auto-start
           setTimeout(() => {
-            (window as any).viewer3dStopAnimation?.();
+            (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
           }, 50); // Final safety stop
         }
         // Keep currentPlayingEpisodeIndex so user can see which episode just finished
         // and can click "Next Episode" to continue
       }, duration);
     },
-    [episodes, currentFrame, onFrameChange, playbackSpeed, setEpisodeAndFrame, startViewer3DPlayback, stopAllPlayback]
+    [episodes, onFrameChange, playbackSpeed, setEpisodeAndFrame, stopAllPlayback]
   );
 
   const playAllEpisodes = useCallback((overrideFrame?: number) => {
@@ -4237,7 +4248,7 @@ export const Sidebar = ({
 
   // Sync playback speed with Viewer3D
   useEffect(() => {
-    (window as any).viewer3dSetPlaybackSpeed?.(playbackSpeed);
+    (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed?.(playbackSpeed);
   }, [playbackSpeed]);
 
   // Cleanup recording interval and playback timeout on unmount
@@ -4423,19 +4434,19 @@ export const Sidebar = ({
                     
                     // viewer3dPlayEpisode automatically starts playback after 10ms, so we need to stop it
                     // Use multiple stops to catch the auto-start at different times
-                    (window as any).viewer3dStopAnimation?.();
+                    (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
                     setTimeout(() => {
-                      (window as any).viewer3dStopAnimation?.();
+                      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
                     }, 5);
                     setTimeout(() => {
-                      (window as any).viewer3dStopAnimation?.();
+                      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
                     }, 12); // Right before auto-start (10ms)
                     setTimeout(() => {
-                      (window as any).viewer3dStopAnimation?.();
-                      (window as any).viewer3dPlayAnimation?.(false);
+                      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+                      (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.(false);
                     }, 25); // Right after auto-start
                     setTimeout(() => {
-                      (window as any).viewer3dStopAnimation?.();
+                      (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
                     }, 50); // Final safety stop
                   }}
                   disabled={episodes.length === 0}
@@ -4452,7 +4463,7 @@ export const Sidebar = ({
                     onValueChange={(value) => {
                       const newSpeed = value ?? 1.0;
                       setPlaybackSpeed(newSpeed);
-                      (window as any).viewer3dSetPlaybackSpeed?.(newSpeed);
+                      (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed?.(newSpeed);
                     }}
                     min={0.25}
                     max={6}

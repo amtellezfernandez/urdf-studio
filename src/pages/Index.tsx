@@ -50,6 +50,7 @@ import type {
   DebugMeshInfo,
   ViewerEpisode,
   EpisodeSaveHandler,
+  URDFRobotLike,
 } from "@/features/types";
 import {
   AXIS_NAMES,
@@ -201,7 +202,7 @@ const Index = () => {
     robotBoundingBox,
     setRobotBoundingBox,
   } = useObjectCreatorStore();
-  const [robot, setRobot] = useState<any>(null);
+  const [robot, setRobot] = useState<URDFRobotLike | null>(null);
 
   // Camera creation state
   const {
@@ -396,7 +397,7 @@ const Index = () => {
     setUrdfContentVersion(prev => prev + 1); // Force reload of 3D viewer and sidebar
     
     toast.success(result.message ?? `Updated axis for joint "${jointName}"`);
-  }, [vizUrdfContent, createUrdfFile, setJointAxes, setJointLimits]);
+  }, [vizUrdfContent, createUrdfFile, setJointAxes, setJointLimits, setUrdfFile, setVizUrdfContent]);
 
   const handleResetAxis = useCallback((jointName: string) => {
     if (!originalJointAxes[jointName]) {
@@ -453,7 +454,7 @@ const Index = () => {
     }
 
     toast.success(result.message ?? `Renamed joint "${oldName}" to "${newName}"`);
-  }, [vizUrdfContent, updateUrdfFile, selectedJoint]);
+  }, [vizUrdfContent, updateUrdfFile, selectedJoint, setAvailableJoints, setSelectedJoint]);
 
   const handleJointLinkChange = useCallback((jointName: string, parentLink: string, childLink: string) => {
     if (!vizUrdfContent) {
@@ -706,7 +707,7 @@ const Index = () => {
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
     },
-    [recordingViewHeight, clampRecordingViewHeight]
+    [recordingViewHeight, clampRecordingViewHeight, setRecordingViewHeight]
   );
 
   const hasRotationChanges = useMemo(

@@ -7,12 +7,14 @@ import { useCameraStore } from "@/store/useCameraStore";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import type { GPUMode } from "@/hooks/use-gpu-mode";
-import type { MeshFiles } from "@/features/types";
+import type { MeshFiles, URDFRobotLike } from "@/features/types";
 
 const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
   new THREE.Vector3(0, 1, 0),
   Math.PI / 2
 );
+
+type PreviewRobot = URDFRobotLike;
 
 const PreviewObjects = ({
   objects,
@@ -89,7 +91,7 @@ const PreviewObjects = ({
   );
 };
 
-const JointValueSync = ({ robot }: { robot: any | null }) => {
+const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
   useFrame(() => {
     if (!robot?.setJointValue) return;
     const values = useJointStore.getState().jointValues;
@@ -107,7 +109,7 @@ const CameraPoseController = ({
   cameraId,
   sceneRadius,
 }: {
-  robot: any | null;
+  robot: PreviewRobot | null;
   cameraId: string | null;
   sceneRadius: number | null;
 }) => {
@@ -213,7 +215,7 @@ export const EpisodeCameraPreview = ({
   );
 
   const groupRef = useRef<THREE.Group>(null);
-  const [robot, setRobot] = useState<any | null>(null);
+  const [robot, setRobot] = useState<PreviewRobot | null>(null);
   const [sceneRadius, setSceneRadius] = useState<number | null>(null);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const blobUrls = useRef<string[]>([]);
@@ -301,7 +303,7 @@ export const EpisodeCameraPreview = ({
     };
 
     try {
-      const robot = loader.parse(urdfContent) as any;
+      const robot = loader.parse(urdfContent) as PreviewRobot;
       const boundingBox = new THREE.Box3().setFromObject(robot);
       const size = boundingBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
