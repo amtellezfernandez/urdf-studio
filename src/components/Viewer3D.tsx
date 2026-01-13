@@ -15,7 +15,6 @@ import { AxisGizmo3D } from "@/components/AxisGizmo3D";
 import { CustomAxesHelper } from "@/components/CustomAxesHelper";
 import { CameraIcons } from "@/components/CameraIcons";
 import { IKDragControls } from "@/components/IKDragControls";
-import { useCameraStore } from "@/store/useCameraStore";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
 import { applyJointValues } from "@/lib/urdf-joints";
@@ -42,6 +41,7 @@ import { useUrdfAnimation } from "@/components/viewer3d/useUrdfAnimation";
 import { useOrbitControlsBindings } from "@/components/viewer3d/useOrbitControlsBindings";
 import { useMotionDataUpload } from "@/components/viewer3d/useMotionDataUpload";
 import { usePlaybackHandlers } from "@/components/viewer3d/usePlaybackHandlers";
+import { useViewerCameraControls } from "@/components/viewer3d/useViewerCameraControls";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -2156,6 +2156,20 @@ export const Viewer3D = ({
     onFrameChange,
     animationController,
   });
+  const {
+    cameras,
+    selectedCameraId,
+    selectCamera,
+    isCameraMenuOpen,
+    setIsCameraMenuOpen,
+    setView,
+    handleCameraViewChange,
+  } = useViewerCameraControls({
+    robot,
+    controlsRef,
+    cameraRef,
+    sceneRef,
+  });
 
   // Convert imported animation frames to nodes
   const convertMotionFramesToNodes = (frames: AnimationFrame[]) => {
@@ -2273,221 +2287,6 @@ export const Viewer3D = ({
       onFrameChange?.(currentFrame, animationFrames.length);
     }
   }, [currentFrame, animationFrames, onFrameChange]);
-
-  // Navigation functions for Blender-style view buttons
-  const setView = useCallback((direction: 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right') => {
-    if (!controlsRef.current || !cameraRef.current || !robot || !sceneRef.current) return;
-    
-    const controls = controlsRef.current;
-    const camera = cameraRef.current;
-    const robotAny = robot;
-    const scene = sceneRef.current;
-    
-    // Try to find robot in scene and get bounding box
-    let center: THREE.Vector3;
-    let distance: number;
-    
-    // Find robot group in scene
-    let robotGroup: THREE.Object3D | null = null;
-    scene.traverse((obj) => {
-      if (obj === robotAny || (obj.userData && obj.userData.isURDFRobot)) {
-        robotGroup = obj;
-      }
-    });
-    
-    // Use robot if found, otherwise try robotAny directly
-    const targetObj = robotGroup || robotAny;
-    
-    // Calculate bounding box
-    const box = new THREE.Box3();
-    try {
-      box.setFromObject(targetObj);
-    } catch (e) {
-      // If setFromObject fails, fall back to stored center
-    }
-    
-    if (!box.isEmpty()) {
-      center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      distance = Math.max(maxDim * 1.5, 2);
-    } else {
-      // Fallback to stored center
-      center = robotAny.userData?.boundingBoxCenter || new THREE.Vector3(0, 0, 0);
-      distance = 3;
-    }
-    
-    let cameraPosition: THREE.Vector3;
-    
-    // Set camera position based on view direction
-    // ROS REP-103 / URDF Standard Coordinate System:
-    // X = forward (red), Y = left (green), Z = up (blue)
-    switch (direction) {
-      case 'front': // Looking from behind robot (+X direction)
-        cameraPosition = new THREE.Vector3(center.x + distance, center.y, center.z);
-        break;
-      case 'back': // Looking from front of robot (-X direction)
-        cameraPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
-        break;
-      case 'left': // Looking from robot's right side (-Y direction)
-        cameraPosition = new THREE.Vector3(center.x, center.y - distance, center.z);
-        break;
-      case 'right': // Looking from robot's left side (+Y direction)
-        cameraPosition = new THREE.Vector3(center.x, center.y + distance, center.z);
-        break;
-      case 'top': // Looking from +Z direction
-        cameraPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
-        break;
-      case 'bottom': // Looking from -Z direction
-        cameraPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
-        break;
-      default:
-        return;
-    }
-    
-    // Smoothly animate camera to new position
-    camera.position.copy(cameraPosition);
-    controls.target.copy(center);
-    controls.update();
-  }, [robot]);
-
-  // Switch to camera view
-  const handleCameraViewChange = useCallback((cameraId: string) => {
-    if (!controlsRef.current || !cameraRef.current || !robot) return;
-
-    const cameras = useCameraStore.getState().cameras;
-    const camera = cameras.find((c) => c.id === cameraId);
-    if (!camera) return;
-
-    const controls = controlsRef.current;
-    const viewCamera = cameraRef.current;
-    const robotAny = robot;
-
-    // Get parent link
-    const parentLink = robotAny.links?.[camera.parent_link];
-    if (!parentLink) return;
-
-    // Update parent link transform
-    parentLink.updateMatrixWorld(true);
-    const parentWorldTransform = new THREE.Matrix4().copy(parentLink.matrixWorld);
-
-    // Create local transform from camera pose
-    const localTransform = new THREE.Matrix4();
-    const RPY_ORDER = 'ZYX' as const;
-    localTransform.makeRotationFromEuler(
-      new THREE.Euler(...camera.pose.rpy, RPY_ORDER)
-    );
-    localTransform.setPosition(new THREE.Vector3(...camera.pose.xyz));
-
-    // Combine: world = parentWorld * local
-    const finalTransform = parentWorldTransform.clone().multiply(localTransform);
-
-    const cameraPosition = new THREE.Vector3();
-    const cameraQuaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    finalTransform.decompose(cameraPosition, cameraQuaternion, scale);
-
-    // Camera forward direction: +X in robotics convention
-    // Three.js camera looks along -Z, so rotate +90° around Y to align
-    const cameraRotation = new THREE.Quaternion();
-    cameraRotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-    const finalQuaternion = cameraQuaternion.clone().multiply(cameraRotation);
-
-    // Calculate forward direction based on the final camera orientation (-Z in Three.js)
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(finalQuaternion);
-
-    // Set camera position and look at a point in front of the camera
-    const lookAtDistance = 1.0;
-    const lookAtPoint = cameraPosition.clone().add(forward.multiplyScalar(lookAtDistance));
-
-    // Set Three.js camera orientation (it looks along -Z, so we rotate it)
-    viewCamera.position.copy(cameraPosition);
-    viewCamera.quaternion.copy(finalQuaternion);
-    controls.target.copy(lookAtPoint);
-    controls.update();
-  }, [robot]);
-
-  const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
-  const cameras = useCameraStore((state) => state.cameras);
-  const selectCamera = useCameraStore((state) => state.selectCamera);
-  const [isCameraMenuOpen, setIsCameraMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isCameraMenuOpen) return;
-    const handleClick = () => setIsCameraMenuOpen(false);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, [isCameraMenuOpen]);
-
-  useEffect(() => {
-    if (!selectedCameraId) return;
-    handleCameraViewChange(selectedCameraId);
-  }, [handleCameraViewChange, selectedCameraId]);
-
-  // Fit to view function
-  const fitToView = useCallback(() => {
-    if (!controlsRef.current || !cameraRef.current || !robot || !sceneRef.current) return;
-    
-    const controls = controlsRef.current;
-    const camera = cameraRef.current;
-    const robotAny = robot;
-    const scene = sceneRef.current;
-    
-    // Try to find robot in scene and get bounding box
-    let center: THREE.Vector3;
-    let size: THREE.Vector3;
-    
-    // Find robot group in scene
-    let robotGroup: THREE.Object3D | null = null;
-    scene.traverse((obj) => {
-      if (obj === robotAny || (obj.userData && obj.userData.isURDFRobot)) {
-        robotGroup = obj;
-      }
-    });
-    
-    // Use robot if found, otherwise try robotAny directly
-    const targetObj = robotGroup || robotAny;
-    
-    // Calculate bounding box
-    const box = new THREE.Box3();
-    try {
-      box.setFromObject(targetObj);
-    } catch (e) {
-      // If setFromObject fails, fall back to stored center
-    }
-    
-    if (!box.isEmpty()) {
-      center = box.getCenter(new THREE.Vector3());
-      size = box.getSize(new THREE.Vector3());
-    } else {
-      // Fallback: use stored center
-      center = robotAny.userData?.boundingBoxCenter || new THREE.Vector3(0, 0, 0);
-      size = new THREE.Vector3(2, 2, 2); // Default size
-    }
-    
-    const maxDim = Math.max(size.x, size.y, size.z);
-    
-    // Calculate distance to fit the robot in view
-    // Use FOV to calculate appropriate distance
-    const fov = camera.fov * (Math.PI / 180);
-    const distance = Math.max(maxDim * 1.5 / Math.tan(fov / 2), 2);
-    
-    // Get current camera direction
-    const direction = new THREE.Vector3()
-      .subVectors(camera.position, controls.target)
-      .normalize();
-    
-    // If direction is zero (camera at target), use default view
-    if (direction.length() < 0.001) {
-      direction.set(1, 1, 0.5).normalize();
-    }
-    
-    // Position camera at appropriate distance
-    const newPosition = center.clone().add(direction.multiplyScalar(distance));
-    camera.position.copy(newPosition);
-    controls.target.copy(center);
-    controls.update();
-  }, [robot]);
 
   return (
     <div className="h-full flex flex-col">
