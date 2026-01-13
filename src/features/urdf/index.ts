@@ -12,6 +12,7 @@ export * from "./parseJointHierarchy";
 export * from "./parseJointLimits";
 export * from "./parseLinkNames";
 export * from "./parseLinkData";
+export * from "./collisionAutoFit";
 export * from "./prettyPrintURDF";
 export * from "./rotateRobot";
 export * from "./updateJointAxis";
