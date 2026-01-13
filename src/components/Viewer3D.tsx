@@ -3417,6 +3417,7 @@ export const Viewer3D = ({
       const robotJointKeys: string[] = robotAny
         ? Object.keys(robotAny.joints || {})
         : [];
+      const knownJoints = new Set(robotJointKeys);
       const actuatedJoints: string[] = robotJointKeys
         .filter((key) => {
           const joint = robotAny?.joints?.[key];
@@ -3445,7 +3446,7 @@ export const Viewer3D = ({
       const actuatedSet = new Set(actuatedJoints);
 
       columns.forEach((columnName) => {
-        if (actuatedSet.has(columnName)) {
+        if (knownJoints.has(columnName)) {
           mapping.set(columnName, columnName);
         }
       });
@@ -3467,8 +3468,8 @@ export const Viewer3D = ({
         for (const [sourceJoint, value] of Object.entries(frame.joints)) {
           const targetJoint =
             mapping.get(sourceJoint) ??
-            (actuatedSet.has(sourceJoint) ? sourceJoint : undefined);
-          if (targetJoint !== undefined) {
+            (knownJoints.has(sourceJoint) ? sourceJoint : undefined);
+          if (targetJoint !== undefined && knownJoints.has(targetJoint)) {
             mapped[targetJoint] = value;
           }
         }
