@@ -1,11 +1,6 @@
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { ExportDialog } from "@/components/ExportDialog";
-import { JointMappingDialog } from "@/components/JointMappingDialog";
-import { MappingListPanel } from "@/components/MappingListPanel";
-import { ObjectCreator } from "@/components/ObjectCreator";
-import { CameraCreator } from "@/components/CameraCreator";
-import { CameraConfigUpload } from "@/components/CameraConfigUpload";
 import { useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
 import {
@@ -31,6 +26,8 @@ import { ViewerLayout } from "@/pages/index/ViewerLayout";
 import { RightSidebarPanel } from "@/pages/index/RightSidebarPanel";
 import { LeftSidebarPanel } from "@/pages/index/LeftSidebarPanel";
 import { LoadingScreen } from "@/pages/index/LoadingScreen";
+import { MappingPanels } from "@/pages/index/MappingPanels";
+import { CreationDialogs } from "@/pages/index/CreationDialogs";
 
 import type {
   MeshFiles,
@@ -905,50 +902,33 @@ const Index = () => {
         onClose={() => setShowPovCameras(false)}
       />
 
-      {/* Joint Mapping List Panel */}
-      <MappingListPanel
-        isOpen={showMappingListPanel}
-        onClose={closeMappingList}
-        mappings={savedMappings}
+      <MappingPanels
+        showMappingListPanel={showMappingListPanel}
+        onCloseMappingList={closeMappingList}
+        savedMappings={savedMappings}
         onSelectMapping={selectMapping}
         onDeleteMapping={deleteMappingById}
+        mappingDialogData={mappingDialogData}
+        showMappingDialog={showMappingDialog}
+        onCloseMappingDialog={closeMappingDialog}
+        availableJoints={availableJoints}
+        selectedMapping={selectedMapping}
+        jointLimits={jointLimits}
+        onApplyMapping={applyMapping}
       />
 
-      {/* Joint Mapping Dialog */}
-      {mappingDialogData && (
-        <JointMappingDialog
-          isOpen={showMappingDialog}
-          onClose={closeMappingDialog}
-          datasetJoints={mappingDialogData.datasetJoints}
-          urdfJoints={availableJoints}
-          jointRanges={mappingDialogData.jointRanges}
-          existingMapping={selectedMapping}
-          source={selectedMapping?.source}
-          jointLimits={jointLimits}
-          onApply={applyMapping}
-        />
-      )}
-
-      {/* Object Creator Dialog */}
-      <ObjectCreator
-        open={objectCreatorOpen}
-        onOpenChange={(open) => (open ? openObjectCreator() : closeObjectCreator())}
-        defaultType={objectCreatorType}
+      <CreationDialogs
+        objectCreatorOpen={objectCreatorOpen}
+        objectCreatorType={objectCreatorType}
+        openObjectCreator={openObjectCreator}
+        closeObjectCreator={closeObjectCreator}
         robotBoundingBox={robotBoundingBox}
-      />
-
-      {/* Camera Creator Dialog */}
-      <CameraCreator
-        open={showCameraCreator}
-        onOpenChange={setShowCameraCreator}
+        showCameraCreator={showCameraCreator}
+        setShowCameraCreator={setShowCameraCreator}
         availableLinks={availableLinks}
         robot={robot}
-      />
-
-      {/* Camera Config Upload Dialog */}
-      <CameraConfigUpload
-        open={showCameraUpload}
-        onOpenChange={setShowCameraUpload}
+        showCameraUpload={showCameraUpload}
+        setShowCameraUpload={setShowCameraUpload}
       />
     </div>
   );
