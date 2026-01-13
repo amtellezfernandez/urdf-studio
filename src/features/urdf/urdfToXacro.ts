@@ -707,7 +707,7 @@ function generateXacroOutput(
  */
 function formatXacroOutput(xml: string): string {
   // Remove existing whitespace between tags
-  let formatted = xml.replace(/>\s+</g, ">\n<");
+  const formatted = xml.replace(/>\s+</g, ">\n<");
 
   // Split into lines
   const lines = formatted.split("\n");

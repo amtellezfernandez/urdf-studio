@@ -69,8 +69,11 @@ const CameraIcon = ({ camera, robot, isSelected, gpuMode = "high" }: CameraIconP
     if (!parentLink) {
       // Fallback: use world coordinates
       groupRef.current.position.set(...camera.pose.xyz);
-      groupRef.current.rotation.setFromEuler(
-        new THREE.Euler(...camera.pose.rpy, RPY_ORDER)
+      groupRef.current.rotation.set(
+        camera.pose.rpy[0],
+        camera.pose.rpy[1],
+        camera.pose.rpy[2],
+        RPY_ORDER
       );
       return;
     }

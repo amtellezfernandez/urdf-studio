@@ -47,6 +47,16 @@ The integrated backend provides:
 - `npm run setup` - Install dependencies and configure tokens
 - `npm run start` - Start URDF Studio (default)
 - `npm run dev` - Start Vite dev server only (for development)
+- `npm run typecheck` - Run TypeScript type checks
+- `npm run smoke` - Run lint + typecheck
+
+## Verbose logging
+
+If you want full Vite + backend logs while developing:
+
+```bash
+URDF_STUDIO_VERBOSE=1 npm run start
+```
 
 ## HuggingFace Token
 

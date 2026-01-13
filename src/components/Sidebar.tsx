@@ -98,6 +98,9 @@ interface SidebarProps {
   onEpisodeSaveHandlerChange?: (
     handler: ((episode: Episode, saveAsNew: boolean, newName?: string) => void) | undefined
   ) => void;
+  onRotateRobot?: (axis: [number, number, number], angleRad: number) => void;
+  onResetRotation?: () => void;
+  hasRotationChanges?: boolean;
   onDatasetActionsReady?: (actions: {
     loadFromLocal: () => void;
     loadFromHuggingFace: () => void;
@@ -722,8 +725,15 @@ const PLAYBACK_GAP_MS = 100;
 const DEFAULT_PLAYBACK_DURATION_MS = 1000;
 
 const sanitizeFilename = (name: string) => {
-  return name
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+  const cleaned = Array.from(name, (char) => {
+    const code = char.charCodeAt(0);
+    if (code < 32 || /[<>:"/\\|?*]/.test(char)) {
+      return "_";
+    }
+    return char;
+  }).join("");
+
+  return cleaned
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_")
     .trim()
@@ -2760,7 +2770,7 @@ export const Sidebar = ({
 
               // Helper to resolve mesh path relative to URDF
               const resolveMeshPath = (urdfDir: string, meshRef: string): string => {
-                let path = meshRef
+                const path = meshRef
                   .replace(/^package:\/\/[^/]+\//, "")
                   .replace(/^file:\/\//, "")
                   .trim()
@@ -4479,6 +4489,10 @@ export const Sidebar = ({
                         ? currentFrame 
                         : 0;
                       const totalFrames = episode.frames.length;
+                      const sourceTypeRaw = episode.metadata?.additional?.sourceType;
+                      const sourceType = typeof sourceTypeRaw === "string" ? sourceTypeRaw : undefined;
+                      const sourceNameRaw = episode.metadata?.additional?.sourceName;
+                      const sourceName = typeof sourceNameRaw === "string" ? sourceNameRaw : undefined;
                         
                         return (
                           <div
@@ -4542,29 +4556,29 @@ export const Sidebar = ({
                                 </div>
                                 
                                 {/* Second Row: Source Info */}
-                                {episode.metadata?.additional?.sourceType && (
+                                {sourceType && (
                                   <div className="flex items-center gap-1">
                                     <Badge
                                       variant={
-                                        episode.metadata.additional.sourceType === 'hf'
+                                        sourceType === 'hf'
                                           ? 'default'
-                                          : episode.metadata.additional.sourceType === 'local'
+                                          : sourceType === 'local'
                                           ? 'secondary'
                                           : 'outline'
                                       }
                                       className="text-[9px] px-1.5 py-0 h-3.5 font-medium"
                                     >
-                                      {episode.metadata.additional.sourceType === 'hf'
+                                      {sourceType === 'hf'
                                         ? 'HF'
-                                        : episode.metadata.additional.sourceType === 'local'
+                                        : sourceType === 'local'
                                         ? 'Local'
-                                        : episode.metadata.additional.sourceType === 'recorded'
+                                        : sourceType === 'recorded'
                                         ? 'REC'
-                                        : episode.metadata.additional.sourceType}
+                                        : sourceType}
                                     </Badge>
-                                    {episode.metadata.additional.sourceName && (
-                                      <span className="text-[10px] text-muted-foreground truncate" title={episode.metadata.additional.sourceName}>
-                                        {episode.metadata.additional.sourceName}
+                                    {sourceName && (
+                                      <span className="text-[10px] text-muted-foreground truncate" title={sourceName}>
+                                        {sourceName}
                                       </span>
                                     )}
                                   </div>

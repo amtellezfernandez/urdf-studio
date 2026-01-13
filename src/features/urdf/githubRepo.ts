@@ -744,7 +744,7 @@ function checkUnsupportedFormats(urdfContent: string): { hasUnsupported: boolean
  */
 function resolveMeshPath(urdfDir: string, meshRef: string): string {
   // Clean and normalize mesh reference in one pass
-  let path = meshRef
+  const path = meshRef
     .replace(/^package:\/\/[^/]+\//, "")  // Remove package:// prefix
     .replace(/^file:\/\//, "")            // Remove file:// prefix
     .trim()                                // Trim whitespace
@@ -1224,4 +1224,3 @@ export function updateURDFMeshPathsToAssets(urdfContent: string): string {
   const serializer = new XMLSerializer();
   return serializer.serializeToString(xmlDoc);
 }
-

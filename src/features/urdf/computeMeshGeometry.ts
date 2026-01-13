@@ -444,8 +444,8 @@ function jacobiEigenvalue(matrix: number[][]): { eigenvalues: number[]; eigenvec
   // Simplified version - for 3x3 we can use analytical solution or iterative method
   // Using a simplified iterative approach
   const n = 3;
-  let A = matrix.map(row => [...row]);
-  let V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  const A = matrix.map(row => [...row]);
+  const V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 
   // Iterative Jacobi method (simplified)
   for (let iter = 0; iter < 10; iter++) {
@@ -578,4 +578,3 @@ export function findMeshFile(filename: string, meshFiles: Record<string, Blob>):
 
   return null;
 }
-

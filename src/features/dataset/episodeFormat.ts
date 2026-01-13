@@ -155,7 +155,11 @@ export const serializeEpisodeCollectionJson = (
 
   const totalFrames = episodeDocs.reduce((sum, doc) => sum + doc.num_frames, 0);
 
-  const jointNames = episodes[0]?.metadata?.joint_names ?? episodeDocs[0]?.metadata?.joint_names ?? [];
+  const episodeJointNames = episodes[0]?.metadata?.joint_names;
+  const docJointNames = episodeDocs[0]?.metadata?.joint_names;
+  const jointNames =
+    (Array.isArray(episodeJointNames) ? episodeJointNames : undefined) ??
+    (Array.isArray(docJointNames) ? (docJointNames as string[]) : []);
 
   const inferredJointCount = jointNames.length;
 
@@ -325,7 +329,7 @@ const parseLegacyFormat = (parsed: Record<string, unknown>, options: EpisodeJson
   const episodesValue = (parsed as { episodes?: unknown }).episodes;
 
   const buildEpisodeFromLegacyDocument = (doc: {
-    joints: EpisodeFrame["joints"][];
+    joints: string[];
     frames: EpisodeFrame[];
     metadata?: EpisodeMetadata;
   }): EpisodeJsonEpisode => {

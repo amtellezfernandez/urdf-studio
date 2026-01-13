@@ -43,11 +43,12 @@ interface Viewer3DProps {
     joints: string[],
     angles: Record<string, number>
   ) => void;
+  onRobotLoaded?: (robot: URDFRobot | null) => void;
   onMotionDataNodesGenerated?: (nodes: Node[], edges: Edge[]) => void;
   onMotionFileChange?: (file: File | null) => void;
   onPlayingChange?: (isPlaying: boolean) => void;
   onAnimationFramesChange?: (hasFrames: boolean) => void;
-  onFrameChange?: (currentFrame: number, totalFrames: number) => void;
+  onFrameChange?: (currentFrame: number, totalFrames?: number) => void;
   collisionVisibility?: CollisionVisibility;
   rotationPlaneVisible?: boolean;
   onRobotBoundingBoxChange?: (boundingBox: THREE.Box3 | null) => void;
@@ -263,12 +264,12 @@ const CollisionGeometries = ({
           
           // Extract position and rotation from combined matrix
           const worldPosition = new THREE.Vector3();
-          const worldRotation = new THREE.Euler();
+          const worldQuaternion = new THREE.Quaternion();
           const worldScale = new THREE.Vector3();
-          linkWorldMatrix.decompose(worldPosition, worldRotation, worldScale);
+          linkWorldMatrix.decompose(worldPosition, worldQuaternion, worldScale);
           
           mesh.position.copy(worldPosition);
-          mesh.rotation.copy(worldRotation);
+          mesh.quaternion.copy(worldQuaternion);
         } else {
           // Fallback: just use local transform if link not found
           mesh.position.set(localXyz[0], localXyz[1], localXyz[2]);
@@ -406,12 +407,12 @@ const CollisionGeometries = ({
         
         // Extract position and rotation from combined matrix
         const worldPosition = new THREE.Vector3();
-        const worldRotation = new THREE.Euler();
+        const worldQuaternion = new THREE.Quaternion();
         const worldScale = new THREE.Vector3();
-        linkWorldMatrix.decompose(worldPosition, worldRotation, worldScale);
+        linkWorldMatrix.decompose(worldPosition, worldQuaternion, worldScale);
         
         mesh.position.copy(worldPosition);
-        mesh.rotation.copy(worldRotation);
+        mesh.quaternion.copy(worldQuaternion);
       }
     });
   });
@@ -433,7 +434,7 @@ const TrackingLine = ({
   endEffectorLink?: string | null;
   gpuMode?: GPUMode;
 }) => {
-  const lineRef = useRef<THREE.Line>(null);
+  const lineRef = useRef<THREE.LineSegments>(null);
 
   useFrame(() => {
     if (!robot || !lineRef.current) return;
@@ -492,7 +493,7 @@ const TrackingLine = ({
   });
 
   return (
-    <line ref={lineRef} renderOrder={1000}>
+    <lineSegments ref={lineRef} renderOrder={1000}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
@@ -516,7 +517,7 @@ const TrackingLine = ({
         depthTest={false}
         depthWrite={false}
       />
-    </line>
+    </lineSegments>
   );
 };
 
@@ -645,7 +646,7 @@ const OrbitVisualization = ({
     );
   }, [centerPosition, radius, inclination, phase, secondaryPhaseOffsetDeg]);
 
-  const targetOffset = useMemo(
+  const targetOffset = useMemo<[number, number, number]>(
     () => [
       orbitTargetPosition.x - centerPosition.x,
       orbitTargetPosition.y - centerPosition.y,
@@ -654,7 +655,7 @@ const OrbitVisualization = ({
     [orbitTargetPosition, centerPosition]
   );
 
-  const secondaryTargetOffset = useMemo(
+  const secondaryTargetOffset = useMemo<[number, number, number]>(
     () => [
       secondaryTargetPosition.x - centerPosition.x,
       secondaryTargetPosition.y - centerPosition.y,
@@ -1478,7 +1479,7 @@ const CreatedObjects = ({
   meshFiles: MeshFiles;
   animationFrames: AnimationFrame[] | null;
   isPlaying: boolean;
-  onRobotLoaded: (robot: any) => void;
+  onRobotLoaded: (robot: URDFRobot | null) => void;
   selectedJoint?: string | null;
   selectedLink?: string | null;
   onSelectPart?: (payload: {
@@ -1487,7 +1488,7 @@ const CreatedObjects = ({
   }) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onDragActiveChange?: (active: boolean) => void;
-  onFrameChange?: (frameIndex: number) => void;
+  onFrameChange?: (frameIndex: number, totalFrames?: number) => void;
   jointLimits?: JointLimits;
   jointAxes?: JointAxisMap;
   gpuMode?: GPUMode;
@@ -2097,7 +2098,7 @@ const CreatedObjects = ({
       
       // Calculate new angle based on initial angle + vertical offset
       // Mouse up (negative dy) increases angle, mouse down (positive dy) decreases angle
-      let next = dragStart.angle + (dy * sensitivity);
+      const next = dragStart.angle + (dy * sensitivity);
       
       // Clamp to joint limits (only if limits are finite)
       let clampedNext = next;
@@ -2451,26 +2452,25 @@ const PlaceholderLamp = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => {
   const baseSegments = isLowGPU ? 16 : 32;
   const standSegments = isLowGPU ? 8 : 16;
   const shadeSegments = isLowGPU ? 16 : 32;
-  const Material = isLowGPU ? THREE.MeshBasicMaterial : THREE.MeshStandardMaterial;
   
   return (
     <group>
       {/* Base */}
       <mesh position={[0, 0.05, 0]}>
         <cylinderGeometry args={[0.3, 0.3, 0.1, baseSegments]} />
-        <Material color="#666666" />
+        {isLowGPU ? <meshBasicMaterial color="#666666" /> : <meshStandardMaterial color="#666666" />}
       </mesh>
 
       {/* Stand */}
       <mesh position={[0, 0.4, 0]}>
         <cylinderGeometry args={[0.05, 0.05, 0.6, standSegments]} />
-        <Material color="#888888" />
+        {isLowGPU ? <meshBasicMaterial color="#888888" /> : <meshStandardMaterial color="#888888" />}
       </mesh>
 
       {/* Lampshade */}
       <mesh position={[0, 0.8, 0]} rotation={[0, 0, 0]}>
         <coneGeometry args={[0.25, 0.3, shadeSegments]} />
-        <Material color="#aaaaaa" />
+        {isLowGPU ? <meshBasicMaterial color="#aaaaaa" /> : <meshStandardMaterial color="#aaaaaa" />}
       </mesh>
     </group>
   );

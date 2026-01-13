@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { X, ChevronDown, Info, Copy, Edit } from "lucide-react";
+import { X, ChevronDown, Info, Copy, Edit, GitCompare } from "lucide-react";
 import { toast } from "sonner";
 import { URDFSyntaxHighlighter } from "./URDFSyntaxHighlighter";
 import { cn } from "@/lib/utils";

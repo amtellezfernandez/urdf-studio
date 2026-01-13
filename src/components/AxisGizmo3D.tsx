@@ -1,7 +1,7 @@
 import { useRef, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { Text } from "@react-three/drei";
+import { Billboard, Text } from "@react-three/drei";
 
 interface AxisGizmo3DProps {
   onViewChange?: (direction: 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right') => void;
@@ -52,8 +52,11 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
     // Scale based on distance to camera to maintain consistent screen size
     const distanceToCamera = camera.position.distanceTo(gizmoPosition);
     const targetScreenSize = 140; // Target size in pixels (bigger)
-    const fov = camera.fov * (Math.PI / 180);
-    const screenHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+    const screenHeight = camera instanceof THREE.PerspectiveCamera
+      ? 2 * Math.tan((camera.fov * Math.PI) / 360) * distanceToCamera
+      : camera instanceof THREE.OrthographicCamera
+        ? Math.abs(camera.top - camera.bottom) / camera.zoom
+        : 1;
     const scaleFactor = (targetScreenSize / 600) * (screenHeight / 2); // 600px reference
     
     // Apply scale with reasonable min/max bounds (bigger)
@@ -198,18 +201,18 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
           <sphereGeometry args={[ballRadius, 16, 16]} />
         </mesh>
         <group renderOrder={10000}>
-          <Text
-            position={[labelDistance, 0, 0]}
-            fontSize={0.13}
-            color="#FFFFFF"
-            anchorX="center"
-            anchorY="middle"
-            outlineWidth={0.008}
-            outlineColor="#000000"
-            billboard
-          >
-            X
-          </Text>
+          <Billboard position={[labelDistance, 0, 0]}>
+            <Text
+              fontSize={0.13}
+              color="#FFFFFF"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.008}
+              outlineColor="#000000"
+            >
+              X
+            </Text>
+          </Billboard>
         </group>
       </group>
 
@@ -261,18 +264,18 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
           <sphereGeometry args={[ballRadius, 16, 16]} />
         </mesh>
         <group renderOrder={10000}>
-          <Text
-            position={[0, labelDistance, 0]}
-            fontSize={0.13}
-            color="#FFFFFF"
-            anchorX="center"
-            anchorY="middle"
-            outlineWidth={0.008}
-            outlineColor="#000000"
-            billboard
-          >
-            Y
-          </Text>
+          <Billboard position={[0, labelDistance, 0]}>
+            <Text
+              fontSize={0.13}
+              color="#FFFFFF"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.008}
+              outlineColor="#000000"
+            >
+              Y
+            </Text>
+          </Billboard>
         </group>
       </group>
 
@@ -324,21 +327,20 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
           <sphereGeometry args={[ballRadius, 16, 16]} />
         </mesh>
         <group renderOrder={10000}>
-          <Text
-            position={[0, 0, labelDistance]}
-            fontSize={0.13}
-            color="#FFFFFF"
-            anchorX="center"
-            anchorY="middle"
-            outlineWidth={0.008}
-            outlineColor="#000000"
-            billboard
-          >
-            Z
-          </Text>
+          <Billboard position={[0, 0, labelDistance]}>
+            <Text
+              fontSize={0.13}
+              color="#FFFFFF"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.008}
+              outlineColor="#000000"
+            >
+              Z
+            </Text>
+          </Billboard>
         </group>
       </group>
     </group>
   );
 };
-

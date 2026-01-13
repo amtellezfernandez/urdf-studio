@@ -24,6 +24,8 @@ const colors = {
   underline: '\x1b[4m',
 };
 
+const verbose = /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_VERBOSE || '');
+
 function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
@@ -61,6 +63,9 @@ ${colors.gray}──────────────────────
 `;
 
 function filterViteOutput(data) {
+  if (verbose) {
+    return true;
+  }
   const output = data.toString();
   
   // Filter out vite's default output
@@ -127,7 +132,7 @@ function main() {
     // Only show errors from Python backend
     pythonBackendProcess.stdout.on('data', (data) => {
       const output = data.toString();
-      if (output.includes('ERROR') || output.includes('Error') || output.includes('WARNING')) {
+      if (verbose || output.includes('ERROR') || output.includes('Error') || output.includes('WARNING')) {
         process.stdout.write(`[Backend] ${data}`);
       }
     });
@@ -188,4 +193,3 @@ function main() {
 }
 
 main();
-

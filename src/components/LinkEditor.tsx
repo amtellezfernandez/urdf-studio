@@ -1013,8 +1013,12 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
           maxZ = Math.max(maxZ, zLink);
         }
         
-        const boxSize = [maxX - minX, maxY - minY, maxZ - minZ];
-        const boxCenter = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
+        const boxSize: [number, number, number] = [maxX - minX, maxY - minY, maxZ - minZ];
+        const boxCenter: [number, number, number] = [
+          (minX + maxX) / 2,
+          (minY + maxY) / 2,
+          (minZ + maxZ) / 2,
+        ];
         
         newGeometryType = "box";
         newGeometryParams = {
@@ -1247,7 +1251,6 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
             
             let axis: [number, number, number];
             let height: number;
-            let centerX: number, centerY: number, centerZ: number;
             
             if (sizeX >= sizeY && sizeX >= sizeZ) {
               axis = [1, 0, 0];
@@ -1260,9 +1263,9 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
               height = sizeZ;
             }
             
-            centerX = (minX + maxX) / 2;
-            centerY = (minY + maxY) / 2;
-            centerZ = (minZ + maxZ) / 2;
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const centerZ = (minZ + maxZ) / 2;
             
             // Compute radius using 95th percentile
             const radialDistances: number[] = [];
@@ -1325,7 +1328,6 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
           
           let axis: [number, number, number];
           let height: number;
-          let centerX: number, centerY: number, centerZ: number;
           
           if (sizeX >= sizeY && sizeX >= sizeZ) {
             axis = [1, 0, 0];
@@ -1338,9 +1340,9 @@ const CollisionControl = ({ linkName, collision, index, linkData, urdfContent, o
             height = sizeZ;
           }
           
-          centerX = (minX + maxX) / 2;
-          centerY = (minY + maxY) / 2;
-          centerZ = (minZ + maxZ) / 2;
+          const centerX = (minX + maxX) / 2;
+          const centerY = (minY + maxY) / 2;
+          const centerZ = (minZ + maxZ) / 2;
           
           // Compute radius using 95th percentile
           const radialDistances: number[] = [];

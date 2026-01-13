@@ -246,7 +246,7 @@ function mapJointType(urdfType: string): string {
  * Converts URDF geometry to MuJoCo geom string
  */
 function geometryToMJCF(geom: GeometryData, indent: string, groupType: string): string {
-  const quat = rpyToQuat(geom.rpy || [0, 0, 0]);
+  const quat = rpyToQuat(geom.origin.rpy || [0, 0, 0]);
   const pos = geom.origin.xyz.join(" ");
   const quatStr = quat.map((v) => v.toFixed(6)).join(" ");
 
@@ -261,23 +261,25 @@ function geometryToMJCF(geom: GeometryData, indent: string, groupType: string): 
   geomStr += `pos="${pos}" quat="${quatStr}" `;
 
   switch (geom.type) {
-    case "box":
+    case "box": {
       // MuJoCo uses half-sizes
       const halfSize = geom.size!.map((s) => (s / 2).toFixed(6)).join(" ");
       geomStr += `type="box" size="${halfSize}"`;
       break;
+    }
 
-    case "cylinder":
+    case "cylinder": {
       // MuJoCo cylinder: radius, half-length
       const cylSize = `${geom.radius!.toFixed(6)} ${(geom.length! / 2).toFixed(6)}`;
       geomStr += `type="cylinder" size="${cylSize}"`;
       break;
+    }
 
     case "sphere":
       geomStr += `type="sphere" size="${geom.radius!.toFixed(6)}"`;
       break;
 
-    case "mesh":
+    case "mesh": {
       // Extract mesh name from filename
       const meshName = geom
         .filename!.split("/")
@@ -286,6 +288,7 @@ function geometryToMJCF(geom: GeometryData, indent: string, groupType: string): 
         .replace(/[^a-zA-Z0-9_]/g, "_");
       geomStr += `type="mesh" mesh="${meshName}"`;
       break;
+    }
 
     default:
       geomStr += 'type="box" size="0.01 0.01 0.01"';

@@ -30,6 +30,7 @@ interface JointNode {
   type: string;
   parentLink: string;
   childLink: string;
+  children?: string[];
 }
 
 interface HierarchyData {
@@ -346,4 +347,3 @@ export const URDFHierarchy = ({
     </Dialog>
   );
 };
-

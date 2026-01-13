@@ -1546,6 +1546,51 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     }
   }, [isDragging, isResizing, dragOffset, resizeStart, resizeDirection, position]);
 
+  const handleSave = useCallback(() => {
+    if (!modifiedEpisode || !onSaveEpisode) return;
+
+    if (saveAsNew && newEpisodeName.trim()) {
+      // Save as new episode
+      onSaveEpisode(modifiedEpisode, true, newEpisodeName.trim());
+      // Remember choice for quick save (Ctrl+S)
+      setLastSaveChoice('new');
+    } else if (!saveAsNew) {
+      // Overwrite existing episode
+      onSaveEpisode(modifiedEpisode, false);
+      // Remember choice for quick save (Ctrl+S)
+      setLastSaveChoice('overwrite');
+    }
+
+    // Close dialog and exit edit mode
+    setShowSaveDialog(false);
+    setIsEditMode(false);
+    setEditingJoint(null);
+    setSelectedPointIndex(null);
+    setTangentHandles(new Map());
+    setSaveAsNew(false);
+    setNewEpisodeName("");
+  }, [modifiedEpisode, onSaveEpisode, saveAsNew, newEpisodeName]);
+
+  const handleCancelSave = useCallback(() => {
+    setShowSaveDialog(false);
+    setSaveAsNew(false);
+    setNewEpisodeName("");
+  }, []);
+
+  const handleJointSelect = useCallback((jointName: string) => {
+    // Make sure the joint is visible first
+    if (!selectedJoints.has(jointName)) {
+      const newSelected = new Set(selectedJoints);
+      newSelected.add(jointName);
+      setSelectedJoints(newSelected);
+    }
+    // Enter edit mode for the selected joint
+    setIsEditMode(true);
+    setEditingJoint(jointName);
+    setSelectedPointIndex(null);
+    setTangentHandles(new Map());
+  }, [selectedJoints]);
+
   if (!open) return null;
 
   if (!episode) return null;
@@ -1988,37 +2033,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   );
 
   // Save Dialog
-  const handleSave = useCallback(() => {
-    if (!modifiedEpisode || !onSaveEpisode) return;
-
-    if (saveAsNew && newEpisodeName.trim()) {
-      // Save as new episode
-      onSaveEpisode(modifiedEpisode, true, newEpisodeName.trim());
-      // Remember choice for quick save (Ctrl+S)
-      setLastSaveChoice('new');
-    } else if (!saveAsNew) {
-      // Overwrite existing episode
-      onSaveEpisode(modifiedEpisode, false);
-      // Remember choice for quick save (Ctrl+S)
-      setLastSaveChoice('overwrite');
-    }
-
-    // Close dialog and exit edit mode
-    setShowSaveDialog(false);
-    setIsEditMode(false);
-    setEditingJoint(null);
-    setSelectedPointIndex(null);
-    setTangentHandles(new Map());
-    setSaveAsNew(false);
-    setNewEpisodeName("");
-  }, [modifiedEpisode, onSaveEpisode, saveAsNew, newEpisodeName]);
-
-  const handleCancelSave = useCallback(() => {
-    setShowSaveDialog(false);
-    setSaveAsNew(false);
-    setNewEpisodeName("");
-  }, []);
-
   const saveDialog = (
     <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
       <DialogContent>
@@ -2084,21 +2098,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       </DialogContent>
     </Dialog>
   );
-
-  // Joint Selection Handler
-  const handleJointSelect = useCallback((jointName: string) => {
-    // Make sure the joint is visible first
-    if (!selectedJoints.has(jointName)) {
-      const newSelected = new Set(selectedJoints);
-      newSelected.add(jointName);
-      setSelectedJoints(newSelected);
-    }
-    // Enter edit mode for the selected joint
-    setIsEditMode(true);
-    setEditingJoint(jointName);
-    setSelectedPointIndex(null);
-    setTangentHandles(new Map());
-  }, [selectedJoints]);
 
 
   // Exit Confirmation Dialog (Blender-like)

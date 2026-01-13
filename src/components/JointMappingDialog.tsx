@@ -274,8 +274,8 @@ export const JointMappingDialog = ({
         : (jointOffsets[mapping.datasetJoint] !== undefined ? jointOffsets[mapping.datasetJoint] : undefined);
       
       // Check warnings with offset applied (if any)
-      let transformedMin = effectiveDatasetMin + (existingOffset || 0);
-      let transformedMax = effectiveDatasetMax + (existingOffset || 0);
+      const transformedMin = effectiveDatasetMin + (existingOffset || 0);
+      const transformedMax = effectiveDatasetMax + (existingOffset || 0);
       
       // Check if transformed values (with user-set offset) still have issues
       const isMinOutAfterOffset = transformedMin < urdfLimit.lower;

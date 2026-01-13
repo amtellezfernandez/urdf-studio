@@ -45,8 +45,11 @@ export const CameraViewButtons = ({ robot, onCameraViewChange }: CameraViewButto
 
     // Scale based on distance
     const distanceToCamera = camera.position.distanceTo(buttonsPosition);
-    const fov = camera.fov * (Math.PI / 180);
-    const screenHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+    const screenHeight = camera instanceof THREE.PerspectiveCamera
+      ? 2 * Math.tan((camera.fov * Math.PI) / 360) * distanceToCamera
+      : camera instanceof THREE.OrthographicCamera
+        ? Math.abs(camera.top - camera.bottom) / camera.zoom
+        : 1;
     const scaleFactor = (100 / 600) * (screenHeight / 2);
     const scale = Math.max(0.12, Math.min(0.30, scaleFactor));
     groupRef.current.scale.setScalar(scale);
@@ -151,4 +154,3 @@ const CameraButton = ({
     </group>
   );
 };
-

@@ -18,3 +18,7 @@ npm run dev
 - Zustand keeps joint state locked in.
 - 3D viewer is live — sliders and nodes update the robot instantly.
 - Import/export supports multi-episode JSON bundles with a manifest, so sharing or versioning is easy.
+
+## 🧪 Dev Tips
+- `URDF_STUDIO_VERBOSE=1 npm run start` to see full Vite + backend logs.
+- `npm run smoke` to run lint + typecheck quickly.
