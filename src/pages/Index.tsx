@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
-import { JointListSidebar } from "@/components/JointListSidebar";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { ExportDialog } from "@/components/ExportDialog";
 import { JointMappingDialog } from "@/components/JointMappingDialog";
@@ -31,6 +30,7 @@ import { TopNavBar } from "@/pages/index/TopNavBar";
 import { MeshFilesStatusPanel } from "@/pages/index/MeshFilesStatusPanel";
 import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
 import { ViewerLayout } from "@/pages/index/ViewerLayout";
+import { RightSidebarPanel } from "@/pages/index/RightSidebarPanel";
 
 import type {
   MeshFiles,
@@ -875,8 +875,7 @@ const Index = () => {
             onViewerOpenChange={setIsViewerOpen}
           />
 
-          {/* Right Sidebar - Joint List */}
-          <JointListSidebar
+          <RightSidebarPanel
             availableJoints={availableJoints}
             episodeJointNames={episodeJointNames}
             availableLinks={availableLinks}
@@ -888,9 +887,9 @@ const Index = () => {
             hoveredJoint={hoveredJoint}
             onJointHover={setHoveredJoint}
             deletedJoints={deletedJoints}
-            width={rightSidebarWidth}
-            isCollapsed={isRightSidebarCollapsed}
-            urdfContent={vizUrdfContent}
+            rightSidebarWidth={rightSidebarWidth}
+            isRightSidebarCollapsed={isRightSidebarCollapsed}
+            vizUrdfContent={vizUrdfContent}
             jointAxes={jointAxes}
             originalJointAxes={originalJointAxes}
             onJointChange={handleJointChange}
@@ -910,26 +909,8 @@ const Index = () => {
             endEffectorLink={endEffectorLink}
             onMarkAsEndEffector={setEndEffectorLink}
             robot={robot}
+            onRightSidebarResizeStart={handleRightSidebarResizeStart}
           />
-
-          {/* Right Sidebar Resizer */}
-          {!isRightSidebarCollapsed && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize right sidebar"
-              onPointerDown={handleRightSidebarResizeStart}
-              className="fixed z-40 cursor-col-resize select-none"
-              style={{
-                top: "32px",
-                bottom: 0,
-                right: rightSidebarWidth - SIDEBAR_RESIZER_WIDTH / 2,
-                width: SIDEBAR_RESIZER_WIDTH,
-              }}
-            >
-              <span className="pointer-events-none absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-border/70" />
-            </div>
-          )}
 
         </>
       )}
