@@ -3900,6 +3900,12 @@ export const Sidebar = ({
 
     if (action.type === "stop") {
       stopAllPlayback();
+      return;
+    }
+
+    if (isPlayingAllRef.current) {
+      setIsPlayingAll(false);
+      isPlayingAllRef.current = false;
     }
   }, [
     currentFrame,
