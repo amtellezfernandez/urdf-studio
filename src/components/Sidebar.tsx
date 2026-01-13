@@ -3827,10 +3827,18 @@ export const Sidebar = ({
       setIsPlayingAll(true);
       isPlayingAllRef.current = true;
 
-      setEpisodeAndFrame(episodeIndex, 0);
+      const lastFrameIdx = episode.frames.length - 1;
+      const resumeFrame =
+        currentPlayingEpisodeIndex === episodeIndex && currentFrame !== undefined
+          ? Math.min(currentFrame, lastFrameIdx)
+          : 0;
+      const startFrame = resumeFrame >= lastFrameIdx ? 0 : resumeFrame;
+
+      setEpisodeAndFrame(episodeIndex, startFrame);
     },
     [
       currentPlayingEpisodeIndex,
+      currentFrame,
       episodes,
       isPlayingAll,
       onViewerOpenChange,

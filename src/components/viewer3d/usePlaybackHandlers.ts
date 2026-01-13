@@ -11,6 +11,7 @@ type UsePlaybackHandlersParams = {
   isPlaying: boolean;
   setIsPlaying: (isPlaying: boolean) => void;
   setAnimationFrames: (frames: AnimationFrame[] | null) => void;
+  setCurrentFrame?: (frameIndex: number) => void;
   onPlayingChange?: (isPlaying: boolean) => void;
   onFrameChange?: (frameIndex: number) => void;
   animationController: AnimationController;
@@ -22,6 +23,7 @@ export const usePlaybackHandlers = ({
   isPlaying,
   setIsPlaying,
   setAnimationFrames,
+  setCurrentFrame,
   onPlayingChange,
   onFrameChange,
   animationController,
@@ -89,13 +91,24 @@ export const usePlaybackHandlers = ({
       );
       animationController.setPreserveFrameTime(null);
       animationController.setCurrentFrameIndex(clampedIndex);
+      setCurrentFrame?.(clampedIndex);
       animationController.setResetAnimationStart(true);
       animationController.setPaused(!autoplay);
       animationController.clearManualJointChange();
       setIsPlaying(autoplay);
       onPlayingChange?.(autoplay);
+      if (!setCurrentFrame) {
+        onFrameChange?.(clampedIndex);
+      }
     },
-    [animationController, onPlayingChange, setAnimationFrames, setIsPlaying]
+    [
+      animationController,
+      onFrameChange,
+      onPlayingChange,
+      setAnimationFrames,
+      setCurrentFrame,
+      setIsPlaying,
+    ]
   );
 
   const handleStopAnimation = useCallback(() => {
@@ -108,8 +121,9 @@ export const usePlaybackHandlers = ({
       animationController.setCurrentFrameIndex(clampedIndex);
       animationController.setManualFrameTime(targetTimestamp);
       animationController.setPreserveFrameTime(targetTimestamp);
+      setCurrentFrame?.(clampedIndex);
 
-      if (onFrameChange) {
+      if (onFrameChange && !setCurrentFrame) {
         onFrameChange(clampedIndex);
       }
     }
@@ -145,12 +159,20 @@ export const usePlaybackHandlers = ({
       if (targetFrame) {
         animationController.setManualFrameTime(targetFrame.timestamp);
         animationController.setCurrentFrameIndex(clampedIndex);
+        setCurrentFrame?.(clampedIndex);
         if (onFrameChange) {
           onFrameChange(clampedIndex);
         }
       }
     },
-    [animationFrames, animationController, onPlayingChange, onFrameChange, setIsPlaying]
+    [
+      animationFrames,
+      animationController,
+      onFrameChange,
+      onPlayingChange,
+      setCurrentFrame,
+      setIsPlaying,
+    ]
   );
 
   return {

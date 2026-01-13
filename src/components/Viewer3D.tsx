@@ -1858,6 +1858,7 @@ export const Viewer3D = ({
     isPlaying,
     setIsPlaying,
     setAnimationFrames,
+    setCurrentFrame,
     onPlayingChange,
     onFrameChange,
     animationController,
