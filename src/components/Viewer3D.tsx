@@ -19,6 +19,7 @@ import { useCameraStore } from "@/store/useCameraStore";
 import { parseEpisodeCsv, parseEpisodeJson } from "@/features/dataset";
 import type { CollisionVisibility } from "@/components/LinkEditor";
 import { cn } from "@/lib/utils";
+import { applyJointValues } from "@/lib/urdf-joints";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
 import type { MeshFiles, WindowWithViewerHandlers } from "@/features/types";
 import { Button } from "@/components/ui/button";
@@ -1977,17 +1978,7 @@ const CreatedObjects = ({
     }
 
     // Apply joint values to robot
-    if (robotRef.current && robotRef.current.setJointValues) {
-      robotRef.current.setJointValues(interpolatedJoints);
-    } else if (robotRef.current && robotRef.current.setJointValue) {
-      // Fallback to individual joint setting
-      for (const jointName in interpolatedJoints) {
-        robotRef.current.setJointValue(
-          jointName,
-          interpolatedJoints[jointName]
-        );
-      }
-    }
+    applyJointValues(robotRef.current, interpolatedJoints, { filter: false });
     
     // Update the store in batch so UI reflects the animation
     setStoreJointValues(interpolatedJoints);
@@ -3089,14 +3080,11 @@ export const Viewer3D = ({
       console.log("[Viewer3D] IK solution received:", solution);
       (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
       const robotAny = robot;
-      if (robotAny?.setJointValues) {
-        console.log("[Viewer3D] Applying via setJointValues");
-        robotAny.setJointValues(blended);
-      } else if (robotAny?.setJointValue) {
-        console.log("[Viewer3D] Applying via setJointValue");
-        for (const [name, value] of Object.entries(blended)) {
-          robotAny.setJointValue(name, value);
-        }
+      if (robotAny?.setJointValues || robotAny?.setJointValue) {
+        console.log(
+          `[Viewer3D] Applying via ${robotAny.setJointValues ? "setJointValues" : "setJointValue"}`
+        );
+        applyJointValues(robotAny, blended, { filter: false });
       } else {
         console.error("[Viewer3D] Robot has no setJointValues or setJointValue method!");
       }
@@ -3348,24 +3336,14 @@ export const Viewer3D = ({
   // Apply joint values from props (skip if dragging)
   useEffect(() => {
     if (!robot || isDraggingJoint || isIkHandleDragging) return;
-    if (typeof robot.setJointValue !== "function") return;
-    for (const [jointName, value] of Object.entries(jointValues)) {
-      if (typeof value === "number" && !Number.isNaN(value)) {
-        robot.setJointValue(jointName, value);
-      }
-    }
+    applyJointValues(robot, jointValues);
   }, [robot, jointValues, isDraggingJoint, isIkHandleDragging]);
 
   const resetPose = useCallback(() => {
     if (!robot) return;
     const resetValues = { ...initialPoseRef.current };
     if (Object.keys(resetValues).length === 0) return;
-    const robotAny = robot;
-    if (typeof robotAny.setJointValue === "function") {
-      for (const [name, value] of Object.entries(resetValues)) {
-        robotAny.setJointValue(name, value);
-      }
-    }
+    applyJointValues(robot, resetValues, { filter: false });
     setStoreJointValues(resetValues);
     if (onJointChange) {
       for (const [name, value] of Object.entries(resetValues)) {
@@ -3378,18 +3356,20 @@ export const Viewer3D = ({
   useEffect(() => {
     if (!robot || isDraggingJoint || isIkHandleDragging) return;
     const r = robot;
-    if (typeof r.setJointValue !== "function") return;
+    if (typeof r.setJointValues !== "function" && typeof r.setJointValue !== "function") return;
     let hasChanges = false;
+    const nextValues: Record<string, number> = {};
     for (const [jointName, value] of Object.entries(storeJointValues)) {
-      if (typeof value === "number" && !Number.isNaN(value)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        nextValues[jointName] = value;
         // Check if the value differs from current robot joint value
         const currentValue = resolveJointScalarValue(r.joints?.[jointName]);
         if (typeof currentValue === "number" && Math.abs(currentValue - value) > 0.001) {
           hasChanges = true;
         }
-        r.setJointValue(jointName, value);
       }
     }
+    applyJointValues(r, nextValues, { filter: false });
     // Mark manual changes if we're not playing and values actually changed
     // This allows slider changes to also prevent animation from overwriting manual changes
     if (hasChanges && !isPlaying) {
@@ -3508,13 +3488,7 @@ export const Viewer3D = ({
 
       if (robot && frames.length > 0) {
         const firstFrame = frames[0].joints;
-        if (robot.setJointValues) {
-          robot.setJointValues(firstFrame);
-        } else if (robot.setJointValue) {
-          for (const [jointName, value] of Object.entries(firstFrame)) {
-            robot.setJointValue(jointName, value);
-          }
-        }
+        applyJointValues(robot, firstFrame, { filter: false });
         setStoreJointValues(firstFrame);
       }
 

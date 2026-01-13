@@ -6,6 +6,7 @@ import { STLLoader } from "three-stdlib";
 import { useCameraStore } from "@/store/useCameraStore";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
+import { applyJointValues } from "@/lib/urdf-joints";
 import type { GPUMode } from "@/hooks/use-gpu-mode";
 import type { MeshFiles } from "@/features/types";
 
@@ -93,11 +94,9 @@ const PreviewObjects = ({
 
 const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
   useFrame(() => {
-    if (!robot?.setJointValue) return;
+    if (!robot) return;
     const values = useJointStore.getState().jointValues;
-    for (const [jointName, value] of Object.entries(values)) {
-      robot.setJointValue(jointName, value);
-    }
+    applyJointValues(robot, values);
     // Keep world matrices up to date so dependent helpers (e.g., camera pose) see movement
     robot.updateMatrixWorld?.(true);
   });
