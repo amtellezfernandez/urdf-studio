@@ -1,32 +1,18 @@
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
-import { ExportDialog } from "@/components/ExportDialog";
 import { useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
 import { useCameraStore } from "@/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/types/file";
 import type { URDFRobot } from "urdf-loader";
-import { TopNavBar } from "@/pages/index/TopNavBar";
-import { MeshFilesStatusPanel } from "@/pages/index/MeshFilesStatusPanel";
-import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
-import { ViewerLayout } from "@/pages/index/ViewerLayout";
-import { RightSidebarPanel } from "@/pages/index/RightSidebarPanel";
-import { LeftSidebarPanel } from "@/pages/index/LeftSidebarPanel";
-import { LoadingScreen } from "@/pages/index/LoadingScreen";
-import { MappingPanels } from "@/pages/index/MappingPanels";
-import { CreationDialogs } from "@/pages/index/CreationDialogs";
 import { useUrdfEditHandlers } from "@/pages/index/useUrdfEditHandlers";
 import { useUrdfUtilityHandlers } from "@/pages/index/useUrdfUtilityHandlers";
 import { useDatasetPlaybackHandlers } from "@/pages/index/useDatasetPlaybackHandlers";
 import { useUrdfMaterialHandlers } from "@/pages/index/useUrdfMaterialHandlers";
+import { PageLayout } from "@/pages/index/PageLayout";
 
-import type {
-  MeshFiles,
-  RotationAxis,
-  UrdfViewMode,
-  AngleUnit,
-} from "@/features/types";
+import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/features/types";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfSelection } from "@/features/urdf-selection";
@@ -309,237 +295,228 @@ const Index = () => {
     return <FolderUploadScreen onFolderSelected={loadFilesFromFolder} />;
   }
 
+  const githubToken =
+    typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN
+      ? import.meta.env.VITE_GITHUB_TOKEN
+      : null;
+
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {isLoading ? (
-        <LoadingScreen />
-      ) : (
-        <>
-          <TopNavBar
-            showMenus={Boolean(originalUrdfContent && vizUrdfContent)}
-            openExportDialog={openExportDialog}
-            onSave={handleSave}
-            onRevert={handleRevert}
-            canRevert={canRevert}
-            onResetRotation={handleResetRotation}
-            hasRotationChanges={hasRotationChanges}
-            onCanonicalOrder={handleCanonicalOrder}
-            onPrettyPrint={handlePrettyPrint}
-            onNormalizeAxes={handleNormalizeAxes}
-            onFixMeshPaths={handleFixMeshPaths}
-            rotationAxis={rotationAxis}
-            setRotationAxis={setRotationAxis}
-            onRotateRobot={handleRotateRobot}
-            angleUnit={angleUnit}
-            setAngleUnit={setAngleUnit}
-            gpuMode={gpuMode}
-            setGPUMode={setGPUMode}
-            showUrdfEditor={showUrdfEditor}
-            setShowUrdfEditor={setShowUrdfEditor}
-            urdfViewMode={urdfViewMode}
-            setUrdfViewMode={setUrdfViewMode}
-            showPovCameras={showPovCameras}
-            setShowPovCameras={setShowPovCameras}
-            openMappingList={openMappingList}
-            datasetActions={datasetActions}
-            openObjectCreator={openObjectCreator}
-            setShowCameraCreator={setShowCameraCreator}
-            setShowCameraUpload={setShowCameraUpload}
-            exportCamerasAsJSON={exportCamerasAsJSON}
-            exportCamerasAsYAML={exportCamerasAsYAML}
-            hasCamerasToExport={hasCamerasToExport}
-          />
-
-          <LeftSidebarPanel
-            isLoading={isLoading}
-            availableJoints={availableJoints}
-            jointLimits={jointLimits}
-            jointAxes={jointAxes}
-            originalJointAxes={originalJointAxes}
-            originalUrdfContent={originalUrdfContent}
-            vizUrdfContent={vizUrdfContent}
-            onJointChange={handleJointChange}
-            onJointSelect={setSelectedJoint}
-            selectedJoint={selectedJoint}
-            onVizUrdfChange={handleVizUrdfChange}
-            onJointAxisChange={handleJointAxisChange}
-            onResetAxis={handleResetAxis}
-            onJointTypeChange={handleJointTypeChange}
-            onJointNameChange={handleJointNameChange}
-            onDeleteJoint={handleDeleteJoint}
-            deletedJoints={deletedJoints}
-            getExportUrdfContent={getExportUrdfContent}
-            onMotionDataUpload={handleMotionDataUpload}
-            onPlayAnimation={handlePlayAnimation}
-            isPlaying={isPlaying}
-            motionDataFileName={motionDataFile?.name}
-            hasAnimationFrames={hasAnimationFrames}
-            currentFrame={currentFrame}
-            totalFrames={totalFrames}
-            sidebarWidth={sidebarWidth}
-            isSidebarCollapsed={isSidebarCollapsed}
-            onToggleCollapse={handleSidebarToggle}
-            meshFiles={meshFiles}
-            onCollisionVisibilityChange={setCollisionVisibility}
-            rotationPlaneVisible={rotationPlaneVisible}
-            onRotationPlaneVisibilityChange={setRotationPlaneVisible}
-            onFrameChange={setCurrentFrame}
-            onUrdfEditorToggle={setShowUrdfEditor}
-            showUrdfEditor={showUrdfEditor}
-            viewerSplitView={viewerSplitView}
-            onViewerSplitViewChange={setViewerSplitView}
-            onViewerEpisodeChange={setViewerEpisode}
-            onViewerOpenChange={setIsViewerOpen}
-            onEpisodeSaveHandlerChange={handleEpisodeSaveHandlerChange}
-            episodesViewHeight={recordingViewHeight}
-            onEpisodesResizeStart={handleEpisodesResizeStart}
-            onDatasetActionsReady={handleDatasetActionsReady}
-            onSidebarResizeStart={handleSidebarResizeStart}
-          />
-
-          <ViewerLayout
-            isSidebarCollapsed={isSidebarCollapsed}
-            isRightSidebarCollapsed={isRightSidebarCollapsed}
-            sidebarWidth={sidebarWidth}
-            rightSidebarWidth={rightSidebarWidth}
-            showUrdfEditor={showUrdfEditor}
-            urdfEditorSplitView={urdfEditorSplitView}
-            recordingViewHeight={recordingViewHeight}
-            urdfContentVersion={urdfContentVersion}
-            urdfFile={urdfFile}
-            meshFiles={meshFiles}
-            hoveredJoint={hoveredJoint}
-            selectedJoint={selectedJoint}
-            selectedLink={selectedLink}
-            jointValues={jointValues}
-            jointLimits={jointLimits}
-            jointAxes={jointAxes}
-            collisionVisibility={collisionVisibility}
-            rotationPlaneVisible={rotationPlaneVisible}
-            originalUrdfContent={originalUrdfContent}
-            vizUrdfContent={vizUrdfContent}
-            urdfViewMode={urdfViewMode}
-            endEffectorLink={endEffectorLink}
-            viewerEpisode={viewerEpisode}
-            currentFrame={currentFrame}
-            episodeSaveHandler={episodeSaveHandler}
-            setUrdfEditorSplitView={setUrdfEditorSplitView}
-            setUrdfViewMode={setUrdfViewMode}
-            setShowUrdfEditor={setShowUrdfEditor}
-            setMotionDataFile={setMotionDataFile}
-            setIsPlaying={setIsPlaying}
-            setHasAnimationFrames={setHasAnimationFrames}
-            handleFrameChange={handleFrameChange}
-            setRobotBoundingBox={setRobotBoundingBox}
-            setRobot={setRobot}
-            handleIkApplied={handleIkApplied}
-            handleViewerResizeStart={handleViewerResizeStart}
-            setSelectedJoint={setSelectedJoint}
-            setSelectedLink={setSelectedLink}
-            setHoveredJoint={setHoveredJoint}
-            handleJointChange={handleJointChange}
-            handleRobotJointsLoaded={handleRobotJointsLoaded}
-            handleVizUrdfChange={handleVizUrdfChange}
-            getExportUrdfContent={getExportUrdfContent}
-            setCurrentFrame={setCurrentFrame}
-            onViewerOpenChange={setIsViewerOpen}
-          />
-
-          <RightSidebarPanel
-            availableJoints={availableJoints}
-            episodeJointNames={episodeJointNames}
-            availableLinks={availableLinks}
-            jointLimits={jointLimits}
-            selectedJoint={selectedJoint}
-            selectedLink={selectedLink}
-            onJointSelect={setSelectedJoint}
-            onLinkSelect={setSelectedLink}
-            hoveredJoint={hoveredJoint}
-            onJointHover={setHoveredJoint}
-            deletedJoints={deletedJoints}
-            rightSidebarWidth={rightSidebarWidth}
-            isRightSidebarCollapsed={isRightSidebarCollapsed}
-            vizUrdfContent={vizUrdfContent}
-            jointAxes={jointAxes}
-            originalJointAxes={originalJointAxes}
-            onJointChange={handleJointChange}
-            onJointAxisChange={handleJointAxisChange}
-            onResetAxis={handleResetAxis}
-            onJointTypeChange={handleJointTypeChange}
-            onJointNameChange={handleJointNameChange}
-            onDeleteJoint={handleDeleteJoint}
-            onJointLinkChange={handleJointLinkChange}
-            angleUnit={angleUnit}
-            onAngleUnitChange={setAngleUnit}
-            meshFiles={meshFiles}
-            onMaterialChange={handleMaterialChange}
-            onLinkNameChange={handleLinkNameChange}
-            onUrdfChange={handleVizUrdfChange}
-            collisionVisibility={collisionVisibility}
-            onCollisionVisibilityChange={setCollisionVisibility}
-            endEffectorLink={endEffectorLink}
-            onMarkAsEndEffector={setEndEffectorLink}
-            robot={robot}
-            onRightSidebarResizeStart={handleRightSidebarResizeStart}
-          />
-
-        </>
-      )}
-
-      <MeshFilesStatusPanel
-        open={showDebugDialog}
-        debugMeshInfo={debugMeshInfo}
-        unmatchedURDFRefs={unmatchedURDFRefs}
-        isRightSidebarCollapsed={isRightSidebarCollapsed}
-        rightSidebarWidth={rightSidebarWidth}
-        onClose={() => setShowDebugDialog(false)}
-      />
-      {/* Export Dialog - Always available, even when on 3D viewer */}
-      <ExportDialog
-        isOpen={isExportDialogOpen}
-        onClose={closeExportDialog}
-        urdfContent={getExportUrdfContent()}
-        meshFiles={meshFiles}
-        githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
-        robotName={robotName}
-      />
-
-      <PovCamerasOverlay
-        open={showPovCameras}
-        cameras={cameras}
-        selectedCameraId={selectedCameraId}
-        onClose={() => setShowPovCameras(false)}
-      />
-
-      <MappingPanels
-        showMappingListPanel={showMappingListPanel}
-        onCloseMappingList={closeMappingList}
-        savedMappings={savedMappings}
-        onSelectMapping={selectMapping}
-        onDeleteMapping={deleteMappingById}
-        mappingDialogData={mappingDialogData}
-        showMappingDialog={showMappingDialog}
-        onCloseMappingDialog={closeMappingDialog}
-        availableJoints={availableJoints}
-        selectedMapping={selectedMapping}
-        jointLimits={jointLimits}
-        onApplyMapping={applyMapping}
-      />
-
-      <CreationDialogs
-        objectCreatorOpen={objectCreatorOpen}
-        objectCreatorType={objectCreatorType}
-        openObjectCreator={openObjectCreator}
-        closeObjectCreator={closeObjectCreator}
-        robotBoundingBox={robotBoundingBox}
-        showCameraCreator={showCameraCreator}
-        setShowCameraCreator={setShowCameraCreator}
-        availableLinks={availableLinks}
-        robot={robot}
-        showCameraUpload={showCameraUpload}
-        setShowCameraUpload={setShowCameraUpload}
-      />
-    </div>
+    <PageLayout
+      isLoading={isLoading}
+      topNavBarProps={{
+        showMenus: Boolean(originalUrdfContent && vizUrdfContent),
+        openExportDialog,
+        onSave: handleSave,
+        onRevert: handleRevert,
+        canRevert,
+        onResetRotation: handleResetRotation,
+        hasRotationChanges,
+        onCanonicalOrder: handleCanonicalOrder,
+        onPrettyPrint: handlePrettyPrint,
+        onNormalizeAxes: handleNormalizeAxes,
+        onFixMeshPaths: handleFixMeshPaths,
+        rotationAxis,
+        setRotationAxis,
+        onRotateRobot: handleRotateRobot,
+        angleUnit,
+        setAngleUnit,
+        gpuMode,
+        setGPUMode,
+        showUrdfEditor,
+        setShowUrdfEditor,
+        urdfViewMode,
+        setUrdfViewMode,
+        showPovCameras,
+        setShowPovCameras,
+        openMappingList,
+        datasetActions,
+        openObjectCreator,
+        setShowCameraCreator,
+        setShowCameraUpload,
+        exportCamerasAsJSON,
+        exportCamerasAsYAML,
+        hasCamerasToExport,
+      }}
+      leftSidebarProps={{
+        isLoading,
+        availableJoints,
+        jointLimits,
+        jointAxes,
+        originalJointAxes,
+        originalUrdfContent,
+        vizUrdfContent,
+        onJointChange: handleJointChange,
+        onJointSelect: setSelectedJoint,
+        selectedJoint,
+        onVizUrdfChange: handleVizUrdfChange,
+        onJointAxisChange: handleJointAxisChange,
+        onResetAxis: handleResetAxis,
+        onJointTypeChange: handleJointTypeChange,
+        onJointNameChange: handleJointNameChange,
+        onDeleteJoint: handleDeleteJoint,
+        deletedJoints,
+        getExportUrdfContent,
+        onMotionDataUpload: handleMotionDataUpload,
+        onPlayAnimation: handlePlayAnimation,
+        isPlaying,
+        motionDataFileName: motionDataFile?.name,
+        hasAnimationFrames,
+        currentFrame,
+        totalFrames,
+        sidebarWidth,
+        isSidebarCollapsed,
+        onToggleCollapse: handleSidebarToggle,
+        meshFiles,
+        onCollisionVisibilityChange: setCollisionVisibility,
+        rotationPlaneVisible,
+        onRotationPlaneVisibilityChange: setRotationPlaneVisible,
+        onFrameChange: setCurrentFrame,
+        onUrdfEditorToggle: setShowUrdfEditor,
+        showUrdfEditor,
+        viewerSplitView,
+        onViewerSplitViewChange: setViewerSplitView,
+        onViewerEpisodeChange: setViewerEpisode,
+        onViewerOpenChange: setIsViewerOpen,
+        onEpisodeSaveHandlerChange: handleEpisodeSaveHandlerChange,
+        episodesViewHeight: recordingViewHeight,
+        onEpisodesResizeStart: handleEpisodesResizeStart,
+        onDatasetActionsReady: handleDatasetActionsReady,
+        onSidebarResizeStart: handleSidebarResizeStart,
+      }}
+      viewerLayoutProps={{
+        isSidebarCollapsed,
+        isRightSidebarCollapsed,
+        sidebarWidth,
+        rightSidebarWidth,
+        showUrdfEditor,
+        urdfEditorSplitView,
+        recordingViewHeight,
+        urdfContentVersion,
+        urdfFile,
+        meshFiles,
+        hoveredJoint,
+        selectedJoint,
+        selectedLink,
+        jointValues,
+        jointLimits,
+        jointAxes,
+        collisionVisibility,
+        rotationPlaneVisible,
+        originalUrdfContent,
+        vizUrdfContent,
+        urdfViewMode,
+        endEffectorLink,
+        viewerEpisode,
+        currentFrame,
+        episodeSaveHandler,
+        setUrdfEditorSplitView,
+        setUrdfViewMode,
+        setShowUrdfEditor,
+        setMotionDataFile,
+        setIsPlaying,
+        setHasAnimationFrames,
+        handleFrameChange,
+        setRobotBoundingBox,
+        setRobot,
+        handleIkApplied,
+        handleViewerResizeStart,
+        setSelectedJoint,
+        setSelectedLink,
+        setHoveredJoint,
+        handleJointChange,
+        handleRobotJointsLoaded,
+        handleVizUrdfChange,
+        getExportUrdfContent,
+        setCurrentFrame,
+        onViewerOpenChange: setIsViewerOpen,
+      }}
+      rightSidebarProps={{
+        availableJoints,
+        episodeJointNames,
+        availableLinks,
+        jointLimits,
+        selectedJoint,
+        selectedLink,
+        onJointSelect: setSelectedJoint,
+        onLinkSelect: setSelectedLink,
+        hoveredJoint,
+        onJointHover: setHoveredJoint,
+        deletedJoints,
+        rightSidebarWidth,
+        isRightSidebarCollapsed,
+        vizUrdfContent,
+        jointAxes,
+        originalJointAxes,
+        onJointChange: handleJointChange,
+        onJointAxisChange: handleJointAxisChange,
+        onResetAxis: handleResetAxis,
+        onJointTypeChange: handleJointTypeChange,
+        onJointNameChange: handleJointNameChange,
+        onDeleteJoint: handleDeleteJoint,
+        onJointLinkChange: handleJointLinkChange,
+        angleUnit,
+        onAngleUnitChange: setAngleUnit,
+        meshFiles,
+        onMaterialChange: handleMaterialChange,
+        onLinkNameChange: handleLinkNameChange,
+        onUrdfChange: handleVizUrdfChange,
+        collisionVisibility,
+        onCollisionVisibilityChange: setCollisionVisibility,
+        endEffectorLink,
+        onMarkAsEndEffector: setEndEffectorLink,
+        robot,
+        onRightSidebarResizeStart: handleRightSidebarResizeStart,
+      }}
+      meshFilesStatusPanelProps={{
+        open: showDebugDialog,
+        debugMeshInfo,
+        unmatchedURDFRefs,
+        isRightSidebarCollapsed,
+        rightSidebarWidth,
+        onClose: () => setShowDebugDialog(false),
+      }}
+      exportDialogProps={{
+        isOpen: isExportDialogOpen,
+        onClose: closeExportDialog,
+        urdfContent: getExportUrdfContent(),
+        meshFiles,
+        githubToken,
+        robotName,
+      }}
+      povCamerasOverlayProps={{
+        open: showPovCameras,
+        cameras,
+        selectedCameraId,
+        onClose: () => setShowPovCameras(false),
+      }}
+      mappingPanelsProps={{
+        showMappingListPanel,
+        onCloseMappingList: closeMappingList,
+        savedMappings,
+        onSelectMapping: selectMapping,
+        onDeleteMapping: deleteMappingById,
+        mappingDialogData,
+        showMappingDialog,
+        onCloseMappingDialog: closeMappingDialog,
+        availableJoints,
+        selectedMapping,
+        jointLimits,
+        onApplyMapping: applyMapping,
+      }}
+      creationDialogsProps={{
+        objectCreatorOpen,
+        objectCreatorType,
+        openObjectCreator,
+        closeObjectCreator,
+        robotBoundingBox,
+        showCameraCreator,
+        setShowCameraCreator,
+        availableLinks,
+        robot,
+        showCameraUpload,
+        setShowCameraUpload,
+      }}
+    />
   );
 };
 
