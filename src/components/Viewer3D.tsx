@@ -40,6 +40,7 @@ import { TrackingLine } from "@/components/viewer3d/TrackingLine";
 import { useAnimationController, type AnimationController } from "@/components/viewer3d/useAnimationController";
 import { useIkSolver } from "@/components/viewer3d/useIkSolver";
 import { useUrdfAnimation } from "@/components/viewer3d/useUrdfAnimation";
+import { useOrbitControlsBindings } from "@/components/viewer3d/useOrbitControlsBindings";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -85,10 +86,6 @@ type EndEffectorPoseState = {
   error: string | null;
   lastUpdated: number | null;
   loading: boolean;
-};
-
-type MouseButtonsWithOriginal = OrbitControlsImpl["mouseButtons"] & {
-  _originalMiddle?: THREE.MOUSE;
 };
 
 // Component to render orbit visualization
@@ -1770,7 +1767,6 @@ export const Viewer3D = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const isShiftPressedRef = useRef<boolean>(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const fkAutoOpenedRef = useRef(false);
   const animationController = useAnimationController();
@@ -1858,116 +1854,7 @@ export const Viewer3D = ({
     }
   }, [isPlaying, animationFrames]);
 
-  // Initialize mouse button configuration when controls are ready
-  useEffect(() => {
-    // Use a small delay to ensure controls are fully initialized
-    const timeoutId = setTimeout(() => {
-      if (!controlsRef.current) return;
-      
-      const controls = controlsRef.current;
-      // @react-three/drei OrbitControls exposes the underlying Three.js controls
-      // The ref should point to the actual OrbitControls instance
-      const threeControls = controls as OrbitControlsImpl | null;
-      
-      // Set default mouse button configuration (Blender-style)
-      // LEFT: rotate, MIDDLE: zoom (default), RIGHT: pan
-      if (threeControls && threeControls.mouseButtons) {
-        const mouseButtons = threeControls.mouseButtons as MouseButtonsWithOriginal;
-        // Default: MMB zooms (DOLLY) if not already set
-        if (mouseButtons._originalMiddle === undefined) {
-          mouseButtons._originalMiddle = mouseButtons.MIDDLE ?? THREE.MOUSE.DOLLY;
-          mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
-        }
-      }
-    }, 100); // Small delay to ensure controls are initialized
-
-    return () => clearTimeout(timeoutId);
-  }, [robot]); // Re-run when robot loads
-
-  // Handle Shift + MMB panning (Blender-style)
-  useEffect(() => {
-    const updateMMBBehavior = (shouldPan: boolean) => {
-      if (!controlsRef.current) return;
-      
-      const threeControls = controlsRef.current;
-      if (threeControls && threeControls.mouseButtons) {
-        const mouseButtons = threeControls.mouseButtons as MouseButtonsWithOriginal;
-        // Store original MMB behavior if not already stored
-        if (mouseButtons._originalMiddle === undefined) {
-          mouseButtons._originalMiddle = mouseButtons.MIDDLE ?? THREE.MOUSE.DOLLY;
-        }
-        
-        // Set MMB behavior based on Shift state
-        if (shouldPan) {
-          mouseButtons.MIDDLE = THREE.MOUSE.PAN;
-        } else {
-          const originalMiddle = mouseButtons._originalMiddle ?? THREE.MOUSE.DOLLY;
-          mouseButtons.MIDDLE = originalMiddle;
-        }
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Shift key press
-      if (e.key === 'Shift' || e.shiftKey) {
-        if (!isShiftPressedRef.current) {
-          isShiftPressedRef.current = true;
-          updateMMBBehavior(true);
-        }
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      // Check if Shift was released
-      if (e.key === 'Shift') {
-        // Use a small delay to check if shift is actually released
-        // (in case user pressed both shift keys)
-        setTimeout(() => {
-          // Check if shift is actually released by testing a synthetic event
-          // If shiftKey is false in the event, shift was released
-          if (!e.shiftKey && isShiftPressedRef.current) {
-            isShiftPressedRef.current = false;
-            updateMMBBehavior(false);
-          }
-        }, 0);
-      }
-    };
-
-    // Also handle mouse events to check shift state when MMB is pressed/released
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button === 1) { // Middle mouse button (button 1)
-        if (e.shiftKey && !isShiftPressedRef.current) {
-          isShiftPressedRef.current = true;
-          updateMMBBehavior(true);
-        } else if (!e.shiftKey && isShiftPressedRef.current) {
-          isShiftPressedRef.current = false;
-          updateMMBBehavior(false);
-        }
-      }
-    };
-
-    const handleMouseUp = (e: MouseEvent) => {
-      if (e.button === 1) { // Middle mouse button released
-        // Check if shift is still pressed
-        if (!e.shiftKey && isShiftPressedRef.current) {
-          isShiftPressedRef.current = false;
-          updateMMBBehavior(false);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, []);
+  useOrbitControlsBindings({ controlsRef, robot });
 
   // Keep EE pose aligned between Three.js and PyRoki (base_link/world frame)
   useEffect(() => {
