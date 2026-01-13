@@ -5,14 +5,10 @@ import { useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
 import {
   canonicalizeUrdf,
-  changeJointAxis,
-  changeJointType,
   fixMeshPaths,
   normalizeAxes,
   parseURDF,
   prettifyUrdf,
-  renameJoint,
-  renameLink,
   rotateUrdf,
 } from "@/features/urdf";
 import { useCameraStore } from "@/store/useCameraStore";
@@ -28,6 +24,7 @@ import { LeftSidebarPanel } from "@/pages/index/LeftSidebarPanel";
 import { LoadingScreen } from "@/pages/index/LoadingScreen";
 import { MappingPanels } from "@/pages/index/MappingPanels";
 import { CreationDialogs } from "@/pages/index/CreationDialogs";
+import { useUrdfEditHandlers } from "@/pages/index/useUrdfEditHandlers";
 
 import type {
   MeshFiles,
@@ -239,279 +236,30 @@ const Index = () => {
   }, [setJointValues]);
 
 
-  const handleVizUrdfChange = useCallback((newContent: string) => {
-    updateUrdfFile(newContent);
-    toast.success("Viz URDF updated from manual edit");
-  }, [updateUrdfFile]);
-
-  const handleMaterialChange = useCallback((linkName: string, materialName: string, color: string) => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-    
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(vizUrdfContent, "text/xml");
-      
-      const parserError = xmlDoc.querySelector("parsererror");
-      if (parserError) {
-        toast.error("Invalid URDF XML");
-        return;
-      }
-
-      // Find or create material element
-      let material = xmlDoc.querySelector(`material[name="${materialName}"]`);
-      if (!material) {
-        // Create material in robot tag
-        const robot = xmlDoc.querySelector("robot");
-        if (!robot) {
-          toast.error("No robot tag found in URDF");
-          return;
-        }
-        material = xmlDoc.createElement("material");
-        material.setAttribute("name", materialName);
-        const colorElement = xmlDoc.createElement("color");
-        // Convert hex to rgba
-        const r = parseInt(color.slice(1, 3), 16) / 255;
-        const g = parseInt(color.slice(3, 5), 16) / 255;
-        const b = parseInt(color.slice(5, 7), 16) / 255;
-        colorElement.setAttribute("rgba", `${r} ${g} ${b} 1.0`);
-        material.appendChild(colorElement);
-        robot.appendChild(material);
-      } else {
-        // Update existing material color
-        let colorElement = material.querySelector("color");
-        if (!colorElement) {
-          colorElement = xmlDoc.createElement("color");
-          material.appendChild(colorElement);
-        }
-        const r = parseInt(color.slice(1, 3), 16) / 255;
-        const g = parseInt(color.slice(3, 5), 16) / 255;
-        const b = parseInt(color.slice(5, 7), 16) / 255;
-        colorElement.setAttribute("rgba", `${r} ${g} ${b} 1.0`);
-      }
-
-      // Find the link
-      const link = xmlDoc.querySelector(`link[name="${linkName}"]`);
-      if (!link) {
-        toast.error(`Link "${linkName}" not found`);
-        return;
-      }
-
-      // Find or create visual element
-      let visual = link.querySelector("visual");
-      if (!visual) {
-        visual = xmlDoc.createElement("visual");
-        const geometry = xmlDoc.createElement("geometry");
-        const box = xmlDoc.createElement("box");
-        box.setAttribute("size", "0.1 0.1 0.1");
-        geometry.appendChild(box);
-        visual.appendChild(geometry);
-        link.appendChild(visual);
-      }
-
-      // Add or update material reference
-      let materialRef = visual.querySelector("material");
-      if (!materialRef) {
-        materialRef = xmlDoc.createElement("material");
-        visual.appendChild(materialRef);
-      }
-      materialRef.setAttribute("name", materialName);
-
-      // Serialize back
-      const serializer = new XMLSerializer();
-      const newContent = serializer.serializeToString(xmlDoc);
-      
-      updateUrdfFile(newContent);
-      toast.success(`Updated material for link "${linkName}"`);
-    } catch (error) {
-      console.error("Error updating material:", error);
-      toast.error("Failed to update material");
-    }
-  }, [vizUrdfContent, updateUrdfFile]);
-
-  const handleLinkNameChange = useCallback((oldName: string, newName: string) => {
-    if (newName === oldName) return;
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-
-    try {
-      const result = renameLink(vizUrdfContent, oldName, newName);
-      if (!result.success) {
-        toast.error(result.error ?? "Failed to update link name");
-        return;
-      }
-
-      updateUrdfFile(result.content);
-      toast.success(result.message ?? `Renamed link "${oldName}" to "${newName}"`);
-    } catch (error) {
-      console.error("Error updating link name:", error);
-      toast.error("Failed to update link name");
-    }
-  }, [vizUrdfContent, updateUrdfFile]);
-
-  const handleJointAxisChange = useCallback((jointName: string, axis: [number, number, number]) => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-
-    const result = changeJointAxis(vizUrdfContent, jointName, axis);
-    if (!result.success) {
-      toast.error(result.error ?? `Unable to update axis for joint "${jointName}"`);
-      return;
-    }
-
-    // Immediately update all state synchronously for consistency with other handlers
-    // This ensures immediate UI updates without deferred transitions that could cause conflicts
-    setVizUrdfContent(result.content);
-    if (result.jointLimits) {
-      setJointLimits(result.jointLimits);
-    }
-    if (result.jointAxes) {
-      setJointAxes(result.jointAxes);
-    }
-    setUrdfFile(createUrdfFile(result.content));
-    setUrdfContentVersion(prev => prev + 1); // Force reload of 3D viewer and sidebar
-    
-    toast.success(result.message ?? `Updated axis for joint "${jointName}"`);
-  }, [vizUrdfContent, createUrdfFile, setJointAxes, setJointLimits, setUrdfFile, setVizUrdfContent]);
-
-  const handleResetAxis = useCallback((jointName: string) => {
-    if (!originalJointAxes[jointName]) {
-      toast.error(`No original axis found for joint "${jointName}"`);
-      return;
-    }
-
-    const originalAxis = originalJointAxes[jointName].xyz;
-    handleJointAxisChange(jointName, originalAxis);
-  }, [originalJointAxes, handleJointAxisChange]);
-
-  const handleJointTypeChange = useCallback((jointName: string, newType: string, lowerLimit?: number, upperLimit?: number) => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-    const result = changeJointType(vizUrdfContent, jointName, newType, lowerLimit, upperLimit);
-    if (!result.success) {
-      toast.error(result.error ?? `Failed to update joint "${jointName}"`);
-      return;
-    }
-
-    updateUrdfFile(result.content);
-    if (result.jointLimits) {
-      setJointLimits(result.jointLimits);
-    }
-    if (result.jointAxes) {
-      setJointAxes(result.jointAxes);
-    }
-    const limitMsg = lowerLimit !== undefined && upperLimit !== undefined
-      ? ` with limits [${lowerLimit.toFixed(2)}, ${upperLimit.toFixed(2)}]`
-      : "";
-    toast.success(result.message ?? `Updated joint "${jointName}" type to ${newType}${limitMsg}`);
-  }, [vizUrdfContent, updateUrdfFile, setJointAxes, setJointLimits]);
-
-  const handleJointNameChange = useCallback((oldName: string, newName: string) => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-    const result = renameJoint(vizUrdfContent, oldName, newName);
-    if (!result.success) {
-      toast.error(result.error ?? `Failed to rename joint "${oldName}" to "${newName}". The name may already exist or be invalid.`);
-      return;
-    }
-    updateUrdfFile(result.content);
-
-    // Update availableJoints to reflect the new name
-    setAvailableJoints(prev => prev.map(name => name === oldName ? newName : name));
-
-    // Update selected joint if it was the one renamed
-    if (selectedJoint === oldName) {
-      setSelectedJoint(newName);
-    }
-
-    toast.success(result.message ?? `Renamed joint "${oldName}" to "${newName}"`);
-  }, [vizUrdfContent, updateUrdfFile, selectedJoint, setAvailableJoints, setSelectedJoint]);
-
-  const handleJointLinkChange = useCallback((jointName: string, parentLink: string, childLink: string) => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF content available");
-      return;
-    }
-
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(vizUrdfContent, "text/xml");
-
-      const parserError = xmlDoc.querySelector("parsererror");
-      if (parserError) {
-        toast.error("Invalid URDF XML");
-        return;
-      }
-
-      const joint = xmlDoc.querySelector(`joint[name="${jointName}"]`);
-      if (!joint) {
-        toast.error(`Joint "${jointName}" not found`);
-        return;
-      }
-
-      // Preserve joint attributes
-      const preservedName = joint.getAttribute("name");
-      const preservedType = joint.getAttribute("type");
-
-      // Update or create parent element
-      let parentElement = joint.querySelector("parent");
-      if (!parentElement) {
-        parentElement = xmlDoc.createElement("parent");
-        joint.insertBefore(parentElement, joint.firstChild);
-      }
-      parentElement.setAttribute("link", parentLink);
-
-      // Update or create child element
-      let childElement = joint.querySelector("child");
-      if (!childElement) {
-        childElement = xmlDoc.createElement("child");
-        if (parentElement.nextSibling) {
-          joint.insertBefore(childElement, parentElement.nextSibling);
-        } else {
-          joint.appendChild(childElement);
-        }
-      }
-      childElement.setAttribute("link", childLink);
-
-      // Restore preserved attributes
-      if (preservedName) {
-        joint.setAttribute("name", preservedName);
-      }
-      if (preservedType) {
-        joint.setAttribute("type", preservedType);
-      }
-
-      // Serialize back
-      const serializer = new XMLSerializer();
-      const newContent = serializer.serializeToString(xmlDoc);
-
-      updateUrdfFile(newContent);
-      toast.success(`Updated links for joint "${jointName}"`);
-    } catch (error) {
-      console.error("Error updating joint links:", error);
-      toast.error("Failed to update joint links");
-    }
-  }, [vizUrdfContent, updateUrdfFile]);
-
-  const handleResetRotation = useCallback(() => {
-    if (!originalVizUrdfContent) {
-      toast.error("No original URDF content found");
-      return;
-    }
-
-    updateUrdfFile(originalVizUrdfContent);
-    toast.success("Reset to original loaded file");
-  }, [originalVizUrdfContent, updateUrdfFile]);
+  const {
+    handleVizUrdfChange,
+    handleLinkNameChange,
+    handleJointAxisChange,
+    handleResetAxis,
+    handleJointTypeChange,
+    handleJointNameChange,
+    handleJointLinkChange,
+    handleResetRotation,
+  } = useUrdfEditHandlers({
+    vizUrdfContent,
+    originalVizUrdfContent,
+    originalJointAxes,
+    selectedJoint,
+    setSelectedJoint,
+    setAvailableJoints,
+    setJointLimits,
+    setJointAxes,
+    setUrdfFile,
+    setVizUrdfContent,
+    createUrdfFile,
+    updateUrdfFile,
+    setUrdfContentVersion,
+  });
 
   const deleteJointsFromURDF = useCallback((urdfContent: string, jointsToDelete: Set<string>): string => {
     if (jointsToDelete.size === 0) return urdfContent;
