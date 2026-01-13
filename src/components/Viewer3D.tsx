@@ -41,6 +41,7 @@ import { useIkSolver } from "@/components/viewer3d/useIkSolver";
 import { useUrdfAnimation } from "@/components/viewer3d/useUrdfAnimation";
 import { useOrbitControlsBindings } from "@/components/viewer3d/useOrbitControlsBindings";
 import { useMotionDataUpload } from "@/components/viewer3d/useMotionDataUpload";
+import { usePlaybackHandlers } from "@/components/viewer3d/usePlaybackHandlers";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -2139,6 +2140,22 @@ export const Viewer3D = ({
     setStoreJointValues,
     onMotionFileChange,
   });
+  const {
+    handleRun,
+    handlePlayEpisode,
+    handleStopAnimation,
+    handleClearAnimation,
+    handleSetFrame,
+  } = usePlaybackHandlers({
+    animationFrames,
+    robot,
+    isPlaying,
+    setIsPlaying,
+    setAnimationFrames,
+    onPlayingChange,
+    onFrameChange,
+    animationController,
+  });
 
   // Convert imported animation frames to nodes
   const convertMotionFramesToNodes = (frames: AnimationFrame[]) => {
@@ -2198,155 +2215,6 @@ export const Viewer3D = ({
 
     return { nodes, edges };
   };
-
-  const handleRun = useCallback((forceState?: boolean) => {
-    if (!animationFrames || animationFrames.length === 0) {
-      toast.error("Please upload a motion data file first");
-      return;
-    }
-    if (!robot) {
-      toast.error("Please upload a URDF file first");
-      return;
-    }
-    // If forceState is provided, use it; otherwise toggle
-    const newPlayingState = forceState !== undefined ? forceState : !isPlaying;
-    
-    // If we're starting to play and we're at the last frame, reset to frame 0 first
-    if (newPlayingState && !isPlaying) {
-      const currentFrameIdx = animationController.currentFrameIndexRef.current;
-      const lastFrameIdx = animationFrames.length - 1;
-      
-      if (currentFrameIdx !== undefined && currentFrameIdx !== null && currentFrameIdx >= lastFrameIdx) {
-        // We're at the last frame - reset to frame 0 before starting to play
-        const firstTimestamp = animationFrames[0].timestamp;
-        const lastTimestamp = animationFrames[lastFrameIdx].timestamp;
-        const animationDuration = lastTimestamp - firstTimestamp;
-        const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
-        
-        const normalizedFirstTime = firstTimestamp;
-        animationController.setManualFrameTime(normalizedFirstTime);
-        animationController.setCurrentFrameIndex(0);
-        animationController.setResetAnimationStart(true); // Flag to reset animation start time
-        // Clear any preserved frame time that might keep us at the last frame
-        animationController.setPreserveFrameTime(null);
-        
-        // Update frame callback immediately
-        if (onFrameChange) {
-          onFrameChange(0);
-        }
-      }
-    }
-    
-    setIsPlaying(newPlayingState);
-    onPlayingChange?.(newPlayingState);
-    // Clear pause flag when starting to play
-    if (newPlayingState) {
-      animationController.setPaused(false);
-      // Clear manual joint changes flag when starting to play - allow animation to take control
-      animationController.clearManualJointChange();
-    } else {
-      // Set pause flag when pausing
-      animationController.setPaused(true);
-    }
-  }, [animationFrames, animationController, robot, isPlaying, onFrameChange, onPlayingChange]);
-
-  // Handler to play episode frames directly
-  const handlePlayEpisode = useCallback((frames: AnimationFrame[]) => {
-    if (!frames || frames.length === 0) {
-      toast.error("No frames to play");
-      return;
-    }
-
-    // Stop any currently playing animation first
-    setIsPlaying(false);
-    
-    // Set the episode frames (this will trigger reset in URDFModel's useEffect)
-    setAnimationFrames(frames);
-    
-    // Start playing after a brief delay to ensure frames are set
-    setTimeout(() => {
-      setIsPlaying(true);
-      onPlayingChange?.(true);
-      // Clear pause flag when starting to play
-      animationController.setPaused(false);
-      // Clear manual joint changes flag when starting to play - allow animation to take control
-      animationController.clearManualJointChange();
-    }, 10);
-  }, [animationController, onPlayingChange]);
-
-  // Handler to stop animation
-  const handleStopAnimation = useCallback(() => {
-    // Before stopping, preserve the current frame position
-    // This prevents the frame from jumping to 0 when stopped
-    if (animationFrames && animationFrames.length > 0) {
-      const firstTimestamp = animationFrames[0].timestamp;
-      const lastTimestamp = animationFrames[animationFrames.length - 1].timestamp;
-      const animationDuration = lastTimestamp - firstTimestamp;
-      const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
-      
-      // Get current frame index from the ref (set by animation loop)
-      const currentFrameIdx = animationController.currentFrameIndexRef.current ?? 0;
-      
-      // Calculate normalized time for current frame
-      const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
-      
-      // Store it immediately so the animation loop can use it right away
-      animationController.setPreserveFrameTime(normalizedTime);
-      
-      // Also immediately update the frame callback to prevent UI from showing wrong frame
-      if (onFrameChange && currentFrameIdx >= 0) {
-        onFrameChange(currentFrameIdx);
-      }
-    }
-    
-    setIsPlaying(false);
-    onPlayingChange?.(false);
-    // Set pause flag to prevent interpolation when stopped
-    animationController.setPaused(true);
-  }, [animationController, onPlayingChange, animationFrames, onFrameChange]);
-
-  // Handler to clear animation frames and release robot for manual control
-  const handleClearAnimation = useCallback(() => {
-    setIsPlaying(false);
-    onPlayingChange?.(false);
-    setAnimationFrames(null);
-    // Clear all animation-related flags
-    animationController.setPaused(true);
-    animationController.setPreserveFrameTime(null);
-    animationController.setManualFrameTime(null);
-    animationController.setCurrentFrameIndex(0);
-  }, [animationController, onPlayingChange]);
-
-  // Handler to set a specific frame index (Blender-style frame navigation)
-  const handleSetFrame = useCallback((frameIndex: number) => {
-    if (!animationFrames || animationFrames.length === 0) {
-      return;
-    }
-    
-    // Stop playback when navigating frames
-    setIsPlaying(false);
-    onPlayingChange?.(false);
-    
-    // Set pause flag to prevent interpolation when frame is manually set
-    animationController.setPaused(true);
-    
-    // Clamp frame index to valid range
-    const clampedIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));
-    const targetFrame = animationFrames[clampedIndex];
-    
-    // Set manual frame time to jump to this frame
-    if (targetFrame) {
-      animationController.setManualFrameTime(targetFrame.timestamp);
-      
-      // Immediately update frame index to prevent it from going to frame 1
-      animationController.setCurrentFrameIndex(clampedIndex);
-      
-      // Update frame change callback immediately
-      if (onFrameChange) {
-        onFrameChange(clampedIndex);
-      }
-    }
-  }, [animationFrames, animationController, onPlayingChange, onFrameChange]);
 
   // Expose handlers for external use (e.g., from Sidebar)
   useEffect(() => {
