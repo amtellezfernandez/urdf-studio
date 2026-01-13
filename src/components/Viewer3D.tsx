@@ -3444,6 +3444,7 @@ export const Viewer3D = ({
 
       const mapping = new Map<string, string>();
       const actuatedSet = new Set(actuatedJoints);
+      const skippedJointNames = new Set<string>();
 
       columns.forEach((columnName) => {
         if (knownJoints.has(columnName)) {
@@ -3471,17 +3472,29 @@ export const Viewer3D = ({
             (knownJoints.has(sourceJoint) ? sourceJoint : undefined);
           if (targetJoint !== undefined && knownJoints.has(targetJoint)) {
             mapped[targetJoint] = value;
+          } else {
+            skippedJointNames.add(sourceJoint);
           }
         }
         return { timestamp: frame.timestamp, joints: mapped };
       });
 
-      if (
-        frames.length === 0 ||
-        frames.every((frame) => Object.keys(frame.joints).length === 0)
-      ) {
+      if (frames.length === 0) {
         toast.error("No data rows found");
         return;
+      }
+
+      const hasJointData = frames.some((frame) => Object.keys(frame.joints).length > 0);
+      if (!hasJointData) {
+        toast.error("No matching joint data found for this robot");
+        return;
+      }
+
+      if (skippedJointNames.size > 0) {
+        const skipped = Array.from(skippedJointNames);
+        const preview = skipped.slice(0, 5).join(", ");
+        const more = skipped.length > 5 ? `, +${skipped.length - 5} more` : "";
+        toast.warning(`Skipped ${skipped.length} unknown joint(s): ${preview}${more}`);
       }
 
       setIsPlaying(false);
