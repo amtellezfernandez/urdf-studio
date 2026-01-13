@@ -142,6 +142,117 @@ function parseMaterial(visual: Element, xmlDoc: Document): { name: string | null
   return { name: materialName, color: null };
 }
 
+function parseLinkDataFromElement(link: Element, xmlDoc: Document): LinkData | null {
+  const linkName = link.getAttribute("name");
+  if (!linkName) return null;
+
+  // Parse visuals
+  const visuals: VisualData[] = [];
+  const visualElements = link.querySelectorAll("visual");
+  visualElements.forEach((visual) => {
+    const geometry = visual.querySelector("geometry");
+    if (!geometry) return;
+
+    const origin = parseOrigin(visual);
+    const geometryData = parseGeometry(geometry);
+    const material = parseMaterial(visual, xmlDoc);
+
+    visuals.push({
+      origin,
+      geometry: geometryData,
+      materialName: material.name,
+      materialColor: material.color,
+    });
+  });
+
+  // Parse collisions
+  const collisions: CollisionData[] = [];
+  const collisionElements = link.querySelectorAll("collision");
+  collisionElements.forEach((collision) => {
+    const geometry = collision.querySelector("geometry");
+    if (!geometry) return;
+
+    const origin = parseOrigin(collision);
+    const geometryData = parseGeometry(geometry);
+
+    collisions.push({
+      origin,
+      geometry: geometryData,
+    });
+  });
+
+  // Parse inertial
+  let inertial: InertialData | null = null;
+  const inertialElement = link.querySelector("inertial");
+  if (inertialElement) {
+    const massElement = inertialElement.querySelector("mass");
+    const mass = massElement ? parseFloat(massElement.getAttribute("value") || "0") : 0;
+
+    const origin = parseOrigin(inertialElement);
+
+    const inertiaElement = inertialElement.querySelector("inertia");
+    let inertia = {
+      ixx: 0, ixy: 0, ixz: 0,
+      iyy: 0, iyz: 0, izz: 0,
+    };
+    if (inertiaElement) {
+      inertia = {
+        ixx: parseFloat(inertiaElement.getAttribute("ixx") || "0"),
+        ixy: parseFloat(inertiaElement.getAttribute("ixy") || "0"),
+        ixz: parseFloat(inertiaElement.getAttribute("ixz") || "0"),
+        iyy: parseFloat(inertiaElement.getAttribute("iyy") || "0"),
+        iyz: parseFloat(inertiaElement.getAttribute("iyz") || "0"),
+        izz: parseFloat(inertiaElement.getAttribute("izz") || "0"),
+      };
+    }
+
+    inertial = {
+      mass,
+      origin,
+      inertia,
+    };
+  }
+
+  return {
+    name: linkName,
+    visuals,
+    collisions,
+    inertial,
+  };
+}
+
+export function parseLinksData(urdfContent: string): LinkData[] {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+
+    const parserError = xmlDoc.querySelector("parsererror");
+    if (parserError) {
+      return [];
+    }
+
+    const robot = xmlDoc.querySelector("robot");
+    if (!robot) {
+      return [];
+    }
+
+    const linkElements = xmlDoc.querySelectorAll("link");
+    const linkData: LinkData[] = [];
+
+    linkElements.forEach((link) => {
+      const data = parseLinkDataFromElement(link, xmlDoc);
+      if (data) {
+        linkData.push(data);
+      }
+    });
+
+    return linkData;
+  } catch (error) {
+    console.error("Error parsing link data:", error);
+    return [];
+  }
+}
+
 export function parseLinkData(urdfContent: string, linkName: string): LinkData | null {
   try {
     const parser = new DOMParser();
@@ -162,78 +273,13 @@ export function parseLinkData(urdfContent: string, linkName: string): LinkData |
       return null;
     }
 
-    // Parse visuals
-    const visuals: VisualData[] = [];
-    const visualElements = link.querySelectorAll("visual");
-    visualElements.forEach((visual) => {
-      const geometry = visual.querySelector("geometry");
-      if (!geometry) return;
-
-      const origin = parseOrigin(visual);
-      const geometryData = parseGeometry(geometry);
-      const material = parseMaterial(visual, xmlDoc);
-
-      visuals.push({
-        origin,
-        geometry: geometryData,
-        materialName: material.name,
-        materialColor: material.color,
-      });
-    });
-
-    // Parse collisions
-    const collisions: CollisionData[] = [];
-    const collisionElements = link.querySelectorAll("collision");
-    collisionElements.forEach((collision) => {
-      const geometry = collision.querySelector("geometry");
-      if (!geometry) return;
-
-      const origin = parseOrigin(collision);
-      const geometryData = parseGeometry(geometry);
-
-      collisions.push({
-        origin,
-        geometry: geometryData,
-      });
-    });
-
-    // Parse inertial
-    let inertial: InertialData | null = null;
-    const inertialElement = link.querySelector("inertial");
-    if (inertialElement) {
-      const massElement = inertialElement.querySelector("mass");
-      const mass = massElement ? parseFloat(massElement.getAttribute("value") || "0") : 0;
-
-      const origin = parseOrigin(inertialElement);
-
-      const inertiaElement = inertialElement.querySelector("inertia");
-      let inertia = {
-        ixx: 0, ixy: 0, ixz: 0,
-        iyy: 0, iyz: 0, izz: 0,
-      };
-      if (inertiaElement) {
-        inertia = {
-          ixx: parseFloat(inertiaElement.getAttribute("ixx") || "0"),
-          ixy: parseFloat(inertiaElement.getAttribute("ixy") || "0"),
-          ixz: parseFloat(inertiaElement.getAttribute("ixz") || "0"),
-          iyy: parseFloat(inertiaElement.getAttribute("iyy") || "0"),
-          iyz: parseFloat(inertiaElement.getAttribute("iyz") || "0"),
-          izz: parseFloat(inertiaElement.getAttribute("izz") || "0"),
-        };
-      }
-
-      inertial = {
-        mass,
-        origin,
-        inertia,
-      };
+    const data = parseLinkDataFromElement(link, xmlDoc);
+    if (!data) {
+      return null;
     }
-
     return {
+      ...data,
       name: linkName,
-      visuals,
-      collisions,
-      inertial,
     };
   } catch (error) {
     console.error("Error parsing link data:", error);

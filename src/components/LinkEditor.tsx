@@ -17,7 +17,7 @@ import {
   computeRotationToAxis,
   computeSphereDiagnostics,
   findMeshFile,
-  parseLinkData,
+  parseLinksData,
   removeCollisionFromLink,
   removeInertialFromLink,
   removeVisualFromLink,
@@ -115,39 +115,7 @@ export const LinkEditor = ({
   // Parse all links from URDF
   const links = useMemo((): LinkData[] => {
     if (!urdfContent) return [];
-
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-
-      const parserError = xmlDoc.querySelector("parsererror");
-      if (parserError) {
-        return [];
-      }
-
-      const robot = xmlDoc.querySelector("robot");
-      if (!robot) {
-        return [];
-      }
-
-      const linkElements = xmlDoc.querySelectorAll("link");
-      const linkData: LinkData[] = [];
-
-      linkElements.forEach((link) => {
-        const name = link.getAttribute("name");
-        if (!name) return;
-
-        const data = parseLinkData(urdfContent, name);
-        if (data) {
-          linkData.push(data);
-        }
-      });
-
-      return linkData.sort((a, b) => a.name.localeCompare(b.name));
-    } catch (error) {
-      console.error("Error parsing links:", error);
-      return [];
-    }
+    return parseLinksData(urdfContent).sort((a, b) => a.name.localeCompare(b.name));
   }, [urdfContent]);
 
   // Filter links by search query
