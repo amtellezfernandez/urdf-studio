@@ -37,6 +37,7 @@ import {
 } from "@/components/viewer3d/viewer3d-helpers";
 import { CollisionGeometries } from "@/components/viewer3d/CollisionGeometries";
 import { TrackingLine } from "@/components/viewer3d/TrackingLine";
+import { useAnimationController, type AnimationController } from "@/components/viewer3d/useAnimationController";
 import { useIkSolver } from "@/components/viewer3d/useIkSolver";
 import { useUrdfAnimation } from "@/components/viewer3d/useUrdfAnimation";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
@@ -1015,6 +1016,7 @@ const CreatedObjects = ({
   playbackSpeed = 1.0,
   rotationPlaneVisible = false,
   dragMode = "move-joints",
+  animationController,
 }: {
   file: File;
   meshFiles: MeshFiles;
@@ -1036,6 +1038,7 @@ const CreatedObjects = ({
   playbackSpeed?: number;
   rotationPlaneVisible?: boolean;
   dragMode?: DragMode;
+  animationController: AnimationController;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<URDFRobot | null>(null);
@@ -1046,7 +1049,6 @@ const CreatedObjects = ({
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const previewJointValue = useJointStore((s) => s.previewJointValue);
-  const hasManualJointChangesRef = useRef<boolean>(false); // Track if user has manually changed joints
   useUrdfAnimation({
     animationFrames,
     robotRef,
@@ -1056,7 +1058,7 @@ const CreatedObjects = ({
     setStoreJointValues,
     onJointChange,
     onFrameChange,
-    hasManualJointChangesRef,
+    animationController,
   });
 
   useEffect(() => {
@@ -1383,7 +1385,7 @@ const CreatedObjects = ({
       }
       
       // Mark that manual joint changes have been made - this prevents animation from overwriting manual changes
-      hasManualJointChangesRef.current = true;
+      animationController.markManualJointChange();
       
       // Update store immediately for responsive UI, but effects are skipped during drag
       if (onJointChange) {
@@ -1764,6 +1766,7 @@ export const Viewer3D = ({
   const isShiftPressedRef = useRef<boolean>(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const fkAutoOpenedRef = useRef(false);
+  const animationController = useAnimationController();
   const storeJointValues = useJointStore((s) => s.jointValues);
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
@@ -1809,6 +1812,7 @@ export const Viewer3D = ({
     urdfContent,
     endEffectorLink,
     onIkApplied,
+    onManualJointChange: animationController.markManualJointChange,
   });
 
   // Use selectedLink from props
@@ -2222,8 +2226,7 @@ export const Viewer3D = ({
     // Mark manual changes if we're not playing and values actually changed
     // This allows slider changes to also prevent animation from overwriting manual changes
     if (hasChanges && !isPlaying) {
-      // Use window property to communicate with URDFModel's animation loop
-      (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
+      animationController.markManualJointChange();
     }
   }, [robot, storeJointValues, isDraggingJoint, isIkHandleDragging, isPlaying]);
 
@@ -2448,7 +2451,7 @@ export const Viewer3D = ({
     
     // If we're starting to play and we're at the last frame, reset to frame 0 first
     if (newPlayingState && !isPlaying) {
-      const currentFrameIdx = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
+      const currentFrameIdx = animationController.currentFrameIndexRef.current;
       const lastFrameIdx = animationFrames.length - 1;
       
       if (currentFrameIdx !== undefined && currentFrameIdx !== null && currentFrameIdx >= lastFrameIdx) {
@@ -2458,14 +2461,12 @@ export const Viewer3D = ({
         const animationDuration = lastTimestamp - firstTimestamp;
         const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
         
-        // Use window properties to communicate with the animation loop
-        // Set manual frame time to first frame
         const normalizedFirstTime = firstTimestamp;
-        (window as WindowWithViewerHandlers).__viewer3dManualFrameTime = normalizedFirstTime;
-        (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = 0;
-        (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime = true; // Flag to reset animation start time
+        animationController.setManualFrameTime(normalizedFirstTime);
+        animationController.setCurrentFrameIndex(0);
+        animationController.setResetAnimationStart(true); // Flag to reset animation start time
         // Clear any preserved frame time that might keep us at the last frame
-        delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
+        animationController.setPreserveFrameTime(null);
         
         // Update frame callback immediately
         if (onFrameChange) {
@@ -2478,15 +2479,14 @@ export const Viewer3D = ({
     onPlayingChange?.(newPlayingState);
     // Clear pause flag when starting to play
     if (newPlayingState) {
-      delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
+      animationController.setPaused(false);
       // Clear manual joint changes flag when starting to play - allow animation to take control
-      // Use window property since URDFModel manages the actual ref
-      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
+      animationController.clearManualJointChange();
     } else {
       // Set pause flag when pausing
-      (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
+      animationController.setPaused(true);
     }
-  }, [animationFrames, robot, isPlaying, onFrameChange, onPlayingChange]);
+  }, [animationFrames, animationController, robot, isPlaying, onFrameChange, onPlayingChange]);
 
   // Handler to play episode frames directly
   const handlePlayEpisode = useCallback((frames: AnimationFrame[]) => {
@@ -2506,12 +2506,11 @@ export const Viewer3D = ({
       setIsPlaying(true);
       onPlayingChange?.(true);
       // Clear pause flag when starting to play
-      delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
+      animationController.setPaused(false);
       // Clear manual joint changes flag when starting to play - allow animation to take control
-      // Note: hasManualJointChangesRef is in URDFModel, so we use window property
-      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
+      animationController.clearManualJointChange();
     }, 10);
-  }, [onPlayingChange]);
+  }, [animationController, onPlayingChange]);
 
   // Handler to stop animation
   const handleStopAnimation = useCallback(() => {
@@ -2524,13 +2523,13 @@ export const Viewer3D = ({
       const normalizedFrameDuration = animationDuration / Math.max(1, animationFrames.length - 1);
       
       // Get current frame index from the ref (set by animation loop)
-      const currentFrameIdx = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex ?? 0;
+      const currentFrameIdx = animationController.currentFrameIndexRef.current ?? 0;
       
       // Calculate normalized time for current frame
       const normalizedTime = firstTimestamp + currentFrameIdx * normalizedFrameDuration;
       
       // Store it immediately so the animation loop can use it right away
-      (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime = normalizedTime;
+      animationController.setPreserveFrameTime(normalizedTime);
       
       // Also immediately update the frame callback to prevent UI from showing wrong frame
       if (onFrameChange && currentFrameIdx >= 0) {
@@ -2541,8 +2540,8 @@ export const Viewer3D = ({
     setIsPlaying(false);
     onPlayingChange?.(false);
     // Set pause flag to prevent interpolation when stopped
-    (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
-  }, [onPlayingChange, animationFrames, onFrameChange]);
+    animationController.setPaused(true);
+  }, [animationController, onPlayingChange, animationFrames, onFrameChange]);
 
   // Handler to clear animation frames and release robot for manual control
   const handleClearAnimation = useCallback(() => {
@@ -2550,11 +2549,11 @@ export const Viewer3D = ({
     onPlayingChange?.(false);
     setAnimationFrames(null);
     // Clear all animation-related flags
-    (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
-    delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
-    delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
-    delete (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
-  }, [onPlayingChange]);
+    animationController.setPaused(true);
+    animationController.setPreserveFrameTime(null);
+    animationController.setManualFrameTime(null);
+    animationController.setCurrentFrameIndex(0);
+  }, [animationController, onPlayingChange]);
 
   // Handler to set a specific frame index (Blender-style frame navigation)
   const handleSetFrame = useCallback((frameIndex: number) => {
@@ -2567,7 +2566,7 @@ export const Viewer3D = ({
     onPlayingChange?.(false);
     
     // Set pause flag to prevent interpolation when frame is manually set
-    (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
+    animationController.setPaused(true);
     
     // Clamp frame index to valid range
     const clampedIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));
@@ -2575,17 +2574,17 @@ export const Viewer3D = ({
     
     // Set manual frame time to jump to this frame
     if (targetFrame) {
-      (window as WindowWithViewerHandlers).__viewer3dManualFrameTime = targetFrame.timestamp;
+      animationController.setManualFrameTime(targetFrame.timestamp);
       
       // Immediately update frame index to prevent it from going to frame 1
-      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedIndex;
+      animationController.setCurrentFrameIndex(clampedIndex);
       
       // Update frame change callback immediately
       if (onFrameChange) {
         onFrameChange(clampedIndex);
       }
     }
-  }, [animationFrames, onPlayingChange, onFrameChange]);
+  }, [animationFrames, animationController, onPlayingChange, onFrameChange]);
 
   // Expose handlers for external use (e.g., from Sidebar)
   useEffect(() => {
@@ -2606,7 +2605,6 @@ export const Viewer3D = ({
       delete (window as WindowWithViewerHandlers).viewer3dSetFrame;
       delete (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed;
       delete (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed;
-      delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
     };
   }, [handleRun, handleMotionDataUpload, handlePlayEpisode, handleStopAnimation, handleClearAnimation, handleSetFrame, playbackSpeed]);
 
@@ -3103,7 +3101,6 @@ export const Viewer3D = ({
             cameraRef.current = camera as THREE.PerspectiveCamera;
             sceneRef.current = scene;
             // Expose camera to window for object dragging
-            (window as WindowWithViewerHandlers).__viewer3dCamera = camera;
             // Configure shadows based on GPU mode
             gl.shadowMap.enabled = gpuMode === "high";
             if (gpuMode === "high") {
@@ -3165,6 +3162,7 @@ export const Viewer3D = ({
                 playbackSpeed={playbackSpeed}
                 rotationPlaneVisible={rotationPlaneVisible}
                 dragMode={dragMode}
+                animationController={animationController}
                 onSelectPart={({ jointName, linkName }) => {
                   // Update selection and highlight
                   onLinkSelect?.(linkName ?? null);

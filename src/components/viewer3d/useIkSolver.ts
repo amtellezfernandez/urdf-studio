@@ -5,7 +5,6 @@ import type { URDFRobot } from "urdf-loader";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import { useJointStore } from "@/store/useJointStore";
 import { applyJointValues } from "@/lib/urdf-joints";
-import type { WindowWithViewerHandlers } from "@/features/types";
 import { getLiveRobotJoints, type DragMode } from "@/components/viewer3d/viewer3d-helpers";
 import type { IkResponsePayload } from "@/components/viewer3d/ik-types";
 
@@ -16,6 +15,7 @@ type UseIkSolverParams = {
   urdfContent: string | null;
   endEffectorLink: string | null;
   onIkApplied?: (values: Record<string, number>) => void;
+  onManualJointChange?: () => void;
 };
 
 export const useIkSolver = ({
@@ -25,6 +25,7 @@ export const useIkSolver = ({
   urdfContent,
   endEffectorLink,
   onIkApplied,
+  onManualJointChange,
 }: UseIkSolverParams) => {
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
   const storeJointValues = useJointStore((s) => s.jointValues);
@@ -404,7 +405,7 @@ export const useIkSolver = ({
       lastIkAppliedRef.current = blended;
 
       console.log("[Viewer3D] IK solution received:", solution);
-      (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
+      onManualJointChange?.();
       const robotAny = robot;
       if (robotAny?.setJointValues || robotAny?.setJointValue) {
         console.log(
@@ -418,15 +419,15 @@ export const useIkSolver = ({
       setStoreJointValues(blended);
       onIkApplied?.(blended);
     },
-    [onIkApplied, robot, setStoreJointValues]
+    [onIkApplied, onManualJointChange, robot, setStoreJointValues]
   );
 
   const handleIkDragStateChange = useCallback((dragging: boolean) => {
     setIsIkHandleDragging(dragging);
     if (dragging) {
-      (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges = true;
+      onManualJointChange?.();
     }
-  }, []);
+  }, [onManualJointChange]);
 
   // Reset IK drag state when mode changes or handle is hidden
   useEffect(() => {

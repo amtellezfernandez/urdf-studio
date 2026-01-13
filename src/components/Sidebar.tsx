@@ -3740,14 +3740,6 @@ export const Sidebar = ({
   // Centralized function to stop all playback
   // This ensures consistent stopping behavior and prevents race conditions
   const stopAllPlayback = useCallback(() => {
-    // CRITICAL: Capture current frame position BEFORE clearing anything
-    // This ensures we can resume from where we stopped, even after 1000+ stop/start cycles
-    const currentFrameIndex = (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex;
-    if (currentFrameIndex !== undefined && currentFrameIndex !== null && onFrameChange) {
-      // Update parent's currentFrame state so playback resumes from this position
-      onFrameChange(currentFrameIndex);
-    }
-
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
 
@@ -3769,11 +3761,7 @@ export const Sidebar = ({
 
     // DO NOT reset frame to 0 - we already captured and preserved the position above
     // (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
-
-    // Clear any preserved frame state
-    delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
-    delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
-  }, [onFrameChange]);
+  }, []);
 
   // Complete reset of all playback state - used when all episodes finish
   // This ensures clean state after a full loop, since episodes can be added/deleted
@@ -3857,10 +3845,6 @@ export const Sidebar = ({
 
       // Capture current session ID to detect if playback was stopped during async operations
       const sessionId = playbackSessionIdRef.current;
-
-      // CRITICAL: Set frame index BEFORE reloading to prevent flicker at frame 0
-      // The useFrame hook checks __viewer3dCurrentFrameIndex when frames are loaded
-      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedFrame;
 
       // viewer3dPlayEpisode loads the episode and automatically starts playback after 10ms
       (window as WindowWithViewerHandlers).viewer3dPlayEpisode?.(frames);

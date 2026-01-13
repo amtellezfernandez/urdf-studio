@@ -3,9 +3,9 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import { applyJointValues } from "@/lib/urdf-joints";
-import type { WindowWithViewerHandlers } from "@/features/types";
 import { hasJointMapChanged } from "@/components/viewer3d/viewer3d-helpers";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
+import type { AnimationController } from "@/components/viewer3d/useAnimationController";
 
 type UseUrdfAnimationParams = {
   animationFrames: AnimationFrame[] | null;
@@ -16,7 +16,7 @@ type UseUrdfAnimationParams = {
   setStoreJointValues: (values: Record<string, number>) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onFrameChange?: (frameIndex: number) => void;
-  hasManualJointChangesRef: MutableRefObject<boolean>;
+  animationController: AnimationController;
 };
 
 export const useUrdfAnimation = ({
@@ -28,19 +28,17 @@ export const useUrdfAnimation = ({
   setStoreJointValues,
   onJointChange,
   onFrameChange,
-  hasManualJointChangesRef,
+  animationController,
 }: UseUrdfAnimationParams) => {
   const animationStartTime = useRef<number>(0);
-  const manualFrameTimeRef = useRef<number | null>(null); // For manual frame navigation
-  const currentFrameIndexRef = useRef<number>(0);
 
   // Reset animation when frames change
   useEffect(() => {
     if (animationFrames) {
       animationStartTime.current = 0;
-      currentFrameIndexRef.current = 0;
+      animationController.currentFrameIndexRef.current = 0;
     }
-  }, [animationFrames]);
+  }, [animationFrames, animationController]);
 
   // Animation loop
   useFrame(() => {
@@ -64,8 +62,8 @@ export const useUrdfAnimation = ({
 
     // Check for preserved frame time from stop handler (set when stopping to preserve position)
     // This MUST be checked first to prevent jumping to frame 0 when stopping
-    const preservedFrameTime = (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
-    if (preservedFrameTime !== undefined && preservedFrameTime !== null) {
+    const preservedFrameTime = animationController.preserveFrameTimeRef.current;
+    if (preservedFrameTime !== null && preservedFrameTime !== undefined) {
       // Use preserved frame time and convert to normalized time
       const frameIndex = Math.round((preservedFrameTime - firstTimestamp) / normalizedFrameDuration);
       const clampedFrameIndex = Math.max(
@@ -74,24 +72,23 @@ export const useUrdfAnimation = ({
       );
       const normalizedTime = firstTimestamp + clampedFrameIndex * normalizedFrameDuration;
       currentTime = normalizedTime;
-      manualFrameTimeRef.current = normalizedTime;
+      animationController.manualFrameTimeRef.current = normalizedTime;
       // Update frame index immediately to prevent wrong frame from being displayed
-      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedFrameIndex;
-      currentFrameIndexRef.current = clampedFrameIndex;
+      animationController.currentFrameIndexRef.current = clampedFrameIndex;
       // Immediately update frame callback with correct frame to prevent UI flicker
       if (onFrameChange) {
         onFrameChange(clampedFrameIndex);
       }
-      // Clear the window property after using it
-      delete (window as WindowWithViewerHandlers).__viewer3dPreserveFrameTime;
+      // Clear the preserved frame time after using it
+      animationController.preserveFrameTimeRef.current = null;
       shouldApplyAnimation = true;
       // Set a flag to skip the normal frame update logic below
-      (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate = true;
+      animationController.skipFrameUpdateRef.current = true;
     }
 
-    // Check for manual frame time from window (set by handleSetFrame or timeline scrubbing)
-    const manualFrameTime = (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
-    if (manualFrameTime !== undefined && manualFrameTime !== null) {
+    // Check for manual frame time (set by handleSetFrame or timeline scrubbing)
+    const manualFrameTime = animationController.manualFrameTimeRef.current;
+    if (manualFrameTime !== null && manualFrameTime !== undefined) {
       // When manually setting a frame, find the frame index from the timestamp
       // Then convert to normalized time for uniform playback
       let targetFrameIndex = animationFrames.length - 1;
@@ -104,10 +101,9 @@ export const useUrdfAnimation = ({
       // Convert to normalized time
       const normalizedTime = firstTimestamp + targetFrameIndex * normalizedFrameDuration;
       currentTime = normalizedTime;
-      manualFrameTimeRef.current = normalizedTime;
+      animationController.manualFrameTimeRef.current = normalizedTime;
       // Update frame index immediately
-      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = targetFrameIndex;
-      currentFrameIndexRef.current = targetFrameIndex;
+      animationController.currentFrameIndexRef.current = targetFrameIndex;
       // Immediately update frame callback to prevent UI from showing wrong frame
       if (onFrameChange) {
         onFrameChange(targetFrameIndex);
@@ -121,55 +117,53 @@ export const useUrdfAnimation = ({
         // When paused, don't update animationStartTime - keep it as is
         // This prevents the frame from jumping when manually set
       }
-      // Clear the window property after using it
-      delete (window as WindowWithViewerHandlers).__viewer3dManualFrameTime;
+      // Clear the manual frame time after using it
+      animationController.manualFrameTimeRef.current = null;
       shouldApplyAnimation = true; // Apply when manually setting frame
       // Set pause flag to prevent interpolation
-      (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
+      animationController.isPausedRef.current = true;
       // Set flag to skip normal frame update
-      (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate = true;
-    } else if (manualFrameTimeRef.current !== null) {
+      animationController.skipFrameUpdateRef.current = true;
+    } else if (animationController.manualFrameTimeRef.current !== null) {
       // Use stored manual frame time (paused at a specific frame)
-      currentTime = manualFrameTimeRef.current;
+      currentTime = animationController.manualFrameTimeRef.current;
       // Calculate frame index from stored time to keep it consistent
       const storedFrameIndex = Math.round((currentTime - firstTimestamp) / normalizedFrameDuration);
       const clampedStoredIndex = Math.max(
         0,
         Math.min(storedFrameIndex, animationFrames.length - 1)
       );
-      (window as WindowWithViewerHandlers).__viewer3dCurrentFrameIndex = clampedStoredIndex;
+      animationController.currentFrameIndexRef.current = clampedStoredIndex;
       // If we start playing from a paused state, update start time and clear manual frame
       if (isPlaying) {
         // The stored time is already normalized, so use it directly
         animationStartTime.current =
           Date.now() - (currentTime - firstTimestamp) / playbackSpeed;
-        manualFrameTimeRef.current = null;
+        animationController.manualFrameTimeRef.current = null;
         shouldApplyAnimation = true;
         // Clear pause flag when starting to play
-        delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
+        animationController.isPausedRef.current = false;
       } else {
         // Paused with manual frame time - stay at this exact frame (no interpolation)
         shouldApplyAnimation = true;
         // Store a flag to indicate we're paused so we don't interpolate
-        (window as WindowWithViewerHandlers).__viewer3dIsPaused = true;
+        animationController.isPausedRef.current = true;
         // Set flag to skip normal frame update to prevent recalculation
-        (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate = true;
+        animationController.skipFrameUpdateRef.current = true;
       }
     } else if (isPlaying) {
       // Normal playback - use normalized timing for uniform playback
       shouldApplyAnimation = true;
       // Clear pause flag when playing
-      delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
+      animationController.isPausedRef.current = false;
       // Clear manual joint changes flag when playing - allow animation to take control
-      hasManualJointChangesRef.current = false;
-      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
+      animationController.hasManualJointChangesRef.current = false;
 
       // Check if we need to reset animation start time (when starting from last frame)
-      const shouldResetStartTime =
-        (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime;
+      const shouldResetStartTime = animationController.resetAnimationStartRef.current;
       if (shouldResetStartTime) {
         animationStartTime.current = 0;
-        delete (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime;
+        animationController.resetAnimationStartRef.current = false;
       }
 
       if (animationStartTime.current === 0) {
@@ -183,13 +177,13 @@ export const useUrdfAnimation = ({
       // Reset loop if we've passed the last frame
       if (currentTime > normalizedLastTimestamp) {
         const lastFrameIndex = animationFrames.length - 1;
-        currentFrameIndexRef.current = lastFrameIndex;
-        manualFrameTimeRef.current = normalizedLastTimestamp;
+        animationController.currentFrameIndexRef.current = lastFrameIndex;
+        animationController.manualFrameTimeRef.current = normalizedLastTimestamp;
         currentTime = normalizedLastTimestamp;
         shouldApplyAnimation = true;
         // Stop playback at the end
-        (window as WindowWithViewerHandlers).__viewer3dResetAnimationStartTime = true;
-        delete (window as WindowWithViewerHandlers).__viewer3dIsPaused;
+        animationController.resetAnimationStartRef.current = true;
+        animationController.isPausedRef.current = false;
         return;
       }
     } else {
@@ -205,10 +199,10 @@ export const useUrdfAnimation = ({
         if (currentTime > normalizedLastTimestamp) {
           currentTime = normalizedLastTimestamp;
         }
-        manualFrameTimeRef.current = currentTime;
+        animationController.manualFrameTimeRef.current = currentTime;
       } else {
         currentTime = firstTimestamp;
-        manualFrameTimeRef.current = currentTime;
+        animationController.manualFrameTimeRef.current = currentTime;
       }
     }
 
@@ -217,12 +211,12 @@ export const useUrdfAnimation = ({
     frameIndex = Math.max(0, Math.min(frameIndex, animationFrames.length - 1));
 
     // Skip frame update if we just preserved the frame position (to prevent flicker)
-    const skipUpdate = (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate;
+    const skipUpdate = animationController.skipFrameUpdateRef.current;
     if (skipUpdate) {
-      delete (window as WindowWithViewerHandlers).__viewer3dSkipFrameUpdate;
+      animationController.skipFrameUpdateRef.current = false;
       // Frame was already updated when preserving position
-    } else if (currentFrameIndexRef.current !== frameIndex) {
-      currentFrameIndexRef.current = frameIndex;
+    } else if (animationController.currentFrameIndexRef.current !== frameIndex) {
+      animationController.currentFrameIndexRef.current = frameIndex;
       // Use requestAnimationFrame to update state outside useFrame
       requestAnimationFrame(() => {
         if (onFrameChange) {
@@ -233,7 +227,7 @@ export const useUrdfAnimation = ({
 
     // Only apply animation values if we should (playing or manual frame set)
     // But skip if user has manually changed joints (to allow manual control)
-    if (!shouldApplyAnimation || (hasManualJointChangesRef.current && !isPlaying)) {
+    if (!shouldApplyAnimation || (animationController.hasManualJointChangesRef.current && !isPlaying)) {
       return;
     }
 
@@ -243,7 +237,7 @@ export const useUrdfAnimation = ({
     // Interpolate between frames using normalized timing
     // This ensures smooth interpolation even with uneven original timestamps
     // When paused, don't interpolate - use exact frame values
-    const isPaused = !isPlaying && (window as WindowWithViewerHandlers).__viewer3dIsPaused;
+    const isPaused = !isPlaying && animationController.isPausedRef.current;
     let t = 0;
     if (!isPaused && normalizedFrameDuration > 0 && frameIndex < animationFrames.length - 1) {
       // Calculate interpolation factor based on normalized time position within the frame interval
@@ -261,16 +255,9 @@ export const useUrdfAnimation = ({
       interpolatedJoints[jointName] = THREE.MathUtils.lerp(current, next, t);
     }
 
-    // Check for manual joint changes flag from window (set by slider changes or dragging)
-    if ((window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges) {
-      hasManualJointChangesRef.current = true;
-      // Clear the window property after reading it
-      delete (window as WindowWithViewerHandlers).__viewer3dHasManualJointChanges;
-    }
-
     // When paused and manual changes have been made, don't apply animation values
     // This allows manual control to work after stopping playback
-    if (isPaused && hasManualJointChangesRef.current) {
+    if (isPaused && animationController.hasManualJointChangesRef.current) {
       return;
     }
 

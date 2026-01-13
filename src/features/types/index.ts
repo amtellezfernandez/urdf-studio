@@ -7,8 +7,6 @@ export type RotationAxis = "x" | "y" | "z";
 export type UrdfViewMode = "original" | "modified" | "split";
 export type AngleUnit = "rad" | "deg";
 
-import type * as THREE from "three";
-
 type DirectoryPickerOptions = FileSystemGetDirectoryOptions & {
   mode?: "read" | "readwrite";
 };
@@ -23,14 +21,6 @@ export interface WindowWithViewerHandlers extends Window {
   viewer3dSetPlaybackSpeed?: (speed: number) => void;
   viewer3dGetPlaybackSpeed?: () => number;
   showDirectoryPicker?: (options?: DirectoryPickerOptions) => Promise<FileSystemDirectoryHandle>;
-  __viewer3dManualFrameTime?: number;
-  __viewer3dCurrentFrameIndex?: number;
-  __viewer3dPreserveFrameTime?: number;
-  __viewer3dResetAnimationStartTime?: boolean;
-  __viewer3dIsPaused?: boolean;
-  __viewer3dHasManualJointChanges?: boolean;
-  __viewer3dSkipFrameUpdate?: boolean;
-  __viewer3dCamera?: THREE.Camera;
 }
 
 export interface DebugMeshInfo {
