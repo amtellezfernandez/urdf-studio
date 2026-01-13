@@ -1565,6 +1565,7 @@ const CreatedObjects = ({
 
     const blobUrls = blobUrlsRef.current;
     const loader = new URDFLoader();
+    const missingMeshes = new Set<string>();
 
     // Custom mesh loader that uses the uploaded files
     loader.loadMeshCb = (
@@ -1592,6 +1593,11 @@ const CreatedObjects = ({
       }
 
       if (!meshBlob) {
+        const normalizedPath = path
+          .replace(/^package:\/\/[^/]+\//, "")
+          .replace(/^file:\/\//, "")
+          .trim();
+        missingMeshes.add(normalizedPath || path);
         // Don't fail - just skip this mesh
         onComplete(null);
         return;
@@ -1690,6 +1696,14 @@ const CreatedObjects = ({
 
           robotRef.current = robot;
           onRobotLoaded(robot);
+
+          if (missingMeshes.size > 0) {
+            const missingList = Array.from(missingMeshes);
+            const preview = missingList.slice(0, 5).join(", ");
+            const more =
+              missingList.length > 5 ? `, +${missingList.length - 5} more` : "";
+            toast.warning(`Missing ${missingList.length} mesh file(s): ${preview}${more}`);
+          }
         }
       } catch (err) {
         console.error("Error loading URDF:", err);
