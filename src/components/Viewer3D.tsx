@@ -46,6 +46,7 @@ import { useUrdfFileContent } from "@/components/viewer3d/useUrdfFileContent";
 import { useDragModeEffects } from "@/components/viewer3d/useDragModeEffects";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
+import { recordPlaybackTrace, usePlaybackDebugTrace } from "@/debug/playbackTrace";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -1750,6 +1751,7 @@ export const Viewer3D = ({
 }: Viewer3DProps) => {
   // Use GPU mode hook for rendering
   const { gpuMode } = useGPUMode();
+  usePlaybackDebugTrace();
   const [, setMotionDataFile] = useState<File | null>(null);
   const [animationFrames, setAnimationFrames] = useState<
     AnimationFrame[] | null
@@ -1875,7 +1877,8 @@ export const Viewer3D = ({
     sceneRef,
   });
   const handlePlaybackEnd = useCallback(
-    () => {
+    (frameIndex: number) => {
+      recordPlaybackTrace("viewer:playbackEnd", { frameIndex });
       if (!isPlaying) {
         return;
       }
