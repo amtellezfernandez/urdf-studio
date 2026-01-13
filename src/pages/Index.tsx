@@ -1,4 +1,3 @@
-import type React from "react";
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { JointListSidebar } from "@/components/JointListSidebar";
@@ -30,17 +29,10 @@ import { useCameraStore } from "@/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/types/file";
 import type { URDFRobot } from "urdf-loader";
-import { ChevronsRight, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { ChevronsRight } from "lucide-react";
+import { TopNavBar } from "@/pages/index/TopNavBar";
+import { MeshFilesStatusPanel } from "@/pages/index/MeshFilesStatusPanel";
+import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
 
 import type {
   MeshFiles,
@@ -48,7 +40,6 @@ import type {
   UrdfViewMode,
   AngleUnit,
   WindowWithViewerHandlers,
-  DebugMeshInfo,
   ViewerEpisode,
   EpisodeSaveHandler,
 } from "@/features/types";
@@ -731,410 +722,40 @@ const Index = () => {
         </div>
       ) : (
         <>
-          {/* Fixed Top Navigation Bar - Blender Style */}
-          <div className="fixed top-0 left-0 right-0 z-50 h-7 bg-[#282828] border-b border-[#3d3d3d] flex items-center px-1">
-            <img 
-              src="/assets/urdf-studio-logo.png" 
-              alt="URDF Studio" 
-              className="h-5 w-auto object-contain ml-1 mr-3"
-            />
-            {originalUrdfContent && vizUrdfContent && (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
-                      File
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56 bg-[#282828] border-[#3d3d3d]">
-                    <DropdownMenuItem
-                      onClick={openExportDialog}
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Export
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleSave}
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Save
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleRevert}
-                      disabled={!canRevert}
-                      className={cn(
-                        "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                        !canRevert && "opacity-50 cursor-not-allowed"
-                      )}
-                      title="Reloads the last saved file"
-                    >
-                      Revert
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleResetRotation}
-                      disabled={!hasRotationChanges}
-                      className={cn(
-                        "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                        !hasRotationChanges && "opacity-50 cursor-not-allowed"
-                      )}
-                      title="Reloads the original loaded file"
-                    >
-                      Reset
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none">
-                      Utils
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
-                    <DropdownMenuItem
-                      onClick={handleCanonicalOrder}
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Canonical Order
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handlePrettyPrint}
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Pretty Print
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleNormalizeAxes}
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Normalize Axes
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleFixMeshPaths}
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Fix Mesh Paths
-                    </DropdownMenuItem>
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        Rotate
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setRotationAxis("x");
-                            handleRotateRobot("x");
-                          }}
-                          className={cn(
-                            "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                            rotationAxis === "x" && "bg-[#3d3d3d] text-white"
-                          )}
-                        >
-                          X
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setRotationAxis("y");
-                            handleRotateRobot("y");
-                          }}
-                          className={cn(
-                            "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                            rotationAxis === "y" && "bg-[#3d3d3d] text-white"
-                          )}
-                        >
-                          Y
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setRotationAxis("z");
-                            handleRotateRobot("z");
-                          }}
-                          className={cn(
-                            "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                            rotationAxis === "z" && "bg-[#3d3d3d] text-white"
-                          )}
-                        >
-                          Z
-                        </DropdownMenuItem>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
-            {originalUrdfContent && vizUrdfContent && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
-                    View
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Angle Unit
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => setAngleUnit("rad")}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          angleUnit === "rad" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        Radians
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setAngleUnit("deg")}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          angleUnit === "deg" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        Degrees
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      GPU Mode
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-40 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => setGPUMode("low")}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          gpuMode === "low" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        Low GPU Mode
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setGPUMode("high")}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          gpuMode === "high" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        High GPU Mode
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuItem
-                    onClick={() => setShowUrdfEditor(false)}
-                    className={cn(
-                      "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                      !showUrdfEditor && "bg-[#3d3d3d] text-white"
-                    )}
-                  >
-                    3D Visualization
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setShowPovCameras(true)}
-                    className={cn(
-                      "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                      showPovCameras && "bg-[#3d3d3d] text-white"
-                    )}
-                  >
-                    POV Cameras
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className={cn(
-                        "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                        showUrdfEditor && "bg-[#3d3d3d] text-white"
-                      )}
-                    >
-                      URDF File
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-40 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setShowUrdfEditor(true);
-                          setUrdfViewMode("original");
-                        }}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          showUrdfEditor && urdfViewMode === "original" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        Original
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setShowUrdfEditor(true);
-                          setUrdfViewMode("modified");
-                        }}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          showUrdfEditor && urdfViewMode === "modified" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        Modified
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setShowUrdfEditor(true);
-                          setUrdfViewMode("split");
-                        }}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          showUrdfEditor && urdfViewMode === "split" && "bg-[#3d3d3d] text-white"
-                        )}
-                      >
-                        Split View
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {originalUrdfContent && vizUrdfContent && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
-                    Dataset
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
-                  <DropdownMenuItem
-                    onClick={openMappingList}
-                    className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                  >
-                    Joint Mappings
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Load Episodes
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.loadFromLocal()}
-                        disabled={!datasetActions}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        From Local File
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.loadFromHuggingFace()}
-                        disabled={!datasetActions || datasetActions.isImportingFromHF}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {datasetActions?.isImportingFromHF ? "Loading from HF..." : "From Hugging Face"}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Export Episodes
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.exportToLocal()}
-                        disabled={!datasetActions || !datasetActions.hasEpisodes || datasetActions.isExportingDataset}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {datasetActions?.isExportingDataset ? "Exporting..." : "To Local File"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => datasetActions?.exportToHuggingFace()}
-                        disabled={!datasetActions || !datasetActions.hasEpisodes || datasetActions.isUploadingToHF}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {datasetActions?.isUploadingToHF ? "Uploading to HF..." : "To Hugging Face"}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {originalUrdfContent && vizUrdfContent && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
-                    Create
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Objects
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-32 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          openObjectCreator("cube");
-                        }}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        Cube
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          openObjectCreator("point");
-                        }}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        Point
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                    >
-                      Camera
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
-                      <DropdownMenuItem
-                        onClick={() => setShowCameraCreator(true)}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        Add Camera
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setShowCameraUpload(true)}
-                        className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
-                      >
-                        Upload Camera Config
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={exportCamerasAsJSON}
-                        disabled={!hasCamerasToExport}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          !hasCamerasToExport && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        Export as JSON
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={exportCamerasAsYAML}
-                        disabled={!hasCamerasToExport}
-                        className={cn(
-                          "text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
-                          !hasCamerasToExport && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        Export as YAML
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
+          <TopNavBar
+            showMenus={Boolean(originalUrdfContent && vizUrdfContent)}
+            openExportDialog={openExportDialog}
+            onSave={handleSave}
+            onRevert={handleRevert}
+            canRevert={canRevert}
+            onResetRotation={handleResetRotation}
+            hasRotationChanges={hasRotationChanges}
+            onCanonicalOrder={handleCanonicalOrder}
+            onPrettyPrint={handlePrettyPrint}
+            onNormalizeAxes={handleNormalizeAxes}
+            onFixMeshPaths={handleFixMeshPaths}
+            rotationAxis={rotationAxis}
+            setRotationAxis={setRotationAxis}
+            onRotateRobot={handleRotateRobot}
+            angleUnit={angleUnit}
+            setAngleUnit={setAngleUnit}
+            gpuMode={gpuMode}
+            setGPUMode={setGPUMode}
+            showUrdfEditor={showUrdfEditor}
+            setShowUrdfEditor={setShowUrdfEditor}
+            urdfViewMode={urdfViewMode}
+            setUrdfViewMode={setUrdfViewMode}
+            showPovCameras={showPovCameras}
+            setShowPovCameras={setShowPovCameras}
+            openMappingList={openMappingList}
+            datasetActions={datasetActions}
+            openObjectCreator={openObjectCreator}
+            setShowCameraCreator={setShowCameraCreator}
+            setShowCameraUpload={setShowCameraUpload}
+            exportCamerasAsJSON={exportCamerasAsJSON}
+            exportCamerasAsYAML={exportCamerasAsYAML}
+            hasCamerasToExport={hasCamerasToExport}
+          />
 
           <Sidebar
             isLoading={isLoading}
@@ -1483,82 +1104,14 @@ const Index = () => {
         </>
       )}
 
-      {/* Mesh Files Status Panel - Bottom Right */}
-      {showDebugDialog && (
-        <div
-          className="fixed bottom-4 z-50 w-80 max-h-[40vh] bg-[#282828] border border-[#3d3d3d] rounded-lg shadow-lg flex flex-col"
-          style={{
-            right: isRightSidebarCollapsed ? "1rem" : `${rightSidebarWidth + 16}px`
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-2 border-b border-[#3d3d3d]">
-            <div className="text-xs font-medium text-[#d4d4d4]">Mesh Files Status</div>
-            <button
-              onClick={() => setShowDebugDialog(false)}
-              className="text-[#9d9d9d] hover:text-[#d4d4d4] transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          
-          {/* Summary */}
-          <div className="px-2 py-1.5 text-xs border-b border-[#3d3d3d] bg-[#1e1e1e]">
-            <div className="text-[#9d9d9d]">
-              Total: {debugMeshInfo.length} | 
-              <span className="text-[#6d9d6d] ml-1">✓ {debugMeshInfo.filter(m => m.found).length}</span> | 
-              <span className="text-[#9d6d6d] ml-1">✗ {debugMeshInfo.filter(m => !m.found).length}</span>
-              {unmatchedURDFRefs.length > 0 && (
-                <span className="text-[#9d6d6d] ml-2">⚠ {unmatchedURDFRefs.length}</span>
-              )}
-            </div>
-          </div>
-          
-          {/* Content */}
-          <div className="overflow-y-auto flex-1 p-2 space-y-1 blender-scrollbar">
-            {unmatchedURDFRefs.length > 0 && (
-              <div className="mb-2 p-1.5 bg-[#2a1e1e] border border-[#4a2d2d] rounded text-xs">
-                <div className="flex items-center gap-1 mb-1">
-                  <AlertCircle className="h-3 w-3 text-[#9d6d6d]" />
-                  <span className="font-medium text-[#9d6d6d]">Unmatched: {unmatchedURDFRefs.length}</span>
-                </div>
-              </div>
-            )}
-            
-            {debugMeshInfo.map((info, index) => (
-              <div
-                key={index}
-                className={`text-xs p-1.5 rounded border ${
-                  info.found
-                    ? "bg-[#1e2a1e] border-[#3d4a3d]"
-                    : "bg-[#2a1e1e] border-[#4a3d3d]"
-                }`}
-              >
-                <div className="flex items-start gap-1.5">
-                  {info.found ? (
-                    <CheckCircle2 className="h-3 w-3 text-[#6d9d6d] flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-[#9d6d6d] flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-[#d4d4d4] truncate">{info.filename}</div>
-                    {info.found && info.urdfReference && (
-                      <div className="text-[#9d9d9d] text-[10px] mt-0.5 truncate">
-                        {info.urdfReference}
-                      </div>
-                    )}
-                    {!info.found && (
-                      <div className="text-[#9d6d6d] text-[10px] mt-0.5">
-                        Not found
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <MeshFilesStatusPanel
+        open={showDebugDialog}
+        debugMeshInfo={debugMeshInfo}
+        unmatchedURDFRefs={unmatchedURDFRefs}
+        isRightSidebarCollapsed={isRightSidebarCollapsed}
+        rightSidebarWidth={rightSidebarWidth}
+        onClose={() => setShowDebugDialog(false)}
+      />
       {/* Export Dialog - Always available, even when on 3D viewer */}
       <ExportDialog
         isOpen={isExportDialogOpen}
@@ -1569,50 +1122,12 @@ const Index = () => {
         robotName={robotName}
       />
 
-      {showPovCameras && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-5xl rounded-xl border border-border bg-[#101010]/95 p-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-border/50">
-              <div>
-                <div className="text-sm font-semibold text-foreground">POV Cameras</div>
-                <p className="text-[11px] text-muted-foreground">Camera definitions (preview removed).</p>
-              </div>
-              <button
-                onClick={() => setShowPovCameras(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-                aria-label="Close POV split view"
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {cameras.map((camera, index) => (
-                <div
-                  key={camera.id}
-                  className={cn(
-                    "flex flex-col gap-2 rounded-lg border bg-gradient-to-b from-[#151515] to-[#0b0b0b] p-3 shadow-lg",
-                    selectedCameraId === camera.id
-                      ? "border-primary/60 ring-2 ring-primary/20"
-                      : "border-border/50"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-                    <span>Camera {index + 1}</span>
-                    <span className="text-[9px] text-muted-foreground/70">{camera.parent_link}</span>
-                  </div>
-                  <div className="text-sm font-semibold text-foreground truncate">{camera.name}</div>
-                  <div className="w-full rounded-md border border-border/40 bg-[#0b0b0b] p-3 text-[11px] text-muted-foreground">
-                    <div>Parent link: <span className="text-foreground">{camera.parent_link}</span></div>
-                    <div>Pose xyz: {camera.pose.xyz.join(", ")}</div>
-                    <div>Pose rpy: {camera.pose.rpy.join(", ")}</div>
-                    <div>Intrinsics: {camera.intrinsics.width}×{camera.intrinsics.height}, FOV {camera.intrinsics.fov_deg}°</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <PovCamerasOverlay
+        open={showPovCameras}
+        cameras={cameras}
+        selectedCameraId={selectedCameraId}
+        onClose={() => setShowPovCameras(false)}
+      />
 
       {/* Joint Mapping List Panel */}
       <MappingListPanel
