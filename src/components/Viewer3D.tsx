@@ -185,6 +185,20 @@ const getLiveRobotJoints = (robot: URDFRobot | null, fallback: Record<string, nu
   return Object.keys(result).length > 0 ? result : fallback;
 };
 
+const hasJointMapChanged = (
+  next: Record<string, number>,
+  prev: Record<string, number> | null
+) => {
+  if (!prev) return true;
+  const nextKeys = Object.keys(next);
+  const prevKeys = Object.keys(prev);
+  if (nextKeys.length !== prevKeys.length) return true;
+  for (const key of nextKeys) {
+    if (prev[key] !== next[key]) return true;
+  }
+  return false;
+};
+
 // Component to render collision geometries from URDF
 const CollisionGeometries = ({
   urdfFile,
@@ -288,8 +302,6 @@ const CollisionGeometries = ({
         const linkObject = robotObject.links?.[linkName] ?? robotObject.getObjectByName?.(linkName);
         
         if (linkObject) {
-          // Update link's world matrix
-          linkObject.updateMatrixWorld(true);
           const linkWorldMatrix = new THREE.Matrix4().copy(linkObject.matrixWorld);
           
           // Create local transform from collision origin
@@ -430,7 +442,6 @@ const CollisionGeometries = ({
       const linkObject = robotObject.links?.[linkName] ?? robotObject.getObjectByName?.(linkName);
       
       if (linkObject) {
-        linkObject.updateMatrixWorld(true);
         const linkWorldMatrix = new THREE.Matrix4().copy(linkObject.matrixWorld);
         
         // Create local transform from collision origin
@@ -1182,11 +1193,6 @@ const CreatedObjects = ({
         for (const linkName of linkNames) {
           const obj = threeLinks[linkName];
           if (!obj || !obj.matrixWorld) continue;
-  
-          if (obj.updateMatrixWorld) {
-            obj.updateMatrixWorld(true);
-          }
-  
           tmpMatrix.copy(obj.matrixWorld);
           tmpMatrix.decompose(pos, quat, scale);
   
@@ -1977,16 +1983,19 @@ const CreatedObjects = ({
       return;
     }
 
-    // Apply joint values to robot
-    applyJointValues(robotRef.current, interpolatedJoints, { filter: false });
-    
-    // Update the store in batch so UI reflects the animation
-    setStoreJointValues(interpolatedJoints);
-    
-    // Also call onJointChange for each joint to notify parent
-    if (onJointChange) {
-      for (const [jointName, value] of Object.entries(interpolatedJoints)) {
-        onJointChange(jointName, value);
+    const shouldSyncJoints = hasJointMapChanged(interpolatedJoints, storeJointValues);
+    if (shouldSyncJoints) {
+      // Apply joint values to robot
+      applyJointValues(robotRef.current, interpolatedJoints, { filter: false });
+
+      // Update the store in batch so UI reflects the animation
+      setStoreJointValues(interpolatedJoints);
+
+      // Also call onJointChange for each joint to notify parent
+      if (onJointChange) {
+        for (const [jointName, value] of Object.entries(interpolatedJoints)) {
+          onJointChange(jointName, value);
+        }
       }
     }
   });
