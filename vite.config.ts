@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
       },
     },
+    ...(mode === "test" || process.env.VITEST ? { hmr: false } : {}),
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
