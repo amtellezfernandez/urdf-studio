@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
-import { Sidebar } from "@/components/Sidebar";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { ExportDialog } from "@/components/ExportDialog";
 import { JointMappingDialog } from "@/components/JointMappingDialog";
@@ -25,12 +24,12 @@ import { useCameraStore } from "@/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/types/file";
 import type { URDFRobot } from "urdf-loader";
-import { ChevronsRight } from "lucide-react";
 import { TopNavBar } from "@/pages/index/TopNavBar";
 import { MeshFilesStatusPanel } from "@/pages/index/MeshFilesStatusPanel";
 import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
 import { ViewerLayout } from "@/pages/index/ViewerLayout";
 import { RightSidebarPanel } from "@/pages/index/RightSidebarPanel";
+import { LeftSidebarPanel } from "@/pages/index/LeftSidebarPanel";
 
 import type {
   MeshFiles,
@@ -40,7 +39,7 @@ import type {
   ViewerEpisode,
   EpisodeSaveHandler,
 } from "@/features/types";
-import { AXIS_NAMES, SIDEBAR_RESIZER_WIDTH } from "@/pages/index/constants";
+import { AXIS_NAMES } from "@/pages/index/constants";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
@@ -750,14 +749,14 @@ const Index = () => {
             hasCamerasToExport={hasCamerasToExport}
           />
 
-          <Sidebar
+          <LeftSidebarPanel
             isLoading={isLoading}
             availableJoints={availableJoints}
             jointLimits={jointLimits}
             jointAxes={jointAxes}
             originalJointAxes={originalJointAxes}
-            originalUrdf={originalUrdfContent}
-            vizUrdf={vizUrdfContent}
+            originalUrdfContent={originalUrdfContent}
+            vizUrdfContent={vizUrdfContent}
             onJointChange={handleJointChange}
             onJointSelect={setSelectedJoint}
             selectedJoint={selectedJoint}
@@ -768,7 +767,7 @@ const Index = () => {
             onJointNameChange={handleJointNameChange}
             onDeleteJoint={handleDeleteJoint}
             deletedJoints={deletedJoints}
-            getExportUrdf={getExportUrdfContent}
+            getExportUrdfContent={getExportUrdfContent}
             onMotionDataUpload={handleMotionDataUpload}
             onPlayAnimation={handlePlayAnimation}
             isPlaying={isPlaying}
@@ -776,8 +775,8 @@ const Index = () => {
             hasAnimationFrames={hasAnimationFrames}
             currentFrame={currentFrame}
             totalFrames={totalFrames}
-            width={sidebarWidth}
-            isCollapsed={isSidebarCollapsed}
+            sidebarWidth={sidebarWidth}
+            isSidebarCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleSidebarToggle}
             meshFiles={meshFiles}
             onCollisionVisibilityChange={setCollisionVisibility}
@@ -788,44 +787,14 @@ const Index = () => {
             showUrdfEditor={showUrdfEditor}
             viewerSplitView={viewerSplitView}
             onViewerSplitViewChange={setViewerSplitView}
-            onViewerEpisodeChange={(episode) => {
-              setViewerEpisode(episode);
-            }}
+            onViewerEpisodeChange={setViewerEpisode}
             onViewerOpenChange={setIsViewerOpen}
             onEpisodeSaveHandlerChange={handleEpisodeSaveHandlerChange}
             episodesViewHeight={recordingViewHeight}
             onEpisodesResizeStart={handleEpisodesResizeStart}
             onDatasetActionsReady={handleDatasetActionsReady}
+            onSidebarResizeStart={handleSidebarResizeStart}
           />
-
-          {!isSidebarCollapsed && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize sidebar"
-              onPointerDown={handleSidebarResizeStart}
-              className="fixed z-40 cursor-col-resize select-none"
-              style={{
-                top: "32px",
-                bottom: 0,
-                left: sidebarWidth - SIDEBAR_RESIZER_WIDTH / 2,
-                width: SIDEBAR_RESIZER_WIDTH,
-              }}
-            >
-              <span className="pointer-events-none absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-border/70" />
-            </div>
-          )}
-
-          {isSidebarCollapsed && (
-            <button
-              type="button"
-              onClick={handleSidebarToggle}
-              className="fixed bottom-6 left-4 z-40 flex items-center gap-1 rounded-full border border-border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm shadow-sm transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <ChevronsRight className="h-3 w-3" />
-              Panel
-            </button>
-          )}
 
           <ViewerLayout
             isSidebarCollapsed={isSidebarCollapsed}
