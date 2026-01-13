@@ -109,6 +109,19 @@ const setEmissiveColor = (material: THREE.Material, color: number) => {
   }
 };
 
+const resolveJointScalarValue = (joint?: URDFJoint | null) => {
+  if (!joint) return undefined;
+  if (typeof joint.angle === "number") {
+    return joint.angle;
+  }
+  const value = joint.jointValue;
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return typeof first === "number" ? first : undefined;
+  }
+  return typeof value === "number" ? value : undefined;
+};
+
 const extractLinkPose = (robot: URDFRobot | null, linkName: string): LinkPose | null => {
   if (!robot) return null;
   const robotAny = robot;
@@ -162,8 +175,7 @@ const getLiveRobotJoints = (robot: URDFRobot | null, fallback: Record<string, nu
   const result: Record<string, number> = {};
   for (const name of Object.keys(joints)) {
     const j = joints[name];
-    const jointValue = Array.isArray(j?.jointValue) ? j.jointValue[0] : j?.jointValue;
-    const val = typeof j?.angle === "number" ? j.angle : typeof jointValue === "number" ? jointValue : undefined;
+    const val = resolveJointScalarValue(j);
     if (typeof val === "number" && !Number.isNaN(val)) {
       result[name] = val;
     }
@@ -2218,7 +2230,7 @@ const CreatedObjects = ({
         const limits = getJointLimits(jointLimits, jointName);
 
         // Read current angle directly from joint
-        const currentAngle = typeof joint.angle === "number" ? joint.angle : 0;
+        const currentAngle = resolveJointScalarValue(joint) ?? 0;
 
         // Store drag start state using world/floor reference (vertical movement)
         dragStartRef.current = {
@@ -3291,7 +3303,7 @@ export const Viewer3D = ({
       const jointObj = robot.joints?.[j];
       // Include all joint types (including fixed), but exclude sensor frames
       return jointObj &&
-             (typeof jointObj.angle === "number" || jointObj.jointType === "fixed") &&
+             (typeof resolveJointScalarValue(jointObj) === "number" || jointObj.jointType === "fixed") &&
              !j.toLowerCase().includes('imu') &&
              !j.toLowerCase().includes('site') &&
              !j.toLowerCase().includes('frame');
@@ -3303,7 +3315,8 @@ export const Viewer3D = ({
       if (jointObj.jointType === "fixed") {
         angles[j] = 0;
       } else {
-        angles[j] = typeof jointObj?.angle === "number" ? jointObj.angle : 0;
+        const value = resolveJointScalarValue(jointObj);
+        angles[j] = typeof value === "number" ? value : 0;
       }
     });
     initialPoseRef.current = { ...angles };
@@ -3370,8 +3383,7 @@ export const Viewer3D = ({
     for (const [jointName, value] of Object.entries(storeJointValues)) {
       if (typeof value === "number" && !Number.isNaN(value)) {
         // Check if the value differs from current robot joint value
-        const rawValue = r.joints?.[jointName]?.jointValue;
-        const currentValue = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+        const currentValue = resolveJointScalarValue(r.joints?.[jointName]);
         if (typeof currentValue === "number" && Math.abs(currentValue - value) > 0.001) {
           hasChanges = true;
         }
@@ -3428,7 +3440,8 @@ export const Viewer3D = ({
       const actuatedJoints: string[] = robotJointKeys
         .filter((key) => {
           const joint = robotAny?.joints?.[key];
-          return joint && typeof joint.angle === "number";
+          const value = resolveJointScalarValue(joint);
+          return joint && joint.jointType !== "fixed" && typeof value === "number";
         })
         .sort((a, b) => {
           const aNum = Number(a);
