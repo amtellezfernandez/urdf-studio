@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { convertMotionFramesToNodes } from "@/components/viewer3d/convertMotionFramesToNodes";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import type { Edge, Node } from "reactflow";
@@ -27,28 +27,36 @@ export const usePlaybackNotifications = ({
   onFrameChange,
   onJointChange,
 }: UsePlaybackNotificationsParams) => {
+  const previousFramesRef = useRef<AnimationFrame[] | null>(null);
   const setPlaybackIsPlaying = useViewerPlaybackStore((state) => state.setIsPlaying);
   const setPlaybackHasFrames = useViewerPlaybackStore((state) => state.setHasFrames);
   const setPlaybackFrameInfo = useViewerPlaybackStore((state) => state.setFrameInfo);
 
   useEffect(() => {
-    if (!isPlaying || !animationFrames) {
-      setCurrentFrame(0);
+    if (previousFramesRef.current === animationFrames) {
+      return;
     }
-  }, [animationFrames, isPlaying, setCurrentFrame]);
 
-  useEffect(() => {
+    previousFramesRef.current = animationFrames;
     const hasFrames = animationFrames !== null && animationFrames.length > 0;
+
     setPlaybackHasFrames(hasFrames);
     onAnimationFramesChange?.(hasFrames);
+
     if (!hasFrames) {
+      setCurrentFrame(0);
       setPlaybackFrameInfo(0, 0);
+      return;
     }
+
+    setPlaybackFrameInfo(currentFrame, animationFrames.length);
   }, [
     animationFrames,
     onAnimationFramesChange,
+    setCurrentFrame,
     setPlaybackFrameInfo,
     setPlaybackHasFrames,
+    currentFrame,
   ]);
 
   useEffect(() => {

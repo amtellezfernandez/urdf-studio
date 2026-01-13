@@ -3788,8 +3788,8 @@ export const Sidebar = ({
       const firstEpisode = episodes[0];
       if (firstEpisode && firstEpisode.frames && firstEpisode.frames.length > 0) {
         const frames = toAnimationFrames(firstEpisode);
-        viewerPlayback.playEpisode(frames);
-        viewerPlayback.setFrame(0);
+        viewerPlayback.playEpisode(frames, { autoplay: false, startFrame: 0 });
+        onFrameChange?.(0);
       }
     }
   }, [stopAllPlayback, onFrameChange, episodes]);
@@ -3808,7 +3808,7 @@ export const Sidebar = ({
           // Episode not loaded, load it first
           const frames = toAnimationFrames(episode);
           viewerPlayback.playEpisode(frames);
-          // viewer3dPlayEpisode will start playback automatically after 10ms
+          // viewer3dPlayEpisode starts playback automatically
           return;
         }
       }
@@ -3832,6 +3832,7 @@ export const Sidebar = ({
     if (!episode || !episode.frames || episode.frames.length === 0) return;
     
     const clampedFrame = Math.max(0, Math.min(frameIndex, episode.frames.length - 1));
+    const shouldAutoplay = isPlayingAllRef.current;
     
     // Always use the same order: episode (only if different) -> frame -> update state
     // Only reload episode if it's different from what's currently loaded
@@ -3842,83 +3843,22 @@ export const Sidebar = ({
     
     if (needsReload) {
       const frames = toAnimationFrames(episode);
-
-      // Capture current session ID to detect if playback was stopped during async operations
-      const sessionId = playbackSessionIdRef.current;
-
-      // viewer3dPlayEpisode loads the episode and automatically starts playback after 10ms
-      viewerPlayback.playEpisode(frames);
+      viewerPlayback.playEpisode(frames, {
+        autoplay: shouldAutoplay,
+        startFrame: clampedFrame,
+      });
       currentLoadedEpisodeRef.current = episodeIndex;
-
-      // If we need to start from a specific frame (not frame 0), set it after frames load
-      // Otherwise, let the natural auto-start happen for smooth playback from frame 0
-      if (clampedFrame > 0) {
-        // Starting from middle of episode - need to set frame and ensure playback continues
-        setTimeout(() => {
-          // Check if this playback session is still valid (not stopped/restarted)
-          if (sessionId !== playbackSessionIdRef.current) return;
-
-          if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
-            viewerPlayback.setFrame(clampedFrame);
-            onFrameChange?.(clampedFrame);
-            // Ensure playback continues from this position
-            if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-              setTimeout(() => {
-                // Check session ID again before starting playback
-                if (sessionId !== playbackSessionIdRef.current) return;
-                if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-                  // Force play (true) to ensure playback continues after setting frame
-                  viewerPlayback.playAnimation(true);
-                }
-              }, 20);
-            }
-          }
-        }, 15);
-      } else {
-        // Starting from frame 0 - just let the auto-start from viewer3dPlayEpisode handle it
-        // The auto-start will begin playback after 10ms automatically
-        // This ensures smooth playback without any stops/restarts
-      }
     } else {
       // Same episode - just update frame position
-      // Capture session ID to detect if stopped during async operations
-      const sessionId = playbackSessionIdRef.current;
-
-      // Use double requestAnimationFrame to ensure playback speed state has updated before setting frame
-      // This is critical for non-1x speeds (e.g., 0.25x) to work correctly
-      // First RAF: allows React state update to propagate
-      requestAnimationFrame(() => {
-        // Check if playback session is still valid
-        if (sessionId !== playbackSessionIdRef.current) return;
-
-        // Second RAF: ensures the prop has been passed to URDFModel and useFrame will use new speed
-        requestAnimationFrame(() => {
-          // Check session again
-          if (sessionId !== playbackSessionIdRef.current) return;
-
-          // Ensure we're setting a valid frame index before calling
-          if (clampedFrame >= 0 && episode && episode.frames && clampedFrame < episode.frames.length) {
-            const wasPlaying = isPlayingAllRef.current;
-            viewerPlayback.setFrame(clampedFrame);
-            onFrameChange?.(clampedFrame);
-            // viewer3dSetFrame stops playback, so resume if we were playing
-            if (wasPlaying && isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-              setTimeout(() => {
-                // Final session check before resuming playback
-                if (sessionId !== playbackSessionIdRef.current) return;
-                if (isPlayingAllRef.current && currentLoadedEpisodeRef.current === episodeIndex) {
-                  // Force play (true) since viewer3dSetFrame stopped playback
-                  viewerPlayback.playAnimation(true);
-                }
-              }, 50); // Increased delay to ensure state is updated
-            }
-          }
-        });
-      });
+      viewerPlayback.setFrame(clampedFrame);
+      onFrameChange?.(clampedFrame);
+      if (shouldAutoplay) {
+        viewerPlayback.playAnimation(true);
+      }
     }
     
     setCurrentPlayingEpisodeIndex(episodeIndex);
-  }, [episodes, playbackSpeed, onFrameChange]);
+  }, [episodes, onFrameChange]);
 
   // Play a single episode in loop (not all episodes)
   const playSingleEpisodeLoop = useCallback((episodeIndex: number) => {
@@ -4176,27 +4116,8 @@ export const Sidebar = ({
         if (episodes[playableIndex] && episodes[playableIndex].frames && episodes[playableIndex].frames.length > 0) {
           const finishedEpisode = episodes[playableIndex];
           const frames = toAnimationFrames(finishedEpisode);
-          // Reload episode frames - viewer3dPlayEpisode will auto-start after 10ms
-          viewerPlayback.playEpisode(frames);
-          // Stop playback immediately and repeatedly to catch auto-start
-          // Then set frame to 0 once stopped
-          viewerPlayback.stopAnimation();
-          setTimeout(() => {
-            viewerPlayback.stopAnimation();
-            viewerPlayback.setFrame(0);
-            onFrameChange?.(0);
-          }, 5);
-          setTimeout(() => {
-            viewerPlayback.stopAnimation();
-          }, 12); // Right before auto-start (10ms)
-          setTimeout(() => {
-            viewerPlayback.stopAnimation();
-            viewerPlayback.setFrame(0);
-            onFrameChange?.(0);
-          }, 25); // Right after auto-start
-          setTimeout(() => {
-            viewerPlayback.stopAnimation();
-          }, 50); // Final safety stop
+          viewerPlayback.playEpisode(frames, { autoplay: false, startFrame: 0 });
+          onFrameChange?.(0);
         }
         // Keep currentPlayingEpisodeIndex so user can see which episode just finished
         // and can click "Next Episode" to continue
@@ -4411,22 +4332,7 @@ export const Sidebar = ({
                     // Update frame callback to ensure UI reflects frame 0
                     onFrameChange?.(0);
                     
-                    // viewer3dPlayEpisode automatically starts playback after 10ms, so we need to stop it
-                    // Use multiple stops to catch the auto-start at different times
                     viewerPlayback.stopAnimation();
-                    setTimeout(() => {
-                      viewerPlayback.stopAnimation();
-                    }, 5);
-                    setTimeout(() => {
-                      viewerPlayback.stopAnimation();
-                    }, 12); // Right before auto-start (10ms)
-                    setTimeout(() => {
-                      viewerPlayback.stopAnimation();
-                      viewerPlayback.playAnimation(false);
-                    }, 25); // Right after auto-start
-                    setTimeout(() => {
-                      viewerPlayback.stopAnimation();
-                    }, 50); // Final safety stop
                   }}
                   disabled={episodes.length === 0}
                   title="Next Episode"

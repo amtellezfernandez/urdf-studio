@@ -1001,6 +1001,7 @@ const CreatedObjects = ({
   onJointChange,
   onDragActiveChange,
   onFrameChange,
+  onPlaybackEnd,
   jointLimits,
   jointAxes,
   gpuMode = "high",
@@ -1023,6 +1024,7 @@ const CreatedObjects = ({
   onJointChange?: (jointName: string, value: number) => void;
   onDragActiveChange?: (active: boolean) => void;
   onFrameChange?: (frameIndex: number, totalFrames?: number) => void;
+  onPlaybackEnd?: (frameIndex: number) => void;
   jointLimits?: JointLimits;
   jointAxes?: JointAxisMap;
   gpuMode?: GPUMode;
@@ -1049,6 +1051,7 @@ const CreatedObjects = ({
     setStoreJointValues,
     onJointChange,
     onFrameChange,
+    onPlaybackEnd,
     animationController,
   });
 
@@ -1871,6 +1874,17 @@ export const Viewer3D = ({
     cameraRef,
     sceneRef,
   });
+  const handlePlaybackEnd = useCallback(
+    () => {
+      if (!isPlaying) {
+        return;
+      }
+      setIsPlaying(false);
+      onPlayingChange?.(false);
+      animationController.setPaused(true);
+    },
+    [animationController, isPlaying, onPlayingChange]
+  );
 
   useViewerWindowBindings({
     handleRun,
@@ -2219,6 +2233,7 @@ export const Viewer3D = ({
                 }}
                 onDragActiveChange={setIsDraggingJoint}
                 onFrameChange={setCurrentFrame}
+                onPlaybackEnd={handlePlaybackEnd}
               />
               <CollisionGeometries
                 urdfFile={urdfFile}

@@ -2,10 +2,15 @@ import { create } from "zustand";
 import type { ChangeEvent } from "react";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 
+export type EpisodePlaybackOptions = {
+  autoplay?: boolean;
+  startFrame?: number;
+};
+
 export type ViewerPlaybackHandlers = {
   playAnimation?: (forceState?: boolean) => void;
   uploadMotionData?: (fileOrEvent: ChangeEvent<HTMLInputElement> | File) => void;
-  playEpisode?: (frames: AnimationFrame[]) => void;
+  playEpisode?: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
   stopAnimation?: () => void;
   clearAnimation?: () => void;
   setFrame?: (frameIndex: number) => void;
@@ -26,7 +31,7 @@ type ViewerPlaybackStore = {
   setHasFrames: (hasFrames: boolean) => void;
   playAnimation: (forceState?: boolean) => void;
   uploadMotionData: (file: File) => void;
-  playEpisode: (frames: AnimationFrame[]) => void;
+  playEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
   stopAnimation: () => void;
   clearAnimation: () => void;
   setFrame: (frameIndex: number) => void;
@@ -55,8 +60,8 @@ export const useViewerPlaybackStore = create<ViewerPlaybackStore>((set, get) => 
   uploadMotionData: (file) => {
     get().handlers.uploadMotionData?.(file);
   },
-  playEpisode: (frames) => {
-    get().handlers.playEpisode?.(frames);
+  playEpisode: (frames, options) => {
+    get().handlers.playEpisode?.(frames, options);
   },
   stopAnimation: () => {
     get().handlers.stopAnimation?.();

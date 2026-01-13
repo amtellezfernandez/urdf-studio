@@ -17,7 +17,10 @@ export interface WindowWithViewerHandlers extends Window {
   viewer3dSetFrame?: (frame: number) => void;
   viewer3dStopAnimation?: () => void;
   viewer3dClearAnimation?: () => void;
-  viewer3dPlayEpisode?: (frames: Array<{ timestamp: number; joints: Record<string, number> }>) => void;
+  viewer3dPlayEpisode?: (
+    frames: Array<{ timestamp: number; joints: Record<string, number> }>,
+    options?: { autoplay?: boolean; startFrame?: number }
+  ) => void;
   viewer3dSetPlaybackSpeed?: (speed: number) => void;
   viewer3dGetPlaybackSpeed?: () => number;
   showDirectoryPicker?: (options?: DirectoryPickerOptions) => Promise<FileSystemDirectoryHandle>;

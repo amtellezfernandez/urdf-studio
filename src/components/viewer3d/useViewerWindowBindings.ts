@@ -1,11 +1,12 @@
 import { useEffect, type ChangeEvent } from "react";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
+import type { EpisodePlaybackOptions } from "@/store/useViewerPlaybackStore";
 import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
 
 type UseViewerWindowBindingsParams = {
   handleRun: (forceState?: boolean) => void;
   handleMotionDataUpload: (fileOrEvent: ChangeEvent<HTMLInputElement> | File) => void;
-  handlePlayEpisode: (frames: AnimationFrame[]) => void;
+  handlePlayEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
   handleStopAnimation: () => void;
   handleClearAnimation: () => void;
   handleSetFrame: (frameIndex: number) => void;

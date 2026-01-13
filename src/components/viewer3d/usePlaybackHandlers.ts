@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
+import type { EpisodePlaybackOptions } from "@/store/useViewerPlaybackStore";
 import type { AnimationController } from "@/components/viewer3d/useAnimationController";
 
 type UsePlaybackHandlersParams = {
@@ -46,21 +47,7 @@ export const usePlaybackHandlers = ({
           currentFrameIdx !== null &&
           currentFrameIdx >= lastFrameIdx
         ) {
-          const firstTimestamp = animationFrames[0].timestamp;
-          const lastTimestamp = animationFrames[lastFrameIdx].timestamp;
-          const animationDuration = lastTimestamp - firstTimestamp;
-          const normalizedFrameDuration =
-            animationDuration / Math.max(1, animationFrames.length - 1);
-
-          const normalizedFirstTime = firstTimestamp;
-          animationController.setManualFrameTime(normalizedFirstTime);
-          animationController.setCurrentFrameIndex(0);
-          animationController.setResetAnimationStart(true);
-          animationController.setPreserveFrameTime(null);
-
-          if (onFrameChange) {
-            onFrameChange(0);
-          }
+          return;
         }
       }
 
@@ -85,21 +72,28 @@ export const usePlaybackHandlers = ({
   );
 
   const handlePlayEpisode = useCallback(
-    (frames: AnimationFrame[]) => {
+    (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => {
       if (!frames || frames.length === 0) {
         toast.error("No frames to play");
         return;
       }
 
-      setIsPlaying(false);
-      setAnimationFrames(frames);
+      const autoplay = options?.autoplay ?? true;
+      const startFrame = options?.startFrame ?? 0;
+      const clampedIndex = Math.max(0, Math.min(startFrame, frames.length - 1));
+      const targetFrame = frames[clampedIndex];
 
-      setTimeout(() => {
-        setIsPlaying(true);
-        onPlayingChange?.(true);
-        animationController.setPaused(false);
-        animationController.clearManualJointChange();
-      }, 10);
+      setAnimationFrames(frames);
+      animationController.setManualFrameTime(
+        targetFrame ? targetFrame.timestamp : null
+      );
+      animationController.setPreserveFrameTime(null);
+      animationController.setCurrentFrameIndex(clampedIndex);
+      animationController.setResetAnimationStart(true);
+      animationController.setPaused(!autoplay);
+      animationController.clearManualJointChange();
+      setIsPlaying(autoplay);
+      onPlayingChange?.(autoplay);
     },
     [animationController, onPlayingChange, setAnimationFrames, setIsPlaying]
   );

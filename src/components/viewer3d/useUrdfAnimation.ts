@@ -16,6 +16,7 @@ type UseUrdfAnimationParams = {
   setStoreJointValues: (values: Record<string, number>) => void;
   onJointChange?: (jointName: string, value: number) => void;
   onFrameChange?: (frameIndex: number) => void;
+  onPlaybackEnd?: (frameIndex: number) => void;
   animationController: AnimationController;
 };
 
@@ -28,9 +29,11 @@ export const useUrdfAnimation = ({
   setStoreJointValues,
   onJointChange,
   onFrameChange,
+  onPlaybackEnd,
   animationController,
 }: UseUrdfAnimationParams) => {
   const animationStartTime = useRef<number>(0);
+  const playbackEndedRef = useRef(false);
 
   // Reset animation when frames change
   useEffect(() => {
@@ -38,7 +41,14 @@ export const useUrdfAnimation = ({
       animationStartTime.current = 0;
       animationController.currentFrameIndexRef.current = 0;
     }
+    playbackEndedRef.current = false;
   }, [animationFrames, animationController]);
+
+  useEffect(() => {
+    if (isPlaying) {
+      playbackEndedRef.current = false;
+    }
+  }, [isPlaying]);
 
   // Animation loop
   useFrame(() => {
@@ -160,6 +170,13 @@ export const useUrdfAnimation = ({
         // Stop playback at the end
         animationController.resetAnimationStartRef.current = true;
         animationController.isPausedRef.current = false;
+        if (!playbackEndedRef.current) {
+          playbackEndedRef.current = true;
+          if (onFrameChange) {
+            onFrameChange(lastFrameIndex);
+          }
+          onPlaybackEnd?.(lastFrameIndex);
+        }
         return;
       }
     } else {

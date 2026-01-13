@@ -1,5 +1,5 @@
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
-import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
+import { useViewerPlaybackStore, type EpisodePlaybackOptions } from "@/store/useViewerPlaybackStore";
 
 export const viewerPlayback = {
   playAnimation: (forceState?: boolean) => {
@@ -11,8 +11,8 @@ export const viewerPlayback = {
   clearAnimation: () => {
     useViewerPlaybackStore.getState().clearAnimation();
   },
-  playEpisode: (frames: AnimationFrame[]) => {
-    useViewerPlaybackStore.getState().playEpisode(frames);
+  playEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => {
+    useViewerPlaybackStore.getState().playEpisode(frames, options);
   },
   uploadMotionData: (file: File) => {
     useViewerPlaybackStore.getState().uploadMotionData(file);
