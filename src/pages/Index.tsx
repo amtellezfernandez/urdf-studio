@@ -18,18 +18,16 @@ import { MappingPanels } from "@/pages/index/MappingPanels";
 import { CreationDialogs } from "@/pages/index/CreationDialogs";
 import { useUrdfEditHandlers } from "@/pages/index/useUrdfEditHandlers";
 import { useUrdfUtilityHandlers } from "@/pages/index/useUrdfUtilityHandlers";
+import { useDatasetPlaybackHandlers } from "@/pages/index/useDatasetPlaybackHandlers";
 
 import type {
   MeshFiles,
   RotationAxis,
   UrdfViewMode,
   AngleUnit,
-  ViewerEpisode,
-  EpisodeSaveHandler,
 } from "@/features/types";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useObjectCreatorStore } from "@/features/object-creator";
-import { useUrdfViewer } from "@/features/urdf-viewer";
 import { useUrdfSelection } from "@/features/urdf-selection";
 import { useLayout } from "@/features/layout";
 import { useExportHandlers, useJointMappingPersistence } from "@/features/export";
@@ -89,7 +87,6 @@ const Index = () => {
     onAutoSelectEndEffector: setEndEffectorLink,
   });
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
-  const [motionDataFile, setMotionDataFile] = useState<File | null>(null);
   const {
     isPlaying,
     setIsPlaying,
@@ -107,7 +104,16 @@ const Index = () => {
     handleMotionDataUpload,
     handlePlayAnimation,
     handleFrameChange,
-  } = useUrdfViewer();
+    motionDataFile,
+    setMotionDataFile,
+    viewerEpisode,
+    setViewerEpisode,
+    isViewerOpen,
+    setIsViewerOpen,
+    episodeSaveHandler,
+    handleEpisodeSaveHandlerChange,
+    episodeJointNames,
+  } = useDatasetPlaybackHandlers();
   const {
     sidebarWidth,
     setSidebarWidth,
@@ -128,9 +134,6 @@ const Index = () => {
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
-  const [viewerEpisode, setViewerEpisode] = useState<ViewerEpisode | null>(null);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [episodeSaveHandler, setEpisodeSaveHandler] = useState<EpisodeSaveHandler | undefined>(undefined);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
   const {
     isExportDialogOpen,
@@ -190,34 +193,6 @@ const Index = () => {
   useEffect(() => {
     setSelectionContext({ vizUrdfContent, availableLinks });
   }, [vizUrdfContent, availableLinks, setSelectionContext]);
-
-  const episodeJointNames = useMemo(() => {
-    if (!viewerEpisode) return [];
-
-    const metadata = viewerEpisode.metadata as { joint_names?: unknown } | undefined;
-    const metadataNames = Array.isArray(metadata?.joint_names)
-      ? (metadata.joint_names as unknown[])
-          .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
-      : [];
-
-    const frameNames =
-      viewerEpisode.frames.length > 0
-        ? Object.keys(viewerEpisode.frames[0].jointPositions)
-        : [];
-
-    const combined = (metadataNames.length > 0 ? metadataNames : frameNames).filter(
-      (name): name is string => typeof name === "string" && name.length > 0
-    );
-
-    return Array.from(new Set(combined)).sort();
-  }, [viewerEpisode]);
-
-  const handleEpisodeSaveHandlerChange = useCallback(
-    (handler?: EpisodeSaveHandler) => {
-      setEpisodeSaveHandler(() => handler);
-    },
-    []
-  );
 
   const handleJointChange = useCallback((jointName: string, value: number) => {
     setStoreJointValue(jointName, value);
