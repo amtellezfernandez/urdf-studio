@@ -2447,35 +2447,6 @@ const InfiniteGrid = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => {
   );
 };
 
-const PlaceholderLamp = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => {
-  const isLowGPU = gpuMode === "low";
-  const baseSegments = isLowGPU ? 16 : 32;
-  const standSegments = isLowGPU ? 8 : 16;
-  const shadeSegments = isLowGPU ? 16 : 32;
-  
-  return (
-    <group>
-      {/* Base */}
-      <mesh position={[0, 0.05, 0]}>
-        <cylinderGeometry args={[0.3, 0.3, 0.1, baseSegments]} />
-        {isLowGPU ? <meshBasicMaterial color="#666666" /> : <meshStandardMaterial color="#666666" />}
-      </mesh>
-
-      {/* Stand */}
-      <mesh position={[0, 0.4, 0]}>
-        <cylinderGeometry args={[0.05, 0.05, 0.6, standSegments]} />
-        {isLowGPU ? <meshBasicMaterial color="#888888" /> : <meshStandardMaterial color="#888888" />}
-      </mesh>
-
-      {/* Lampshade */}
-      <mesh position={[0, 0.8, 0]} rotation={[0, 0, 0]}>
-        <coneGeometry args={[0.25, 0.3, shadeSegments]} />
-        {isLowGPU ? <meshBasicMaterial color="#aaaaaa" /> : <meshStandardMaterial color="#aaaaaa" />}
-      </mesh>
-    </group>
-  );
-};
-
 // Helper function to convert hex color string to Three.js hex number
 const hexToThreeJsHex = (hex: string): number => {
   // Remove # if present
@@ -4361,8 +4332,6 @@ export const Viewer3D = ({
                 onIkTargetClick={solveIkForObject}
               />
             </>
-          ) : (
-            <PlaceholderLamp gpuMode={gpuMode} />
           )}
 
           {/* Custom axes helper - solid lines for positive, dots for negative */}
