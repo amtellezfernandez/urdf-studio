@@ -23,6 +23,7 @@ import {
   type LinkData,
 } from "@/features/urdf";
 import { toast } from "sonner";
+import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
 
 interface CollisionControlProps {
   linkName: string;
@@ -110,6 +111,7 @@ export const CollisionControl = ({
     );
     onUrdfChange(newContent);
   };
+  const scheduleUpdate = useDeferredUrdfUpdate(updateURDF);
 
   const handleGeometryTypeChange = async (
     newType: "box" | "sphere" | "cylinder" | "mesh"
@@ -692,7 +694,7 @@ export const CollisionControl = ({
   const handleParamChange = (key: string, value: string) => {
     setGeometryParams({ ...geometryParams, [key]: value });
     setCalculationInfo(null);
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const handleOriginChange = (field: "xyz" | "rpy", index: number, value: number) => {
@@ -700,7 +702,7 @@ export const CollisionControl = ({
     newOrigin[field][index] = value;
     setOrigin(newOrigin);
     setCalculationInfo(null);
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const parseSize = (sizeStr: string): [number, number, number] => {

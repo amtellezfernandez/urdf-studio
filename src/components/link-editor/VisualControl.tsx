@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { updateVisualInLink, type LinkData, type VisualData } from "@/features/urdf";
+import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
 
 interface VisualControlProps {
   linkName: string;
@@ -49,17 +50,18 @@ export const VisualControl = ({
     );
     onUrdfChange(newContent);
   };
+  const scheduleUpdate = useDeferredUrdfUpdate(updateURDF);
 
   const handleParamChange = (key: string, value: string) => {
     setGeometryParams({ ...geometryParams, [key]: value });
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const handleOriginChange = (field: "xyz" | "rpy", index: number, value: number) => {
     const newOrigin = { ...origin };
     newOrigin[field][index] = value;
     setOrigin(newOrigin);
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const handleColorChange = (newColor: string) => {
@@ -68,7 +70,7 @@ export const VisualControl = ({
       const materialName = `material_${linkName}`;
       onMaterialChange(linkName, materialName, newColor);
     }
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const parseSize = (sizeStr: string): [number, number, number] => {

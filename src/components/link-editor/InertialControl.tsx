@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { AlertTriangle, Calculator } from "lucide-react";
 import { updateInertialInLink, type InertialData } from "@/features/urdf";
 import { toast } from "sonner";
+import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
 
 interface InertialControlProps {
   linkName: string;
@@ -71,22 +72,23 @@ export const InertialControl = ({
     const newContent = updateInertialInLink(urdfContent, linkName, mass, inertia, origin);
     onUrdfChange(newContent);
   };
+  const scheduleUpdate = useDeferredUrdfUpdate(updateURDF);
 
   const handleMassChange = (newMass: number) => {
     setMass(newMass);
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const handleOriginChange = (field: "xyz" | "rpy", index: number, value: number) => {
     const newOrigin = { ...origin };
     newOrigin[field][index] = value;
     setOrigin(newOrigin);
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const handleInertiaChange = (key: keyof typeof inertia, value: number) => {
     setInertia({ ...inertia, [key]: value });
-    setTimeout(updateURDF, 0);
+    scheduleUpdate();
   };
 
   const handleComputeFromMesh = () => {
