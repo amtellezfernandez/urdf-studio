@@ -102,55 +102,31 @@ export const useUrdfAnimation = ({
       const normalizedTime = firstTimestamp + targetFrameIndex * normalizedFrameDuration;
       currentTime = normalizedTime;
       animationController.manualFrameTimeRef.current = normalizedTime;
-      // Update frame index immediately
-      animationController.currentFrameIndexRef.current = targetFrameIndex;
-      // Immediately update frame callback to prevent UI from showing wrong frame
-      if (onFrameChange) {
-        onFrameChange(targetFrameIndex);
+      // Update frame index immediately (only notify if it changed)
+      const previousFrameIndex = animationController.currentFrameIndexRef.current;
+      if (previousFrameIndex !== targetFrameIndex) {
+        animationController.currentFrameIndexRef.current = targetFrameIndex;
+        if (onFrameChange) {
+          onFrameChange(targetFrameIndex);
+        }
+      } else {
+        animationController.currentFrameIndexRef.current = targetFrameIndex;
       }
       // Update animation start time to maintain position when playing resumes
       // But only if we're going to play - if paused, don't update it
       if (isPlaying) {
         animationStartTime.current =
           Date.now() - (normalizedTime - firstTimestamp) / playbackSpeed;
-      } else {
-        // When paused, don't update animationStartTime - keep it as is
-        // This prevents the frame from jumping when manually set
-      }
-      // Clear the manual frame time after using it
-      animationController.manualFrameTimeRef.current = null;
-      shouldApplyAnimation = true; // Apply when manually setting frame
-      // Set pause flag to prevent interpolation
-      animationController.isPausedRef.current = true;
-      // Set flag to skip normal frame update
-      animationController.skipFrameUpdateRef.current = true;
-    } else if (animationController.manualFrameTimeRef.current !== null) {
-      // Use stored manual frame time (paused at a specific frame)
-      currentTime = animationController.manualFrameTimeRef.current;
-      // Calculate frame index from stored time to keep it consistent
-      const storedFrameIndex = Math.round((currentTime - firstTimestamp) / normalizedFrameDuration);
-      const clampedStoredIndex = Math.max(
-        0,
-        Math.min(storedFrameIndex, animationFrames.length - 1)
-      );
-      animationController.currentFrameIndexRef.current = clampedStoredIndex;
-      // If we start playing from a paused state, update start time and clear manual frame
-      if (isPlaying) {
-        // The stored time is already normalized, so use it directly
-        animationStartTime.current =
-          Date.now() - (currentTime - firstTimestamp) / playbackSpeed;
+        // Clear the manual frame time when resuming so playback can advance
         animationController.manualFrameTimeRef.current = null;
-        shouldApplyAnimation = true;
-        // Clear pause flag when starting to play
         animationController.isPausedRef.current = false;
       } else {
-        // Paused with manual frame time - stay at this exact frame (no interpolation)
-        shouldApplyAnimation = true;
-        // Store a flag to indicate we're paused so we don't interpolate
+        // When paused, keep the manual frame time so the frame stays frozen
         animationController.isPausedRef.current = true;
-        // Set flag to skip normal frame update to prevent recalculation
-        animationController.skipFrameUpdateRef.current = true;
       }
+      shouldApplyAnimation = true; // Apply when manually setting frame
+      // Set flag to skip normal frame update to prevent recalculation
+      animationController.skipFrameUpdateRef.current = true;
     } else if (isPlaying) {
       // Normal playback - use normalized timing for uniform playback
       shouldApplyAnimation = true;
