@@ -67,7 +67,6 @@ export const usePlaybackHandlers = ({
       animationController,
       robot,
       isPlaying,
-      onFrameChange,
       onPlayingChange,
       setIsPlaying,
     ]
@@ -160,7 +159,7 @@ export const usePlaybackHandlers = ({
         animationController.setManualFrameTime(targetFrame.timestamp);
         animationController.setCurrentFrameIndex(clampedIndex);
         setCurrentFrame?.(clampedIndex);
-        if (onFrameChange) {
+        if (onFrameChange && !setCurrentFrame) {
           onFrameChange(clampedIndex);
         }
       }
