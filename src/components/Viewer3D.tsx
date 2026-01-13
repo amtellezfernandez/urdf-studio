@@ -1411,7 +1411,14 @@ const CreatedObjects = ({
       document.removeEventListener("pointermove", handleDocumentPointerMove);
       document.removeEventListener("pointerup", handleDocumentPointerUp);
     };
-  }, [isDragging, onJointChange, onDragActiveChange, previewJointValue, setStoreJointValue]);
+  }, [
+    animationController,
+    isDragging,
+    onJointChange,
+    onDragActiveChange,
+    previewJointValue,
+    setStoreJointValue,
+  ]);
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
@@ -2228,7 +2235,14 @@ export const Viewer3D = ({
     if (hasChanges && !isPlaying) {
       animationController.markManualJointChange();
     }
-  }, [robot, storeJointValues, isDraggingJoint, isIkHandleDragging, isPlaying]);
+  }, [
+    animationController,
+    robot,
+    storeJointValues,
+    isDraggingJoint,
+    isIkHandleDragging,
+    isPlaying,
+  ]);
 
   const parseMotionDataFile = useCallback((file: File) => {
     const reader = new FileReader();

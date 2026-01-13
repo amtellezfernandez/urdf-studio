@@ -3,14 +3,6 @@ import { FolderUploadScreen } from "@/components/FolderUploadScreen";
 import { ExportDialog } from "@/components/ExportDialog";
 import { useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
-import {
-  canonicalizeUrdf,
-  fixMeshPaths,
-  normalizeAxes,
-  parseURDF,
-  prettifyUrdf,
-  rotateUrdf,
-} from "@/features/urdf";
 import { useCameraStore } from "@/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/types/file";
@@ -25,6 +17,7 @@ import { LoadingScreen } from "@/pages/index/LoadingScreen";
 import { MappingPanels } from "@/pages/index/MappingPanels";
 import { CreationDialogs } from "@/pages/index/CreationDialogs";
 import { useUrdfEditHandlers } from "@/pages/index/useUrdfEditHandlers";
+import { useUrdfUtilityHandlers } from "@/pages/index/useUrdfUtilityHandlers";
 
 import type {
   MeshFiles,
@@ -34,7 +27,6 @@ import type {
   ViewerEpisode,
   EpisodeSaveHandler,
 } from "@/features/types";
-import { AXIS_NAMES } from "@/pages/index/constants";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
@@ -261,135 +253,22 @@ const Index = () => {
     setUrdfContentVersion,
   });
 
-  const deleteJointsFromURDF = useCallback((urdfContent: string, jointsToDelete: Set<string>): string => {
-    if (jointsToDelete.size === 0) return urdfContent;
-    
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-    
-    // Check for parsing errors
-    const parserError = xmlDoc.querySelector("parsererror");
-    if (parserError) {
-      const errorText = parserError.textContent || "Unknown XML parsing error";
-      console.error("URDF parsing error:", errorText);
-      return urdfContent;
-    }
-    
-    // Validate robot element exists
-    const robot = xmlDoc.querySelector("robot");
-    if (!robot) {
-      console.error("No <robot> element found in URDF");
-      return urdfContent;
-    }
-    
-    jointsToDelete.forEach((jointName) => {
-      xmlDoc.querySelector(`joint[name="${jointName}"]`)?.remove();
-    });
-    
-    return new XMLSerializer().serializeToString(xmlDoc);
-  }, []);
-
-  // URDF Utility Handlers
-  const handleCanonicalOrder = useCallback(() => {
-    if (!vizUrdfContent) return;
-    const result = canonicalizeUrdf(vizUrdfContent);
-    if (!result.success) {
-      toast.error(result.error ?? "Failed to reorder URDF");
-      return;
-    }
-    handleVizUrdfChange(result.content);
-    toast.success(result.message ?? "URDF elements reordered to canonical format");
-  }, [vizUrdfContent, handleVizUrdfChange]);
-
-  const handlePrettyPrint = useCallback(() => {
-    if (!vizUrdfContent) return;
-    const result = prettifyUrdf(vizUrdfContent);
-    if (!result.success) {
-      toast.error(result.error ?? "Failed to format URDF");
-      return;
-    }
-    handleVizUrdfChange(result.content);
-    toast.success(result.message ?? "URDF formatted with consistent indentation");
-  }, [vizUrdfContent, handleVizUrdfChange]);
-
-  const handleNormalizeAxes = useCallback(() => {
-    if (!vizUrdfContent) return;
-    const result = normalizeAxes(vizUrdfContent);
-    if (!result.success) {
-      toast.error(result.error ?? "Failed to normalize joint axes");
-      return;
-    }
-    handleVizUrdfChange(result.content);
-
-    if (result.issues.length > 0) {
-      toast.warning(`Normalized axes with ${result.issues.length} error(s) fixed`);
-      result.issues.forEach(err => {
-        console.warn(`Joint "${err.jointName}" (${err.jointType}): ${err.issue}`);
-      });
-    } else if (result.corrections.length > 0) {
-      toast.success(result.message ?? `Normalized ${result.corrections.length} joint axis(es)`);
-      result.corrections.forEach(correction => {
-        console.info(`Joint "${correction.jointName}": ${correction.reason}`);
-      });
-    } else {
-      toast.info("All joint axes are already normalized");
-    }
-  }, [vizUrdfContent, handleVizUrdfChange]);
-
-  const handleFixMeshPaths = useCallback(() => {
-    if (!vizUrdfContent) return;
-    const result = fixMeshPaths(vizUrdfContent);
-    handleVizUrdfChange(result.urdfContent);
-
-    if (result.corrections.length > 0) {
-      toast.success(`Fixed ${result.corrections.length} mesh path(s)`);
-      result.corrections.forEach(correction => {
-        console.info(`Fixed path: "${correction.original}" -> "${correction.corrected}"`);
-      });
-    } else {
-      toast.info("All mesh paths are already correct");
-    }
-  }, [vizUrdfContent, handleVizUrdfChange]);
-
-  const getExportUrdfContent = useCallback(() => {
-    if (!vizUrdfContent) return "";
-    return deleteJointsFromURDF(vizUrdfContent, deletedJoints);
-  }, [vizUrdfContent, deleteJointsFromURDF, deletedJoints]);
-
-  const robotName = useMemo(() => {
-    if (!vizUrdfContent) return "robot";
-    const parsed = parseURDF(vizUrdfContent);
-    if (!parsed.isValid) return "robot";
-    const robot = parsed.document.querySelector("robot");
-    return robot?.getAttribute("name") || "robot";
-  }, [vizUrdfContent]);
-
-  const handleDeleteJoint = useCallback((jointName: string) => {
-    const willRemove = !deletedJoints.has(jointName);
-    toggleDeletedJoint(jointName);
-    toast.success(
-      willRemove
-        ? `Joint "${jointName}" will be removed from exported URDF`
-        : `Joint "${jointName}" will be included in exported URDF`
-    );
-  }, [deletedJoints, toggleDeletedJoint]);
-
-  const handleRotateRobot = useCallback((axis: RotationAxis) => {
-    if (!vizUrdfContent) {
-      toast.error("No URDF loaded");
-      return;
-    }
-
-    const result = rotateUrdf(vizUrdfContent, axis);
-
-    if (!result.success) {
-      toast.error(result.error ?? "Failed to rotate robot");
-      return;
-    }
-
-    updateUrdfFile(result.content);
-    toast.success(result.message ?? `Robot rotated 90° around ${AXIS_NAMES[axis]}-axis`);
-  }, [vizUrdfContent, updateUrdfFile]);
+  const {
+    handleCanonicalOrder,
+    handlePrettyPrint,
+    handleNormalizeAxes,
+    handleFixMeshPaths,
+    handleRotateRobot,
+    getExportUrdfContent,
+    robotName,
+    handleDeleteJoint,
+  } = useUrdfUtilityHandlers({
+    vizUrdfContent,
+    deletedJoints,
+    toggleDeletedJoint,
+    handleVizUrdfChange,
+    updateUrdfFile,
+  });
 
   const handleRobotJointsLoaded = useCallback((joints: string[], angles: Record<string, number>) => {
     startTransition(() => {
