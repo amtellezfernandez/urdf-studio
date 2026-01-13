@@ -8,7 +8,9 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
 import { MappingPanels } from "@/pages/index/MappingPanels";
 import { CreationDialogs } from "@/pages/index/CreationDialogs";
-import { LoadingScreen } from "@/pages/index/LoadingScreen";
+import { PageShell } from "@/pages/index/PageShell";
+import { PageOverlays } from "@/pages/index/PageOverlays";
+import { PageDialogs } from "@/pages/index/PageDialogs";
 
 type PageLayoutProps = {
   isLoading: boolean;
@@ -36,21 +38,21 @@ export const PageLayout = ({
   creationDialogsProps,
 }: PageLayoutProps) => (
   <div className="flex h-screen w-full overflow-hidden bg-background">
-    {isLoading ? (
-      <LoadingScreen />
-    ) : (
-      <>
-        <TopNavBar {...topNavBarProps} />
-        <LeftSidebarPanel {...leftSidebarProps} />
-        <ViewerLayout {...viewerLayoutProps} />
-        <RightSidebarPanel {...rightSidebarProps} />
-      </>
-    )}
-
-    <MeshFilesStatusPanel {...meshFilesStatusPanelProps} />
-    <ExportDialog {...exportDialogProps} />
-    <PovCamerasOverlay {...povCamerasOverlayProps} />
-    <MappingPanels {...mappingPanelsProps} />
-    <CreationDialogs {...creationDialogsProps} />
+    <PageShell
+      isLoading={isLoading}
+      topNavBarProps={topNavBarProps}
+      leftSidebarProps={leftSidebarProps}
+      viewerLayoutProps={viewerLayoutProps}
+      rightSidebarProps={rightSidebarProps}
+    />
+    <PageOverlays
+      meshFilesStatusPanelProps={meshFilesStatusPanelProps}
+      exportDialogProps={exportDialogProps}
+      povCamerasOverlayProps={povCamerasOverlayProps}
+    />
+    <PageDialogs
+      mappingPanelsProps={mappingPanelsProps}
+      creationDialogsProps={creationDialogsProps}
+    />
   </div>
 );
