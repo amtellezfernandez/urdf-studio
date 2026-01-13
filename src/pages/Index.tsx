@@ -19,6 +19,7 @@ import { CreationDialogs } from "@/pages/index/CreationDialogs";
 import { useUrdfEditHandlers } from "@/pages/index/useUrdfEditHandlers";
 import { useUrdfUtilityHandlers } from "@/pages/index/useUrdfUtilityHandlers";
 import { useDatasetPlaybackHandlers } from "@/pages/index/useDatasetPlaybackHandlers";
+import { useUrdfMaterialHandlers } from "@/pages/index/useUrdfMaterialHandlers";
 
 import type {
   MeshFiles,
@@ -245,6 +246,11 @@ const Index = () => {
     updateUrdfFile,
   });
 
+  const { handleMaterialChange } = useUrdfMaterialHandlers({
+    vizUrdfContent,
+    updateUrdfFile,
+  });
+
   const handleRobotJointsLoaded = useCallback((joints: string[], angles: Record<string, number>) => {
     startTransition(() => {
       setAvailableJoints(joints);
@@ -466,6 +472,7 @@ const Index = () => {
             angleUnit={angleUnit}
             onAngleUnitChange={setAngleUnit}
             meshFiles={meshFiles}
+            onMaterialChange={handleMaterialChange}
             onLinkNameChange={handleLinkNameChange}
             onUrdfChange={handleVizUrdfChange}
             collisionVisibility={collisionVisibility}

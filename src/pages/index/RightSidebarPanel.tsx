@@ -38,6 +38,7 @@ type RightSidebarPanelProps = {
   angleUnit: AngleUnit;
   onAngleUnitChange: (unit: AngleUnit) => void;
   meshFiles: MeshFiles;
+  onMaterialChange: (linkName: string, materialName: string, color: string) => void;
   onLinkNameChange: (oldName: string, newName: string) => void;
   onUrdfChange: (content: string) => void;
   collisionVisibility: CollisionVisibility;
@@ -75,6 +76,7 @@ export const RightSidebarPanel = ({
   angleUnit,
   onAngleUnitChange,
   meshFiles,
+  onMaterialChange,
   onLinkNameChange,
   onUrdfChange,
   collisionVisibility,
@@ -112,6 +114,7 @@ export const RightSidebarPanel = ({
       angleUnit={angleUnit}
       onAngleUnitChange={onAngleUnitChange}
       meshFiles={meshFiles}
+      onMaterialChange={onMaterialChange}
       onLinkNameChange={onLinkNameChange}
       onUrdfChange={onUrdfChange}
       collisionVisibility={collisionVisibility}
