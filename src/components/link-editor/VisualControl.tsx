@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { updateVisualInLink, type LinkData, type VisualData } from "@/features/urdf";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
@@ -9,6 +8,7 @@ import {
   parseVector3,
   updateVector3Value,
 } from "@/components/link-editor/sizeUtils";
+import { Vector3Inputs } from "@/components/link-editor/Vector3Inputs";
 
 interface VisualControlProps {
   linkName: string;
@@ -81,6 +81,7 @@ export const VisualControl = ({
 
   const title =
     linkData.visuals.length === 1 ? "Visual (Mesh)" : `Visual ${index + 1} (Mesh)`;
+  const scaleValues = parseVector3(geometryParams.scale || "1 1 1");
 
   return (
     <BlenderPanel title={title} defaultOpen={true} className="mb-0.5">
@@ -95,53 +96,37 @@ export const VisualControl = ({
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Scale">
-          <div className="flex items-center gap-0.5">
-            {parseVector3(geometryParams.scale || "1 1 1").map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => {
-                  const scale = parseVector3(geometryParams.scale || "1 1 1");
-                  scale[i] = newVal;
-                  handleParamChange("scale", formatVector3(scale));
-                }}
-                step={0.0001}
-                min={0.0001}
-                compact
-                className="w-14"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={scaleValues}
+            onChange={(i, newVal) => {
+              const nextScale = updateVector3Value(scaleValues, i, newVal);
+              handleParamChange("scale", formatVector3(nextScale));
+            }}
+            step={0.0001}
+            min={0.0001}
+            className="gap-0.5"
+            inputClassName="w-14"
+          />
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin XYZ">
-          <div className="flex items-center gap-0.5">
-            {origin.xyz.map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => handleOriginChange("xyz", i, newVal)}
-                step={0.01}
-                compact
-                className="w-14"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={origin.xyz}
+            onChange={(i, newVal) => handleOriginChange("xyz", i, newVal)}
+            step={0.01}
+            className="gap-0.5"
+            inputClassName="w-14"
+          />
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin RPY">
-          <div className="flex items-center gap-0.5">
-            {origin.rpy.map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => handleOriginChange("rpy", i, newVal)}
-                step={0.01}
-                compact
-                className="w-14"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={origin.rpy}
+            onChange={(i, newVal) => handleOriginChange("rpy", i, newVal)}
+            step={0.01}
+            className="gap-0.5"
+            inputClassName="w-14"
+          />
         </BlenderPropertyRow>
 
         {onMaterialChange && (

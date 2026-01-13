@@ -26,6 +26,7 @@ import {
   parseVector3,
   updateVector3Value,
 } from "@/components/link-editor/sizeUtils";
+import { Vector3Inputs } from "@/components/link-editor/Vector3Inputs";
 
 interface CollisionControlProps {
   linkName: string;
@@ -260,6 +261,9 @@ export const CollisionControl = ({
     scheduleUpdate();
   };
 
+  const sizeValues = parseVector3(geometryParams.size || "1 1 1");
+  const scaleValues = parseVector3(geometryParams.scale || "1 1 1");
+
   return (
     <BlenderPanel
       title={
@@ -331,23 +335,15 @@ export const CollisionControl = ({
 
         {geometryType === "box" && (
           <BlenderPropertyRow label="Size">
-            <div className="flex items-center gap-1">
-              {parseVector3(geometryParams.size || "1 1 1").map((val, i) => (
-                <NumberInput
-                  key={i}
-                  value={val}
-                  onValueChange={(newVal) => {
-                    const size = parseVector3(geometryParams.size || "1 1 1");
-                    size[i] = newVal;
-                    handleParamChange("size", formatVector3(size));
-                  }}
-                  step={0.01}
-                  min={0.001}
-                  compact
-                  className="w-16"
-                />
-              ))}
-            </div>
+            <Vector3Inputs
+              values={sizeValues}
+              onChange={(i, newVal) => {
+                const nextSize = updateVector3Value(sizeValues, i, newVal);
+                handleParamChange("size", formatVector3(nextSize));
+              }}
+              step={0.01}
+              min={0.001}
+            />
           </BlenderPropertyRow>
         )}
 
@@ -428,55 +424,33 @@ export const CollisionControl = ({
               />
             </BlenderPropertyRow>
             <BlenderPropertyRow label="Scale">
-              <div className="flex items-center gap-1">
-                {parseVector3(geometryParams.scale || "1 1 1").map((val, i) => (
-                  <NumberInput
-                    key={i}
-                    value={val}
-                    onValueChange={(newVal) => {
-                      const scale = parseVector3(geometryParams.scale || "1 1 1");
-                      scale[i] = newVal;
-                      handleParamChange("scale", formatVector3(scale));
-                    }}
-                    step={0.01}
-                    min={0.001}
-                    compact
-                    className="w-16"
-                  />
-                ))}
-              </div>
+              <Vector3Inputs
+                values={scaleValues}
+                onChange={(i, newVal) => {
+                  const nextScale = updateVector3Value(scaleValues, i, newVal);
+                  handleParamChange("scale", formatVector3(nextScale));
+                }}
+                step={0.01}
+                min={0.001}
+              />
             </BlenderPropertyRow>
           </>
         )}
 
         <BlenderPropertyRow label="Origin XYZ">
-          <div className="flex items-center gap-1">
-            {origin.xyz.map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => handleOriginChange("xyz", i, newVal)}
-                step={0.01}
-                compact
-                className="w-16"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={origin.xyz}
+            onChange={(i, newVal) => handleOriginChange("xyz", i, newVal)}
+            step={0.01}
+          />
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin RPY">
-          <div className="flex items-center gap-1">
-            {origin.rpy.map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => handleOriginChange("rpy", i, newVal)}
-                step={0.01}
-                compact
-                className="w-16"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={origin.rpy}
+            onChange={(i, newVal) => handleOriginChange("rpy", i, newVal)}
+            step={0.01}
+          />
         </BlenderPropertyRow>
 
         {onUrdfChange && (

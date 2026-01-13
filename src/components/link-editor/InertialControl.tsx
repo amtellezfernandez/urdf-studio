@@ -8,6 +8,7 @@ import { updateInertialInLink, type InertialData } from "@/features/urdf";
 import { toast } from "sonner";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
 import { updateVector3Value } from "@/components/link-editor/sizeUtils";
+import { Vector3Inputs } from "@/components/link-editor/Vector3Inputs";
 
 interface InertialControlProps {
   linkName: string;
@@ -121,33 +122,19 @@ export const InertialControl = ({
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin XYZ">
-          <div className="flex items-center gap-1">
-            {origin.xyz.map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => handleOriginChange("xyz", i, newVal)}
-                step={0.01}
-                compact
-                className="w-16"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={origin.xyz}
+            onChange={(i, newVal) => handleOriginChange("xyz", i, newVal)}
+            step={0.01}
+          />
         </BlenderPropertyRow>
 
         <BlenderPropertyRow label="Origin RPY">
-          <div className="flex items-center gap-1">
-            {origin.rpy.map((val, i) => (
-              <NumberInput
-                key={i}
-                value={val}
-                onValueChange={(newVal) => handleOriginChange("rpy", i, newVal)}
-                step={0.01}
-                compact
-                className="w-16"
-              />
-            ))}
-          </div>
+          <Vector3Inputs
+            values={origin.rpy}
+            onChange={(i, newVal) => handleOriginChange("rpy", i, newVal)}
+            step={0.01}
+          />
         </BlenderPropertyRow>
 
         <div className="space-y-1 pt-1 border-t border-border/20">
