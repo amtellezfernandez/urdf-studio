@@ -1,10 +1,7 @@
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { JointListSidebar } from "@/components/JointListSidebar";
-import { Viewer3D } from "@/components/Viewer3D";
-import { URDFComparison } from "@/components/URDFComparison";
 import { FolderUploadScreen } from "@/components/FolderUploadScreen";
-import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
 import { ExportDialog } from "@/components/ExportDialog";
 import { JointMappingDialog } from "@/components/JointMappingDialog";
 import { MappingListPanel } from "@/components/MappingListPanel";
@@ -33,21 +30,17 @@ import { ChevronsRight } from "lucide-react";
 import { TopNavBar } from "@/pages/index/TopNavBar";
 import { MeshFilesStatusPanel } from "@/pages/index/MeshFilesStatusPanel";
 import { PovCamerasOverlay } from "@/pages/index/PovCamerasOverlay";
+import { ViewerLayout } from "@/pages/index/ViewerLayout";
 
 import type {
   MeshFiles,
   RotationAxis,
   UrdfViewMode,
   AngleUnit,
-  WindowWithViewerHandlers,
   ViewerEpisode,
   EpisodeSaveHandler,
 } from "@/features/types";
-import {
-  AXIS_NAMES,
-  SIDEBAR_RESIZER_WIDTH,
-  VIEWER_RESIZER_HEIGHT,
-} from "@/pages/index/constants";
+import { AXIS_NAMES, SIDEBAR_RESIZER_WIDTH } from "@/pages/index/constants";
 import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
 import { useObjectCreatorStore } from "@/features/object-creator";
 import { useUrdfViewer } from "@/features/urdf-viewer";
@@ -834,216 +827,53 @@ const Index = () => {
             </button>
           )}
 
-          <main
-            className="flex-1 flex flex-col overflow-hidden bg-background transition-[margin-left,margin-right] duration-200 ease-out"
-            style={{
-              marginLeft: isSidebarCollapsed ? 0 : sidebarWidth,
-              marginRight: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
-              marginTop: "28px"
-            }}
-          >
-            <div className="flex-1 min-h-0 relative">
-              {showUrdfEditor && urdfEditorSplitView ? (
-                <div className="flex flex-col h-full">
-                  {/* Simulation in top half */}
-                  <div className="flex-1 min-h-0 border-b border-border/20">
-                    <Viewer3D
-                      key={`urdf-${urdfContentVersion}`}
-                      urdfFile={urdfFile}
-                      initialMeshFiles={meshFiles}
-                      selectedJoint={hoveredJoint || selectedJoint}
-                      selectedLink={selectedLink}
-                      jointValues={jointValues}
-                      jointLimits={jointLimits}
-                      jointAxes={jointAxes}
-                      onJointSelect={setSelectedJoint}
-                      onLinkSelect={setSelectedLink}
-                      onJointHover={setHoveredJoint}
-                      onJointChange={handleJointChange}
-                      onRobotJointsLoaded={handleRobotJointsLoaded}
-                      onMotionFileChange={setMotionDataFile}
-                      onPlayingChange={setIsPlaying}
-                      onAnimationFramesChange={setHasAnimationFrames}
-                      onFrameChange={handleFrameChange}
-                      collisionVisibility={collisionVisibility}
-                      rotationPlaneVisible={rotationPlaneVisible}
-                      onRobotBoundingBoxChange={setRobotBoundingBox}
-                      onRobotLoaded={setRobot}
-                      endEffectorLink={endEffectorLink}
-                      onIkApplied={handleIkApplied}
-                    />
-                  </div>
-                  {/* Editor in bottom half */}
-                  <div className="flex-1 min-h-0">
-                    <URDFComparison
-                      originalUrdf={originalUrdfContent}
-                      vizUrdf={vizUrdfContent}
-                      isOpen={true}
-                      onClose={() => setShowUrdfEditor(false)}
-                      onVizUrdfChange={handleVizUrdfChange}
-                      getExportUrdf={getExportUrdfContent}
-                      meshFiles={meshFiles}
-                      githubToken={typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null}
-                      inline={true}
-                      splitView={true}
-                      onSplitViewToggle={setUrdfEditorSplitView}
-                      selectedView={urdfViewMode}
-                      onSelectedViewChange={setUrdfViewMode}
-                    />
-                  </div>
-                </div>
-              ) : showUrdfEditor ? (
-                <div className="flex flex-col h-full">
-                  {/* Simulation in top half */}
-                  <div className="flex-1 min-h-0 border-b border-border/20">
-                    <Viewer3D
-                      key={`urdf-${urdfContentVersion}`}
-                      urdfFile={urdfFile}
-                      initialMeshFiles={meshFiles}
-                      selectedJoint={hoveredJoint || selectedJoint}
-                      selectedLink={selectedLink}
-                      jointValues={jointValues}
-                      jointLimits={jointLimits}
-                      jointAxes={jointAxes}
-                      onJointSelect={setSelectedJoint}
-                      onLinkSelect={setSelectedLink}
-                      onJointHover={setHoveredJoint}
-                      onJointChange={handleJointChange}
-                      onRobotJointsLoaded={handleRobotJointsLoaded}
-                      onMotionFileChange={setMotionDataFile}
-                      onPlayingChange={setIsPlaying}
-                      onAnimationFramesChange={setHasAnimationFrames}
-                      onFrameChange={handleFrameChange}
-                      collisionVisibility={collisionVisibility}
-                      rotationPlaneVisible={rotationPlaneVisible}
-                      onRobotBoundingBoxChange={setRobotBoundingBox}
-                      onRobotLoaded={setRobot}
-                      endEffectorLink={endEffectorLink}
-                      onIkApplied={handleIkApplied}
-                    />
-                  </div>
-                  {/* Editor in bottom half */}
-                  <div className="flex-1 min-h-0">
-                    <URDFComparison
-                      originalUrdf={originalUrdfContent}
-                      vizUrdf={vizUrdfContent}
-                      isOpen={true}
-                      onClose={() => setShowUrdfEditor(false)}
-                      onVizUrdfChange={handleVizUrdfChange}
-                      getExportUrdf={getExportUrdfContent}
-                      meshFiles={meshFiles}
-                      githubToken={typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null}
-                      inline={true}
-                      splitView={true}
-                      onSplitViewToggle={setUrdfEditorSplitView}
-                      selectedView={urdfViewMode}
-                      onSelectedViewChange={setUrdfViewMode}
-                    />
-                  </div>
-                </div>
-              ) : showUrdfEditor ? (
-                <URDFComparison
-                  originalUrdf={originalUrdfContent}
-                  vizUrdf={vizUrdfContent}
-                  isOpen={true}
-                  onClose={() => setShowUrdfEditor(false)}
-                  onVizUrdfChange={handleVizUrdfChange}
-                  getExportUrdf={getExportUrdfContent}
-                  meshFiles={meshFiles}
-                  selectedView={urdfViewMode}
-                  onSelectedViewChange={setUrdfViewMode}
-                  githubToken={typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN ? import.meta.env.VITE_GITHUB_TOKEN : null}
-                  inline={true}
-                  splitView={false}
-                  onSplitViewToggle={setUrdfEditorSplitView}
-                />
-              ) : (
-                <div className="flex flex-col h-full">
-                  {/* 3D Viewer in top half */}
-                  <div 
-                    className="min-h-0 border-b border-border/20"
-                    style={{ flex: `0 0 ${(1 - recordingViewHeight) * 100}%` }}
-                  >
-                    <Viewer3D
-                      key={`urdf-${urdfContentVersion}`}
-                      urdfFile={urdfFile}
-                      initialMeshFiles={meshFiles}
-                      selectedJoint={hoveredJoint || selectedJoint}
-                      selectedLink={selectedLink}
-                      jointValues={jointValues}
-                      jointLimits={jointLimits}
-                      jointAxes={jointAxes}
-                      onJointSelect={setSelectedJoint}
-                      onLinkSelect={setSelectedLink}
-                      onJointHover={setHoveredJoint}
-                      onJointChange={handleJointChange}
-                      onRobotJointsLoaded={handleRobotJointsLoaded}
-                      onMotionFileChange={setMotionDataFile}
-                      onPlayingChange={setIsPlaying}
-                      onAnimationFramesChange={setHasAnimationFrames}
-                      onFrameChange={handleFrameChange}
-                      collisionVisibility={collisionVisibility}
-                      rotationPlaneVisible={rotationPlaneVisible}
-                      onRobotBoundingBoxChange={setRobotBoundingBox}
-                      onRobotLoaded={setRobot}
-                      endEffectorLink={endEffectorLink}
-                      onIkApplied={handleIkApplied}
-                    />
-                  </div>
-                  {/* Vertical Resizer - always visible */}
-                  <div
-                    onPointerDown={handleViewerResizeStart}
-                    className="cursor-row-resize select-none bg-border/30 hover:bg-border/60 transition-colors relative group flex-shrink-0 z-10"
-                    style={{ height: VIEWER_RESIZER_HEIGHT }}
-                    aria-label="Resize viewer"
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-12 h-0.5 bg-border/40 group-hover:bg-border/80 transition-colors rounded-full" />
-                    </div>
-                  </div>
-                  {/* Recording view in bottom half - always shows header */}
-                  <div 
-                    className="min-h-0 overflow-hidden flex flex-col"
-                    style={{ 
-                      flex: `0 0 ${recordingViewHeight * 100}%`,
-                    }}
-                  >
-                    {viewerEpisode ? (
-                        <EpisodeViewer3DModal
-                          episode={viewerEpisode}
-                          open={true}
-                          onOpenChange={(open) => {
-                            // Don't allow closing - always keep it open
-                            if (!open) {
-                              setIsViewerOpen(true);
-                            }
-                          }}
-                          inline={true}
-                          globalCurrentFrame={currentFrame}
-                          onSetGlobalFrame={(frame: number) => {
-                            (window as WindowWithViewerHandlers).viewer3dSetFrame?.(frame);
-                            setCurrentFrame(frame);
-                          }}
-                          showOnlyHeader={recordingViewHeight <= 0.08}
-                          onSaveEpisode={episodeSaveHandler}
-                        />
-                    ) : (
-                        <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
-                          <div className="flex flex-col items-center gap-3 text-center px-6">
-                            <div className="text-sm font-medium text-muted-foreground">
-                              No episodes available
-                            </div>
-                            <div className="text-xs text-muted-foreground/70 max-w-md">
-                              Record an episode or import episodes from files to view them here.
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </main>
+          <ViewerLayout
+            isSidebarCollapsed={isSidebarCollapsed}
+            isRightSidebarCollapsed={isRightSidebarCollapsed}
+            sidebarWidth={sidebarWidth}
+            rightSidebarWidth={rightSidebarWidth}
+            showUrdfEditor={showUrdfEditor}
+            urdfEditorSplitView={urdfEditorSplitView}
+            recordingViewHeight={recordingViewHeight}
+            urdfContentVersion={urdfContentVersion}
+            urdfFile={urdfFile}
+            meshFiles={meshFiles}
+            hoveredJoint={hoveredJoint}
+            selectedJoint={selectedJoint}
+            selectedLink={selectedLink}
+            jointValues={jointValues}
+            jointLimits={jointLimits}
+            jointAxes={jointAxes}
+            collisionVisibility={collisionVisibility}
+            rotationPlaneVisible={rotationPlaneVisible}
+            originalUrdfContent={originalUrdfContent}
+            vizUrdfContent={vizUrdfContent}
+            urdfViewMode={urdfViewMode}
+            endEffectorLink={endEffectorLink}
+            viewerEpisode={viewerEpisode}
+            currentFrame={currentFrame}
+            episodeSaveHandler={episodeSaveHandler}
+            setUrdfEditorSplitView={setUrdfEditorSplitView}
+            setUrdfViewMode={setUrdfViewMode}
+            setShowUrdfEditor={setShowUrdfEditor}
+            setMotionDataFile={setMotionDataFile}
+            setIsPlaying={setIsPlaying}
+            setHasAnimationFrames={setHasAnimationFrames}
+            handleFrameChange={handleFrameChange}
+            setRobotBoundingBox={setRobotBoundingBox}
+            setRobot={setRobot}
+            handleIkApplied={handleIkApplied}
+            handleViewerResizeStart={handleViewerResizeStart}
+            setSelectedJoint={setSelectedJoint}
+            setSelectedLink={setSelectedLink}
+            setHoveredJoint={setHoveredJoint}
+            handleJointChange={handleJointChange}
+            handleRobotJointsLoaded={handleRobotJointsLoaded}
+            handleVizUrdfChange={handleVizUrdfChange}
+            getExportUrdfContent={getExportUrdfContent}
+            setCurrentFrame={setCurrentFrame}
+            onViewerOpenChange={setIsViewerOpen}
+          />
 
           {/* Right Sidebar - Joint List */}
           <JointListSidebar
