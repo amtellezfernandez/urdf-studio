@@ -45,6 +45,7 @@ import { useRobotJointSync } from "@/components/viewer3d/useRobotJointSync";
 import { useUrdfFileContent } from "@/components/viewer3d/useUrdfFileContent";
 import { useDragModeEffects } from "@/components/viewer3d/useDragModeEffects";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
+import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -1756,7 +1757,7 @@ export const Viewer3D = ({
   const { meshFiles } = useMeshFilesState(initialMeshFiles);
   const [isDraggingJoint, setIsDraggingJoint] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0); // 1.0 = normal speed
+  const playbackSpeed = useViewerPlaybackStore((state) => state.playbackSpeed);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1878,8 +1879,6 @@ export const Viewer3D = ({
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,
-    setPlaybackSpeed,
-    playbackSpeed,
   });
 
   useDragModeEffects({

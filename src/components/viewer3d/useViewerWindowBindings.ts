@@ -1,6 +1,6 @@
 import { useEffect, type ChangeEvent } from "react";
-import type { WindowWithViewerHandlers } from "@/features/types";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
+import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
 
 type UseViewerWindowBindingsParams = {
   handleRun: (forceState?: boolean) => void;
@@ -9,8 +9,6 @@ type UseViewerWindowBindingsParams = {
   handleStopAnimation: () => void;
   handleClearAnimation: () => void;
   handleSetFrame: (frameIndex: number) => void;
-  setPlaybackSpeed: (speed: number) => void;
-  playbackSpeed: number;
 };
 
 export const useViewerWindowBindings = ({
@@ -20,36 +18,28 @@ export const useViewerWindowBindings = ({
   handleStopAnimation,
   handleClearAnimation,
   handleSetFrame,
-  setPlaybackSpeed,
-  playbackSpeed,
 }: UseViewerWindowBindingsParams) => {
+  const registerHandlers = useViewerPlaybackStore((state) => state.registerHandlers);
+  const clearHandlers = useViewerPlaybackStore((state) => state.clearHandlers);
+
   useEffect(() => {
-    (window as WindowWithViewerHandlers).viewer3dPlayAnimation = handleRun;
-    (window as WindowWithViewerHandlers).viewer3dUploadMotionData = handleMotionDataUpload;
-    (window as WindowWithViewerHandlers).viewer3dPlayEpisode = handlePlayEpisode;
-    (window as WindowWithViewerHandlers).viewer3dStopAnimation = handleStopAnimation;
-    (window as WindowWithViewerHandlers).viewer3dClearAnimation = handleClearAnimation;
-    (window as WindowWithViewerHandlers).viewer3dSetFrame = handleSetFrame;
-    (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed = setPlaybackSpeed;
-    (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed = () => playbackSpeed;
-    return () => {
-      delete (window as WindowWithViewerHandlers).viewer3dPlayAnimation;
-      delete (window as WindowWithViewerHandlers).viewer3dUploadMotionData;
-      delete (window as WindowWithViewerHandlers).viewer3dPlayEpisode;
-      delete (window as WindowWithViewerHandlers).viewer3dStopAnimation;
-      delete (window as WindowWithViewerHandlers).viewer3dClearAnimation;
-      delete (window as WindowWithViewerHandlers).viewer3dSetFrame;
-      delete (window as WindowWithViewerHandlers).viewer3dSetPlaybackSpeed;
-      delete (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed;
-    };
+    registerHandlers({
+      playAnimation: handleRun,
+      uploadMotionData: handleMotionDataUpload,
+      playEpisode: handlePlayEpisode,
+      stopAnimation: handleStopAnimation,
+      clearAnimation: handleClearAnimation,
+      setFrame: handleSetFrame,
+    });
+    return () => clearHandlers();
   }, [
+    clearHandlers,
     handleRun,
     handleMotionDataUpload,
     handlePlayEpisode,
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,
-    playbackSpeed,
-    setPlaybackSpeed,
+    registerHandlers,
   ]);
 };
