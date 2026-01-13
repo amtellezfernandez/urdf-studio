@@ -4154,6 +4154,8 @@ export const Sidebar = ({
                         ? currentFrame 
                         : 0;
                       const totalFrames = episode.frames.length;
+                      const lastFrameIndex = Math.max(0, totalFrames - 1);
+                      const displayFrame = Math.max(0, Math.min(episodeCurrentFrame, lastFrameIndex));
                       const sourceTypeRaw = episode.metadata?.additional?.sourceType;
                       const sourceType = typeof sourceTypeRaw === "string" ? sourceTypeRaw : undefined;
                       const sourceNameRaw = episode.metadata?.additional?.sourceName;
@@ -4216,7 +4218,7 @@ export const Sidebar = ({
                                       ? "text-primary font-semibold"
                                       : "text-muted-foreground"
                                   }`}>
-                                    {episodeCurrentFrame}/{totalFrames}
+                                    {displayFrame}/{lastFrameIndex}
                                   </span>
                                 </div>
                                 
