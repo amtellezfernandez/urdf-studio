@@ -2,7 +2,8 @@ import type React from "react";
 import { Viewer3D } from "@/components/Viewer3D";
 import { URDFComparison } from "@/components/URDFComparison";
 import { EpisodeViewer3DModal } from "@/components/EpisodeViewer3DModal";
-import type { MeshFiles, UrdfViewMode, WindowWithViewerHandlers, ViewerEpisode } from "@/features/types";
+import type { MeshFiles, UrdfViewMode, ViewerEpisode } from "@/features/types";
+import { viewerPlayback } from "@/features/viewerPlayback";
 import type { URDFRobot } from "urdf-loader";
 import type * as THREE from "three";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
@@ -254,7 +255,7 @@ export const ViewerLayout = ({
                   inline={true}
                   globalCurrentFrame={currentFrame}
                   onSetGlobalFrame={(frame: number) => {
-                    (window as WindowWithViewerHandlers).viewer3dSetFrame?.(frame);
+                    viewerPlayback.setFrame(frame);
                     setCurrentFrame(frame);
                   }}
                   showOnlyHeader={recordingViewHeight <= 0.08}

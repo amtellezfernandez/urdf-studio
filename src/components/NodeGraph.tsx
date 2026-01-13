@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Square, X, Download } from "lucide-react";
 import { useJointStore, type JointParameter } from "@/store/useJointStore";
 import { toast } from "sonner";
-import type { WindowWithViewerHandlers } from "@/features/types";
+import { viewerPlayback } from "@/features/viewerPlayback";
 
 interface RecordedFrame {
   timestamp: number;
@@ -292,10 +292,10 @@ export const NodeGraph = ({ selectedJoint, onJointChange, jointValues, onSelectJ
   // Recording functions
   const startRecording = useCallback(() => {
     // Stop all replay/playback
-    (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+    viewerPlayback.stopAnimation();
     
     // Reset frame counters to beginning
-    (window as WindowWithViewerHandlers).viewer3dSetFrame?.(0);
+    viewerPlayback.setFrame(0);
     
     // Start recording
     setIsRecording(true);

@@ -38,7 +38,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { WindowWithViewerHandlers } from "@/features/types";
+import { viewerPlayback } from "@/features/viewerPlayback";
+import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
 
 // Constants
 const CANVAS_PADDING = 40;
@@ -119,8 +120,8 @@ const calculateFrameFromMouse = (
 // because the parent's onSetGlobalFrame will call stopAllPlayback() which clears frames,
 // and calling viewer3dPlayAnimation with cleared frames would trigger "upload data first" error
 const updateViewerFrame = (frame: number) => {
-  (window as WindowWithViewerHandlers).viewer3dSetFrame?.(frame);
-  (window as WindowWithViewerHandlers).viewer3dStopAnimation?.();
+  viewerPlayback.setFrame(frame);
+  viewerPlayback.stopAnimation();
 };
 
 // Simple moving-average smoother for joint trajectories
@@ -347,6 +348,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   onSaveEpisode,
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
+  const playbackSpeed = useViewerPlaybackStore((state) => state.playbackSpeed);
   const [selectedJoints, setSelectedJoints] = useState<Set<string>>(new Set());
   const [position, setPosition] = useState({ x: 100, y: 100 });
   const [size, setSize] = useState({ width: 800, height: 600 });
@@ -1226,13 +1228,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     
     const totalFrames = episode.frames.length;
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
-    const effectiveSpeed = (window as WindowWithViewerHandlers).viewer3dGetPlaybackSpeed?.() ?? 1.0;
+    const effectiveSpeed = playbackSpeed || 1.0;
     const frameDuration = totalFrames > 1 
       ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
       : 0;
     const calculatedTime = frame * frameDuration;
     return `${(calculatedTime / 1000).toFixed(2)}s`;
-  }, [episode]);
+  }, [episode, playbackSpeed]);
 
   // Draw canvas
   useLayoutEffect(() => {

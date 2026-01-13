@@ -1,28 +1,46 @@
 import { useCallback, useState } from "react";
 import type { CollisionVisibility } from "@/components/LinkEditor";
-import type { WindowWithViewerHandlers } from "@/features/types";
+import { viewerPlayback } from "@/features/viewerPlayback";
+import { useViewerPlaybackStore } from "@/store/useViewerPlaybackStore";
 
 export const useUrdfViewer = () => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hasAnimationFrames, setHasAnimationFrames] = useState(false);
-  const [currentFrame, setCurrentFrame] = useState(0);
-  const [totalFrames, setTotalFrames] = useState(0);
+  const isPlaying = useViewerPlaybackStore((state) => state.isPlaying);
+  const hasAnimationFrames = useViewerPlaybackStore((state) => state.hasFrames);
+  const currentFrame = useViewerPlaybackStore((state) => state.currentFrame);
+  const totalFrames = useViewerPlaybackStore((state) => state.totalFrames);
+  const setIsPlaying = useViewerPlaybackStore((state) => state.setIsPlaying);
+  const setHasAnimationFrames = useViewerPlaybackStore((state) => state.setHasFrames);
+  const setFrameInfo = useViewerPlaybackStore((state) => state.setFrameInfo);
+
   const [rotationPlaneVisible, setRotationPlaneVisible] = useState(false);
   const [collisionVisibility, setCollisionVisibility] = useState<CollisionVisibility>({});
   const [viewerSplitView, setViewerSplitView] = useState(false);
 
   const handleMotionDataUpload = useCallback((file: File) => {
-    (window as WindowWithViewerHandlers).viewer3dUploadMotionData?.(file);
+    viewerPlayback.uploadMotionData(file);
   }, []);
 
   const handlePlayAnimation = useCallback(() => {
-    (window as WindowWithViewerHandlers).viewer3dPlayAnimation?.();
+    viewerPlayback.playAnimation();
   }, []);
 
   const handleFrameChange = useCallback((frame: number, total: number) => {
-    setCurrentFrame(frame);
-    setTotalFrames(total);
-  }, []);
+    setFrameInfo(frame, total);
+  }, [setFrameInfo]);
+
+  const setCurrentFrame = useCallback(
+    (frame: number) => {
+      setFrameInfo(frame);
+    },
+    [setFrameInfo]
+  );
+
+  const setTotalFrames = useCallback(
+    (total: number) => {
+      setFrameInfo(currentFrame, total);
+    },
+    [currentFrame, setFrameInfo]
+  );
 
   return {
     // State
