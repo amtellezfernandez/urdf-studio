@@ -42,6 +42,7 @@ import { useOrbitControlsBindings } from "@/components/viewer3d/useOrbitControls
 import { useMotionDataUpload } from "@/components/viewer3d/useMotionDataUpload";
 import { usePlaybackHandlers } from "@/components/viewer3d/usePlaybackHandlers";
 import { useViewerCameraControls } from "@/components/viewer3d/useViewerCameraControls";
+import { convertMotionFramesToNodes } from "@/components/viewer3d/convertMotionFramesToNodes";
 import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -2171,65 +2172,6 @@ export const Viewer3D = ({
     sceneRef,
   });
 
-  // Convert imported animation frames to nodes
-  const convertMotionFramesToNodes = (frames: AnimationFrame[]) => {
-    if (!frames || frames.length === 0) return { nodes: [], edges: [] };
-
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
-
-    // Create nodes for each keyframe
-    frames.forEach((frame, index) => {
-      const timestamp = frame.timestamp;
-      const joints = Object.entries(frame.joints).map(([name, value]) => ({
-        name,
-        value,
-      }));
-
-      const node = {
-        id: `motion-keyframe-${index}`,
-        type: "customNode",
-        position: {
-          x: 100 + index * 200, // Spread nodes horizontally
-          y: 100 + (index % 3) * 150, // Create rows of 3
-        },
-        data: {
-          type: "joint",
-          joints,
-          onJointChange,
-          onDelete: () => {
-            // Handle node deletion if needed
-          },
-          isImportedNode: true,
-          timestamp: timestamp,
-          frameIndex: index,
-        },
-        hidden: true, // Hide imported nodes visually but keep them for animation
-      };
-
-      nodes.push(node);
-
-      // Create edges between consecutive frames
-      if (index > 0) {
-        const edge = {
-          id: `motion-edge-${index - 1}-${index}`,
-          source: `motion-keyframe-${index - 1}`,
-          target: `motion-keyframe-${index}`,
-          type: "custom",
-          data: {
-            onDelete: () => {
-              // Handle edge deletion if needed
-            },
-          },
-          hidden: true, // Hide imported edges visually but keep them for animation
-        };
-        edges.push(edge);
-      }
-    });
-
-    return { nodes, edges };
-  };
-
   // Expose handlers for external use (e.g., from Sidebar)
   useEffect(() => {
     (window as WindowWithViewerHandlers).viewer3dPlayAnimation = handleRun;
@@ -2275,6 +2217,19 @@ export const Viewer3D = ({
   useEffect(() => {
     onAnimationFramesChange?.(animationFrames !== null && animationFrames.length > 0);
   }, [animationFrames, onAnimationFramesChange]);
+
+  useEffect(() => {
+    if (!onMotionDataNodesGenerated) return;
+    if (!animationFrames || animationFrames.length === 0) {
+      onMotionDataNodesGenerated([], []);
+      return;
+    }
+    const { nodes, edges } = convertMotionFramesToNodes({
+      frames: animationFrames,
+      onJointChange,
+    });
+    onMotionDataNodesGenerated(nodes, edges);
+  }, [animationFrames, onJointChange, onMotionDataNodesGenerated]);
 
   // Notify when playing state changes
   useEffect(() => {
