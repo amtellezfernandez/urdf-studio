@@ -4,7 +4,7 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { STLLoader } from "three-stdlib";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
+import URDFLoader, { type URDFRobot } from "urdf-loader";
 import { toast } from "sonner";
 import { useJointStore } from "@/store/useJointStore";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
@@ -22,6 +22,21 @@ import { cn } from "@/lib/utils";
 import { applyJointValues } from "@/lib/urdf-joints";
 import { useGPUMode, type GPUMode } from "@/hooks/use-gpu-mode";
 import type { MeshFiles, WindowWithViewerHandlers } from "@/features/types";
+import {
+  extractLinkPose,
+  getDragModeDisplayName,
+  getLiveRobotJoints,
+  hasJointMapChanged,
+  positionDistance,
+  quaternionAngularErrorDeg,
+  resolveJointScalarValue,
+  setEmissiveColor,
+  toZeroIfTiny,
+  type DragMode,
+  type LinkPose,
+} from "@/components/viewer3d/viewer3d-helpers";
+import { CollisionGeometries } from "@/components/viewer3d/CollisionGeometries";
+import { TrackingLine } from "@/components/viewer3d/TrackingLine";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -63,11 +78,6 @@ interface AnimationFrame {
   joints: Record<string, number>;
 }
 
-type LinkPose = {
-  position: [number, number, number];
-  quaternion: [number, number, number, number]; // w, x, y, z
-};
-
 type EndEffectorPoseState = {
   pyroki: LinkPose | null;
   three: LinkPose | null;
@@ -80,492 +90,6 @@ type EndEffectorPoseState = {
 
 type MouseButtonsWithOriginal = OrbitControlsImpl["mouseButtons"] & {
   _originalMiddle?: THREE.MOUSE;
-};
-
-const safeDecode = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
-const getDragModeDisplayName = (mode: 'move-joints' | 'click-to-place' | 'drag-handle') => {
-  switch (mode) {
-    case 'move-joints':
-      return 'Move Joints';
-    case 'click-to-place':
-      return 'Click-to-place';
-    case 'drag-handle':
-      return 'Drag Handle';
-    default:
-      return 'Move Joints';
-  }
-};
-
-const setEmissiveColor = (material: THREE.Material, color: number) => {
-  const emissiveMaterial = material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial | THREE.MeshPhongMaterial;
-  if (emissiveMaterial.emissive) {
-    emissiveMaterial.emissive.setHex(color);
-  }
-};
-
-const resolveJointScalarValue = (joint?: URDFJoint | null) => {
-  if (!joint) return undefined;
-  if (typeof joint.angle === "number") {
-    return joint.angle;
-  }
-  const value = joint.jointValue;
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return typeof first === "number" ? first : undefined;
-  }
-  return typeof value === "number" ? value : undefined;
-};
-
-const extractLinkPose = (robot: URDFRobot | null, linkName: string): LinkPose | null => {
-  if (!robot) return null;
-  const robotAny = robot;
-  const link =
-    robotAny?.links?.[linkName] ??
-    robotAny?.getObjectByName?.(linkName) ??
-    robotAny?.getObjectByName?.(safeDecode(linkName));
-
-  if (!link || !link.matrixWorld) return null;
-  if (typeof link.updateMatrixWorld === "function") {
-    link.updateMatrixWorld(true);
-  }
-
-  const pos = new THREE.Vector3();
-  const quat = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
-  link.matrixWorld.decompose(pos, quat, scale);
-
-  return {
-    position: [pos.x, pos.y, pos.z],
-    quaternion: [quat.w, quat.x, quat.y, quat.z],
-  };
-};
-
-const positionDistance = (a: [number, number, number], b: [number, number, number]) => {
-  const dx = a[0] - b[0];
-  const dy = a[1] - b[1];
-  const dz = a[2] - b[2];
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-};
-
-const quaternionAngularErrorDeg = (
-  pyrokiWxyz: [number, number, number, number],
-  threeWxyz: [number, number, number, number]
-) => {
-  const qPy = new THREE.Quaternion(pyrokiWxyz[1], pyrokiWxyz[2], pyrokiWxyz[3], pyrokiWxyz[0]);
-  const qThree = new THREE.Quaternion(threeWxyz[1], threeWxyz[2], threeWxyz[3], threeWxyz[0]);
-  const delta = qPy.clone().invert().multiply(qThree);
-  const angle = 2 * Math.acos(Math.min(1, Math.max(-1, delta.w)));
-  return (angle * 180) / Math.PI;
-};
-
-const toZeroIfTiny = (value: number | null, epsilon: number) => {
-  if (value === null) return null;
-  return Math.abs(value) <= epsilon ? 0 : value;
-};
-
-const getLiveRobotJoints = (robot: URDFRobot | null, fallback: Record<string, number>) => {
-  if (!robot) return fallback;
-  const joints = robot.joints || {};
-  const result: Record<string, number> = {};
-  for (const name of Object.keys(joints)) {
-    const j = joints[name];
-    const val = resolveJointScalarValue(j);
-    if (typeof val === "number" && !Number.isNaN(val)) {
-      result[name] = val;
-    }
-  }
-  // Fallback to provided map if we missed anything
-  return Object.keys(result).length > 0 ? result : fallback;
-};
-
-const hasJointMapChanged = (
-  next: Record<string, number>,
-  prev: Record<string, number> | null
-) => {
-  if (!prev) return true;
-  const nextKeys = Object.keys(next);
-  const prevKeys = Object.keys(prev);
-  if (nextKeys.length !== prevKeys.length) return true;
-  for (const key of nextKeys) {
-    if (prev[key] !== next[key]) return true;
-  }
-  return false;
-};
-
-// Component to render collision geometries from URDF
-const CollisionGeometries = ({
-  urdfFile,
-  meshFiles,
-  collisionVisibility,
-  robot,
-  gpuMode = "high",
-}: {
-  urdfFile: File;
-  meshFiles: MeshFiles;
-  collisionVisibility: CollisionVisibility;
-  robot: URDFRobot | null;
-  gpuMode?: GPUMode;
-}) => {
-  const [urdfContent, setUrdfContent] = useState<string>("");
-  const collisionGroupRef = useRef<THREE.Group>(null);
-  const collisionMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; linkName: string; localXyz: [number, number, number]; localRpy: [number, number, number] }>>(new Map());
-
-  // Read URDF content
-  useEffect(() => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      setUrdfContent(content);
-    };
-    reader.readAsText(urdfFile);
-  }, [urdfFile]);
-
-  // Parse and render collision geometries
-  useEffect(() => {
-    if (!urdfContent || !collisionGroupRef.current || !robot) return;
-
-    // Clear existing collision geometries
-    collisionMeshesRef.current.forEach(({ mesh }) => {
-      const material = mesh.material;
-      if (Array.isArray(material)) {
-        material.forEach((mat) => mat.dispose());
-      } else {
-        material.dispose();
-      }
-      mesh.geometry?.dispose();
-      collisionGroupRef.current?.remove(mesh);
-    });
-    collisionMeshesRef.current.clear();
-
-    while (collisionGroupRef.current.children.length > 0) {
-      const child = collisionGroupRef.current.children[0];
-      if (child instanceof THREE.Mesh && child.userData?.isCollisionGeometry) {
-        const material = child.material;
-        if (Array.isArray(material)) {
-          material.forEach((mat) => mat.dispose());
-        } else {
-          material.dispose();
-        }
-        child.geometry?.dispose();
-      }
-      collisionGroupRef.current.remove(child);
-    }
-
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-      const parserError = xmlDoc.querySelector("parsererror");
-      if (parserError) return;
-
-      const robotElement = xmlDoc.querySelector("robot");
-      if (!robotElement) return;
-
-      // Update robot matrix world to get current link positions
-      const robotObject = robot;
-      robotObject?.updateMatrixWorld(true);
-
-      const links = xmlDoc.querySelectorAll("link");
-      const isLowGPU = gpuMode === "low";
-
-      // Create translucent grey material
-      // Use same rendering settings as rotation plane to ensure visibility
-      const collisionMaterial = isLowGPU
-        ? new THREE.MeshBasicMaterial({
-            color: 0x808080,
-            opacity: 0.3,
-            transparent: true,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            depthTest: false,
-          })
-        : new THREE.MeshStandardMaterial({
-            color: 0x808080,
-            opacity: 0.3,
-            transparent: true,
-            metalness: 0.1,
-            roughness: 0.9,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            depthTest: false,
-          });
-
-      // Helper function to apply link transformation to mesh
-      const applyLinkTransform = (mesh: THREE.Mesh, linkName: string, localXyz: [number, number, number], localRpy: [number, number, number]) => {
-        // Get the link object from robot
-        const linkObject = robotObject.links?.[linkName] ?? robotObject.getObjectByName?.(linkName);
-        
-        if (linkObject) {
-          const linkWorldMatrix = new THREE.Matrix4().copy(linkObject.matrixWorld);
-          
-          // Create local transform from collision origin
-          const localMatrix = new THREE.Matrix4();
-          localMatrix.makeRotationFromEuler(new THREE.Euler(localRpy[0], localRpy[1], localRpy[2], 'XYZ'));
-          localMatrix.setPosition(new THREE.Vector3(localXyz[0], localXyz[1], localXyz[2]));
-          
-          // Combine: world = linkWorld * local
-          linkWorldMatrix.multiply(localMatrix);
-          
-          // Extract position and rotation from combined matrix
-          const worldPosition = new THREE.Vector3();
-          const worldQuaternion = new THREE.Quaternion();
-          const worldScale = new THREE.Vector3();
-          linkWorldMatrix.decompose(worldPosition, worldQuaternion, worldScale);
-          
-          mesh.position.copy(worldPosition);
-          mesh.quaternion.copy(worldQuaternion);
-        } else {
-          // Fallback: just use local transform if link not found
-          mesh.position.set(localXyz[0], localXyz[1], localXyz[2]);
-          mesh.rotation.set(localRpy[0], localRpy[1], localRpy[2]);
-        }
-      };
-
-      links.forEach((link) => {
-        const linkName = link.getAttribute("name");
-        if (!linkName) return;
-
-        const linkVisibility = collisionVisibility[linkName];
-        if (!linkVisibility) return;
-
-        const collisions = link.querySelectorAll("collision");
-        collisions.forEach((collision, index) => {
-          const isVisible = linkVisibility[index] ?? false;
-          if (!isVisible) return;
-
-          // Get origin (local to link)
-          const origin = collision.querySelector("origin");
-          const xyz = (origin?.getAttribute("xyz")?.split(" ").map(parseFloat) || [0, 0, 0]) as [number, number, number];
-          const rpy = (origin?.getAttribute("rpy")?.split(" ").map(parseFloat) || [0, 0, 0]) as [number, number, number];
-
-          // Get geometry
-          const geometryEl = collision.querySelector("geometry");
-          if (!geometryEl) return;
-
-          let mesh: THREE.Mesh | null = null;
-
-          // Check geometry type
-          const box = geometryEl.querySelector("box");
-          const sphere = geometryEl.querySelector("sphere");
-          const cylinder = geometryEl.querySelector("cylinder");
-          const meshEl = geometryEl.querySelector("mesh");
-
-          if (box) {
-            const sizeStr = box.getAttribute("size");
-            const size = sizeStr?.split(" ").map(parseFloat) || [1, 1, 1];
-            const boxGeometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
-            mesh = new THREE.Mesh(boxGeometry, collisionMaterial.clone());
-            mesh.renderOrder = 999;
-          } else if (sphere) {
-            const radius = parseFloat(sphere.getAttribute("radius") || "1");
-            const sphereGeometry = new THREE.SphereGeometry(radius, 32, 32);
-            mesh = new THREE.Mesh(sphereGeometry, collisionMaterial.clone());
-            mesh.renderOrder = 999;
-          } else if (cylinder) {
-            const radius = parseFloat(cylinder.getAttribute("radius") || "1");
-            const length = parseFloat(cylinder.getAttribute("length") || "1");
-            const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, length, 32);
-            mesh = new THREE.Mesh(cylinderGeometry, collisionMaterial.clone());
-            mesh.renderOrder = 999;
-          } else if (meshEl) {
-            // For mesh collision geometries, load the mesh file
-            const filename = meshEl.getAttribute("filename");
-            // No scaling - use mesh geometry as-is
-
-            if (filename) {
-              // Try to find the mesh file
-              const filenameOnly = filename.split("/").pop() || filename;
-              const meshBlob = meshFiles[filenameOnly] || meshFiles[filename];
-
-              if (meshBlob) {
-                // Load mesh asynchronously
-                const blobUrl = URL.createObjectURL(meshBlob);
-                const stlLoader = new STLLoader();
-                stlLoader.load(
-                  blobUrl,
-                  (geometry) => {
-                    // No geometry scaling applied
-                    const loadedMesh = new THREE.Mesh(geometry, collisionMaterial.clone());
-                    loadedMesh.renderOrder = 999;
-                    applyLinkTransform(loadedMesh, linkName, xyz, rpy);
-                    loadedMesh.userData.isCollisionGeometry = true;
-                    loadedMesh.userData.linkName = linkName;
-                    collisionGroupRef.current?.add(loadedMesh);
-                    // Store reference for frame updates
-                    const meshKey = `${linkName}_${index}`;
-                    collisionMeshesRef.current.set(meshKey, { mesh: loadedMesh, linkName, localXyz: xyz, localRpy: rpy });
-                    URL.revokeObjectURL(blobUrl);
-                  },
-                  undefined,
-                  (err) => {
-                    console.error(`Error loading collision mesh ${filename}:`, err);
-                    URL.revokeObjectURL(blobUrl);
-                  }
-                );
-              }
-              return; // Skip synchronous mesh creation for mesh files
-            }
-          }
-
-          if (mesh) {
-            mesh.renderOrder = 999;
-            applyLinkTransform(mesh, linkName, xyz, rpy);
-            mesh.userData.isCollisionGeometry = true;
-            mesh.userData.linkName = linkName;
-            collisionGroupRef.current.add(mesh);
-            // Store reference for frame updates
-            const meshKey = `${linkName}_${index}`;
-            collisionMeshesRef.current.set(meshKey, { mesh, linkName, localXyz: xyz, localRpy: rpy });
-          }
-        });
-      });
-    } catch (error) {
-      console.error("Error rendering collision geometries:", error);
-    }
-  }, [urdfContent, collisionVisibility, robot, gpuMode, meshFiles]);
-
-  // Update collision geometry transforms every frame to follow robot movement
-  useFrame(() => {
-    if (!collisionGroupRef.current || !robot) return;
-
-    const robotObject = robot;
-    robotObject.updateMatrixWorld?.(true);
-
-    // Update each collision mesh transform based on its link's current world position
-    collisionMeshesRef.current.forEach(({ mesh, linkName, localXyz, localRpy }) => {
-      const linkObject = robotObject.links?.[linkName] ?? robotObject.getObjectByName?.(linkName);
-      
-      if (linkObject) {
-        const linkWorldMatrix = new THREE.Matrix4().copy(linkObject.matrixWorld);
-        
-        // Create local transform from collision origin
-        const localMatrix = new THREE.Matrix4();
-        localMatrix.makeRotationFromEuler(new THREE.Euler(localRpy[0], localRpy[1], localRpy[2], 'XYZ'));
-        localMatrix.setPosition(new THREE.Vector3(localXyz[0], localXyz[1], localXyz[2]));
-        
-        // Combine: world = linkWorld * local
-        linkWorldMatrix.multiply(localMatrix);
-        
-        // Extract position and rotation from combined matrix
-        const worldPosition = new THREE.Vector3();
-        const worldQuaternion = new THREE.Quaternion();
-        const worldScale = new THREE.Vector3();
-        linkWorldMatrix.decompose(worldPosition, worldQuaternion, worldScale);
-        
-        mesh.position.copy(worldPosition);
-        mesh.quaternion.copy(worldQuaternion);
-      }
-    });
-  });
-
-  return <group ref={collisionGroupRef} renderOrder={999} />;
-};
-
-// Component for a dynamic line that tracks a joint position
-const TrackingLine = ({
-  cubePos,
-  robot,
-  trackedJointName,
-  endEffectorLink,
-  gpuMode = "high",
-}: {
-  cubePos: THREE.Vector3;
-  robot: URDFRobot | null;
-  trackedJointName: string | null;
-  endEffectorLink?: string | null;
-  gpuMode?: GPUMode;
-}) => {
-  const lineRef = useRef<THREE.LineSegments>(null);
-
-  useFrame(() => {
-    if (!robot || !lineRef.current) return;
-
-    let targetPos: THREE.Vector3 | null = null;
-
-    // If there's a tracked joint, use its center position
-    if (trackedJointName) {
-      try {
-        const joint = robot?.joints?.[trackedJointName];
-        if (joint) {
-          // Update joint's world matrix to get current position
-          joint.updateWorldMatrix(true, true);
-          
-          // Get the world position of the joint
-          targetPos = new THREE.Vector3();
-          joint.getWorldPosition(targetPos);
-        }
-      } catch (error) {
-        console.error("Error getting joint world position:", error);
-      }
-    } else if (endEffectorLink) {
-      // Otherwise use end-effector link center
-      try {
-        const robotAny = robot;
-        const link =
-          robotAny?.links?.[endEffectorLink] ??
-          robotAny?.getObjectByName?.(endEffectorLink) ??
-          robotAny?.getObjectByName?.(decodeURIComponent(endEffectorLink));
-        if (link) {
-          link.updateMatrixWorld(true);
-          const pos = new THREE.Vector3();
-          link.getWorldPosition(pos);
-          targetPos = pos;
-        }
-      } catch (error) {
-        console.error("Error getting link world position:", error);
-      }
-    }
-
-    // If still no target position, skip drawing
-    if (!targetPos) return;
-
-    // Update line geometry
-    const geometry = lineRef.current.geometry as THREE.BufferGeometry;
-    const positions = geometry.attributes.position as THREE.BufferAttribute;
-    if (positions) {
-      positions.array[0] = cubePos.x;
-      positions.array[1] = cubePos.y;
-      positions.array[2] = cubePos.z;
-      positions.array[3] = targetPos.x;
-      positions.array[4] = targetPos.y;
-      positions.array[5] = targetPos.z;
-      positions.needsUpdate = true;
-    }
-  });
-
-  return (
-    <lineSegments ref={lineRef} renderOrder={1000}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={2}
-          array={new Float32Array([
-            cubePos.x,
-            cubePos.y,
-            cubePos.z,
-            cubePos.x,
-            cubePos.y,
-            cubePos.z,
-          ])}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <lineBasicMaterial 
-        color="#ff00ff" 
-        linewidth={2} 
-        opacity={0.7} 
-        transparent 
-        depthTest={false}
-        depthWrite={false}
-      />
-    </lineSegments>
-  );
 };
 
 // Component to render orbit visualization
@@ -1515,7 +1039,7 @@ const CreatedObjects = ({
   gpuMode = "high",
   playbackSpeed = 1.0,
   rotationPlaneVisible = false,
-  dragMode = 'move-joints',
+  dragMode = "move-joints",
 }: {
   file: File;
   meshFiles: MeshFiles;
@@ -1536,7 +1060,7 @@ const CreatedObjects = ({
   gpuMode?: GPUMode;
   playbackSpeed?: number;
   rotationPlaneVisible?: boolean;
-  dragMode?: 'move-joints' | 'click-to-place' | 'drag-handle';
+  dragMode?: DragMode;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<URDFRobot | null>(null);
@@ -2594,7 +2118,7 @@ export const Viewer3D = ({
   const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
 
   // Drag mode state
-  const [dragMode, setDragMode] = useState<'move-joints' | 'click-to-place' | 'drag-handle'>('move-joints');
+  const [dragMode, setDragMode] = useState<DragMode>("move-joints");
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
 
   // Reset IK smoothing state when the robot or drag mode changes
