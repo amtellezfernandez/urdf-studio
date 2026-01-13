@@ -21,6 +21,7 @@ import {
 } from "@/features/urdf";
 import { toast } from "sonner";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
+import { formatVector3, parseVector3 } from "@/components/link-editor/sizeUtils";
 
 interface CollisionControlProps {
   linkName: string;
@@ -254,15 +255,6 @@ export const CollisionControl = ({
     scheduleUpdate();
   };
 
-  const parseSize = (sizeStr: string): [number, number, number] => {
-    const parts = sizeStr.split(" ").map(parseFloat);
-    return [parts[0] || 1, parts[1] || 1, parts[2] || 1];
-  };
-
-  const formatSize = (size: [number, number, number]): string => {
-    return `${size[0]} ${size[1]} ${size[2]}`;
-  };
-
   return (
     <BlenderPanel
       title={
@@ -335,14 +327,14 @@ export const CollisionControl = ({
         {geometryType === "box" && (
           <BlenderPropertyRow label="Size">
             <div className="flex items-center gap-1">
-              {parseSize(geometryParams.size || "1 1 1").map((val, i) => (
+              {parseVector3(geometryParams.size || "1 1 1").map((val, i) => (
                 <NumberInput
                   key={i}
                   value={val}
                   onValueChange={(newVal) => {
-                    const size = parseSize(geometryParams.size || "1 1 1");
+                    const size = parseVector3(geometryParams.size || "1 1 1");
                     size[i] = newVal;
-                    handleParamChange("size", formatSize(size));
+                    handleParamChange("size", formatVector3(size));
                   }}
                   step={0.01}
                   min={0.001}
@@ -432,14 +424,14 @@ export const CollisionControl = ({
             </BlenderPropertyRow>
             <BlenderPropertyRow label="Scale">
               <div className="flex items-center gap-1">
-                {parseSize(geometryParams.scale || "1 1 1").map((val, i) => (
+                {parseVector3(geometryParams.scale || "1 1 1").map((val, i) => (
                   <NumberInput
                     key={i}
                     value={val}
                     onValueChange={(newVal) => {
-                      const scale = parseSize(geometryParams.scale || "1 1 1");
+                      const scale = parseVector3(geometryParams.scale || "1 1 1");
                       scale[i] = newVal;
-                      handleParamChange("scale", formatSize(scale));
+                      handleParamChange("scale", formatVector3(scale));
                     }}
                     step={0.01}
                     min={0.001}

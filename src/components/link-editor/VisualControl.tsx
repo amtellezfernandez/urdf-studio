@@ -4,6 +4,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { BlenderPanel, BlenderPropertyRow } from "@/components/ui/blender-panel";
 import { updateVisualInLink, type LinkData, type VisualData } from "@/features/urdf";
 import { useDeferredUrdfUpdate } from "@/components/link-editor/useDeferredUrdfUpdate";
+import { formatVector3, parseVector3 } from "@/components/link-editor/sizeUtils";
 
 interface VisualControlProps {
   linkName: string;
@@ -73,15 +74,6 @@ export const VisualControl = ({
     scheduleUpdate();
   };
 
-  const parseSize = (sizeStr: string): [number, number, number] => {
-    const parts = sizeStr.split(" ").map(parseFloat);
-    return [parts[0] || 1, parts[1] || 1, parts[2] || 1];
-  };
-
-  const formatSize = (size: [number, number, number]): string => {
-    return `${size[0]} ${size[1]} ${size[2]}`;
-  };
-
   const title =
     linkData.visuals.length === 1 ? "Visual (Mesh)" : `Visual ${index + 1} (Mesh)`;
 
@@ -99,14 +91,14 @@ export const VisualControl = ({
 
         <BlenderPropertyRow label="Scale">
           <div className="flex items-center gap-0.5">
-            {parseSize(geometryParams.scale || "1 1 1").map((val, i) => (
+            {parseVector3(geometryParams.scale || "1 1 1").map((val, i) => (
               <NumberInput
                 key={i}
                 value={val}
                 onValueChange={(newVal) => {
-                  const scale = parseSize(geometryParams.scale || "1 1 1");
+                  const scale = parseVector3(geometryParams.scale || "1 1 1");
                   scale[i] = newVal;
-                  handleParamChange("scale", formatSize(scale));
+                  handleParamChange("scale", formatVector3(scale));
                 }}
                 step={0.0001}
                 min={0.0001}
