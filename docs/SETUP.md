@@ -21,7 +21,7 @@ If you want to compare forward kinematics between the Three.js URDFLoader and [P
 
 ```bash
 cd ~/URDFStudio
-~/.local/bin/uv pip install --python .venv/bin/python3 -e ./pyroki
+~/.local/bin/uv pip install --python .venv/bin/python3 -e ./vendor/pyroki
 ```
 
 Once installed, the FK validation popup in the viewer will call into PyRoki via the existing Python environment.

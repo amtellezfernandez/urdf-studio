@@ -24,6 +24,7 @@ npm run dev
 - `npm run smoke` to run lint + typecheck quickly.
 
 ## 📚 Docs
+- [Docs index](docs/README.md)
 - [Setup](docs/SETUP.md)
 - [Teleoperation](docs/TELEOPERATION.md)
 - [Dev notes](docs/dev_notes.md)
