@@ -8,7 +8,7 @@ import readline from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
+const rootDir = join(__dirname, '..', '..');
 
 // Colors for terminal output
 const colors = {
@@ -385,4 +385,3 @@ async function main() {
 }
 
 main();
-

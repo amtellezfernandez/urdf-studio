@@ -364,7 +364,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
                     <p className="font-semibold">Troubleshooting:</p>
                     <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                       <li>Make sure rerun-sdk is installed: <code className="bg-muted px-1 rounded">pip install rerun-sdk</code></li>
-                      <li>Check that the Python script is accessible: <code className="bg-muted px-1 rounded">backend/scripts/rerun_viewer.py</code></li>
+                      <li>Check that the Python script is accessible: <code className="bg-muted px-1 rounded">apps/api/backend/scripts/rerun_viewer.py</code></li>
                       <li>Try switching to Desktop mode if Web mode fails</li>
                     </ul>
                   </div>

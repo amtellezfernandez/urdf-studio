@@ -14,8 +14,8 @@ import { parse } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
-const pythonScript = join(rootDir, 'backend', 'scripts', 'rerun_viewer.py');
+const rootDir = join(__dirname, '..', '..');
+const pythonScript = join(rootDir, 'apps', 'api', 'backend', 'scripts', 'rerun_viewer.py');
 
 const PORT = 3001;
 
