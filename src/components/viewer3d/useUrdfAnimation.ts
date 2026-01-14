@@ -57,7 +57,6 @@ export const useUrdfAnimation = ({
     if (!animationFrames || !robotRef.current || animationFrames.length === 0) {
       return;
     }
-    const shouldPlay = isPlaying && !animationController.isPausedRef.current;
 
     const firstTimestamp = animationFrames[0].timestamp;
     const lastTimestamp = animationFrames[animationFrames.length - 1].timestamp;
@@ -139,7 +138,7 @@ export const useUrdfAnimation = ({
       }
       // Update animation start time to maintain position when playing resumes
       // But only if we're going to play - if paused, don't update it
-      if (shouldPlay) {
+      if (isPlaying) {
         animationStartTime.current =
           Date.now() - (normalizedTime - firstTimestamp) / playbackSpeed;
         // Clear the manual frame time when resuming so playback can advance
@@ -152,7 +151,7 @@ export const useUrdfAnimation = ({
       shouldApplyAnimation = true; // Apply when manually setting frame
       // Set flag to skip normal frame update to prevent recalculation
       animationController.skipFrameUpdateRef.current = true;
-    } else if (shouldPlay) {
+    } else if (isPlaying) {
       // Normal playback - use normalized timing for uniform playback
       shouldApplyAnimation = true;
       // Clear pause flag when playing
@@ -243,7 +242,7 @@ export const useUrdfAnimation = ({
     // Interpolate between frames using normalized timing
     // This ensures smooth interpolation even with uneven original timestamps
     // When paused, don't interpolate - use exact frame values
-    const isPaused = !shouldPlay && animationController.isPausedRef.current;
+    const isPaused = !isPlaying && animationController.isPausedRef.current;
     let t = 0;
     if (!isPaused && normalizedFrameDuration > 0 && frameIndex < animationFrames.length - 1) {
       // Calculate interpolation factor based on normalized time position within the frame interval
