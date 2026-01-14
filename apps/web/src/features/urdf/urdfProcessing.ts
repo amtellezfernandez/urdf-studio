@@ -121,9 +121,3 @@ export const convertUrdfToMjcfCached = (xml: string): MjcfConversionResult => {
   conversionCache.set(key, result);
   return result;
 };
-
-export const clearUrdfProcessingCaches = () => {
-  statsCache.clear();
-  highlightCache.clear();
-  conversionCache.clear();
-};

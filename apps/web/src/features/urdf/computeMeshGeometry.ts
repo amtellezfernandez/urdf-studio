@@ -104,9 +104,6 @@ export function computeMeshBoundsFromArrayBuffer(
   }
 }
 
-export const clearMeshBoundsCache = () => {
-  meshBoundsCache.clear();
-};
 
 /**
  * Combines multiple mesh bounds into a single bounding box
