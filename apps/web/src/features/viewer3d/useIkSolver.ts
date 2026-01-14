@@ -383,14 +383,28 @@ export const useIkSolver = ({
   const handleIkDragSolved = useCallback(
     (solution: Record<string, number>) => {
       const SMOOTH_ALPHA = 0.35; // blend factor to damp sudden IK jumps
+      const MAX_BLEND_DELTA = 0.5; // rad or meters, skip blending for large jumps
       const previous = lastIkAppliedRef.current;
       const blended: Record<string, number> = {};
 
       if (previous) {
+        let maxDelta = 0;
+        for (const [joint, value] of Object.entries(solution)) {
+          const prevVal = previous[joint];
+          if (typeof prevVal === "number") {
+            const delta = Math.abs(value - prevVal);
+            if (delta > maxDelta) maxDelta = delta;
+          }
+        }
+
+        const shouldBlend = maxDelta > 0 && maxDelta < MAX_BLEND_DELTA;
+
         // Blend towards new solution to avoid flicker between IK branches
         for (const [joint, value] of Object.entries(solution)) {
           const prevVal = previous[joint] ?? value;
-          blended[joint] = prevVal + (value - prevVal) * SMOOTH_ALPHA;
+          blended[joint] = shouldBlend
+            ? prevVal + (value - prevVal) * SMOOTH_ALPHA
+            : value;
         }
         // Keep any joints that were in the previous state but not present in the new solution
         for (const [joint, prevVal] of Object.entries(previous)) {

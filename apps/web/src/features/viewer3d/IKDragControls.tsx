@@ -38,6 +38,7 @@ export const IKDragControls = ({
   const springStrength = 45; // higher = more responsive
   const springDamping = 12; // higher = more damping
   const snapDistance = 0.003; // meters, snap when very close
+  const reachMargin = 1.25;
   const lastIkCallRef = useRef<number>(0);
   const ikThrottleMs = 60; // Call IK at most once every 60ms to avoid spamming and keep responses smooth
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -190,7 +191,7 @@ export const IKDragControls = ({
         safety += 1;
       }
 
-      reachRadiusRef.current = reach > 0 ? reach : null;
+      reachRadiusRef.current = reach > 0 ? reach * reachMargin : null;
       baseLinkNameRef.current = cursor || null;
 
       if (!baseLinkNameRef.current) {
@@ -387,6 +388,30 @@ export const IKDragControls = ({
     [camera, gl, raycaster, robot]
   );
 
+  const reconcileReachRadius = useCallback(() => {
+    if (!robot || !endEffectorObject.current) return;
+    const reachRadius = reachRadiusRef.current;
+    if (!reachRadius) return;
+
+    const baseLinkName = baseLinkNameRef.current;
+    const baseObject =
+      (baseLinkName &&
+        (robot.links?.[baseLinkName] ?? robot.getObjectByName?.(baseLinkName))) ||
+      robot;
+    if (!baseObject?.updateMatrixWorld || !baseObject?.getWorldPosition) {
+      return;
+    }
+
+    baseObject.updateMatrixWorld(true);
+    endEffectorObject.current.updateMatrixWorld(true);
+    baseObject.getWorldPosition(basePositionRef.current);
+    endEffectorObject.current.getWorldPosition(clampDirectionRef.current);
+    const currentDistance = basePositionRef.current.distanceTo(clampDirectionRef.current);
+    if (currentDistance > reachRadius) {
+      reachRadiusRef.current = currentDistance * reachMargin;
+    }
+  }, [robot, reachMargin]);
+
   const endDrag = useCallback(
     (pointerId?: number) => {
       if (pointerId !== undefined && activePointerIdRef.current !== null) {
@@ -430,6 +455,7 @@ export const IKDragControls = ({
       event.stopPropagation();
       activePointerIdRef.current = event.pointerId;
       dragVelocityRef.current.set(0, 0, 0);
+      reconcileReachRadius();
       const domElement = gl.domElement as Element & {
         setPointerCapture?: (id: number) => void;
       };
@@ -461,7 +487,7 @@ export const IKDragControls = ({
         intersectionRef.current
       );
     },
-    [enabled, camera, gl, onDragStateChange, updateDragTarget]
+    [enabled, camera, gl, onDragStateChange, reconcileReachRadius, updateDragTarget]
   );
 
   const handlePointerMove = useCallback(
