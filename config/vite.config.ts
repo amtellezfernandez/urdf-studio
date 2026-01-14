@@ -39,13 +39,9 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("node_modules/@react-three/")) return "react-three";
-          if (
-            id.includes("node_modules/three") ||
-            id.includes("node_modules/three-stdlib") ||
-            id.includes("node_modules/urdf-loader")
-          ) {
-            return "three-core";
-          }
+          if (id.includes("node_modules/three-stdlib")) return "three-stdlib";
+          if (id.includes("node_modules/urdf-loader")) return "urdf-loader";
+          if (id.includes("node_modules/three")) return "three";
           if (id.includes("node_modules/reactflow")) return "reactflow";
           if (id.includes("node_modules/jszip")) return "jszip";
           if (id.includes("node_modules/@radix-ui/")) return "radix-ui";
