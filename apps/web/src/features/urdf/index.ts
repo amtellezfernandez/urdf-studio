@@ -26,3 +26,7 @@ export * from "./convert/urdfToXacro";
 export * from "./editor/urdfEditorActions";
 
 export * from "./github/githubRepo";
+
+export * from "./loader/useUrdfLoader";
+export * from "./selection";
+export * from "./viewer";

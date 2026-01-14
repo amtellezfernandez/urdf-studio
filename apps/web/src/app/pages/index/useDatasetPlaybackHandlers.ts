@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useUrdfViewer } from "@/features/urdf-viewer";
+import { useUrdfViewer } from "@/features/urdf";
 import type { EpisodeSaveHandler, ViewerEpisode } from "@/features/types";
 
 export const useDatasetPlaybackHandlers = () => {

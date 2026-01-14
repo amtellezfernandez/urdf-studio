@@ -14,9 +14,8 @@ import { useUrdfMaterialHandlers } from "@/app/pages/index/useUrdfMaterialHandle
 import { PageLayout } from "@/app/pages/index/PageLayout";
 
 import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/features/types";
-import { useUrdfLoader } from "@/features/urdf-loader/useUrdfLoader";
+import { useUrdfLoader, useUrdfSelection } from "@/features/urdf";
 import { useObjectCreatorStore } from "@/features/object-creator";
-import { useUrdfSelection } from "@/features/urdf-selection";
 import { useLayout } from "@/features/layout";
 import { useExportHandlers, useJointMappingPersistence } from "@/features/export";
 import { useThemeAndGPUMode } from "@/features/theme-gpu";
