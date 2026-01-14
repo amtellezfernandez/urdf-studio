@@ -3,28 +3,38 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { fileURLToPath } from "url";
 import { componentTagger } from "lovable-tagger";
+import { runtimeConfig, runtimeUrls } from "./runtime.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
-const webRoot = path.resolve(rootDir, "apps", "web");
+const webRoot = path.resolve(rootDir, "web");
+
+const clientConfig = {
+  apiBaseUrl: runtimeUrls.apiBaseUrl,
+  rerunWebUrl: runtimeUrls.rerunWebUrl,
+  rerunWsUrl: runtimeUrls.rerunWsUrl,
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   root: webRoot,
-  cacheDir: path.resolve(rootDir, "node_modules", ".vite", "apps-web"),
+  cacheDir: path.resolve(rootDir, "node_modules", ".vite", "web"),
   server: {
-    host: "::",
-    port: 5173,
+    host: runtimeConfig.web.bindHost,
+    port: runtimeConfig.web.port,
     proxy: {
       "/api": {
-        target: "http://localhost:3001",
+        target: runtimeUrls.apiBaseUrl,
         changeOrigin: true,
       },
     },
     ...(mode === "test" || process.env.VITEST ? { hmr: false, ws: false } : {}),
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  define: {
+    __URDF_CONFIG__: JSON.stringify(clientConfig),
+  },
   css: {
     postcss: path.resolve(__dirname, "postcss.config.js"),
   },

@@ -70,4 +70,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile backend modules
-        run: python -m compileall apps/backend
+        run: python -m compileall backend

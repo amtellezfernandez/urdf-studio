@@ -36,6 +36,8 @@ This will start:
 - **Frontend**: `http://localhost:5173` (Vite + React)
 - **Backend API**: `http://localhost:8000` (FastAPI + Python)
 
+Ports and hosts are configurable via `config/app.config.json` or `URDF_*` env vars.
+
 The integrated backend provides:
 - `GET  /health` – Health check (PyRoki, yourdfpy, Rerun status)
 - `POST /pyroki/fk` – Forward kinematics using PyRoki (with URDF caching)

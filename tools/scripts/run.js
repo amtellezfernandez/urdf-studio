@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execSync, spawn } from 'child_process';
+import { runtimeConfig, runtimeUrls } from '../../config/runtime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -110,9 +111,9 @@ function main() {
   
   log('');
   log('  Frontend:', colors.reset);
-  log(`  ${colors.pinkBright}${colors.underline}http://localhost:5173${colors.reset}`, colors.reset);
+  log(`  ${colors.pinkBright}${colors.underline}${runtimeUrls.webBaseUrl}${colors.reset}`, colors.reset);
   log('  Backend API:', colors.reset);
-  log(`  ${colors.pinkBright}${colors.underline}http://localhost:8000${colors.reset}`, colors.reset);
+  log(`  ${colors.pinkBright}${colors.underline}${runtimeUrls.apiBaseUrl}${colors.reset}`, colors.reset);
   log('');
   log('  Press Ctrl+C to stop', colors.gray);
   log('');
@@ -122,7 +123,16 @@ function main() {
   let pythonBackendProcess = null;
 
   if (existsSync(venvPython)) {
-    pythonBackendProcess = spawn(venvPython, ['-m', 'uvicorn', 'backend.server:app', '--reload', '--port', '8000', '--app-dir', 'apps'], {
+    pythonBackendProcess = spawn(venvPython, [
+      '-m',
+      'uvicorn',
+      'backend.server:app',
+      '--reload',
+      '--host',
+      runtimeConfig.api.host,
+      '--port',
+      String(runtimeConfig.api.port),
+    ], {
       cwd: rootDir,
       env,
       shell: true,

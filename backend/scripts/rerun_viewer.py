@@ -11,6 +11,8 @@ import xml.etree.ElementTree as ET
 from typing import Dict, List, Tuple, Optional
 import math
 
+from backend.core.settings import settings
+
 try:
     import rerun as rr
 except ImportError:
@@ -126,8 +128,8 @@ def visualize_episode(
     recording_name: str = "lerobot/episode",
     spawn: bool = True,
     serve: bool = False,
-    web_port: int = 9090,
-    ws_port: int = 9876,
+    web_port: int = settings.rerun_web_port,
+    ws_port: int = settings.rerun_ws_port,
 ):
     """Visualize an episode using Rerun."""
     
@@ -237,7 +239,7 @@ def visualize_episode(
     print(f"Displaying episode data in viewer (not recording new data)")
     
     if serve:
-        print(f"Web viewer: http://127.0.0.1:{web_port}")
+        print(f"Web viewer: http://{settings.rerun_host}:{web_port}")
         print("Press Ctrl+C to stop the server")
         # Keep the script running so the servers stay alive
         try:
@@ -271,8 +273,8 @@ def main():
     parser.add_argument("--spawn", action="store_true", default=True, help="Spawn Rerun viewer (default: True)")
     parser.add_argument("--no-spawn", dest="spawn", action="store_false", help="Don't spawn viewer")
     parser.add_argument("--serve", action="store_true", help="Serve Rerun over WebSocket (distant mode)")
-    parser.add_argument("--web-port", type=int, default=9090, help="Web port for serve mode")
-    parser.add_argument("--ws-port", type=int, default=9876, help="WebSocket port for serve mode")
+    parser.add_argument("--web-port", type=int, default=settings.rerun_web_port, help="Web port for serve mode")
+    parser.add_argument("--ws-port", type=int, default=settings.rerun_ws_port, help="WebSocket port for serve mode")
 
     args = parser.parse_args()
 

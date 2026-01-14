@@ -7,6 +7,7 @@ from backend.api.datasets import router as datasets_router
 from backend.api.health import router as health_router
 from backend.api.pyroki import router as pyroki_router
 from backend.api.rerun import router as rerun_router
+from backend.core.settings import settings
 
 
 def create_app() -> FastAPI:
@@ -14,7 +15,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

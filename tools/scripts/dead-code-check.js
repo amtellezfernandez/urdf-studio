@@ -8,14 +8,14 @@ import * as ts from "typescript";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..", "..");
-const webRoot = path.join(root, "apps", "web");
+const webRoot = path.join(root, "web");
 const srcRoot = path.join(webRoot, "src");
 const entrypoint = path.join(srcRoot, "app", "main.tsx");
 
 const codeExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 const graphExtensions = new Set([...codeExtensions, ".json", ".css"]);
 
-const scanDirs = ["apps", "config", "tools"].map((dir) => path.join(root, dir));
+const scanDirs = ["web", "backend", "config", "tools"].map((dir) => path.join(root, dir));
 const debug = process.env.DEAD_CODE_DEBUG === "1";
 if (debug) {
   const sanityRegex = /import\s+/;
@@ -80,6 +80,7 @@ const extractSpecs = (code) => {
     /new\s+Worker\(\s*new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)\s*\)/g,
     /new\s+SharedWorker\(\s*new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)\s*\)/g,
     /new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g,
+    /@import\s+(?:url\()?['"]([^'"]+)['"]\)?/g,
   ];
 
   for (const pattern of patterns) {
@@ -134,7 +135,8 @@ const collectUnusedFiles = () => {
 
   const edges = new Map();
   for (const file of allFiles) {
-    if (!codeExtensions.has(path.extname(file))) {
+    const ext = path.extname(file);
+    if (!codeExtensions.has(ext) && ext !== ".css") {
       edges.set(path.normalize(file), new Set());
       continue;
     }

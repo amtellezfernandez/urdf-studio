@@ -23,10 +23,10 @@
 
     "baseUrl": "..",
     "paths": {
-      "@/*": ["apps/web/src/*"]
+      "@/*": ["web/src/*"]
     },
     "tsBuildInfoFile": "../node_modules/.cache/tsbuildinfo/app.tsbuildinfo",
     "resolveJsonModule": true
   },
-  "include": ["../apps/web/src"]
+  "include": ["../web/src"]
 }

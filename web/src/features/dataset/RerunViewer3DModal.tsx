@@ -11,11 +11,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { AlertCircle, Loader2, Play, Eye, Monitor, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/shared/config/api";
+import {
+  RERUN_WEB_URL,
+  RERUN_WEB_PORT,
+  RERUN_WS_PORT,
+  RERUN_WS_URL,
+} from "@/shared/config/runtime";
 import type { Episode } from "@/features/dataset";
 
 // Constants
-const RERUN_SERVER_URL = "http://127.0.0.1:9090";
-const RERUN_WS_PORT = 9876;
+const RERUN_SERVER_URL = RERUN_WEB_URL;
 
 interface RerunStartResponse {
   success?: boolean;
@@ -133,7 +138,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
           recording: recording,
           spawn: viewerMode === "spawn",
           serve: viewerMode === "serve",
-          web_port: 9090,
+          web_port: RERUN_WEB_PORT,
           ws_port: RERUN_WS_PORT,
         }),
       });
@@ -353,7 +358,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
                     <p className="font-semibold">Troubleshooting:</p>
                     <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                       <li>Make sure rerun-sdk is installed: <code className="bg-muted px-1 rounded">pip install rerun-sdk</code></li>
-                      <li>Check that the Python script is accessible: <code className="bg-muted px-1 rounded">apps/backend/scripts/rerun_viewer.py</code></li>
+                      <li>Check that the Python script is accessible: <code className="bg-muted px-1 rounded">backend/scripts/rerun_viewer.py</code></li>
                       <li>Try switching to Desktop mode if Web mode fails</li>
                     </ul>
                   </div>
@@ -374,7 +379,7 @@ export const RerunViewer3DModal: React.FC<RerunViewer3DModalProps> = ({
           ) : viewerMode === "serve" && isServerRunning ? (
             <iframe
               ref={iframeRef}
-              src={`${RERUN_SERVER_URL}?url=ws://127.0.0.1:${RERUN_WS_PORT}`}
+              src={`${RERUN_SERVER_URL}?url=${encodeURIComponent(RERUN_WS_URL)}`}
               className="w-full h-full border-0"
               title="Rerun Viewer"
               allow="fullscreen"

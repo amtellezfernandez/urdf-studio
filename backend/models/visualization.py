@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.core.settings import settings
+
 
 class RerunVisualizeRequest(BaseModel):
     episode: Dict[str, Any] = Field(..., description="Episode data as JSON")
@@ -11,8 +13,8 @@ class RerunVisualizeRequest(BaseModel):
     recording: str = Field(default="lerobot/episode_0", description="Recording name")
     spawn: bool = Field(default=False, description="Spawn desktop viewer")
     serve: bool = Field(default=False, description="Serve web viewer")
-    web_port: int = Field(default=9090, description="Web viewer port")
-    ws_port: int = Field(default=9876, description="WebSocket port")
+    web_port: int = Field(default=settings.rerun_web_port, description="Web viewer port")
+    ws_port: int = Field(default=settings.rerun_ws_port, description="WebSocket port")
 
 
 class RerunVisualizeResponse(BaseModel):
