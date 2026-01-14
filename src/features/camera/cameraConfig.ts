@@ -1,4 +1,4 @@
-import { Camera, CameraConfig, CameraConfigFile } from "@/types/camera";
+import { Camera, CameraConfig, CameraConfigFile } from "@/shared/types/camera";
 import jsyaml from "js-yaml";
 
 /**

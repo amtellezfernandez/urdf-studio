@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/features/camera";
-import type { Camera } from "@/types/camera";
+import type { Camera } from "@/shared/types/camera";
 
 type UseExportHandlersParams = {
   vizUrdfContent?: string | null;

@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import type React from "react";
-import { DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "@/components/Sidebar";
-import { DEFAULT_RIGHT_SIDEBAR_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH } from "@/components/JointListSidebar";
-import { DEFAULT_RECORDING_VIEW_HEIGHT, MIN_HEADER_HEIGHT } from "@/pages/index/constants";
+import { DEFAULT_SIDEBAR_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "@/features/layout/Sidebar";
+import { DEFAULT_RIGHT_SIDEBAR_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH } from "@/features/layout/JointListSidebar";
+import { DEFAULT_RECORDING_VIEW_HEIGHT, MIN_HEADER_HEIGHT } from "@/app/pages/index/constants";
 
 export const useLayout = () => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);

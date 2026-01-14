@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { URDFRobot } from "urdf-loader";
-import { applyJointValues } from "@/lib/urdf-joints";
+import { applyJointValues } from "@/shared/lib/urdf-joints";
 
 describe("applyJointValues", () => {
   it("filters non-finite values before applying", () => {

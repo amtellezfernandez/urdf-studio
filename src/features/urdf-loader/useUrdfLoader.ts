@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import type { FileWithPath } from "@/types/file";
+import type { FileWithPath } from "@/shared/types/file";
 import {
   createVizFilename,
   parseJointAxesFromURDF,
@@ -9,8 +9,8 @@ import {
   type JointAxisMap,
   type JointLimits,
 } from "@/features/urdf";
-import { findDeepestLeafLink } from "@/pages/index/utils";
-import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/pages/index/constants";
+import { findDeepestLeafLink } from "@/app/pages/index/utils";
+import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/app/pages/index/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/features/types";
 
 type UseUrdfLoaderOptions = {

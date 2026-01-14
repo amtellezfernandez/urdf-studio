@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useJointStore } from "@/store/useJointStore";
-import { findDeepestLeafLink } from "@/pages/index/utils";
+import { useJointStore } from "@/shared/store/useJointStore";
+import { findDeepestLeafLink } from "@/app/pages/index/utils";
 
 type SelectionContext = {
   vizUrdfContent?: string | null;

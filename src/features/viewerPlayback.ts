@@ -1,6 +1,6 @@
-import type { AnimationFrame } from "@/components/viewer3d/viewer3d-types";
-import { recordPlaybackTrace } from "@/debug/playbackTrace";
-import { useViewerPlaybackStore, type EpisodePlaybackOptions } from "@/store/useViewerPlaybackStore";
+import type { AnimationFrame } from "@/features/viewer3d/viewer3d-types";
+import { recordPlaybackTrace } from "@/shared/debug/playbackTrace";
+import { useViewerPlaybackStore, type EpisodePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
 
 export const viewerPlayback = {
   playAnimation: (forceState?: boolean) => {

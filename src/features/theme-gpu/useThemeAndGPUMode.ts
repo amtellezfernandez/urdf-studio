@@ -1,5 +1,5 @@
-import { useGPUMode } from "@/hooks/use-gpu-mode";
-import { useTheme } from "@/hooks/use-theme";
+import { useGPUMode } from "@/shared/hooks/use-gpu-mode";
+import { useTheme } from "@/shared/hooks/use-theme";
 
 export const useThemeAndGPUMode = () => {
   const theme = useTheme();
