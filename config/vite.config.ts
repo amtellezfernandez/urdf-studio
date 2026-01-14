@@ -17,9 +17,12 @@ export default defineConfig(({ mode }) => ({
     ...(mode === "test" || process.env.VITEST ? { hmr: false, ws: false } : {}),
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  css: {
+    postcss: path.resolve(__dirname, "./postcss.config.js"),
+  },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "../src"),
     },
   },
 }));
