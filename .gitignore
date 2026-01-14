@@ -1,5 +1,6 @@
 node_modules
 .urdf-studio-config.json
+.npmrc
 .venv
 amd-hackathon/
 dist/
