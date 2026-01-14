@@ -48,7 +48,6 @@ export const recordPlaybackTrace = (
     typeof performance !== "undefined" ? performance.now() : Date.now();
   const entry: PlaybackTraceEntry = { type, at: timestamp, payload };
   pushTraceEntry(entry);
-  // eslint-disable-next-line no-console
   console.log("[playback]", entry);
 };
 

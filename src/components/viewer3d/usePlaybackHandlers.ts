@@ -75,7 +75,9 @@ export const usePlaybackHandlers = ({
       animationController,
       robot,
       isPlaying,
+      onFrameChange,
       onPlayingChange,
+      setCurrentFrame,
       setIsPlaying,
     ]
   );
@@ -138,7 +140,14 @@ export const usePlaybackHandlers = ({
     setIsPlaying(false);
     onPlayingChange?.(false);
     animationController.setPaused(true);
-  }, [animationController, onPlayingChange, animationFrames, onFrameChange, setIsPlaying]);
+  }, [
+    animationController,
+    onPlayingChange,
+    animationFrames,
+    onFrameChange,
+    setCurrentFrame,
+    setIsPlaying,
+  ]);
 
   const handleClearAnimation = useCallback(() => {
     setIsPlaying(false);
