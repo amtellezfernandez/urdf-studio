@@ -44,6 +44,8 @@ export const IKDragControls = ({
   const targetPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const targetQuaternionRef = useRef<THREE.Quaternion>(new THREE.Quaternion());
   const targetScaleRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const activePointerIdRef = useRef<number | null>(null);
+  const intersectionRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // Debug initial props
   useEffect(() => {
@@ -194,6 +196,61 @@ export const IKDragControls = ({
     [urdfContent, endEffectorLink, onIkSolved]
   );
 
+  const updateDragTarget = useCallback(
+    (clientX: number, clientY: number, applyOffset: boolean = true) => {
+      if (!targetMeshRef.current) return false;
+
+      const rect = gl.domElement.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+
+      if (!raycaster.ray.intersectPlane(dragPlaneRef.current, intersectionRef.current)) {
+        return false;
+      }
+
+      if (!applyOffset) {
+        return true;
+      }
+
+      intersectionRef.current.add(dragOffsetRef.current);
+      targetMeshRef.current.position.copy(intersectionRef.current);
+
+      pendingTargetRef.current = {
+        position: targetMeshRef.current.position.clone(),
+        quaternion: targetMeshRef.current.quaternion.clone(),
+      };
+      return true;
+    },
+    [camera, gl, raycaster]
+  );
+
+  const endDrag = useCallback(
+    (pointerId?: number) => {
+      if (pointerId !== undefined && activePointerIdRef.current !== null) {
+        if (pointerId !== activePointerIdRef.current) return;
+      }
+
+      if (pointerId !== undefined) {
+        const domElement = gl.domElement as Element & {
+          releasePointerCapture?: (id: number) => void;
+        };
+        if (domElement?.releasePointerCapture) {
+          try {
+            domElement.releasePointerCapture(pointerId);
+          } catch {
+            // Ignore release failures for browsers that reject stale captures.
+          }
+        }
+      }
+
+      activePointerIdRef.current = null;
+      setIsDragging(false);
+      onDragStateChange?.(false);
+    },
+    [gl, onDragStateChange]
+  );
+
   // Pointer event handlers for direct dragging
   const handlePointerDown = useCallback(
     (event: ThreeEvent<PointerEvent>) => {
@@ -202,11 +259,16 @@ export const IKDragControls = ({
       }
 
       event.stopPropagation();
-      const target = event.target;
-      if (target instanceof Element && "setPointerCapture" in target) {
-        (target as Element & { setPointerCapture: (id: number) => void }).setPointerCapture(
-          event.pointerId
-        );
+      activePointerIdRef.current = event.pointerId;
+      const domElement = gl.domElement as Element & {
+        setPointerCapture?: (id: number) => void;
+      };
+      if (domElement?.setPointerCapture) {
+        try {
+          domElement.setPointerCapture(event.pointerId);
+        } catch {
+          // Ignore capture failures; we'll still listen globally.
+        }
       }
 
       setIsDragging(true);
@@ -220,20 +282,16 @@ export const IKDragControls = ({
         targetMeshRef.current.position
       );
 
-      // Update raycaster with current pointer position
-      const rect = gl.domElement.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-
-      // Calculate offset from plane intersection to sphere center
-      const intersection = new THREE.Vector3();
-      raycaster.ray.intersectPlane(dragPlaneRef.current, intersection);
-      if (intersection) {
-        dragOffsetRef.current.subVectors(targetMeshRef.current.position, intersection);
+      const hasIntersection = updateDragTarget(event.clientX, event.clientY, false);
+      if (!hasIntersection) {
+        return;
       }
+      dragOffsetRef.current.subVectors(
+        targetMeshRef.current.position,
+        intersectionRef.current
+      );
     },
-    [enabled, camera, gl, raycaster, onDragStateChange]
+    [enabled, camera, gl, onDragStateChange, updateDragTarget]
   );
 
   const handlePointerMove = useCallback(
@@ -241,28 +299,9 @@ export const IKDragControls = ({
       if (!isDragging || !targetMeshRef.current) return;
 
       event.stopPropagation();
-
-      // Update raycaster with current pointer position
-      const rect = gl.domElement.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-
-      // Find intersection with drag plane
-      const intersection = new THREE.Vector3();
-      if (raycaster.ray.intersectPlane(dragPlaneRef.current, intersection)) {
-        // Apply offset and update position
-        intersection.add(dragOffsetRef.current);
-        targetMeshRef.current.position.copy(intersection);
-
-        // Queue for IK solving
-        pendingTargetRef.current = {
-          position: targetMeshRef.current.position.clone(),
-          quaternion: targetMeshRef.current.quaternion.clone(),
-        };
-      }
+      updateDragTarget(event.clientX, event.clientY);
     },
-    [isDragging, camera, gl, raycaster]
+    [isDragging, updateDragTarget]
   );
 
   const handlePointerUp = useCallback(
@@ -270,18 +309,42 @@ export const IKDragControls = ({
       if (!isDragging) return;
 
       event.stopPropagation();
-      const target = event.target;
-      if (target instanceof Element && "releasePointerCapture" in target) {
-        (target as Element & { releasePointerCapture: (id: number) => void }).releasePointerCapture(
-          event.pointerId
-        );
-      }
-
-      setIsDragging(false);
-      onDragStateChange?.(false);
+      endDrag(event.pointerId);
     },
-    [isDragging, onDragStateChange]
+    [isDragging, endDrag]
   );
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleWindowPointerMove = (event: PointerEvent) => {
+      if (
+        activePointerIdRef.current !== null &&
+        event.pointerId !== activePointerIdRef.current
+      ) {
+        return;
+      }
+      updateDragTarget(event.clientX, event.clientY);
+    };
+
+    const handleWindowPointerUp = (event: PointerEvent) => {
+      endDrag(event.pointerId);
+    };
+
+    const handleWindowPointerCancel = (event: PointerEvent) => {
+      endDrag(event.pointerId);
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerCancel);
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerCancel);
+    };
+  }, [isDragging, endDrag, updateDragTarget]);
 
   // Use frame loop to throttle IK calls during dragging
   useFrame(() => {
@@ -324,11 +387,15 @@ export const IKDragControls = ({
   // If controls become disabled, ensure dragging flag is cleared
   useEffect(() => {
     if (!enabled) {
-      setIsDragging(false);
+      if (activePointerIdRef.current !== null) {
+        endDrag(activePointerIdRef.current);
+      } else {
+        setIsDragging(false);
+        onDragStateChange?.(false);
+      }
       setIsHovered(false);
-      onDragStateChange?.(false);
     }
-  }, [enabled, onDragStateChange]);
+  }, [enabled, endDrag, onDragStateChange]);
 
   if (!enabled || !endEffectorObject.current) {
     return null;
