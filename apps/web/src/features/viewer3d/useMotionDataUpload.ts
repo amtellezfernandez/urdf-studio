@@ -1,7 +1,7 @@
 import { useCallback, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
-import { parseEpisodeCsv, parseEpisodeJson } from "@/features/dataset";
+import { parseEpisodeTextAsync } from "@/features/dataset";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
 import { resolveJointScalarValue } from "@/features/viewer3d/viewer3d-helpers";
 import type { AnimationFrame } from "@/features/viewer3d/viewer3d-types";
@@ -26,34 +26,34 @@ export const useMotionDataUpload = ({
   const parseMotionDataFile = useCallback(
     (file: File) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const content = e.target?.result as string;
         let sourceFrames:
           | { timestamp: number; joints: Record<string, number> }[]
           | undefined;
         let jointOrder: string[] | undefined;
 
-        const jsonResult = parseEpisodeJson(content);
-        if (jsonResult.episodes && jsonResult.episodes.length > 0) {
-          const episode = jsonResult.episodes[0];
+        const parseResult = await parseEpisodeTextAsync(content);
+        if (parseResult.error) {
+          toast.error(parseResult.error);
+          return;
+        }
+
+        if (parseResult.episodes && parseResult.episodes.length > 0) {
+          const episode = parseResult.episodes[0];
           sourceFrames = episode.frames;
           jointOrder = episode.jointOrder;
-          if (jsonResult.episodes.length > 1) {
+          if (parseResult.episodes.length > 1) {
             toast.info(
-              `Found ${jsonResult.episodes.length} episodes in file; loading the first one`
+              `Found ${parseResult.episodes.length} episodes in file; loading the first one`
             );
           }
-        } else if (jsonResult.frames) {
-          sourceFrames = jsonResult.frames;
-          jointOrder = jsonResult.jointOrder;
+        } else if (parseResult.frames) {
+          sourceFrames = parseResult.frames;
+          jointOrder = parseResult.jointOrder;
         } else {
-          const csvResult = parseEpisodeCsv(content);
-          if (!csvResult.frames) {
-            toast.error(jsonResult.error ?? csvResult.error ?? "Invalid motion data format");
-            return;
-          }
-          sourceFrames = csvResult.frames;
-          jointOrder = csvResult.jointOrder;
+          toast.error("Invalid motion data format");
+          return;
         }
 
         if (!sourceFrames || sourceFrames.length === 0) {

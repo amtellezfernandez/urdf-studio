@@ -1,7 +1,5 @@
 import type React from "react";
-import { Viewer3D } from "@/features/viewer3d/Viewer3D";
-import { URDFComparison } from "@/features/urdf/URDFComparison";
-import { EpisodeViewer3DModal } from "@/features/dataset/EpisodeViewer3DModal";
+import { Suspense, lazy } from "react";
 import type { MeshFiles, UrdfViewMode, ViewerEpisode } from "@/features/types";
 import { viewerPlayback } from "@/features/viewerPlayback";
 import type { URDFRobot } from "urdf-loader";
@@ -9,6 +7,18 @@ import type * as THREE from "three";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
 import { VIEWER_RESIZER_HEIGHT } from "@/app/pages/index/constants";
+
+const Viewer3D = lazy(() =>
+  import("@/features/viewer3d/Viewer3D").then((module) => ({ default: module.Viewer3D }))
+);
+const URDFComparison = lazy(() =>
+  import("@/features/urdf/URDFComparison").then((module) => ({ default: module.URDFComparison }))
+);
+const EpisodeViewer3DModal = lazy(() =>
+  import("@/features/dataset/EpisodeViewer3DModal").then((module) => ({
+    default: module.EpisodeViewer3DModal,
+  }))
+);
 
 type ViewerLayoutProps = {
   isSidebarCollapsed: boolean;
@@ -145,76 +155,86 @@ export const ViewerLayout = ({
           <div className="flex flex-col h-full">
             {/* Simulation in top half */}
             <div className="flex-1 min-h-0 border-b border-border/20">
-              <Viewer3D key={viewerKey} {...viewerProps} />
+              <Suspense fallback={<div className="h-full w-full bg-background" />}>
+                <Viewer3D key={viewerKey} {...viewerProps} />
+              </Suspense>
             </div>
             {/* Editor in bottom half */}
             <div className="flex-1 min-h-0">
-              <URDFComparison
-                originalUrdf={originalUrdfContent}
-                vizUrdf={vizUrdfContent}
-                isOpen={true}
-                onClose={() => setShowUrdfEditor(false)}
-                onVizUrdfChange={handleVizUrdfChange}
-                getExportUrdf={getExportUrdfContent}
-                meshFiles={meshFiles}
-                githubToken={
-                  typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null
-                }
-                inline={true}
-                splitView={true}
-                onSplitViewToggle={setUrdfEditorSplitView}
-                selectedView={urdfViewMode}
-                onSelectedViewChange={setUrdfViewMode}
-              />
+              <Suspense fallback={<div className="h-full w-full bg-background" />}>
+                <URDFComparison
+                  originalUrdf={originalUrdfContent}
+                  vizUrdf={vizUrdfContent}
+                  isOpen={true}
+                  onClose={() => setShowUrdfEditor(false)}
+                  onVizUrdfChange={handleVizUrdfChange}
+                  getExportUrdf={getExportUrdfContent}
+                  meshFiles={meshFiles}
+                  githubToken={
+                    typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null
+                  }
+                  inline={true}
+                  splitView={true}
+                  onSplitViewToggle={setUrdfEditorSplitView}
+                  selectedView={urdfViewMode}
+                  onSelectedViewChange={setUrdfViewMode}
+                />
+              </Suspense>
             </div>
           </div>
         ) : showUrdfEditor ? (
           <div className="flex flex-col h-full">
             {/* Simulation in top half */}
             <div className="flex-1 min-h-0 border-b border-border/20">
-              <Viewer3D key={viewerKey} {...viewerProps} />
+              <Suspense fallback={<div className="h-full w-full bg-background" />}>
+                <Viewer3D key={viewerKey} {...viewerProps} />
+              </Suspense>
             </div>
             {/* Editor in bottom half */}
             <div className="flex-1 min-h-0">
-              <URDFComparison
-                originalUrdf={originalUrdfContent}
-                vizUrdf={vizUrdfContent}
-                isOpen={true}
-                onClose={() => setShowUrdfEditor(false)}
-                onVizUrdfChange={handleVizUrdfChange}
-                getExportUrdf={getExportUrdfContent}
-                meshFiles={meshFiles}
-                githubToken={
-                  typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null
-                }
-                inline={true}
-                splitView={true}
-                onSplitViewToggle={setUrdfEditorSplitView}
-                selectedView={urdfViewMode}
-                onSelectedViewChange={setUrdfViewMode}
-              />
+              <Suspense fallback={<div className="h-full w-full bg-background" />}>
+                <URDFComparison
+                  originalUrdf={originalUrdfContent}
+                  vizUrdf={vizUrdfContent}
+                  isOpen={true}
+                  onClose={() => setShowUrdfEditor(false)}
+                  onVizUrdfChange={handleVizUrdfChange}
+                  getExportUrdf={getExportUrdfContent}
+                  meshFiles={meshFiles}
+                  githubToken={
+                    typeof window !== "undefined" ? import.meta.env.VITE_GITHUB_TOKEN || null : null
+                  }
+                  inline={true}
+                  splitView={true}
+                  onSplitViewToggle={setUrdfEditorSplitView}
+                  selectedView={urdfViewMode}
+                  onSelectedViewChange={setUrdfViewMode}
+                />
+              </Suspense>
             </div>
           </div>
         ) : showUrdfEditor ? (
-          <URDFComparison
-            originalUrdf={originalUrdfContent}
-            vizUrdf={vizUrdfContent}
-            isOpen={true}
-            onClose={() => setShowUrdfEditor(false)}
-            onVizUrdfChange={handleVizUrdfChange}
-            getExportUrdf={getExportUrdfContent}
-            meshFiles={meshFiles}
-            selectedView={urdfViewMode}
-            onSelectedViewChange={setUrdfViewMode}
-            githubToken={
-              typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN
-                ? import.meta.env.VITE_GITHUB_TOKEN
-                : null
-            }
-            inline={true}
-            splitView={false}
-            onSplitViewToggle={setUrdfEditorSplitView}
-          />
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <URDFComparison
+              originalUrdf={originalUrdfContent}
+              vizUrdf={vizUrdfContent}
+              isOpen={true}
+              onClose={() => setShowUrdfEditor(false)}
+              onVizUrdfChange={handleVizUrdfChange}
+              getExportUrdf={getExportUrdfContent}
+              meshFiles={meshFiles}
+              selectedView={urdfViewMode}
+              onSelectedViewChange={setUrdfViewMode}
+              githubToken={
+                typeof window !== "undefined" && import.meta.env.VITE_GITHUB_TOKEN
+                  ? import.meta.env.VITE_GITHUB_TOKEN
+                  : null
+              }
+              inline={true}
+              splitView={false}
+              onSplitViewToggle={setUrdfEditorSplitView}
+            />
+          </Suspense>
         ) : (
           <div className="flex flex-col h-full">
             {/* 3D Viewer in top half */}
@@ -222,7 +242,9 @@ export const ViewerLayout = ({
               className="min-h-0 border-b border-border/20"
               style={{ flex: `0 0 ${(1 - recordingViewHeight) * 100}%` }}
             >
-              <Viewer3D key={viewerKey} {...viewerProps} />
+              <Suspense fallback={<div className="h-full w-full bg-background" />}>
+                <Viewer3D key={viewerKey} {...viewerProps} />
+              </Suspense>
             </div>
             {/* Vertical Resizer - always visible */}
             <div
@@ -243,24 +265,26 @@ export const ViewerLayout = ({
               }}
             >
               {viewerEpisode ? (
-                <EpisodeViewer3DModal
-                  episode={viewerEpisode}
-                  open={true}
-                  onOpenChange={(open) => {
-                    // Don't allow closing - always keep it open
-                    if (!open) {
-                      onViewerOpenChange?.(true);
-                    }
-                  }}
-                  inline={true}
-                  globalCurrentFrame={currentFrame}
-                  onSetGlobalFrame={(frame: number) => {
-                    viewerPlayback.setFrame(frame);
-                    setCurrentFrame(frame);
-                  }}
-                  showOnlyHeader={recordingViewHeight <= 0.08}
-                  onSaveEpisode={episodeSaveHandler}
-                />
+                <Suspense fallback={<div className="flex-1 min-h-0 bg-background" />}>
+                  <EpisodeViewer3DModal
+                    episode={viewerEpisode}
+                    open={true}
+                    onOpenChange={(open) => {
+                      // Don't allow closing - always keep it open
+                      if (!open) {
+                        onViewerOpenChange?.(true);
+                      }
+                    }}
+                    inline={true}
+                    globalCurrentFrame={currentFrame}
+                    onSetGlobalFrame={(frame: number) => {
+                      viewerPlayback.setFrame(frame);
+                      setCurrentFrame(frame);
+                    }}
+                    showOnlyHeader={recordingViewHeight <= 0.08}
+                    onSaveEpisode={episodeSaveHandler}
+                  />
+                </Suspense>
               ) : (
                 <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
                   <div className="flex flex-col items-center gap-3 text-center px-6">

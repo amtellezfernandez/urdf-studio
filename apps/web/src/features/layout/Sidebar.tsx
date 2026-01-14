@@ -21,8 +21,7 @@ import { type CollisionVisibility } from "@/features/urdf/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { cn } from "@/shared/lib/utils";
 import {
-  parseEpisodeCsv,
-  parseEpisodeJson,
+  parseEpisodeTextAsync,
   serializeEpisodeJson,
   serializeEpisodeCollectionJson,
   type EpisodeJsonEpisode,
@@ -1618,51 +1617,36 @@ export const Sidebar = ({
             ? new Set(getSortedJointList(availableJointsStore))
             : undefined;
 
-        const jsonResult = parseEpisodeJson(text, {
+        const parseResult = await parseEpisodeTextAsync(text, {
           allowedJoints,
         });
 
+        if (parseResult.error) {
+          toast.error(parseResult.error);
+          return false;
+        }
+
         const episodesToAdd: EpisodeJsonEpisode[] = [];
 
-        if (jsonResult.episodes && jsonResult.episodes.length > 0) {
-          episodesToAdd.push(...jsonResult.episodes);
-        } else if (jsonResult.frames) {
+        if (parseResult.episodes && parseResult.episodes.length > 0) {
+          episodesToAdd.push(...parseResult.episodes);
+        } else if (parseResult.frames) {
           episodesToAdd.push({
-            frames: jsonResult.frames,
+            frames: parseResult.frames,
             jointOrder:
-              jsonResult.jointOrder ??
+              parseResult.jointOrder ??
               Array.from(
                 new Set(
-                  jsonResult.frames.flatMap((frame) =>
+                  parseResult.frames.flatMap((frame) =>
                     Object.keys(frame.joints)
                   )
                 )
               ),
-            metadata: jsonResult.metadata,
+            metadata: parseResult.metadata,
           });
         } else {
-          const csvResult = parseEpisodeCsv(text, {
-            allowedJoints,
-          });
-          if (!csvResult.frames) {
-            toast.error(
-              jsonResult.error ?? csvResult.error ?? "Failed to parse animation data file"
-            );
-            return false;
-          }
-
-          episodesToAdd.push({
-            frames: csvResult.frames,
-            jointOrder:
-              csvResult.jointOrder ??
-              Array.from(
-                new Set(
-                  csvResult.frames.flatMap((frame) =>
-                    Object.keys(frame.joints)
-                  )
-                )
-              ),
-          });
+          toast.error("Failed to parse animation data file");
+          return false;
         }
 
         let totalFramesLoaded = 0;
