@@ -85,23 +85,3 @@ export function prettyPrintURDF(urdfContent: string, indentSize: number = 2): st
 
   return formatted;
 }
-
-/**
- * Minifies URDF content by removing unnecessary whitespace
- *
- * @param urdfContent - URDF XML content as string
- * @returns Minified URDF without extra whitespace
- */
-export function minifyURDF(urdfContent: string): string {
-  const parsed = parseURDF(urdfContent);
-
-  if (!parsed.isValid) {
-    console.error("Cannot minify: Invalid URDF");
-    return urdfContent;
-  }
-
-  const serialized = serializeURDF(parsed.document);
-
-  // Remove newlines and extra spaces between tags
-  return serialized.replace(/>\s+</g, "><").trim();
-}

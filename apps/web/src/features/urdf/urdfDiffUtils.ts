@@ -1,14 +1,14 @@
 import { canonicalOrderURDF } from "./canonicalOrdering";
 import { prettyPrintURDF } from "./prettyPrintURDF";
 
-export interface UrdfComparisonResult {
+interface UrdfComparisonResult {
   normalizedOriginal: string;
   normalizedModified: string;
   areEqual: boolean;
   differenceCount: number;
 }
 
-export const normalizeUrdfForDiff = (content: string): string => {
+const normalizeUrdfForDiff = (content: string): string => {
   if (!content.trim()) return "";
 
   try {

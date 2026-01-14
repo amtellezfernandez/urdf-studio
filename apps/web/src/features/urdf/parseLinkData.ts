@@ -2,7 +2,7 @@
  * Parses all visual, collision, and inertial elements from a link
  */
 
-export interface GeometryData {
+interface GeometryData {
   type: "box" | "sphere" | "cylinder" | "mesh" | null;
   params: Record<string, string>;
 }
@@ -219,38 +219,6 @@ function parseLinkDataFromElement(link: Element, xmlDoc: Document): LinkData | n
     collisions,
     inertial,
   };
-}
-
-export function parseLinksData(urdfContent: string): LinkData[] {
-  try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
-
-    const parserError = xmlDoc.querySelector("parsererror");
-    if (parserError) {
-      return [];
-    }
-
-    const robot = xmlDoc.querySelector("robot");
-    if (!robot) {
-      return [];
-    }
-
-    const linkElements = xmlDoc.querySelectorAll("link");
-    const linkData: LinkData[] = [];
-
-    linkElements.forEach((link) => {
-      const data = parseLinkDataFromElement(link, xmlDoc);
-      if (data) {
-        linkData.push(data);
-      }
-    });
-
-    return linkData;
-  } catch (error) {
-    console.error("Error parsing link data:", error);
-    return [];
-  }
 }
 
 export function parseLinkData(urdfContent: string, linkName: string): LinkData | null {

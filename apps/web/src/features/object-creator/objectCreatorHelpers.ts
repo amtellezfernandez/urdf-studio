@@ -16,13 +16,6 @@ export const getDefaultSize = (type: ObjectCreatorType): THREE.Vector3 => {
   return new THREE.Vector3(size, size, size);
 };
 
-export const getDefaultOrbitParams = () => ({
-  orbitRadius: DEFAULT_ORBIT_RADIUS,
-  orbitInclination: DEFAULT_ORBIT_INCLINATION,
-  orbitPhase: DEFAULT_ORBIT_PHASE,
-  orbitOffset: DEFAULT_ORBIT_OFFSET,
-});
-
 export const suggestPositionFromBoundingBox = (robotBoundingBox?: THREE.Box3 | null) => {
   if (!robotBoundingBox || robotBoundingBox.isEmpty()) {
     return { x: 0.5, y: 0.5, z: 0.5 };
@@ -42,4 +35,3 @@ export const suggestPositionFromBoundingBox = (robotBoundingBox?: THREE.Box3 | n
     z: parseFloat(robotCenter.z.toFixed(3)),
   };
 };
-

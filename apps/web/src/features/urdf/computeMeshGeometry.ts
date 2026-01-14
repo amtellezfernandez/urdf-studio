@@ -16,27 +16,11 @@ export interface MeshBounds {
 
 const meshBoundsCache = createLruCache<MeshBounds>(16);
 
-export interface PCAResult {
+interface PCAResult {
   axis: [number, number, number];
   eigenvalues: [number, number, number];
   eigenvectors: [[number, number, number], [number, number, number], [number, number, number]];
   centroid: [number, number, number];
-}
-
-/**
- * Loads and computes bounds from a mesh file
- */
-export async function computeMeshBounds(
-  meshFile: Blob,
-  scale: string = "1 1 1"
-): Promise<MeshBounds | null> {
-  try {
-    const arrayBuffer = await meshFile.arrayBuffer();
-    return computeMeshBoundsFromArrayBuffer(arrayBuffer, scale);
-  } catch (error) {
-    console.error("Error computing mesh bounds:", error);
-    return null;
-  }
 }
 
 export function computeMeshBoundsFromArrayBuffer(
@@ -106,45 +90,9 @@ export function computeMeshBoundsFromArrayBuffer(
 
 
 /**
- * Combines multiple mesh bounds into a single bounding box
- * This handles links with multiple visual meshes
- */
-export function combineMeshBounds(boundsArray: MeshBounds[]): MeshBounds | null {
-  if (boundsArray.length === 0) return null;
-  if (boundsArray.length === 1) return boundsArray[0];
-
-  // Find overall min/max across all meshes
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-  const allVertices: number[] = [];
-
-  for (const bounds of boundsArray) {
-    minX = Math.min(minX, bounds.min[0]);
-    minY = Math.min(minY, bounds.min[1]);
-    minZ = Math.min(minZ, bounds.min[2]);
-    maxX = Math.max(maxX, bounds.max[0]);
-    maxY = Math.max(maxY, bounds.max[1]);
-    maxZ = Math.max(maxZ, bounds.max[2]);
-    
-    // Collect all vertices for PCA calculation
-    for (let i = 0; i < bounds.vertices.length; i++) {
-      allVertices.push(bounds.vertices[i]);
-    }
-  }
-
-  return {
-    min: [minX, minY, minZ],
-    max: [maxX, maxY, maxZ],
-    size: [maxX - minX, maxY - minY, maxZ - minZ],
-    center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
-    vertices: new Float32Array(allVertices),
-  };
-}
-
-/**
  * Compute cylinder diagnostics from mesh vertices
  */
-export interface CylinderDiagnostics {
+interface CylinderDiagnostics {
   elongation: number;      // λ₁ / λ₂
   roundness: number;        // λ₂ / λ₃
   outlierRatio: number;     // r_max / r_p95
@@ -158,7 +106,7 @@ export interface CylinderDiagnostics {
 /**
  * Compute sphere diagnostics from mesh vertices
  */
-export interface SphereDiagnostics {
+interface SphereDiagnostics {
   elongation: number;      // λ₁ / λ₂
   flatness: number;        // λ₂ / λ₃
   isIsotropic: boolean;     // elongation < 2 and flatness < 2

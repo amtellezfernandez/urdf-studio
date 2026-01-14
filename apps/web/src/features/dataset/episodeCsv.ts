@@ -8,7 +8,7 @@ export interface EpisodeCsvParseOptions {
   allowedJoints?: Iterable<string>;
 }
 
-export interface EpisodeCsvParseResult {
+interface EpisodeCsvParseResult {
   frames?: EpisodeFrame[];
   jointOrder?: string[];
   error?: string;
@@ -25,18 +25,6 @@ const headerToJointName = (header: string) => {
     return match[1].trim();
   }
   return cleaned;
-};
-
-export const serializeEpisodeCsv = (frames: EpisodeFrame[], jointOrder: string[]) => {
-  const headers = [TIMESTAMP_HEADER, ...jointOrder.map((joint) => `joint${joint}`)];
-  const rows = [headers.join(",")];
-
-  for (const frame of frames) {
-    const rowValues = [frame.timestamp, ...jointOrder.map((joint) => frame.joints[joint] ?? 0)];
-    rows.push(rowValues.join(","));
-  }
-
-  return rows.join("\n");
 };
 
 export const parseEpisodeCsv = (rawText: string, options: EpisodeCsvParseOptions = {}): EpisodeCsvParseResult => {

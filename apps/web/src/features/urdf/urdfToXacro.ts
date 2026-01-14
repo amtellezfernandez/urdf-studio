@@ -746,11 +746,3 @@ function formatXacroOutput(xml: string): string {
 
   return result.join("\n");
 }
-
-/**
- * Simple wrapper that returns only the Xacro content
- */
-export function convertURDFToXacroSimple(urdfContent: string): string {
-  const result = convertURDFToXacro(urdfContent);
-  return result.xacroContent;
-}

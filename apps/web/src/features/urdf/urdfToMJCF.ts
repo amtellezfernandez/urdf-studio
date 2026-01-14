@@ -717,11 +717,3 @@ export function convertURDFToMJCF(urdfContent: string): MJCFConversionResult {
 
   return result;
 }
-
-/**
- * Simple wrapper that returns only the MJCF content
- */
-export function convertURDFToMJCFSimple(urdfContent: string): string {
-  const result = convertURDFToMJCF(urdfContent);
-  return result.mjcfContent;
-}

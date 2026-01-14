@@ -201,14 +201,14 @@ const collectUnusedExports = () => {
 
   const exportInfo = new Map();
   const usageInfo = new Map();
+  const exportAllTargets = new Map();
 
   const ensureUsage = (filePath) => {
     const normalized = path.normalize(filePath);
     if (!usageInfo.has(normalized)) {
       usageInfo.set(normalized, {
         used: new Set(),
-        hasNamespaceImport: false,
-        hasExportAll: false,
+        allUsed: false,
       });
     }
     return usageInfo.get(normalized);
@@ -225,15 +225,17 @@ const collectUnusedExports = () => {
     exportInfo.get(normalized).named.add(name);
   };
 
-  const markExportAll = (filePath) => {
+  const markAllUsed = (filePath) => {
+    const usage = ensureUsage(filePath);
+    usage.allUsed = true;
+  };
+
+  const addExportAllTarget = (filePath, target) => {
     const normalized = path.normalize(filePath);
-    if (!exportInfo.has(normalized)) {
-      exportInfo.set(normalized, {
-        named: new Set(),
-        hasExportAll: false,
-      });
+    if (!exportAllTargets.has(normalized)) {
+      exportAllTargets.set(normalized, new Set());
     }
-    exportInfo.get(normalized).hasExportAll = true;
+    exportAllTargets.get(normalized).add(path.normalize(target));
   };
 
   for (const file of allCodeFiles) {
@@ -246,7 +248,7 @@ const collectUnusedExports = () => {
           const clause = node.importClause;
           if (clause?.namedBindings) {
             if (ts.isNamespaceImport(clause.namedBindings)) {
-              usage.hasNamespaceImport = true;
+              usage.allUsed = true;
             } else if (ts.isNamedImports(clause.namedBindings)) {
               for (const element of clause.namedBindings.elements) {
                 const name = (element.propertyName ?? element.name).text;
@@ -257,13 +259,22 @@ const collectUnusedExports = () => {
         }
       }
 
-      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-        const [arg] = node.arguments;
-        if (arg && ts.isStringLiteral(arg)) {
-          const target = resolveSpec(arg.text, file);
-          if (target) {
-            const usage = ensureUsage(target);
-            usage.hasExportAll = true;
+      if (ts.isCallExpression(node)) {
+        if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+          const [arg] = node.arguments;
+          if (arg && ts.isStringLiteral(arg)) {
+            const target = resolveSpec(arg.text, file);
+            if (target) {
+              markAllUsed(target);
+            }
+          }
+        } else if (ts.isIdentifier(node.expression) && node.expression.text === "require") {
+          const [arg] = node.arguments;
+          if (arg && ts.isStringLiteral(arg)) {
+            const target = resolveSpec(arg.text, file);
+            if (target) {
+              markAllUsed(target);
+            }
           }
         }
       }
@@ -271,10 +282,10 @@ const collectUnusedExports = () => {
       if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
         const target = resolveSpec(node.moduleSpecifier.text, file);
         if (target) {
-          const usage = ensureUsage(target);
           if (!node.exportClause) {
-            usage.hasExportAll = true;
+            addExportAllTarget(file, target);
           } else if (ts.isNamedExports(node.exportClause)) {
+            const usage = ensureUsage(target);
             for (const element of node.exportClause.elements) {
               const name = (element.propertyName ?? element.name).text;
               usage.used.add(name);
@@ -293,10 +304,6 @@ const collectUnusedExports = () => {
     const source = parseSourceFile(file);
     ts.forEachChild(source, (node) => {
       if (ts.isExportDeclaration(node)) {
-        if (!node.exportClause && node.moduleSpecifier) {
-          markExportAll(file);
-          return;
-        }
         if (node.exportClause && ts.isNamedExports(node.exportClause)) {
           for (const element of node.exportClause.elements) {
             addExport(file, element.name.text);
@@ -327,17 +334,66 @@ const collectUnusedExports = () => {
     });
   }
 
+  const usedByFile = new Map();
+  const allUsedByFile = new Set();
+
+  for (const [filePath, usage] of usageInfo.entries()) {
+    if (usage.allUsed) {
+      allUsedByFile.add(filePath);
+    }
+    if (usage.used.size) {
+      usedByFile.set(filePath, new Set(usage.used));
+    }
+  }
+
+  const getUsedSet = (filePath) => {
+    const normalized = path.normalize(filePath);
+    if (!usedByFile.has(normalized)) {
+      usedByFile.set(normalized, new Set());
+    }
+    return usedByFile.get(normalized);
+  };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [sourceFile, targets] of exportAllTargets.entries()) {
+      const sourceAllUsed = allUsedByFile.has(sourceFile);
+      const sourceUsed = getUsedSet(sourceFile);
+      for (const target of targets) {
+        const targetExports = exportInfo.get(target)?.named;
+        if (!targetExports || targetExports.size === 0) {
+          continue;
+        }
+
+        if (sourceAllUsed) {
+          if (!allUsedByFile.has(target)) {
+            allUsedByFile.add(target);
+            changed = true;
+          }
+          continue;
+        }
+
+        const targetUsed = getUsedSet(target);
+        for (const name of sourceUsed) {
+          if (targetExports.has(name) && !targetUsed.has(name)) {
+            targetUsed.add(name);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
   const unusedExports = [];
   for (const [filePath, exports] of exportInfo.entries()) {
-    if (exports.hasExportAll) continue;
     if (exports.named.size === 0) continue;
 
-    const usage = usageInfo.get(filePath);
-    if (usage?.hasNamespaceImport || usage?.hasExportAll) {
+    if (allUsedByFile.has(filePath)) {
       continue;
     }
 
-    const used = usage ? usage.used : new Set();
+    const used = usedByFile.get(filePath) ?? new Set();
     const unused = [...exports.named].filter((name) => !used.has(name));
     if (unused.length) {
       unusedExports.push({

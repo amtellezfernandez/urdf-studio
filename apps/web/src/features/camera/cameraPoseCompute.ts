@@ -12,12 +12,12 @@
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 
-export interface CameraPoseConfig {
+interface CameraPoseConfig {
   xyz: [number, number, number];
   rpy: [number, number, number]; // In radians
 }
 
-export interface AutoComputeOptions {
+interface AutoComputeOptions {
   marginForward?: number; // Distance in front of the link (meters)
   marginUp?: number; // Height above link center (meters)
   marginRight?: number; // Offset to the right (meters)
@@ -101,7 +101,7 @@ export function computeLinkBoundingBox(robot: URDFRobot | null, linkName: string
  * @param options - Margin offsets (unused, kept for compatibility)
  * @returns Camera pose in parent link's coordinate frame
  */
-export function autoComputeCameraPose(
+function autoComputeCameraPose(
   robot: URDFRobot | null,
   parentLink: string,
   options: AutoComputeOptions = {},
@@ -155,14 +155,3 @@ export function autoComputeCameraPoseDefault(robot: URDFRobot | null, parentLink
 /**
  * Convert pose to YAML-compatible array format [x, y, z, roll, pitch, yaw]
  */
-export function poseToArray(pose: CameraPoseConfig): number[] {
-  return [...pose.xyz, ...pose.rpy];
-}
-
-/**
- * Format pose for display (with units and degree conversion)
- */
-export function formatPoseForDisplay(pose: CameraPoseConfig): string {
-  const radToDeg = (rad: number) => ((rad * 180) / Math.PI).toFixed(1);
-  return `Position: [${pose.xyz.map((v) => v.toFixed(3)).join(", ")}] m\n` + `Rotation: [${pose.rpy.map(radToDeg).join(", ")}] deg`;
-}

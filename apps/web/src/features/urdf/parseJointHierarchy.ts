@@ -13,7 +13,7 @@ export interface JointHierarchyNode {
   parentJoint?: string; // Name of parent joint
 }
 
-export interface JointHierarchy {
+interface JointHierarchy {
   rootJoints: JointHierarchyNode[];
   allJoints: Map<string, JointHierarchyNode>;
   orderedJoints: JointHierarchyNode[]; // All joints in URDF order
@@ -159,4 +159,3 @@ export function parseJointHierarchy(urdfContent: string): JointHierarchy {
   
   return { rootJoints, allJoints, orderedJoints };
 }
-

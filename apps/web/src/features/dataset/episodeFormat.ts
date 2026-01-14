@@ -11,7 +11,7 @@ export interface EpisodeJsonEpisode {
   metadata?: EpisodeMetadata;
 }
 
-export interface EpisodeJsonParseResult {
+interface EpisodeJsonParseResult {
   frames?: EpisodeFrame[];
   jointOrder?: string[];
   metadata?: EpisodeMetadata;

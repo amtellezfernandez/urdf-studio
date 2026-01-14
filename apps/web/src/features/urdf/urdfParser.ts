@@ -6,7 +6,7 @@
  * to ensure consistent error handling and validation.
  */
 
-export interface ParsedURDF {
+interface ParsedURDF {
   document: Document;
   isValid: boolean;
   error?: string;
@@ -81,16 +81,4 @@ export function serializeURDF(document: Document): string {
  * @param fallback Fallback value if parsing fails
  * @returns Result of callback or fallback
  */
-export function withParsedURDF<T>(
-  urdfContent: string,
-  callback: (document: Document) => T,
-  fallback: T
-): T {
-  const parsed = parseURDF(urdfContent);
-  if (!parsed.isValid) {
-    return fallback;
-  }
-  return callback(parsed.document);
-}
-
 

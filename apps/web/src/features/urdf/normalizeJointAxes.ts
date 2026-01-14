@@ -10,7 +10,7 @@
 
 import { parseURDF, serializeURDF } from "./urdfParser";
 
-export interface AxisNormalizationResult {
+interface AxisNormalizationResult {
   urdfContent: string;
   corrections: AxisCorrection[];
   errors: AxisError[];
@@ -223,7 +223,3 @@ export function normalizeJointAxes(urdfContent: string): AxisNormalizationResult
  * @param urdfContent - URDF XML content as string
  * @returns Corrected URDF content
  */
-export function normalizeJointAxesSimple(urdfContent: string): string {
-  const result = normalizeJointAxes(urdfContent);
-  return result.urdfContent;
-}

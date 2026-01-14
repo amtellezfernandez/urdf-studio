@@ -10,7 +10,7 @@ import { updateJointNameInURDF } from "./updateJointName";
 import { updateJointTypeInURDF } from "./updateJointType";
 import { updateLinkNameInURDF } from "./updateLinkName";
 
-export interface UrdfEditResult {
+interface UrdfEditResult {
   success: boolean;
   content: string;
   message?: string;
@@ -21,7 +21,7 @@ export interface UrdfEditResult {
   jointAxes?: JointAxisMap;
 }
 
-export interface NormalizeAxesResult extends UrdfEditResult {
+interface NormalizeAxesResult extends UrdfEditResult {
   corrections: AxisCorrection[];
   issues: AxisError[];
 }

@@ -12,13 +12,13 @@
 
 import { parseURDF, serializeURDF } from "./urdfParser";
 
-export interface PathFixResult {
+interface PathFixResult {
   urdfContent: string;
   corrections: PathCorrection[];
   packageName: string;
 }
 
-export interface PathCorrection {
+interface PathCorrection {
   element: string; // "visual" or "collision"
   linkName: string;
   original: string;
@@ -240,7 +240,3 @@ export function fixMeshPaths(urdfContent: string, packageName?: string): PathFix
  * @param packageName - Optional package name to use
  * @returns Corrected URDF content
  */
-export function fixMeshPathsSimple(urdfContent: string, packageName?: string): string {
-  const result = fixMeshPaths(urdfContent, packageName);
-  return result.urdfContent;
-}

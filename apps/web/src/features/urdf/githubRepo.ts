@@ -2,7 +2,7 @@
  * GitHub repository utility functions
  */
 
-export interface GitHubRepoInfo {
+interface GitHubRepoInfo {
   owner: string;
   repo: string;
   path?: string;
@@ -53,13 +53,6 @@ export interface URDFCandidate {
   hasUnsupportedFormats?: boolean;
   unsupportedFormats?: string[];
   unmatchedMeshReferences?: string[];
-}
-
-export interface RobotDescriptionStructure {
-  rootPath: string;
-  urdfFiles: URDFCandidate[];
-  meshesPath?: string;
-  assetsPath?: string;
 }
 
 interface GitHubTreeEntry {
@@ -545,75 +538,6 @@ function findMeshOrAssetsFolder(files: GitHubFile[], rootPath: string): { meshes
  * 
  * This function detects the standard ROS robot description package structure.
  */
-export function findRobotDescriptionStructures(files: GitHubFile[]): RobotDescriptionStructure[] {
-  const structures: RobotDescriptionStructure[] = [];
-  const directories = files.filter(f => f.type === "dir");
-  const urdfFiles = files.filter(f => f.type === "file" && f.name.toLowerCase().endsWith(".urdf"));
-  
-  // Check each directory as a potential root
-  for (const dir of directories) {
-    const rootPath = dir.path;
-    
-    // Find URDF files in root or any subdirectory
-    const urdfInRoot = urdfFiles.filter(urdf => {
-      const urdfDir = dirname(urdf.path);
-      // URDF is in root or in any subdirectory of root
-      return urdfDir.toLowerCase() === rootPath.toLowerCase() || 
-             urdfDir.toLowerCase().startsWith(`${rootPath}/`.toLowerCase());
-    });
-    
-    // Check for meshes/ or assets/ folders
-    const { meshes: meshesFolder, assets: assetsFolder } = findMeshOrAssetsFolder(files, rootPath);
-    
-    if (urdfInRoot.length > 0 && (meshesFolder || assetsFolder)) {
-      const candidates: URDFCandidate[] = urdfInRoot.map(urdf => ({
-        path: urdf.path,
-        name: urdf.name,
-        hasMeshesFolder: true,
-        meshesFolderPath: meshesFolder?.path || assetsFolder?.path,
-      }));
-      
-      structures.push({
-        rootPath,
-        urdfFiles: candidates,
-        meshesPath: meshesFolder?.path,
-        assetsPath: assetsFolder?.path,
-      });
-    }
-  }
-  
-  // Check root level structure
-  const rootUrdfFiles = urdfFiles.filter(urdf => dirname(urdf.path) === "");
-  if (rootUrdfFiles.length > 0) {
-    const { meshes: rootMeshes, assets: rootAssets } = findMeshOrAssetsFolder(files, "");
-    
-    if (rootMeshes || rootAssets) {
-      const candidates: URDFCandidate[] = rootUrdfFiles.map(urdf => ({
-        path: urdf.path,
-        name: urdf.name,
-        hasMeshesFolder: true,
-        meshesFolderPath: rootMeshes?.path || rootAssets?.path,
-      }));
-      
-      structures.push({
-        rootPath: "",
-        urdfFiles: candidates,
-        meshesPath: rootMeshes?.path,
-        assetsPath: rootAssets?.path,
-      });
-    }
-  }
-
-  return structures;
-}
-
-/**
- * Get all URDF candidates from robot description structures
- */
-export function getURDFCandidatesFromStructures(structures: RobotDescriptionStructure[]): URDFCandidate[] {
-  return structures.flatMap(structure => structure.urdfFiles);
-}
-
 /**
  * Decode base64 string to ArrayBuffer
  */
@@ -649,7 +573,7 @@ function getMimeType(filePath: string): string {
  * Get file content from GitHub using the Blob API (most efficient)
  * Falls back to Contents API if blob SHA is not available
  */
-export async function getGitHubFileContent(
+async function getGitHubFileContent(
   owner: string,
   repo: string,
   filePath: string,
@@ -1026,57 +950,6 @@ export async function convertGitHubFilesToFileList(
   }
 
   return dataTransfer.files;
-}
-
-/**
- * Create a new GitHub repository
- */
-export async function createGitHubRepository(
-  name: string,
-  description: string,
-  isPrivate: boolean,
-  accessToken: string
-): Promise<{ owner: string; repo: string }> {
-  const headers: HeadersInit = {
-    Accept: "application/vnd.github.v3+json",
-    Authorization: `token ${accessToken}`,
-    "Content-Type": "application/json",
-  };
-
-  // First, get the authenticated user
-  const userResponse = await fetch("https://api.github.com/user", { headers });
-  if (!userResponse.ok) {
-    throw new Error("Failed to get authenticated user. Please check your token permissions.");
-  }
-  const user = await userResponse.json();
-  const owner = user.login;
-
-  // Create the repository
-  const createRepoUrl = "https://api.github.com/user/repos";
-  const response = await fetch(createRepoUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      name,
-      description,
-      private: isPrivate,
-      auto_init: false, // Don't create README, we'll add files
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    if (response.status === 422) {
-      throw new Error(`Repository name "${name}" is invalid or already exists.`);
-    }
-    if (response.status === 403) {
-      throw new Error("Token doesn't have permission to create repositories. Please check your token permissions.");
-    }
-    throw new Error(`Failed to create repository: ${response.statusText}${errorText ? ` - ${errorText.substring(0, 200)}` : ''}`);
-  }
-
-  const repo = await response.json();
-  return { owner, repo: repo.name };
 }
 
 /**

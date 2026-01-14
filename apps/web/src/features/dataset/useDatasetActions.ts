@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-export type DatasetActions = {
+type DatasetActions = {
   loadFromLocal: () => void;
   loadFromHuggingFace: () => void;
   exportToLocal: () => void;
