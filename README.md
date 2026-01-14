@@ -22,9 +22,3 @@ npm run dev
 ## 🧪 Dev Tips
 - `URDF_STUDIO_VERBOSE=1 npm run start` to see full Vite + backend logs.
 - `npm run smoke` to run lint + typecheck quickly.
-
-## 📚 Docs
-- [Setup](docs/SETUP.md)
-- [Teleoperation](docs/TELEOPERATION.md)
-- [Dev notes](docs/dev_notes.md)
-- [Sample animation](samples/test-animation.csv)

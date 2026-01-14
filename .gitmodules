@@ -1,0 +1,3 @@
+[submodule "vendor/lerobotdataset"]
+	path = vendor/lerobotdataset
+	url = https://github.com/marso-robotics/lerobotdataset.git
