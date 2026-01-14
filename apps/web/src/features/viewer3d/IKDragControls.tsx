@@ -46,6 +46,7 @@ export const IKDragControls = ({
   const targetScaleRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const activePointerIdRef = useRef<number | null>(null);
   const intersectionRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const lastSolvedTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
 
   // Debug initial props
   useEffect(() => {
@@ -89,9 +90,8 @@ export const IKDragControls = ({
     endEffectorObject.current = link;
   }, [robot, endEffectorLink]);
 
-  // Update target position to match end effector (runs on joint changes and initially)
-  useFrame(() => {
-    if (!endEffectorObject.current || !targetMeshRef.current || isDragging) return;
+  const syncTargetToEndEffector = useCallback(() => {
+    if (!endEffectorObject.current || !targetMeshRef.current) return;
 
     const link = endEffectorObject.current;
     link.updateMatrixWorld(true);
@@ -104,6 +104,16 @@ export const IKDragControls = ({
 
     targetMeshRef.current.position.copy(targetPositionRef.current);
     targetMeshRef.current.quaternion.copy(targetQuaternionRef.current);
+    lastSolvedTargetRef.current = {
+      position: targetPositionRef.current.clone(),
+      quaternion: targetQuaternionRef.current.clone(),
+    };
+  }, []);
+
+  // Update target position to match end effector (runs on joint changes and initially)
+  useFrame(() => {
+    if (!endEffectorObject.current || !targetMeshRef.current || isDragging) return;
+    syncTargetToEndEffector();
   });
 
   // Solve IK when target is moved - uses current joint values as seed for fast convergence
@@ -179,10 +189,21 @@ export const IKDragControls = ({
           lastError = "IK solve returned no solution";
         }
 
-        if (!solved && lastError && lastIkErrorRef.current !== lastError) {
+        if (solved) {
+          lastSolvedTargetRef.current = {
+            position: position.clone(),
+            quaternion: quaternion.clone(),
+          };
+        } else if (lastError && lastIkErrorRef.current !== lastError) {
           lastIkErrorRef.current = lastError;
           console.warn("[IK] Drag handle solve failed:", lastError);
           toast.error(lastError);
+        }
+
+        if (!solved) {
+          pendingTargetRef.current = null;
+          queuedTargetRef.current = null;
+          syncTargetToEndEffector();
         }
       } catch (error: unknown) {
         const isAbort =
@@ -190,10 +211,13 @@ export const IKDragControls = ({
         if (!isAbort) {
           console.error("[IK] Solve error:", error);
           toast.error("IK solve failed. Is the IK server running?");
+          pendingTargetRef.current = null;
+          queuedTargetRef.current = null;
+          syncTargetToEndEffector();
         }
       }
     },
-    [urdfContent, endEffectorLink, onIkSolved]
+    [urdfContent, endEffectorLink, onIkSolved, syncTargetToEndEffector]
   );
 
   const updateDragTarget = useCallback(
