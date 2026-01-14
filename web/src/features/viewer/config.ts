@@ -15,3 +15,9 @@ export const IK_ORBIT_DEFAULTS = {
   phaseDeg: 0,
   secondaryOffsetDeg: 180,
 };
+
+export const IK_SOLVER_DEFAULTS = {
+  requestTimeoutMs: 1200,
+  dragTimeoutMs: 300,
+  orbitTimeoutMs: 250,
+};

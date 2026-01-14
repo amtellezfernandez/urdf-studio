@@ -4,8 +4,13 @@ import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import { API_BASE_URL } from "@/shared/config/api";
-import { IK_DRAG_CONFIG } from "@/features/viewer/config";
+import { IK_DRAG_CONFIG, IK_SOLVER_DEFAULTS } from "@/features/viewer/config";
 import { buildIkOrientationPayload } from "@/features/viewer/viewer-helpers";
+import {
+  cancelIk,
+  isIkFailure,
+  solveIk as solveIkRequest,
+} from "@/features/ik/ikClient";
 
 interface IKDragControlsProps {
   robot: URDFRobot | null; // URDFRobot
@@ -45,7 +50,7 @@ export const IKDragControls = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isClamped, setIsClamped] = useState(false);
   const lastIkCallRef = useRef<number>(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRequestIdRef = useRef<string | null>(null);
   const latestJointValuesRef = useRef<Record<string, number>>(currentJointValues);
   const lastIkErrorRef = useRef<string | null>(null);
   const pendingTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
@@ -243,99 +248,75 @@ export const IKDragControls = ({
   });
 
   // Solve IK when target is moved - uses current joint values as seed for fast convergence
-  const solveIk = useCallback(
+  const runIkSolve = useCallback(
     async (position: THREE.Vector3, quaternion: THREE.Quaternion) => {
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+      if (activeRequestIdRef.current) {
+        cancelIk(activeRequestIdRef.current);
+      }
+      const requestId = `drag-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+      activeRequestIdRef.current = requestId;
 
       try {
-        const basePayload = {
-          urdf: urdfContent,
-          joint_values: latestJointValuesRef.current,
-          target_link: endEffectorLink,
-          target_position: [position.x, position.y, position.z],
-        };
-
         const orientationPayload = buildIkOrientationPayload(quaternion);
 
-        // Try strict orientation first, then fall back to position-only solve
-        const payloads = [
-          orientationPayload
-            ? {
-                ...basePayload,
-                target_rotation: orientationPayload.rotation,
-                target_wxyz: orientationPayload.wxyz,
-                ignore_orientation: false,
-              }
-            : null,
-          {
-            ...basePayload,
-            target_rotation: null,
-            target_wxyz: null,
-            ignore_orientation: true,
-          },
-        ].filter(Boolean) as Array<Record<string, unknown>>;
+        const result = await solveIkRequest({
+          requestId,
+          apiBaseUrl: API_BASE_URL,
+          urdf: urdfContent,
+          jointValues: latestJointValuesRef.current,
+          targetLink: endEffectorLink,
+          targetPosition: [position.x, position.y, position.z],
+          orientation: orientationPayload ?? null,
+          orientationMode: "prefer",
+          timeoutMs: IK_SOLVER_DEFAULTS.dragTimeoutMs,
+        });
 
-        let solved = false;
-        let lastError: string | null = null;
-
-        for (const payload of payloads) {
-          const response = await fetch(`${API_BASE_URL}/pyroki/ik`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          });
-
-          if (!response.ok) {
-            try {
-              const msg = await response.json();
-              lastError = msg?.detail || msg?.error || response.statusText;
-            } catch {
-              lastError = response.statusText;
-            }
-            continue;
-          }
-
-          const data = await response.json();
-
-          if (data?.solution) {
-            onIkSolved(data.solution);
-            solved = true;
-            lastError = null;
-            lastIkErrorRef.current = null;
-            break;
-          }
-
-          lastError = "IK solve returned no solution";
+        if (activeRequestIdRef.current !== requestId) {
+          return;
         }
+        activeRequestIdRef.current = null;
 
-        if (solved) {
-          lastSolvedTargetRef.current = {
-            position: position.clone(),
-            quaternion: quaternion.clone(),
-          };
-        } else if (lastError && lastIkErrorRef.current !== lastError) {
-          lastIkErrorRef.current = lastError;
-          console.warn("[IK] Drag handle solve failed:", lastError);
-          toast.error(lastError);
-        }
-
-        if (!solved) {
+        if (isIkFailure(result)) {
+          const lastError = result.error || "IK solve failed";
+          if (lastIkErrorRef.current !== lastError) {
+            lastIkErrorRef.current = lastError;
+            console.warn("[IK] Drag handle solve failed:", lastError);
+            toast.error(lastError);
+          }
           pendingTargetRef.current = null;
           queuedTargetRef.current = null;
           syncTargetToEndEffector();
+          return;
         }
+
+        if (!result.result?.solution) {
+          const lastError = "IK solve returned no solution";
+          if (lastIkErrorRef.current !== lastError) {
+            lastIkErrorRef.current = lastError;
+            console.warn("[IK] Drag handle solve failed:", lastError);
+            toast.error(lastError);
+          }
+          pendingTargetRef.current = null;
+          queuedTargetRef.current = null;
+          syncTargetToEndEffector();
+          return;
+        }
+
+        onIkSolved(result.result.solution);
+        lastSolvedTargetRef.current = {
+          position: position.clone(),
+          quaternion: quaternion.clone(),
+        };
+        lastIkErrorRef.current = null;
       } catch (error: unknown) {
-        const isAbort =
-          error instanceof DOMException && error.name === "AbortError";
-        if (!isAbort) {
-          console.error("[IK] Solve error:", error);
-          toast.error("IK solve failed. Is the IK server running?");
-          pendingTargetRef.current = null;
-          queuedTargetRef.current = null;
-          syncTargetToEndEffector();
+        if (activeRequestIdRef.current === requestId) {
+          activeRequestIdRef.current = null;
         }
+        console.error("[IK] Solve error:", error);
+        toast.error("IK solve failed. Is the IK server running?");
+        pendingTargetRef.current = null;
+        queuedTargetRef.current = null;
+        syncTargetToEndEffector();
       }
     },
     [urdfContent, endEffectorLink, onIkSolved, syncTargetToEndEffector]
@@ -606,7 +587,7 @@ export const IKDragControls = ({
     isSolvingRef.current = true;
     lastIkCallRef.current = now;
 
-    solveIk(position.clone(), quaternion.clone())
+    runIkSolve(position.clone(), quaternion.clone())
       .catch(() => {
         /* errors handled inside solveIk */
       })
@@ -615,11 +596,11 @@ export const IKDragControls = ({
       });
   });
 
-  // Cleanup abort controller on unmount
+  // Cleanup outstanding IK requests on unmount
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (activeRequestIdRef.current) {
+        cancelIk(activeRequestIdRef.current);
       }
     };
   }, []);

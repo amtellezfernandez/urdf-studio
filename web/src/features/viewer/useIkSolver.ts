@@ -10,8 +10,9 @@ import {
   getLiveRobotJoints,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
-import { IK_ORBIT_DEFAULTS } from "@/features/viewer/config";
+import { IK_ORBIT_DEFAULTS, IK_SOLVER_DEFAULTS } from "@/features/viewer/config";
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
+import { isIkFailure, solveIk } from "@/features/ik/ikClient";
 
 type UseIkSolverParams = {
   apiBaseUrl: string;
@@ -150,62 +151,30 @@ export const useIkSolver = ({
       setIsIkRunning(true);
 
       try {
-        const basePayload: Record<string, unknown> = {
+        const result = await solveIk({
+          apiBaseUrl,
           urdf: urdfContent,
-          joint_values: jointValues,
-          target_link: endEffectorLink,
-          target_position: targetPosition,
-        };
+          jointValues,
+          targetLink: endEffectorLink,
+          targetPosition,
+          orientation: orientationPayload ?? null,
+          orientationMode: orientationOptional ? "optional" : "prefer",
+          timeoutMs: IK_SOLVER_DEFAULTS.requestTimeoutMs,
+        });
 
-        const tryPayloads: Array<Record<string, unknown>> = [];
-        if (orientationOptional || !orientationPayload) {
-          tryPayloads.push({
-            ...basePayload,
-            target_rotation: null,
-            target_wxyz: null,
-            ignore_orientation: true,
-          });
-        }
-        if (orientationPayload) {
-          tryPayloads.push({
-            ...basePayload,
-            target_rotation: orientationPayload.rotation,
-            target_wxyz: orientationPayload.wxyz,
-          });
-        }
-
-        let data: IkResponsePayload | null = null;
-        let lastError: string | null = null;
-
-        for (const payload of tryPayloads) {
-          const response = await fetch(`${apiBaseUrl}/pyroki/ik`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
-          if (!response.ok) {
-            try {
-              const msg = (await response.json()).detail || (await response.json()).error;
-              lastError = msg || "IK solve failed";
-            } catch {
-              lastError = "IK solve failed";
-            }
-            continue;
-          }
-
-          data = (await response.json()) as IkResponsePayload;
-          lastError = null;
-          break;
-        }
-
-        if (!data) {
-          setIkError(lastError || "IK solve failed");
+        if (isIkFailure(result)) {
+          setIkError(result.error || "IK solve failed");
           setIkResult(null);
           return;
         }
 
-        setIkResult(data);
+        if (!result.result?.solution) {
+          setIkError("IK solve returned no solution");
+          setIkResult(null);
+          return;
+        }
+
+        setIkResult(result.result);
       } catch (err) {
         setIkError(err instanceof Error ? err.message : "Unknown IK error");
         setIkResult(null);
@@ -314,28 +283,31 @@ export const useIkSolver = ({
         const targetPosition = computeTargetPosition(currentPhase);
 
         try {
-          // Use current joint values as seed for next IK
-          const response = await fetch(`${apiBaseUrl}/pyroki/ik`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              urdf: urdfContent,
-              joint_values: currentJointValues,
-              target_link: endEffectorLink,
-              target_position: targetPosition,
-              ignore_orientation: true,
-            }),
+          const result = await solveIk({
+            apiBaseUrl,
+            urdf: urdfContent,
+            jointValues: currentJointValues,
+            targetLink: endEffectorLink,
+            targetPosition,
+            orientationMode: "ignore",
+            timeoutMs: IK_SOLVER_DEFAULTS.orbitTimeoutMs,
           });
 
-          if (response.ok) {
-            const data = (await response.json()) as IkResponsePayload;
-            currentJointValues = data.solution;
+          if (isIkFailure(result)) {
+            console.error("IK failed at step", currentStep, result.error);
+            return;
+          }
 
-            // Apply to robot
-            setStoreJointValues(data.solution);
-            onIkApplied?.(data.solution);
-          } else {
-            console.error("IK failed at step", currentStep);
+          if (!result.result?.solution) {
+            console.error("IK failed at step", currentStep, "No solution returned");
+            return;
+          }
+
+          currentJointValues = result.result.solution;
+
+          if (!orbitFollowAbortRef.current) {
+            setStoreJointValues(result.result.solution);
+            onIkApplied?.(result.result.solution);
           }
         } catch (err) {
           console.error("Error during orbit following:", err);
