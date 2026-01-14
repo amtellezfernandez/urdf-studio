@@ -1,7 +1,7 @@
 import type React from "react";
 import { Sidebar } from "@/features/layout/Sidebar";
 import { ChevronsRight } from "lucide-react";
-import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
+import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import type { MeshFiles, ViewerEpisode } from "@/features/types";
 import { SIDEBAR_RESIZER_WIDTH } from "@/app/pages/index/constants";

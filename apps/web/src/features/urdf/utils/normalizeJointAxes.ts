@@ -8,7 +8,7 @@
  * - Invalid formats
  */
 
-import { parseURDF, serializeURDF } from "./urdfParser";
+import { parseURDF, serializeURDF } from "../parsing/urdfParser";
 
 interface AxisNormalizationResult {
   urdfContent: string;

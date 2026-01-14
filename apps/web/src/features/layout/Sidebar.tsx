@@ -15,8 +15,8 @@ import { useJointStore } from "@/shared/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
-import { URDFComparison } from "@/features/urdf/URDFComparison";
-import { type CollisionVisibility } from "@/features/urdf/LinkEditor";
+import { URDFComparison } from "@/features/urdf/editor/URDFComparison";
+import { type CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { cn } from "@/shared/lib/utils";
 import {

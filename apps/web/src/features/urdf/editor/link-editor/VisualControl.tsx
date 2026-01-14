@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/shared/ui/input";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
-import { updateVisualInLink, type LinkData, type VisualData } from "@/features/urdf";
-import { useDeferredUrdfUpdate } from "@/features/urdf/link-editor/useDeferredUrdfUpdate";
+import { updateVisualInLink } from "@/features/urdf/editor/updateLinkData";
+import type { LinkData, VisualData } from "@/features/urdf/parsing/parseLinkData";
+import { useDeferredUrdfUpdate } from "@/features/urdf/editor/link-editor/useDeferredUrdfUpdate";
 import {
   formatVector3,
   parseVector3,
   updateVector3Value,
-} from "@/features/urdf/link-editor/sizeUtils";
-import { Vector3Inputs } from "@/features/urdf/link-editor/Vector3Inputs";
+} from "@/features/urdf/editor/link-editor/sizeUtils";
+import { Vector3Inputs } from "@/features/urdf/editor/link-editor/Vector3Inputs";
 
 interface VisualControlProps {
   linkName: string;

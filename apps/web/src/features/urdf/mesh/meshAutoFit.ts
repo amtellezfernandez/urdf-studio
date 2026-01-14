@@ -2,7 +2,7 @@ import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
 import type { CollisionAutoFitResult, CollisionAutoFitType } from "./collisionAutoFit";
 import { autoFitCollisionGeometry } from "./collisionAutoFit";
 import { computeMeshBoundsFromArrayBuffer } from "./computeMeshGeometry";
-import type { OriginData } from "./parseLinkData";
+import type { OriginData } from "../parsing/parseLinkData";
 
 type MeshAutoFitResponse = {
   id: number;

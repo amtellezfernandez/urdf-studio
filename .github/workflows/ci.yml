@@ -7,7 +7,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  frontend:
+    name: Frontend checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -23,3 +24,50 @@ jobs:
         run: npm run smoke
       - name: Run tests
         run: npm test
+
+  build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Build
+        run: npm run build
+
+  dead-code:
+    name: Dead-code scan
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Run dead-code scan
+        run: node tools/scripts/dead-code-check.js
+
+  backend:
+    name: Backend compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile backend modules
+        run: python -m compileall apps/backend

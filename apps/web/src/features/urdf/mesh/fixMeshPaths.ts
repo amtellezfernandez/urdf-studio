@@ -10,7 +10,7 @@
  * Normalizes to standard ROS package:// format
  */
 
-import { parseURDF, serializeURDF } from "./urdfParser";
+import { parseURDF, serializeURDF } from "../parsing/urdfParser";
 
 interface PathFixResult {
   urdfContent: string;

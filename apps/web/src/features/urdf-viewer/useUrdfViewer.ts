@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
+import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { viewerPlayback } from "@/features/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 

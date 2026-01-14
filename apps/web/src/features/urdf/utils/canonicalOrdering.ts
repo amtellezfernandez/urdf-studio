@@ -7,7 +7,7 @@
  * - Joint level: origin, parent, child, axis, limit, dynamics, mimic, safety_controller
  */
 
-import { parseURDF, serializeURDF } from "./urdfParser";
+import { parseURDF, serializeURDF } from "../parsing/urdfParser";
 
 // Order for top-level robot children
 const ROBOT_CHILD_ORDER: Record<string, number> = {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { escapeHtml } from "./urdfHighlight";
-import { highlightUrdfAsync } from "./urdfProcessing";
+import { escapeHtml } from "../parsing/urdfHighlight";
+import { highlightUrdfAsync } from "../convert/urdfProcessing";
 
 interface URDFSyntaxHighlighterProps {
   xml: string;

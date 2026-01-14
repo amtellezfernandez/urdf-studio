@@ -37,7 +37,7 @@ import {
   convertUrdfToXacroCached,
   getUrdfStats,
   getUrdfStatsAsync,
-} from "@/features/urdf/urdfProcessing";
+} from "@/features/urdf/convert/urdfProcessing";
 
 interface URDFComparisonProps {
   originalUrdf: string;

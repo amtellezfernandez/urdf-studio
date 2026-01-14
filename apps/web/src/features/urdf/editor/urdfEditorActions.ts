@@ -1,10 +1,10 @@
 import type { RotationAxis } from "@/features/types";
-import { canonicalOrderURDF } from "./canonicalOrdering";
-import { normalizeJointAxes, type AxisCorrection, type AxisError } from "./normalizeJointAxes";
-import { parseJointAxesFromURDF, type JointAxisMap } from "./parseJointAxis";
-import { parseJointLimitsFromURDF, type JointLimits } from "./parseJointLimits";
-import { prettyPrintURDF } from "./prettyPrintURDF";
-import { rotateRobot90Degrees } from "./rotateRobot";
+import { canonicalOrderURDF } from "../utils/canonicalOrdering";
+import { normalizeJointAxes, type AxisCorrection, type AxisError } from "../utils/normalizeJointAxes";
+import { parseJointAxesFromURDF, type JointAxisMap } from "../parsing/parseJointAxis";
+import { parseJointLimitsFromURDF, type JointLimits } from "../parsing/parseJointLimits";
+import { prettyPrintURDF } from "../utils/prettyPrintURDF";
+import { rotateRobot90Degrees } from "../utils/rotateRobot";
 import { updateJointAxisInURDF } from "./updateJointAxis";
 import { updateJointNameInURDF } from "./updateJointName";
 import { updateJointTypeInURDF } from "./updateJointType";

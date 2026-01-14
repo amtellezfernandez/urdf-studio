@@ -4,11 +4,12 @@ import { NumberInput } from "@/shared/ui/number-input";
 import { BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/shared/ui/tooltip";
 import { AlertTriangle, Calculator } from "lucide-react";
-import { updateInertialInLink, type InertialData } from "@/features/urdf";
+import { updateInertialInLink } from "@/features/urdf/editor/updateLinkData";
+import type { InertialData } from "@/features/urdf/parsing/parseLinkData";
 import { toast } from "sonner";
-import { useDeferredUrdfUpdate } from "@/features/urdf/link-editor/useDeferredUrdfUpdate";
-import { updateVector3Value } from "@/features/urdf/link-editor/sizeUtils";
-import { Vector3Inputs } from "@/features/urdf/link-editor/Vector3Inputs";
+import { useDeferredUrdfUpdate } from "@/features/urdf/editor/link-editor/useDeferredUrdfUpdate";
+import { updateVector3Value } from "@/features/urdf/editor/link-editor/sizeUtils";
+import { Vector3Inputs } from "@/features/urdf/editor/link-editor/Vector3Inputs";
 
 interface InertialControlProps {
   linkName: string;

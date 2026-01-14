@@ -7,7 +7,7 @@
  * - Substituting values with ${...} expressions
  */
 
-import { parseURDF, serializeURDF } from "./urdfParser";
+import { parseURDF, serializeURDF } from "../parsing/urdfParser";
 
 // ============================================================================
 // MODULE A: AST Parser and Tree Structure

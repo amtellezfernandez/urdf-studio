@@ -5,7 +5,7 @@
  * Converts messy or minified XML into human-readable format.
  */
 
-import { parseURDF, serializeURDF } from "./urdfParser";
+import { parseURDF, serializeURDF } from "../parsing/urdfParser";
 
 /**
  * Formats an XML string with proper indentation

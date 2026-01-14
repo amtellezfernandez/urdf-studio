@@ -11,21 +11,18 @@ import {
 } from "@/shared/ui/select";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { Eye, EyeOff, Info, Trash2 } from "lucide-react";
-import {
-  autoFitCollisionGeometryFromMesh,
-  findMeshFile,
-  updateCollisionInLink,
-  type CollisionData,
-  type LinkData,
-} from "@/features/urdf";
+import { updateCollisionInLink } from "@/features/urdf/editor/updateLinkData";
+import { autoFitCollisionGeometryFromMesh } from "@/features/urdf/mesh/meshAutoFit";
+import { findMeshFile } from "@/features/urdf/mesh/computeMeshGeometry";
+import type { CollisionData, LinkData } from "@/features/urdf/parsing/parseLinkData";
 import { toast } from "sonner";
-import { useDeferredUrdfUpdate } from "@/features/urdf/link-editor/useDeferredUrdfUpdate";
+import { useDeferredUrdfUpdate } from "@/features/urdf/editor/link-editor/useDeferredUrdfUpdate";
 import {
   formatVector3,
   parseVector3,
   updateVector3Value,
-} from "@/features/urdf/link-editor/sizeUtils";
-import { Vector3Inputs } from "@/features/urdf/link-editor/Vector3Inputs";
+} from "@/features/urdf/editor/link-editor/sizeUtils";
+import { Vector3Inputs } from "@/features/urdf/editor/link-editor/Vector3Inputs";
 
 interface CollisionControlProps {
   linkName: string;

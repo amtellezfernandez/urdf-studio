@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { STLLoader } from "three-stdlib";
 import type { URDFRobot } from "urdf-loader";
-import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
+import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { MeshFiles } from "@/features/types";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 

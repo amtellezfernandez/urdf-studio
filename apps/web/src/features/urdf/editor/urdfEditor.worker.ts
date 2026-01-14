@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-import { highlightUrdfToHtml } from "./urdfHighlight";
-import { parseUrdfStats, type UrdfParseStats } from "./urdfStats";
+import { highlightUrdfToHtml } from "../parsing/urdfHighlight";
+import { parseUrdfStats, type UrdfParseStats } from "../parsing/urdfStats";
 
 type UrdfWorkerRequest = {
   id: number;

@@ -5,14 +5,14 @@ import { viewerPlayback } from "@/features/viewerPlayback";
 import type { URDFRobot } from "urdf-loader";
 import type * as THREE from "three";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
-import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
+import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { VIEWER_RESIZER_HEIGHT } from "@/app/pages/index/constants";
 
 const Viewer3D = lazy(() =>
   import("@/features/viewer3d/Viewer3D").then((module) => ({ default: module.Viewer3D }))
 );
 const URDFComparison = lazy(() =>
-  import("@/features/urdf/URDFComparison").then((module) => ({ default: module.URDFComparison }))
+  import("@/features/urdf/editor/URDFComparison").then((module) => ({ default: module.URDFComparison }))
 );
 const EpisodeViewer3DModal = lazy(() =>
   import("@/features/dataset/EpisodeViewer3DModal").then((module) => ({

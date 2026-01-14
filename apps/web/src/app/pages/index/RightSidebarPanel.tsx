@@ -1,6 +1,6 @@
 import type React from "react";
 import { JointListSidebar } from "@/features/layout/JointListSidebar";
-import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
+import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import type { AngleUnit, MeshFiles } from "@/features/types";
 import type { URDFRobot } from "urdf-loader";

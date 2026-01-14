@@ -5,7 +5,7 @@
  * Based on the structure used by urdf2mjcf (https://github.com/kscalelabs/urdf2mjcf)
  */
 
-import { parseURDF } from "./urdfParser";
+import { parseURDF } from "../parsing/urdfParser";
 
 interface MJCFConversionResult {
   mjcfContent: string;

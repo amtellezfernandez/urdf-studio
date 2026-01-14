@@ -3,7 +3,7 @@
 import { autoFitCollisionGeometry } from "./collisionAutoFit";
 import { computeMeshBoundsFromArrayBuffer } from "./computeMeshGeometry";
 import type { CollisionAutoFitResult, CollisionAutoFitType } from "./collisionAutoFit";
-import type { OriginData } from "./parseLinkData";
+import type { OriginData } from "../parsing/parseLinkData";
 
 type MeshAutoFitRequest = {
   id: number;

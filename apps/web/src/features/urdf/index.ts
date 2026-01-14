@@ -1,28 +1,28 @@
-export * from "./addJointColors";
-export * from "./canonicalOrdering";
-export * from "./computeMeshGeometry";
-export * from "./fixMeshPaths";
-export * from "./githubRepo";
-export * from "./getJointLinks";
-export * from "./jointColors";
-export * from "./normalizeJointAxes";
-export * from "./parseJointAxis";
-export * from "./parseJointHierarchy";
-export * from "./parseJointLimits";
-export * from "./parseLinkNames";
-export * from "./parseLinkData";
-export * from "./collisionAutoFit";
-export * from "./prettyPrintURDF";
-export * from "./rotateRobot";
-export * from "./updateJointAxis";
-export * from "./updateJointName";
-export * from "./updateJointType";
-export * from "./updateLinkData";
-export * from "./updateLinkName";
-export * from "./urdfDiffUtils";
-export * from "./urdfEditorActions";
-export * from "./urdfParser";
-export * from "./urdfProcessing";
-export * from "./urdfToMJCF";
-export * from "./urdfToXacro";
-export * from "./meshAutoFit";
+export * from "./utils/addJointColors";
+export * from "./utils/canonicalOrdering";
+export * from "./utils/jointColors";
+export * from "./utils/normalizeJointAxes";
+export * from "./utils/prettyPrintURDF";
+export * from "./utils/rotateRobot";
+export * from "./utils/urdfDiffUtils";
+
+export * from "./parsing/getJointLinks";
+export * from "./parsing/parseJointAxis";
+export * from "./parsing/parseJointHierarchy";
+export * from "./parsing/parseJointLimits";
+export * from "./parsing/parseLinkNames";
+export * from "./parsing/parseLinkData";
+export * from "./parsing/urdfParser";
+
+export * from "./mesh/collisionAutoFit";
+export * from "./mesh/computeMeshGeometry";
+export * from "./mesh/fixMeshPaths";
+export * from "./mesh/meshAutoFit";
+
+export * from "./convert/urdfProcessing";
+export * from "./convert/urdfToMJCF";
+export * from "./convert/urdfToXacro";
+
+export * from "./editor/urdfEditorActions";
+
+export * from "./github/githubRepo";

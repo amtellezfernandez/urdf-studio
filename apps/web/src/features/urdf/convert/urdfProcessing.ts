@@ -1,7 +1,7 @@
 import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
 import { createLruCache, hashString } from "@/shared/lib/cache";
-import { escapeHtml, highlightUrdfToHtml } from "./urdfHighlight";
-import { parseUrdfStats, type UrdfParseStats } from "./urdfStats";
+import { escapeHtml, highlightUrdfToHtml } from "../parsing/urdfHighlight";
+import { parseUrdfStats, type UrdfParseStats } from "../parsing/urdfStats";
 import { convertURDFToMJCF } from "./urdfToMJCF";
 import { convertURDFToXacro } from "./urdfToXacro";
 
@@ -28,7 +28,7 @@ const broker = createWorkerTaskBroker<
   if (typeof Worker === "undefined") {
     return null;
   }
-  return new Worker(new URL("./urdfEditor.worker.ts", import.meta.url), { type: "module" });
+  return new Worker(new URL("../editor/urdfEditor.worker.ts", import.meta.url), { type: "module" });
 });
 
 const cacheKey = (prefix: string, xml: string) => `${prefix}:${hashString(xml)}`;

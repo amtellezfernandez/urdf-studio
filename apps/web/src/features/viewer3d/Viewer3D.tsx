@@ -15,7 +15,7 @@ import { AxisGizmo3D } from "@/features/viewer3d/AxisGizmo3D";
 import { CustomAxesHelper } from "@/features/viewer3d/CustomAxesHelper";
 import { CameraIcons } from "@/features/camera/CameraIcons";
 import { IKDragControls } from "@/features/viewer3d/IKDragControls";
-import type { CollisionVisibility } from "@/features/urdf/LinkEditor";
+import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { cn } from "@/shared/lib/utils";
 import { useGPUMode, type GPUMode } from "@/shared/hooks/use-gpu-mode";
 import type { MeshFiles } from "@/features/types";

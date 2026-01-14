@@ -9,13 +9,13 @@ import {
   removeCollisionFromLink,
   removeInertialFromLink,
   removeVisualFromLink,
-  type LinkData,
-} from "@/features/urdf";
+} from "@/features/urdf/editor/updateLinkData";
+import type { LinkData } from "@/features/urdf/parsing/parseLinkData";
 import { cn } from "@/shared/lib/utils";
 import { toast } from "sonner";
-import { VisualControl } from "@/features/urdf/link-editor/VisualControl";
-import { CollisionControl } from "@/features/urdf/link-editor/CollisionControl";
-import { InertialControl } from "@/features/urdf/link-editor/InertialControl";
+import { VisualControl } from "@/features/urdf/editor/link-editor/VisualControl";
+import { CollisionControl } from "@/features/urdf/editor/link-editor/CollisionControl";
+import { InertialControl } from "@/features/urdf/editor/link-editor/InertialControl";
 
 // Collision visibility state type
 export interface CollisionVisibility {
