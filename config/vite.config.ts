@@ -7,10 +7,11 @@ import { componentTagger } from "lovable-tagger";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
+const webRoot = path.resolve(rootDir, "apps", "web");
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  root: rootDir,
+  root: webRoot,
   server: {
     host: "::",
     port: 5173,
@@ -28,7 +29,7 @@ export default defineConfig(({ mode }) => ({
   },
   resolve: {
     alias: {
-      "@": path.resolve(rootDir, "src"),
+      "@": path.resolve(webRoot, "src"),
     },
   },
 }));

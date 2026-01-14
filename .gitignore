@@ -3,7 +3,7 @@ node_modules
 .npmrc
 .venv
 amd-hackathon/
-dist/
+**/dist/
 bun.lockb
 **/__pycache__/
 *.pyc

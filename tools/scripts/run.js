@@ -122,7 +122,7 @@ function main() {
   let pythonBackendProcess = null;
 
   if (existsSync(venvPython)) {
-    pythonBackendProcess = spawn(venvPython, ['-m', 'uvicorn', 'backend.server:app', '--reload', '--port', '8000'], {
+    pythonBackendProcess = spawn(venvPython, ['-m', 'uvicorn', 'backend.server:app', '--reload', '--port', '8000', '--app-dir', 'apps'], {
       cwd: rootDir,
       env,
       shell: true,
