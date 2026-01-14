@@ -1,16 +1,26 @@
 import type { ComponentProps } from "react";
-import { TopNavBar } from "@/app/pages/index/TopNavBar";
-import { LeftSidebarPanel } from "@/app/pages/index/LeftSidebarPanel";
-import { ViewerLayout } from "@/app/pages/index/ViewerLayout";
-import { RightSidebarPanel } from "@/app/pages/index/RightSidebarPanel";
+import { Suspense, lazy } from "react";
 import { LoadingScreen } from "@/app/pages/index/LoadingScreen";
+
+const TopNavBar = lazy(() =>
+  import("@/app/pages/index/TopNavBar").then((module) => ({ default: module.TopNavBar }))
+);
+const LeftSidebarPanel = lazy(() =>
+  import("@/app/pages/index/LeftSidebarPanel").then((module) => ({ default: module.LeftSidebarPanel }))
+);
+const ViewerLayout = lazy(() =>
+  import("@/app/pages/index/ViewerLayout").then((module) => ({ default: module.ViewerLayout }))
+);
+const RightSidebarPanel = lazy(() =>
+  import("@/app/pages/index/RightSidebarPanel").then((module) => ({ default: module.RightSidebarPanel }))
+);
 
 type PageShellProps = {
   isLoading: boolean;
-  topNavBarProps: ComponentProps<typeof TopNavBar>;
-  leftSidebarProps: ComponentProps<typeof LeftSidebarPanel>;
-  viewerLayoutProps: ComponentProps<typeof ViewerLayout>;
-  rightSidebarProps: ComponentProps<typeof RightSidebarPanel>;
+  topNavBarProps: ComponentProps<typeof import("@/app/pages/index/TopNavBar").TopNavBar>;
+  leftSidebarProps: ComponentProps<typeof import("@/app/pages/index/LeftSidebarPanel").LeftSidebarPanel>;
+  viewerLayoutProps: ComponentProps<typeof import("@/app/pages/index/ViewerLayout").ViewerLayout>;
+  rightSidebarProps: ComponentProps<typeof import("@/app/pages/index/RightSidebarPanel").RightSidebarPanel>;
 };
 
 export const PageShell = ({
@@ -23,10 +33,10 @@ export const PageShell = ({
   isLoading ? (
     <LoadingScreen />
   ) : (
-    <>
+    <Suspense fallback={<LoadingScreen />}>
       <TopNavBar {...topNavBarProps} />
       <LeftSidebarPanel {...leftSidebarProps} />
       <ViewerLayout {...viewerLayoutProps} />
       <RightSidebarPanel {...rightSidebarProps} />
-    </>
+    </Suspense>
   );

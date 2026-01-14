@@ -33,4 +33,28 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(webRoot, "src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("node_modules/@react-three/")) return "react-three";
+          if (
+            id.includes("node_modules/three") ||
+            id.includes("node_modules/three-stdlib") ||
+            id.includes("node_modules/urdf-loader")
+          ) {
+            return "three-core";
+          }
+          if (id.includes("node_modules/reactflow")) return "reactflow";
+          if (id.includes("node_modules/jszip")) return "jszip";
+          if (id.includes("node_modules/@radix-ui/")) return "radix-ui";
+          if (id.includes("node_modules/lucide-react")) return "lucide";
+          if (id.includes("node_modules/@tanstack/")) return "tanstack";
+          if (id.includes("node_modules/zustand")) return "zustand";
+          return;
+        },
+      },
+    },
+  },
 }));

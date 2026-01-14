@@ -1,12 +1,28 @@
 import type { ComponentProps } from "react";
-import { MeshFilesStatusPanel } from "@/app/pages/index/MeshFilesStatusPanel";
-import { ExportDialog } from "@/features/dataset/ExportDialog";
-import { PovCamerasOverlay } from "@/app/pages/index/PovCamerasOverlay";
+import { Suspense, lazy } from "react";
+
+const MeshFilesStatusPanel = lazy(() =>
+  import("@/app/pages/index/MeshFilesStatusPanel").then((module) => ({
+    default: module.MeshFilesStatusPanel,
+  }))
+);
+const ExportDialog = lazy(() =>
+  import("@/features/dataset/ExportDialog").then((module) => ({ default: module.ExportDialog }))
+);
+const PovCamerasOverlay = lazy(() =>
+  import("@/app/pages/index/PovCamerasOverlay").then((module) => ({
+    default: module.PovCamerasOverlay,
+  }))
+);
 
 type PageOverlaysProps = {
-  meshFilesStatusPanelProps: ComponentProps<typeof MeshFilesStatusPanel>;
-  exportDialogProps: ComponentProps<typeof ExportDialog>;
-  povCamerasOverlayProps: ComponentProps<typeof PovCamerasOverlay>;
+  meshFilesStatusPanelProps: ComponentProps<
+    typeof import("@/app/pages/index/MeshFilesStatusPanel").MeshFilesStatusPanel
+  >;
+  exportDialogProps: ComponentProps<typeof import("@/features/dataset/ExportDialog").ExportDialog>;
+  povCamerasOverlayProps: ComponentProps<
+    typeof import("@/app/pages/index/PovCamerasOverlay").PovCamerasOverlay
+  >;
 };
 
 export const PageOverlays = ({
@@ -14,9 +30,9 @@ export const PageOverlays = ({
   exportDialogProps,
   povCamerasOverlayProps,
 }: PageOverlaysProps) => (
-  <>
+  <Suspense fallback={null}>
     <MeshFilesStatusPanel {...meshFilesStatusPanelProps} />
     <ExportDialog {...exportDialogProps} />
     <PovCamerasOverlay {...povCamerasOverlayProps} />
-  </>
+  </Suspense>
 );
