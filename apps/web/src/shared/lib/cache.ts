@@ -2,7 +2,7 @@ type CacheEntry<V> = {
   value: V;
 };
 
-export type LruCache<V> = {
+type LruCache<V> = {
   get: (key: string) => V | undefined;
   set: (key: string, value: V) => void;
   has: (key: string) => boolean;

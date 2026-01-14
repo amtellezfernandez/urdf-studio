@@ -1,6 +1,6 @@
 import type { URDFRobot } from "urdf-loader";
 
-export type JointValueMap = Record<string, number>;
+type JointValueMap = Record<string, number>;
 
 type ApplyJointValuesOptions = {
   filter?: boolean;

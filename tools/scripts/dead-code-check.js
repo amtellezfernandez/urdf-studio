@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as ts from "typescript";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +37,36 @@ const walk = (dir, filter) => {
     }
   }
   return files;
+};
+
+const scriptKindForFile = (filePath) => {
+  const ext = path.extname(filePath);
+  switch (ext) {
+    case ".tsx":
+      return ts.ScriptKind.TSX;
+    case ".jsx":
+      return ts.ScriptKind.JSX;
+    case ".js":
+      return ts.ScriptKind.JS;
+    case ".ts":
+      return ts.ScriptKind.TS;
+    case ".mjs":
+    case ".cjs":
+      return ts.ScriptKind.JS;
+    default:
+      return ts.ScriptKind.TS;
+  }
+};
+
+const parseSourceFile = (filePath) => {
+  const code = fs.readFileSync(filePath, "utf8");
+  return ts.createSourceFile(
+    filePath,
+    code,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindForFile(filePath)
+  );
 };
 
 const extractSpecs = (code) => {
@@ -163,6 +194,162 @@ const collectUnusedFiles = () => {
   return unused.sort();
 };
 
+const collectUnusedExports = () => {
+  const allCodeFiles = scanDirs.flatMap((dir) =>
+    walk(dir, (name) => codeExtensions.has(path.extname(name)))
+  );
+
+  const exportInfo = new Map();
+  const usageInfo = new Map();
+
+  const ensureUsage = (filePath) => {
+    const normalized = path.normalize(filePath);
+    if (!usageInfo.has(normalized)) {
+      usageInfo.set(normalized, {
+        used: new Set(),
+        hasNamespaceImport: false,
+        hasExportAll: false,
+      });
+    }
+    return usageInfo.get(normalized);
+  };
+
+  const addExport = (filePath, name) => {
+    const normalized = path.normalize(filePath);
+    if (!exportInfo.has(normalized)) {
+      exportInfo.set(normalized, {
+        named: new Set(),
+        hasExportAll: false,
+      });
+    }
+    exportInfo.get(normalized).named.add(name);
+  };
+
+  const markExportAll = (filePath) => {
+    const normalized = path.normalize(filePath);
+    if (!exportInfo.has(normalized)) {
+      exportInfo.set(normalized, {
+        named: new Set(),
+        hasExportAll: false,
+      });
+    }
+    exportInfo.get(normalized).hasExportAll = true;
+  };
+
+  for (const file of allCodeFiles) {
+    const source = parseSourceFile(file);
+    const visit = (node) => {
+      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+        const target = resolveSpec(node.moduleSpecifier.text, file);
+        if (target) {
+          const usage = ensureUsage(target);
+          const clause = node.importClause;
+          if (clause?.namedBindings) {
+            if (ts.isNamespaceImport(clause.namedBindings)) {
+              usage.hasNamespaceImport = true;
+            } else if (ts.isNamedImports(clause.namedBindings)) {
+              for (const element of clause.namedBindings.elements) {
+                const name = (element.propertyName ?? element.name).text;
+                usage.used.add(name);
+              }
+            }
+          }
+        }
+      }
+
+      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const [arg] = node.arguments;
+        if (arg && ts.isStringLiteral(arg)) {
+          const target = resolveSpec(arg.text, file);
+          if (target) {
+            const usage = ensureUsage(target);
+            usage.hasExportAll = true;
+          }
+        }
+      }
+
+      if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        const target = resolveSpec(node.moduleSpecifier.text, file);
+        if (target) {
+          const usage = ensureUsage(target);
+          if (!node.exportClause) {
+            usage.hasExportAll = true;
+          } else if (ts.isNamedExports(node.exportClause)) {
+            for (const element of node.exportClause.elements) {
+              const name = (element.propertyName ?? element.name).text;
+              usage.used.add(name);
+            }
+          }
+        }
+      }
+
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+
+  for (const file of allCodeFiles) {
+    if (!file.startsWith(srcRoot)) continue;
+    const source = parseSourceFile(file);
+    ts.forEachChild(source, (node) => {
+      if (ts.isExportDeclaration(node)) {
+        if (!node.exportClause && node.moduleSpecifier) {
+          markExportAll(file);
+          return;
+        }
+        if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+          for (const element of node.exportClause.elements) {
+            addExport(file, element.name.text);
+          }
+        }
+      }
+
+      if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        for (const decl of node.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name)) {
+            addExport(file, decl.name.text);
+          }
+        }
+      }
+
+      if (
+        (ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node) ||
+          ts.isInterfaceDeclaration(node) ||
+          ts.isTypeAliasDeclaration(node) ||
+          ts.isEnumDeclaration(node)) &&
+        node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        if (node.name) {
+          addExport(file, node.name.text);
+        }
+      }
+    });
+  }
+
+  const unusedExports = [];
+  for (const [filePath, exports] of exportInfo.entries()) {
+    if (exports.hasExportAll) continue;
+    if (exports.named.size === 0) continue;
+
+    const usage = usageInfo.get(filePath);
+    if (usage?.hasNamespaceImport || usage?.hasExportAll) {
+      continue;
+    }
+
+    const used = usage ? usage.used : new Set();
+    const unused = [...exports.named].filter((name) => !used.has(name));
+    if (unused.length) {
+      unusedExports.push({
+        file: path.relative(root, filePath),
+        names: unused.sort(),
+      });
+    }
+  }
+
+  return unusedExports;
+};
+
 const collectUnusedDependencies = () => {
   const files = scanDirs.flatMap((dir) =>
     walk(dir, (name) => codeExtensions.has(path.extname(name)))
@@ -193,6 +380,7 @@ const collectUnusedDependencies = () => {
 };
 
 const unusedFiles = collectUnusedFiles();
+const unusedExports = collectUnusedExports();
 const unusedDeps = collectUnusedDependencies();
 
 let hasIssues = false;
@@ -210,6 +398,14 @@ if (unusedDeps.length) {
   console.error("Unused dependencies detected:");
   for (const dep of unusedDeps) {
     console.error(`  - ${dep}`);
+  }
+}
+
+if (unusedExports.length) {
+  hasIssues = true;
+  console.error("Unused exports detected:");
+  for (const entry of unusedExports) {
+    console.error(`  - ${entry.file}: ${entry.names.join(", ")}`);
   }
 }
 

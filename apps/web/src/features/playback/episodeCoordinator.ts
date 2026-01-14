@@ -1,10 +1,10 @@
-export type EpisodeLike = {
+type EpisodeLike = {
   frames: Array<unknown>;
 };
 
 export type PlaybackMode = "all" | "single" | null;
 
-export type PlaybackEndAction =
+type PlaybackEndAction =
   | { type: "none" }
   | { type: "stop" }
   | { type: "advance"; nextIndex: number };

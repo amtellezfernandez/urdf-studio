@@ -1,4 +1,4 @@
-export type WorkerTaskOptions<TRequest, TResponse> = {
+type WorkerTaskOptions<TRequest, TResponse> = {
   transfer?: Transferable[];
   signal?: AbortSignal;
   shouldUseWorker?: (request: TRequest) => boolean;
@@ -6,7 +6,7 @@ export type WorkerTaskOptions<TRequest, TResponse> = {
   shouldFallback?: (response: TResponse) => boolean;
 };
 
-export type WorkerTaskBroker<TRequest, TResponse> = {
+type WorkerTaskBroker<TRequest, TResponse> = {
   run: (request: TRequest, options?: WorkerTaskOptions<TRequest, TResponse>) => Promise<TResponse | null>;
   terminate: () => void;
 };

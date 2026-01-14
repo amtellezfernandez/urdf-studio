@@ -76,7 +76,7 @@ export const extractLinkPose = (robot: URDFRobot | null, linkName: string): Link
   };
 };
 
-export const normalizeIkQuaternion = (quat: THREE.Quaternion) => {
+const normalizeIkQuaternion = (quat: THREE.Quaternion) => {
   const normalized = quat.clone().normalize();
   if (normalized.w < 0) {
     normalized.w *= -1;

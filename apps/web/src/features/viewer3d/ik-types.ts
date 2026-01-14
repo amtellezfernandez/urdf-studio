@@ -1,4 +1,4 @@
-export interface IkDiagnostics {
+interface IkDiagnostics {
   termination_reason: string;
   termination_flags: boolean[];
   iterations: number;

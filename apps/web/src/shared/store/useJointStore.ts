@@ -1,23 +1,23 @@
 import { create } from "zustand";
 
-export type JointValues = Record<string, number>;
+type JointValues = Record<string, number>;
 
-export interface SetJointValueOptions {
+interface SetJointValueOptions {
   enforceVelocity?: boolean;
   timestamp?: number;
 }
 
-export interface JointParameter {
+interface JointParameter {
   name: string;
   value: number;
 }
 
-export interface TransitionOptions {
+interface TransitionOptions {
   smooth: boolean;
   smoothness: number; // Controls FPS and transition speed (0-100)
 }
 
-export interface NodeState {
+interface NodeState {
   id: string;
   type: "joint" | "transition";
   joints?: JointParameter[];

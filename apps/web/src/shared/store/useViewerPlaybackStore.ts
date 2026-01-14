@@ -7,7 +7,7 @@ export type EpisodePlaybackOptions = {
   startFrame?: number;
 };
 
-export type ViewerPlaybackHandlers = {
+type ViewerPlaybackHandlers = {
   playAnimation?: (forceState?: boolean) => void;
   uploadMotionData?: (fileOrEvent: ChangeEvent<HTMLInputElement> | File) => void;
   playEpisode?: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;

@@ -2,13 +2,13 @@
  * Camera configuration types for URDF Studio
  */
 
-export interface CameraIntrinsics {
+interface CameraIntrinsics {
   width: number;
   height: number;
   fov_deg: number;
 }
 
-export interface CameraPose {
+interface CameraPose {
   xyz: [number, number, number];  // Position [x, y, z]
   rpy: [number, number, number];  // Rotation [roll, pitch, yaw] in radians
 }

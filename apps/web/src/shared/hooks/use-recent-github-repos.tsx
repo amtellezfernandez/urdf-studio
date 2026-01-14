@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-export interface RecentGitHubRepo {
+interface RecentGitHubRepo {
   url: string;
   owner: string;
   repo: string;
@@ -171,4 +171,3 @@ export function useRecentGitHubRepos() {
     clearRecentRepos,
   };
 }
-
