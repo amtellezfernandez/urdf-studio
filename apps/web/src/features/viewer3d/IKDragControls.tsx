@@ -31,6 +31,7 @@ export const IKDragControls = ({
   const { camera, gl, raycaster, pointer } = useThree();
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
   const lastIkCallRef = useRef<number>(0);
   const ikThrottleMs = 60; // Call IK at most once every 60ms to avoid spamming and keep responses smooth
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -47,6 +48,11 @@ export const IKDragControls = ({
   const activePointerIdRef = useRef<number | null>(null);
   const intersectionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const lastSolvedTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
+  const basePositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const clampDirectionRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const reachRadiusRef = useRef<number | null>(null);
+  const baseLinkNameRef = useRef<string | null>(null);
+  const clampedRef = useRef(false);
 
   // Debug initial props
   useEffect(() => {
@@ -90,6 +96,102 @@ export const IKDragControls = ({
     endEffectorObject.current = link;
   }, [robot, endEffectorLink]);
 
+  useEffect(() => {
+    if (!urdfContent || !endEffectorLink) {
+      reachRadiusRef.current = null;
+      baseLinkNameRef.current = null;
+      clampedRef.current = false;
+      setIsClamped(false);
+      return;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(urdfContent, "text/xml");
+      const parserError = xmlDoc.querySelector("parsererror");
+      if (parserError) {
+        reachRadiusRef.current = null;
+        baseLinkNameRef.current = null;
+        return;
+      }
+
+      const linkNames = new Set<string>();
+      xmlDoc.querySelectorAll("link").forEach((link) => {
+        const name = link.getAttribute("name");
+        if (name) linkNames.add(name);
+      });
+
+      const jointByChildLink = new Map<
+        string,
+        {
+          parentLink: string;
+          origin: [number, number, number];
+          type: string;
+          limitLower?: number;
+          limitUpper?: number;
+        }
+      >();
+
+      const childLinks = new Set<string>();
+      xmlDoc.querySelectorAll("joint").forEach((joint) => {
+        const child = joint.querySelector("child")?.getAttribute("link");
+        const parent = joint.querySelector("parent")?.getAttribute("link");
+        if (!child || !parent) return;
+        childLinks.add(child);
+
+        const origin = joint.querySelector("origin");
+        const xyz = (origin?.getAttribute("xyz")?.split(" ").map(parseFloat) || [
+          0,
+          0,
+          0,
+        ]) as [number, number, number];
+
+        const limit = joint.querySelector("limit");
+        const lowerRaw = limit?.getAttribute("lower");
+        const upperRaw = limit?.getAttribute("upper");
+        const lower = lowerRaw !== null ? Number(lowerRaw) : undefined;
+        const upper = upperRaw !== null ? Number(upperRaw) : undefined;
+
+        jointByChildLink.set(child, {
+          parentLink: parent,
+          origin: xyz,
+          type: joint.getAttribute("type") || "fixed",
+          limitLower: Number.isFinite(lower) ? lower : undefined,
+          limitUpper: Number.isFinite(upper) ? upper : undefined,
+        });
+      });
+
+      let reach = 0;
+      let cursor = endEffectorLink;
+      let safety = 0;
+      while (jointByChildLink.has(cursor) && safety < 200) {
+        const jointInfo = jointByChildLink.get(cursor);
+        if (!jointInfo) break;
+        const [x, y, z] = jointInfo.origin;
+        reach += Math.sqrt(x * x + y * y + z * z);
+        if (jointInfo.type === "prismatic") {
+          const lower = jointInfo.limitLower ?? 0;
+          const upper = jointInfo.limitUpper ?? 0;
+          reach += Math.max(Math.abs(lower), Math.abs(upper));
+        }
+        cursor = jointInfo.parentLink;
+        safety += 1;
+      }
+
+      reachRadiusRef.current = reach > 0 ? reach : null;
+      baseLinkNameRef.current = cursor || null;
+
+      if (!baseLinkNameRef.current) {
+        const rootLinks = Array.from(linkNames).filter((name) => !childLinks.has(name));
+        baseLinkNameRef.current = rootLinks[0] ?? null;
+      }
+    } catch (error) {
+      console.warn("[IK] Failed to compute reach envelope:", error);
+      reachRadiusRef.current = null;
+      baseLinkNameRef.current = null;
+    }
+  }, [urdfContent, endEffectorLink]);
+
   const syncTargetToEndEffector = useCallback(() => {
     if (!endEffectorObject.current || !targetMeshRef.current) return;
 
@@ -108,6 +210,10 @@ export const IKDragControls = ({
       position: targetPositionRef.current.clone(),
       quaternion: targetQuaternionRef.current.clone(),
     };
+    if (clampedRef.current) {
+      clampedRef.current = false;
+      setIsClamped(false);
+    }
   }, []);
 
   // Update target position to match end effector (runs on joint changes and initially)
@@ -238,6 +344,32 @@ export const IKDragControls = ({
       }
 
       intersectionRef.current.add(dragOffsetRef.current);
+      let clamped = false;
+      const reachRadius = reachRadiusRef.current;
+      if (reachRadius && robot) {
+        const baseLinkName = baseLinkNameRef.current;
+        const baseObject =
+          (baseLinkName &&
+            (robot.links?.[baseLinkName] ??
+              robot.getObjectByName?.(baseLinkName))) ||
+          robot;
+        if (baseObject?.updateMatrixWorld && baseObject?.getWorldPosition) {
+          baseObject.updateMatrixWorld(true);
+          baseObject.getWorldPosition(basePositionRef.current);
+          clampDirectionRef.current.copy(intersectionRef.current).sub(basePositionRef.current);
+          const distance = clampDirectionRef.current.length();
+          if (distance > reachRadius && distance > 0) {
+            clampDirectionRef.current.setLength(reachRadius);
+            intersectionRef.current.copy(basePositionRef.current).add(clampDirectionRef.current);
+            clamped = true;
+          }
+        }
+      }
+
+      if (clampedRef.current !== clamped) {
+        clampedRef.current = clamped;
+        setIsClamped(clamped);
+      }
       targetMeshRef.current.position.copy(intersectionRef.current);
 
       pendingTargetRef.current = {
@@ -246,7 +378,7 @@ export const IKDragControls = ({
       };
       return true;
     },
-    [camera, gl, raycaster]
+    [camera, gl, raycaster, robot]
   );
 
   const endDrag = useCallback(
@@ -271,6 +403,10 @@ export const IKDragControls = ({
       activePointerIdRef.current = null;
       setIsDragging(false);
       onDragStateChange?.(false);
+      if (clampedRef.current) {
+        clampedRef.current = false;
+        setIsClamped(false);
+      }
     },
     [gl, onDragStateChange]
   );
@@ -437,9 +573,9 @@ export const IKDragControls = ({
     >
       <sphereGeometry args={[0.035]} />
       <meshBasicMaterial
-        color={isDragging ? "#ff6b6b" : isHovered ? "#5bc0de" : "#4dabf7"}
+        color={isClamped ? "#f59e0b" : isDragging ? "#ff6b6b" : isHovered ? "#5bc0de" : "#4dabf7"}
         transparent
-        opacity={isDragging ? 0.9 : isHovered ? 0.8 : 0.7}
+        opacity={isDragging || isClamped ? 0.9 : isHovered ? 0.8 : 0.7}
         depthTest={false}
       />
     </mesh>
