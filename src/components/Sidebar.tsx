@@ -3781,6 +3781,7 @@ export const Sidebar = ({
         autoplay: shouldAutoplay,
         startFrame: clampedFrame,
       });
+      onFrameChange?.(clampedFrame);
       currentLoadedEpisodeRef.current = episodeIndex;
     } else {
       // Same episode - just update frame position
