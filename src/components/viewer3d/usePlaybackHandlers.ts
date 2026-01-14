@@ -49,7 +49,15 @@ export const usePlaybackHandlers = ({
           currentFrameIdx !== null &&
           currentFrameIdx >= lastFrameIdx
         ) {
-          return;
+          const firstTimestamp = animationFrames[0]?.timestamp ?? 0;
+          animationController.setCurrentFrameIndex(0);
+          animationController.setManualFrameTime(firstTimestamp);
+          animationController.setPreserveFrameTime(null);
+          animationController.setResetAnimationStart(true);
+          setCurrentFrame?.(0);
+          if (onFrameChange && !setCurrentFrame) {
+            onFrameChange(0);
+          }
         }
       }
 
