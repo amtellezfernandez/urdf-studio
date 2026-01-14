@@ -3713,17 +3713,19 @@ export const Sidebar = ({
 
   // Centralized function to stop all playback
   // This ensures consistent stopping behavior and prevents race conditions
-  const stopAllPlayback = useCallback(() => {
+  const stopAllPlayback = useCallback((options?: { clearLoadedEpisode?: boolean }) => {
+    const clearLoadedEpisode = options?.clearLoadedEpisode ?? true;
     isPlayingAllRef.current = false;
     setIsPlayingAll(false);
     setPlaybackMode(null);
 
     viewerPlayback.stopAnimation();
 
-    // CRITICAL: Clear the loaded episode ref so that when resuming playback,
-    // setEpisodeAndFrame knows it needs to reload the episode frames
-    // This prevents flickering from frame 0 → scrubbed frame
-    currentLoadedEpisodeRef.current = null;
+    if (clearLoadedEpisode) {
+      // Clear the loaded episode ref so that when resuming playback,
+      // setEpisodeAndFrame knows it needs to reload the episode frames.
+      currentLoadedEpisodeRef.current = null;
+    }
 
     // DO NOT reset frame to 0 - we already captured and preserved the position above
     // viewerPlayback.setFrame(0);
@@ -3857,7 +3859,7 @@ export const Sidebar = ({
     }
 
     if (isPlayingAll) {
-      stopAllPlayback();
+      stopAllPlayback({ clearLoadedEpisode: false });
       return;
     }
 
