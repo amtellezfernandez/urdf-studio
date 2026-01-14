@@ -34,6 +34,7 @@ export const useUrdfAnimation = ({
 }: UseUrdfAnimationParams) => {
   const animationStartTime = useRef<number>(0);
   const playbackEndedRef = useRef(false);
+  const frameUpdateEpochRef = useRef(0);
 
   // Reset animation when frames change
   useEffect(() => {
@@ -42,6 +43,7 @@ export const useUrdfAnimation = ({
       animationController.currentFrameIndexRef.current = 0;
     }
     playbackEndedRef.current = false;
+    frameUpdateEpochRef.current += 1;
   }, [animationFrames, animationController]);
 
   useEffect(() => {
@@ -217,8 +219,12 @@ export const useUrdfAnimation = ({
       // Frame was already updated when preserving position
     } else if (animationController.currentFrameIndexRef.current !== frameIndex) {
       animationController.currentFrameIndexRef.current = frameIndex;
+      const frameUpdateEpoch = frameUpdateEpochRef.current;
       // Use requestAnimationFrame to update state outside useFrame
       requestAnimationFrame(() => {
+        if (frameUpdateEpoch !== frameUpdateEpochRef.current) {
+          return;
+        }
         if (onFrameChange) {
           onFrameChange(frameIndex);
         }
