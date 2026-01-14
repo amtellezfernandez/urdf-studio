@@ -12,6 +12,7 @@ const webRoot = path.resolve(rootDir, "apps", "web");
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   root: webRoot,
+  cacheDir: path.resolve(rootDir, "node_modules", ".vite", "apps-web"),
   server: {
     host: "::",
     port: 5173,
