@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
+import { buildIkOrientationPayload } from "@/features/viewer3d/viewer3d-helpers";
 
 interface IKDragControlsProps {
   robot: URDFRobot | null; // URDFRobot
@@ -250,30 +251,25 @@ export const IKDragControls = ({
           target_position: [position.x, position.y, position.z],
         };
 
-        // Convert quaternion to rotation matrix for the API
-        const { w, x, y, z } = quaternion;
-        const targetRotation = [
-          [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-          [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-          [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-        ];
-        const targetWxyz = [w, x, y, z];
+        const orientationPayload = buildIkOrientationPayload(quaternion);
 
         // Try strict orientation first, then fall back to position-only solve
         const payloads = [
-          {
-            ...basePayload,
-            target_rotation: targetRotation,
-            target_wxyz: targetWxyz,
-            ignore_orientation: false,
-          },
+          orientationPayload
+            ? {
+                ...basePayload,
+                target_rotation: orientationPayload.rotation,
+                target_wxyz: orientationPayload.wxyz,
+                ignore_orientation: false,
+              }
+            : null,
           {
             ...basePayload,
             target_rotation: null,
             target_wxyz: null,
             ignore_orientation: true,
           },
-        ];
+        ].filter(Boolean) as Array<Record<string, unknown>>;
 
         let solved = false;
         let lastError: string | null = null;

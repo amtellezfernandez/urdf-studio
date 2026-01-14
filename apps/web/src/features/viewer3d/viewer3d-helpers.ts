@@ -76,6 +76,36 @@ export const extractLinkPose = (robot: URDFRobot | null, linkName: string): Link
   };
 };
 
+export const normalizeIkQuaternion = (quat: THREE.Quaternion) => {
+  const normalized = quat.clone().normalize();
+  if (normalized.w < 0) {
+    normalized.w *= -1;
+    normalized.x *= -1;
+    normalized.y *= -1;
+    normalized.z *= -1;
+  }
+  return normalized;
+};
+
+export const buildIkOrientationPayload = (quat: THREE.Quaternion) => {
+  const normalized = normalizeIkQuaternion(quat);
+  const { w, x, y, z } = normalized;
+  if (![w, x, y, z].every(Number.isFinite)) {
+    return null;
+  }
+
+  const rotation = [
+    [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+  ];
+
+  return {
+    wxyz: [w, x, y, z] as [number, number, number, number],
+    rotation,
+  };
+};
+
 export const positionDistance = (
   a: [number, number, number],
   b: [number, number, number]

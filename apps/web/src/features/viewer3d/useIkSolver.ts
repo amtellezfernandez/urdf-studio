@@ -5,7 +5,11 @@ import type { URDFRobot } from "urdf-loader";
 import { useObjectStore, type CreatedObject } from "@/features/object-creator";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
-import { getLiveRobotJoints, type DragMode } from "@/features/viewer3d/viewer3d-helpers";
+import {
+  buildIkOrientationPayload,
+  getLiveRobotJoints,
+  type DragMode,
+} from "@/features/viewer3d/viewer3d-helpers";
 import type { IkResponsePayload } from "@/features/viewer3d/ik-types";
 
 type UseIkSolverParams = {
@@ -131,13 +135,7 @@ export const useIkSolver = ({
       }
 
       // Use end-effector orientation directly (no transformation needed)
-      const { w, x, y, z } = effQuat;
-      const targetRotation = [
-        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-      ];
-      const targetWxyz = [w, x, y, z];
+      const orientationPayload = buildIkOrientationPayload(effQuat);
       // Orientation is optional for orbit points (not center) and point types
       const orientationOptional =
         (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") ||
@@ -158,7 +156,7 @@ export const useIkSolver = ({
         };
 
         const tryPayloads: Array<Record<string, unknown>> = [];
-        if (orientationOptional) {
+        if (orientationOptional || !orientationPayload) {
           tryPayloads.push({
             ...basePayload,
             target_rotation: null,
@@ -166,11 +164,13 @@ export const useIkSolver = ({
             ignore_orientation: true,
           });
         }
-        tryPayloads.push({
-          ...basePayload,
-          target_rotation: targetRotation,
-          target_wxyz: targetWxyz,
-        });
+        if (orientationPayload) {
+          tryPayloads.push({
+            ...basePayload,
+            target_rotation: orientationPayload.rotation,
+            target_wxyz: orientationPayload.wxyz,
+          });
+        }
 
         let data: IkResponsePayload | null = null;
         let lastError: string | null = null;
