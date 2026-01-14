@@ -19,6 +19,7 @@ import { useObjectCreatorStore } from "@/features/objects";
 import { useLayout } from "@/features/layout";
 import { useExportHandlers, useJointMappingPersistence } from "@/features/dataset/exports";
 import { useThemeAndGPUMode } from "@/features/theme";
+import { DEMO_ROBOT_URDF } from "@/shared/samples/demoRobot";
 
 const Index = () => {
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
@@ -189,6 +190,20 @@ const Index = () => {
     setJointValues(values);
   }, [setJointValues]);
 
+  const handleLoadDemo = useCallback(() => {
+    try {
+      const demoFile = new File([DEMO_ROBOT_URDF], "demo_robot.urdf", {
+        type: "application/xml",
+      });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(demoFile);
+      void loadFilesFromFolder(dataTransfer.files);
+      toast.success("Loaded demo robot");
+    } catch (error) {
+      toast.error("Failed to load demo robot");
+    }
+  }, [loadFilesFromFolder]);
+
 
   const {
     handleVizUrdfChange,
@@ -292,7 +307,12 @@ const Index = () => {
 
   // Show upload screen if no files loaded yet
   if (!hasLoadedFiles) {
-    return <FolderUploadScreen onFolderSelected={loadFilesFromFolder} />;
+    return (
+      <FolderUploadScreen
+        onFolderSelected={loadFilesFromFolder}
+        onLoadDemo={handleLoadDemo}
+      />
+    );
   }
 
   const githubToken =
