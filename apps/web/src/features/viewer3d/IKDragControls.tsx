@@ -32,6 +32,8 @@ export const IKDragControls = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isClamped, setIsClamped] = useState(false);
+  const maxDragSpeed = 1.5; // units per second, keeps IK handle from snapping too fast
+  const minSolveDistance = 0.002; // meters, avoid spamming IK for tiny moves
   const lastIkCallRef = useRef<number>(0);
   const ikThrottleMs = 60; // Call IK at most once every 60ms to avoid spamming and keep responses smooth
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -48,6 +50,10 @@ export const IKDragControls = ({
   const activePointerIdRef = useRef<number | null>(null);
   const intersectionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const lastSolvedTargetRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
+  const desiredTargetRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const dragDeltaRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const hasDesiredTargetRef = useRef(false);
+  const lastSubmittedTargetRef = useRef<THREE.Vector3 | null>(null);
   const basePositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const clampDirectionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const reachRadiusRef = useRef<number | null>(null);
@@ -210,6 +216,8 @@ export const IKDragControls = ({
       position: targetPositionRef.current.clone(),
       quaternion: targetQuaternionRef.current.clone(),
     };
+    hasDesiredTargetRef.current = false;
+    lastSubmittedTargetRef.current = null;
     if (clampedRef.current) {
       clampedRef.current = false;
       setIsClamped(false);
@@ -370,12 +378,8 @@ export const IKDragControls = ({
         clampedRef.current = clamped;
         setIsClamped(clamped);
       }
-      targetMeshRef.current.position.copy(intersectionRef.current);
-
-      pendingTargetRef.current = {
-        position: targetMeshRef.current.position.clone(),
-        quaternion: targetMeshRef.current.quaternion.clone(),
-      };
+      desiredTargetRef.current.copy(intersectionRef.current);
+      hasDesiredTargetRef.current = true;
       return true;
     },
     [camera, gl, raycaster, robot]
@@ -403,6 +407,8 @@ export const IKDragControls = ({
       activePointerIdRef.current = null;
       setIsDragging(false);
       onDragStateChange?.(false);
+      hasDesiredTargetRef.current = false;
+      lastSubmittedTargetRef.current = null;
       if (clampedRef.current) {
         clampedRef.current = false;
         setIsClamped(false);
@@ -507,13 +513,43 @@ export const IKDragControls = ({
   }, [isDragging, endDrag, updateDragTarget]);
 
   // Use frame loop to throttle IK calls during dragging
-  useFrame(() => {
-    if (!isDragging) return;
+  useFrame((_, delta) => {
+    if (!isDragging || !targetMeshRef.current) return;
 
     // Always keep the most recent target; drop older ones to avoid backlog
     if (pendingTargetRef.current) {
       queuedTargetRef.current = pendingTargetRef.current;
       pendingTargetRef.current = null;
+    }
+
+    if (hasDesiredTargetRef.current) {
+      dragDeltaRef.current.copy(desiredTargetRef.current).sub(targetMeshRef.current.position);
+      const distance = dragDeltaRef.current.length();
+      if (distance > 0) {
+        const maxStep = maxDragSpeed * delta;
+        if (distance > maxStep) {
+          dragDeltaRef.current.multiplyScalar(maxStep / distance);
+          targetMeshRef.current.position.add(dragDeltaRef.current);
+        } else {
+          targetMeshRef.current.position.copy(desiredTargetRef.current);
+        }
+      }
+    }
+
+    const lastSubmitted = lastSubmittedTargetRef.current;
+    const currentPosition = targetMeshRef.current.position;
+    const distanceSinceLast =
+      lastSubmitted ? lastSubmitted.distanceTo(currentPosition) : Number.POSITIVE_INFINITY;
+
+    if (distanceSinceLast >= minSolveDistance) {
+      pendingTargetRef.current = {
+        position: currentPosition.clone(),
+        quaternion: targetMeshRef.current.quaternion.clone(),
+      };
+      if (!lastSubmittedTargetRef.current) {
+        lastSubmittedTargetRef.current = new THREE.Vector3();
+      }
+      lastSubmittedTargetRef.current.copy(currentPosition);
     }
 
     if (isSolvingRef.current || !queuedTargetRef.current) return;
