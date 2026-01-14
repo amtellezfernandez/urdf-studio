@@ -17,11 +17,11 @@ This will:
 
 ### Optional: Enable PyRoki FK validation
 
-If you want to compare forward kinematics between the Three.js URDFLoader and [PyRoki](https://github.com/chungmin99/pyroki), install PyRoki into the local virtual environment:
+If you want to compare forward kinematics between the Three.js URDFLoader and [PyRoki](https://github.com/chungmin99/pyroki), install the vendored PyRoki into the local virtual environment:
 
 ```bash
 cd ~/URDFStudio
-~/.local/bin/uv pip install --python .venv/bin/python3 "pyroki @ git+https://github.com/chungmin99/pyroki.git"
+~/.local/bin/uv pip install --python .venv/bin/python3 -e ./pyroki
 ```
 
 Once installed, the FK validation popup in the viewer will call into PyRoki via the existing Python environment.

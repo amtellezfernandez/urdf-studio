@@ -1,9 +1,9 @@
 node_modules
 .urdf-studio-config.json
 .venv
-pyroki/
 amd-hackathon/
 dist/
+bun.lockb
 **/__pycache__/
 *.pyc
 *.pyo
