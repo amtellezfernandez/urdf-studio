@@ -134,6 +134,12 @@ export const useIkSolver = ({
       } else {
         effQuat.set(0, 0, 0, 1);
       }
+      const targetQuaternion: [number, number, number, number] = [
+        effQuat.w,
+        effQuat.x,
+        effQuat.y,
+        effQuat.z,
+      ];
 
       const jointValues = getLiveRobotJoints(robot, useJointStore.getState().jointValues);
 
@@ -185,6 +191,10 @@ export const useIkSolver = ({
       setIkError(null);
       setIkTargetName(targetObj.id);
       setIsIkRunning(true);
+      setIkDebugState({
+        lastTargetPosition: targetPosition,
+        lastTargetQuaternion: targetQuaternion,
+      });
 
       const start = performance.now();
       try {
@@ -274,6 +284,7 @@ export const useIkSolver = ({
 
       setIsFollowingOrbit(true);
       setOrbitFollowProgress(0);
+      setIkDebugState({ lastTargetQuaternion: null });
       toast.success(`Following orbit from ${clickedPoint} point...`);
 
       const radius = targetObj.orbitRadius ?? 0.3;
@@ -319,6 +330,7 @@ export const useIkSolver = ({
         const t = totalSteps <= 1 ? 1 : currentStep / (totalSteps - 1); // cover the full arc including the end point
         const currentPhase = normalizeDeg(startPhase + direction * arcLength * t);
         const targetPosition = computeTargetPosition(currentPhase);
+        setIkDebugState({ lastTargetPosition: targetPosition });
 
         try {
           const start = performance.now();

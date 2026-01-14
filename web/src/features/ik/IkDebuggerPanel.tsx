@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
@@ -18,32 +18,69 @@ interface IkDebuggerPanelProps {
 const formatVec3 = (vec: [number, number, number]) =>
   `x:${vec[0].toFixed(3)} y:${vec[1].toFixed(3)} z:${vec[2].toFixed(3)}`;
 
+const formatQuat = (quat: [number, number, number, number]) =>
+  `w:${quat[0].toFixed(3)} x:${quat[1].toFixed(3)} y:${quat[2].toFixed(3)} z:${quat[3].toFixed(3)}`;
+
+const formatMaybe = (value: number | null | undefined, digits = 3) =>
+  value === null || value === undefined ? "-" : value.toFixed(digits);
+
 export const IkDebuggerPanel = ({
   urdfContent,
   robot,
   endEffectorLink,
   robotBoundingBox,
 }: IkDebuggerPanelProps) => {
-  const objects = useObjectStore((s) => s.objects);
-  const ikTargetName = useIkDebugStore((s) => s.targetName);
-  const status = useIkDebugStore((s) => s.status);
-  const error = useIkDebugStore((s) => s.error);
-  const isFollowingOrbit = useIkDebugStore((s) => s.isFollowingOrbit);
-  const orbitFollowProgress = useIkDebugStore((s) => s.orbitFollowProgress);
-  const durationMs = useIkDebugStore((s) => s.durationMs);
-  const diagnostics = useIkDebugStore((s) => s.diagnostics);
+  const debugRef = useRef(useIkDebugStore.getState());
+  const objectsRef = useRef(useObjectStore.getState().objects);
+  const [debugSnapshot, setDebugSnapshot] = useState(debugRef.current);
+  const [objectsSnapshot, setObjectsSnapshot] = useState(objectsRef.current);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribeDebug = useIkDebugStore.subscribe((state) => {
+      debugRef.current = state;
+    });
+    const unsubscribeObjects = useObjectStore.subscribe((state) => {
+      objectsRef.current = state.objects;
+    });
+    return () => {
+      unsubscribeDebug();
+      unsubscribeObjects();
+    };
+  }, []);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setDebugSnapshot(debugRef.current);
+      setObjectsSnapshot(objectsRef.current);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const ikTargets = useMemo(
-    () => objects.filter((obj) => obj.isIkTarget),
-    [objects]
+    () => objectsSnapshot.filter((obj) => obj.isIkTarget),
+    [objectsSnapshot]
   );
 
-  const selectedTarget = useMemo(() => {
-    if (ikTargetName) {
-      return objects.find((obj) => obj.id === ikTargetName) ?? null;
+  useEffect(() => {
+    const targetIds = ikTargets.map((obj) => obj.id);
+    if (debugSnapshot.targetName && targetIds.includes(debugSnapshot.targetName)) {
+      setSelectedTargetId(debugSnapshot.targetName);
+      return;
     }
-    return ikTargets[0] ?? null;
-  }, [ikTargetName, ikTargets, objects]);
+    if (selectedTargetId && targetIds.includes(selectedTargetId)) {
+      return;
+    }
+    setSelectedTargetId(targetIds[0] ?? null);
+  }, [debugSnapshot.targetName, ikTargets, selectedTargetId]);
+
+  const selectedTarget = useMemo(() => {
+    if (!selectedTargetId) return null;
+    return ikTargets.find((obj) => obj.id === selectedTargetId) ?? null;
+  }, [ikTargets, selectedTargetId]);
 
   const targetPosition = useMemo(() => {
     if (!selectedTarget) return null;
@@ -90,11 +127,26 @@ export const IkDebuggerPanel = ({
     const size = new THREE.Vector3();
     robotBoundingBox.getSize(size);
     return {
-      min: [robotBoundingBox.min.x, robotBoundingBox.min.y, robotBoundingBox.min.z] as [number, number, number],
-      max: [robotBoundingBox.max.x, robotBoundingBox.max.y, robotBoundingBox.max.z] as [number, number, number],
+      min: [robotBoundingBox.min.x, robotBoundingBox.min.y, robotBoundingBox.min.z] as [
+        number,
+        number,
+        number,
+      ],
+      max: [robotBoundingBox.max.x, robotBoundingBox.max.y, robotBoundingBox.max.z] as [
+        number,
+        number,
+        number,
+      ],
       size: [size.x, size.y, size.z] as [number, number, number],
     };
   }, [robotBoundingBox]);
+
+  const orbitMode = selectedTarget?.ikTargetType === "orbit";
+  const isDragHandle = debugSnapshot.targetName === "drag-handle";
+  const displayTargetPosition = isDragHandle
+    ? debugSnapshot.lastTargetPosition
+    : targetPosition ?? debugSnapshot.lastTargetPosition;
+  const displayTargetQuaternion = debugSnapshot.lastTargetQuaternion;
 
   return (
     <div className="space-y-2">
@@ -102,8 +154,10 @@ export const IkDebuggerPanel = ({
         <div className="space-y-0.5">
           <BlenderPropertyRow label="Status">
             <span className="text-[10px] text-foreground">
-              {status}
-              {status === "error" && error ? `: ${error}` : ""}
+              {debugSnapshot.status}
+              {debugSnapshot.status === "error" && debugSnapshot.error
+                ? `: ${debugSnapshot.error}`
+                : ""}
             </span>
           </BlenderPropertyRow>
           <BlenderPropertyRow label="Solver">
@@ -121,7 +175,12 @@ export const IkDebuggerPanel = ({
           </BlenderPropertyRow>
           <BlenderPropertyRow label="Target Pos">
             <span className="text-[10px] font-mono text-foreground">
-              {targetPosition ? formatVec3(targetPosition) : "-"}
+              {displayTargetPosition ? formatVec3(displayTargetPosition) : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Target Rot">
+            <span className="text-[10px] font-mono text-foreground">
+              {displayTargetQuaternion ? formatQuat(displayTargetQuaternion) : "-"}
             </span>
           </BlenderPropertyRow>
           <BlenderPropertyRow label="Mode">
@@ -129,83 +188,83 @@ export const IkDebuggerPanel = ({
               {selectedTarget?.ikTargetType ?? "-"}
             </span>
           </BlenderPropertyRow>
-          {selectedTarget?.ikTargetType === "orbit" && (
-            <BlenderPropertyRow label="Point">
-              <span className="text-[10px] text-foreground">
-                {selectedTarget?.orbitTargetPoint ?? "-"}
-              </span>
-            </BlenderPropertyRow>
-          )}
-          <BlenderPropertyRow label="Solve ms">
-            <span className="text-[10px] font-mono text-foreground">
-              {durationMs !== null ? durationMs.toFixed(0) : "-"}
+          <BlenderPropertyRow label="Point">
+            <span className="text-[10px] text-foreground">
+              {orbitMode ? selectedTarget?.orbitTargetPoint ?? "-" : "-"}
             </span>
           </BlenderPropertyRow>
-          {selectedTarget?.ikTargetType === "orbit" && (
-            <>
-              <BlenderPropertyRow label="Radius">
-                <span className="text-[10px] font-mono text-foreground">
-                  {selectedTarget.orbitRadius?.toFixed(3) ?? "-"}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Incline">
-                <span className="text-[10px] font-mono text-foreground">
-                  {selectedTarget.orbitInclination?.toFixed(1) ?? "-"}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Phase">
-                <span className="text-[10px] font-mono text-foreground">
-                  {selectedTarget.orbitPhase?.toFixed(1) ?? "-"}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Offset">
-                <span className="text-[10px] font-mono text-foreground">
-                  {selectedTarget.orbitSecondaryOffset?.toFixed(1) ?? "-"}
-                </span>
-              </BlenderPropertyRow>
-            </>
-          )}
-          {isFollowingOrbit && (
-            <BlenderPropertyRow label="Orbit">
-              <span className="text-[10px] font-mono text-foreground">
-                {orbitFollowProgress.toFixed(0)}%
-              </span>
-            </BlenderPropertyRow>
-          )}
-          {diagnostics && (
-            <>
-              <BlenderPropertyRow label="Iter">
-                <span className="text-[10px] font-mono text-foreground">
-                  {diagnostics.iterations}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Cost">
-                <span className="text-[10px] font-mono text-foreground">
-                  {diagnostics.cost.toFixed(4)}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Term">
-                <span className="text-[10px] text-foreground">
-                  {diagnostics.termination_reason}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Valid">
-                <span className="text-[10px] text-foreground">
-                  {diagnostics.validity}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Degeneracy">
-                <span className="text-[10px] text-foreground">
-                  {diagnostics.degeneracy}
-                </span>
-              </BlenderPropertyRow>
-              <BlenderPropertyRow label="Branch">
-                <span className="text-[10px] text-foreground">
-                  {diagnostics.branch_maybe ? "possible" : "expected"}
-                </span>
-              </BlenderPropertyRow>
-            </>
-          )}
+          <BlenderPropertyRow label="Solve ms">
+            <span className="text-[10px] font-mono text-foreground">
+              {debugSnapshot.durationMs !== null
+                ? debugSnapshot.durationMs.toFixed(0)
+                : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Radius">
+            <span className="text-[10px] font-mono text-foreground">
+              {orbitMode ? formatMaybe(selectedTarget?.orbitRadius, 3) : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Incline">
+            <span className="text-[10px] font-mono text-foreground">
+              {orbitMode ? formatMaybe(selectedTarget?.orbitInclination, 1) : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Phase">
+            <span className="text-[10px] font-mono text-foreground">
+              {orbitMode ? formatMaybe(selectedTarget?.orbitPhase, 1) : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Offset">
+            <span className="text-[10px] font-mono text-foreground">
+              {orbitMode ? formatMaybe(selectedTarget?.orbitSecondaryOffset, 1) : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Orbit">
+            <span className="text-[10px] font-mono text-foreground">
+              {debugSnapshot.isFollowingOrbit
+                ? `${debugSnapshot.orbitFollowProgress.toFixed(0)}%`
+                : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Iter">
+            <span className="text-[10px] font-mono text-foreground">
+              {debugSnapshot.diagnostics ? debugSnapshot.diagnostics.iterations : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Cost">
+            <span className="text-[10px] font-mono text-foreground">
+              {debugSnapshot.diagnostics
+                ? debugSnapshot.diagnostics.cost.toFixed(4)
+                : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Term">
+            <span className="text-[10px] text-foreground">
+              {debugSnapshot.diagnostics
+                ? debugSnapshot.diagnostics.termination_reason
+                : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Valid">
+            <span className="text-[10px] text-foreground">
+              {debugSnapshot.diagnostics ? debugSnapshot.diagnostics.validity : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Degeneracy">
+            <span className="text-[10px] text-foreground">
+              {debugSnapshot.diagnostics ? debugSnapshot.diagnostics.degeneracy : "-"}
+            </span>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Branch">
+            <span className="text-[10px] text-foreground">
+              {debugSnapshot.diagnostics
+                ? debugSnapshot.diagnostics.branch_maybe
+                  ? "possible"
+                  : "expected"
+                : "-"}
+            </span>
+          </BlenderPropertyRow>
         </div>
       </BlenderPanel>
 

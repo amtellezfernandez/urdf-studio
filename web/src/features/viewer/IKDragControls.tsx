@@ -261,8 +261,8 @@ export const IKDragControls = ({
         status: "running",
         error: null,
         targetName: "drag-handle",
-        targetLink: endEffectorLink,
-        targetPosition: [position.x, position.y, position.z],
+        lastTargetPosition: [position.x, position.y, position.z],
+        lastTargetQuaternion: [quaternion.w, quaternion.x, quaternion.y, quaternion.z],
         durationMs: null,
         diagnostics: null,
       });
@@ -651,8 +651,9 @@ export const IKDragControls = ({
         onDragStateChange?.(false);
       }
       setIsHovered(false);
+      setIkDebugState({ targetName: null });
     }
-  }, [enabled, endDrag, onDragStateChange]);
+  }, [enabled, endDrag, onDragStateChange, setIkDebugState]);
 
   if (!enabled || !endEffectorObject.current) {
     return null;
