@@ -1,5 +1,4 @@
 import type React from "react";
-import JSZip from "jszip";
 import { Button } from "@/shared/ui/button";
 import {
   Select,
@@ -55,6 +54,20 @@ import {
   getPlaybackEndAction,
   type PlaybackMode,
 } from "@/features/playback/episodeCoordinator";
+
+type JSZipConstructor = typeof import("jszip");
+type JSZipInstance = import("jszip");
+type JSZipObject = import("jszip").JSZipObject;
+
+const loadJSZip = (() => {
+  let cached: Promise<JSZipConstructor> | null = null;
+  return () => {
+    if (!cached) {
+      cached = import("jszip").then((module) => module.default as JSZipConstructor);
+    }
+    return cached;
+  };
+})();
 
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
@@ -430,7 +443,7 @@ const computeV3Stats = (
 const generateV3DatasetArchive = async (
   episodes: Episode[],
   robotBaseName: string | undefined,
-  zip: JSZip,
+  zip: JSZipInstance,
   datasetName: string,
   robotName?: string | undefined,
   urdfJointOrder?: string[] // URDF-defined joint order
@@ -1758,7 +1771,7 @@ export const Sidebar = ({
   );
 
   const loadEpisodesFromArchiveZip = useCallback(
-    async (zip: JSZip) => {
+    async (zip: JSZipInstance) => {
       // Check if this is a v3 dataset format
       const infoJsonEntry = Object.values(zip.files).find(
         (entry) => entry.name.includes("meta/info.json") && !entry.dir
@@ -2048,7 +2061,7 @@ export const Sidebar = ({
 
       let loadedCount = 0;
 
-      const processEntry = async (entry: JSZip.JSZipObject) => {
+      const processEntry = async (entry: JSZipObject) => {
         try {
           const content = await entry.async("blob");
           const fileName = entry.name.split("/").pop() ?? entry.name;
@@ -2171,6 +2184,7 @@ export const Sidebar = ({
     if (hasInfoJson) {
       // This is a v3 dataset folder - convert to zip and load
       try {
+        const JSZip = await loadJSZip();
         const zip = new JSZip();
         const infoJsonFile = fileArray.find((file) => {
           const path = file.webkitRelativePath || file.name;
@@ -2349,6 +2363,7 @@ export const Sidebar = ({
 
       // Generate v3 dataset format using common helper
       const datasetName = `${robotBaseName}_v3`;
+      const JSZip = await loadJSZip();
       const zip = new JSZip();
       await generateV3DatasetArchive(episodes, robotBaseName, zip, datasetName, robotName, availableJointsStore);
       const blob = await zip.generateAsync({ type: "blob" });
@@ -2414,6 +2429,7 @@ export const Sidebar = ({
     setIsExportingDataset(true);
     try {
       const datasetName = `${robotBaseName}_v3`;
+      const JSZip = await loadJSZip();
       const zip = new JSZip();
       await generateV3DatasetArchive(episodes, robotBaseName, zip, datasetName, robotName, availableJointsStore);
       const blob = await zip.generateAsync({ type: "blob" });
@@ -2439,6 +2455,7 @@ export const Sidebar = ({
     }
 
     const datasetName = `temp_mix_${Date.now()}`;
+    const JSZip = await loadJSZip();
     const zip = new JSZip();
     await generateV3DatasetArchive(
       episodes,
@@ -2517,6 +2534,7 @@ export const Sidebar = ({
       }
 
       const blob = await response.blob();
+      const JSZip = await loadJSZip();
       const zip = await JSZip.loadAsync(blob);
       await loadEpisodesFromArchiveZip(zip);
     } catch (error) {
