@@ -32,7 +32,7 @@ interface JointControlProps {
   jointName: string;
   jointInfo?: JointLimitInfo;
   jointAxis?: JointAxisInfo;
-  currentValue: number;
+  currentValue?: number;
   onValueChange: (value: number) => void;
   onAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
@@ -139,6 +139,10 @@ export const JointControl = ({
   
   const needsLimits = currentType === "revolute" || currentType === "prismatic";
   const needsAxis = ["revolute", "continuous", "prismatic", "planar"].includes(currentType);
+  const storeJointValue = useJointStore(
+    useCallback((s) => s.jointValues[jointName] ?? 0, [jointName])
+  );
+  const resolvedValue = currentValue ?? storeJointValue;
 
   const jointMaxVelocityOverride = useJointStore(
     (s) => s.jointVelocityLimits[jointName]
@@ -357,7 +361,7 @@ export const JointControl = ({
     }
   }, [jointInfo?.lower, jointInfo?.upper, jointInfo?.type]);
 
-  const valueColor = getJointValueColor(currentValue, min, max, hasBothLimits);
+  const valueColor = getJointValueColor(resolvedValue, min, max, hasBothLimits);
   const valueDisplayRef = useRef<HTMLSpanElement>(null);
   const [isValueFocused, setIsValueFocused] = useState(false);
   const isDraggingValue = useRef(false);
@@ -370,7 +374,7 @@ export const JointControl = ({
   }>({
     startX: 0,
     startY: 0,
-    startValue: currentValue,
+    startValue: resolvedValue,
     originalCursor: "",
   });
 
@@ -404,14 +408,14 @@ export const JointControl = ({
       const snapped = snapValueIfNeeded(value, Boolean(options?.snap));
       const clamped = clampValue(snapped);
       if (Number.isFinite(clamped)) {
-        if (clamped !== currentValue) {
+        if (clamped !== resolvedValue) {
           onValueChange(clamped);
         }
       } else {
         onValueChange(clamped);
       }
     },
-    [clampValue, currentValue, onValueChange, snapValueIfNeeded]
+    [clampValue, onValueChange, resolvedValue, snapValueIfNeeded]
   );
 
   const getDragSensitivity = useCallback(
@@ -507,7 +511,7 @@ export const JointControl = ({
     dragState.current = {
       startX: event.clientX,
       startY: event.clientY,
-      startValue: currentValue,
+      startValue: resolvedValue,
       originalCursor: document.body.style.cursor,
     };
 
@@ -546,9 +550,9 @@ export const JointControl = ({
       if (angleUnit === "deg") {
         delta *= DEG_TO_RAD;
       }
-      applyValueChange(currentValue + delta);
+      applyValueChange(resolvedValue + delta);
     },
-    [angleUnit, applyValueChange, currentValue, getWheelStep, isValueFocused]
+    [angleUnit, applyValueChange, resolvedValue, getWheelStep, isValueFocused]
   );
 
   const handleValueKeyDown = useCallback(
@@ -558,10 +562,10 @@ export const JointControl = ({
 
       if (["ArrowUp", "ArrowRight", "PageUp"].includes(event.key)) {
         event.preventDefault();
-        applyValueChange(currentValue + stepRad, { snap: event.ctrlKey });
+        applyValueChange(resolvedValue + stepRad, { snap: event.ctrlKey });
       } else if (["ArrowDown", "ArrowLeft", "PageDown"].includes(event.key)) {
         event.preventDefault();
-        applyValueChange(currentValue - stepRad, { snap: event.ctrlKey });
+        applyValueChange(resolvedValue - stepRad, { snap: event.ctrlKey });
       } else if (event.key === "Home" && Number.isFinite(min)) {
         event.preventDefault();
         applyValueChange(min, { snap: event.ctrlKey });
@@ -576,7 +580,7 @@ export const JointControl = ({
         applyValueChange(0);
       }
     },
-    [applyValueChange, currentValue, max, min]
+    [applyValueChange, max, min, resolvedValue]
   );
 
   const handleMouseLeave = useCallback((e: React.MouseEvent) => {
@@ -676,8 +680,8 @@ export const JointControl = ({
                 }
                 aria-valuenow={
                   angleUnit === "deg"
-                    ? currentValue * RAD_TO_DEG
-                    : currentValue
+                    ? resolvedValue * RAD_TO_DEG
+                    : resolvedValue
                 }
                 className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
                 style={{ color: valueColor }}
@@ -688,8 +692,8 @@ export const JointControl = ({
                 onKeyDown={handleValueKeyDown}
               >
                 {angleUnit === "deg" 
-                  ? `${(currentValue * RAD_TO_DEG).toFixed(2)}°`
-                  : `${currentValue.toFixed(2)}`}
+                  ? `${(resolvedValue * RAD_TO_DEG).toFixed(2)}°`
+                  : `${resolvedValue.toFixed(2)}`}
               </span>
             )}
           </CollapsibleTrigger>
@@ -704,7 +708,7 @@ export const JointControl = ({
             <div className="flex items-center gap-2">
               <div className="flex-1">
                 <CustomSlider
-                  value={[currentValue]}
+                  value={[resolvedValue]}
                   onValueChange={(value) => onValueChange(value[0])}
                   min={min}
                   max={max}
@@ -714,7 +718,7 @@ export const JointControl = ({
                 />
               </div>
               <NumberInput
-                value={angleUnit === "deg" ? currentValue * RAD_TO_DEG : currentValue}
+                value={angleUnit === "deg" ? resolvedValue * RAD_TO_DEG : resolvedValue}
               onValueChange={(val) => {
                 const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
                   const clampedValue = Math.max(min, Math.min(max, radValue));

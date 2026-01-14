@@ -65,8 +65,9 @@ export const useRobotJointSync = ({
 
   useEffect(() => {
     if (!robot || isDraggingJoint || isIkHandleDragging) return;
+    if (jointValues === storeJointValues) return;
     applyJointValues(robot, jointValues);
-  }, [robot, jointValues, isDraggingJoint, isIkHandleDragging]);
+  }, [robot, jointValues, storeJointValues, isDraggingJoint, isIkHandleDragging]);
 
   const resetPose = useCallback(() => {
     if (!robot) return;

@@ -22,6 +22,15 @@ const AXIS_COLORS = {
 export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
   const groupRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
+  const tempVectors = useMemo(
+    () => ({
+      cameraDirection: new THREE.Vector3(),
+      cameraRight: new THREE.Vector3(),
+      cameraUp: new THREE.Vector3(),
+      gizmoPosition: new THREE.Vector3(),
+    }),
+    []
+  );
   
   // Position gizmo relative to camera in a fixed position
   // This ensures it always stays visible and doesn't disappear when camera moves
@@ -29,13 +38,11 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
     if (!groupRef.current) return;
     
     // Get camera's local coordinate system from world matrix
-    const cameraDirection = new THREE.Vector3();
+    const { cameraDirection, cameraRight, cameraUp, gizmoPosition } = tempVectors;
     camera.getWorldDirection(cameraDirection);
     
     // Extract right (X) and up (Y) vectors from camera's world matrix
-    const cameraRight = new THREE.Vector3();
     cameraRight.setFromMatrixColumn(camera.matrixWorld, 0);
-    const cameraUp = new THREE.Vector3();
     cameraUp.setFromMatrixColumn(camera.matrixWorld, 1);
     
     // Calculate gizmo position: top-right corner of viewport (where Selected Joint popup was)
@@ -45,10 +52,11 @@ export const AxisGizmo3D = ({ onViewChange }: AxisGizmo3DProps = {}) => {
     const screenOffsetY = 0.4; // Top offset (positive = up)
     
     // Calculate position: start from camera, move forward, then offset
-    const gizmoPosition = camera.position.clone()
-      .add(cameraDirection.clone().multiplyScalar(viewDistance))
-      .add(cameraRight.clone().multiplyScalar(screenOffsetX))
-      .add(cameraUp.clone().multiplyScalar(screenOffsetY));
+    gizmoPosition
+      .copy(camera.position)
+      .addScaledVector(cameraDirection, viewDistance)
+      .addScaledVector(cameraRight, screenOffsetX)
+      .addScaledVector(cameraUp, screenOffsetY);
     
     groupRef.current.position.copy(gizmoPosition);
     

@@ -41,6 +41,9 @@ export const IKDragControls = ({
   const isSolvingRef = useRef(false);
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane());
   const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const targetPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const targetQuaternionRef = useRef<THREE.Quaternion>(new THREE.Quaternion());
+  const targetScaleRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // Debug initial props
   useEffect(() => {
@@ -91,13 +94,14 @@ export const IKDragControls = ({
     const link = endEffectorObject.current;
     link.updateMatrixWorld(true);
 
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    link.matrixWorld.decompose(pos, quat, scale);
+    link.matrixWorld.decompose(
+      targetPositionRef.current,
+      targetQuaternionRef.current,
+      targetScaleRef.current
+    );
 
-    targetMeshRef.current.position.copy(pos);
-    targetMeshRef.current.quaternion.copy(quat);
+    targetMeshRef.current.position.copy(targetPositionRef.current);
+    targetMeshRef.current.quaternion.copy(targetQuaternionRef.current);
   });
 
   // Solve IK when target is moved - uses current joint values as seed for fast convergence

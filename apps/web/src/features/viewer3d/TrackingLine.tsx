@@ -19,6 +19,7 @@ export const TrackingLine = ({
   gpuMode?: GPUMode;
 }) => {
   const lineRef = useRef<THREE.LineSegments>(null);
+  const targetPosRef = useRef(new THREE.Vector3());
 
   useFrame(() => {
     if (!robot || !lineRef.current) return;
@@ -34,8 +35,8 @@ export const TrackingLine = ({
           joint.updateWorldMatrix(true, true);
 
           // Get the world position of the joint
-          targetPos = new THREE.Vector3();
-          joint.getWorldPosition(targetPos);
+          joint.getWorldPosition(targetPosRef.current);
+          targetPos = targetPosRef.current;
         }
       } catch (error) {
         console.error("Error getting joint world position:", error);
@@ -50,9 +51,8 @@ export const TrackingLine = ({
           robotAny?.getObjectByName?.(safeDecode(endEffectorLink));
         if (link) {
           link.updateMatrixWorld(true);
-          const pos = new THREE.Vector3();
-          link.getWorldPosition(pos);
-          targetPos = pos;
+          link.getWorldPosition(targetPosRef.current);
+          targetPos = targetPosRef.current;
         }
       } catch (error) {
         console.error("Error getting link world position:", error);

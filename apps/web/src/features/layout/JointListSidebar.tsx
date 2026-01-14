@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { JointListItem } from "@/features/layout/JointListItem";
 import { JointControl } from "@/features/layout/JointControl";
 import { Input } from "@/shared/ui/input";
@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, X, Box, Video } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
-import { useJointStore } from "@/shared/store/useJointStore";
 import { useObjectStore } from "@/features/object-creator";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/features/urdf";
@@ -29,7 +28,6 @@ interface HierarchyTreeViewProps {
     filteredJoints: JointHierarchyNode[];
   } | null;
   jointLimits: JointLimits;
-  jointValues: Record<string, number>;
   deletedJoints: Set<string>;
   selectedJoint?: string | null;
   hoveredJoint?: string | null;
@@ -49,7 +47,6 @@ interface HierarchyTreeViewProps {
 const HierarchyTreeView = ({
   hierarchyTree,
   jointLimits,
-  jointValues,
   deletedJoints,
   selectedJoint,
   hoveredJoint,
@@ -289,11 +286,10 @@ const HierarchyTreeView = ({
                       }}
                     />
                   </>
-                  <JointListItem
-                    jointName={joint.jointName}
-                    jointInfo={jointLimits[joint.jointName]}
-                    currentValue={jointValues[joint.jointName] ?? 0}
-                    onValueChange={() => {}} // Read-only
+                    <JointListItem
+                      jointName={joint.jointName}
+                      jointInfo={jointLimits[joint.jointName]}
+                      onValueChange={() => {}} // Read-only
                     isDeleted={deletedJoints.has(joint.jointName)}
                     isSelected={selectedJoint === joint.jointName}
                     isHighlighted={hoveredJoint === joint.jointName}
@@ -354,6 +350,8 @@ export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 280;
 export const RIGHT_SIDEBAR_MIN_WIDTH = 200;
 export const RIGHT_SIDEBAR_MAX_WIDTH = 450;
 const POINT_SIZE = 0.02;
+const VIRTUAL_ROW_HEIGHT = 34;
+const VIRTUAL_OVERSCAN = 8;
 
 // Object Editor Panel
 interface ObjectEditorPanelProps {
@@ -1049,8 +1047,6 @@ export const JointListSidebar = ({
   endEffectorLink,
   onMarkAsEndEffector,
 }: JointListSidebarProps) => {
-  const jointValues = useJointStore((s) => s.jointValues);
-
   // Use prop if provided, otherwise default to "rad"
   const angleUnit = angleUnitProp ?? "rad";
   const onAngleUnitChange = onAngleUnitChangeProp ?? (() => {});
@@ -1058,6 +1054,10 @@ export const JointListSidebar = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "elements">("flat");
+  const jointListRef = useRef<HTMLDivElement>(null);
+  const scrollRafRef = useRef<number | null>(null);
+  const [jointListHeight, setJointListHeight] = useState(0);
+  const [jointListScrollTop, setJointListScrollTop] = useState(0);
 
   // Use selectedLink from props instead of local state
   const selectedLink = selectedLinkProp ?? null;
@@ -1074,6 +1074,44 @@ export const JointListSidebar = ({
     // Initialize all joints as visible when availableJoints changes
     setVisibleJoints(new Set(availableJoints));
   }, [availableJoints]);
+
+  useLayoutEffect(() => {
+    const container = jointListRef.current;
+    if (!container) return;
+
+    const updateHeight = () => {
+      setJointListHeight(container.clientHeight);
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const handleJointListScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const nextTop = event.currentTarget.scrollTop;
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current);
+    }
+    scrollRafRef.current = requestAnimationFrame(() => {
+      setJointListScrollTop(nextTop);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
 
   // Listen for visibility changes from episode viewer
   useEffect(() => {
@@ -1216,6 +1254,21 @@ export const JointListSidebar = ({
 
     return joints;
   }, [availableJoints, jointLimits, typeFilter, searchQuery]);
+
+  const shouldVirtualize = viewMode === "flat" && filteredJoints.length > 200;
+  const totalVirtualHeight = shouldVirtualize ? filteredJoints.length * VIRTUAL_ROW_HEIGHT : 0;
+  const visibleCount = shouldVirtualize && jointListHeight > 0
+    ? Math.ceil(jointListHeight / VIRTUAL_ROW_HEIGHT)
+    : 0;
+  const startIndex = shouldVirtualize
+    ? Math.max(0, Math.floor(jointListScrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN)
+    : 0;
+  const endIndex = shouldVirtualize
+    ? Math.min(filteredJoints.length, startIndex + visibleCount + VIRTUAL_OVERSCAN * 2)
+    : filteredJoints.length;
+  const renderedJoints = shouldVirtualize
+    ? filteredJoints.slice(startIndex, endIndex)
+    : filteredJoints;
 
   // Build tree structure for hierarchy view (Link -> Joint -> Link -> Joint...)
   const hierarchyTree = useMemo(() => {
@@ -1414,7 +1467,11 @@ export const JointListSidebar = ({
           </div>
 
           {/* Scrollable Joint List */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 minimal-scrollbar">
+          <div
+            ref={jointListRef}
+            onScroll={handleJointListScroll}
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 minimal-scrollbar"
+          >
             {viewMode === "links" ? (
               // Links view
               filteredLinks.length === 0 ? (
@@ -1493,32 +1550,72 @@ export const JointListSidebar = ({
                     : "No joints available"}
                 </div>
               ) : (
-                <div className="space-y-0.5">
-                  {filteredJoints.map((jointName) => (
-                    <JointListItem
-                      key={jointName}
-                      jointName={jointName}
-                      jointInfo={jointLimits[jointName]}
-                      currentValue={jointValues[jointName] ?? 0}
-                      onValueChange={() => {}} // Read-only
-                      isDeleted={deletedJoints.has(jointName)}
-                      isSelected={selectedJoint === jointName}
-                      isHighlighted={hoveredJoint === jointName}
-                      angleUnit={angleUnit}
-                      onClick={() => {
-                        onJointSelect?.(jointName);
-                        setSelectedLink(null);
-                        useObjectStore.getState().setSelectedObject(null);
-                        useCameraStore.getState().selectCamera(null);
-                      }}
-                      onHover={onJointHover}
-                      availableJoints={availableJoints}
-                      colorJointNames={colorJointNames}
-                      isVisible={visibleJoints.has(jointName)}
-                      onVisibilityToggle={handleVisibilityToggle}
-                    />
-                  ))}
-                </div>
+                shouldVirtualize ? (
+                  <div style={{ height: totalVirtualHeight, position: "relative" }}>
+                    {renderedJoints.map((jointName, index) => {
+                      const itemIndex = startIndex + index;
+                      return (
+                        <div
+                          key={jointName}
+                          style={{
+                            position: "absolute",
+                            top: itemIndex * VIRTUAL_ROW_HEIGHT,
+                            left: 0,
+                            right: 0,
+                            height: VIRTUAL_ROW_HEIGHT,
+                          }}
+                        >
+                          <JointListItem
+                            jointName={jointName}
+                            jointInfo={jointLimits[jointName]}
+                            onValueChange={() => {}} // Read-only
+                            isDeleted={deletedJoints.has(jointName)}
+                            isSelected={selectedJoint === jointName}
+                            isHighlighted={hoveredJoint === jointName}
+                            angleUnit={angleUnit}
+                            onClick={() => {
+                              onJointSelect?.(jointName);
+                              setSelectedLink(null);
+                              useObjectStore.getState().setSelectedObject(null);
+                              useCameraStore.getState().selectCamera(null);
+                            }}
+                            onHover={onJointHover}
+                            availableJoints={availableJoints}
+                            colorJointNames={colorJointNames}
+                            isVisible={visibleJoints.has(jointName)}
+                            onVisibilityToggle={handleVisibilityToggle}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    {renderedJoints.map((jointName) => (
+                      <JointListItem
+                        key={jointName}
+                        jointName={jointName}
+                        jointInfo={jointLimits[jointName]}
+                        onValueChange={() => {}} // Read-only
+                        isDeleted={deletedJoints.has(jointName)}
+                        isSelected={selectedJoint === jointName}
+                        isHighlighted={hoveredJoint === jointName}
+                        angleUnit={angleUnit}
+                        onClick={() => {
+                          onJointSelect?.(jointName);
+                          setSelectedLink(null);
+                          useObjectStore.getState().setSelectedObject(null);
+                          useCameraStore.getState().selectCamera(null);
+                        }}
+                        onHover={onJointHover}
+                        availableJoints={availableJoints}
+                        colorJointNames={colorJointNames}
+                        isVisible={visibleJoints.has(jointName)}
+                        onVisibilityToggle={handleVisibilityToggle}
+                      />
+                    ))}
+                  </div>
+                )
               )
             ) : viewMode === "elements" ? (
               // Elements view (Objects and Cameras)
@@ -1547,11 +1644,10 @@ export const JointListSidebar = ({
                     : "No joints available"}
                 </div>
               ) : (
-                <HierarchyTreeView
-                  hierarchyTree={hierarchyTree}
-                  jointLimits={jointLimits}
-                  jointValues={jointValues}
-                  deletedJoints={deletedJoints}
+                  <HierarchyTreeView
+                    hierarchyTree={hierarchyTree}
+                    jointLimits={jointLimits}
+                    deletedJoints={deletedJoints}
                   selectedJoint={selectedJoint}
                   hoveredJoint={hoveredJoint}
                   angleUnit={angleUnit}
@@ -1613,7 +1709,6 @@ export const JointListSidebar = ({
                   jointInfo={jointLimits[selectedJoint]}
                   jointAxis={jointAxes[selectedJoint]}
                   originalAxis={originalJointAxes[selectedJoint]}
-                  currentValue={jointValues[selectedJoint] ?? 0}
                   onValueChange={(value) => {
                     if (onJointChange && selectedJoint) {
                       onJointChange(selectedJoint, value);

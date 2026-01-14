@@ -1050,7 +1050,6 @@ const CreatedObjects = ({
     playbackSpeed,
     storeJointValues,
     setStoreJointValues,
-    onJointChange,
     onFrameChange,
     onPlaybackEnd,
     animationController,
@@ -1510,8 +1509,10 @@ const RotationPlane = ({
   gpuMode?: GPUMode;
 }) => {
   const planeRef = useRef<THREE.Mesh>(null);
-  const [position, setPosition] = useState<THREE.Vector3>(new THREE.Vector3());
-  const [rotation, setRotation] = useState<THREE.Euler>(new THREE.Euler());
+  const positionRef = useRef(new THREE.Vector3());
+  const quaternionRef = useRef(new THREE.Quaternion());
+  const defaultNormal = useMemo(() => new THREE.Vector3(0, 0, 1), []);
+  const fallbackAxis = useMemo(() => new THREE.Vector3(1, 0, 0), []);
   const [axisX, axisY, axisZ] = axis;
 
   // Calculate axis vector and color reactively when axis changes
@@ -1582,31 +1583,19 @@ const RotationPlane = ({
 
     // Get joint position in world space
     joint.updateWorldMatrix(true, true);
-    const worldPos = new THREE.Vector3();
-    joint.getWorldPosition(worldPos);
-    setPosition(worldPos);
+    joint.getWorldPosition(positionRef.current);
+    planeRef.current.position.copy(positionRef.current);
 
-    // Calculate rotation to align plane perpendicular to axis
-    // The plane should be perpendicular to the joint axis (plane normal = axis direction)
-    // Default plane normal is (0, 0, 1) for a plane in XY plane
-    // We want the plane's normal to align with the axis
-    const defaultNormal = new THREE.Vector3(0, 0, 1);
-    const quaternion = new THREE.Quaternion();
-    
-    // If axis is parallel to default normal, use a different reference
+    // Rotate plane so its normal aligns with the joint axis.
     if (Math.abs(axisVec.dot(defaultNormal)) > 0.99) {
-      // Axis is nearly parallel to Z, rotate around X axis
-      quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      quaternionRef.current.setFromAxisAngle(fallbackAxis, Math.PI / 2);
     } else if (Math.abs(axisVec.dot(defaultNormal)) < -0.99) {
-      // Axis is nearly opposite to Z, rotate around X axis the other way
-      quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      quaternionRef.current.setFromAxisAngle(fallbackAxis, -Math.PI / 2);
     } else {
-      // Rotate plane so its normal aligns with the axis
-      quaternion.setFromUnitVectors(defaultNormal, axisVec);
+      quaternionRef.current.setFromUnitVectors(defaultNormal, axisVec);
     }
-    
-    const euler = new THREE.Euler().setFromQuaternion(quaternion);
-    setRotation(euler);
+
+    planeRef.current.quaternion.copy(quaternionRef.current);
   });
 
   // Plane size - make it reasonably sized
@@ -1615,8 +1604,6 @@ const RotationPlane = ({
   return (
     <mesh
       ref={planeRef}
-      position={position}
-      rotation={rotation}
       renderOrder={1000}
     >
       <planeGeometry args={[planeSize, planeSize]} />

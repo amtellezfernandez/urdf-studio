@@ -1,8 +1,9 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { memo, useRef, useState, useCallback, useEffect } from "react";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimitInfo } from "@/features/urdf";
 import jointColors from "@/shared/joint_colors.json";
 import { getJointColor } from "@/features/urdf";
+import { useJointStore } from "@/shared/store/useJointStore";
 
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";
@@ -62,7 +63,7 @@ const getJointValueColor = (value: number, min: number, max: number, hasBothLimi
 interface JointListItemProps {
   jointName: string;
   jointInfo?: JointLimitInfo;
-  currentValue: number;
+  currentValue?: number;
   onValueChange: (value: number) => void;
   isDeleted?: boolean;
   onHover?: (jointName: string | null) => void;
@@ -77,7 +78,7 @@ interface JointListItemProps {
   hideColorSquare?: boolean;
 }
 
-export const JointListItem = ({
+const JointListItemBase = ({
   jointName,
   jointInfo,
   currentValue,
@@ -94,6 +95,10 @@ export const JointListItem = ({
   onVisibilityToggle,
   hideColorSquare = false,
 }: JointListItemProps) => {
+  const storeJointValue = useJointStore(
+    useCallback((s) => s.jointValues[jointName] ?? 0, [jointName])
+  );
+  const resolvedValue = currentValue ?? storeJointValue;
   const currentType = jointInfo?.type || "continuous";
   const hasLowerLimit = jointInfo?.lower !== null && jointInfo?.lower !== undefined;
   const hasUpperLimit = jointInfo?.upper !== null && jointInfo?.upper !== undefined;
@@ -102,7 +107,7 @@ export const JointListItem = ({
   const max = hasUpperLimit && jointInfo ? jointInfo.upper ?? fallbackRange : fallbackRange;
   const hasBothLimits = hasLowerLimit && hasUpperLimit;
 
-  const valueColor = getJointValueColor(currentValue, min, max, hasBothLimits);
+  const valueColor = getJointValueColor(resolvedValue, min, max, hasBothLimits);
   const valueDisplayRef = useRef<HTMLSpanElement>(null);
   const [isValueFocused, setIsValueFocused] = useState(false);
   const isDraggingValue = useRef(false);
@@ -115,7 +120,7 @@ export const JointListItem = ({
   }>({
     startX: 0,
     startY: 0,
-    startValue: currentValue,
+    startValue: resolvedValue,
     originalCursor: "",
   });
 
@@ -149,14 +154,14 @@ export const JointListItem = ({
       const snapped = snapValueIfNeeded(value, Boolean(options?.snap));
       const clamped = clampValue(snapped);
       if (Number.isFinite(clamped)) {
-        if (clamped !== currentValue) {
+        if (clamped !== resolvedValue) {
           onValueChange(clamped);
         }
       } else {
         onValueChange(clamped);
       }
     },
-    [clampValue, currentValue, onValueChange, snapValueIfNeeded]
+    [clampValue, onValueChange, resolvedValue, snapValueIfNeeded]
   );
 
   const getDragSensitivity = useCallback(
@@ -252,7 +257,7 @@ export const JointListItem = ({
     dragState.current = {
       startX: event.clientX,
       startY: event.clientY,
-      startValue: currentValue,
+      startValue: resolvedValue,
       originalCursor: document.body.style.cursor,
     };
 
@@ -291,9 +296,9 @@ export const JointListItem = ({
       if (angleUnit === "deg") {
         delta *= Math.PI / 180;
       }
-      applyValueChange(currentValue + delta);
+      applyValueChange(resolvedValue + delta);
     },
-    [angleUnit, applyValueChange, currentValue, getWheelStep, isValueFocused]
+    [angleUnit, applyValueChange, resolvedValue, getWheelStep, isValueFocused]
   );
 
   const handleValueKeyDown = useCallback(
@@ -303,10 +308,10 @@ export const JointListItem = ({
 
       if (["ArrowUp", "ArrowRight", "PageUp"].includes(event.key)) {
         event.preventDefault();
-        applyValueChange(currentValue + stepRad, { snap: event.ctrlKey });
+        applyValueChange(resolvedValue + stepRad, { snap: event.ctrlKey });
       } else if (["ArrowDown", "ArrowLeft", "PageDown"].includes(event.key)) {
         event.preventDefault();
-        applyValueChange(currentValue - stepRad, { snap: event.ctrlKey });
+        applyValueChange(resolvedValue - stepRad, { snap: event.ctrlKey });
       } else if (event.key === "Home" && Number.isFinite(min)) {
         event.preventDefault();
         applyValueChange(min, { snap: event.ctrlKey });
@@ -321,7 +326,7 @@ export const JointListItem = ({
         applyValueChange(0);
       }
     },
-    [applyValueChange, currentValue, max, min]
+    [applyValueChange, max, min, resolvedValue]
   );
 
   // Get joint type color from joint_colors.json
@@ -421,8 +426,8 @@ export const JointListItem = ({
         }
         aria-valuenow={
           angleUnit === "deg"
-            ? currentValue * (180 / Math.PI)
-            : currentValue
+          ? resolvedValue * (180 / Math.PI)
+          : resolvedValue
         }
         className="text-xs blender-number whitespace-nowrap flex-shrink-0 min-w-[50px] text-right"
         style={{ color: valueColor }}
@@ -433,10 +438,12 @@ export const JointListItem = ({
         onKeyDown={handleValueKeyDown}
       >
         {angleUnit === "deg"
-          ? `${(currentValue * (180 / Math.PI)).toFixed(2)}°`
-          : `${currentValue.toFixed(2)}`}
+          ? `${(resolvedValue * (180 / Math.PI)).toFixed(2)}°`
+          : `${resolvedValue.toFixed(2)}`}
       </span>
       </div>
     </div>
   );
 };
+
+export const JointListItem = memo(JointListItemBase);

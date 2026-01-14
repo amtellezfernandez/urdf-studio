@@ -14,7 +14,6 @@ type UseUrdfAnimationParams = {
   playbackSpeed: number;
   storeJointValues: Record<string, number>;
   setStoreJointValues: (values: Record<string, number>) => void;
-  onJointChange?: (jointName: string, value: number) => void;
   onFrameChange?: (frameIndex: number) => void;
   onPlaybackEnd?: (frameIndex: number) => void;
   animationController: AnimationController;
@@ -27,7 +26,6 @@ export const useUrdfAnimation = ({
   playbackSpeed,
   storeJointValues,
   setStoreJointValues,
-  onJointChange,
   onFrameChange,
   onPlaybackEnd,
   animationController,
@@ -35,6 +33,8 @@ export const useUrdfAnimation = ({
   const animationStartTime = useRef<number>(0);
   const playbackEndedRef = useRef(false);
   const frameUpdateEpochRef = useRef(0);
+  const lastUiSyncRef = useRef(0);
+  const uiSyncIntervalMs = 80;
 
   // Reset animation when frames change
   useEffect(() => {
@@ -44,6 +44,7 @@ export const useUrdfAnimation = ({
     }
     playbackEndedRef.current = false;
     frameUpdateEpochRef.current += 1;
+    lastUiSyncRef.current = 0;
   }, [animationFrames, animationController]);
 
   useEffect(() => {
@@ -268,17 +269,17 @@ export const useUrdfAnimation = ({
 
     const shouldSyncJoints = hasJointMapChanged(interpolatedJoints, storeJointValues);
     if (shouldSyncJoints) {
-      // Apply joint values to robot
       applyJointValues(robotRef.current, interpolatedJoints, { filter: false });
 
-      // Update the store in batch so UI reflects the animation
-      setStoreJointValues(interpolatedJoints);
+      const now = Date.now();
+      const shouldSyncUi =
+        !isPlaying ||
+        now - lastUiSyncRef.current >= uiSyncIntervalMs ||
+        frameIndex === animationFrames.length - 1;
 
-      // Also call onJointChange for each joint to notify parent
-      if (onJointChange) {
-        for (const [jointName, value] of Object.entries(interpolatedJoints)) {
-          onJointChange(jointName, value);
-        }
+      if (shouldSyncUi) {
+        lastUiSyncRef.current = now;
+        setStoreJointValues(interpolatedJoints);
       }
     }
   });

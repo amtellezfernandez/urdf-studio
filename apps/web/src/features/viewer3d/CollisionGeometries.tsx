@@ -28,11 +28,14 @@ export const CollisionGeometries = ({
       {
         mesh: THREE.Mesh;
         linkName: string;
-        localXyz: [number, number, number];
-        localRpy: [number, number, number];
+        localMatrix: THREE.Matrix4;
       }
     >
   >(new Map());
+  const tempMatrix = useRef(new THREE.Matrix4());
+  const tempPosition = useRef(new THREE.Vector3());
+  const tempQuaternion = useRef(new THREE.Quaternion());
+  const tempScale = useRef(new THREE.Vector3());
 
   // Read URDF content
   useEffect(() => {
@@ -117,8 +120,7 @@ export const CollisionGeometries = ({
       const applyLinkTransform = (
         mesh: THREE.Mesh,
         linkName: string,
-        localXyz: [number, number, number],
-        localRpy: [number, number, number]
+        localMatrix: THREE.Matrix4
       ) => {
         // Get the link object from robot
         const linkObject =
@@ -126,13 +128,6 @@ export const CollisionGeometries = ({
 
         if (linkObject) {
           const linkWorldMatrix = new THREE.Matrix4().copy(linkObject.matrixWorld);
-
-          // Create local transform from collision origin
-          const localMatrix = new THREE.Matrix4();
-          localMatrix.makeRotationFromEuler(
-            new THREE.Euler(localRpy[0], localRpy[1], localRpy[2], "XYZ")
-          );
-          localMatrix.setPosition(new THREE.Vector3(localXyz[0], localXyz[1], localXyz[2]));
 
           // Combine: world = linkWorld * local
           linkWorldMatrix.multiply(localMatrix);
@@ -147,8 +142,13 @@ export const CollisionGeometries = ({
           mesh.quaternion.copy(worldQuaternion);
         } else {
           // Fallback: just use local transform if link not found
-          mesh.position.set(localXyz[0], localXyz[1], localXyz[2]);
-          mesh.rotation.set(localRpy[0], localRpy[1], localRpy[2]);
+          localMatrix.decompose(
+            tempPosition.current,
+            tempQuaternion.current,
+            tempScale.current
+          );
+          mesh.position.copy(tempPosition.current);
+          mesh.quaternion.copy(tempQuaternion.current);
         }
       };
 
@@ -176,6 +176,12 @@ export const CollisionGeometries = ({
             0,
             0,
           ]) as [number, number, number];
+
+          const localMatrix = new THREE.Matrix4();
+          localMatrix.makeRotationFromEuler(
+            new THREE.Euler(rpy[0], rpy[1], rpy[2], "XYZ")
+          );
+          localMatrix.setPosition(xyz[0], xyz[1], xyz[2]);
 
           // Get geometry
           const geometryEl = collision.querySelector("geometry");
@@ -226,7 +232,7 @@ export const CollisionGeometries = ({
                     // No geometry scaling applied
                     const loadedMesh = new THREE.Mesh(geometry, collisionMaterial.clone());
                     loadedMesh.renderOrder = 999;
-                    applyLinkTransform(loadedMesh, linkName, xyz, rpy);
+                    applyLinkTransform(loadedMesh, linkName, localMatrix);
                     loadedMesh.userData.isCollisionGeometry = true;
                     loadedMesh.userData.linkName = linkName;
                     collisionGroupRef.current?.add(loadedMesh);
@@ -235,8 +241,7 @@ export const CollisionGeometries = ({
                     collisionMeshesRef.current.set(meshKey, {
                       mesh: loadedMesh,
                       linkName,
-                      localXyz: xyz,
-                      localRpy: rpy,
+                      localMatrix,
                     });
                     URL.revokeObjectURL(blobUrl);
                   },
@@ -253,7 +258,7 @@ export const CollisionGeometries = ({
 
           if (mesh) {
             mesh.renderOrder = 999;
-            applyLinkTransform(mesh, linkName, xyz, rpy);
+            applyLinkTransform(mesh, linkName, localMatrix);
             mesh.userData.isCollisionGeometry = true;
             mesh.userData.linkName = linkName;
             collisionGroupRef.current.add(mesh);
@@ -262,8 +267,7 @@ export const CollisionGeometries = ({
             collisionMeshesRef.current.set(meshKey, {
               mesh,
               linkName,
-              localXyz: xyz,
-              localRpy: rpy,
+              localMatrix,
             });
           }
         });
@@ -281,31 +285,19 @@ export const CollisionGeometries = ({
     robotObject.updateMatrixWorld?.(true);
 
     // Update each collision mesh transform based on its link's current world position
-    collisionMeshesRef.current.forEach(({ mesh, linkName, localXyz, localRpy }) => {
+    collisionMeshesRef.current.forEach(({ mesh, linkName, localMatrix }) => {
       const linkObject =
         robotObject.links?.[linkName] ?? robotObject.getObjectByName?.(linkName);
 
       if (linkObject) {
-        const linkWorldMatrix = new THREE.Matrix4().copy(linkObject.matrixWorld);
-
-        // Create local transform from collision origin
-        const localMatrix = new THREE.Matrix4();
-        localMatrix.makeRotationFromEuler(
-          new THREE.Euler(localRpy[0], localRpy[1], localRpy[2], "XYZ")
+        tempMatrix.current.copy(linkObject.matrixWorld).multiply(localMatrix);
+        tempMatrix.current.decompose(
+          tempPosition.current,
+          tempQuaternion.current,
+          tempScale.current
         );
-        localMatrix.setPosition(new THREE.Vector3(localXyz[0], localXyz[1], localXyz[2]));
-
-        // Combine: world = linkWorld * local
-        linkWorldMatrix.multiply(localMatrix);
-
-        // Extract position and rotation from combined matrix
-        const worldPosition = new THREE.Vector3();
-        const worldQuaternion = new THREE.Quaternion();
-        const worldScale = new THREE.Vector3();
-        linkWorldMatrix.decompose(worldPosition, worldQuaternion, worldScale);
-
-        mesh.position.copy(worldPosition);
-        mesh.quaternion.copy(worldQuaternion);
+        mesh.position.copy(tempPosition.current);
+        mesh.quaternion.copy(tempQuaternion.current);
       }
     });
   });
