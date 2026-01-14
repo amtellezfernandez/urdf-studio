@@ -1,3 +1,4 @@
+import { createWorkerTaskRunner } from "@/shared/lib/workerTaskRunner";
 import type { CollisionAutoFitResult, CollisionAutoFitType } from "./collisionAutoFit";
 import { autoFitCollisionGeometry } from "./collisionAutoFit";
 import { computeMeshBoundsFromArrayBuffer } from "./computeMeshGeometry";
@@ -9,38 +10,21 @@ type MeshAutoFitResponse = {
   error?: string;
 };
 
-const meshAutoFitMinBytes = 16 * 1024;
-let meshAutoFitWorker: Worker | null = null;
-let meshAutoFitNextId = 0;
-const meshAutoFitPending = new Map<number, (response: MeshAutoFitResponse) => void>();
+type MeshAutoFitRequest = {
+  id: number;
+  arrayBuffer: ArrayBuffer;
+  scale: string;
+  visualOrigin: OriginData;
+  requestedType: CollisionAutoFitType;
+};
 
-const getMeshAutoFitWorker = () => {
+const meshAutoFitMinBytes = 16 * 1024;
+const runner = createWorkerTaskRunner<MeshAutoFitRequest, MeshAutoFitResponse>(() => {
   if (typeof Worker === "undefined") {
     return null;
   }
-
-  if (!meshAutoFitWorker) {
-    meshAutoFitWorker = new Worker(new URL("./meshAutoFit.worker.ts", import.meta.url), {
-      type: "module",
-    });
-    meshAutoFitWorker.onmessage = (event: MessageEvent<MeshAutoFitResponse>) => {
-      const { id } = event.data;
-      const resolver = meshAutoFitPending.get(id);
-      if (!resolver) return;
-      meshAutoFitPending.delete(id);
-      resolver(event.data);
-    };
-    meshAutoFitWorker.onerror = () => {
-      const pending = Array.from(meshAutoFitPending.values());
-      meshAutoFitPending.clear();
-      meshAutoFitWorker?.terminate();
-      meshAutoFitWorker = null;
-      pending.forEach((resolve) => resolve({ id: -1, error: "Mesh auto-fit worker failed" }));
-    };
-  }
-
-  return meshAutoFitWorker;
-};
+  return new Worker(new URL("./meshAutoFit.worker.ts", import.meta.url), { type: "module" });
+});
 
 const computeAutoFitFallback = (
   arrayBuffer: ArrayBuffer,
@@ -67,29 +51,20 @@ export const autoFitCollisionGeometryFromMesh = async (
     return computeAutoFitFallback(arrayBuffer, scale, visualOrigin, requestedType);
   }
 
-  const worker = getMeshAutoFitWorker();
-  if (!worker) {
+  if (typeof Worker === "undefined") {
     return computeAutoFitFallback(arrayBuffer, scale, visualOrigin, requestedType);
   }
+  const response = await runner.run(
+    {
+      arrayBuffer,
+      scale,
+      visualOrigin,
+      requestedType,
+    },
+    [arrayBuffer]
+  );
 
-  const requestId = meshAutoFitNextId;
-  meshAutoFitNextId += 1;
-
-  const response = await new Promise<MeshAutoFitResponse>((resolve) => {
-    meshAutoFitPending.set(requestId, resolve);
-    worker.postMessage(
-      {
-        id: requestId,
-        arrayBuffer,
-        scale,
-        visualOrigin,
-        requestedType,
-      },
-      [arrayBuffer]
-    );
-  });
-
-  if (response.error) {
+  if (!response || response.error) {
     return null;
   }
 
