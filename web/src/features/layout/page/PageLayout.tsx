@@ -19,6 +19,9 @@ type PageLayoutProps = {
   viewerLayoutProps: ComponentProps<typeof ViewerLayout>;
   rightSidebarProps: ComponentProps<typeof RightSidebarPanel>;
   meshFilesStatusPanelProps: ComponentProps<typeof MeshFilesStatusPanel>;
+  loadIssuesPanelProps: ComponentProps<
+    typeof import("@/features/layout/page/LoadIssuesPanel").LoadIssuesPanel
+  >;
   exportDialogProps: ComponentProps<typeof ExportDialog>;
   povCamerasOverlayProps: ComponentProps<typeof PovCamerasOverlay>;
   mappingPanelsProps: ComponentProps<typeof MappingPanels>;
@@ -32,6 +35,7 @@ export const PageLayout = ({
   viewerLayoutProps,
   rightSidebarProps,
   meshFilesStatusPanelProps,
+  loadIssuesPanelProps,
   exportDialogProps,
   povCamerasOverlayProps,
   mappingPanelsProps,
@@ -49,6 +53,7 @@ export const PageLayout = ({
       meshFilesStatusPanelProps={meshFilesStatusPanelProps}
       exportDialogProps={exportDialogProps}
       povCamerasOverlayProps={povCamerasOverlayProps}
+      loadIssuesPanelProps={loadIssuesPanelProps}
     />
     <PageDialogs
       mappingPanelsProps={mappingPanelsProps}

@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { FolderUploadScreen } from "@/features/dataset/FolderUploadScreen";
-import { useDatasetActions } from "@/features/dataset";
+import { toAnimationFrames, useDatasetActions } from "@/features/dataset";
 import { toast } from "sonner";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
@@ -20,6 +20,8 @@ import { useLayout } from "@/features/layout";
 import { useExportHandlers, useJointMappingPersistence } from "@/features/dataset/exports";
 import { useThemeAndGPUMode } from "@/features/theme";
 import { DEMO_ROBOT_URDF } from "@/shared/samples/demoRobot";
+import { createDemoEpisode } from "@/shared/samples/demoMotion";
+import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 
 const Index = () => {
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
@@ -60,6 +62,9 @@ const Index = () => {
     unmatchedURDFRefs,
     showDebugDialog,
     setShowDebugDialog,
+    urdfValidationError,
+    showLoadIssues,
+    setShowLoadIssues,
     setSavedVizUrdfContent,
     setOriginalVizUrdfContent,
     setJointLimits,
@@ -123,6 +128,7 @@ const Index = () => {
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
+  const [pendingDemoMotion, setPendingDemoMotion] = useState(false);
   const {
     isExportDialogOpen,
     openExportDialog,
@@ -190,6 +196,28 @@ const Index = () => {
     setJointValues(values);
   }, [setJointValues]);
 
+  const playDemoEpisode = useCallback(
+    (jointNames: string[]) => {
+      if (jointNames.length === 0) {
+        toast.error("Demo motion requires a robot with joints loaded.");
+        return;
+      }
+      const demoEpisode = createDemoEpisode({
+        jointNames,
+        jointLimits,
+      });
+      setViewerEpisode(demoEpisode);
+      setIsViewerOpen(true);
+      viewerPlayback.playEpisode(toAnimationFrames(demoEpisode), { autoplay: true });
+      setTimeout(() => {
+        if (!hasAnimationFrames) {
+          viewerPlayback.playEpisode(toAnimationFrames(demoEpisode), { autoplay: true });
+        }
+      }, 300);
+    },
+    [hasAnimationFrames, jointLimits, setIsViewerOpen, setViewerEpisode]
+  );
+
   const handleLoadDemo = useCallback(() => {
     try {
       const demoFile = new File([DEMO_ROBOT_URDF], "demo_robot.urdf", {
@@ -203,6 +231,29 @@ const Index = () => {
       toast.error("Failed to load demo robot");
     }
   }, [loadFilesFromFolder]);
+
+  const handlePlayDemoMotion = useCallback(() => {
+    if (!hasLoadedFiles) {
+      setPendingDemoMotion(true);
+      handleLoadDemo();
+      return;
+    }
+
+    const jointNames = availableJoints.length > 0
+      ? availableJoints
+      : ["joint_1", "joint_2"];
+    playDemoEpisode(jointNames);
+  }, [availableJoints, handleLoadDemo, hasLoadedFiles, playDemoEpisode]);
+
+  useEffect(() => {
+    if (!pendingDemoMotion || !hasLoadedFiles) return;
+
+    const jointNames = availableJoints.length > 0
+      ? availableJoints
+      : ["joint_1", "joint_2"];
+    playDemoEpisode(jointNames);
+    setPendingDemoMotion(false);
+  }, [availableJoints, hasLoadedFiles, pendingDemoMotion, playDemoEpisode]);
 
 
   const {
@@ -311,6 +362,7 @@ const Index = () => {
       <FolderUploadScreen
         onFolderSelected={loadFilesFromFolder}
         onLoadDemo={handleLoadDemo}
+        onPlayDemoMotion={handlePlayDemoMotion}
       />
     );
   }
@@ -499,6 +551,18 @@ const Index = () => {
     onClose: () => setShowDebugDialog(false),
   };
 
+  const loadIssuesPanelProps: ComponentProps<
+    typeof PageLayout
+  >["loadIssuesPanelProps"] = {
+    open: showLoadIssues,
+    urdfError: urdfValidationError,
+    unmatchedURDFRefs,
+    onOpenMeshStatus: () => setShowDebugDialog(true),
+    onFixMeshPaths: handleFixMeshPaths,
+    onOpenUrdfEditor: () => setShowUrdfEditor(true),
+    onClose: () => setShowLoadIssues(false),
+  };
+
   const exportDialogProps: ComponentProps<typeof PageLayout>["exportDialogProps"] = {
     isOpen: isExportDialogOpen,
     onClose: closeExportDialog,
@@ -553,6 +617,7 @@ const Index = () => {
     viewerLayoutProps,
     rightSidebarProps,
     meshFilesStatusPanelProps,
+    loadIssuesPanelProps,
     exportDialogProps,
     povCamerasOverlayProps,
     mappingPanelsProps,

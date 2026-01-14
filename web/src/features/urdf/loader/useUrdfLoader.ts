@@ -6,6 +6,7 @@ import {
   parseJointAxesFromURDF,
   parseJointLimitsFromURDF,
   parseLinkNames,
+  parseURDF,
   type JointAxisMap,
   type JointLimits,
 } from "@/features/urdf";
@@ -34,6 +35,8 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
   const [debugMeshInfo, setDebugMeshInfo] = useState<DebugMeshInfo[]>([]);
   const [unmatchedURDFRefs, setUnmatchedURDFRefs] = useState<string[]>([]);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
+  const [urdfValidationError, setUrdfValidationError] = useState<string | null>(null);
+  const [showLoadIssues, setShowLoadIssues] = useState(false);
 
   const createUrdfFile = useCallback(
     (content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
@@ -96,10 +99,13 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         const originalContent = await urdfFile.text();
         const urdfFilename = urdfFile.name;
 
+        const parsedUrdf = parseURDF(originalContent);
+        setUrdfValidationError(parsedUrdf.isValid ? null : parsedUrdf.error ?? "Invalid URDF");
+
         const parsedLimits = parseJointLimitsFromURDF(originalContent);
         const parsedAxes = parseJointAxesFromURDF(originalContent);
         const parsedLinks = parseLinkNames(originalContent);
-        const autoEndEffector = findDeepestLeafLink(originalContent);
+        const autoEndEffector = parsedUrdf.isValid ? findDeepestLeafLink(originalContent) : null;
 
         setOriginalUrdfContent(originalContent);
         setJointLimits(parsedLimits);
@@ -253,7 +259,9 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
 
         setDebugMeshInfo(debugInfo);
         setUnmatchedURDFRefs(unmatchedRefs);
-        setShowDebugDialog(true);
+        const hasIssues = unmatchedRefs.length > 0 || !parsedUrdf.isValid;
+        setShowDebugDialog(hasIssues);
+        setShowLoadIssues(hasIssues);
 
         if (import.meta.env.DEV) {
           console.log(`Loaded ${stlFiles.length} mesh files with ${Object.keys(meshes).length} total path variations`);
@@ -284,6 +292,8 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         if (import.meta.env.DEV) {
           console.error("Failed to load robot files:", error);
         }
+        setUrdfValidationError(error instanceof Error ? error.message : "Failed to load URDF");
+        setShowLoadIssues(true);
         toast.error(error instanceof Error ? error.message : "Failed to load robot files");
       } finally {
         setIsLoading(false);
@@ -309,6 +319,9 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
     unmatchedURDFRefs,
     showDebugDialog,
     setShowDebugDialog,
+    urdfValidationError,
+    showLoadIssues,
+    setShowLoadIssues,
     setSavedVizUrdfContent,
     setOriginalVizUrdfContent,
     setJointLimits,

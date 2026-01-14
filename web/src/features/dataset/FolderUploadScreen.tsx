@@ -29,9 +29,11 @@ import {
 interface FolderUploadScreenProps {
   onFolderSelected: (files: FileList) => void;
   onLoadDemo?: () => void;
+  onPlayDemoMotion?: () => void;
 }
 
-export const FolderUploadScreen = memo(({ onFolderSelected, onLoadDemo }: FolderUploadScreenProps) => {
+export const FolderUploadScreen = memo(
+  ({ onFolderSelected, onLoadDemo, onPlayDemoMotion }: FolderUploadScreenProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { gpuMode, setGPUMode } = useGPUMode();
   const { recentRepos, addRecentRepo, removeRecentRepo } = useRecentGitHubRepos();
@@ -450,16 +452,23 @@ export const FolderUploadScreen = memo(({ onFolderSelected, onLoadDemo }: Folder
           </p>
         </div>
 
-        {onLoadDemo && (
+        {(onLoadDemo || onPlayDemoMotion) && (
           <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
             <h2 className="text-sm font-semibold text-foreground">Quick Start</h2>
             <p className="text-xs text-muted-foreground">
               Load a built-in demo robot to explore the UI. No files or tokens needed.
             </p>
-            <div className="flex justify-center">
-              <Button onClick={onLoadDemo} size="sm" variant="secondary">
-                Try Demo Robot
-              </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {onLoadDemo && (
+                <Button onClick={onLoadDemo} size="sm" variant="secondary">
+                  Try Demo Robot
+                </Button>
+              )}
+              {onPlayDemoMotion && (
+                <Button onClick={onPlayDemoMotion} size="sm">
+                  Play Sample Motion
+                </Button>
+              )}
             </div>
             <p className="text-[11px] text-muted-foreground">
               Tip: the demo uses built-in box/cylinder geometry, so no mesh files are required.
@@ -738,4 +747,5 @@ export const FolderUploadScreen = memo(({ onFolderSelected, onLoadDemo }: Folder
       </div>
     </div>
   );
-});
+  }
+);

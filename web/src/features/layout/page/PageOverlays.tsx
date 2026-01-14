@@ -14,6 +14,11 @@ const PovCamerasOverlay = lazy(() =>
     default: module.PovCamerasOverlay,
   }))
 );
+const LoadIssuesPanel = lazy(() =>
+  import("@/features/layout/page/LoadIssuesPanel").then((module) => ({
+    default: module.LoadIssuesPanel,
+  }))
+);
 
 type PageOverlaysProps = {
   meshFilesStatusPanelProps: ComponentProps<
@@ -23,14 +28,19 @@ type PageOverlaysProps = {
   povCamerasOverlayProps: ComponentProps<
     typeof import("@/features/layout/page/PovCamerasOverlay").PovCamerasOverlay
   >;
+  loadIssuesPanelProps: ComponentProps<
+    typeof import("@/features/layout/page/LoadIssuesPanel").LoadIssuesPanel
+  >;
 };
 
 export const PageOverlays = ({
   meshFilesStatusPanelProps,
   exportDialogProps,
   povCamerasOverlayProps,
+  loadIssuesPanelProps,
 }: PageOverlaysProps) => (
   <Suspense fallback={null}>
+    <LoadIssuesPanel {...loadIssuesPanelProps} />
     <MeshFilesStatusPanel {...meshFilesStatusPanelProps} />
     <ExportDialog {...exportDialogProps} />
     <PovCamerasOverlay {...povCamerasOverlayProps} />
