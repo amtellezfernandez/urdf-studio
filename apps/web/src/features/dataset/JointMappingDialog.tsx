@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/ui/tabs";
 import { X, AlertCircle, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimits } from "@/features/urdf";
-import type { JointMapping, SavedMapping } from "@/features/types";
+import type { JointMapping, SavedMapping } from "@/shared/types/feature";
 
 interface JointMappingDialogProps {
   isOpen: boolean;

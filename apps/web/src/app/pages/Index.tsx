@@ -7,18 +7,18 @@ import { useCameraStore } from "@/shared/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/shared/types/file";
 import type { URDFRobot } from "urdf-loader";
-import { useUrdfEditHandlers } from "@/app/pages/index/useUrdfEditHandlers";
-import { useUrdfUtilityHandlers } from "@/app/pages/index/useUrdfUtilityHandlers";
-import { useDatasetPlaybackHandlers } from "@/app/pages/index/useDatasetPlaybackHandlers";
-import { useUrdfMaterialHandlers } from "@/app/pages/index/useUrdfMaterialHandlers";
-import { PageLayout } from "@/app/pages/index/PageLayout";
+import { useUrdfEditHandlers } from "@/features/layout/page/useUrdfEditHandlers";
+import { useUrdfUtilityHandlers } from "@/features/layout/page/useUrdfUtilityHandlers";
+import { useDatasetPlaybackHandlers } from "@/features/layout/page/useDatasetPlaybackHandlers";
+import { useUrdfMaterialHandlers } from "@/features/layout/page/useUrdfMaterialHandlers";
+import { PageLayout } from "@/features/layout/page/PageLayout";
 
-import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/features/types";
+import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/shared/types/feature";
 import { useUrdfLoader, useUrdfSelection } from "@/features/urdf";
-import { useObjectCreatorStore } from "@/features/object-creator";
+import { useObjectCreatorStore } from "@/features/objects";
 import { useLayout } from "@/features/layout";
-import { useExportHandlers, useJointMappingPersistence } from "@/features/export";
-import { useThemeAndGPUMode } from "@/features/theme-gpu";
+import { useExportHandlers, useJointMappingPersistence } from "@/features/dataset/exports";
+import { useThemeAndGPUMode } from "@/features/theme";
 
 const Index = () => {
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();

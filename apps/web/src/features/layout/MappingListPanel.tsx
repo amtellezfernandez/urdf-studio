@@ -9,7 +9,7 @@ import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { Trash2, Edit } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import type { SavedMapping } from "@/features/types";
+import type { SavedMapping } from "@/shared/types/feature";
 
 interface MappingListPanelProps {
   isOpen: boolean;

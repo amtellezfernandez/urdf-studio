@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
-import { viewerPlayback } from "@/features/viewerPlayback";
+import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 
 export const useUrdfViewer = () => {

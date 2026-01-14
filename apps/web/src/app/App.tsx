@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/shared/ui/sonner";
 import { TooltipProvider } from "@/shared/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { GPUModeProvider } from "@/features/theme-gpu";
+import { GPUModeProvider } from "@/features/theme";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 

@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, X, Box, Video } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
-import { useObjectStore } from "@/features/object-creator";
+import { useObjectStore } from "@/features/objects";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { parseJointHierarchy, type JointHierarchyNode } from "@/features/urdf";
 import { parseLinkData, type LinkData } from "@/features/urdf";

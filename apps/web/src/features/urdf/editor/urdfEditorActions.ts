@@ -1,4 +1,4 @@
-import type { RotationAxis } from "@/features/types";
+import type { RotationAxis } from "@/shared/types/feature";
 import { canonicalOrderURDF } from "../utils/canonicalOrdering";
 import { normalizeJointAxes, type AxisCorrection, type AxisError } from "../utils/normalizeJointAxes";
 import { parseJointAxesFromURDF, type JointAxisMap } from "../parsing/parseJointAxis";

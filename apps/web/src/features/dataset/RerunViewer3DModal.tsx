@@ -10,23 +10,12 @@ import { Button } from "@/shared/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { AlertCircle, Loader2, Play, Eye, Monitor, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import type { EpisodeMetadata } from "@/features/dataset";
+import { API_BASE_URL } from "@/shared/config/api";
+import type { Episode } from "@/features/dataset";
 
 // Constants
 const RERUN_SERVER_URL = "http://127.0.0.1:9090";
 const RERUN_WS_PORT = 9876;
-const API_BASE_URL = "http://localhost:8000";
-
-interface Episode {
-  id: string;
-  number: number;
-  frames: Array<{
-    timestamp: number;
-    jointPositions: Record<string, number>;
-  }>;
-  createdAt: number;
-  metadata?: EpisodeMetadata;
-}
 
 interface RerunStartResponse {
   success?: boolean;

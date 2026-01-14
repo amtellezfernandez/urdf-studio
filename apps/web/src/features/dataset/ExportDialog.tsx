@@ -32,7 +32,7 @@ import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { cn } from "@/shared/lib/utils";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/features/camera";
-import type { WindowWithViewerHandlers } from "@/features/types";
+import type { WindowWithViewerHandlers } from "@/shared/types/feature";
 
 interface ExportDialogProps {
   isOpen: boolean;

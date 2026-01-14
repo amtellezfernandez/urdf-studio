@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isFeatureFlagEnabled } from "@/shared/config/featureFlags";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 
 type PlaybackTraceEntry = {
@@ -12,16 +13,7 @@ type PlaybackTraceWindow = Window & {
   __playbackTraceLimit?: number;
 };
 
-const isPlaybackDebugEnabled = (): boolean => {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  try {
-    return window.localStorage.getItem("urdfstudio:playbackDebug") === "1";
-  } catch {
-    return false;
-  }
-};
+const isPlaybackDebugEnabled = (): boolean => isFeatureFlagEnabled("playbackTrace");
 
 const getTraceWindow = (): PlaybackTraceWindow => window as PlaybackTraceWindow;
 

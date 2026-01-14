@@ -5,10 +5,10 @@ import URDFLoader, { type URDFRobot } from "urdf-loader";
 import { STLLoader } from "three-stdlib";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { useJointStore } from "@/shared/store/useJointStore";
-import { useObjectStore, type CreatedObject } from "@/features/object-creator";
+import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
-import type { MeshFiles } from "@/features/types";
+import type { MeshFiles } from "@/shared/types/feature";
 
 const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
   new THREE.Vector3(0, 1, 0),

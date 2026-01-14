@@ -9,9 +9,9 @@ import {
   type JointAxisMap,
   type JointLimits,
 } from "@/features/urdf";
-import { findDeepestLeafLink } from "@/app/pages/index/utils";
-import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/app/pages/index/constants";
-import type { DebugMeshInfo, MeshFiles } from "@/features/types";
+import { findDeepestLeafLink } from "@/features/layout/page/utils";
+import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
+import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;

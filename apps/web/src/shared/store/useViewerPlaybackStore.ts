@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ChangeEvent } from "react";
-import type { AnimationFrame } from "@/features/viewer3d/viewer3d-types";
+import type { AnimationFrame } from "@/features/viewer/viewer-types";
 
 export type EpisodePlaybackOptions = {
   autoplay?: boolean;

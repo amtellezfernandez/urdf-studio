@@ -1,59 +1,46 @@
 import type React from "react";
-import { Button } from "@/shared/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
-import { Switch } from "@/shared/ui/switch";
-import { Slider } from "@/shared/ui/slider";
-import { NumberInput } from "@/shared/ui/number-input";
-import { Square, Download, GitCompare, RotateCw, Settings, Sliders, Upload, Play, GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, List, Gauge, SkipBack, SkipForward, StepBack, StepForward, ChevronsLeft, ChevronsRight, Send, Eye, Circle, FolderOpen, Pause, Box, CloudDownload, GitBranch } from "lucide-react";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
-import { URDFComparison } from "@/features/urdf/editor/URDFComparison";
 import { type CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
-import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
-import { cn } from "@/shared/lib/utils";
 import {
+  buildEpisodeDataForV3,
+  createEpisode,
+  generateV3DatasetArchive,
+  getSortedJointList,
+  normalizeInsertIndex,
   parseEpisodeTextAsync,
+  parseRobotName,
+  parseSpaceInput,
+  renumberEpisodes,
+  sanitizeFilename,
+  sanitizeSpaceName,
   serializeEpisodeJson,
   serializeEpisodeCollectionJson,
+  toAnimationFrames,
+  type Episode,
   type EpisodeJsonEpisode,
   type EpisodeMetadata,
+  type RecordedFrame,
+  RECORDING_INTERVAL_MS,
   getMappingForSource,
   saveMapping,
 } from "@/features/dataset";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/shared/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/shared/ui/dropdown-menu";
-import { EpisodeViewer3DModal } from "@/features/dataset/EpisodeViewer3DModal";
 import { RerunViewer3DModal } from "@/features/dataset/RerunViewer3DModal";
-import { Badge } from "@/shared/ui/badge";
 import { JointMappingDialog } from "@/features/dataset/JointMappingDialog";
 import { useCameraStore } from "@/shared/store/useCameraStore";
-import { EpisodeCameraPreview } from "@/features/camera/EpisodeCameraPreview";
-import type { JointMapping } from "@/features/types";
-import { viewerPlayback } from "@/features/viewerPlayback";
+import type { JointMapping } from "@/shared/types/feature";
+import { useHfToken } from "@/features/layout/hooks/useHfToken";
+import { EpisodesPanel } from "@/features/layout/panels/EpisodesPanel";
+import { EpisodePreviewPanel } from "@/features/layout/panels/EpisodePreviewPanel";
+import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import {
   findNextPlayableEpisodeIndex,
   getPlaybackEndAction,
   type PlaybackMode,
-} from "@/features/playback/episodeCoordinator";
+} from "@/features/viewer/playback/episodeCoordinator";
 
 type JSZipConstructor = typeof import("jszip");
 type JSZipInstance = import("jszip");
@@ -136,668 +123,16 @@ interface SidebarProps {
   onEpisodesResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-interface RecordedFrame {
-  timestamp: number;
-  jointPositions: Record<string, number>;
-}
-
 type HfIdentity = {
   name: string;
   fullname?: string;
 };
 
-interface Episode {
-  id: string;
-  number: number;
-  frames: RecordedFrame[];
-  createdAt: number;
-  metadata?: EpisodeMetadata;
-}
-
 type FileWithRelativePath = File & {
   webkitRelativePath?: string;
 };
 
-const normalizeInsertIndex = (length: number, insertPosition?: number) =>
-  Math.max(0, Math.min(insertPosition ?? length, length));
-
-const renumberEpisodes = (episodes: Episode[]) =>
-  episodes.map((episode, index) => ({
-    ...episode,
-    number: index + 1,
-    metadata: episode.metadata
-      ? {
-          ...episode.metadata,
-          episodeNumber: index + 1,
-          episode_index:
-            episode.metadata.episode_index !== undefined
-              ? episode.metadata.episode_index
-              : index,
-        }
-      : undefined,
-  }));
-
-const createEpisode = (
-  id: string,
-  number: number,
-  frames: RecordedFrame[],
-  metadata?: EpisodeMetadata
-): Episode => {
-  const jointNames =
-    Array.isArray(metadata?.joint_names) && metadata.joint_names.length > 0
-      ? (metadata.joint_names as string[])
-      : Array.from(
-          new Set(frames.flatMap((frame) => Object.keys(frame.jointPositions)))
-        );
-
-  const normalizedMetadata = metadata
-    ? {
-        ...metadata,
-        episodeNumber: number,
-        episode_index:
-          metadata.episode_index !== undefined
-            ? metadata.episode_index
-            : number - 1,
-        joint_names: jointNames,
-        createdAt: metadata.createdAt ?? Date.now(),
-        num_frames: metadata.num_frames ?? frames.length,
-      }
-    : undefined;
-
-  return {
-    id,
-    number,
-    frames,
-    createdAt: normalizedMetadata?.createdAt ?? Date.now(),
-    metadata: normalizedMetadata,
-  };
-};
-
-const toAnimationFrames = (episode: Episode) =>
-  episode.frames.map((frame) => ({
-    timestamp: frame.timestamp,
-    joints: frame.jointPositions,
-  }));
-
-const FALLBACK_JOINTS = ["1", "2", "3", "4", "5"];
 type HFSpaceVisibility = "public" | "private";
-
-const RECORDING_INTERVAL_MS = 20;
-
-// ============================================================================
-// Common v3 Dataset Helper Functions
-// ============================================================================
-
-/**
- * Builds episode data structures and flattened rows for v3 dataset format
- */
-interface BuildEpisodeDataResult {
-  globalJointOrder: string[];
-  flattenedRows: Array<Record<string, unknown>>;
-  episodeSummaries: Array<Record<string, unknown>>;
-  episodeIndexToTasks: Map<number, string[]>;
-  tasksSet: Set<string>;
-  totalFrames: number;
-  representativeFps: number;
-  representativeRobotType: string | undefined;
-}
-
-const buildEpisodeDataForV3 = (
-  episodes: Episode[],
-  robotBaseName: string | undefined,
-  robotName?: string | undefined,
-  urdfJointOrder?: string[] // URDF-defined joint order
-): BuildEpisodeDataResult => {
-  const globalJointSet = new Set<string>();
-  let totalFrames = 0;
-  let representativeFps = 0;
-  let representativeRobotType: string | undefined;
-  const tasksSet = new Set<string>();
-  const flattenedRows: Array<Record<string, unknown>> = [];
-  const episodeSummaries: Array<Record<string, unknown>> = [];
-  const episodeIndexToTasks = new Map<number, string[]>();
-
-  let runningDatasetIndex = 0;
-
-  // First pass: collect all joints
-  episodes.forEach((episode) => {
-    episode.frames.forEach((frame) => {
-      Object.keys(frame.jointPositions).forEach((joint) =>
-        globalJointSet.add(joint)
-      );
-    });
-  });
-
-  // Determine global joint order: use URDF order if available, otherwise alphabetical
-  let globalJointOrder: string[];
-  if (urdfJointOrder && urdfJointOrder.length > 0) {
-    // Use URDF order, filtering to only joints that appear in episodes
-    globalJointOrder = urdfJointOrder.filter((joint) => globalJointSet.has(joint));
-    // Add any joints from episodes that aren't in URDF order (shouldn't happen, but safety)
-    const urdfSet = new Set(urdfJointOrder);
-    const missingJoints = Array.from(globalJointSet).filter((joint) => !urdfSet.has(joint));
-    if (missingJoints.length > 0) {
-      // Sort missing joints alphabetically and append
-      missingJoints.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      globalJointOrder = [...globalJointOrder, ...missingJoints];
-    }
-  } else {
-    // Fallback to alphabetical sorting if no URDF order available
-    globalJointOrder = Array.from(globalJointSet).sort((a, b) =>
-      a.localeCompare(b, undefined, { numeric: true })
-    );
-  }
-
-  // Second pass: build flattened rows and episode summaries
-  episodes.forEach((episode) => {
-    if (episode.frames.length === 0) {
-      return;
-    }
-
-    const episodeIndex = episode.number - 1;
-    const jointOrder =
-      Array.isArray(episode.metadata?.joint_names) &&
-      episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
-        : globalJointOrder;
-
-    const computedFps = (() => {
-      if (episode.frames.length < 2) return 0;
-      const start = episode.frames[0].timestamp;
-      const end = episode.frames[episode.frames.length - 1].timestamp;
-      if (end <= start) return 0;
-      return (episode.frames.length - 1) / ((end - start) / 1000);
-    })();
-
-    const metadataFps =
-      typeof episode.metadata?.fps === "number"
-        ? episode.metadata.fps
-        : undefined;
-    const fps =
-      metadataFps && metadataFps > 0
-        ? metadataFps
-        : computedFps > 0
-        ? computedFps
-        : 1000 / RECORDING_INTERVAL_MS;
-
-    if (!representativeFps && fps) {
-      representativeFps = fps;
-    }
-
-    const robotTypeRaw = episode.metadata?.robot_type;
-    const robotType =
-      typeof robotTypeRaw === "string" && robotTypeRaw.length > 0
-        ? robotTypeRaw
-        : (robotName ?? robotBaseName ?? "unknown");
-    if (!representativeRobotType) {
-      representativeRobotType = robotType;
-    }
-
-    const episodeTasks =
-      (episode.metadata?.tasks as string[] | undefined) ?? [];
-    episodeTasks.forEach((task) => {
-      if (typeof task === "string" && task.length > 0) {
-        tasksSet.add(task);
-      }
-    });
-
-    // Store episode_index to tasks mapping
-    episodeIndexToTasks.set(episodeIndex, episodeTasks);
-
-    const startIndex = runningDatasetIndex;
-
-    episode.frames.forEach((frame, frameIdx) => {
-      const actionVector = jointOrder.map(
-        (joint) => frame.jointPositions[joint] ?? 0
-      );
-
-      flattenedRows.push({
-        index: runningDatasetIndex,
-        episode_index: episodeIndex,
-        frame_index: frameIdx,
-        timestamp: frame.timestamp / 1000,
-        action: actionVector,
-        "observation.state": actionVector,
-        robot_type: robotType,
-      });
-
-      runningDatasetIndex += 1;
-    });
-
-    const endIndex = runningDatasetIndex - 1;
-
-    episodeSummaries.push({
-      episode_index: episodeIndex,
-      tasks: episodeTasks,
-      length: episode.frames.length,
-      dataset_from_index: startIndex,
-      dataset_to_index: endIndex,
-    });
-
-    totalFrames += episode.frames.length;
-  });
-
-  // Use robot_type from episode metadata if available, otherwise use raw robotName (not sanitized)
-  const finalRobotType = representativeRobotType ?? robotName ?? robotBaseName ?? "unknown";
-  
-  return {
-    globalJointOrder,
-    flattenedRows,
-    episodeSummaries,
-    episodeIndexToTasks,
-    tasksSet,
-    totalFrames,
-    representativeFps: representativeFps || 1000 / RECORDING_INTERVAL_MS,
-    representativeRobotType: finalRobotType,
-  };
-};
-
-/**
- * Computes statistics for v3 dataset from flattened rows
- */
-const computeV3Stats = (
-  flattenedRows: Array<Record<string, unknown>>,
-  episodeIndexToTasks: Map<number, string[]>,
-  tasksSet: Set<string>
-): Record<string, unknown> => {
-  const frameIndices = flattenedRows.map((row) => row.frame_index as number);
-  const timestamps = flattenedRows.map((row) => row.timestamp as number);
-  const episodeIndices = flattenedRows.map((row) => row.episode_index as number);
-  const observationStates = flattenedRows.map(
-    (row) => row["observation.state"] as number[]
-  );
-  const actions = flattenedRows.map((row) => row.action as number[]);
-
-  // Compute task_index stats from episode_index to tasks mapping
-  const tasksList = Array.from(tasksSet);
-  const taskIndexMap = new Map<string, number>();
-  tasksList.forEach((task, index) => {
-    taskIndexMap.set(task, index);
-  });
-  const taskIndices = flattenedRows.map((row) => {
-    // Find task_index from episode_index
-    const epIdx = row.episode_index as number;
-    const episodeTasks = episodeIndexToTasks.get(epIdx);
-    if (episodeTasks && episodeTasks.length > 0) {
-      return taskIndexMap.get(episodeTasks[0]) ?? 0;
-    }
-    return 0;
-  });
-
-  const datasetIndices = flattenedRows.map((row) => row.index as number);
-
-  return {
-    frame_index: computeFieldStats(frameIndices, false),
-    timestamp: computeFieldStats(timestamps, false),
-    task_index: computeFieldStats(taskIndices, false),
-    index: computeFieldStats(datasetIndices, false),
-    episode_index: computeFieldStats(episodeIndices, false),
-    "observation.state": computeFieldStats(observationStates, true),
-    action: computeFieldStats(actions, true),
-  };
-};
-
-/**
- * Generates v3 dataset structure in a JSZip archive
- */
-const generateV3DatasetArchive = async (
-  episodes: Episode[],
-  robotBaseName: string | undefined,
-  zip: JSZipInstance,
-  datasetName: string,
-  robotName?: string | undefined,
-  urdfJointOrder?: string[] // URDF-defined joint order
-): Promise<void> => {
-  const datasetFolder = zip.folder(datasetName);
-  if (!datasetFolder) {
-    throw new Error("Failed to initialize dataset archive");
-  }
-
-  const metaFolder = datasetFolder.folder("meta");
-  const dataFolder = datasetFolder.folder("data");
-  const videosRoot = datasetFolder.folder("videos");
-  const episodesFolder = metaFolder?.folder("episodes");
-
-  if (!metaFolder || !dataFolder || !videosRoot || !episodesFolder) {
-    throw new Error("Failed to allocate dataset directories");
-  }
-
-  // Use common helper to build episode data
-  const episodeData = buildEpisodeDataForV3(episodes, robotBaseName, robotName, urdfJointOrder);
-  const {
-    globalJointOrder,
-    flattenedRows,
-    episodeSummaries,
-    episodeIndexToTasks,
-    tasksSet,
-    totalFrames,
-    representativeFps,
-    representativeRobotType,
-  } = episodeData;
-
-  // Compute statistics using common helper
-  const statsJson = computeV3Stats(flattenedRows, episodeIndexToTasks, tasksSet);
-
-  const infoJson = {
-    codebase_version: "v3.0",
-    robot_type: representativeRobotType,
-    total_episodes: episodes.length,
-    total_frames: totalFrames,
-    total_tasks: tasksSet.size,
-    chunks_size: 1000,
-    data_files_size_in_mb: 0,
-    video_files_size_in_mb: 0,
-    fps: representativeFps,
-    splits: {
-      train: `0:${episodes.length}`,
-    },
-    data_path: "data/chunk-{chunk_index:03d}/file-{file_index:03d}.parquet",
-    video_path: "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4",
-    features: {
-      action: {
-        dtype: "float32",
-        names: globalJointOrder.map((name) => `${name}.pos`),
-        shape: [globalJointOrder.length],
-      },
-      "observation.state": {
-        dtype: "float32",
-        names: globalJointOrder.map((name) => `${name}.pos`),
-        shape: [globalJointOrder.length],
-      },
-      timestamp: {
-        dtype: "float32",
-        shape: [1],
-        names: null,
-      },
-      frame_index: {
-        dtype: "int64",
-        shape: [1],
-        names: null,
-      },
-      episode_index: {
-        dtype: "int64",
-        shape: [1],
-        names: null,
-      },
-      index: {
-        dtype: "int64",
-        shape: [1],
-        names: null,
-      },
-      task_index: {
-        dtype: "int64",
-        shape: [1],
-        names: null,
-      },
-    },
-  };
-
-  // Write info.json (required)
-  metaFolder.file("info.json", JSON.stringify(infoJson, null, 2));
-
-  // Write stats.json (required for v3.0)
-  metaFolder.file("stats.json", JSON.stringify(statsJson, null, 2));
-
-  // Write tasks as parquet: meta/tasks.parquet
-  const tasksList = Array.from(tasksSet);
-  const tasksParquetContent = tasksList
-    .map((task, index) => JSON.stringify({ task, task_index: index }))
-    .join("\n");
-  metaFolder.file("tasks.parquet", tasksParquetContent);
-
-  // Write episodes as parquet chunk: meta/episodes/chunk-000.parquet
-  const episodesChunkContent = episodeSummaries
-    .map((ep) => JSON.stringify(ep))
-    .join("\n");
-  episodesFolder.file("chunk-000.parquet", episodesChunkContent);
-
-  // Write data files in chunk/file structure: data/chunk-000/file-000.parquet
-  const chunkFolder = dataFolder.folder("chunk-000");
-  if (!chunkFolder) {
-    throw new Error("Failed to create data/chunk-000 directory");
-  }
-  const flattenedContent = flattenedRows
-    .map((row) => JSON.stringify(row))
-    .join("\n");
-  chunkFolder.file("file-000.parquet", flattenedContent);
-
-  // Create video structure: videos/{video_key}/chunk-000/ (exact structure, even if empty)
-  // Always create at least one video key folder structure to match reference format
-  const videoCameras = new Set<string>();
-  episodes.forEach((episode) => {
-    if (episode.metadata?.videos && typeof episode.metadata.videos === "object") {
-      Object.keys(episode.metadata.videos).forEach((camera) => {
-        if (typeof camera === "string" && camera.length > 0) {
-          videoCameras.add(camera);
-        }
-      });
-    }
-  });
-  // Always create at least one video folder structure, even if no videos exist
-  if (videoCameras.size === 0) {
-    videoCameras.add("camera_default");
-  }
-  // Create exact video folder structure matching reference format
-  videoCameras.forEach((videoKey) => {
-    const videoKeyFolder = videosRoot.folder(videoKey);
-    if (videoKeyFolder) {
-      // Create chunk-000 folder structure (even if empty, structure must exist)
-      videoKeyFolder.folder("chunk-000");
-    }
-  });
-};
-
-// Helper function to compute statistics for a field
-const computeFieldStats = (
-  values: number[] | number[][],
-  isArray: boolean
-): {
-  min: number | number[];
-  max: number | number[];
-  mean: number | number[];
-  std: number | number[];
-  count: number | number[];
-  q01: number | number[];
-  q10: number | number[];
-  q50: number | number[];
-  q90: number | number[];
-  q99: number | number[];
-} => {
-  if (isArray && values.length > 0 && Array.isArray(values[0])) {
-    // Handle array fields (like observation.state, action)
-    const arrayValues = values as number[][];
-    const arrayLength = arrayValues[0].length;
-    const stats: {
-      min: number[];
-      max: number[];
-      mean: number[];
-      std: number[];
-      count: number[];
-      q01: number[];
-      q10: number[];
-      q50: number[];
-      q90: number[];
-      q99: number[];
-    } = {
-      min: Array(arrayLength).fill(Infinity),
-      max: Array(arrayLength).fill(-Infinity),
-      mean: Array(arrayLength).fill(0),
-      std: Array(arrayLength).fill(0),
-      count: Array(arrayLength).fill(arrayValues.length),
-      q01: Array(arrayLength).fill(0),
-      q10: Array(arrayLength).fill(0),
-      q50: Array(arrayLength).fill(0),
-      q90: Array(arrayLength).fill(0),
-      q99: Array(arrayLength).fill(0),
-    };
-
-    // Helper to get quantile value safely
-    const getQuantile = (sorted: number[], percentile: number): number => {
-      if (sorted.length === 0) return 0;
-      const index = Math.floor(sorted.length * percentile);
-      return sorted[Math.min(index, sorted.length - 1)] ?? 0;
-    };
-
-    // Compute min, max, mean for each dimension
-    for (let i = 0; i < arrayLength; i++) {
-      const dimensionValues = arrayValues.map((arr) => arr[i]).filter((v) => typeof v === "number");
-      if (dimensionValues.length === 0) {
-        stats.min[i] = 0;
-        stats.max[i] = 0;
-        stats.mean[i] = 0;
-        stats.std[i] = 0;
-        stats.q01[i] = 0;
-        stats.q10[i] = 0;
-        stats.q50[i] = 0;
-        stats.q90[i] = 0;
-        stats.q99[i] = 0;
-        continue;
-      }
-
-      stats.min[i] = Math.min(...dimensionValues);
-      stats.max[i] = Math.max(...dimensionValues);
-      stats.mean[i] =
-        dimensionValues.reduce((sum, val) => sum + val, 0) / dimensionValues.length;
-
-      // Compute std
-      const variance =
-        dimensionValues.reduce((sum, val) => sum + Math.pow(val - stats.mean[i], 2), 0) /
-        dimensionValues.length;
-      stats.std[i] = Math.sqrt(variance);
-
-      // Compute quantiles
-      const sorted = [...dimensionValues].sort((a, b) => a - b);
-      stats.q01[i] = getQuantile(sorted, 0.01);
-      stats.q10[i] = getQuantile(sorted, 0.1);
-      stats.q50[i] = getQuantile(sorted, 0.5);
-      stats.q90[i] = getQuantile(sorted, 0.9);
-      stats.q99[i] = getQuantile(sorted, 0.99);
-    }
-
-    return stats;
-  } else {
-    // Handle scalar fields - always return arrays
-    const scalarValues = (values as number[]).filter((v) => typeof v === "number");
-    if (scalarValues.length === 0) {
-      return {
-        min: [0],
-        max: [0],
-        mean: [0],
-        std: [0],
-        count: [0],
-        q01: [0],
-        q10: [0],
-        q50: [0],
-        q90: [0],
-        q99: [0],
-      };
-    }
-
-    const sorted = [...scalarValues].sort((a, b) => a - b);
-    const min = Math.min(...scalarValues);
-    const max = Math.max(...scalarValues);
-    const mean = scalarValues.reduce((sum, val) => sum + val, 0) / scalarValues.length;
-    const variance =
-      scalarValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
-      scalarValues.length;
-    const std = Math.sqrt(variance);
-    const count = scalarValues.length;
-
-    // Helper to get quantile value safely
-    const getQuantile = (percentile: number): number => {
-      const index = Math.floor(sorted.length * percentile);
-      return sorted[Math.min(index, sorted.length - 1)] ?? 0;
-    };
-
-    return {
-      min: [min],
-      max: [max],
-      mean: [mean],
-      std: [std],
-      count: [count],
-      q01: [getQuantile(0.01)],
-      q10: [getQuantile(0.1)],
-      q50: [getQuantile(0.5)],
-      q90: [getQuantile(0.9)],
-      q99: [getQuantile(0.99)],
-    };
-  }
-};
-
-const sanitizeFilename = (name: string) => {
-  const cleaned = Array.from(name, (char) => {
-    const code = char.charCodeAt(0);
-    if (code < 32 || /[<>:"/\\|?*]/.test(char)) {
-      return "_";
-    }
-    return char;
-  }).join("");
-
-  return cleaned
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .trim()
-    .replace(/^_+|_+$/g, "") || "robot";
-};
-
-const getSortedJointList = (availableJoints: string[]) => {
-  if (!availableJoints || availableJoints.length === 0) {
-    return FALLBACK_JOINTS;
-  }
-
-  return [...availableJoints].sort((a, b) => {
-    const aNum = Number(a);
-    const bNum = Number(b);
-    if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
-      return aNum - bNum;
-    }
-    return a.localeCompare(b);
-  });
-};
-
-const parseRobotName = (urdf: string) => {
-  if (!urdf) return "robot";
-  try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(urdf, "text/xml");
-    const parserError = xmlDoc.querySelector("parsererror");
-    if (parserError) {
-      return "robot";
-    }
-
-    const robotName = xmlDoc.querySelector("robot")?.getAttribute("name");
-    return robotName?.trim() || "robot";
-  } catch {
-    return "robot";
-  }
-};
-
-const sanitizeSpaceName = (value: string) => {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "") || "urdfstudio-recordings";
-};
-
-const normalizeSpaceInput = (input: string) => {
-  return input
-    .trim()
-    .replace(/^https?:\/\/huggingface\.co\/spaces\//i, "")
-    .replace(/^spaces\//i, "");
-};
-
-const parseSpaceInput = (input: string, defaultOwner?: string) => {
-  const normalized = normalizeSpaceInput(input);
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length >= 2) {
-    return { owner: parts[0], name: parts[1] };
-  }
-  if (parts.length === 1 && defaultOwner) {
-    return { owner: defaultOwner, name: parts[0] };
-  }
-  return null;
-};
 
 export const Sidebar = ({
   isLoading = false,
@@ -878,27 +213,15 @@ export const Sidebar = ({
   const robotName = useMemo(() => parseRobotName(originalUrdf), [originalUrdf]);
   const robotBaseName = useMemo(() => sanitizeFilename(robotName), [robotName]);
 
-  const [hfToken, setHfToken] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("urdfstudio:hfToken");
-  });
+  const { hfToken, setHfToken } = useHfToken();
   const [isUploadingToHF, setIsUploadingToHF] = useState(false);
   const [isImportingFromHF, setIsImportingFromHF] = useState(false);
   const [isImportingFromHFDataset, setIsImportingFromHFDataset] = useState(false);
   const [isExportingDataset, setIsExportingDataset] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hfToken) {
-      localStorage.setItem("urdfstudio:hfToken", hfToken);
-    } else {
-      localStorage.removeItem("urdfstudio:hfToken");
-    }
-  }, [hfToken]);
-
-  useEffect(() => {
     hfIdentityRef.current = null;
-  }, [hfToken]);
+  }, [hfToken, setHfToken]);
 
   const ensureHfToken = useCallback(async () => {
     let token = hfToken;
@@ -921,7 +244,7 @@ export const Sidebar = ({
       setHfToken(tokenPrompt);
     }
     return token;
-  }, [hfToken]);
+  }, [hfToken, setHfToken]);
 
   const fetchHfIdentity = useCallback(
     async (token: string): Promise<HfIdentity> => {
@@ -3965,383 +3288,34 @@ export const Sidebar = ({
         )}
 
         {/* Top Section - Recording Controls (shrinks when episode viewer grows) */}
-        <div
-          className="overflow-hidden flex flex-col p-1.5 border-b border-border/20"
-          style={{
-            flex: `0 0 ${((1 - (episodesViewHeight ?? 0.4)) * 100)}%`,
-            minHeight: '50px'
-          }}
-        >
-          <div className="flex-1 overflow-y-auto blender-scrollbar">
-            {/* Blender-style Menu Bar */}
-            <div className="flex items-center gap-1.5 border-b border-border/50 pb-1 mb-1.5">
-              {/* Record Button - Always Visible */}
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 px-2 text-xs flex-shrink-0 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:border-red-500"
-                    onClick={isRecording ? stopRecording : startRecording}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Circle className={`w-3 h-3 fill-current ${isRecording ? 'animate-pulse' : ''}`} />
-                      <span>{isRecording ? "Stop" : "Record"}</span>
-                    </div>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  <p className="font-medium">{isRecording ? "Stop Recording" : "Start Recording"}</p>
-                  <p className="text-muted-foreground">
-                    {isRecording 
-                      ? "Stop recording the current episode" 
-                      : "Record a new episode by moving the robot"}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Recording Stats - Always Reserved Space */}
-              <div className="flex items-center gap-1.5 text-[10px] font-mono min-w-[60px]">
-                {isRecording ? (
-                  <>
-                    <span className="text-muted-foreground">{recordingStats.frames}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-muted-foreground">{recordingStats.seconds.toFixed(1)}s</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-muted-foreground/40">0</span>
-                    <span className="text-muted-foreground/40">/</span>
-                    <span className="text-muted-foreground/40">0.0s</span>
-                  </>
-                )}
-              </div>
-
-              {/* FPS Input */}
-              <div className="flex items-center gap-1">
-                <label className="text-[10px] text-muted-foreground whitespace-nowrap">FPS:</label>
-                <NumberInput
-                  value={recordingFps}
-                  onValueChange={setRecordingFps}
-                  min={1}
-                  max={120}
-                  step={1}
-                  compact={true}
-                  disabled={isRecording}
-                  className="w-14"
-                />
-              </div>
-
-              {/* Hidden file input for dataset loading - triggered from top menu */}
-              <input
-                type="file"
-                id="motion-upload-episodes"
-                accept=".json,.csv,.pos"
-                multiple
-                {...({
-                  webkitdirectory: "",
-                  directory: "",
-                  mozdirectory: "",
-                } as React.InputHTMLAttributes<HTMLInputElement>)}
-                onChange={(e) => {
-                  void handleFileUpload(e.target.files);
-                  e.target.value = "";
-                }}
-                className="hidden"
-              />
-            </div>
-
-            {/* Blender-style Timeline Controls */}
-            <BlenderPanel title="Timeline" defaultOpen={true}>
-              {/* Playback and Speed on same row */}
-              <div className="flex items-center gap-1.5 mb-1">
-                {/* Previous Episode */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={() => {
-                    if (episodes.length === 0) return;
-                    const currentIndex = currentPlayingEpisodeIndex ?? 0;
-                    const prevIndex = currentIndex > 0 ? currentIndex - 1 : episodes.length - 1;
-                    setEpisodeAndFrame(prevIndex, 0);
-                    setCurrentPlayingEpisodeIndex(prevIndex);
-                  }}
-                  disabled={episodes.length === 0}
-                  title="Previous Episode"
-                >
-                  <SkipBack className="w-3 h-3" />
-                </Button>
-
-                {/* Play/Pause */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={() => playAllEpisodes()}
-                  disabled={episodes.length === 0}
-                  title={isPlayingAll ? "Pause" : "Play"}
-                >
-                  {isPlayingAll ? (
-                    <Pause className="w-3 h-3" />
-                  ) : (
-                    <Play className="w-3 h-3 fill-current" />
-                  )}
-                </Button>
-
-                {/* Next Episode */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={() => {
-                    if (episodes.length === 0) return;
-                    // ALWAYS stop playback first (equivalent to clicking stop)
-                    stopAllPlayback();
-                    
-                    // Then move to next episode starting at frame 0
-                    const currentIndex = currentPlayingEpisodeIndex ?? 0;
-                    const nextIndex = (currentIndex + 1) % episodes.length;
-                    
-                    // Always start from frame 0 when moving to next episode
-                    setEpisodeAndFrame(nextIndex, 0);
-                    setCurrentPlayingEpisodeIndex(nextIndex);
-                    // Update frame callback to ensure UI reflects frame 0
-                    onFrameChange?.(0);
-                  }}
-                  disabled={episodes.length === 0}
-                  title="Next Episode"
-                >
-                  <SkipForward className="w-3 h-3" />
-                </Button>
-
-                {/* Speed Control - Blender style (Number Input) */}
-                <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-[10px] text-muted-foreground whitespace-nowrap">Speed:</label>
-                  <NumberInput
-                    value={playbackSpeed}
-                    onValueChange={(value) => {
-                      const newSpeed = value ?? 1.0;
-                      setPlaybackSpeed(newSpeed);
-                    }}
-                    min={0.25}
-                    max={6}
-                    step={0.25}
-                    compact={true}
-                    className="w-16"
-                  />
-                  <span className="text-[10px] font-mono text-foreground tabular-nums">
-                    x{playbackSpeed % 1 === 0 ? playbackSpeed.toFixed(0) : playbackSpeed.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </BlenderPanel>
-
-            {/* Episodes List */}
-            <BlenderPanel title={`Episodes (${episodes.length})`} defaultOpen={true}>
-              <div className="flex-1 overflow-y-auto max-h-[400px] blender-scrollbar -mx-1.5">
-                {episodes.length === 0 ? (
-                  <div className="py-2 text-center">
-                    <p className="text-xs text-muted-foreground">No episodes</p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">Load JSON data or record new</p>
-                  </div>
-                ) : (
-                  <div className="space-y-0">
-                    {episodes.map((episode, index) => {
-                      const duration = episode.frames.length > 0 
-                        ? episode.frames[episode.frames.length - 1].timestamp 
-                        : 0;
-                      const durationSeconds = (duration / 1000).toFixed(1);
-                      const isPlaying = currentPlayingEpisodeIndex === index && isPlayingAll;
-                      // Get current frame for this episode - show currentFrame if it's the currently active episode (regardless of playing state)
-                      // Frames start at 0
-                      const episodeCurrentFrame = (currentPlayingEpisodeIndex === index && currentFrame !== undefined) 
-                        ? currentFrame 
-                        : 0;
-                      const totalFrames = episode.frames.length;
-                      const lastFrameIndex = Math.max(0, totalFrames - 1);
-                      const displayFrame = Math.max(0, Math.min(episodeCurrentFrame, lastFrameIndex));
-                      const sourceTypeRaw = episode.metadata?.additional?.sourceType;
-                      const sourceType = typeof sourceTypeRaw === "string" ? sourceTypeRaw : undefined;
-                      const sourceNameRaw = episode.metadata?.additional?.sourceName;
-                      const sourceName = typeof sourceNameRaw === "string" ? sourceNameRaw : undefined;
-                        
-                        return (
-                          <div
-                            key={episode.id}
-                            className={cn(
-                              "group relative border rounded px-0.25 py-0.5 transition-all",
-                              isPlaying
-                                ? "border-primary shadow-lg shadow-primary/20 bg-primary/5"
-                                : "border-border bg-background hover:bg-muted/30"
-                            )}
-                          >
-                            {/* Main Row */}
-                            <div className="flex items-start gap-1">
-                              {/* Play/Pause Button - Prominent like Blender's video strips */}
-                              <Button
-                                size="sm"
-                                variant={isPlaying ? "default" : "ghost"}
-                                className={cn(
-                                  "h-6 w-6 p-0 flex-shrink-0 mt-0.5",
-                                  isPlaying && "bg-primary hover:bg-primary/90"
-                                )}
-                                onClick={() => {
-                                  playEpisode(episode);
-                                }}
-                                title={isPlaying ? "Pause" : "Play"}
-                              >
-                                {isPlaying ? (
-                                  <Pause className="w-3 h-3" />
-                                ) : (
-                                  <Play className="w-3 h-3 fill-current" />
-                                )}
-                              </Button>
-                              
-                              {/* Episode Number */}
-                              <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <span className="text-[10px] font-bold text-primary">
-                                  {episode.number}
-                                </span>
-                              </div>
-                              
-                              {/* Episode Info - Blender Style */}
-                              <div className="flex-1 min-w-0">
-                                {/* First Row: Stats */}
-                                <div className="flex items-center gap-1 mb-0.5">
-                                  <span className="text-xs font-medium text-foreground">
-                                    {episode.frames.length} frames
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground">•</span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {durationSeconds}s
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground">•</span>
-                                  {/* Frame Counter - Highlighted when playing */}
-                                  <span className={`text-[10px] font-mono tabular-nums ${
-                                    currentPlayingEpisodeIndex === index && isPlayingAll
-                                      ? "text-primary font-semibold"
-                                      : "text-muted-foreground"
-                                  }`}>
-                                    {displayFrame}/{lastFrameIndex}
-                                  </span>
-                                </div>
-                                
-                                {/* Second Row: Source Info */}
-                                {sourceType && (
-                                  <div className="flex items-center gap-1">
-                                    <Badge
-                                      variant={
-                                        sourceType === 'hf'
-                                          ? 'default'
-                                          : sourceType === 'local'
-                                          ? 'secondary'
-                                          : 'outline'
-                                      }
-                                      className="text-[9px] px-1.5 py-0 h-3.5 font-medium"
-                                    >
-                                      {sourceType === 'hf'
-                                        ? 'HF'
-                                        : sourceType === 'local'
-                                        ? 'Local'
-                                        : sourceType === 'recorded'
-                                        ? 'REC'
-                                        : sourceType}
-                                    </Badge>
-                                    {sourceName && (
-                                      <span className="text-[10px] text-muted-foreground truncate" title={sourceName}>
-                                        {sourceName}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                            </div>
-                          
-                            {/* Compact Controls - All Actions Together */}
-                            <div className="flex items-center gap-0.5 mt-1 pt-0.5 border-t border-border/30 opacity-40 group-hover:opacity-100 transition-opacity">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-1 text-[10px] text-muted-foreground/60 hover:text-foreground"
-                                onClick={() => moveEpisode(episode.id, 'up')}
-                                disabled={index === 0}
-                                title="Move up"
-                              >
-                                <ArrowUp className="w-2.5 h-2.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-1 text-[10px] text-muted-foreground/60 hover:text-foreground"
-                                onClick={() => moveEpisode(episode.id, 'down')}
-                                disabled={index === episodes.length - 1}
-                                title="Move down"
-                              >
-                                <ArrowDown className="w-2.5 h-2.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-1 text-[10px] text-muted-foreground/60 hover:text-foreground"
-                                onClick={() => retakeEpisode(episode.id)}
-                                disabled={isRecording}
-                                title="Retake"
-                              >
-                                <RotateCcw className="w-2.5 h-2.5 mr-0.5" />
-                                Retake
-                              </Button>
-                              <div className="flex-1" />
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 w-5 p-0 text-muted-foreground/60 hover:text-foreground"
-                                onClick={() => exportEpisodeToDataFile(episode)}
-                                title="Export"
-                              >
-                                <Download className="w-2.5 h-2.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 w-5 p-0 text-muted-foreground/60 hover:text-foreground"
-                                onClick={() => deleteEpisode(episode.id)}
-                                disabled={isRecording}
-                                title="Delete"
-                              >
-                                <Trash2 className="w-2.5 h-2.5" />
-                              </Button>
-                            </div>
-                          </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </BlenderPanel>
-          </div>
-
-          {/* Collapse Button at Bottom of Top Section */}
-          {onToggleCollapse && (
-            <div className="flex-shrink-0 border-t border-border/30 flex items-center justify-center p-1.5">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={onToggleCollapse}
-                aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
-                title={isCollapsed ? "Show sidebar" : "Hide sidebar"}
-              >
-                {isCollapsed ? (
-                  <ChevronsRight className="w-4 h-4" />
-                ) : (
-                  <ChevronsLeft className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
+        <EpisodesPanel
+          episodes={episodes}
+          episodesViewHeight={episodesViewHeight}
+          isRecording={isRecording}
+          recordingStats={recordingStats}
+          recordingFps={recordingFps}
+          setRecordingFps={setRecordingFps}
+          startRecording={startRecording}
+          stopRecording={stopRecording}
+          handleFileUpload={handleFileUpload}
+          playAllEpisodes={playAllEpisodes}
+          stopAllPlayback={stopAllPlayback}
+          setEpisodeAndFrame={setEpisodeAndFrame}
+          setCurrentPlayingEpisodeIndex={setCurrentPlayingEpisodeIndex}
+          playEpisode={playEpisode}
+          moveEpisode={moveEpisode}
+          retakeEpisode={retakeEpisode}
+          exportEpisodeToDataFile={exportEpisodeToDataFile}
+          deleteEpisode={deleteEpisode}
+          onFrameChange={onFrameChange}
+          isPlayingAll={isPlayingAll}
+          currentFrame={currentFrame}
+          currentPlayingEpisodeIndex={currentPlayingEpisodeIndex}
+          playbackSpeed={playbackSpeed}
+          setPlaybackSpeed={setPlaybackSpeed}
+          onToggleCollapse={onToggleCollapse}
+          isCollapsed={isCollapsed}
+        />
 
         {/* Horizontal Resizer */}
         {onEpisodesResizeStart && (
@@ -4358,47 +3332,15 @@ export const Sidebar = ({
         )}
 
         {/* Bottom Section - Matches episode viewer height */}
-        <div
-          className="overflow-hidden flex flex-col bg-background"
-          style={{
-            flex: `0 0 ${((episodesViewHeight ?? 0.4) * 100)}%`,
-            minHeight: '160px'
-          }}
-        >
-          <div className="flex-1 min-h-0 flex flex-col gap-2 p-2">
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold text-foreground">Episode camera monitor</span>
-                <span className="text-[11px] text-muted-foreground">Fixed frame; image updates during playback.</span>
-              </div>
-              <Select
-                value={episodePreviewCameraId ?? undefined}
-                onValueChange={(value) => setEpisodePreviewCameraId(value)}
-                disabled={cameras.length === 0}
-              >
-                <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="Choose camera" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cameras.map((cam) => (
-                    <SelectItem key={cam.id} value={cam.id}>
-                      {cam.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex-1 min-h-[160px]">
-              <EpisodeCameraPreview
-                urdfContent={vizUrdf || originalUrdf || null}
-                meshFiles={meshFiles}
-                cameraId={episodePreviewCameraId}
-                gpuMode="low"
-              />
-            </div>
-          </div>
-        </div>
+        <EpisodePreviewPanel
+          episodesViewHeight={episodesViewHeight}
+          cameras={cameras}
+          episodePreviewCameraId={episodePreviewCameraId}
+          setEpisodePreviewCameraId={setEpisodePreviewCameraId}
+          vizUrdf={vizUrdf}
+          originalUrdf={originalUrdf}
+          meshFiles={meshFiles}
+        />
       </div>
 
       {/* Rerun Viewer Modal */}

@@ -38,8 +38,9 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
 import { cn } from "@/shared/lib/utils";
-import { viewerPlayback } from "@/features/viewerPlayback";
+import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
+import { toAnimationFrames, type Episode, type RecordedFrame } from "@/features/dataset";
 
 // Constants
 const CANVAS_PADDING = 40;
@@ -51,19 +52,6 @@ const JOINT_COLORS = [
   "#ec4899", "#eab308", "#22c55e", "#3b82f6",
   "#a855f7", "#f97316", "#06b6d4", "#ef4444",
 ] as const;
-
-interface RecordedFrame {
-  timestamp: number;
-  jointPositions: Record<string, number>;
-}
-
-interface Episode {
-  id: string;
-  number: number;
-  frames: RecordedFrame[];
-  createdAt: number;
-  metadata?: Record<string, unknown>;
-}
 
 interface EpisodeViewer3DModalProps {
   episode: Episode | null;
@@ -80,13 +68,6 @@ interface EpisodeViewer3DModalProps {
   showOnlyHeader?: boolean; // If true, only show the header (for collapsed view)
   onSaveEpisode?: (episode: Episode, saveAsNew: boolean, newName?: string) => void; // Callback to save/update episode
 }
-
-// Helper function to convert episode to animation frames
-const toAnimationFrames = (ep: Episode) =>
-  ep.frames.map((frame) => ({
-    timestamp: frame.timestamp,
-    joints: frame.jointPositions,
-  }));
 
 // Helper to get current frame value
 const getCurrentFrameValue = (
