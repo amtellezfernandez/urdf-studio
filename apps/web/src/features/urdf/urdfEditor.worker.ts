@@ -1,0 +1,46 @@
+/// <reference lib="webworker" />
+
+import { highlightUrdfToHtml } from "./urdfHighlight";
+import { parseUrdfStats, type UrdfParseStats } from "./urdfStats";
+
+type UrdfWorkerRequest = {
+  id: number;
+  type: "stats" | "highlight";
+  xml: string;
+};
+
+type UrdfWorkerResponse =
+  | { id: number; type: "stats"; result: UrdfParseStats }
+  | { id: number; type: "highlight"; result: string }
+  | { id: number; type: "error"; error: string };
+
+const ctx = self as unknown as DedicatedWorkerGlobalScope;
+
+ctx.onmessage = (event: MessageEvent<UrdfWorkerRequest>) => {
+  const { id, type, xml } = event.data;
+  try {
+    if (type === "stats") {
+      const stats = parseUrdfStats(xml);
+      const response: UrdfWorkerResponse = { id, type, result: stats };
+      ctx.postMessage(response);
+      return;
+    }
+
+    if (type === "highlight") {
+      const html = highlightUrdfToHtml(xml);
+      const response: UrdfWorkerResponse = { id, type, result: html };
+      ctx.postMessage(response);
+      return;
+    }
+
+    const response: UrdfWorkerResponse = { id, type: "error", error: "Unknown URDF worker task" };
+    ctx.postMessage(response);
+  } catch (error) {
+    const response: UrdfWorkerResponse = {
+      id,
+      type: "error",
+      error: error instanceof Error ? error.message : "URDF worker failed",
+    };
+    ctx.postMessage(response);
+  }
+};

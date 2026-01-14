@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,9 +32,10 @@ import {
   convertURDFToXacro,
   fixMeshPaths,
   normalizeAxes,
-  parseURDF,
   prettifyUrdf,
 } from "@/features/urdf";
+import { parseUrdfStatsAsync } from "@/features/urdf/urdfEditorWorker";
+import { parseUrdfStats } from "@/features/urdf/urdfStats";
 
 interface URDFComparisonProps {
   originalUrdf: string;
@@ -79,62 +80,42 @@ export const URDFComparison = ({
   // Parse URDF content in real-time
   const activeUrdf = isEditing ? editedVizUrdf : vizUrdf;
 
-  const parseInfo = useMemo(() => {
-    const parsed = parseURDF(activeUrdf);
-    
-    if (!parsed.isValid) {
-      return {
-        isValid: false,
-        error: parsed.error || "Unknown parsing error",
-        links: 0,
-        joints: 0,
-        materials: 0,
-      };
-    }
+  const [parseInfo, setParseInfo] = useState(() => parseUrdfStats(activeUrdf));
+  const [originalParseInfo, setOriginalParseInfo] = useState(() =>
+    parseUrdfStats(originalUrdf)
+  );
+  const parseRequestRef = useRef(0);
+  const originalParseRequestRef = useRef(0);
 
-    const doc = parsed.document;
-    const links = doc.querySelectorAll("link").length;
-    const joints = doc.querySelectorAll("joint").length;
-    const materials = doc.querySelectorAll("material").length;
-    const robotName = doc.querySelector("robot")?.getAttribute("name") || "Unnamed";
+  useEffect(() => {
+    const requestId = parseRequestRef.current + 1;
+    parseRequestRef.current = requestId;
 
-    return {
-      isValid: true,
-      error: null,
-      links,
-      joints,
-      materials,
-      robotName,
+    const timeout = setTimeout(() => {
+      parseUrdfStatsAsync(activeUrdf).then((stats) => {
+        if (parseRequestRef.current !== requestId) return;
+        setParseInfo(stats);
+      });
+    }, 120);
+
+    return () => {
+      clearTimeout(timeout);
     };
   }, [activeUrdf]);
 
-  // Parse original URDF
-  const originalParseInfo = useMemo(() => {
-    const parsed = parseURDF(originalUrdf);
-    
-    if (!parsed.isValid) {
-      return {
-        isValid: false,
-        error: parsed.error || "Unknown parsing error",
-        links: 0,
-        joints: 0,
-        materials: 0,
-      };
-    }
+  useEffect(() => {
+    const requestId = originalParseRequestRef.current + 1;
+    originalParseRequestRef.current = requestId;
 
-    const doc = parsed.document;
-    const links = doc.querySelectorAll("link").length;
-    const joints = doc.querySelectorAll("joint").length;
-    const materials = doc.querySelectorAll("material").length;
-    const robotName = doc.querySelector("robot")?.getAttribute("name") || "Unnamed";
+    const timeout = setTimeout(() => {
+      parseUrdfStatsAsync(originalUrdf).then((stats) => {
+        if (originalParseRequestRef.current !== requestId) return;
+        setOriginalParseInfo(stats);
+      });
+    }, 200);
 
-    return {
-      isValid: true,
-      error: null,
-      links,
-      joints,
-      materials,
-      robotName,
+    return () => {
+      clearTimeout(timeout);
     };
   }, [originalUrdf]);
 
@@ -313,10 +294,8 @@ export const URDFComparison = ({
 
   // Extract robot name from URDF for export
   const robotName = useMemo(() => {
-    const parsed = parseURDF(vizUrdf);
-    if (!parsed.isValid) return "robot";
-    const robot = parsed.document.querySelector("robot");
-    return robot?.getAttribute("name") || "robot";
+    const stats = parseUrdfStats(vizUrdf);
+    return stats.robotName || "robot";
   }, [vizUrdf]);
 
   const formattedOriginal = formatXML(originalUrdf);

@@ -23,7 +23,23 @@ export interface PCAResult {
 /**
  * Loads and computes bounds from a mesh file
  */
-export async function computeMeshBounds(meshFile: Blob, scale: string = "1 1 1"): Promise<MeshBounds | null> {
+export async function computeMeshBounds(
+  meshFile: Blob,
+  scale: string = "1 1 1"
+): Promise<MeshBounds | null> {
+  try {
+    const arrayBuffer = await meshFile.arrayBuffer();
+    return computeMeshBoundsFromArrayBuffer(arrayBuffer, scale);
+  } catch (error) {
+    console.error("Error computing mesh bounds:", error);
+    return null;
+  }
+}
+
+export function computeMeshBoundsFromArrayBuffer(
+  arrayBuffer: ArrayBuffer,
+  scale: string = "1 1 1"
+): MeshBounds | null {
   try {
     const scaleParts = scale.split(" ").map(parseFloat);
     const scaleVec = new THREE.Vector3(
@@ -33,7 +49,6 @@ export async function computeMeshBounds(meshFile: Blob, scale: string = "1 1 1")
     );
 
     const loader = new STLLoader();
-    const arrayBuffer = await meshFile.arrayBuffer();
     const geometry = loader.parse(arrayBuffer);
 
     if (!geometry.attributes.position) {

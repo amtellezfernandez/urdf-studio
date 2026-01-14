@@ -26,3 +26,4 @@ export * from "./urdfEditorActions";
 export * from "./urdfParser";
 export * from "./urdfToMJCF";
 export * from "./urdfToXacro";
+export * from "./meshAutoFit";

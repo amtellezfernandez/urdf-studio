@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/shared/ui/input";
 import { Button } from "@/shared/ui/button";
 import { NumberInput } from "@/shared/ui/number-input";
@@ -12,8 +12,7 @@ import {
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { Eye, EyeOff, Info, Trash2 } from "lucide-react";
 import {
-  autoFitCollisionGeometry,
-  computeMeshBounds,
+  autoFitCollisionGeometryFromMesh,
   findMeshFile,
   updateCollisionInLink,
   type CollisionData,
@@ -66,6 +65,7 @@ export const CollisionControl = ({
     method: string;
     formula?: string;
   } | null>(null);
+  const autoFillRequestRef = useRef(0);
 
   const visualMeshInfo = useMemo(() => {
     if (linkData.visuals.length === 0) return null;
@@ -183,6 +183,8 @@ export const CollisionControl = ({
       return;
     }
 
+    const requestId = autoFillRequestRef.current + 1;
+    autoFillRequestRef.current = requestId;
     setIsComputing(true);
     try {
       const meshIndex = Math.min(selectedVisualMeshIndex, visualMeshInfo.length - 1);
@@ -194,13 +196,15 @@ export const CollisionControl = ({
         return;
       }
 
-      const bounds = await computeMeshBounds(meshFile, selectedMeshInfo.scale);
-      if (!bounds) {
-        toast.error("Failed to compute mesh bounds");
+      const fitResult = await autoFitCollisionGeometryFromMesh(
+        meshFile,
+        selectedMeshInfo.scale,
+        selectedMeshInfo.origin,
+        type
+      );
+      if (requestId !== autoFillRequestRef.current) {
         return;
       }
-
-      const fitResult = autoFitCollisionGeometry(bounds, selectedMeshInfo.origin, type);
       if (!fitResult) {
         toast.error("Failed to compute collision geometry");
         return;
@@ -242,7 +246,9 @@ export const CollisionControl = ({
       console.error("Error auto-filling collision:", error);
       toast.error("Failed to auto-fill collision");
     } finally {
-      setIsComputing(false);
+      if (requestId === autoFillRequestRef.current) {
+        setIsComputing(false);
+      }
     }
   };
 
