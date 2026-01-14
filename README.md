@@ -23,15 +23,6 @@ npm run dev
 - `URDF_STUDIO_VERBOSE=1 npm run start` to see full Vite + backend logs.
 - `npm run smoke` to run lint + typecheck quickly.
 
-## 🗂 Project Layout
-- `apps/web` - Vite + React frontend
-- `apps/api/backend` - FastAPI backend
-- `tools/scripts` - CLI + dev scripts
-- `tools/segmentation` - mesh segmentation utilities
-- `vendor/pyroki` - vendored PyRoki
-- `docs` - setup + teleoperation guides
-- `samples` - sample data files
-
 ## 📚 Docs
 - [Setup](docs/SETUP.md)
 - [Teleoperation](docs/TELEOPERATION.md)

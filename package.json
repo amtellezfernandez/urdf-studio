@@ -12,11 +12,11 @@
     "typecheck": "tsc -b --pretty false",
     "smoke": "npm run lint && npm run typecheck",
     "preview": "vite preview --config apps/web/vite.config.ts",
-    "setup": "node tools/scripts/setup.js",
-    "start": "node tools/scripts/run.js"
+    "setup": "node scripts/setup.js",
+    "start": "node scripts/run.js"
   },
   "bin": {
-    "urdf-studio": "./tools/scripts/cli.js"
+    "urdf-studio": "./scripts/cli.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

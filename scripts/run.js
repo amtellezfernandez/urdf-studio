@@ -7,7 +7,7 @@ import { execSync, spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..', '..');
+const rootDir = join(__dirname, '..');
 
 // Colors for terminal output
 const colors = {
@@ -122,16 +122,12 @@ function main() {
   let pythonBackendProcess = null;
 
   if (existsSync(venvPython)) {
-    pythonBackendProcess = spawn(
-      venvPython,
-      ['-m', 'uvicorn', 'backend.server:app', '--app-dir', 'apps/api', '--reload', '--port', '8000'],
-      {
-        cwd: rootDir,
-        env,
-        shell: true,
-        stdio: 'pipe',
-      },
-    );
+    pythonBackendProcess = spawn(venvPython, ['-m', 'uvicorn', 'backend.server:app', '--reload', '--port', '8000'], {
+      cwd: rootDir,
+      env,
+      shell: true,
+      stdio: 'pipe',
+    });
 
     // Only show errors from Python backend
     pythonBackendProcess.stdout.on('data', (data) => {

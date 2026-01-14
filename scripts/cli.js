@@ -6,7 +6,7 @@ import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..', '..');
+const rootDir = join(__dirname, '..');
 
 const command = process.argv[2];
 
@@ -49,3 +49,4 @@ if (command === 'setup') {
   console.log('Run "urdf-studio --help" for usage information');
   process.exit(1);
 }
+
