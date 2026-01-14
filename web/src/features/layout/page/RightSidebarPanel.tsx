@@ -4,6 +4,7 @@ import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import type { AngleUnit, MeshFiles } from "@/shared/types/feature";
 import type { URDFRobot } from "urdf-loader";
+import type * as THREE from "three";
 import { SIDEBAR_RESIZER_WIDTH } from "@/features/layout/page/constants";
 
 type RightSidebarPanelProps = {
@@ -46,6 +47,7 @@ type RightSidebarPanelProps = {
   endEffectorLink: string | null;
   onMarkAsEndEffector: (linkName: string | null) => void;
   robot: URDFRobot | null;
+  robotBoundingBox: THREE.Box3 | null;
   onRightSidebarResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
 };
 
@@ -84,6 +86,7 @@ export const RightSidebarPanel = ({
   endEffectorLink,
   onMarkAsEndEffector,
   robot,
+  robotBoundingBox,
   onRightSidebarResizeStart,
 }: RightSidebarPanelProps) => (
   <>
@@ -122,6 +125,7 @@ export const RightSidebarPanel = ({
       endEffectorLink={endEffectorLink}
       onMarkAsEndEffector={onMarkAsEndEffector}
       robot={robot}
+      robotBoundingBox={robotBoundingBox}
     />
 
     {!isRightSidebarCollapsed && (

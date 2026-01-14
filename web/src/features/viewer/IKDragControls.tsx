@@ -11,6 +11,7 @@ import {
   isIkFailure,
   solveIk as solveIkRequest,
 } from "@/features/ik/ikClient";
+import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 
 interface IKDragControlsProps {
   robot: URDFRobot | null; // URDFRobot
@@ -75,6 +76,7 @@ export const IKDragControls = ({
   const reachRadiusRef = useRef<number | null>(null);
   const baseLinkNameRef = useRef<string | null>(null);
   const clampedRef = useRef(false);
+  const setIkDebugState = useIkDebugStore((s) => s.setState);
 
   // Debug initial props
   useEffect(() => {
@@ -255,6 +257,16 @@ export const IKDragControls = ({
       }
       const requestId = `drag-${Date.now()}-${Math.round(Math.random() * 100000)}`;
       activeRequestIdRef.current = requestId;
+      setIkDebugState({
+        status: "running",
+        error: null,
+        targetName: "drag-handle",
+        targetLink: endEffectorLink,
+        targetPosition: [position.x, position.y, position.z],
+        durationMs: null,
+        diagnostics: null,
+      });
+      const start = performance.now();
 
       try {
         const orientationPayload = buildIkOrientationPayload(quaternion);
@@ -283,6 +295,12 @@ export const IKDragControls = ({
             console.warn("[IK] Drag handle solve failed:", lastError);
             toast.error(lastError);
           }
+          setIkDebugState({
+            status: "error",
+            error: lastError,
+            durationMs: performance.now() - start,
+            diagnostics: null,
+          });
           pendingTargetRef.current = null;
           queuedTargetRef.current = null;
           syncTargetToEndEffector();
@@ -296,6 +314,12 @@ export const IKDragControls = ({
             console.warn("[IK] Drag handle solve failed:", lastError);
             toast.error(lastError);
           }
+          setIkDebugState({
+            status: "error",
+            error: lastError,
+            durationMs: performance.now() - start,
+            diagnostics: null,
+          });
           pendingTargetRef.current = null;
           queuedTargetRef.current = null;
           syncTargetToEndEffector();
@@ -303,6 +327,12 @@ export const IKDragControls = ({
         }
 
         onIkSolved(result.result.solution);
+        setIkDebugState({
+          status: "success",
+          error: null,
+          durationMs: performance.now() - start,
+          diagnostics: result.result.diagnostics ?? null,
+        });
         lastSolvedTargetRef.current = {
           position: position.clone(),
           quaternion: quaternion.clone(),
@@ -314,12 +344,18 @@ export const IKDragControls = ({
         }
         console.error("[IK] Solve error:", error);
         toast.error("IK solve failed. Is the IK server running?");
+        setIkDebugState({
+          status: "error",
+          error: error instanceof Error ? error.message : "IK solve failed",
+          durationMs: null,
+          diagnostics: null,
+        });
         pendingTargetRef.current = null;
         queuedTargetRef.current = null;
         syncTargetToEndEffector();
       }
     },
-    [urdfContent, endEffectorLink, onIkSolved, syncTargetToEndEffector]
+    [urdfContent, endEffectorLink, onIkSolved, setIkDebugState, syncTargetToEndEffector]
   );
 
   const updateDragTarget = useCallback(

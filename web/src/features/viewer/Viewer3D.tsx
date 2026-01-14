@@ -50,8 +50,6 @@ import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { recordPlaybackTrace, usePlaybackDebugTrace } from "@/shared/debug/playbackTrace";
 import { Button } from "@/shared/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface Viewer3DProps {
   urdfFile: File | null;
@@ -561,437 +559,6 @@ const CreatedObjects = ({
     );
   };
 
-  interface FKLinkError {
-    linkName: string;
-    positionError: number;
-    rotationErrorDeg: number;
-    pyrokiPosition: { x: number; y: number; z: number };
-    urdfPosition: { x: number; y: number; z: number };
-    pyrokiQuat: { w: number; x: number; y: number; z: number };
-    urdfQuat: { w: number; x: number; y: number; z: number };
-  }
-  
-  interface FKValidationDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    urdfContent: string | null;
-    robot: URDFRobot | null;
-  }
-  
-  const FKValidationDialog = ({
-    open,
-    onOpenChange,
-    urdfContent,
-    robot,
-  }: FKValidationDialogProps) => {
-    const jointValues = useJointStore((s) => s.jointValues);
-    const [isChecking, setIsChecking] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [summary, setSummary] = useState<{
-      maxPositionError: number;
-      maxRotationErrorDeg: number;
-      perLink: FKLinkError[];
-    } | null>(null);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const latestRequestId = useRef(0);
-
-    // Draggable state
-    const [position, setPosition] = useState({ x: 100, y: 100 });
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-    const panelRef = useRef<HTMLDivElement>(null);
-
-    // Expanded link state for showing detailed values
-    const [expandedLink, setExpandedLink] = useState<string | null>(null);
-  
-    const computeComparison = useCallback(async () => {
-      if (!open) return;
-      if (!urdfContent || !robot) {
-        setError("Missing URDF content or robot model for FK validation.");
-        return;
-      }
-  
-      const requestId = ++latestRequestId.current;
-      setIsChecking(true);
-      setError(null);
-  
-      try {
-        const response = await fetch(`${API_BASE_URL}/pyroki/fk`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            urdf: urdfContent,
-            joint_values: jointValues,
-          }),
-        });
-  
-        if (!response.ok) {
-          let message = "PyRoki FK API request failed";
-          try {
-            const data = await response.json();
-            message =
-              data.error || data.detail || data.message || message;
-          } catch {
-            // Ignore JSON parse errors
-          }
-          if (requestId === latestRequestId.current) {
-            setError(message);
-            setSummary(null);
-          }
-          return;
-        }
-  
-        const data = await response.json();
-        if (requestId !== latestRequestId.current) {
-          // A newer request finished after this one; ignore stale result
-          return;
-        }
-  
-        const links = Array.isArray(data.links) ? data.links : [];
-        const pyrokiByName: Record<
-          string,
-          { position: number[]; quaternion_wxyz: number[] }
-        > = {};
-        for (const link of links) {
-          if (
-            typeof link?.name === "string" &&
-            Array.isArray(link.position) &&
-            Array.isArray(link.quaternion_wxyz)
-          ) {
-            pyrokiByName[link.name] = {
-              position: link.position,
-              quaternion_wxyz: link.quaternion_wxyz,
-            };
-          }
-        }
-  
-        const robotAny = robot;
-        if (robotAny.updateMatrixWorld) {
-          robotAny.updateMatrixWorld(true);
-        }
-
-        const threeLinks = robotAny.links || {};
-        const linkNames = Object.keys(threeLinks);
-  
-        const tmpMatrix = new THREE.Matrix4();
-        const pos = new THREE.Vector3();
-        const quat = new THREE.Quaternion();
-        const scale = new THREE.Vector3();
-  
-        const perLink: FKLinkError[] = [];
-        let maxPositionError = 0;
-        let maxRotationErrorDeg = 0;
-  
-        for (const linkName of linkNames) {
-          const obj = threeLinks[linkName];
-          if (!obj || !obj.matrixWorld) continue;
-          tmpMatrix.copy(obj.matrixWorld);
-          tmpMatrix.decompose(pos, quat, scale);
-  
-          const pyrokiLink = pyrokiByName[linkName];
-          if (!pyrokiLink) continue;
-  
-          const [px, py, pz] = pyrokiLink.position ?? [];
-          const [w, x, y, z] = pyrokiLink.quaternion_wxyz ?? [];
-          if (
-            typeof px !== "number" ||
-            typeof py !== "number" ||
-            typeof pz !== "number" ||
-            typeof w !== "number" ||
-            typeof x !== "number" ||
-            typeof y !== "number" ||
-            typeof z !== "number"
-          ) {
-            continue;
-          }
-  
-          // PyRoki coordinates are directly in Three.js scene coordinates (meters)
-          const pxScene = px;
-          const pyScene = py;
-          const pzScene = pz;
-  
-          const dx = pos.x - pxScene;
-          const dy = pos.y - pyScene;
-          const dz = pos.z - pzScene;
-          const positionError = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  
-          // Convert PyRoki quaternion (w,x,y,z) to Three.js (x,y,z,w)
-          const pyrokiQuat = new THREE.Quaternion(x, y, z, w);
-
-          // Compute dot product to handle quaternion sign ambiguity
-          // q and -q represent the same rotation, so use shortest path
-          const dot = quat.x * pyrokiQuat.x + quat.y * pyrokiQuat.y +
-                      quat.z * pyrokiQuat.z + quat.w * pyrokiQuat.w;
-
-          // Use absolute value of dot product for shortest angular distance
-          const absDot = Math.abs(dot);
-          const clampedDot = Math.min(1, Math.max(-1, absDot));
-          const angleRad = 2 * Math.acos(clampedDot);
-          const rotationErrorDeg = (angleRad * 180) / Math.PI;
-  
-          maxPositionError = Math.max(maxPositionError, positionError);
-          maxRotationErrorDeg = Math.max(maxRotationErrorDeg, rotationErrorDeg);
-
-          perLink.push({
-            linkName,
-            positionError,
-            rotationErrorDeg,
-            pyrokiPosition: { x: pxScene, y: pyScene, z: pzScene },
-            urdfPosition: { x: pos.x, y: pos.y, z: pos.z },
-            pyrokiQuat: { w, x, y, z },
-            urdfQuat: { w: quat.w, x: quat.x, y: quat.y, z: quat.z },
-          });
-        }
-  
-        perLink.sort(
-          (a, b) => b.positionError - a.positionError || b.rotationErrorDeg - a.rotationErrorDeg
-        );
-  
-        setSummary({
-          maxPositionError,
-          maxRotationErrorDeg,
-          perLink,
-        });
-        setLastUpdated(new Date());
-      } catch (err) {
-        if (requestId === latestRequestId.current) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unknown error while running PyRoki FK comparison"
-          );
-          setSummary(null);
-        }
-      } finally {
-        if (requestId === latestRequestId.current) {
-          setIsChecking(false);
-        }
-      }
-    }, [open, urdfContent, robot, jointValues]);
-  
-    // Debounced real-time comparison while the dialog is open and joints change.
-    useEffect(() => {
-      if (!open) return;
-      const handle = setTimeout(() => {
-        void computeComparison();
-      }, 150);
-      return () => clearTimeout(handle);
-    }, [open, jointValues, computeComparison]);
-
-    // Drag handlers
-    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!panelRef.current) return;
-      const rect = panelRef.current.getBoundingClientRect();
-      setIsDragging(true);
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
-    };
-
-    useEffect(() => {
-      if (!isDragging) return;
-
-      const handleMouseMove = (e: MouseEvent) => {
-        setPosition({
-          x: e.clientX - dragOffset.x,
-          y: e.clientY - dragOffset.y,
-        });
-      };
-
-      const handleMouseUp = () => {
-        setIsDragging(false);
-      };
-
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }, [isDragging, dragOffset]);
-
-    if (!open) return null;
-  
-    return (
-      <div
-        ref={panelRef}
-        className="fixed bg-background border rounded-lg shadow-lg z-50"
-        style={{
-          left: `${position.x}px`,
-          top: `${position.y}px`,
-          width: '600px',
-          maxWidth: '90vw',
-          maxHeight: '85vh',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Draggable header */}
-        <div
-          className="flex items-center justify-between p-3 border-b cursor-move select-none bg-muted/50"
-          onMouseDown={handleMouseDown}
-        >
-          <div className="flex-1">
-            <h3 className="font-semibold text-sm">PyRoki vs URDFLoader FK</h3>
-            <p className="text-xs text-muted-foreground">
-              Compare forward kinematics in real time
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            onClick={() => onOpenChange(false)}
-          >
-            ✕
-          </Button>
-        </div>
-
-        {/* Content area */}
-        <div className="p-4 overflow-auto flex-1">
-          {error && (
-            <Alert variant="destructive" className="mb-3">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>PyRoki FK error</AlertTitle>
-              <AlertDescription className="whitespace-pre-wrap text-xs">
-                {error}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {!error && summary && (
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                <span>
-                  Max position error:{" "}
-                  {(summary.maxPositionError * 1000).toFixed(2)} mm · Max rotation
-                  error: {summary.maxRotationErrorDeg.toFixed(2)}°
-                  {lastUpdated
-                    ? ` · Updated at ${lastUpdated.toLocaleTimeString()}`
-                    : null}
-                </span>
-              </div>
-
-              <div className="border rounded-md p-2 max-h-96 overflow-auto text-xs">
-                <div className="font-medium mb-2 text-muted-foreground">
-                  Link Comparison (top 10 by position error)
-                </div>
-                {summary.perLink.length === 0 && (
-                  <div className="text-muted-foreground">
-                    No overlapping link names between PyRoki and URDFLoader.
-                  </div>
-                )}
-                {summary.perLink.slice(0, 10).map((item) => (
-                  <div key={item.linkName} className="mb-3 border border-border rounded p-2">
-                    <div
-                      className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-1 rounded mb-2"
-                      onClick={() => setExpandedLink(expandedLink === item.linkName ? null : item.linkName)}
-                    >
-                      <span className="font-mono mr-2 truncate flex items-center gap-1">
-                        <span className="text-muted-foreground">{expandedLink === item.linkName ? '▼' : '▶'}</span>
-                        <span className="font-semibold">{item.linkName}</span>
-                      </span>
-                      <span className="text-right whitespace-nowrap text-xs">
-                        Δ {(item.positionError * 1000).toFixed(2)} mm ·{" "}
-                        {item.rotationErrorDeg.toFixed(2)}°
-                      </span>
-                    </div>
-
-                    {/* Always show coordinates */}
-                    <div className="ml-4 text-[10px] space-y-1">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <div className="font-semibold text-emerald-600 mb-0.5">PyRoki (m)</div>
-                          <div className="font-mono text-[9px] leading-tight">
-                            x: {item.pyrokiPosition.x.toFixed(4)}
-                          </div>
-                          <div className="font-mono text-[9px] leading-tight">
-                            y: {item.pyrokiPosition.y.toFixed(4)}
-                          </div>
-                          <div className="font-mono text-[9px] leading-tight">
-                            z: {item.pyrokiPosition.z.toFixed(4)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-blue-600 mb-0.5">Three.js (m)</div>
-                          <div className="font-mono text-[9px] leading-tight">
-                            x: {item.urdfPosition.x.toFixed(4)}
-                          </div>
-                          <div className="font-mono text-[9px] leading-tight">
-                            y: {item.urdfPosition.y.toFixed(4)}
-                          </div>
-                          <div className="font-mono text-[9px] leading-tight">
-                            z: {item.urdfPosition.z.toFixed(4)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expanded view shows quaternions */}
-                    {expandedLink === item.linkName && (
-                      <div className="ml-4 mt-2 p-2 bg-muted/30 rounded text-[10px] space-y-1">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <div className="font-semibold text-emerald-600 mb-1">PyRoki Quat</div>
-                            <div className="font-mono text-[9px]">
-                              w: {item.pyrokiQuat.w.toFixed(4)}
-                            </div>
-                            <div className="font-mono text-[9px]">
-                              x: {item.pyrokiQuat.x.toFixed(4)}
-                            </div>
-                            <div className="font-mono text-[9px]">
-                              y: {item.pyrokiQuat.y.toFixed(4)}
-                            </div>
-                            <div className="font-mono text-[9px]">
-                              z: {item.pyrokiQuat.z.toFixed(4)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="font-semibold text-blue-600 mb-1">Three.js Quat</div>
-                            <div className="font-mono text-[9px]">
-                              w: {item.urdfQuat.w.toFixed(4)}
-                            </div>
-                            <div className="font-mono text-[9px]">
-                              x: {item.urdfQuat.x.toFixed(4)}
-                            </div>
-                            <div className="font-mono text-[9px]">
-                              y: {item.urdfQuat.y.toFixed(4)}
-                            </div>
-                            <div className="font-mono text-[9px]">
-                              z: {item.urdfQuat.z.toFixed(4)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void computeComparison();
-              }}
-              disabled={isChecking || !urdfContent || !robot}
-            >
-              {isChecking ? "Recomputing..." : "Recompute now"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
   const URDFModel = ({
   file,
   meshFiles,
@@ -1747,7 +1314,6 @@ export const Viewer3D = ({
   >(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [robot, setRobot] = useState<URDFRobot | null>(null);
-  const [isFkDialogOpen, setIsFkDialogOpen] = useState(false);
   const { meshFiles } = useMeshFilesState(initialMeshFiles);
   const [isDraggingJoint, setIsDraggingJoint] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
@@ -1764,7 +1330,7 @@ export const Viewer3D = ({
     urdfFile,
     robot,
     onLinkSelect,
-    onAutoOpenFk: () => setIsFkDialogOpen(true),
+    onAutoOpenFk: () => {},
   });
   const endEffectorPose = useEndEffectorPoseSync({
     robot,
@@ -1919,7 +1485,7 @@ export const Viewer3D = ({
 
       {/* 3D Viewer Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Joint Types Panel or Links Panel - Blender Style */}
+        {/* Joint Types Panel - Blender Style */}
         {Object.keys(jointLimits || {}).length > 0 && (() => {
           // Helper to convert hex to rgba
           const hexToRgba = (hex: string, alpha: number) => {
@@ -1929,7 +1495,6 @@ export const Viewer3D = ({
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
           };
 
-          // Always show joints panel regardless of drag mode
           // Count joints by type
           const totalJoints = Object.keys(jointLimits || {}).length;
           const typeCounts: Record<string, number> = {};
@@ -1961,7 +1526,7 @@ export const Viewer3D = ({
 
             {/* Content - Compact */}
             <div className="p-1.5 space-y-1.5">
-              {/* Joint Types List - Compact (First) */}
+              {/* Joint Types List - Compact */}
               <div className="space-y-0.5">
                 {existingTypes.map((type) => {
                   const count = typeCounts[type];
@@ -2005,7 +1570,7 @@ export const Viewer3D = ({
                 })}
               </div>
 
-              {/* Selected Link Section - Compact (Second) */}
+              {/* Selected Link Section */}
               <div className="pt-1.5 border-t border-border/15">
                 <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
                   Selected Link
@@ -2015,7 +1580,7 @@ export const Viewer3D = ({
                 </div>
               </div>
 
-              {/* Associated Joint Section - Compact (Third) */}
+              {/* Associated Joint Section */}
               <div className="pt-1.5 border-t border-border/15">
                 <div className="text-[9px] font-semibold text-muted-foreground/80 tracking-tight mb-0.5 uppercase">
                   Associated Joint
@@ -2278,15 +1843,6 @@ export const Viewer3D = ({
             zoomSpeed={1.0}
           />
         </Canvas>
-
-        {robot && urdfContent && (
-          <FKValidationDialog
-            open={isFkDialogOpen}
-            onOpenChange={setIsFkDialogOpen}
-            urdfContent={urdfContent}
-            robot={robot}
-          />
-        )}
 
         <IKResultDialog
           open={ikDialogOpen}

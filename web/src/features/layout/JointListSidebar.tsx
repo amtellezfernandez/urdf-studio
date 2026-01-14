@@ -16,6 +16,7 @@ import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { CameraList } from "@/features/camera/CameraList";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { NumberInput } from "@/shared/ui/number-input";
+import { IkDebuggerPanel } from "@/features/ik/IkDebuggerPanel";
 import { Button } from "@/shared/ui/button";
 import { Trash2 } from "lucide-react";
 import * as THREE from "three";
@@ -1009,6 +1010,7 @@ interface JointListSidebarProps {
   episodeJointNames?: string[];
   endEffectorLink?: string | null;
   onMarkAsEndEffector?: (linkName: string | null) => void;
+  robotBoundingBox?: THREE.Box3 | null;
 }
 
 export const JointListSidebar = ({
@@ -1046,6 +1048,7 @@ export const JointListSidebar = ({
   robot,
   endEffectorLink,
   onMarkAsEndEffector,
+  robotBoundingBox,
 }: JointListSidebarProps) => {
   // Use prop if provided, otherwise default to "rad"
   const angleUnit = angleUnitProp ?? "rad";
@@ -1053,7 +1056,7 @@ export const JointListSidebar = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "elements">("flat");
+  const [viewMode, setViewMode] = useState<"links" | "flat" | "hierarchy" | "elements" | "ik">("flat");
   const jointListRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef<number | null>(null);
   const [jointListHeight, setJointListHeight] = useState(0);
@@ -1386,6 +1389,17 @@ export const JointListSidebar = ({
               >
                 Elements
               </button>
+              <button
+                onClick={() => setViewMode("ik")}
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  viewMode === "ik"
+                    ? "text-primary cursor-default"
+                    : "text-muted-foreground hover:text-foreground cursor-pointer"
+                )}
+              >
+                IK
+              </button>
               <div className="flex-1"></div>
             </div>
           </div>
@@ -1443,27 +1457,6 @@ export const JointListSidebar = ({
               </div>
             )}
 
-            {/* Joint type summary (always visible) */}
-            <div className="rounded border border-border/40 bg-muted/10 px-2 py-1.5 space-y-1">
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span>Joint Types</span>
-                <span>{Object.keys(jointLimits).length}</span>
-              </div>
-              <div className="flex flex-wrap gap-1 text-[11px]">
-                {jointTypes.length === 0 ? (
-                  <span className="text-muted-foreground">None</span>
-                ) : (
-                  jointTypes.map((type) => (
-                    <span
-                      key={type}
-                      className="px-1.5 py-0.5 rounded border border-border/50 bg-background/60 text-foreground"
-                    >
-                      {type} ({jointTypeCounts[type] ?? 0})
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Scrollable Joint List */}
@@ -1632,6 +1625,13 @@ export const JointListSidebar = ({
                 }}
                 onJointSelect={onJointSelect}
                 setSelectedLink={setSelectedLink}
+              />
+            ) : viewMode === "ik" ? (
+              <IkDebuggerPanel
+                urdfContent={urdfContent}
+                robot={robot}
+                endEffectorLink={endEffectorLink}
+                robotBoundingBox={robotBoundingBox}
               />
             ) : (
               // Hierarchical view

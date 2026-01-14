@@ -537,6 +537,7 @@ const Index = () => {
     endEffectorLink,
     onMarkAsEndEffector: setEndEffectorLink,
     robot,
+    robotBoundingBox,
     onRightSidebarResizeStart: handleRightSidebarResizeStart,
   };
 

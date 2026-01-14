@@ -55,7 +55,7 @@ export const useEndEffectorPoseSync = ({
       return;
     }
 
-    const timeoutId = setTimeout(async () => {
+    const frameId = requestAnimationFrame(async () => {
       const requestId = ++requestIdRef.current;
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -176,10 +176,10 @@ export const useEndEffectorPoseSync = ({
           loading: false,
         });
       }
-    }, 150);
+    });
 
     return () => {
-      clearTimeout(timeoutId);
+      cancelAnimationFrame(frameId);
       abortRef.current?.abort();
     };
   }, [apiBaseUrl, endEffectorLink, robot, storeJointValues, urdfContent]);

@@ -13,6 +13,7 @@ import {
 import { IK_ORBIT_DEFAULTS, IK_SOLVER_DEFAULTS } from "@/features/viewer/config";
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { isIkFailure, solveIk } from "@/features/ik/ikClient";
+import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 
 type UseIkSolverParams = {
   apiBaseUrl: string;
@@ -43,9 +44,11 @@ export const useIkSolver = ({
   const [isIkHandleDragging, setIsIkHandleDragging] = useState(false);
   const [isFollowingOrbit, setIsFollowingOrbit] = useState(false);
   const [orbitFollowProgress, setOrbitFollowProgress] = useState(0);
+  const [ikSolveDurationMs, setIkSolveDurationMs] = useState<number | null>(null);
   const orbitFollowAnimationRef = useRef<number | null>(null);
   const orbitFollowAbortRef = useRef<boolean>(false);
   const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
+  const setIkDebugState = useIkDebugStore((s) => s.setState);
 
   const ikDragEnabled =
     dragMode === "drag-handle" && !!robot && !!urdfContent && !!endEffectorLink;
@@ -59,6 +62,39 @@ export const useIkSolver = ({
   useEffect(() => {
     lastIkAppliedRef.current = null;
   }, [urdfContent, endEffectorLink, dragMode]);
+
+  useEffect(() => {
+    if (dragMode === "drag-handle") {
+      return;
+    }
+    const status = isIkRunning
+      ? "running"
+      : ikError
+        ? "error"
+        : ikResult
+          ? "success"
+          : "idle";
+
+    setIkDebugState({
+      status,
+      error: ikError,
+      targetName: ikTargetName,
+      isFollowingOrbit,
+      orbitFollowProgress,
+      durationMs: ikSolveDurationMs,
+      diagnostics: ikResult?.diagnostics ?? null,
+    });
+  }, [
+    dragMode,
+    ikError,
+    ikResult,
+    ikTargetName,
+    isFollowingOrbit,
+    isIkRunning,
+    orbitFollowProgress,
+    ikSolveDurationMs,
+    setIkDebugState,
+  ]);
 
   const solveIkForObject = useCallback(
     async (obj: CreatedObject) => {
@@ -150,6 +186,7 @@ export const useIkSolver = ({
       setIkTargetName(targetObj.id);
       setIsIkRunning(true);
 
+      const start = performance.now();
       try {
         const result = await solveIk({
           apiBaseUrl,
@@ -179,6 +216,7 @@ export const useIkSolver = ({
         setIkError(err instanceof Error ? err.message : "Unknown IK error");
         setIkResult(null);
       } finally {
+        setIkSolveDurationMs(performance.now() - start);
         setIsIkRunning(false);
       }
     },
@@ -283,6 +321,7 @@ export const useIkSolver = ({
         const targetPosition = computeTargetPosition(currentPhase);
 
         try {
+          const start = performance.now();
           const result = await solveIk({
             apiBaseUrl,
             urdf: urdfContent,
@@ -292,6 +331,8 @@ export const useIkSolver = ({
             orientationMode: "ignore",
             timeoutMs: IK_SOLVER_DEFAULTS.orbitTimeoutMs,
           });
+
+          setIkSolveDurationMs(performance.now() - start);
 
           if (isIkFailure(result)) {
             console.error("IK failed at step", currentStep, result.error);
