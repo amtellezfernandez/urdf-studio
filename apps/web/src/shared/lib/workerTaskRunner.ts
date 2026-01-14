@@ -1,24 +1,56 @@
-export type WorkerTaskRunner<TRequest, TResponse> = {
-  run: (request: Omit<TRequest, "id">, transfer?: Transferable[]) => Promise<TResponse | null>;
+export type WorkerTaskOptions<TRequest, TResponse> = {
+  transfer?: Transferable[];
+  signal?: AbortSignal;
+  shouldUseWorker?: (request: TRequest) => boolean;
+  fallback?: (request: TRequest) => Promise<TResponse> | TResponse;
+  shouldFallback?: (response: TResponse) => boolean;
+};
+
+export type WorkerTaskBroker<TRequest, TResponse> = {
+  run: (request: TRequest, options?: WorkerTaskOptions<TRequest, TResponse>) => Promise<TResponse | null>;
   terminate: () => void;
 };
 
-export const createWorkerTaskRunner = <
-  TRequest extends { id: number },
+type BrokerTask<TRequest, TResponse> = {
+  id: number;
+  request: TRequest;
+  options: WorkerTaskOptions<TRequest, TResponse>;
+  resolve: (response: TResponse | null) => void;
+  canceled: boolean;
+};
+
+type WorkerTaskBrokerOptions = {
+  concurrency?: number;
+};
+
+export const createWorkerTaskBroker = <
+  TRequest extends Record<string, unknown>,
   TResponse extends { id: number }
 >(
-  createWorker: () => Worker | null
-): WorkerTaskRunner<TRequest, TResponse> => {
+  createWorker: () => Worker | null,
+  options: WorkerTaskBrokerOptions = {}
+): WorkerTaskBroker<TRequest, TResponse> => {
   let worker: Worker | null = null;
   let nextId = 0;
-  const pending = new Map<number, (response: TResponse | null) => void>();
+  const queue: Array<BrokerTask<TRequest, TResponse>> = [];
+  const inFlight = new Map<number, BrokerTask<TRequest, TResponse>>();
+  const maxConcurrent = Math.max(1, options.concurrency ?? 1);
 
   const flush = () => {
-    const resolvers = Array.from(pending.values());
-    pending.clear();
+    const pendingTasks = [...queue, ...inFlight.values()];
+    queue.length = 0;
+    inFlight.clear();
     worker?.terminate();
     worker = null;
-    resolvers.forEach((resolve) => resolve(null));
+    pendingTasks.forEach((task) => {
+      if (task.options.fallback) {
+        Promise.resolve(task.options.fallback(task.request))
+          .then((result) => task.resolve(result))
+          .catch(() => task.resolve(null));
+      } else {
+        task.resolve(null);
+      }
+    });
   };
 
   const getWorker = () => {
@@ -28,11 +60,27 @@ export const createWorkerTaskRunner = <
 
       instance.onmessage = (event: MessageEvent<TResponse>) => {
         const response = event.data;
-        const resolver = pending.get(response.id);
-        if (!resolver) return;
-        pending.delete(response.id);
-        resolver(response);
+        const task = inFlight.get(response.id);
+        if (!task) return;
+        inFlight.delete(response.id);
+        if (!task.canceled) {
+          if (task.options.shouldFallback?.(response)) {
+            if (task.options.fallback) {
+              Promise.resolve(task.options.fallback(task.request))
+                .then((result) => task.resolve(result))
+                .catch(() => task.resolve(null));
+            } else {
+              task.resolve(response);
+            }
+          } else {
+            task.resolve(response);
+          }
+        } else {
+          task.resolve(null);
+        }
+        pump();
       };
+
       instance.onerror = () => {
         flush();
       };
@@ -43,18 +91,80 @@ export const createWorkerTaskRunner = <
     return worker;
   };
 
-  const run = async (
-    request: Omit<TRequest, "id">,
-    transfer: Transferable[] = []
-  ): Promise<TResponse | null> => {
+  const startTask = (task: BrokerTask<TRequest, TResponse>) => {
+    if (task.canceled) {
+      task.resolve(null);
+      return;
+    }
+
     const instance = getWorker();
-    if (!instance) return null;
+    if (!instance) {
+      if (task.options.fallback) {
+        Promise.resolve(task.options.fallback(task.request))
+          .then((result) => task.resolve(result))
+          .catch(() => task.resolve(null));
+      } else {
+        task.resolve(null);
+      }
+      return;
+    }
+
+    inFlight.set(task.id, task);
+    instance.postMessage({ id: task.id, ...task.request }, task.options.transfer ?? []);
+  };
+
+  const pump = () => {
+    while (inFlight.size < maxConcurrent && queue.length > 0) {
+      const next = queue.shift();
+      if (!next) break;
+      startTask(next);
+    }
+  };
+
+  const run = async (
+    request: TRequest,
+    taskOptions: WorkerTaskOptions<TRequest, TResponse> = {}
+  ): Promise<TResponse | null> => {
+    if (taskOptions.signal?.aborted) {
+      return null;
+    }
+
+    if (taskOptions.shouldUseWorker && !taskOptions.shouldUseWorker(request)) {
+      if (taskOptions.fallback) {
+        return taskOptions.fallback(request);
+      }
+      return null;
+    }
+
     const id = nextId;
     nextId += 1;
 
     return new Promise((resolve) => {
-      pending.set(id, resolve);
-      instance.postMessage({ id, ...request } as TRequest, transfer);
+      const task: BrokerTask<TRequest, TResponse> = {
+        id,
+        request,
+        options: taskOptions,
+        resolve,
+        canceled: false,
+      };
+
+      if (taskOptions.signal) {
+        const abortHandler = () => {
+          task.canceled = true;
+          if (inFlight.has(task.id)) {
+            return;
+          }
+          const index = queue.findIndex((queued) => queued.id === task.id);
+          if (index >= 0) {
+            queue.splice(index, 1);
+            resolve(null);
+          }
+        };
+        taskOptions.signal.addEventListener("abort", abortHandler, { once: true });
+      }
+
+      queue.push(task);
+      pump();
     });
   };
 

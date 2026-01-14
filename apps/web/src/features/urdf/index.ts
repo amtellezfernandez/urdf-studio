@@ -24,6 +24,7 @@ export * from "./updateLinkName";
 export * from "./urdfDiffUtils";
 export * from "./urdfEditorActions";
 export * from "./urdfParser";
+export * from "./urdfProcessing";
 export * from "./urdfToMJCF";
 export * from "./urdfToXacro";
 export * from "./meshAutoFit";

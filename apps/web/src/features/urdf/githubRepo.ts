@@ -19,6 +19,32 @@ export interface GitHubFile {
   sha?: string; // Blob SHA from Trees API (preferred for content fetching)
 }
 
+const normalizedPathCache = new Map<string, string>();
+const lowerCaseFileMapCache = new WeakMap<GitHubFile[], Map<string, GitHubFile>>();
+
+function normalizePathCached(path: string): string {
+  const cached = normalizedPathCache.get(path);
+  if (cached) return cached;
+  const normalized = normalizePath(path);
+  normalizedPathCache.set(path, normalized);
+  return normalized;
+}
+
+function getLowerCaseFileMap(files: GitHubFile[]): Map<string, GitHubFile> {
+  const cached = lowerCaseFileMapCache.get(files);
+  if (cached) return cached;
+
+  const pathMap = new Map<string, GitHubFile>();
+  for (const file of files) {
+    if (file.type === "file") {
+      const normalized = normalizePathCached(file.path);
+      pathMap.set(normalized.toLowerCase(), file);
+    }
+  }
+  lowerCaseFileMapCache.set(files, pathMap);
+  return pathMap;
+}
+
 export interface URDFCandidate {
   path: string;
   name: string;
@@ -418,14 +444,7 @@ export async function checkCandidatesForUnsupportedFormats(
   repo: string,
   accessToken?: string
 ): Promise<URDFCandidate[]> {
-  // Create case-insensitive path map for efficient lookup
-  const pathMap = new Map<string, GitHubFile>();
-  for (const file of files) {
-    if (file.type === "file") {
-      const normalized = normalizePath(file.path);
-      pathMap.set(normalized.toLowerCase(), file);
-    }
-  }
+  const pathMap = getLowerCaseFileMap(files);
 
   return Promise.all(
     candidates.map(async (candidate) => {
@@ -762,7 +781,7 @@ function resolveMeshPath(urdfDir: string, meshRef: string): string {
   
   // If URDF is at root, return normalized path
   if (!urdfDir) {
-    return normalizePath(path);
+    return normalizePathCached(path);
   }
   
   // Split paths into parts (filter empty parts)
@@ -786,7 +805,7 @@ function resolveMeshPath(urdfDir: string, meshRef: string): string {
   }
   
   // Join and normalize
-  return normalizePath(resolvedParts.join("/"));
+  return normalizePathCached(resolvedParts.join("/"));
 }
 
 /**
@@ -929,15 +948,8 @@ export async function convertGitHubFilesToFileList(
 
   // Create case-insensitive path map for efficient lookup
   // Only need one map since we always do case-insensitive lookups
-  const pathMap = new Map<string, GitHubFile>();
+  const pathMap = getLowerCaseFileMap(files);
   const seenPaths = new Set<string>(); // Track unique file paths to avoid duplicates
-
-  for (const file of files) {
-    if (file.type === "file") {
-      const normalized = normalizePath(file.path);
-      pathMap.set(normalized.toLowerCase(), file);
-    }
-  }
 
   // Resolve each mesh reference using simple path resolution
   // NO filtering by folder/basePath - searches entire repository tree

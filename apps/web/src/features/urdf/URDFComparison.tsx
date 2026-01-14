@@ -28,14 +28,16 @@ import {
 import {
   canonicalizeUrdf,
   compareUrdfs,
-  convertURDFToMJCF,
-  convertURDFToXacro,
   fixMeshPaths,
   normalizeAxes,
   prettifyUrdf,
 } from "@/features/urdf";
-import { parseUrdfStatsAsync } from "@/features/urdf/urdfEditorWorker";
-import { parseUrdfStats } from "@/features/urdf/urdfStats";
+import {
+  convertUrdfToMjcfCached,
+  convertUrdfToXacroCached,
+  getUrdfStats,
+  getUrdfStatsAsync,
+} from "@/features/urdf/urdfProcessing";
 
 interface URDFComparisonProps {
   originalUrdf: string;
@@ -80,9 +82,9 @@ export const URDFComparison = ({
   // Parse URDF content in real-time
   const activeUrdf = isEditing ? editedVizUrdf : vizUrdf;
 
-  const [parseInfo, setParseInfo] = useState(() => parseUrdfStats(activeUrdf));
+  const [parseInfo, setParseInfo] = useState(() => getUrdfStats(activeUrdf));
   const [originalParseInfo, setOriginalParseInfo] = useState(() =>
-    parseUrdfStats(originalUrdf)
+    getUrdfStats(originalUrdf)
   );
   const parseRequestRef = useRef(0);
   const originalParseRequestRef = useRef(0);
@@ -90,15 +92,17 @@ export const URDFComparison = ({
   useEffect(() => {
     const requestId = parseRequestRef.current + 1;
     parseRequestRef.current = requestId;
+    const controller = new AbortController();
 
     const timeout = setTimeout(() => {
-      parseUrdfStatsAsync(activeUrdf).then((stats) => {
+      getUrdfStatsAsync(activeUrdf, controller.signal).then((stats) => {
         if (parseRequestRef.current !== requestId) return;
         setParseInfo(stats);
       });
     }, 120);
 
     return () => {
+      controller.abort();
       clearTimeout(timeout);
     };
   }, [activeUrdf]);
@@ -106,15 +110,17 @@ export const URDFComparison = ({
   useEffect(() => {
     const requestId = originalParseRequestRef.current + 1;
     originalParseRequestRef.current = requestId;
+    const controller = new AbortController();
 
     const timeout = setTimeout(() => {
-      parseUrdfStatsAsync(originalUrdf).then((stats) => {
+      getUrdfStatsAsync(originalUrdf, controller.signal).then((stats) => {
         if (originalParseRequestRef.current !== requestId) return;
         setOriginalParseInfo(stats);
       });
     }, 200);
 
     return () => {
+      controller.abort();
       clearTimeout(timeout);
     };
   }, [originalUrdf]);
@@ -294,7 +300,7 @@ export const URDFComparison = ({
 
   // Extract robot name from URDF for export
   const robotName = useMemo(() => {
-    const stats = parseUrdfStats(vizUrdf);
+    const stats = getUrdfStats(vizUrdf);
     return stats.robotName || "robot";
   }, [vizUrdf]);
 
@@ -304,7 +310,7 @@ export const URDFComparison = ({
   // Convert to different formats for display
   const originalXacro = useMemo(() => {
     try {
-      const result = convertURDFToXacro(originalUrdf);
+      const result = convertUrdfToXacroCached(originalUrdf);
       return formatXML(result.xacroContent);
     } catch {
       return formattedOriginal;
@@ -313,7 +319,7 @@ export const URDFComparison = ({
 
   const originalMJCF = useMemo(() => {
     try {
-      const result = convertURDFToMJCF(originalUrdf);
+      const result = convertUrdfToMjcfCached(originalUrdf);
       return formatXML(result.mjcfContent);
     } catch {
       return formattedOriginal;
@@ -323,7 +329,7 @@ export const URDFComparison = ({
   const modifiedXacro = useMemo(() => {
     try {
       const urdfContent = isEditing ? editedVizUrdf : (getExportUrdf ? getExportUrdf() : vizUrdf);
-      const result = convertURDFToXacro(urdfContent);
+      const result = convertUrdfToXacroCached(urdfContent);
       return formatXML(result.xacroContent);
     } catch {
       return formattedViz;
@@ -333,7 +339,7 @@ export const URDFComparison = ({
   const modifiedMJCF = useMemo(() => {
     try {
       const urdfContent = isEditing ? editedVizUrdf : (getExportUrdf ? getExportUrdf() : vizUrdf);
-      const result = convertURDFToMJCF(urdfContent);
+      const result = convertUrdfToMjcfCached(urdfContent);
       return formatXML(result.mjcfContent);
     } catch {
       return formattedViz;

@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { STLLoader } from "three-stdlib";
+import { createLruCache, hashArrayBuffer } from "@/shared/lib/cache";
 
 export interface MeshBounds {
   min: [number, number, number];
@@ -12,6 +13,8 @@ export interface MeshBounds {
   center: [number, number, number];
   vertices: Float32Array;
 }
+
+const meshBoundsCache = createLruCache<MeshBounds>(16);
 
 export interface PCAResult {
   axis: [number, number, number];
@@ -41,6 +44,12 @@ export function computeMeshBoundsFromArrayBuffer(
   scale: string = "1 1 1"
 ): MeshBounds | null {
   try {
+    const cacheKey = `${hashArrayBuffer(arrayBuffer)}:${scale}`;
+    const cached = meshBoundsCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const scaleParts = scale.split(" ").map(parseFloat);
     const scaleVec = new THREE.Vector3(
       scaleParts[0] || 1,
@@ -80,18 +89,24 @@ export function computeMeshBoundsFromArrayBuffer(
       maxZ = Math.max(maxZ, z);
     }
 
-    return {
+    const result: MeshBounds = {
       min: [minX, minY, minZ],
       max: [maxX, maxY, maxZ],
       size: [maxX - minX, maxY - minY, maxZ - minZ],
       center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
       vertices,
     };
+    meshBoundsCache.set(cacheKey, result);
+    return result;
   } catch (error) {
     console.error("Error computing mesh bounds:", error);
     return null;
   }
 }
+
+export const clearMeshBoundsCache = () => {
+  meshBoundsCache.clear();
+};
 
 /**
  * Combines multiple mesh bounds into a single bounding box

@@ -1,4 +1,4 @@
-import { createWorkerTaskRunner } from "@/shared/lib/workerTaskRunner";
+import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
 import { parseEpisodeText, type EpisodeParseOptions, type EpisodeParseResult } from "./episodeParserCore";
 
 type WorkerRequest = {
@@ -13,7 +13,7 @@ type WorkerResponse = {
 };
 
 const MIN_WORKER_BYTES = 256 * 1024;
-const runner = createWorkerTaskRunner<WorkerRequest, WorkerResponse>(() => {
+const broker = createWorkerTaskBroker<Omit<WorkerRequest, "id">, WorkerResponse>(() => {
   if (typeof Worker === "undefined") {
     return null;
   }
@@ -37,7 +37,17 @@ export const parseEpisodeTextAsync = async (
   }
 
   const allowedJoints = options.allowedJoints ? Array.from(options.allowedJoints) : undefined;
-  const response = await runner.run({ text: rawText, allowedJoints });
+  const response = await broker.run(
+    { text: rawText, allowedJoints },
+    {
+      shouldUseWorker: (request) => request.text.length >= MIN_WORKER_BYTES,
+      fallback: (request) => ({
+        id: -1,
+        result: parseEpisodeText(request.text, { allowedJoints: request.allowedJoints }),
+      }),
+      shouldFallback: (result) => Boolean(result?.result?.error),
+    }
+  );
   if (!response) {
     return parseEpisodeText(rawText, { allowedJoints });
   }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { escapeHtml } from "./urdfHighlight";
-import { highlightUrdfAsync } from "./urdfEditorWorker";
+import { highlightUrdfAsync } from "./urdfProcessing";
 
 interface URDFSyntaxHighlighterProps {
   xml: string;
@@ -25,15 +25,17 @@ export const URDFSyntaxHighlighter = ({ xml, className = "" }: URDFSyntaxHighlig
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     setHighlightedHtml(escapeHtml(xml));
+    const controller = new AbortController();
 
     const timeout = setTimeout(() => {
-      highlightUrdfAsync(xml).then((html) => {
+      highlightUrdfAsync(xml, controller.signal).then((html) => {
         if (requestRef.current !== requestId) return;
         setHighlightedHtml(html);
       });
     }, 120);
 
     return () => {
+      controller.abort();
       clearTimeout(timeout);
     };
   }, [xml]);

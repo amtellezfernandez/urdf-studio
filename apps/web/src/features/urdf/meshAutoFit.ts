@@ -1,4 +1,4 @@
-import { createWorkerTaskRunner } from "@/shared/lib/workerTaskRunner";
+import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
 import type { CollisionAutoFitResult, CollisionAutoFitType } from "./collisionAutoFit";
 import { autoFitCollisionGeometry } from "./collisionAutoFit";
 import { computeMeshBoundsFromArrayBuffer } from "./computeMeshGeometry";
@@ -19,7 +19,7 @@ type MeshAutoFitRequest = {
 };
 
 const meshAutoFitMinBytes = 16 * 1024;
-const runner = createWorkerTaskRunner<MeshAutoFitRequest, MeshAutoFitResponse>(() => {
+const broker = createWorkerTaskBroker<Omit<MeshAutoFitRequest, "id">, MeshAutoFitResponse>(() => {
   if (typeof Worker === "undefined") {
     return null;
   }
@@ -54,14 +54,30 @@ export const autoFitCollisionGeometryFromMesh = async (
   if (typeof Worker === "undefined") {
     return computeAutoFitFallback(arrayBuffer, scale, visualOrigin, requestedType);
   }
-  const response = await runner.run(
+  const response = await broker.run(
     {
       arrayBuffer,
       scale,
       visualOrigin,
       requestedType,
     },
-    [arrayBuffer]
+    {
+      transfer: [arrayBuffer],
+      shouldUseWorker: (request) => request.arrayBuffer.byteLength >= meshAutoFitMinBytes,
+      fallback: (request) => ({
+        id: -1,
+        result:
+          request.arrayBuffer.byteLength > 0
+            ? computeAutoFitFallback(
+                request.arrayBuffer,
+                request.scale,
+                request.visualOrigin,
+                request.requestedType
+              )
+            : null,
+      }),
+      shouldFallback: (result) => Boolean(result?.error),
+    }
   );
 
   if (!response || response.error) {

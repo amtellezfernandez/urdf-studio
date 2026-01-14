@@ -22,7 +22,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { convertURDFToMJCF, convertURDFToXacro, extractMeshReferencesFromURDF, fetchRepoContents } from "@/features/urdf";
+import {
+  convertUrdfToMjcfCached,
+  convertUrdfToXacroCached,
+  extractMeshReferencesFromURDF,
+  fetchRepoContents,
+} from "@/features/urdf";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { cn } from "@/shared/lib/utils";
 import { useCameraStore } from "@/shared/store/useCameraStore";
@@ -629,7 +634,7 @@ export const ExportDialog = ({
         }
 
         if (formatSelections.xacro) {
-          const xacroResult = convertURDFToXacro(urdfContent);
+          const xacroResult = convertUrdfToXacroCached(urdfContent);
           const filename = `${currentBaseName}.urdf.xacro`;
           if (method === "download") {
             await downloadFile(xacroResult.xacroContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
@@ -638,7 +643,7 @@ export const ExportDialog = ({
         }
 
         if (formatSelections.mujoco) {
-          const mjcfResult = convertURDFToMJCF(urdfContent);
+          const mjcfResult = convertUrdfToMjcfCached(urdfContent);
           const filename = `${currentBaseName}.xml`;
           if (method === "download") {
             await downloadFile(mjcfResult.mjcfContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
@@ -658,7 +663,7 @@ export const ExportDialog = ({
         }
 
         if (formatSelections.xacro) {
-          const xacroResult = convertURDFToXacro(originalUrdfContent);
+          const xacroResult = convertUrdfToXacroCached(originalUrdfContent);
           const filename = `${originalBaseName}.urdf.xacro`;
           if (method === "download") {
             await downloadFile(xacroResult.xacroContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
@@ -667,7 +672,7 @@ export const ExportDialog = ({
         }
 
         if (formatSelections.mujoco) {
-          const mjcfResult = convertURDFToMJCF(originalUrdfContent);
+          const mjcfResult = convertUrdfToMjcfCached(originalUrdfContent);
           const filename = `${originalBaseName}.xml`;
           if (method === "download") {
             await downloadFile(mjcfResult.mjcfContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
