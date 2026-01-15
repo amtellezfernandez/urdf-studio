@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-from pathlib import Path
 
 from backend.models.ik_config import (
     IkConfigResponse,
@@ -11,6 +9,8 @@ from backend.models.ik_config import (
     IkSolverTuning,
     IkTimeouts,
 )
+
+from backend.core.app_config import get_config_value, read_app_config
 
 IK_CONFIG_VERSION = "1"
 
@@ -50,26 +50,6 @@ _DEFAULT_SOLVER_TUNING = {
 }
 
 
-def _read_config() -> dict:
-    root_dir = Path(__file__).resolve().parents[2]
-    config_path = root_dir / "config" / "app.config.json"
-    if not config_path.exists():
-        return {}
-    try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-
-
-def _get(config: dict, path: list[str], fallback):
-    current = config
-    for key in path:
-        if not isinstance(current, dict) or key not in current:
-            return fallback
-        current = current[key]
-    return current if current is not None else fallback
-
-
 def _read_int(key: str, fallback: int) -> int:
     raw = os.getenv(key)
     if not raw:
@@ -91,15 +71,15 @@ def _read_float(key: str, fallback: float) -> float:
 
 
 def _apply_config_overrides_timeouts(base: IkTimeouts, config: dict) -> IkTimeouts:
-    request_ms = _get(config, ["ik", "timeouts", "requestMs"], None)
+    request_ms = get_config_value(config, ["ik", "timeouts", "requestMs"], None)
     if request_ms is None:
-        request_ms = _get(config, ["ik", "timeouts", "request_ms"], base.request_ms)
-    drag_ms = _get(config, ["ik", "timeouts", "dragMs"], None)
+        request_ms = get_config_value(config, ["ik", "timeouts", "request_ms"], base.request_ms)
+    drag_ms = get_config_value(config, ["ik", "timeouts", "dragMs"], None)
     if drag_ms is None:
-        drag_ms = _get(config, ["ik", "timeouts", "drag_ms"], base.drag_ms)
-    orbit_ms = _get(config, ["ik", "timeouts", "orbitMs"], None)
+        drag_ms = get_config_value(config, ["ik", "timeouts", "drag_ms"], base.drag_ms)
+    orbit_ms = get_config_value(config, ["ik", "timeouts", "orbitMs"], None)
     if orbit_ms is None:
-        orbit_ms = _get(config, ["ik", "timeouts", "orbit_ms"], base.orbit_ms)
+        orbit_ms = get_config_value(config, ["ik", "timeouts", "orbit_ms"], base.orbit_ms)
     return IkTimeouts(
         request_ms=int(request_ms),
         drag_ms=int(drag_ms),
@@ -110,41 +90,41 @@ def _apply_config_overrides_timeouts(base: IkTimeouts, config: dict) -> IkTimeou
 def _apply_config_overrides_drag(base: IkDragConfig, config: dict) -> IkDragConfig:
     return IkDragConfig(
         max_drag_speed=float(
-            _get(config, ["ik", "drag", "maxDragSpeed"], base.max_drag_speed)
+            get_config_value(config, ["ik", "drag", "maxDragSpeed"], base.max_drag_speed)
         ),
         min_solve_distance=float(
-            _get(config, ["ik", "drag", "minSolveDistance"], base.min_solve_distance)
+            get_config_value(config, ["ik", "drag", "minSolveDistance"], base.min_solve_distance)
         ),
         spring_strength=float(
-            _get(config, ["ik", "drag", "springStrength"], base.spring_strength)
+            get_config_value(config, ["ik", "drag", "springStrength"], base.spring_strength)
         ),
         spring_damping=float(
-            _get(config, ["ik", "drag", "springDamping"], base.spring_damping)
+            get_config_value(config, ["ik", "drag", "springDamping"], base.spring_damping)
         ),
         snap_distance=float(
-            _get(config, ["ik", "drag", "snapDistance"], base.snap_distance)
+            get_config_value(config, ["ik", "drag", "snapDistance"], base.snap_distance)
         ),
         reach_margin=float(
-            _get(config, ["ik", "drag", "reachMargin"], base.reach_margin)
+            get_config_value(config, ["ik", "drag", "reachMargin"], base.reach_margin)
         ),
         ik_throttle_ms=int(
-            _get(config, ["ik", "drag", "ikThrottleMs"], base.ik_throttle_ms)
+            get_config_value(config, ["ik", "drag", "ikThrottleMs"], base.ik_throttle_ms)
         ),
         max_link_traversal=int(
-            _get(config, ["ik", "drag", "maxLinkTraversal"], base.max_link_traversal)
+            get_config_value(config, ["ik", "drag", "maxLinkTraversal"], base.max_link_traversal)
         ),
     )
 
 
 def _apply_config_overrides_orbit(base: IkOrbitDefaults, config: dict) -> IkOrbitDefaults:
     return IkOrbitDefaults(
-        radius=float(_get(config, ["ik", "orbit", "radius"], base.radius)),
+        radius=float(get_config_value(config, ["ik", "orbit", "radius"], base.radius)),
         inclination_deg=float(
-            _get(config, ["ik", "orbit", "inclinationDeg"], base.inclination_deg)
+            get_config_value(config, ["ik", "orbit", "inclinationDeg"], base.inclination_deg)
         ),
-        phase_deg=float(_get(config, ["ik", "orbit", "phaseDeg"], base.phase_deg)),
+        phase_deg=float(get_config_value(config, ["ik", "orbit", "phaseDeg"], base.phase_deg)),
         secondary_offset_deg=float(
-            _get(
+            get_config_value(
                 config,
                 ["ik", "orbit", "secondaryOffsetDeg"],
                 base.secondary_offset_deg,
@@ -160,10 +140,10 @@ def _apply_config_overrides_solver(
     solver_key_alt = solver_id
     return IkSolverTuning(
         position_weight=float(
-            _get(
+            get_config_value(
                 config,
                 ["ik", "solverTuning", solver_key_alt, "positionWeight"],
-                _get(
+                get_config_value(
                     config,
                     ["ik", "solverTuning", solver_key, "positionWeight"],
                     base.position_weight,
@@ -171,10 +151,10 @@ def _apply_config_overrides_solver(
             )
         ),
         orientation_weight=float(
-            _get(
+            get_config_value(
                 config,
                 ["ik", "solverTuning", solver_key_alt, "orientationWeight"],
-                _get(
+                get_config_value(
                     config,
                     ["ik", "solverTuning", solver_key, "orientationWeight"],
                     base.orientation_weight,
@@ -182,10 +162,10 @@ def _apply_config_overrides_solver(
             )
         ),
         posture_weight=float(
-            _get(
+            get_config_value(
                 config,
                 ["ik", "solverTuning", solver_key_alt, "postureWeight"],
-                _get(
+                get_config_value(
                     config,
                     ["ik", "solverTuning", solver_key, "postureWeight"],
                     base.posture_weight,
@@ -193,10 +173,10 @@ def _apply_config_overrides_solver(
             )
         ),
         velocity_dt=float(
-            _get(
+            get_config_value(
                 config,
                 ["ik", "solverTuning", solver_key_alt, "velocityDt"],
-                _get(
+                get_config_value(
                     config,
                     ["ik", "solverTuning", solver_key, "velocityDt"],
                     base.velocity_dt,
@@ -204,10 +184,10 @@ def _apply_config_overrides_solver(
             )
         ),
         limit_weight=float(
-            _get(
+            get_config_value(
                 config,
                 ["ik", "solverTuning", solver_key_alt, "limitWeight"],
-                _get(
+                get_config_value(
                     config,
                     ["ik", "solverTuning", solver_key, "limitWeight"],
                     base.limit_weight,
@@ -267,7 +247,7 @@ def _apply_env_overrides_solver(
 
 
 def get_ik_config() -> IkConfigResponse:
-    config = _read_config()
+    config = read_app_config()
     timeouts = _apply_env_overrides_timeouts(
         _apply_config_overrides_timeouts(_DEFAULT_TIMEOUTS, config)
     )

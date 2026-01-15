@@ -38,6 +38,20 @@ This will start:
 
 Ports and hosts are configurable via `config/app.config.json` or `URDF_*` env vars.
 
+### Quick Start Sample (SO-ARM100)
+The Quick Start panel loads the SO-ARM100 URDF + meshes from the vendor submodule.
+
+```bash
+git submodule update --init --recursive
+```
+
+Then click **Load SO-ARM100** in the UI.
+
+### IK Benchmark (SO-ARM100)
+```bash
+python backend/scripts/ik_benchmark.py
+```
+
 The integrated backend provides:
 - `GET  /health` – Health check (PyRoki, yourdfpy, Rerun status)
 - `POST /pyroki/fk` – Forward kinematics using PyRoki (with URDF caching)

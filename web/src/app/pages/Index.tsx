@@ -22,6 +22,7 @@ import { useThemeAndGPUMode } from "@/features/theme";
 import { DEMO_ROBOT_URDF } from "@/shared/samples/demoRobot";
 import { createDemoEpisode } from "@/shared/samples/demoMotion";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
+import { API_BASE_URL } from "@/shared/config/api";
 import { useIkConfigSync } from "@/features/ik/useIkConfigSync";
 import { useIkRegistrySync } from "@/features/ik/useIkRegistrySync";
 
@@ -222,24 +223,84 @@ const Index = () => {
     [hasAnimationFrames, jointLimits, setIsViewerOpen, setViewerEpisode]
   );
 
-  const handleLoadDemo = useCallback(() => {
+  const handleLoadQuickStart = useCallback(async () => {
+    const fallbackToDemo = (reason?: string) => {
+      if (reason) {
+        toast.error(reason);
+      }
+      try {
+        const demoFile = new File([DEMO_ROBOT_URDF], "demo_robot.urdf", {
+          type: "application/xml",
+        });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(demoFile);
+        void loadFilesFromFolder(dataTransfer.files);
+        toast.success("Loaded demo robot");
+      } catch {
+        toast.error("Failed to load demo robot");
+      }
+    };
+
     try {
-      const demoFile = new File([DEMO_ROBOT_URDF], "demo_robot.urdf", {
-        type: "application/xml",
-      });
+      const response = await fetch(`${API_BASE_URL}/samples/quickstart`);
+      if (!response.ok) {
+        let message = "Quick start sample unavailable";
+        try {
+          const payload = (await response.json()) as { detail?: string };
+          if (payload?.detail) {
+            message = payload.detail;
+          }
+        } catch {
+          // Ignore parse errors.
+        }
+        throw new Error(message);
+      }
+      const data = (await response.json()) as {
+        label?: string;
+        files?: Array<{ path?: string; content_base64?: string; mime?: string }>;
+      };
+      if (!data?.files || data.files.length === 0) {
+        throw new Error("Quick start sample has no files");
+      }
+
       const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(demoFile);
+      data.files.forEach((file) => {
+        if (!file?.path || !file.content_base64) return;
+        const binary = Uint8Array.from(atob(file.content_base64), (char) =>
+          char.charCodeAt(0)
+        );
+        const blob = new Blob([binary], {
+          type: file.mime || "application/octet-stream",
+        });
+        const filename = file.path.split("/").pop() || file.path;
+        const fileObj = new File([blob], filename, { type: file.mime });
+        Object.defineProperty(fileObj, "webkitRelativePath", {
+          value: file.path,
+          writable: false,
+          enumerable: true,
+          configurable: false,
+        });
+        dataTransfer.items.add(fileObj);
+      });
+
+      if (dataTransfer.files.length === 0) {
+        throw new Error("Quick start sample files missing");
+      }
+
       void loadFilesFromFolder(dataTransfer.files);
-      toast.success("Loaded demo robot");
+      toast.success(`Loaded ${data.label ?? "SO-ARM100"} sample`);
     } catch (error) {
-      toast.error("Failed to load demo robot");
+      const message =
+        error instanceof Error ? error.message : "Quick start load failed";
+      console.warn("Quick start load failed, falling back to demo:", error);
+      fallbackToDemo(message);
     }
   }, [loadFilesFromFolder]);
 
   const handlePlayDemoMotion = useCallback(() => {
     if (!hasLoadedFiles) {
       setPendingDemoMotion(true);
-      handleLoadDemo();
+      handleLoadQuickStart();
       return;
     }
 
@@ -247,7 +308,7 @@ const Index = () => {
       ? availableJoints
       : ["joint_1", "joint_2"];
     playDemoEpisode(jointNames);
-  }, [availableJoints, handleLoadDemo, hasLoadedFiles, playDemoEpisode]);
+  }, [availableJoints, handleLoadQuickStart, hasLoadedFiles, playDemoEpisode]);
 
   useEffect(() => {
     if (!pendingDemoMotion || !hasLoadedFiles) return;
@@ -365,7 +426,7 @@ const Index = () => {
     return (
       <FolderUploadScreen
         onFolderSelected={loadFilesFromFolder}
-        onLoadDemo={handleLoadDemo}
+        onLoadQuickStart={handleLoadQuickStart}
         onPlayDemoMotion={handlePlayDemoMotion}
       />
     );

@@ -51,5 +51,15 @@
         "limitWeight": 1
       }
     }
+  },
+  "samples": {
+    "quickStartId": "so-arm100",
+    "items": {
+      "so-arm100": {
+        "label": "SO-ARM100 (SO101)",
+        "repoPath": "vendor/so-arm100",
+        "urdfPath": "Simulation/SO101/so101_new_calib.urdf"
+      }
+    }
   }
 }

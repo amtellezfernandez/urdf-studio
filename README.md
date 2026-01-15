@@ -8,6 +8,10 @@ npm install
 npm run dev
 ```
 
+## ⚡ Quick Start Sample (SO-ARM100)
+- Pull submodules: `git submodule update --init --recursive`
+- Launch the app and click **Load SO-ARM100** in the Quick Start panel.
+
 ## 🤖 What You Can Do
 - Drag in a URDF folder (zip it up with meshes) and the bot pops into the viewer.
 - Scrub joints, drop keyframes, and build sequences without wrestling XML.

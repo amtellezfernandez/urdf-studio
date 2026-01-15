@@ -1,29 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
-from pathlib import Path
 
-
-def _read_config() -> dict:
-    root_dir = Path(__file__).resolve().parents[2]
-    config_path = root_dir / "config" / "app.config.json"
-    if not config_path.exists():
-        return {}
-    try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-
-
-def _get(config: dict, path: list[str], fallback):
-    current = config
-    for key in path:
-        if not isinstance(current, dict) or key not in current:
-            return fallback
-        current = current[key]
-    return current if current is not None else fallback
+from backend.core.app_config import get_config_value, read_app_config
 
 
 def _read_int(key: str, fallback: int) -> int:
@@ -61,14 +41,14 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    config = _read_config()
-    web_host = _read_str("URDF_WEB_HOST", _get(config, ["web", "host"], "localhost"))
-    web_port = _read_int("URDF_WEB_PORT", _get(config, ["web", "port"], 5173))
-    api_host = _read_str("URDF_API_HOST", _get(config, ["api", "host"], "127.0.0.1"))
-    api_port = _read_int("URDF_API_PORT", _get(config, ["api", "port"], 8000))
-    rerun_host = _read_str("URDF_RERUN_HOST", _get(config, ["rerun", "host"], "127.0.0.1"))
-    rerun_web_port = _read_int("URDF_RERUN_WEB_PORT", _get(config, ["rerun", "webPort"], 9090))
-    rerun_ws_port = _read_int("URDF_RERUN_WS_PORT", _get(config, ["rerun", "wsPort"], 9876))
+    config = read_app_config()
+    web_host = _read_str("URDF_WEB_HOST", get_config_value(config, ["web", "host"], "localhost"))
+    web_port = _read_int("URDF_WEB_PORT", get_config_value(config, ["web", "port"], 5173))
+    api_host = _read_str("URDF_API_HOST", get_config_value(config, ["api", "host"], "127.0.0.1"))
+    api_port = _read_int("URDF_API_PORT", get_config_value(config, ["api", "port"], 8000))
+    rerun_host = _read_str("URDF_RERUN_HOST", get_config_value(config, ["rerun", "host"], "127.0.0.1"))
+    rerun_web_port = _read_int("URDF_RERUN_WEB_PORT", get_config_value(config, ["rerun", "webPort"], 9090))
+    rerun_ws_port = _read_int("URDF_RERUN_WS_PORT", get_config_value(config, ["rerun", "wsPort"], 9876))
     cors_origins = _build_cors_origins(web_host, web_port)
     return Settings(
         web_host=web_host,

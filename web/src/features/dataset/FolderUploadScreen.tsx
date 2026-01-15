@@ -28,12 +28,12 @@ import {
 
 interface FolderUploadScreenProps {
   onFolderSelected: (files: FileList) => void;
-  onLoadDemo?: () => void;
+  onLoadQuickStart?: () => void;
   onPlayDemoMotion?: () => void;
 }
 
 export const FolderUploadScreen = memo(
-  ({ onFolderSelected, onLoadDemo, onPlayDemoMotion }: FolderUploadScreenProps) => {
+  ({ onFolderSelected, onLoadQuickStart, onPlayDemoMotion }: FolderUploadScreenProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { gpuMode, setGPUMode } = useGPUMode();
   const { recentRepos, addRecentRepo, removeRecentRepo } = useRecentGitHubRepos();
@@ -452,16 +452,16 @@ export const FolderUploadScreen = memo(
           </p>
         </div>
 
-        {(onLoadDemo || onPlayDemoMotion) && (
+        {(onLoadQuickStart || onPlayDemoMotion) && (
           <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
             <h2 className="text-sm font-semibold text-foreground">Quick Start</h2>
             <p className="text-xs text-muted-foreground">
-              Load a built-in demo robot to explore the UI. No files or tokens needed.
+              Load the SO-ARM100 sample robot to explore the UI. No files or tokens needed.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {onLoadDemo && (
-                <Button onClick={onLoadDemo} size="sm" variant="secondary">
-                  Try Demo Robot
+              {onLoadQuickStart && (
+                <Button onClick={onLoadQuickStart} size="sm" variant="secondary">
+                  Load SO-ARM100
                 </Button>
               )}
               {onPlayDemoMotion && (
@@ -471,7 +471,7 @@ export const FolderUploadScreen = memo(
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Tip: the demo uses built-in box/cylinder geometry, so no mesh files are required.
+              Tip: this sample ships with meshes; if it fails, run `git submodule update --init --recursive`.
             </p>
           </div>
         )}

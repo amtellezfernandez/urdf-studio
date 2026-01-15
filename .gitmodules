@@ -1,3 +1,6 @@
 [submodule "vendor/lerobot"]
 	path = vendor/lerobot
 	url = https://github.com/huggingface/lerobot
+[submodule "vendor/so-arm100"]
+	path = vendor/so-arm100
+	url = https://github.com/TheRobotStudio/SO-ARM100
