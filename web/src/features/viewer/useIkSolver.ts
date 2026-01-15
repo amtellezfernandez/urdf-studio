@@ -53,6 +53,7 @@ export const useIkSolver = ({
   const orbitFollowAnimationRef = useRef<number | null>(null);
   const orbitFollowAbortRef = useRef<boolean>(false);
   const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
+  const lastIkApplyTimeRef = useRef<number | null>(null);
   const setIkDebugState = useIkDebugStore((s) => s.setState);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
@@ -77,6 +78,7 @@ export const useIkSolver = ({
   // Reset IK smoothing state when the robot or drag mode changes
   useEffect(() => {
     lastIkAppliedRef.current = null;
+    lastIkApplyTimeRef.current = null;
   }, [urdfContent, endEffectorLink, dragMode]);
 
   useEffect(() => {
@@ -459,6 +461,13 @@ export const useIkSolver = ({
       const smoothAlpha = Math.min(Math.max(smoothAlphaRaw, 0), 1);
       const maxStepDelta = maxStepDeltaRaw > 0 ? maxStepDeltaRaw : Infinity;
       const maxBlendDelta = maxBlendDeltaRaw > 0 ? maxBlendDeltaRaw : Infinity;
+      const now = performance.now();
+      const lastApply = lastIkApplyTimeRef.current ?? now;
+      const dtMs = Math.min(Math.max(now - lastApply, 16), 1000);
+      const stepScale = Math.min(dtMs / 16, 20);
+      const maxStepDeltaScaled = Number.isFinite(maxStepDelta)
+        ? maxStepDelta * stepScale
+        : maxStepDelta;
       const previous = lastIkAppliedRef.current;
       const blended: Record<string, number> = {};
 
@@ -479,7 +488,10 @@ export const useIkSolver = ({
         for (const [joint, value] of Object.entries(solution)) {
           const prevVal = previous[joint] ?? value;
           const delta = value - prevVal;
-          const clamped = Math.abs(delta) > maxStepDelta ? Math.sign(delta) * maxStepDelta : delta;
+          const clamped =
+            Math.abs(delta) > maxStepDeltaScaled
+              ? Math.sign(delta) * maxStepDeltaScaled
+              : delta;
           blended[joint] = prevVal + clamped * blendFactor;
         }
         // Keep any joints that were in the previous state but not present in the new solution
@@ -493,6 +505,7 @@ export const useIkSolver = ({
       }
 
       lastIkAppliedRef.current = blended;
+      lastIkApplyTimeRef.current = now;
 
       console.log("[Viewer3D] IK solution received:", solution);
       onManualJointChange?.();
