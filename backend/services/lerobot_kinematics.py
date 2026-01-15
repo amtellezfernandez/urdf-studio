@@ -191,14 +191,14 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
         frame_task = _get_or_create_frame_task(entry, req.target_link)
         frame_task.T_world_frame = target_pose
 
-    tuning = get_solver_tuning("lerobot-placo")
-    has_orientation = req.target_rotation is not None or req.target_wxyz is not None
-    frame_task.configure(
-        req.target_link,
-        "soft",
-        float(tuning.position_weight),
-        float(tuning.orientation_weight) if has_orientation else 0.0,
-    )
+        tuning = get_solver_tuning("lerobot-placo")
+        has_orientation = req.target_rotation is not None or req.target_wxyz is not None
+        frame_task.configure(
+            req.target_link,
+            "soft",
+            float(tuning.position_weight),
+            float(tuning.orientation_weight) if has_orientation else 0.0,
+        )
         entry.joints_task.set_joints(seed_map)
     except Exception as exc:
         raise HTTPException(
