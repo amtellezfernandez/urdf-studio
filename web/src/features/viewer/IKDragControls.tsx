@@ -34,6 +34,7 @@ const {
   ikThrottleMs,
   maxLinkTraversal,
 } = IK_DRAG_CONFIG;
+const STALE_SOLVE_DISTANCE = Math.max(minSolveDistance * 12, 0.05);
 
 export const IKDragControls = ({
   robot,
@@ -324,6 +325,19 @@ export const IKDragControls = ({
           queuedTargetRef.current = null;
           syncTargetToEndEffector();
           return;
+        }
+
+        if (targetMeshRef.current) {
+          const distanceToCurrent = targetMeshRef.current.position.distanceTo(position);
+          if (distanceToCurrent > STALE_SOLVE_DISTANCE) {
+            setIkDebugState({
+              status: "success",
+              error: null,
+              durationMs: performance.now() - start,
+              diagnostics: result.result.diagnostics ?? null,
+            });
+            return;
+          }
         }
 
         onIkSolved(result.result.solution);
