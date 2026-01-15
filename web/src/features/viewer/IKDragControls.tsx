@@ -4,7 +4,6 @@ import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import { API_BASE_URL } from "@/shared/config/api";
-import { IK_DRAG_CONFIG } from "@/features/viewer/config";
 import { buildIkOrientationPayload } from "@/features/viewer/viewer-helpers";
 import {
   cancelIk,
@@ -26,17 +25,6 @@ interface IKDragControlsProps {
   mode?: "translate" | "rotate";
   onDragStateChange?: (dragging: boolean) => void;
 }
-
-const {
-  maxDragSpeed,
-  minSolveDistance,
-  springStrength,
-  springDamping,
-  snapDistance,
-  reachMargin,
-  ikThrottleMs,
-  maxLinkTraversal,
-} = IK_DRAG_CONFIG;
 
 export const IKDragControls = ({
   robot,
@@ -83,7 +71,19 @@ export const IKDragControls = ({
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
   const dragTimeoutMs = useIkParamsStore((s) => s.dragTimeoutMs);
+  const dragConfig = useIkParamsStore((s) => s.dragConfig);
   const lastDebugUpdateRef = useRef(0);
+
+  const {
+    maxDragSpeed,
+    minSolveDistance,
+    springStrength,
+    springDamping,
+    snapDistance,
+    reachMargin,
+    ikThrottleMs,
+    maxLinkTraversal,
+  } = dragConfig;
 
   // Debug initial props
   useEffect(() => {
@@ -221,7 +221,7 @@ export const IKDragControls = ({
       reachRadiusRef.current = null;
       baseLinkNameRef.current = null;
     }
-  }, [urdfContent, endEffectorLink]);
+  }, [endEffectorLink, maxLinkTraversal, reachMargin, urdfContent]);
 
   const syncTargetToEndEffector = useCallback(() => {
     if (!endEffectorObject.current || !targetMeshRef.current) return;
@@ -451,7 +451,7 @@ export const IKDragControls = ({
     if (currentDistance > reachRadius) {
       reachRadiusRef.current = currentDistance * reachMargin;
     }
-  }, [robot]);
+  }, [reachMargin, robot]);
 
   const endDrag = useCallback(
     (pointerId?: number) => {

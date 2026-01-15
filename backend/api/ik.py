@@ -1,52 +1,43 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
-from backend.models.ik_solvers import IkSolverInfo, IkSolversResponse
-from backend.services.health import dependency_health
-
-
-def _placo_available() -> bool:
-    try:
-        import placo  # type: ignore # noqa: F401
-    except ImportError:
-        return False
-    return True
+from backend.models.kinematics import IKResponse, IkSolveRequest
+from backend.models.ik_config import IkConfigResponse
+from backend.models.ik_solvers import IkSolversResponse
+from backend.services.ik_config import get_ik_config
+from backend.services.ik_registry import (
+    IK_SOLVER_REGISTRY_VERSION,
+    default_solver_chain,
+    list_available_solvers,
+)
+from backend.services.kinematics import inverse_kinematics as pyroki_ik
+from backend.services.lerobot_kinematics import inverse_kinematics as lerobot_ik
 
 router = APIRouter(prefix="/ik", tags=["ik"])
 
 
 @router.get("/solvers", response_model=IkSolversResponse)
 def list_ik_solvers() -> IkSolversResponse:
-    health = dependency_health()
-    placo_ok = _placo_available()
-    solvers: list[IkSolverInfo] = []
-    if health.pyroki:
-        solvers.append(
-            IkSolverInfo(
-                id="pyroki-http",
-                label="PyRoki (HTTP)",
-                description="Backend IK service.",
-                mode="remote",
-            )
-        )
-    if placo_ok:
-        solvers.append(
-            IkSolverInfo(
-                id="lerobot-placo",
-                label="LeRobot (Placo)",
-                description="Placo-based IK service.",
-                mode="remote",
-            )
-        )
+    solvers = list_available_solvers()
+    default_chain = default_solver_chain()
+    return IkSolversResponse(
+        version=IK_SOLVER_REGISTRY_VERSION,
+        solvers=solvers,
+        default_chain=default_chain,
+    )
 
-    default_chain: list[str] = []
-    if health.pyroki:
-        default_chain.append("pyroki-http")
-    if placo_ok:
-        default_chain.append("lerobot-placo")
 
-    if not default_chain and solvers:
-        default_chain = [solver.id for solver in solvers]
+@router.get("/config", response_model=IkConfigResponse)
+def get_ik_runtime_config() -> IkConfigResponse:
+    return get_ik_config()
 
-    return IkSolversResponse(solvers=solvers, default_chain=default_chain)
+
+@router.post("/solve", response_model=IKResponse)
+def solve_ik(req: IkSolveRequest) -> IKResponse:
+    solver_id = req.solver_id
+    if solver_id == "pyroki-http":
+        return pyroki_ik(req)
+    if solver_id == "lerobot-placo":
+        return lerobot_ik(req)
+    raise HTTPException(status_code=400, detail=f"Unknown solver: {solver_id}")

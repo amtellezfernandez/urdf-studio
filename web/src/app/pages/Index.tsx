@@ -22,8 +22,12 @@ import { useThemeAndGPUMode } from "@/features/theme";
 import { DEMO_ROBOT_URDF } from "@/shared/samples/demoRobot";
 import { createDemoEpisode } from "@/shared/samples/demoMotion";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
+import { useIkConfigSync } from "@/features/ik/useIkConfigSync";
+import { useIkRegistrySync } from "@/features/ik/useIkRegistrySync";
 
 const Index = () => {
+  useIkConfigSync();
+  useIkRegistrySync();
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);

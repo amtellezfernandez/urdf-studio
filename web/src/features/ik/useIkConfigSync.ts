@@ -1,0 +1,85 @@
+import { useEffect } from "react";
+import { API_BASE_URL } from "@/shared/config/api";
+import type { IkConfigResponse } from "./types";
+import { useIkParamsStore } from "./useIkParamsStore";
+
+const mapSolverTuning = (tuning?: IkConfigResponse["solver_tuning"]) => {
+  if (!tuning) return {};
+  const mapped: Record<string, {
+    positionWeight: number;
+    orientationWeight: number;
+    postureWeight: number;
+    velocityDt: number;
+    limitWeight: number;
+  }> = {};
+  Object.entries(tuning).forEach(([key, value]) => {
+    if (!value) return;
+    mapped[key] = {
+      positionWeight: value.position_weight ?? 0,
+      orientationWeight: value.orientation_weight ?? 0,
+      postureWeight: value.posture_weight ?? 0,
+      velocityDt: value.velocity_dt ?? 0,
+      limitWeight: value.limit_weight ?? 0,
+    };
+  });
+  return mapped;
+};
+
+export const useIkConfigSync = () => {
+  const setConfig = useIkParamsStore((s) => s.setConfig);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/ik/config`);
+        if (!response.ok) return;
+        const data = (await response.json()) as IkConfigResponse;
+
+        if (cancelled) return;
+
+        const nextConfig: Parameters<typeof setConfig>[0] = {};
+        nextConfig.configVersion = data.version ?? null;
+        if (data.timeouts?.request_ms !== undefined) {
+          nextConfig.requestTimeoutMs = data.timeouts.request_ms;
+        }
+        if (data.timeouts?.drag_ms !== undefined) {
+          nextConfig.dragTimeoutMs = data.timeouts.drag_ms;
+        }
+        if (data.timeouts?.orbit_ms !== undefined) {
+          nextConfig.orbitTimeoutMs = data.timeouts.orbit_ms;
+        }
+        if (data.drag) {
+          nextConfig.dragConfig = {
+            maxDragSpeed: data.drag.max_drag_speed ?? 1.2,
+            minSolveDistance: data.drag.min_solve_distance ?? 0.003,
+            springStrength: data.drag.spring_strength ?? 45,
+            springDamping: data.drag.spring_damping ?? 12,
+            snapDistance: data.drag.snap_distance ?? 0.003,
+            reachMargin: data.drag.reach_margin ?? 1.25,
+            ikThrottleMs: data.drag.ik_throttle_ms ?? 40,
+            maxLinkTraversal: data.drag.max_link_traversal ?? 200,
+          };
+        }
+        if (data.orbit) {
+          nextConfig.orbitDefaults = {
+            radius: data.orbit.radius ?? 0.3,
+            inclinationDeg: data.orbit.inclination_deg ?? 45,
+            phaseDeg: data.orbit.phase_deg ?? 0,
+            secondaryOffsetDeg: data.orbit.secondary_offset_deg ?? 180,
+          };
+        }
+        nextConfig.solverTuning = mapSolverTuning(data.solver_tuning);
+        setConfig(nextConfig);
+      } catch {
+        // Ignore config sync failures.
+      }
+    };
+
+    void fetchConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [setConfig]);
+};

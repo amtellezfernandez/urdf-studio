@@ -13,6 +13,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from backend.models.kinematics import IKDiagnostics, IKRequest, IKResponse
+from backend.services.ik_config import get_solver_tuning
 
 
 @dataclass
@@ -113,13 +114,14 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
         solver.mask_fbase(True)
         solver.enable_joint_limits(True)
         solver.enable_velocity_limits(True)
+        tuning = get_solver_tuning("lerobot-placo")
         if hasattr(solver, "dt"):
-            solver.dt = 1.0 / 60.0
+            solver.dt = float(tuning.velocity_dt)
         else:
             solver.enable_velocity_limits(False)
         joint_names = list(robot.joint_names())
         joints_task = solver.add_joints_task()
-        joints_task.configure("posture", "soft", 0.05)
+        joints_task.configure("posture", "soft", float(tuning.posture_weight))
     except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Failed to build Placo robot: {exc}"
@@ -189,13 +191,14 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
         frame_task = _get_or_create_frame_task(entry, req.target_link)
         frame_task.T_world_frame = target_pose
 
-        has_orientation = req.target_rotation is not None or req.target_wxyz is not None
-        frame_task.configure(
-            req.target_link,
-            "soft",
-            100.0,
-            1.0 if has_orientation else 0.0,
-        )
+    tuning = get_solver_tuning("lerobot-placo")
+    has_orientation = req.target_rotation is not None or req.target_wxyz is not None
+    frame_task.configure(
+        req.target_link,
+        "soft",
+        float(tuning.position_weight),
+        float(tuning.orientation_weight) if has_orientation else 0.0,
+    )
         entry.joints_task.set_joints(seed_map)
     except Exception as exc:
         raise HTTPException(

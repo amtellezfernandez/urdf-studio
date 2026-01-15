@@ -1,40 +1,23 @@
-import type { IkSolverId, IkSolveStrategy } from "./types";
+import type { IkSolverId, IkSolveStrategy, IkSolverMeta } from "./types";
 import { IK_RUNTIME_CONFIG } from "@/shared/config/runtime";
 import { isIkfastAvailable } from "./ikfastSolver";
 
-type SolverDescriptor = {
-  id: IkSolverId;
-  label: string;
-  description: string;
-  capabilities: string[];
-  requirements: string[];
-};
+const KNOWN_SOLVER_IDS = new Set<IkSolverId>([
+  "pyroki-http",
+  "lerobot-placo",
+  "ikfast-wasm",
+]);
 
-export const IK_SOLVER_DEFS: SolverDescriptor[] = [
-  {
-    id: "pyroki-http",
-    label: "PyRoki (HTTP)",
-    description: "Backend IK service (default).",
-    capabilities: ["Orientation", "Limits"],
-    requirements: ["Backend"],
-  },
-  {
-    id: "lerobot-placo",
-    label: "LeRobot (Placo)",
-    description: "Backend IK via Placo (LeRobot).",
-    capabilities: ["Pose"],
-    requirements: ["Backend", "Placo"],
-  },
+export const LOCAL_SOLVER_DEFS: IkSolverMeta[] = [
   {
     id: "ikfast-wasm",
     label: "IKFast (WASM)",
     description: "Analytic solver adapter (WASM module).",
     capabilities: ["Analytic", "Fast"],
     requirements: ["WASM"],
+    source: "local",
   },
 ];
-
-const KNOWN_SOLVER_IDS = new Set(IK_SOLVER_DEFS.map((solver) => solver.id));
 
 const normalizeSolverChain = (chain: unknown): IkSolverId[] => {
   if (!Array.isArray(chain)) return [];

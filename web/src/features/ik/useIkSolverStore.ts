@@ -1,25 +1,25 @@
 import { create } from "zustand";
-import type { IkSolverId } from "./types";
+import type { IkSolverId, IkSolverMeta } from "./types";
 import { isIkfastAvailable } from "./ikfastSolver";
+import { LOCAL_SOLVER_DEFS } from "./registry";
 
 type IkSolverStore = {
   selectedSolverId: IkSolverId;
-  availableSolverIds: IkSolverId[];
+  availableSolvers: IkSolverMeta[];
   setSelectedSolverId: (solverId: IkSolverId) => void;
-  setAvailableSolverIds: (solverIds: IkSolverId[]) => void;
+  setAvailableSolvers: (solvers: IkSolverMeta[]) => void;
 };
 
-const buildInitialAvailable = (): IkSolverId[] => {
-  const base: IkSolverId[] = ["pyroki-http"];
-  if (isIkfastAvailable()) {
-    base.push("ikfast-wasm");
+const buildInitialAvailable = (): IkSolverMeta[] => {
+  if (!isIkfastAvailable()) {
+    return [];
   }
-  return base;
+  return LOCAL_SOLVER_DEFS.filter((solver) => solver.id === "ikfast-wasm");
 };
 
 export const useIkSolverStore = create<IkSolverStore>((set) => ({
   selectedSolverId: "pyroki-http",
-  availableSolverIds: buildInitialAvailable(),
+  availableSolvers: buildInitialAvailable(),
   setSelectedSolverId: (solverId) => set({ selectedSolverId: solverId }),
-  setAvailableSolverIds: (solverIds) => set({ availableSolverIds: solverIds }),
+  setAvailableSolvers: (solvers) => set({ availableSolvers: solvers }),
 }));

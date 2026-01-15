@@ -10,7 +10,6 @@ import {
   getLiveRobotJoints,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
-import { IK_ORBIT_DEFAULTS } from "@/features/viewer/config";
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { isIkFailure, solveIk } from "@/features/ik/ikClient";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
@@ -59,6 +58,7 @@ export const useIkSolver = ({
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
   const requestTimeoutMs = useIkParamsStore((s) => s.requestTimeoutMs);
   const orbitTimeoutMs = useIkParamsStore((s) => s.orbitTimeoutMs);
+  const orbitDefaults = useIkParamsStore((s) => s.orbitDefaults);
 
   const resolveOrientationMode = (
     setting: IkOrientationSetting,
@@ -164,15 +164,14 @@ export const useIkSolver = ({
       let targetPosition: [number, number, number];
       if (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") {
         // Calculate position on orbit based on which point was clicked
-        const radius = targetObj.orbitRadius ?? IK_ORBIT_DEFAULTS.radius;
-        const inclination =
-          targetObj.orbitInclination ?? IK_ORBIT_DEFAULTS.inclinationDeg;
-        const basePhase = targetObj.orbitPhase ?? IK_ORBIT_DEFAULTS.phaseDeg;
+        const radius = targetObj.orbitRadius ?? orbitDefaults.radius;
+        const inclination = targetObj.orbitInclination ?? orbitDefaults.inclinationDeg;
+        const basePhase = targetObj.orbitPhase ?? orbitDefaults.phaseDeg;
 
         // Use secondary offset if secondary point was clicked
         const secondaryOffset =
           targetObj.orbitTargetPoint === "secondary"
-            ? (targetObj.orbitSecondaryOffset ?? IK_ORBIT_DEFAULTS.secondaryOffsetDeg)
+            ? (targetObj.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg)
             : 0;
         const phase = basePhase + secondaryOffset;
 
@@ -253,6 +252,7 @@ export const useIkSolver = ({
       clickOrientation,
       dragMode,
       endEffectorLink,
+      orbitDefaults,
       requestTimeoutMs,
       robot,
       selectedSolverId,
@@ -282,8 +282,9 @@ export const useIkSolver = ({
       const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
 
       // Determine which point was clicked and calculate the arc to traverse
-      const basePhase = targetObj.orbitPhase ?? 0;
-      const secondaryOffset = targetObj.orbitSecondaryOffset ?? 180;
+      const basePhase = targetObj.orbitPhase ?? orbitDefaults.phaseDeg;
+      const secondaryOffset =
+        targetObj.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg;
       const clickedPoint = targetObj.orbitTargetPoint; // "primary", "secondary", or "center"
 
       if (clickedPoint === "center" || !clickedPoint) {
@@ -314,8 +315,8 @@ export const useIkSolver = ({
       setIkDebugState({ lastTargetQuaternion: null });
       toast.success(`Following orbit from ${clickedPoint} point...`);
 
-      const radius = targetObj.orbitRadius ?? 0.3;
-      const inclination = targetObj.orbitInclination ?? 45;
+      const radius = targetObj.orbitRadius ?? orbitDefaults.radius;
+      const inclination = targetObj.orbitInclination ?? orbitDefaults.inclinationDeg;
       const inclinationRad = (inclination * Math.PI) / 180;
       const totalSteps = Math.max(1, Math.round(arcLength)); // 1 degree per step
       const minStepIntervalMs = 45;
@@ -418,6 +419,7 @@ export const useIkSolver = ({
       endEffectorLink,
       ikResult,
       onIkApplied,
+      orbitDefaults,
       orbitTimeoutMs,
       robot,
       selectedSolverId,

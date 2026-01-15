@@ -26,6 +26,7 @@ from backend.models.kinematics import (
     IKRequest,
     IKResponse,
 )
+from backend.services.ik_config import get_solver_tuning
 
 
 @dataclass
@@ -108,6 +109,11 @@ def _get_or_create_ik_solver(entry: RobotEntry, target_link: str, target_idx: in
 
     robot = entry.robot
 
+    tuning = get_solver_tuning("pyroki-http")
+    pos_weight = float(tuning.position_weight)
+    ori_weight = float(tuning.orientation_weight)
+    limit_weight = float(tuning.limit_weight)
+
     @jdc.jit
     def solve_ik_fast(
         target_wxyz: jnp.ndarray,
@@ -127,13 +133,13 @@ def _get_or_create_ik_solver(entry: RobotEntry, target_link: str, target_idx: in
                 joint_var,
                 target_pose,
                 jnp.array(target_idx, dtype=jnp.int32),
-                pos_weight=100.0,
-                ori_weight=1.0,
+                pos_weight=pos_weight,
+                ori_weight=ori_weight,
             ),
             pk.costs.limit_cost(
                 robot,
                 joint_var,
-                weight=50.0,
+                weight=limit_weight,
             ),
         ]
 

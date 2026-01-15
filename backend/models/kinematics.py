@@ -42,6 +42,13 @@ class IKRequest(BaseModel):
     )
 
 
+class IkSolveRequest(IKRequest):
+    solver_id: str = Field(
+        default="pyroki-http",
+        description="Solver id to use (e.g., pyroki-http, lerobot-placo).",
+    )
+
+
 class IKDiagnostics(BaseModel):
     termination_reason: str
     termination_flags: List[bool]

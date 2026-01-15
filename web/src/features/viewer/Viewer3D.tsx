@@ -27,7 +27,7 @@ import {
   setEmissiveColor,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
-import { IK_ORBIT_DEFAULTS } from "@/features/viewer/config";
+import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 import { CollisionGeometries } from "@/features/viewer/CollisionGeometries";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
 import { useAnimationController, type AnimationController } from "@/features/viewer/useAnimationController";
@@ -90,7 +90,7 @@ const OrbitVisualization = ({
   color,
   onPrimaryOrbitClick,
   onSecondaryOrbitClick,
-  secondaryPhaseOffsetDeg = IK_ORBIT_DEFAULTS.secondaryOffsetDeg,
+  secondaryPhaseOffsetDeg = 0,
 }: {
   centerPosition: THREE.Vector3;
   radius: number;
@@ -415,11 +415,11 @@ const CreatedObjects = ({
             {obj.isIkTarget && obj.ikTargetType === "orbit" && (
               <OrbitVisualization
                 centerPosition={obj.position}
-                radius={obj.orbitRadius ?? IK_ORBIT_DEFAULTS.radius}
-                inclination={obj.orbitInclination ?? IK_ORBIT_DEFAULTS.inclinationDeg}
-                phase={obj.orbitPhase ?? IK_ORBIT_DEFAULTS.phaseDeg}
+                radius={obj.orbitRadius ?? orbitDefaults.radius}
+                inclination={obj.orbitInclination ?? orbitDefaults.inclinationDeg}
+                phase={obj.orbitPhase ?? orbitDefaults.phaseDeg}
                 secondaryPhaseOffsetDeg={
-                  obj.orbitSecondaryOffset ?? IK_ORBIT_DEFAULTS.secondaryOffsetDeg
+                  obj.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg
                 }
                 color={targetTint}
                 onPrimaryOrbitClick={() => {
@@ -1318,6 +1318,7 @@ export const Viewer3D = ({
   const [isDraggingJoint, setIsDraggingJoint] = useState(false);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const playbackSpeed = useViewerPlaybackStore((state) => state.playbackSpeed);
+  const orbitDefaults = useIkParamsStore((state) => state.orbitDefaults);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1660,10 +1661,10 @@ export const Viewer3D = ({
               let targetZ = targetObj.position.z;
 
               if (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") {
-                const radius = targetObj.orbitRadius ?? IK_ORBIT_DEFAULTS.radius;
+                const radius = targetObj.orbitRadius ?? orbitDefaults.radius;
                 const inclination =
-                  targetObj.orbitInclination ?? IK_ORBIT_DEFAULTS.inclinationDeg;
-                const basePhase = targetObj.orbitPhase ?? IK_ORBIT_DEFAULTS.phaseDeg;
+                  targetObj.orbitInclination ?? orbitDefaults.inclinationDeg;
+                const basePhase = targetObj.orbitPhase ?? orbitDefaults.phaseDeg;
 
                 // Use secondary offset if secondary point was clicked
                 const secondaryOffset = targetObj.orbitTargetPoint === "secondary" ? (targetObj.orbitSecondaryOffset ?? 180) : 0;

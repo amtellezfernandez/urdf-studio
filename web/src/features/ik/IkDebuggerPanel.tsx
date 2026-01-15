@@ -3,14 +3,10 @@ import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { NumberInput } from "@/shared/ui/number-input";
-import { API_BASE_URL } from "@/shared/config/api";
 import { useObjectStore } from "@/features/objects";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 import { FkComparisonPanel } from "@/features/ik/FkComparisonPanel";
-import { IK_ORBIT_DEFAULTS } from "@/features/viewer/config";
-import { IK_SOLVER_DEFS } from "@/features/ik/registry";
-import type { IkSolverId } from "@/features/ik/types";
-import { isIkfastAvailable } from "@/features/ik/ikfastSolver";
+import type { IkSolverId, IkSolverMeta } from "@/features/ik/types";
 import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
 import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 
@@ -42,14 +38,14 @@ export const IkDebuggerPanel = ({
   const [objectsSnapshot, setObjectsSnapshot] = useState(objectsRef.current);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
-  const availableSolverIds = useIkSolverStore((s) => s.availableSolverIds);
+  const availableSolvers = useIkSolverStore((s) => s.availableSolvers);
   const setSelectedSolverId = useIkSolverStore((s) => s.setSelectedSolverId);
-  const setAvailableSolverIds = useIkSolverStore((s) => s.setAvailableSolverIds);
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
   const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
   const requestTimeoutMs = useIkParamsStore((s) => s.requestTimeoutMs);
   const dragTimeoutMs = useIkParamsStore((s) => s.dragTimeoutMs);
   const orbitTimeoutMs = useIkParamsStore((s) => s.orbitTimeoutMs);
+  const orbitDefaults = useIkParamsStore((s) => s.orbitDefaults);
   const setClickOrientation = useIkParamsStore((s) => s.setClickOrientation);
   const setDragOrientation = useIkParamsStore((s) => s.setDragOrientation);
   const setRequestTimeoutMs = useIkParamsStore((s) => s.setRequestTimeoutMs);
@@ -68,40 +64,6 @@ export const IkDebuggerPanel = ({
       unsubscribeObjects();
     };
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchSolvers = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/ik/solvers`);
-        if (!response.ok) return;
-        const data = (await response.json()) as {
-          solvers?: Array<{ id?: string } | string>;
-        };
-        const serverIds =
-          data?.solvers
-            ?.map((entry) => (typeof entry === "string" ? entry : entry?.id))
-            .filter((id): id is string => typeof id === "string") ?? [];
-        const nextIds: string[] = ["pyroki-http", ...serverIds];
-        const unique = Array.from(new Set(nextIds));
-        const knownIds = new Set(IK_SOLVER_DEFS.map((solver) => solver.id));
-        const filtered = unique.filter((id): id is IkSolverId =>
-          knownIds.has(id as IkSolverId)
-        );
-        const localIds: IkSolverId[] = isIkfastAvailable() ? ["ikfast-wasm"] : [];
-        const merged = Array.from(new Set<IkSolverId>(["pyroki-http", ...filtered, ...localIds]));
-        if (!cancelled) {
-          setAvailableSolverIds(merged);
-        }
-      } catch {
-        // Ignore autodetect failures.
-      }
-    };
-    void fetchSolvers();
-    return () => {
-      cancelled = true;
-    };
-  }, [setAvailableSolverIds]);
 
   useEffect(() => {
     let raf = 0;
@@ -147,12 +109,12 @@ export const IkDebuggerPanel = ({
       ];
     }
 
-    const radius = selectedTarget.orbitRadius ?? IK_ORBIT_DEFAULTS.radius;
-    const inclination = selectedTarget.orbitInclination ?? IK_ORBIT_DEFAULTS.inclinationDeg;
-    const basePhase = selectedTarget.orbitPhase ?? IK_ORBIT_DEFAULTS.phaseDeg;
+    const radius = selectedTarget.orbitRadius ?? orbitDefaults.radius;
+    const inclination = selectedTarget.orbitInclination ?? orbitDefaults.inclinationDeg;
+    const basePhase = selectedTarget.orbitPhase ?? orbitDefaults.phaseDeg;
     const secondaryOffset =
       selectedTarget.orbitTargetPoint === "secondary"
-        ? selectedTarget.orbitSecondaryOffset ?? IK_ORBIT_DEFAULTS.secondaryOffsetDeg
+        ? selectedTarget.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg
         : 0;
 
     const phase = basePhase + secondaryOffset;
@@ -169,25 +131,30 @@ export const IkDebuggerPanel = ({
       selectedTarget.position.y + yAdjusted,
       selectedTarget.position.z + z,
     ] as [number, number, number];
-  }, [selectedTarget]);
-
-  const solverLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    IK_SOLVER_DEFS.forEach((solver) => labels.set(solver.id, solver.label));
-    return labels;
-  }, []);
+  }, [orbitDefaults, selectedTarget]);
 
   const solverOptions = useMemo(() => {
-    const ids = new Set<IkSolverId>(availableSolverIds);
-    ids.add(selectedSolverId);
-    const ordered = Array.from(ids);
-    ordered.sort((a, b) => (a === "pyroki-http" ? -1 : b === "pyroki-http" ? 1 : 0));
-    return ordered.map((id) => ({
-      id,
-      label: solverLabels.get(id) ?? id,
-      unavailable: !availableSolverIds.includes(id),
+    const byId = new Map<IkSolverId, IkSolverMeta>();
+    availableSolvers.forEach((solver) => {
+      byId.set(solver.id, solver);
+    });
+    if (!byId.has(selectedSolverId)) {
+      byId.set(selectedSolverId, {
+        id: selectedSolverId,
+        label: selectedSolverId,
+        source: "local",
+      });
+    }
+    const ordered = Array.from(byId.values()).sort((a, b) =>
+      a.id === "pyroki-http" ? -1 : b.id === "pyroki-http" ? 1 : 0
+    );
+    const availableIds = new Set(availableSolvers.map((solver) => solver.id));
+    return ordered.map((solver) => ({
+      id: solver.id,
+      label: solver.label ?? solver.id,
+      unavailable: !availableIds.has(solver.id),
     }));
-  }, [availableSolverIds, selectedSolverId, solverLabels]);
+  }, [availableSolvers, selectedSolverId]);
 
   const orientationOptions = useMemo(
     () => [
