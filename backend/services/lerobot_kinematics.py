@@ -23,7 +23,7 @@ class PlacoRobotEntry:
     robot: Any
     solver: Any
     joint_names: List[str]
-    joints_task: Any
+    joints_task: Any | None
     task_cache: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -122,8 +122,10 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
         else:
             solver.enable_velocity_limits(False)
         joint_names = list(robot.joint_names())
-        joints_task = solver.add_joints_task()
-        joints_task.configure("posture", "soft", float(tuning.posture_weight))
+        joints_task = None
+        if float(tuning.posture_weight) > 0.0:
+            joints_task = solver.add_joints_task()
+            joints_task.configure("posture", "soft", float(tuning.posture_weight))
     except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Failed to build Placo robot: {exc}"
@@ -201,7 +203,9 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
             float(tuning.position_weight),
             float(tuning.orientation_weight) if has_orientation else 0.0,
         )
-        entry.joints_task.set_joints(seed_map)
+        if entry.joints_task is not None:
+            joint_seed = [seed_map.get(name, 0.0) for name in entry.joint_names]
+            entry.joints_task.set_joints(joint_seed)
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Placo IK setup failed: {exc}"

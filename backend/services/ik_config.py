@@ -44,14 +44,14 @@ _DEFAULT_SOLVER_TUNING = {
         max_blend_delta=0.6,
     ),
     "lerobot-placo": IkSolverTuning(
-        position_weight=100.0,
-        orientation_weight=0.5,
-        posture_weight=0.15,
+        position_weight=1.0,
+        orientation_weight=0.01,
+        posture_weight=0.0,
         velocity_dt=0.0,
-        limit_weight=1.0,
-        smooth_alpha=0.2,
-        max_step_delta=0.12,
-        max_blend_delta=0.4,
+        limit_weight=0.0,
+        smooth_alpha=0.25,
+        max_step_delta=0.2,
+        max_blend_delta=0.6,
     ),
 }
 

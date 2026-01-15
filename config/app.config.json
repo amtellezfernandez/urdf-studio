@@ -47,14 +47,14 @@
         "maxBlendDelta": 0.6
       },
       "lerobot-placo": {
-        "positionWeight": 100,
-        "orientationWeight": 0.5,
-        "postureWeight": 0.15,
+        "positionWeight": 1,
+        "orientationWeight": 0.01,
+        "postureWeight": 0,
         "velocityDt": 0,
-        "limitWeight": 1,
-        "smoothAlpha": 0.2,
-        "maxStepDelta": 0.12,
-        "maxBlendDelta": 0.4
+        "limitWeight": 0,
+        "smoothAlpha": 0.25,
+        "maxStepDelta": 0.2,
+        "maxBlendDelta": 0.6
       }
     }
   },
