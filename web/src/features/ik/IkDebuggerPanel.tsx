@@ -2,11 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
+import { NumberInput } from "@/shared/ui/number-input";
+import { API_BASE_URL } from "@/shared/config/api";
 import { useObjectStore } from "@/features/objects";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 import { FkComparisonPanel } from "@/features/ik/FkComparisonPanel";
 import { IK_ORBIT_DEFAULTS } from "@/features/viewer/config";
-import { DEFAULT_IK_SOLVER_CHAIN } from "@/features/ik/registry";
+import { IK_SOLVER_DEFS } from "@/features/ik/registry";
+import type { IkSolverId } from "@/features/ik/types";
+import { isIkfastAvailable } from "@/features/ik/ikfastSolver";
+import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
+import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 
 interface IkDebuggerPanelProps {
   urdfContent?: string | null;
@@ -35,6 +41,20 @@ export const IkDebuggerPanel = ({
   const [debugSnapshot, setDebugSnapshot] = useState(debugRef.current);
   const [objectsSnapshot, setObjectsSnapshot] = useState(objectsRef.current);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
+  const availableSolverIds = useIkSolverStore((s) => s.availableSolverIds);
+  const setSelectedSolverId = useIkSolverStore((s) => s.setSelectedSolverId);
+  const setAvailableSolverIds = useIkSolverStore((s) => s.setAvailableSolverIds);
+  const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
+  const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
+  const requestTimeoutMs = useIkParamsStore((s) => s.requestTimeoutMs);
+  const dragTimeoutMs = useIkParamsStore((s) => s.dragTimeoutMs);
+  const orbitTimeoutMs = useIkParamsStore((s) => s.orbitTimeoutMs);
+  const setClickOrientation = useIkParamsStore((s) => s.setClickOrientation);
+  const setDragOrientation = useIkParamsStore((s) => s.setDragOrientation);
+  const setRequestTimeoutMs = useIkParamsStore((s) => s.setRequestTimeoutMs);
+  const setDragTimeoutMs = useIkParamsStore((s) => s.setDragTimeoutMs);
+  const setOrbitTimeoutMs = useIkParamsStore((s) => s.setOrbitTimeoutMs);
 
   useEffect(() => {
     const unsubscribeDebug = useIkDebugStore.subscribe((state) => {
@@ -48,6 +68,40 @@ export const IkDebuggerPanel = ({
       unsubscribeObjects();
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSolvers = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/ik/solvers`);
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          solvers?: Array<{ id?: string } | string>;
+        };
+        const serverIds =
+          data?.solvers
+            ?.map((entry) => (typeof entry === "string" ? entry : entry?.id))
+            .filter((id): id is string => typeof id === "string") ?? [];
+        const nextIds: string[] = ["pyroki-http", ...serverIds];
+        const unique = Array.from(new Set(nextIds));
+        const knownIds = new Set(IK_SOLVER_DEFS.map((solver) => solver.id));
+        const filtered = unique.filter((id): id is IkSolverId =>
+          knownIds.has(id as IkSolverId)
+        );
+        const localIds: IkSolverId[] = isIkfastAvailable() ? ["ikfast-wasm"] : [];
+        const merged = Array.from(new Set<IkSolverId>(["pyroki-http", ...filtered, ...localIds]));
+        if (!cancelled) {
+          setAvailableSolverIds(merged);
+        }
+      } catch {
+        // Ignore autodetect failures.
+      }
+    };
+    void fetchSolvers();
+    return () => {
+      cancelled = true;
+    };
+  }, [setAvailableSolverIds]);
 
   useEffect(() => {
     let raf = 0;
@@ -117,10 +171,35 @@ export const IkDebuggerPanel = ({
     ] as [number, number, number];
   }, [selectedTarget]);
 
-  const solverLabel = useMemo(
-    () => `auto (${DEFAULT_IK_SOLVER_CHAIN.join(", ")})`,
+  const solverLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    IK_SOLVER_DEFS.forEach((solver) => labels.set(solver.id, solver.label));
+    return labels;
+  }, []);
+
+  const solverOptions = useMemo(() => {
+    const ids = new Set<IkSolverId>(availableSolverIds);
+    ids.add(selectedSolverId);
+    const ordered = Array.from(ids);
+    ordered.sort((a, b) => (a === "pyroki-http" ? -1 : b === "pyroki-http" ? 1 : 0));
+    return ordered.map((id) => ({
+      id,
+      label: solverLabels.get(id) ?? id,
+      unavailable: !availableSolverIds.includes(id),
+    }));
+  }, [availableSolverIds, selectedSolverId, solverLabels]);
+
+  const orientationOptions = useMemo(
+    () => [
+      { id: "auto", label: "Auto" },
+      { id: "prefer", label: "Prefer" },
+      { id: "optional", label: "Optional" },
+      { id: "ignore", label: "Ignore" },
+      { id: "required", label: "Required" },
+    ],
     []
   );
+
 
   const bboxSummary = useMemo(() => {
     if (!robotBoundingBox || robotBoundingBox.isEmpty()) return null;
@@ -161,7 +240,20 @@ export const IkDebuggerPanel = ({
             </span>
           </BlenderPropertyRow>
           <BlenderPropertyRow label="Solver">
-            <span className="text-[10px] text-foreground">{solverLabel}</span>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedSolverId}
+                onChange={(event) => setSelectedSolverId(event.target.value as typeof selectedSolverId)}
+                className="h-5 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
+              >
+                {solverOptions.map((option) => (
+                  <option key={option.id} value={option.id} disabled={option.unavailable}>
+                    {option.label}
+                    {option.unavailable ? " (unavailable)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
           </BlenderPropertyRow>
           <BlenderPropertyRow label="Target">
             <span className="text-[10px] text-foreground">
@@ -264,6 +356,73 @@ export const IkDebuggerPanel = ({
                   : "expected"
                 : "-"}
             </span>
+          </BlenderPropertyRow>
+        </div>
+      </BlenderPanel>
+
+      <BlenderPanel title="Parameters" defaultOpen={false}>
+        <div className="space-y-0.5">
+          <BlenderPropertyRow label="Click orient">
+            <select
+              value={clickOrientation}
+              onChange={(event) => setClickOrientation(event.target.value as typeof clickOrientation)}
+              className="h-5 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
+            >
+              {orientationOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Drag orient">
+            <select
+              value={dragOrientation}
+              onChange={(event) => setDragOrientation(event.target.value as typeof dragOrientation)}
+              className="h-5 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
+            >
+              {orientationOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Solve ms">
+            <div className="w-24">
+              <NumberInput
+                compact
+                min={50}
+                max={10000}
+                step={50}
+                value={requestTimeoutMs}
+                onValueChange={setRequestTimeoutMs}
+              />
+            </div>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Drag ms">
+            <div className="w-24">
+              <NumberInput
+                compact
+                min={50}
+                max={10000}
+                step={50}
+                value={dragTimeoutMs}
+                onValueChange={setDragTimeoutMs}
+              />
+            </div>
+          </BlenderPropertyRow>
+          <BlenderPropertyRow label="Orbit ms">
+            <div className="w-24">
+              <NumberInput
+                compact
+                min={50}
+                max={10000}
+                step={50}
+                value={orbitTimeoutMs}
+                onValueChange={setOrbitTimeoutMs}
+              />
+            </div>
           </BlenderPropertyRow>
         </div>
       </BlenderPanel>

@@ -60,6 +60,7 @@ export const runtimeConfig = {
     webPort: readNumber("URDF_RERUN_WEB_PORT", getConfigValue(fileConfig, ["rerun", "webPort"], 9090)),
     wsPort: readNumber("URDF_RERUN_WS_PORT", getConfigValue(fileConfig, ["rerun", "wsPort"], 9876)),
   },
+  ik: getConfigValue(fileConfig, ["ik"], {}),
 };
 
 export const runtimeUrls = {

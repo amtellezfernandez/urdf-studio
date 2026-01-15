@@ -1,5 +1,6 @@
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import type { IkSolveRequest, IkSolveResponse, IkSolveStrategy } from "./types";
+import { solveWithIkfast } from "./ikfastSolver";
 
 type SolveMessage = {
   type: "solve";
@@ -94,6 +95,9 @@ const solveWithStrategy = async (
 ) => {
   if (strategy.solverId === "pyroki-http") {
     return solveWithPyroki(request, strategy, remainingMs);
+  }
+  if (strategy.solverId === "ikfast-wasm") {
+    return solveWithIkfast(request.payload, strategy, remainingMs);
   }
 
   return { ok: false, error: `Unknown solver: ${strategy.solverId}`, status: "solver_error" as const };

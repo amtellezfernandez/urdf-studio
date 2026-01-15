@@ -1,3 +1,5 @@
+import { IK_RUNTIME_CONFIG } from "@/shared/config/runtime";
+
 export const IK_DRAG_CONFIG = {
   maxDragSpeed: 1.2,
   minSolveDistance: 0.003,
@@ -16,8 +18,10 @@ export const IK_ORBIT_DEFAULTS = {
   secondaryOffsetDeg: 180,
 };
 
+const ikTimeouts = IK_RUNTIME_CONFIG?.timeouts ?? {};
+
 export const IK_SOLVER_DEFAULTS = {
-  requestTimeoutMs: 1200,
-  dragTimeoutMs: 300,
-  orbitTimeoutMs: 250,
+  requestTimeoutMs: ikTimeouts.requestMs ?? 1200,
+  dragTimeoutMs: ikTimeouts.dragMs ?? 300,
+  orbitTimeoutMs: ikTimeouts.orbitMs ?? 250,
 };

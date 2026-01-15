@@ -14,6 +14,7 @@ const clientConfig = {
   apiBaseUrl: runtimeUrls.apiBaseUrl,
   rerunWebUrl: runtimeUrls.rerunWebUrl,
   rerunWsUrl: runtimeUrls.rerunWsUrl,
+  ik: runtimeConfig.ik,
 };
 
 // https://vitejs.dev/config/

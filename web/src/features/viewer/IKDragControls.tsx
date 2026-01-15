@@ -4,7 +4,7 @@ import { useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import { API_BASE_URL } from "@/shared/config/api";
-import { IK_DRAG_CONFIG, IK_SOLVER_DEFAULTS } from "@/features/viewer/config";
+import { IK_DRAG_CONFIG } from "@/features/viewer/config";
 import { buildIkOrientationPayload } from "@/features/viewer/viewer-helpers";
 import {
   cancelIk,
@@ -12,6 +12,9 @@ import {
   solveIk as solveIkRequest,
 } from "@/features/ik/ikClient";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
+import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
+import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
+import type { OrientationMode } from "@/features/ik/registry";
 
 interface IKDragControlsProps {
   robot: URDFRobot | null; // URDFRobot
@@ -78,6 +81,9 @@ export const IKDragControls = ({
   const baseLinkNameRef = useRef<string | null>(null);
   const clampedRef = useRef(false);
   const setIkDebugState = useIkDebugStore((s) => s.setState);
+  const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
+  const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
+  const dragTimeoutMs = useIkParamsStore((s) => s.dragTimeoutMs);
 
   // Debug initial props
   useEffect(() => {
@@ -272,6 +278,9 @@ export const IKDragControls = ({
       try {
         const orientationPayload = buildIkOrientationPayload(quaternion);
 
+        const orientationMode: OrientationMode =
+          dragOrientation === "auto" ? "prefer" : dragOrientation;
+
         const result = await solveIkRequest({
           requestId,
           apiBaseUrl: API_BASE_URL,
@@ -280,8 +289,9 @@ export const IKDragControls = ({
           targetLink: endEffectorLink,
           targetPosition: [position.x, position.y, position.z],
           orientation: orientationPayload ?? null,
-          orientationMode: "prefer",
-          timeoutMs: IK_SOLVER_DEFAULTS.dragTimeoutMs,
+          orientationMode,
+          timeoutMs: dragTimeoutMs,
+          solverChain: [selectedSolverId],
         });
 
         if (activeRequestIdRef.current !== requestId) {
@@ -369,7 +379,16 @@ export const IKDragControls = ({
         syncTargetToEndEffector();
       }
     },
-    [urdfContent, endEffectorLink, onIkSolved, setIkDebugState, syncTargetToEndEffector]
+    [
+      dragOrientation,
+      dragTimeoutMs,
+      urdfContent,
+      endEffectorLink,
+      onIkSolved,
+      selectedSolverId,
+      setIkDebugState,
+      syncTargetToEndEffector,
+    ]
   );
 
   const updateDragTarget = useCallback(

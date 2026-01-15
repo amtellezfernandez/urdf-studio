@@ -3,8 +3,10 @@ import { ikBroker } from "./ikBroker";
 import {
   DEFAULT_IK_SOLVER_CHAIN,
   buildIkStrategies,
+  getSolverChain,
   type OrientationMode,
 } from "./registry";
+import { solveWithIkfast } from "./ikfastSolver";
 import type {
   IkOrientationPayload,
   IkSolvePayload,
@@ -115,6 +117,27 @@ const solveWithHttp = async (
   }
 };
 
+const solveWithStrategy = async (
+  apiBaseUrl: string,
+  payload: IkSolvePayload,
+  strategy: IkSolveStrategy,
+  timeoutMs: number
+): Promise<IkSolveResponse> => {
+  if (strategy.solverId === "pyroki-http") {
+    return solveWithHttp(apiBaseUrl, payload, strategy, timeoutMs);
+  }
+  if (strategy.solverId === "ikfast-wasm") {
+    const result = await solveWithIkfast(payload, strategy, timeoutMs);
+    return { requestId: "local", ...result };
+  }
+  return {
+    requestId: "local",
+    ok: false,
+    error: `Unknown solver: ${strategy.solverId}`,
+    status: "solver_error",
+  };
+};
+
 const solveInMainThread = async (
   apiBaseUrl: string,
   payload: IkSolvePayload,
@@ -132,7 +155,7 @@ const solveInMainThread = async (
       return { ok: false, error: "IK solve timed out", status: "timeout" };
     }
 
-    const result = await solveWithHttp(apiBaseUrl, payload, strategy, remaining);
+    const result = await solveWithStrategy(apiBaseUrl, payload, strategy, remaining);
     if (result.ok && result.result) {
       return { ok: true, result: result.result };
     }
@@ -159,8 +182,10 @@ export const solveIk = async (request: IkClientRequest): Promise<IkClientResult>
     targetWxyz: request.orientation?.wxyz ?? null,
   };
 
+  const solverChain = request.solverChain ?? getSolverChain(request.apiBaseUrl);
+
   const strategies = buildIkStrategies(
-    request.solverChain ?? DEFAULT_IK_SOLVER_CHAIN,
+    solverChain ?? DEFAULT_IK_SOLVER_CHAIN,
     orientationMode,
     hasOrientation
   );

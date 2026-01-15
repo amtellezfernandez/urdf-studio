@@ -10,10 +10,16 @@ import {
   getLiveRobotJoints,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
-import { IK_ORBIT_DEFAULTS, IK_SOLVER_DEFAULTS } from "@/features/viewer/config";
+import { IK_ORBIT_DEFAULTS } from "@/features/viewer/config";
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { isIkFailure, solveIk } from "@/features/ik/ikClient";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
+import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
+import {
+  useIkParamsStore,
+  type IkOrientationSetting,
+} from "@/features/ik/useIkParamsStore";
+import type { OrientationMode } from "@/features/ik/registry";
 
 type UseIkSolverParams = {
   apiBaseUrl: string;
@@ -49,6 +55,15 @@ export const useIkSolver = ({
   const orbitFollowAbortRef = useRef<boolean>(false);
   const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
   const setIkDebugState = useIkDebugStore((s) => s.setState);
+  const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
+  const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
+  const requestTimeoutMs = useIkParamsStore((s) => s.requestTimeoutMs);
+  const orbitTimeoutMs = useIkParamsStore((s) => s.orbitTimeoutMs);
+
+  const resolveOrientationMode = (
+    setting: IkOrientationSetting,
+    fallback: OrientationMode
+  ): OrientationMode => (setting === "auto" ? fallback : setting);
 
   const ikDragEnabled =
     dragMode === "drag-handle" && !!robot && !!urdfContent && !!endEffectorLink;
@@ -181,10 +196,12 @@ export const useIkSolver = ({
 
       // Use end-effector orientation directly (no transformation needed)
       const orientationPayload = buildIkOrientationPayload(effQuat);
-      // Orientation is optional for orbit points (not center) and point types
-      const orientationOptional =
+      const orientationFallback: OrientationMode =
         (targetObj.ikTargetType === "orbit" && targetObj.orbitTargetPoint !== "center") ||
-        (targetObj.ikTargetType !== "orbit" && targetObj.type === "point");
+        (targetObj.ikTargetType !== "orbit" && targetObj.type === "point")
+          ? "optional"
+          : "prefer";
+      const orientationMode = resolveOrientationMode(clickOrientation, orientationFallback);
 
       setIkDialogOpen(true);
       setIkResult(null);
@@ -205,8 +222,9 @@ export const useIkSolver = ({
           targetLink: endEffectorLink,
           targetPosition,
           orientation: orientationPayload ?? null,
-          orientationMode: orientationOptional ? "optional" : "prefer",
-          timeoutMs: IK_SOLVER_DEFAULTS.requestTimeoutMs,
+          orientationMode,
+          timeoutMs: requestTimeoutMs,
+          solverChain: [selectedSolverId],
         });
 
         if (isIkFailure(result)) {
@@ -230,7 +248,16 @@ export const useIkSolver = ({
         setIsIkRunning(false);
       }
     },
-    [apiBaseUrl, dragMode, endEffectorLink, robot, urdfContent]
+    [
+      apiBaseUrl,
+      clickOrientation,
+      dragMode,
+      endEffectorLink,
+      requestTimeoutMs,
+      robot,
+      selectedSolverId,
+      urdfContent,
+    ]
   );
 
   // Follow orbit incrementally using previous IK solution as seed
@@ -341,7 +368,8 @@ export const useIkSolver = ({
             targetLink: endEffectorLink,
             targetPosition,
             orientationMode: "ignore",
-            timeoutMs: IK_SOLVER_DEFAULTS.orbitTimeoutMs,
+            timeoutMs: orbitTimeoutMs,
+            solverChain: [selectedSolverId],
           });
 
           setIkSolveDurationMs(performance.now() - start);
@@ -385,7 +413,17 @@ export const useIkSolver = ({
       // Start the orbit following
       orbitFollowAnimationRef.current = requestAnimationFrame(stepOrbit);
     },
-    [apiBaseUrl, endEffectorLink, ikResult, onIkApplied, robot, setStoreJointValues, urdfContent]
+    [
+      apiBaseUrl,
+      endEffectorLink,
+      ikResult,
+      onIkApplied,
+      orbitTimeoutMs,
+      robot,
+      selectedSolverId,
+      setStoreJointValues,
+      urdfContent,
+    ]
   );
 
   // Stop orbit following
