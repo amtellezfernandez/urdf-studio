@@ -52,17 +52,18 @@ const parseErrorMessage = async (response: Response) => {
   }
 };
 
-const solveWithHttp = async (
+const solveWithBackend = async (
   apiBaseUrl: string,
   payload: IkSolvePayload,
   strategy: IkSolveStrategy,
-  timeoutMs: number
+  timeoutMs: number,
+  endpoint: "pyroki" | "lerobot"
 ): Promise<IkSolveResponse> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${apiBaseUrl}/pyroki/ik`, {
+    const response = await fetch(`${apiBaseUrl}/${endpoint}/ik`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -124,7 +125,10 @@ const solveWithStrategy = async (
   timeoutMs: number
 ): Promise<IkSolveResponse> => {
   if (strategy.solverId === "pyroki-http") {
-    return solveWithHttp(apiBaseUrl, payload, strategy, timeoutMs);
+    return solveWithBackend(apiBaseUrl, payload, strategy, timeoutMs, "pyroki");
+  }
+  if (strategy.solverId === "lerobot-placo") {
+    return solveWithBackend(apiBaseUrl, payload, strategy, timeoutMs, "lerobot");
   }
   if (strategy.solverId === "ikfast-wasm") {
     const result = await solveWithIkfast(payload, strategy, timeoutMs);

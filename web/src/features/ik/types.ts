@@ -1,6 +1,6 @@
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 
-export type IkSolverId = "pyroki-http" | "ikfast-wasm";
+export type IkSolverId = "pyroki-http" | "lerobot-placo" | "ikfast-wasm";
 
 export type IkOrientationPayload = {
   rotation: number[][];

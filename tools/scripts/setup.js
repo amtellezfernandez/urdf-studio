@@ -285,7 +285,7 @@ function findUv() {
 
 async function checkRerun() {
   log('');
-  logArrow('🔍 Setting up Python environment and Rerun');
+  logArrow('🔍 Setting up Python environment, Rerun, and Placo');
   log('');
 
   const venvPath = join(rootDir, '.venv');
@@ -333,34 +333,67 @@ async function checkRerun() {
       encoding: 'utf-8'
     }).trim();
     logSuccess(`Rerun SDK already installed (version ${version})`);
+  } catch (e) {
+    // Not installed, proceed with installation
+    logInfo('Installing rerun-sdk in virtual environment...');
+    try {
+      execSync(`"${uvPath}" pip install --python ${venvPython} rerun-sdk`, {
+        cwd: rootDir,
+        stdio: 'inherit',
+        shell: true
+      });
+
+      // Verify installation
+      const version = execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, {
+        stdio: 'pipe',
+        encoding: 'utf-8'
+      }).trim();
+      logSuccess(`Rerun SDK installed successfully (version ${version})`);
+      logInfo('   Virtual environment: .venv/');
+    } catch (installError) {
+      log('✗ Failed to install rerun-sdk', colors.yellow);
+      logInfo('   You can try installing manually:');
+      logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 rerun-sdk`);
+      log('');
+      logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+      return false;
+    }
+  }
+  // Check if placo is already installed
+  try {
+    const version = execSync(
+      `${venvPython} -c "import placo; print(getattr(placo, '__version__', 'unknown'))"`,
+      { stdio: 'pipe', encoding: 'utf-8' }
+    ).trim();
+    logSuccess(`Placo already installed (version ${version})`);
     return true;
   } catch (e) {
     // Not installed, proceed with installation
   }
 
-  // Install rerun-sdk in the virtual environment
-  logInfo('Installing rerun-sdk in virtual environment...');
+  // Install placo in the virtual environment
+  logInfo('Installing placo in virtual environment...');
   try {
-    execSync(`"${uvPath}" pip install --python ${venvPython} rerun-sdk`, {
+    execSync(`"${uvPath}" pip install --python ${venvPython} placo`, {
       cwd: rootDir,
       stdio: 'inherit',
       shell: true
     });
 
     // Verify installation
-    const version = execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, {
-      stdio: 'pipe',
-      encoding: 'utf-8'
-    }).trim();
-    logSuccess(`Rerun SDK installed successfully (version ${version})`);
+    const version = execSync(
+      `${venvPython} -c "import placo; print(getattr(placo, '__version__', 'unknown'))"`,
+      { stdio: 'pipe', encoding: 'utf-8' }
+    ).trim();
+    logSuccess(`Placo installed successfully (version ${version})`);
     logInfo('   Virtual environment: .venv/');
     return true;
   } catch (installError) {
-    log('✗ Failed to install rerun-sdk', colors.yellow);
+    log('✗ Failed to install placo', colors.yellow);
     logInfo('   You can try installing manually:');
-    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 rerun-sdk`);
+    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 placo`);
     log('');
-    logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
+    logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Placo, but the LeRobot IK solver will not be available.${colors.reset}`);
     return false;
   }
 }

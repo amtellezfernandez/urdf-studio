@@ -33,11 +33,17 @@ const parseErrorMessage = async (response: Response) => {
   }
 };
 
-const solveWithPyroki = async (
+const solveWithBackend = async (
   request: IkSolveRequest,
   strategy: IkSolveStrategy,
-  remainingMs: number
-): Promise<{ ok: boolean; result?: IkResponsePayload; error?: string; status?: IkSolveResponse["status"] }> => {
+  remainingMs: number,
+  endpoint: "pyroki" | "lerobot"
+): Promise<{
+  ok: boolean;
+  result?: IkResponsePayload;
+  error?: string;
+  status?: IkSolveResponse["status"];
+}> => {
   const controller = new AbortController();
   inFlightControllers.set(request.requestId, controller);
   const timeout = setTimeout(() => controller.abort(), remainingMs);
@@ -53,7 +59,7 @@ const solveWithPyroki = async (
       ignore_orientation: strategy.ignoreOrientation,
     };
 
-    const response = await fetch(`${request.apiBaseUrl}/pyroki/ik`, {
+    const response = await fetch(`${request.apiBaseUrl}/${endpoint}/ik`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -94,7 +100,10 @@ const solveWithStrategy = async (
   remainingMs: number
 ) => {
   if (strategy.solverId === "pyroki-http") {
-    return solveWithPyroki(request, strategy, remainingMs);
+    return solveWithBackend(request, strategy, remainingMs, "pyroki");
+  }
+  if (strategy.solverId === "lerobot-placo") {
+    return solveWithBackend(request, strategy, remainingMs, "lerobot");
   }
   if (strategy.solverId === "ikfast-wasm") {
     return solveWithIkfast(request.payload, strategy, remainingMs);

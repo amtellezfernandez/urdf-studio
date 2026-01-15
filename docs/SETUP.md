@@ -11,7 +11,7 @@ npm run setup
 This will:
 - Show a beautiful banner
 - Install all dependencies
-- Set up Python virtual environment with Rerun SDK
+- Set up Python virtual environment with Rerun SDK and Placo (LeRobot IK)
 - Prompt you to configure HuggingFace authentication (optional)
 - Prompt you to configure GitHub authentication (optional)
 

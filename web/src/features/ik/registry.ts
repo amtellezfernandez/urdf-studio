@@ -19,6 +19,13 @@ export const IK_SOLVER_DEFS: SolverDescriptor[] = [
     requirements: ["Backend"],
   },
   {
+    id: "lerobot-placo",
+    label: "LeRobot (Placo)",
+    description: "Backend IK via Placo (LeRobot).",
+    capabilities: ["Pose"],
+    requirements: ["Backend", "Placo"],
+  },
+  {
     id: "ikfast-wasm",
     label: "IKFast (WASM)",
     description: "Analytic solver adapter (WASM module).",

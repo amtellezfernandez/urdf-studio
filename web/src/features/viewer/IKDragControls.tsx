@@ -279,7 +279,11 @@ export const IKDragControls = ({
         const orientationPayload = buildIkOrientationPayload(quaternion);
 
         const orientationMode: OrientationMode =
-          dragOrientation === "auto" ? "prefer" : dragOrientation;
+          dragOrientation === "auto"
+            ? selectedSolverId === "lerobot-placo"
+              ? "optional"
+              : "prefer"
+            : dragOrientation;
 
         const result = await solveIkRequest({
           requestId,
