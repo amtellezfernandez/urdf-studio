@@ -7,6 +7,7 @@ import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
 import {
   buildIkOrientationPayload,
+  extractLinkPose,
   getLiveRobotJoints,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
@@ -54,6 +55,10 @@ export const useIkSolver = ({
   const orbitFollowAbortRef = useRef<boolean>(false);
   const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
   const lastIkApplyTimeRef = useRef<number | null>(null);
+  const pyrokiWarmupRef = useRef<{ key: string; inFlight: boolean }>({
+    key: "",
+    inFlight: false,
+  });
   const setIkDebugState = useIkDebugStore((s) => s.setState);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
@@ -80,6 +85,54 @@ export const useIkSolver = ({
     lastIkAppliedRef.current = null;
     lastIkApplyTimeRef.current = null;
   }, [urdfContent, endEffectorLink, dragMode]);
+
+  useEffect(() => {
+    if (!robot || !urdfContent || !endEffectorLink) return;
+
+    const pose = extractLinkPose(robot, endEffectorLink);
+    if (!pose) return;
+
+    const warmupKey = `${endEffectorLink}:${urdfContent.length}`;
+    if (pyrokiWarmupRef.current.key === warmupKey) {
+      return;
+    }
+    pyrokiWarmupRef.current = { key: warmupKey, inFlight: true };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    const targetPosition: [number, number, number] = [
+      pose.position[0],
+      pose.position[1],
+      pose.position[2],
+    ];
+
+    fetch(`${apiBaseUrl}/pyroki/ik`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        urdf: urdfContent,
+        joint_values: getLiveRobotJoints(robot, storeJointValues),
+        target_link: endEffectorLink,
+        target_position: targetPosition,
+        target_wxyz: pose.quaternion,
+      }),
+      signal: controller.signal,
+    })
+      .catch(() => {
+        // Ignore warmup failures; this is best-effort to remove first-move lag.
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (pyrokiWarmupRef.current.key === warmupKey) {
+          pyrokiWarmupRef.current.inFlight = false;
+        }
+      });
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [apiBaseUrl, endEffectorLink, robot, storeJointValues, urdfContent]);
 
   useEffect(() => {
     if (dragMode === "drag-handle") {

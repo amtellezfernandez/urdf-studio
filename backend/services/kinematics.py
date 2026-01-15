@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import tempfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
@@ -44,6 +46,37 @@ def _hash_urdf(urdf_xml: str) -> str:
     return hashlib.sha256(urdf_xml.encode("utf-8")).hexdigest()
 
 
+def _strip_visual_collision(urdf_xml: str) -> str:
+    """
+    Strip visuals/collisions to avoid mesh loading overhead for kinematics-only solves.
+    """
+
+    def regex_strip(xml: str) -> str:
+        xml = re.sub(r"<visual\\b[^>]*>.*?</visual>", "", xml, flags=re.DOTALL | re.IGNORECASE)
+        xml = re.sub(r"<collision\\b[^>]*>.*?</collision>", "", xml, flags=re.DOTALL | re.IGNORECASE)
+        xml = re.sub(r"<mesh\\b[^>]*/>", "", xml, flags=re.DOTALL | re.IGNORECASE)
+        xml = re.sub(r"<mesh\\b[^>]*>.*?</mesh>", "", xml, flags=re.DOTALL | re.IGNORECASE)
+        return xml
+
+    try:
+        root = ET.fromstring(urdf_xml)
+    except ET.ParseError:
+        return regex_strip(urdf_xml)
+
+    def tag_name(element: ET.Element) -> str:
+        return element.tag.split("}", 1)[-1]
+
+    for parent in root.iter():
+        for child in list(parent):
+            if tag_name(child) in ("visual", "collision"):
+                parent.remove(child)
+
+    sanitized = ET.tostring(root, encoding="unicode")
+    if "<mesh" in sanitized:
+        sanitized = regex_strip(sanitized)
+    return sanitized
+
+
 def _load_urdf_from_xml(urdf_xml: str) -> yourdfpy.URDF:
     """
     yourdfpy prefers loading from file; write XML to a temp file once.
@@ -64,18 +97,19 @@ def _load_urdf_from_xml(urdf_xml: str) -> yourdfpy.URDF:
 def _get_or_create_robot(urdf_xml: str) -> RobotEntry:
     if not urdf_xml.strip():
         raise HTTPException(status_code=400, detail="URDF content is empty")
-    urdf_hash = _hash_urdf(urdf_xml)
+    sanitized_urdf = _strip_visual_collision(urdf_xml)
+    urdf_hash = _hash_urdf(sanitized_urdf)
     entry = _robot_cache.get(urdf_hash)
     if entry is not None:
         return entry
     try:
-        urdf = _load_urdf_from_xml(urdf_xml)
+        urdf = _load_urdf_from_xml(sanitized_urdf)
         robot = Robot.from_urdf(urdf)
     except Exception as exc:  # defensive; surfaced as HTTP error
         raise HTTPException(
             status_code=400, detail=f"Failed to build PyRoki robot: {exc}"
         ) from exc
-    entry = RobotEntry(urdf_hash=urdf_hash, urdf_xml=urdf_xml, robot=robot)
+    entry = RobotEntry(urdf_hash=urdf_hash, urdf_xml=sanitized_urdf, robot=robot)
     _robot_cache[urdf_hash] = entry
     return entry
 
