@@ -49,9 +49,9 @@ _DEFAULT_SOLVER_TUNING = {
         posture_weight=0.15,
         velocity_dt=0.0,
         limit_weight=1.0,
-        smooth_alpha=0.2,
-        max_step_delta=0.12,
-        max_blend_delta=0.4,
+        smooth_alpha=0.15,
+        max_step_delta=0.05,
+        max_blend_delta=0.2,
     ),
 }
 

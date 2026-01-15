@@ -52,9 +52,9 @@
         "postureWeight": 0.15,
         "velocityDt": 0,
         "limitWeight": 1,
-        "smoothAlpha": 0.2,
-        "maxStepDelta": 0.12,
-        "maxBlendDelta": 0.4
+        "smoothAlpha": 0.15,
+        "maxStepDelta": 0.05,
+        "maxBlendDelta": 0.2
       }
     }
   },
