@@ -47,7 +47,7 @@
         "positionWeight": 100,
         "orientationWeight": 0.5,
         "postureWeight": 0.15,
-        "velocityDt": 0.0166667,
+        "velocityDt": 0,
         "limitWeight": 1
       }
     }

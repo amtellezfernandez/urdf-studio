@@ -44,7 +44,7 @@ _DEFAULT_SOLVER_TUNING = {
         position_weight=100.0,
         orientation_weight=0.5,
         posture_weight=0.15,
-        velocity_dt=1.0 / 60.0,
+        velocity_dt=0.0,
         limit_weight=1.0,
     ),
 }

@@ -112,11 +112,13 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
         robot = placo.RobotWrapper(tmp_path)
         solver = placo.KinematicsSolver(robot)
         solver.mask_fbase(True)
-        solver.enable_joint_limits(True)
-        solver.enable_velocity_limits(True)
         tuning = get_solver_tuning("lerobot-placo")
-        if hasattr(solver, "dt"):
+        enable_joint_limits = float(tuning.limit_weight) > 0.0
+        solver.enable_joint_limits(enable_joint_limits)
+        enable_velocity_limits = float(tuning.velocity_dt) > 0.0
+        if enable_velocity_limits and hasattr(solver, "dt"):
             solver.dt = float(tuning.velocity_dt)
+            solver.enable_velocity_limits(True)
         else:
             solver.enable_velocity_limits(False)
         joint_names = list(robot.joint_names())
