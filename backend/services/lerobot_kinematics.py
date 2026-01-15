@@ -204,8 +204,15 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
             float(tuning.orientation_weight) if has_orientation else 0.0,
         )
         if entry.joints_task is not None:
-            joint_seed = [seed_map.get(name, 0.0) for name in entry.joint_names]
-            entry.joints_task.set_joints(joint_seed)
+            try:
+                entry.joints_task.set_joints(seed_map)
+            except Exception:
+                joint_seed = [seed_map.get(name, 0.0) for name in entry.joint_names]
+                try:
+                    entry.joints_task.set_joints(joint_seed)
+                except Exception:
+                    joint_seed_array = np.array(joint_seed, dtype=np.float64)
+                    entry.joints_task.set_joints(joint_seed_array)
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Placo IK setup failed: {exc}"
