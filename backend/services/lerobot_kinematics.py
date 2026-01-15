@@ -113,6 +113,10 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
         solver.mask_fbase(True)
         solver.enable_joint_limits(True)
         solver.enable_velocity_limits(True)
+        if hasattr(solver, "dt"):
+            solver.dt = 1.0 / 60.0
+        else:
+            solver.enable_velocity_limits(False)
         joint_names = list(robot.joint_names())
         joints_task = solver.add_joints_task()
         joints_task.configure("posture", "soft", 0.05)
