@@ -37,7 +37,6 @@ const {
   ikThrottleMs,
   maxLinkTraversal,
 } = IK_DRAG_CONFIG;
-const STALE_SOLVE_DISTANCE = Math.max(minSolveDistance * 12, 0.05);
 
 export const IKDragControls = ({
   robot,
@@ -84,6 +83,7 @@ export const IKDragControls = ({
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
   const dragTimeoutMs = useIkParamsStore((s) => s.dragTimeoutMs);
+  const lastDebugUpdateRef = useRef(0);
 
   // Debug initial props
   useEffect(() => {
@@ -314,7 +314,6 @@ export const IKDragControls = ({
           });
           pendingTargetRef.current = null;
           queuedTargetRef.current = null;
-          syncTargetToEndEffector();
           return;
         }
 
@@ -333,21 +332,7 @@ export const IKDragControls = ({
           });
           pendingTargetRef.current = null;
           queuedTargetRef.current = null;
-          syncTargetToEndEffector();
           return;
-        }
-
-        if (targetMeshRef.current) {
-          const distanceToCurrent = targetMeshRef.current.position.distanceTo(position);
-          if (distanceToCurrent > STALE_SOLVE_DISTANCE) {
-            setIkDebugState({
-              status: "success",
-              error: null,
-              durationMs: performance.now() - start,
-              diagnostics: result.result.diagnostics ?? null,
-            });
-            return;
-          }
         }
 
         onIkSolved(result.result.solution);
@@ -376,7 +361,6 @@ export const IKDragControls = ({
         });
         pendingTargetRef.current = null;
         queuedTargetRef.current = null;
-        syncTargetToEndEffector();
       }
     },
     [
@@ -387,7 +371,6 @@ export const IKDragControls = ({
       onIkSolved,
       selectedSolverId,
       setIkDebugState,
-      syncTargetToEndEffector,
     ]
   );
 
@@ -637,6 +620,20 @@ export const IKDragControls = ({
           lastSubmittedTargetRef.current = new THREE.Vector3();
         }
         lastSubmittedTargetRef.current.copy(currentPosition);
+
+        const now = performance.now();
+        if (now - lastDebugUpdateRef.current > 50) {
+          lastDebugUpdateRef.current = now;
+          setIkDebugState({
+            lastTargetPosition: [currentPosition.x, currentPosition.y, currentPosition.z],
+            lastTargetQuaternion: [
+              targetMeshRef.current.quaternion.w,
+              targetMeshRef.current.quaternion.x,
+              targetMeshRef.current.quaternion.y,
+              targetMeshRef.current.quaternion.z,
+            ],
+          });
+        }
       }
     }
 
@@ -655,7 +652,6 @@ export const IKDragControls = ({
     queuedTargetRef.current = null;
     isSolvingRef.current = true;
     lastIkCallRef.current = now;
-
     runIkSolve(position.clone(), quaternion.clone())
       .catch(() => {
         /* errors handled inside solveIk */

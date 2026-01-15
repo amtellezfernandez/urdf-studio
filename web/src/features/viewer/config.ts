@@ -7,7 +7,7 @@ export const IK_DRAG_CONFIG = {
   springDamping: 12,
   snapDistance: 0.003,
   reachMargin: 1.25,
-  ikThrottleMs: 60,
+  ikThrottleMs: 40,
   maxLinkTraversal: 200,
 };
 

@@ -1378,7 +1378,12 @@ export const Viewer3D = ({
   useOrbitControlsBindings({ controlsRef, robot });
   
   useRobotCameraCentering({ robot, controlsRef });
-  useRobotBoundingBoxSync({ robot, onRobotBoundingBoxChange, onRobotLoaded });
+  useRobotBoundingBoxSync({
+    robot,
+    onRobotBoundingBoxChange,
+    onRobotLoaded,
+    isDragging: isDraggingJoint || isIkHandleDragging,
+  });
   const { resetPose } = useRobotJointSync({
     robot,
     jointValues,
