@@ -35,6 +35,9 @@ class IkSolverTuning(BaseModel):
     posture_weight: float
     velocity_dt: float
     limit_weight: float
+    smooth_alpha: float
+    max_step_delta: float
+    max_blend_delta: float
 
 
 class IkConfigResponse(BaseModel):

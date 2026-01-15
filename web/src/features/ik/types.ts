@@ -78,6 +78,9 @@ export type IkConfigResponse = {
       posture_weight?: number;
       velocity_dt?: number;
       limit_weight?: number;
+      smooth_alpha?: number;
+      max_step_delta?: number;
+      max_blend_delta?: number;
     }
   >;
 };

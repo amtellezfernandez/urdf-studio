@@ -11,6 +11,9 @@ const mapSolverTuning = (tuning?: IkConfigResponse["solver_tuning"]) => {
     postureWeight: number;
     velocityDt: number;
     limitWeight: number;
+    smoothAlpha: number;
+    maxStepDelta: number;
+    maxBlendDelta: number;
   }> = {};
   Object.entries(tuning).forEach(([key, value]) => {
     if (!value) return;
@@ -20,6 +23,9 @@ const mapSolverTuning = (tuning?: IkConfigResponse["solver_tuning"]) => {
       postureWeight: value.posture_weight ?? 0,
       velocityDt: value.velocity_dt ?? 0,
       limitWeight: value.limit_weight ?? 0,
+      smoothAlpha: value.smooth_alpha ?? 0,
+      maxStepDelta: value.max_step_delta ?? 0,
+      maxBlendDelta: value.max_blend_delta ?? 0,
     };
   });
   return mapped;

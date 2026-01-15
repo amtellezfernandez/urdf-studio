@@ -41,14 +41,20 @@
         "orientationWeight": 1,
         "postureWeight": 0,
         "velocityDt": 0.0166667,
-        "limitWeight": 50
+        "limitWeight": 50,
+        "smoothAlpha": 0.3,
+        "maxStepDelta": 0.2,
+        "maxBlendDelta": 0.6
       },
       "lerobot-placo": {
         "positionWeight": 100,
         "orientationWeight": 0.5,
         "postureWeight": 0.15,
         "velocityDt": 0,
-        "limitWeight": 1
+        "limitWeight": 1,
+        "smoothAlpha": 0.2,
+        "maxStepDelta": 0.12,
+        "maxBlendDelta": 0.4
       }
     }
   },

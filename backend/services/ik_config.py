@@ -39,6 +39,9 @@ _DEFAULT_SOLVER_TUNING = {
         posture_weight=0.0,
         velocity_dt=1.0 / 60.0,
         limit_weight=50.0,
+        smooth_alpha=0.3,
+        max_step_delta=0.2,
+        max_blend_delta=0.6,
     ),
     "lerobot-placo": IkSolverTuning(
         position_weight=100.0,
@@ -46,6 +49,9 @@ _DEFAULT_SOLVER_TUNING = {
         posture_weight=0.15,
         velocity_dt=0.0,
         limit_weight=1.0,
+        smooth_alpha=0.2,
+        max_step_delta=0.12,
+        max_blend_delta=0.4,
     ),
 }
 
@@ -194,6 +200,39 @@ def _apply_config_overrides_solver(
                 ),
             )
         ),
+        smooth_alpha=float(
+            get_config_value(
+                config,
+                ["ik", "solverTuning", solver_key_alt, "smoothAlpha"],
+                get_config_value(
+                    config,
+                    ["ik", "solverTuning", solver_key, "smoothAlpha"],
+                    base.smooth_alpha,
+                ),
+            )
+        ),
+        max_step_delta=float(
+            get_config_value(
+                config,
+                ["ik", "solverTuning", solver_key_alt, "maxStepDelta"],
+                get_config_value(
+                    config,
+                    ["ik", "solverTuning", solver_key, "maxStepDelta"],
+                    base.max_step_delta,
+                ),
+            )
+        ),
+        max_blend_delta=float(
+            get_config_value(
+                config,
+                ["ik", "solverTuning", solver_key_alt, "maxBlendDelta"],
+                get_config_value(
+                    config,
+                    ["ik", "solverTuning", solver_key, "maxBlendDelta"],
+                    base.max_blend_delta,
+                ),
+            )
+        ),
     )
 
 
@@ -243,6 +282,9 @@ def _apply_env_overrides_solver(
         ),
         velocity_dt=_read_float(f"URDF_IK_{prefix}_VELOCITY_DT", base.velocity_dt),
         limit_weight=_read_float(f"URDF_IK_{prefix}_LIMIT_WEIGHT", base.limit_weight),
+        smooth_alpha=_read_float(f"URDF_IK_{prefix}_SMOOTH_ALPHA", base.smooth_alpha),
+        max_step_delta=_read_float(f"URDF_IK_{prefix}_MAX_STEP_DELTA", base.max_step_delta),
+        max_blend_delta=_read_float(f"URDF_IK_{prefix}_MAX_BLEND_DELTA", base.max_blend_delta),
     )
 
 

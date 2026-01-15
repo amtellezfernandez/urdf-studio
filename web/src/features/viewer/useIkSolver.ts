@@ -59,6 +59,7 @@ export const useIkSolver = ({
   const requestTimeoutMs = useIkParamsStore((s) => s.requestTimeoutMs);
   const orbitTimeoutMs = useIkParamsStore((s) => s.orbitTimeoutMs);
   const orbitDefaults = useIkParamsStore((s) => s.orbitDefaults);
+  const solverTuning = useIkParamsStore((s) => s.solverTuning);
 
   const resolveOrientationMode = (
     setting: IkOrientationSetting,
@@ -449,10 +450,15 @@ export const useIkSolver = ({
 
   const handleIkDragSolved = useCallback(
     (solution: Record<string, number>) => {
-      const isPlaco = selectedSolverId === "lerobot-placo";
-      const SMOOTH_ALPHA = isPlaco ? 0.2 : 0.35; // blend factor to damp sudden IK jumps
-      const MAX_BLEND_DELTA = isPlaco ? 1.5 : 0.5; // rad or meters, skip blending for large jumps
-      const MAX_STEP_DELTA = isPlaco ? 0.15 : 0.5; // per-solve clamp to avoid sudden jumps
+      const tuning = solverTuning[selectedSolverId];
+      const smoothAlphaRaw = tuning?.smoothAlpha ?? (selectedSolverId === "lerobot-placo" ? 0.2 : 0.3);
+      const maxStepDeltaRaw =
+        tuning?.maxStepDelta ?? (selectedSolverId === "lerobot-placo" ? 0.12 : 0.2);
+      const maxBlendDeltaRaw =
+        tuning?.maxBlendDelta ?? (selectedSolverId === "lerobot-placo" ? 0.4 : 0.6);
+      const smoothAlpha = Math.min(Math.max(smoothAlphaRaw, 0), 1);
+      const maxStepDelta = maxStepDeltaRaw > 0 ? maxStepDeltaRaw : Infinity;
+      const maxBlendDelta = maxBlendDeltaRaw > 0 ? maxBlendDeltaRaw : Infinity;
       const previous = lastIkAppliedRef.current;
       const blended: Record<string, number> = {};
 
@@ -466,23 +472,15 @@ export const useIkSolver = ({
           }
         }
 
-        const shouldBlend = isPlaco ? true : maxDelta > 0 && maxDelta < MAX_BLEND_DELTA;
+        const shouldBlend = maxDelta > 0 && maxDelta <= maxBlendDelta;
+        const blendFactor = shouldBlend ? smoothAlpha : 1;
 
         // Blend towards new solution to avoid flicker between IK branches
         for (const [joint, value] of Object.entries(solution)) {
           const prevVal = previous[joint] ?? value;
-          if (isPlaco) {
-            const delta = value - prevVal;
-            const clamped =
-              Math.abs(delta) > MAX_STEP_DELTA
-                ? Math.sign(delta) * MAX_STEP_DELTA
-                : delta;
-            blended[joint] = prevVal + (shouldBlend ? clamped * SMOOTH_ALPHA : clamped);
-          } else {
-            blended[joint] = shouldBlend
-              ? prevVal + (value - prevVal) * SMOOTH_ALPHA
-              : value;
-          }
+          const delta = value - prevVal;
+          const clamped = Math.abs(delta) > maxStepDelta ? Math.sign(delta) * maxStepDelta : delta;
+          blended[joint] = prevVal + clamped * blendFactor;
         }
         // Keep any joints that were in the previous state but not present in the new solution
         for (const [joint, prevVal] of Object.entries(previous)) {
@@ -511,7 +509,7 @@ export const useIkSolver = ({
       setStoreJointValues(blended);
       onIkApplied?.(blended);
     },
-    [onIkApplied, onManualJointChange, robot, selectedSolverId, setStoreJointValues]
+    [onIkApplied, onManualJointChange, robot, selectedSolverId, setStoreJointValues, solverTuning]
   );
 
   const handleIkDragStateChange = useCallback((dragging: boolean) => {

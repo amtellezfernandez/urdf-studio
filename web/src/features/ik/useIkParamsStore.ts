@@ -18,6 +18,9 @@ type IkParamsState = {
     postureWeight: number;
     velocityDt: number;
     limitWeight: number;
+    smoothAlpha: number;
+    maxStepDelta: number;
+    maxBlendDelta: number;
   }>;
   configVersion: string | null;
   setClickOrientation: (mode: IkOrientationSetting) => void;
