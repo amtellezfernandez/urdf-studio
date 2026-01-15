@@ -1,13 +1,13 @@
 import { IK_RUNTIME_CONFIG } from "@/shared/config/runtime";
 
 export const IK_DRAG_CONFIG = {
-  maxDragSpeed: 1.2,
-  minSolveDistance: 0.003,
-  springStrength: 45,
-  springDamping: 12,
-  snapDistance: 0.003,
-  reachMargin: 1.25,
-  ikThrottleMs: 40,
+  maxDragSpeed: 0.8,
+  minSolveDistance: 0.005,
+  springStrength: 30,
+  springDamping: 18,
+  snapDistance: 0.004,
+  reachMargin: 1.2,
+  ikThrottleMs: 60,
   maxLinkTraversal: 200,
 };
 

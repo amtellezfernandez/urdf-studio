@@ -20,13 +20,13 @@
       "orbitMs": 250
     },
     "drag": {
-      "maxDragSpeed": 1.2,
-      "minSolveDistance": 0.003,
-      "springStrength": 45,
-      "springDamping": 12,
-      "snapDistance": 0.003,
-      "reachMargin": 1.25,
-      "ikThrottleMs": 40,
+      "maxDragSpeed": 0.8,
+      "minSolveDistance": 0.005,
+      "springStrength": 30,
+      "springDamping": 18,
+      "snapDistance": 0.004,
+      "reachMargin": 1.2,
+      "ikThrottleMs": 60,
       "maxLinkTraversal": 200
     },
     "orbit": {
@@ -45,10 +45,10 @@
       },
       "lerobot-placo": {
         "positionWeight": 100,
-        "orientationWeight": 1,
-        "postureWeight": 0.05,
+        "orientationWeight": 0.5,
+        "postureWeight": 0.15,
         "velocityDt": 0.0166667,
-        "limitWeight": 0
+        "limitWeight": 1
       }
     }
   }

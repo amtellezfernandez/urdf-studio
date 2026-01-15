@@ -52,13 +52,13 @@ export const useIkConfigSync = () => {
         }
         if (data.drag) {
           nextConfig.dragConfig = {
-            maxDragSpeed: data.drag.max_drag_speed ?? 1.2,
-            minSolveDistance: data.drag.min_solve_distance ?? 0.003,
-            springStrength: data.drag.spring_strength ?? 45,
-            springDamping: data.drag.spring_damping ?? 12,
-            snapDistance: data.drag.snap_distance ?? 0.003,
-            reachMargin: data.drag.reach_margin ?? 1.25,
-            ikThrottleMs: data.drag.ik_throttle_ms ?? 40,
+            maxDragSpeed: data.drag.max_drag_speed ?? 0.8,
+            minSolveDistance: data.drag.min_solve_distance ?? 0.005,
+            springStrength: data.drag.spring_strength ?? 30,
+            springDamping: data.drag.spring_damping ?? 18,
+            snapDistance: data.drag.snap_distance ?? 0.004,
+            reachMargin: data.drag.reach_margin ?? 1.2,
+            ikThrottleMs: data.drag.ik_throttle_ms ?? 60,
             maxLinkTraversal: data.drag.max_link_traversal ?? 200,
           };
         }

@@ -16,13 +16,13 @@ IK_CONFIG_VERSION = "1"
 
 _DEFAULT_TIMEOUTS = IkTimeouts(request_ms=1200, drag_ms=300, orbit_ms=250)
 _DEFAULT_DRAG = IkDragConfig(
-    max_drag_speed=1.2,
-    min_solve_distance=0.003,
-    spring_strength=45.0,
-    spring_damping=12.0,
-    snap_distance=0.003,
-    reach_margin=1.25,
-    ik_throttle_ms=40,
+    max_drag_speed=0.8,
+    min_solve_distance=0.005,
+    spring_strength=30.0,
+    spring_damping=18.0,
+    snap_distance=0.004,
+    reach_margin=1.2,
+    ik_throttle_ms=60,
     max_link_traversal=200,
 )
 _DEFAULT_ORBIT = IkOrbitDefaults(
@@ -42,10 +42,10 @@ _DEFAULT_SOLVER_TUNING = {
     ),
     "lerobot-placo": IkSolverTuning(
         position_weight=100.0,
-        orientation_weight=1.0,
-        posture_weight=0.05,
+        orientation_weight=0.5,
+        posture_weight=0.15,
         velocity_dt=1.0 / 60.0,
-        limit_weight=0.0,
+        limit_weight=1.0,
     ),
 }
 
