@@ -518,7 +518,9 @@ export const useIkSolver = ({
       const now = performance.now();
       const lastApply = lastIkApplyTimeRef.current ?? now;
       const dtMs = Math.min(Math.max(now - lastApply, 16), 1000);
-      const stepScale = Math.min(dtMs / 16, 20);
+      const baseScale = Math.min(dtMs / 16, 20);
+      const stepScale =
+        selectedSolverId === "lerobot-placo" ? Math.min(baseScale, 4) : baseScale;
       const maxStepDeltaScaled = Number.isFinite(maxStepDelta)
         ? maxStepDelta * stepScale
         : maxStepDelta;
