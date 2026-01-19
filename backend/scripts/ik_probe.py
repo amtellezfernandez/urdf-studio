@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import numpy as np
 
@@ -83,7 +83,87 @@ def _print_pose(label: str, pos: np.ndarray, rot: np.ndarray) -> None:
     print(f"{label} pos={pos_str} rot_trace={trace:+.4f}")
 
 
-def run_probe(sample_id: str, target_link: str, offset: np.ndarray) -> int:
+def _solve_pyroki_pose(
+    urdf_xml: str,
+    target_link: str,
+    target_pos: np.ndarray,
+    target_quat: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    solution = pyroki_ik(
+        IKRequest(
+            urdf=urdf_xml,
+            joint_values={},
+            target_link=target_link,
+            target_position=target_pos.tolist(),
+            target_wxyz=target_quat.tolist(),
+        )
+    ).solution
+    fk_payload = forward_kinematics(FKRequest(urdf=urdf_xml, joint_values=solution))
+    pos, quat = _find_link_pose(fk_payload, target_link)
+    return pos, _quat_to_matrix(quat)
+
+
+def _solve_placo_pose(
+    urdf_xml: str,
+    target_link: str,
+    target_pos: np.ndarray,
+    target_quat: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    solution = placo_ik(
+        IKRequest(
+            urdf=urdf_xml,
+            joint_values={},
+            target_link=target_link,
+            target_position=target_pos.tolist(),
+            target_wxyz=target_quat.tolist(),
+        )
+    ).solution
+    return _placo_fk(urdf_xml, solution, target_link)
+
+
+def _describe_alignment(offset: np.ndarray, delta: np.ndarray) -> Tuple[float, float, str]:
+    offset_norm = float(np.linalg.norm(offset))
+    delta_norm = float(np.linalg.norm(delta))
+    if offset_norm == 0 or delta_norm == 0:
+        return 0.0, 0.0, "none"
+    cos = float(np.dot(offset, delta) / (offset_norm * delta_norm))
+    ratio = float(delta_norm / offset_norm)
+    axis_idx = int(np.argmax(np.abs(delta)))
+    axis_label = ["x", "y", "z"][axis_idx]
+    axis_sign = "+" if delta[axis_idx] >= 0 else "-"
+    return cos, ratio, f"{axis_sign}{axis_label}"
+
+
+def _print_sweep_results(
+    label: str,
+    base_pos: np.ndarray,
+    offsets: List[Tuple[str, np.ndarray]],
+    solve_fn,
+    target_link: str,
+    target_quat: np.ndarray,
+    urdf_xml: str,
+) -> None:
+    print(f"\n== {label} Sweep ==")
+    for name, offset in offsets:
+        target_pos = base_pos + offset
+        solved_pos, _ = solve_fn(urdf_xml, target_link, target_pos, target_quat)
+        delta = solved_pos - base_pos
+        cos, ratio, axis_hint = _describe_alignment(offset, delta)
+        offset_str = f"[{offset[0]:+.3f}, {offset[1]:+.3f}, {offset[2]:+.3f}]"
+        delta_str = f"[{delta[0]:+.3f}, {delta[1]:+.3f}, {delta[2]:+.3f}]"
+        print(
+            f"{name:<4} offset={offset_str} delta={delta_str} "
+            f"align={cos:+.3f} scale={ratio:.3f} axis={axis_hint}"
+        )
+
+
+def run_probe(
+    sample_id: str,
+    target_link: str,
+    offset: np.ndarray,
+    run_sweep: bool,
+    sweep_step: float,
+) -> int:
     urdf_xml = _load_sample_urdf(sample_id)
 
     fk_payload = forward_kinematics(FKRequest(urdf=urdf_xml, joint_values={}))
@@ -103,21 +183,9 @@ def run_probe(sample_id: str, target_link: str, offset: np.ndarray) -> int:
     print("\n== Target ==")
     _print_pose("target", target_pos, target_rot)
 
-    # PyRoki IK solve for reference
-    pyroki_solution = pyroki_ik(
-        IKRequest(
-            urdf=urdf_xml,
-            joint_values={},
-            target_link=target_link,
-            target_position=target_pos.tolist(),
-            target_wxyz=base_quat.tolist(),
-        )
-    ).solution
-    pyroki_fk_payload = forward_kinematics(
-        FKRequest(urdf=urdf_xml, joint_values=pyroki_solution)
+    pyroki_pos, pyroki_rot = _solve_pyroki_pose(
+        urdf_xml, target_link, target_pos, base_quat
     )
-    pyroki_pos, pyroki_quat = _find_link_pose(pyroki_fk_payload, target_link)
-    pyroki_rot = _quat_to_matrix(pyroki_quat)
     pyroki_pos_err = float(np.linalg.norm(pyroki_pos - target_pos))
     pyroki_rot_err = _rotation_error_deg(target_rot, pyroki_rot)
     print("\n== PyRoki IK result ==")
@@ -125,21 +193,43 @@ def run_probe(sample_id: str, target_link: str, offset: np.ndarray) -> int:
     print(f"pyroki_err pos_err={pyroki_pos_err:.6f} rot_err_deg={pyroki_rot_err:.3f}")
 
     # Placo IK solve
-    placo_solution = placo_ik(
-        IKRequest(
-            urdf=urdf_xml,
-            joint_values={},
-            target_link=target_link,
-            target_position=target_pos.tolist(),
-            target_wxyz=base_quat.tolist(),
-        )
-    ).solution
-    placo_pos, placo_rot = _placo_fk(urdf_xml, placo_solution, target_link)
+    placo_pos, placo_rot = _solve_placo_pose(
+        urdf_xml, target_link, target_pos, base_quat
+    )
     placo_pos_err = float(np.linalg.norm(placo_pos - target_pos))
     placo_rot_err = _rotation_error_deg(target_rot, placo_rot)
     print("\n== Placo IK result ==")
     _print_pose("placo_ik", placo_pos, placo_rot)
     print(f"placo_err pos_err={placo_pos_err:.6f} rot_err_deg={placo_rot_err:.3f}")
+
+    if run_sweep:
+        step = float(sweep_step)
+        offsets = [
+            ("+X", np.array([step, 0.0, 0.0], dtype=np.float64)),
+            ("-X", np.array([-step, 0.0, 0.0], dtype=np.float64)),
+            ("+Y", np.array([0.0, step, 0.0], dtype=np.float64)),
+            ("-Y", np.array([0.0, -step, 0.0], dtype=np.float64)),
+            ("+Z", np.array([0.0, 0.0, step], dtype=np.float64)),
+            ("-Z", np.array([0.0, 0.0, -step], dtype=np.float64)),
+        ]
+        _print_sweep_results(
+            "PyRoki",
+            base_pos,
+            offsets,
+            _solve_pyroki_pose,
+            target_link,
+            base_quat,
+            urdf_xml,
+        )
+        _print_sweep_results(
+            "Placo",
+            base_pos,
+            offsets,
+            _solve_placo_pose,
+            target_link,
+            base_quat,
+            urdf_xml,
+        )
 
     return 0
 
@@ -161,10 +251,27 @@ def main() -> int:
         type=_parse_offset,
         help="Offset from current FK position in meters (x,y,z).",
     )
+    parser.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Run a 6-axis sweep to verify direction alignment.",
+    )
+    parser.add_argument(
+        "--sweep-step",
+        type=float,
+        default=0.05,
+        help="Step size in meters for sweep offsets.",
+    )
     args = parser.parse_args()
 
     try:
-        return run_probe(args.sample, args.link, args.offset)
+        return run_probe(
+            args.sample,
+            args.link,
+            args.offset,
+            args.sweep,
+            args.sweep_step,
+        )
     except Exception as exc:
         print(f"[ik_probe] failed: {exc}", file=sys.stderr)
         return 1

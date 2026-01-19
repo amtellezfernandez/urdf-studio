@@ -181,6 +181,7 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
     seed_map = {name: float(req.joint_values.get(name, 0.0)) for name in entry.joint_names}
     for joint_name, value in seed_map.items():
         robot.set_joint(joint_name, value)
+    robot.update_kinematics()
 
     rotation = (
         np.array(req.target_rotation, dtype=np.float64)
@@ -223,7 +224,7 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
         iterations = max(1, int(tuning.solve_iterations))
         for _ in range(iterations):
             entry.solver.solve(True)
-        robot.update_kinematics()
+            robot.update_kinematics()
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Placo IK solve failed: {exc}"
