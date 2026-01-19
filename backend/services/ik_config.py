@@ -42,6 +42,7 @@ _DEFAULT_SOLVER_TUNING = {
         smooth_alpha=0.3,
         max_step_delta=0.2,
         max_blend_delta=0.6,
+        solve_iterations=1,
     ),
     "lerobot-placo": IkSolverTuning(
         position_weight=100.0,
@@ -52,6 +53,7 @@ _DEFAULT_SOLVER_TUNING = {
         smooth_alpha=0.15,
         max_step_delta=0.05,
         max_blend_delta=0.2,
+        solve_iterations=3,
     ),
 }
 
@@ -233,6 +235,17 @@ def _apply_config_overrides_solver(
                 ),
             )
         ),
+        solve_iterations=int(
+            get_config_value(
+                config,
+                ["ik", "solverTuning", solver_key_alt, "solveIterations"],
+                get_config_value(
+                    config,
+                    ["ik", "solverTuning", solver_key, "solveIterations"],
+                    base.solve_iterations,
+                ),
+            )
+        ),
     )
 
 
@@ -285,6 +298,9 @@ def _apply_env_overrides_solver(
         smooth_alpha=_read_float(f"URDF_IK_{prefix}_SMOOTH_ALPHA", base.smooth_alpha),
         max_step_delta=_read_float(f"URDF_IK_{prefix}_MAX_STEP_DELTA", base.max_step_delta),
         max_blend_delta=_read_float(f"URDF_IK_{prefix}_MAX_BLEND_DELTA", base.max_blend_delta),
+        solve_iterations=_read_int(
+            f"URDF_IK_{prefix}_SOLVE_ITER", base.solve_iterations
+        ),
     )
 
 

@@ -44,7 +44,8 @@
         "limitWeight": 50,
         "smoothAlpha": 0.3,
         "maxStepDelta": 0.2,
-        "maxBlendDelta": 0.6
+        "maxBlendDelta": 0.6,
+        "solveIterations": 1
       },
       "lerobot-placo": {
         "positionWeight": 100,
@@ -54,7 +55,8 @@
         "limitWeight": 1,
         "smoothAlpha": 0.15,
         "maxStepDelta": 0.05,
-        "maxBlendDelta": 0.2
+        "maxBlendDelta": 0.2,
+        "solveIterations": 3
       }
     }
   },

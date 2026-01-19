@@ -81,6 +81,7 @@ export type IkConfigResponse = {
       smooth_alpha?: number;
       max_step_delta?: number;
       max_blend_delta?: number;
+      solve_iterations?: number;
     }
   >;
 };

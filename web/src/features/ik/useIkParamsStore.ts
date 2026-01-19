@@ -21,6 +21,7 @@ type IkParamsState = {
     smoothAlpha: number;
     maxStepDelta: number;
     maxBlendDelta: number;
+    solveIterations: number;
   }>;
   configVersion: string | null;
   setClickOrientation: (mode: IkOrientationSetting) => void;

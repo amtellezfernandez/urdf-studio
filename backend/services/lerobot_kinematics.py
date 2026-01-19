@@ -219,7 +219,10 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
         ) from exc
 
     try:
-        entry.solver.solve(True)
+        tuning = get_solver_tuning("lerobot-placo")
+        iterations = max(1, int(tuning.solve_iterations))
+        for _ in range(iterations):
+            entry.solver.solve(True)
         robot.update_kinematics()
     except Exception as exc:
         raise HTTPException(

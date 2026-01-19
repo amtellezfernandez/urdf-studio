@@ -38,6 +38,7 @@ class IkSolverTuning(BaseModel):
     smooth_alpha: float
     max_step_delta: float
     max_blend_delta: float
+    solve_iterations: int
 
 
 class IkConfigResponse(BaseModel):

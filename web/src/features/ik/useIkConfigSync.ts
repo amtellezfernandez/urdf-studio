@@ -14,6 +14,7 @@ const mapSolverTuning = (tuning?: IkConfigResponse["solver_tuning"]) => {
     smoothAlpha: number;
     maxStepDelta: number;
     maxBlendDelta: number;
+    solveIterations: number;
   }> = {};
   Object.entries(tuning).forEach(([key, value]) => {
     if (!value) return;
@@ -26,6 +27,7 @@ const mapSolverTuning = (tuning?: IkConfigResponse["solver_tuning"]) => {
       smoothAlpha: value.smooth_alpha ?? 0,
       maxStepDelta: value.max_step_delta ?? 0,
       maxBlendDelta: value.max_blend_delta ?? 0,
+      solveIterations: value.solve_iterations ?? 0,
     };
   });
   return mapped;
