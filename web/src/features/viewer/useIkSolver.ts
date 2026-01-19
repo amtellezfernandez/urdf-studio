@@ -106,12 +106,13 @@ export const useIkSolver = ({
       pose.position[2],
     ];
 
+    const warmupJoints = getLiveRobotJoints(robot, useJointStore.getState().jointValues);
     fetch(`${apiBaseUrl}/pyroki/ik`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         urdf: urdfContent,
-        joint_values: getLiveRobotJoints(robot, storeJointValues),
+        joint_values: warmupJoints,
         target_link: endEffectorLink,
         target_position: targetPosition,
         target_wxyz: pose.quaternion,
@@ -132,7 +133,7 @@ export const useIkSolver = ({
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [apiBaseUrl, endEffectorLink, robot, storeJointValues, urdfContent]);
+  }, [apiBaseUrl, endEffectorLink, robot, urdfContent]);
 
   useEffect(() => {
     if (dragMode === "drag-handle") {
