@@ -1208,6 +1208,16 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (!episode || episode.frames.length === 0) return "0.00s";
     
     const totalFrames = episode.frames.length;
+    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
+    const axisJointName =
+      editingJoint ??
+      (selectedJointNames.length > 0 ? selectedJointNames[0] : null);
+    const axisRange = axisJointName ? jointRanges[axisJointName] : undefined;
+    const axisPadding = axisRange
+      ? (axisRange.max - axisRange.min) * 0.1 || 0.1
+      : 0;
+    const axisMin = axisRange ? axisRange.min - axisPadding : undefined;
+    const axisMax = axisRange ? axisRange.max + axisPadding : undefined;
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
     const effectiveSpeed = playbackSpeed || 1.0;
     const frameDuration = totalFrames > 1 
@@ -1291,8 +1301,48 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.fillText("Joint Position", 0, 0);
     ctx.restore();
 
+    if (
+      axisRange &&
+      Number.isFinite(axisMin) &&
+      Number.isFinite(axisMax) &&
+      axisMin !== undefined &&
+      axisMax !== undefined
+    ) {
+      const axisMid = (axisMin + axisMax) / 2;
+      const axisSpan = axisMax - axisMin || 1;
+      const labelX = CANVAS_PADDING - 6;
+      const valueToY = (value: number) =>
+        height - CANVAS_PADDING - graphHeight * ((value - axisMin) / axisSpan);
+      const lineX1 = CANVAS_PADDING;
+      const lineX2 = width - CANVAS_PADDING;
+
+      const drawGuide = (value: number, label: string, color: string) => {
+        const y = valueToY(value);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(lineX1, y);
+        ctx.lineTo(lineX2, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = color;
+        ctx.font = "9px monospace";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, labelX, y);
+      };
+
+      drawGuide(axisMax, "max", "#71717a");
+      drawGuide(axisMid, "mid", "#71717a");
+      drawGuide(axisMin, "min", "#71717a");
+      if (axisMin <= 0 && axisMax >= 0) {
+        drawGuide(0, "0", "#52525b");
+      }
+    }
+
     // Draw joint curves
-    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
     const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
 
     selectedJointNames.forEach((jointName) => {
