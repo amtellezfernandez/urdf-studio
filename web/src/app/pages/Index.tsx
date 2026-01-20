@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 import { useState, useCallback, useMemo, startTransition, useEffect } from "react";
 import { FolderUploadScreen } from "@/features/dataset/FolderUploadScreen";
 import { toAnimationFrames, useDatasetActions } from "@/features/dataset";
+import type { Episode } from "@/features/dataset";
 import { toast } from "sonner";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { useCameraPanels } from "@/features/camera";
@@ -90,6 +91,8 @@ const Index = () => {
     onAutoSelectEndEffector: setEndEffectorLink,
   });
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
+  const [pendingDemoEpisodes, setPendingDemoEpisodes] = useState<Episode[] | null>(null);
+  const [pendingDemoScene, setPendingDemoScene] = useState(false);
   const {
     isPlaying,
     setIsPlaying,
@@ -210,17 +213,50 @@ const Index = () => {
     if (availableJoints.length > 0) return availableJoints;
     const limitNames = Object.keys(jointLimits ?? {});
     if (limitNames.length > 0) return limitNames;
-    return ["joint_1", "joint_2"];
+    return [];
   }, [availableJoints, jointLimits]);
 
+  const resolveParentLinkFromRobot = useCallback(
+    (linkName: string) => {
+      if (!robot) return null;
+      const linkObj =
+        robot.links?.[linkName] ??
+        robot.getObjectByName?.(linkName) ??
+        robot.getObjectByName?.(decodeURIComponent(linkName));
+      if (!linkObj) return null;
+      const linkNames = new Set(Object.keys(robot.links ?? {}));
+      let cursor = linkObj.parent;
+      while (cursor) {
+        if (linkNames.has(cursor.name)) return cursor.name;
+        cursor = cursor.parent;
+      }
+      return null;
+    },
+    [robot]
+  );
+
   const resolveDemoCameraLink = useCallback(() => {
-    if (endEffectorLink) return endEffectorLink;
-    const hint = availableLinks.find((link) =>
-      /(gripper|tool|ee|end_effector)/i.test(link)
+    if (availableLinks.length === 0) return null;
+    const isFrameLike = (name: string) =>
+      /frame|dummy|target|origin|marker|site/i.test(name);
+    const isPreferred = (name: string) => /(gripper|tool|ee|end_effector)/i.test(name);
+
+    if (endEffectorLink) {
+      if (!isFrameLike(endEffectorLink)) return endEffectorLink;
+      const parent = resolveParentLinkFromRobot(endEffectorLink);
+      if (parent) return parent;
+    }
+
+    const preferred = availableLinks.find(
+      (link) => isPreferred(link) && !isFrameLike(link)
     );
-    if (hint) return hint;
-    return availableLinks.length > 0 ? availableLinks[availableLinks.length - 1] : null;
-  }, [availableLinks, endEffectorLink]);
+    if (preferred) return preferred;
+
+    const fallback = availableLinks.find((link) => isPreferred(link));
+    if (fallback) return fallback;
+
+    return availableLinks[availableLinks.length - 1];
+  }, [availableLinks, endEffectorLink, resolveParentLinkFromRobot]);
 
   const prepareDemoScene = useCallback(() => {
     const cameraLink = resolveDemoCameraLink();
@@ -229,13 +265,59 @@ const Index = () => {
         (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
       );
       if (!hasGripperCamera) {
+        let pose = {
+          xyz: [0.02, 0, 0.08] as [number, number, number],
+          rpy: [0, 0, 0] as [number, number, number],
+        };
+        if (robot) {
+          const linkObj =
+            robot.links?.[cameraLink] ??
+            robot.getObjectByName?.(cameraLink) ??
+            robot.getObjectByName?.(decodeURIComponent(cameraLink));
+          if (linkObj) {
+            linkObj.updateMatrixWorld(true);
+            const linkWorld = linkObj.matrixWorld.clone();
+            const linkWorldInverse = linkWorld.clone().invert();
+            const localOffset = new THREE.Vector3(0, 0, 0.08);
+            const worldPos = localOffset.clone().applyMatrix4(linkWorld);
+            const target =
+              robotBoundingBox?.getCenter(new THREE.Vector3()) ??
+              linkObj.getWorldPosition(new THREE.Vector3());
+            const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
+              new THREE.Vector3(0, 1, 0),
+              Math.PI / 2
+            );
+            const correctionInverse = rotationCorrection.clone().invert();
+            const lookAtMatrix = new THREE.Matrix4().lookAt(
+              worldPos,
+              target,
+              new THREE.Vector3(0, 0, 1)
+            );
+            const worldLookQuat = new THREE.Quaternion().setFromRotationMatrix(
+              lookAtMatrix
+            );
+            const worldBaseQuat = worldLookQuat.clone().multiply(correctionInverse);
+            const worldMatrix = new THREE.Matrix4().compose(
+              worldPos,
+              worldBaseQuat,
+              new THREE.Vector3(1, 1, 1)
+            );
+            const localMatrix = linkWorldInverse.multiply(worldMatrix);
+            const localPos = new THREE.Vector3();
+            const localQuat = new THREE.Quaternion();
+            const localScale = new THREE.Vector3();
+            localMatrix.decompose(localPos, localQuat, localScale);
+            const localEuler = new THREE.Euler().setFromQuaternion(localQuat, "ZYX");
+            pose = {
+              xyz: [localPos.x, localPos.y, localPos.z],
+              rpy: [localEuler.x, localEuler.y, localEuler.z],
+            };
+          }
+        }
         addCamera({
           name: "Gripper Top",
           parent_link: cameraLink,
-          pose: {
-            xyz: [0.02, 0, 0.08],
-            rpy: [Math.PI, 0, 0],
-          },
+          pose,
           intrinsics: {
             width: 640,
             height: 480,
@@ -245,7 +327,7 @@ const Index = () => {
       }
     }
 
-    if (objectCount > 0) return;
+    if (objectCount > 0) return Boolean(cameraLink);
 
     const baseCenter = robotBoundingBox
       ? robotBoundingBox.getCenter(new THREE.Vector3())
@@ -309,6 +391,7 @@ const Index = () => {
       trackedJointName: null,
       isIkTarget: false,
     });
+    return Boolean(cameraLink);
   }, [
     addCamera,
     addObject,
@@ -316,6 +399,7 @@ const Index = () => {
     objectCount,
     resolveDemoCameraLink,
     robotBoundingBox,
+    robot,
   ]);
 
   const playDemoEpisode = useCallback(
@@ -331,8 +415,11 @@ const Index = () => {
       const firstEpisode = demoEpisodes[0];
       if (datasetActions?.loadDemoEpisodes) {
         datasetActions.loadDemoEpisodes(demoEpisodes);
+      } else {
+        setPendingDemoEpisodes(demoEpisodes);
       }
-      prepareDemoScene();
+      const didPrepare = prepareDemoScene();
+      setPendingDemoScene(!didPrepare);
       if (!firstEpisode) {
         toast.error("Demo motion has no frames.");
         return;
@@ -438,16 +525,44 @@ const Index = () => {
     }
 
     const jointNames = resolveDemoJointNames();
+    if (jointNames.length === 0) {
+      if (!pendingDemoMotion) {
+        toast.info("Waiting for joints to finish loading...");
+      }
+      setPendingDemoMotion(true);
+      return;
+    }
     playDemoEpisode(jointNames);
-  }, [handleLoadQuickStart, hasLoadedFiles, playDemoEpisode, resolveDemoJointNames]);
+  }, [
+    handleLoadQuickStart,
+    hasLoadedFiles,
+    pendingDemoMotion,
+    playDemoEpisode,
+    resolveDemoJointNames,
+  ]);
 
   useEffect(() => {
     if (!pendingDemoMotion || !hasLoadedFiles) return;
 
     const jointNames = resolveDemoJointNames();
+    if (jointNames.length === 0) return;
     playDemoEpisode(jointNames);
     setPendingDemoMotion(false);
   }, [hasLoadedFiles, pendingDemoMotion, playDemoEpisode, resolveDemoJointNames]);
+
+  useEffect(() => {
+    if (!pendingDemoEpisodes || !datasetActions?.loadDemoEpisodes) return;
+    datasetActions.loadDemoEpisodes(pendingDemoEpisodes);
+    setPendingDemoEpisodes(null);
+  }, [datasetActions, pendingDemoEpisodes]);
+
+  useEffect(() => {
+    if (!pendingDemoScene) return;
+    const didPrepare = prepareDemoScene();
+    if (didPrepare) {
+      setPendingDemoScene(false);
+    }
+  }, [pendingDemoScene, prepareDemoScene]);
 
 
   const {

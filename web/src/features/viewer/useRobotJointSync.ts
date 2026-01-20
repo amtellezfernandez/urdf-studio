@@ -43,8 +43,7 @@ export const useRobotJointSync = ({
         (typeof resolveJointScalarValue(jointObj) === "number" ||
           jointObj.jointType === "fixed") &&
         !j.toLowerCase().includes("imu") &&
-        !j.toLowerCase().includes("site") &&
-        !j.toLowerCase().includes("frame")
+        !j.toLowerCase().includes("site")
       );
     });
     const angles: Record<string, number> = {};
