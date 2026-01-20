@@ -59,6 +59,10 @@ export const useIkSolver = ({
     key: "",
     inFlight: false,
   });
+  const lerobotWarmupRef = useRef<{ key: string; inFlight: boolean }>({
+    key: "",
+    inFlight: false,
+  });
   const setIkDebugState = useIkDebugStore((s) => s.setState);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
@@ -134,6 +138,51 @@ export const useIkSolver = ({
       clearTimeout(timeout);
     };
   }, [apiBaseUrl, endEffectorLink, robot, urdfContent]);
+
+  useEffect(() => {
+    if (!robot || !urdfContent || !endEffectorLink) return;
+    if (selectedSolverId !== "lerobot-placo") return;
+
+    const pose = extractLinkPose(robot, endEffectorLink);
+    if (!pose) return;
+
+    const warmupKey = `lerobot:${endEffectorLink}:${urdfContent.length}`;
+    if (lerobotWarmupRef.current.key === warmupKey) {
+      return;
+    }
+    lerobotWarmupRef.current = { key: warmupKey, inFlight: true };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    const warmupJoints = getLiveRobotJoints(robot, useJointStore.getState().jointValues);
+
+    fetch(`${apiBaseUrl}/lerobot/ik`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        urdf: urdfContent,
+        joint_values: warmupJoints,
+        target_link: endEffectorLink,
+        target_position: pose.position,
+        target_wxyz: pose.quaternion,
+      }),
+      signal: controller.signal,
+    })
+      .catch(() => {
+        // Best-effort warmup for Placo.
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (lerobotWarmupRef.current.key === warmupKey) {
+          lerobotWarmupRef.current.inFlight = false;
+        }
+      });
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [apiBaseUrl, endEffectorLink, robot, selectedSolverId, urdfContent]);
 
   useEffect(() => {
     if (dragMode === "drag-handle") {
