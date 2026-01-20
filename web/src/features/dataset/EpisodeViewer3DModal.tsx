@@ -467,6 +467,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     for (let i = 0; i < episode.frames.length; i++) {
       const original = episode.frames[i];
       const modified = modifiedEpisode.frames[i];
+      if (Math.abs(original.timestamp - modified.timestamp) > 0.5) {
+        return true;
+      }
       const originalJoints = Object.keys(original.jointPositions);
       const modifiedJoints = Object.keys(modified.jointPositions);
       
@@ -1470,18 +1473,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   // Calculate time display
   const calculateTime = useCallback((frame: number): string => {
-    if (!episode || episode.frames.length === 0) return "0.00s";
+    const timeEpisode = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
+    if (!timeEpisode || timeEpisode.frames.length === 0) return "0.00s";
     
-    const totalFrames = episode.frames.length;
-    const resolvedTrimRange = getResolvedTrimRange(totalFrames);
-    const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
+    const totalFrames = timeEpisode.frames.length;
+    const totalDuration =
+      timeEpisode.frames[totalFrames - 1].timestamp - timeEpisode.frames[0].timestamp;
     const effectiveSpeed = playbackSpeed || 1.0;
     const frameDuration = totalFrames > 1 
       ? (totalDuration / (totalFrames - 1)) / effectiveSpeed
       : 0;
     const calculatedTime = frame * frameDuration;
     return `${(calculatedTime / 1000).toFixed(2)}s`;
-  }, [episode, playbackSpeed]);
+  }, [episode, modifiedEpisode, isEditMode, playbackSpeed]);
 
   // Draw canvas
   useLayoutEffect(() => {
@@ -1886,7 +1890,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   if (!episode) return null;
 
   const totalFrames = episode?.frames.length ?? 0;
-  const duration = totalFrames > 0 && episode ? episode.frames[totalFrames - 1].timestamp : 0;
+  const timeEpisode = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
+  const duration =
+    totalFrames > 0 && timeEpisode
+      ? timeEpisode.frames[timeEpisode.frames.length - 1].timestamp
+      : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
   const resolvedTrimRange = getResolvedTrimRange(totalFrames);
