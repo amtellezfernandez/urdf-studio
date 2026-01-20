@@ -50,7 +50,7 @@
       "lerobot-placo": {
         "positionWeight": 100,
         "orientationWeight": 0.5,
-        "postureWeight": 0.15,
+        "postureWeight": 0,
         "velocityDt": 0,
         "limitWeight": 1,
         "smoothAlpha": 0.12,
