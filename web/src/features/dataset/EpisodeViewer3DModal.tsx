@@ -134,6 +134,16 @@ const smoothSeries = (values: number[], windowSize = 5, passes = 2) => {
   return current;
 };
 
+const median = (values: number[]) => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
 // Helper to smooth curve around a point using Catmull-Rom spline
 const smoothCurveAroundPoint = (
   values: number[],
@@ -731,6 +741,56 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     onSetGlobalFrame?.(0);
     toast.success("Trimmed range (all joints)");
   }, [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]);
+
+  const handleAutoTrimRange = useCallback(() => {
+    const targetEpisode = modifiedEpisode ?? episode;
+    if (!isEditMode || !targetEpisode) return;
+    if (jointNames.length === 0 || targetEpisode.frames.length < 2) {
+      toast.error("Not enough frames to auto trim");
+      return;
+    }
+
+    const perFrameDelta: number[] = [];
+    for (let i = 1; i < targetEpisode.frames.length; i += 1) {
+      let maxDelta = 0;
+      const current = targetEpisode.frames[i].jointPositions;
+      const previous = targetEpisode.frames[i - 1].jointPositions;
+      for (const jointName of jointNames) {
+        const nextValue = current[jointName];
+        const prevValue = previous[jointName];
+        if (!Number.isFinite(nextValue) || !Number.isFinite(prevValue)) continue;
+        const delta = Math.abs(nextValue - prevValue);
+        if (delta > maxDelta) maxDelta = delta;
+      }
+      perFrameDelta.push(maxDelta);
+    }
+
+    const baseline = median(perFrameDelta.filter((value) => Number.isFinite(value)));
+    const threshold = Math.max(baseline * 3, 1e-4);
+
+    let first = -1;
+    let last = -1;
+    for (let i = 0; i < perFrameDelta.length; i += 1) {
+      if (perFrameDelta[i] > threshold) {
+        const frameIndex = i + 1;
+        if (first === -1) first = frameIndex;
+        last = frameIndex;
+      }
+    }
+
+    if (first === -1 || last === -1) {
+      toast.error("No movement detected for auto trim");
+      return;
+    }
+
+    const start = Math.max(0, first - 1);
+    const end = Math.min(targetEpisode.frames.length - 1, last + 1);
+    setTrimRange({ start, end });
+    setCurrentFrame(start);
+    preservedFrameRef.current = start;
+    onSetGlobalFrame?.(start);
+    toast.success("Auto range set");
+  }, [isEditMode, modifiedEpisode, episode, jointNames, onSetGlobalFrame]);
 
 
   // Keyboard shortcuts (Blender-like)
@@ -1930,6 +1990,25 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Set In (current frame)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAutoTrimRange();
+                    }}
+                    disabled={totalFrames < 2}
+                  >
+                    <span className="text-xs">Auto</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Auto detect In/Out</p>
                 </TooltipContent>
               </Tooltip>
               <Tooltip delayDuration={0}>
