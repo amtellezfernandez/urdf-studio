@@ -729,7 +729,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setCurrentFrame(0);
     preservedFrameRef.current = 0;
     onSetGlobalFrame?.(0);
-    toast.success("Trimmed to range");
+    toast.success("Trimmed range (all joints)");
   }, [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]);
 
 
@@ -1434,9 +1434,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
       // In edit mode, show non-edited lines in dark grey
       const isEditingThisJoint = isEditMode && editingJoint === jointName;
-      const displayColor = isEditMode 
-        ? (isEditingThisJoint ? color : "#404040") // Dark grey for non-edited
-        : color;
+      const shouldDim = isEditMode && !!editingJoint && editingJoint !== jointName;
+      const displayColor = shouldDim ? "#404040" : color;
 
       ctx.strokeStyle = displayColor;
       ctx.lineWidth = isEditingThisJoint ? 3 : 2; // Thicker line for editing
@@ -1701,6 +1700,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setSelectedPointIndex(null);
     setTangentHandles(new Map());
   }, [selectedJoints]);
+
+  const handleEnterTimelineEdit = useCallback(() => {
+    setIsEditMode(true);
+    setEditingJoint(null);
+    setSelectedPointIndex(null);
+    setDraggingHandle(null);
+    setTangentHandles(new Map());
+  }, []);
 
   if (!open) return null;
 
@@ -2125,6 +2132,16 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 className="w-36 max-h-[200px] overflow-y-auto bg-[#282828] border-[#3d3d3d] p-0.5"
                 align="end"
               >
+                <DropdownMenuItem
+                  onClick={handleEnterTimelineEdit}
+                  className={cn(
+                    "text-[9px] font-mono cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]",
+                    "flex items-center gap-1 px-1.5 py-0.5"
+                  )}
+                >
+                  <span className="flex-1 truncate">Edit Timeline</span>
+                </DropdownMenuItem>
+                <div className="h-px bg-[#3d3d3d] my-0.5" />
                 {jointNames.length === 0 ? (
                   <div className="text-[9px] text-[#9d9d9d] py-1 px-1.5 text-center">
                     No joints
