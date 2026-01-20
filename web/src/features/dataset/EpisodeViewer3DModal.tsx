@@ -134,16 +134,6 @@ const smoothSeries = (values: number[], windowSize = 5, passes = 2) => {
   return current;
 };
 
-const median = (values: number[]) => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-  return sorted[mid];
-};
-
 // Helper to smooth curve around a point using Catmull-Rom spline
 const smoothCurveAroundPoint = (
   values: number[],
@@ -765,16 +755,37 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       perFrameDelta.push(maxDelta);
     }
 
-    const baseline = median(perFrameDelta.filter((value) => Number.isFinite(value)));
-    const threshold = Math.max(baseline * 3, 1e-4);
-
+    const epsilon = 1e-4;
+    const minRun = 2;
+    const isMoving = perFrameDelta.map((delta) => delta > epsilon);
     let first = -1;
     let last = -1;
-    for (let i = 0; i < perFrameDelta.length; i += 1) {
-      if (perFrameDelta[i] > threshold) {
-        const frameIndex = i + 1;
-        if (first === -1) first = frameIndex;
-        last = frameIndex;
+
+    for (let i = 0; i <= isMoving.length - minRun; i += 1) {
+      let run = true;
+      for (let j = 0; j < minRun; j += 1) {
+        if (!isMoving[i + j]) {
+          run = false;
+          break;
+        }
+      }
+      if (run) {
+        first = i + 1;
+        break;
+      }
+    }
+
+    for (let i = isMoving.length - 1; i >= minRun - 1; i -= 1) {
+      let run = true;
+      for (let j = 0; j < minRun; j += 1) {
+        if (!isMoving[i - j]) {
+          run = false;
+          break;
+        }
+      }
+      if (run) {
+        last = i + 1;
+        break;
       }
     }
 
@@ -784,7 +795,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     }
 
     const start = Math.max(0, first - 1);
-    const end = Math.min(targetEpisode.frames.length - 1, last + 1);
+    const end = Math.min(targetEpisode.frames.length - 1, Math.max(first, last) + 1);
     setTrimRange({ start, end });
     setCurrentFrame(start);
     preservedFrameRef.current = start;
