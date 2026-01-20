@@ -797,24 +797,58 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         return;
       }
 
-      const scale = 1 / speed;
-      const baseTime = modifiedEpisode.frames[startIndex].timestamp;
-      const oldEndTime = modifiedEpisode.frames[endIndex].timestamp;
-      const scaledEndTime = baseTime + (oldEndTime - baseTime) * scale;
-      const deltaAfter = scaledEndTime - oldEndTime;
+      const baseFps = recordedFps > 0 ? recordedFps : effectiveFps > 0 ? effectiveFps : 30;
+      const segmentFrames = modifiedEpisode.frames.slice(startIndex, endIndex + 1);
+      const segmentStartTime = segmentFrames[0].timestamp;
+      const segmentTimes = segmentFrames.map((frame) => frame.timestamp - segmentStartTime);
+      const segmentDuration = segmentTimes[segmentTimes.length - 1];
+      const newDuration = segmentDuration / speed;
+      const targetCount = Math.max(2, Math.round((newDuration / 1000) * baseFps) + 1);
+      const lastSegmentIndex = segmentFrames.length - 1;
+      let sourceIndex = 0;
 
-      const nextFrames = modifiedEpisode.frames.map((frame, idx) => {
-        let timestamp = frame.timestamp;
-        if (idx >= startIndex && idx <= endIndex) {
-          timestamp = baseTime + (frame.timestamp - baseTime) * scale;
-        } else if (idx > endIndex) {
-          timestamp = frame.timestamp + deltaAfter;
+      const resampledSegment = Array.from({ length: targetCount }, (_, idx) => {
+        const tNew =
+          targetCount === 1 ? 0 : (newDuration * idx) / (targetCount - 1);
+        const tSrc = Math.min(segmentDuration, tNew * speed);
+
+        while (
+          sourceIndex < lastSegmentIndex - 1 &&
+          segmentTimes[sourceIndex + 1] < tSrc
+        ) {
+          sourceIndex += 1;
         }
+
+        const t0 = segmentTimes[sourceIndex] ?? 0;
+        const t1 = segmentTimes[sourceIndex + 1] ?? t0;
+        const alpha = t1 > t0 ? (tSrc - t0) / (t1 - t0) : 0;
+        const frameA = segmentFrames[sourceIndex];
+        const frameB = segmentFrames[sourceIndex + 1] ?? frameA;
+
+        const jointPositions: Record<string, number> = {};
+        for (const jointName of jointNames) {
+          const v0 = frameA.jointPositions[jointName];
+          const v1 = frameB.jointPositions[jointName] ?? v0;
+          if (!Number.isFinite(v0) || !Number.isFinite(v1)) {
+            jointPositions[jointName] = Number.isFinite(v0) ? v0 : v1 ?? 0;
+          } else {
+            jointPositions[jointName] = v0 + (v1 - v0) * alpha;
+          }
+        }
+
         return {
-          ...frame,
-          timestamp,
+          timestamp: segmentStartTime + tNew,
+          jointPositions,
         };
       });
+
+      const deltaAfter = newDuration - segmentDuration;
+      const before = modifiedEpisode.frames.slice(0, startIndex);
+      const after = modifiedEpisode.frames.slice(endIndex + 1).map((frame) => ({
+        ...frame,
+        timestamp: frame.timestamp + deltaAfter,
+      }));
+      const nextFrames = [...before, ...resampledSegment, ...after];
 
       const lastTimestamp =
         nextFrames[nextFrames.length - 1]?.timestamp ?? modifiedEpisode.frames.at(-1)?.timestamp ?? 0;
@@ -824,6 +858,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         metadata: modifiedEpisode.metadata
           ? {
               ...modifiedEpisode.metadata,
+              fps: baseFps,
               num_frames: nextFrames.length,
               episode_length_sec: lastTimestamp / 1000,
             }
@@ -832,16 +867,26 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
       setModifiedEpisode(nextEpisode);
       pushToHistory(nextEpisode);
+      setTrimRange({ start: null, end: null });
       setCurrentFrame(startIndex);
       preservedFrameRef.current = startIndex;
       onSetGlobalFrame?.(startIndex);
       toast.success(
         resolved
-          ? `Retime ${speed.toFixed(2)}x (range)`
-          : `Retime ${speed.toFixed(2)}x (all)`
+          ? `Speed ${speed.toFixed(2)}x (range)`
+          : `Speed ${speed.toFixed(2)}x (all)`
       );
     },
-    [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]
+    [
+      isEditMode,
+      modifiedEpisode,
+      getResolvedTrimRange,
+      recordedFps,
+      effectiveFps,
+      jointNames,
+      pushToHistory,
+      onSetGlobalFrame,
+    ]
   );
 
   const handleRescaleFps = useCallback(() => {
@@ -2352,7 +2397,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Retime: 2x = faster, 0.5x = slower</p>
+                    <p>Speed: resample to keep FPS while changing duration</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
