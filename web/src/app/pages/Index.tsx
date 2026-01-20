@@ -206,18 +206,35 @@ const Index = () => {
     setJointValues(values);
   }, [setJointValues]);
 
+  const resolveDemoJointNames = useCallback(() => {
+    if (availableJoints.length > 0) return availableJoints;
+    const limitNames = Object.keys(jointLimits ?? {});
+    if (limitNames.length > 0) return limitNames;
+    return ["joint_1", "joint_2"];
+  }, [availableJoints, jointLimits]);
+
+  const resolveDemoCameraLink = useCallback(() => {
+    if (endEffectorLink) return endEffectorLink;
+    const hint = availableLinks.find((link) =>
+      /(gripper|tool|ee|end_effector)/i.test(link)
+    );
+    if (hint) return hint;
+    return availableLinks.length > 0 ? availableLinks[availableLinks.length - 1] : null;
+  }, [availableLinks, endEffectorLink]);
+
   const prepareDemoScene = useCallback(() => {
-    if (endEffectorLink) {
+    const cameraLink = resolveDemoCameraLink();
+    if (cameraLink) {
       const hasGripperCamera = cameras.some(
-        (cam) => cam.parent_link === endEffectorLink && cam.name === "Gripper Top"
+        (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
       );
       if (!hasGripperCamera) {
         addCamera({
           name: "Gripper Top",
-          parent_link: endEffectorLink,
+          parent_link: cameraLink,
           pose: {
-            xyz: [0, 0, 0.06],
-            rpy: [-1.2, 0, 0],
+            xyz: [0.02, 0, 0.08],
+            rpy: [Math.PI, 0, 0],
           },
           intrinsics: {
             width: 640,
@@ -292,7 +309,14 @@ const Index = () => {
       trackedJointName: null,
       isIkTarget: false,
     });
-  }, [addCamera, addObject, cameras, endEffectorLink, objectCount, robotBoundingBox]);
+  }, [
+    addCamera,
+    addObject,
+    cameras,
+    objectCount,
+    resolveDemoCameraLink,
+    robotBoundingBox,
+  ]);
 
   const playDemoEpisode = useCallback(
     (jointNames: string[]) => {
@@ -413,21 +437,17 @@ const Index = () => {
       return;
     }
 
-    const jointNames = availableJoints.length > 0
-      ? availableJoints
-      : ["joint_1", "joint_2"];
+    const jointNames = resolveDemoJointNames();
     playDemoEpisode(jointNames);
-  }, [availableJoints, handleLoadQuickStart, hasLoadedFiles, playDemoEpisode]);
+  }, [handleLoadQuickStart, hasLoadedFiles, playDemoEpisode, resolveDemoJointNames]);
 
   useEffect(() => {
     if (!pendingDemoMotion || !hasLoadedFiles) return;
 
-    const jointNames = availableJoints.length > 0
-      ? availableJoints
-      : ["joint_1", "joint_2"];
+    const jointNames = resolveDemoJointNames();
     playDemoEpisode(jointNames);
     setPendingDemoMotion(false);
-  }, [availableJoints, hasLoadedFiles, pendingDemoMotion, playDemoEpisode]);
+  }, [hasLoadedFiles, pendingDemoMotion, playDemoEpisode, resolveDemoJointNames]);
 
 
   const {
