@@ -63,38 +63,78 @@ export const SIDEBAR_MAX_WIDTH = 320;
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const resolveSmoothingWindowSize = (fps: number) => {
-  if (!Number.isFinite(fps) || fps <= 0) return 5;
-  const target = Math.round(fps * 0.15);
-  const clamped = Math.max(3, Math.min(9, target));
-  return clamped % 2 === 0 ? clamped + 1 : clamped;
+const resolveSmoothingTau = (fps: number) => {
+  if (!Number.isFinite(fps) || fps <= 0) return 0.12;
+  const frameDt = 1 / fps;
+  return clampNumber(frameDt * 3, 0.04, 0.25);
 };
 
-const smoothSeries = (values: number[], windowSize: number, passes = 2) => {
+const median = (values: number[]) => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
+const smoothRecordedJointSeries = (
+  values: number[],
+  timestamps: number[],
+  fps: number,
+  rangeMin: number,
+  rangeMax: number
+) => {
   if (values.length < 3) return values.slice();
-  const size = Math.max(3, windowSize);
-  const radius = Math.floor(size / 2);
-  let current = values.slice();
+  const tau = resolveSmoothingTau(fps);
+  const defaultDt = Number.isFinite(fps) && fps > 0 ? 1 / fps : 1 / 30;
+  const deltas = values.slice(1).map((value, index) => Math.abs(value - values[index]));
+  const medianDelta = median(deltas.filter((delta) => Number.isFinite(delta)));
+  const rangeSpan = Math.abs(rangeMax - rangeMin);
+  const maxStep =
+    medianDelta > 0 ? medianDelta * 3 : rangeSpan > 0 ? rangeSpan * 0.03 : 0;
 
-  for (let pass = 0; pass < passes; pass += 1) {
-    const next = current.map((value, idx) => {
-      if (idx === 0 || idx === current.length - 1) return values[idx];
+  const smoothed = new Array(values.length);
+  smoothed[0] = values[0];
 
-      let sum = 0;
-      let weightSum = 0;
-      for (let offset = -radius; offset <= radius; offset += 1) {
-        const target = idx + offset;
-        if (target < 0 || target >= current.length) continue;
-        const weight = offset === 0 ? 2 : 1;
-        sum += current[target] * weight;
-        weightSum += weight;
+  for (let i = 1; i < values.length; i += 1) {
+    const rawDt = (timestamps[i] - timestamps[i - 1]) / 1000;
+    const dt = Number.isFinite(rawDt) && rawDt > 0 ? rawDt : defaultDt;
+    const alpha = clampNumber(1 - Math.exp(-dt / tau), 0.05, 0.6);
+    let next = smoothed[i - 1] + alpha * (values[i] - smoothed[i - 1]);
+
+    if (maxStep > 0) {
+      const delta = next - smoothed[i - 1];
+      if (Math.abs(delta) > maxStep) {
+        next = smoothed[i - 1] + Math.sign(delta) * maxStep;
       }
-      return weightSum > 0 ? sum / weightSum : value;
-    });
-    current = next;
+    }
+
+    smoothed[i] = next;
   }
 
-  return current;
+  let smoothedMin = smoothed[0];
+  let smoothedMax = smoothed[0];
+  for (let i = 1; i < smoothed.length; i += 1) {
+    smoothedMin = Math.min(smoothedMin, smoothed[i]);
+    smoothedMax = Math.max(smoothedMax, smoothed[i]);
+  }
+
+  let output = smoothed.slice();
+  if (smoothedMax > smoothedMin && rangeMax > rangeMin) {
+    const scale = (rangeMax - rangeMin) / (smoothedMax - smoothedMin);
+    const shift = rangeMin - smoothedMin * scale;
+    const restoreBlend = 0.6;
+    output = smoothed.map((value) => {
+      const restored = value * scale + shift;
+      return value * (1 - restoreBlend) + restored * restoreBlend;
+    });
+  }
+
+  output[0] = values[0];
+  output[output.length - 1] = values[values.length - 1];
+  return output.map((value) => clampNumber(value, rangeMin, rangeMax));
 };
 
 const smoothRecordedFrames = (
@@ -109,9 +149,8 @@ const smoothRecordedFrames = (
     }));
   }
 
-  const maxWindow = frames.length % 2 === 0 ? frames.length - 1 : frames.length;
-  const windowSize = Math.max(3, Math.min(resolveSmoothingWindowSize(fps), maxWindow));
   const smoothedByJoint = new Map<string, number[]>();
+  const timestamps = frames.map((frame) => frame.timestamp);
 
   for (const jointName of jointNames) {
     const values: number[] = [];
@@ -134,13 +173,8 @@ const smoothRecordedFrames = (
       continue;
     }
 
-    const smoothed = smoothSeries(values, windowSize, 2);
-    smoothed[0] = values[0];
-    smoothed[smoothed.length - 1] = values[values.length - 1];
-    smoothedByJoint.set(
-      jointName,
-      smoothed.map((value) => clampNumber(value, min, max))
-    );
+    const smoothed = smoothRecordedJointSeries(values, timestamps, fps, min, max);
+    smoothedByJoint.set(jointName, smoothed);
   }
 
   if (smoothedByJoint.size === 0) {
