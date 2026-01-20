@@ -33,6 +33,8 @@ type EpisodesPanelProps = {
   applyFpsTarget: () => void;
   getEpisodeFps: (episode: Episode) => number;
   fpsTolerance?: number;
+  getEpisodeVelocityStatus: (episode: Episode) => { overCount: number; maxRatio: number };
+  velocityTolerance?: number;
   startRecording: () => void;
   stopRecording: () => void;
   handleFileUpload: (files: FileList | null) => void | Promise<void>;
@@ -67,6 +69,8 @@ export const EpisodesPanel = ({
   applyFpsTarget,
   getEpisodeFps,
   fpsTolerance = 0.5,
+  getEpisodeVelocityStatus,
+  velocityTolerance = 0.05,
   startRecording,
   stopRecording,
   handleFileUpload,
@@ -92,6 +96,10 @@ export const EpisodesPanel = ({
     const fps = getEpisodeFps(episode);
     if (fps <= 0 || fpsTarget <= 0) return count;
     return Math.abs(fps - fpsTarget) > fpsTolerance ? count + 1 : count;
+  }, 0);
+  const velocityMismatchCount = episodes.reduce((count, episode) => {
+    const status = getEpisodeVelocityStatus(episode);
+    return status.overCount > 0 ? count + 1 : count;
   }, 0);
 
   return (
@@ -212,7 +220,15 @@ export const EpisodesPanel = ({
             variant="outline"
             className="text-[9px] px-1.5 py-0 h-4 border-amber-500/40 text-amber-400 bg-amber-500/10"
           >
-            {fpsMismatchCount} mismatch
+            {fpsMismatchCount} fps
+          </Badge>
+        )}
+        {velocityMismatchCount > 0 && (
+          <Badge
+            variant="outline"
+            className="text-[9px] px-1.5 py-0 h-4 border-amber-500/40 text-amber-400 bg-amber-500/10"
+          >
+            {velocityMismatchCount} vel
           </Badge>
         )}
       </div>
@@ -324,6 +340,8 @@ export const EpisodesPanel = ({
                   fpsTarget > 0 &&
                   episodeFps > 0 &&
                   Math.abs(episodeFps - fpsTarget) > fpsTolerance;
+                const velocityStatus = getEpisodeVelocityStatus(episode);
+                const isVelocityMismatch = velocityStatus.overCount > 0;
                 const isPlaying =
                   currentPlayingEpisodeIndex === index && isPlayingAll;
                 const episodeCurrentFrame =
@@ -401,6 +419,18 @@ export const EpisodesPanel = ({
                                 className="text-[9px] px-1 py-0 h-3.5 border-amber-500/40 text-amber-400 bg-amber-500/10"
                               >
                                 fps {episodeFps.toFixed(1)}
+                              </Badge>
+                            </>
+                          )}
+                          {isVelocityMismatch && (
+                            <>
+                              <span className="text-[10px] text-muted-foreground">•</span>
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1 py-0 h-3.5 border-amber-500/40 text-amber-400 bg-amber-500/10"
+                                title={`Velocity limit exceeded on ${velocityStatus.overCount} joint(s)`}
+                              >
+                                vel x{Math.max(1, velocityStatus.maxRatio).toFixed(2)}
                               </Badge>
                             </>
                           )}

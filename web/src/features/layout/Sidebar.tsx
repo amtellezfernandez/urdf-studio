@@ -60,6 +60,7 @@ export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 320;
 const FPS_MISMATCH_TOLERANCE = 0.5;
+const VELOCITY_LIMIT_TOLERANCE = 0.05;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -610,6 +611,65 @@ export const Sidebar = ({
       return nextEpisode;
     },
     [resolveJointNames]
+  );
+
+  const getEpisodeVelocityStatus = useCallback(
+    (episode: Episode) => {
+      if (!jointLimits || episode.frames.length < 2) {
+        return { overCount: 0, maxRatio: 0 };
+      }
+      const velocityLimits = Object.entries(jointLimits)
+        .map(([jointName, info]) => ({
+          jointName,
+          velocity: info.velocity,
+        }))
+        .filter(
+          (entry) =>
+            Number.isFinite(entry.velocity) &&
+            (entry.velocity as number) > 0
+        ) as Array<{ jointName: string; velocity: number }>;
+      if (velocityLimits.length === 0) {
+        return { overCount: 0, maxRatio: 0 };
+      }
+
+      const maxVelocities = new Map<string, number>();
+      velocityLimits.forEach(({ jointName }) => {
+        maxVelocities.set(jointName, 0);
+      });
+
+      for (let i = 1; i < episode.frames.length; i += 1) {
+        const prev = episode.frames[i - 1];
+        const current = episode.frames[i];
+        const dtMs = current.timestamp - prev.timestamp;
+        if (!Number.isFinite(dtMs) || dtMs <= 0) continue;
+        const dt = dtMs / 1000;
+        velocityLimits.forEach(({ jointName }) => {
+          const prevValue = prev.jointPositions[jointName];
+          const currValue = current.jointPositions[jointName];
+          if (!Number.isFinite(prevValue) || !Number.isFinite(currValue)) return;
+          const velocity = Math.abs(currValue - prevValue) / dt;
+          const existing = maxVelocities.get(jointName) ?? 0;
+          if (velocity > existing) {
+            maxVelocities.set(jointName, velocity);
+          }
+        });
+      }
+
+      let overCount = 0;
+      let maxRatio = 0;
+      velocityLimits.forEach(({ jointName, velocity }) => {
+        const observed = maxVelocities.get(jointName) ?? 0;
+        if (velocity <= 0) return;
+        const ratio = observed / velocity;
+        if (ratio > 1 + VELOCITY_LIMIT_TOLERANCE) {
+          overCount += 1;
+          if (ratio > maxRatio) maxRatio = ratio;
+        }
+      });
+
+      return { overCount, maxRatio };
+    },
+    [jointLimits]
   );
 
   const handleEpisodeSave = useCallback(
@@ -3554,6 +3614,8 @@ export const Sidebar = ({
           setFpsTarget={setTargetFps}
           applyFpsTarget={applyTargetFps}
           getEpisodeFps={computeEpisodeFps}
+          getEpisodeVelocityStatus={getEpisodeVelocityStatus}
+          velocityTolerance={VELOCITY_LIMIT_TOLERANCE}
           fpsTolerance={FPS_MISMATCH_TOLERANCE}
           startRecording={startRecording}
           stopRecording={stopRecording}

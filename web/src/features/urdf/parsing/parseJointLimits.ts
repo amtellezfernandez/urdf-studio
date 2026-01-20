@@ -8,6 +8,7 @@ export interface JointLimitInfo {
   type: string; // 'revolute', 'continuous', 'prismatic', 'fixed', etc.
   lower: number | null; // Lower limit if present, null if unlimited
   upper: number | null; // Upper limit if present, null if unlimited
+  velocity?: number | null; // Velocity limit if present
 }
 
 export interface JointLimits {
@@ -50,6 +51,18 @@ export function parseJointLimitsFromURDF(urdfContent: string): JointLimits {
     // Initialize with defaults based on joint type
     let lower: number | null = null;
     let upper: number | null = null;
+    let velocity: number | null = null;
+
+    const limitTag = joint.querySelector("limit");
+    if (limitTag) {
+      const velocityStr = limitTag.getAttribute("velocity");
+      if (velocityStr !== null) {
+        const parsedVelocity = parseFloat(velocityStr);
+        if (!Number.isNaN(parsedVelocity)) {
+          velocity = parsedVelocity;
+        }
+      }
+    }
 
     // Fixed joints can't move
     if (jointType === "fixed") {
@@ -57,6 +70,7 @@ export function parseJointLimitsFromURDF(urdfContent: string): JointLimits {
         type: jointType,
         lower: 0,
         upper: 0,
+        velocity: velocity ?? 0,
       };
       return;
     }
@@ -67,13 +81,13 @@ export function parseJointLimitsFromURDF(urdfContent: string): JointLimits {
         type: jointType,
         lower: null, // Unlimited
         upper: null, // Unlimited
+        velocity,
       };
       return;
     }
 
     // For revolute and prismatic joints, check for <limit> tag
     if (jointType === "revolute" || jointType === "prismatic") {
-      const limitTag = joint.querySelector("limit");
       if (limitTag) {
         const lowerStr = limitTag.getAttribute("lower");
         const upperStr = limitTag.getAttribute("upper");
@@ -107,6 +121,7 @@ export function parseJointLimitsFromURDF(urdfContent: string): JointLimits {
       type: jointType,
       lower,
       upper,
+      velocity,
     };
   });
 
@@ -155,4 +170,3 @@ export function getJointLimits(
     upper: jointInfo.upper,
   };
 }
-
