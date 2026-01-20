@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
 import { cn } from "@/shared/lib/utils";
+import { NumberInput } from "@/shared/ui/number-input";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { toAnimationFrames, type Episode, type RecordedFrame } from "@/features/dataset";
@@ -353,6 +354,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     start: null,
     end: null,
   });
+  const [retimeScale, setRetimeScale] = useState(1);
 
   // Undo/Redo system (Blender-like)
   const [editHistory, setEditHistory] = useState<Episode[]>([]);
@@ -731,6 +733,76 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     onSetGlobalFrame?.(0);
     toast.success("Trimmed range (all joints)");
   }, [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]);
+
+  const handleTimeScale = useCallback(
+    (scale: number) => {
+      if (!isEditMode || !modifiedEpisode) return;
+      if (!Number.isFinite(scale) || scale <= 0) {
+        toast.error("Enter a valid scale");
+        return;
+      }
+      if (Math.abs(scale - 1) < 1e-4) {
+        toast.info("Scale is already 1x");
+        return;
+      }
+      if (modifiedEpisode.frames.length < 2) {
+        toast.error("Not enough frames to retime");
+        return;
+      }
+
+      const resolved = getResolvedTrimRange(modifiedEpisode.frames.length);
+      const startIndex = resolved?.start ?? 0;
+      const endIndex = resolved?.end ?? modifiedEpisode.frames.length - 1;
+      if (startIndex >= endIndex) {
+        toast.error("Select a valid range to retime");
+        return;
+      }
+
+      const baseTime = modifiedEpisode.frames[startIndex].timestamp;
+      const oldEndTime = modifiedEpisode.frames[endIndex].timestamp;
+      const scaledEndTime = baseTime + (oldEndTime - baseTime) * scale;
+      const deltaAfter = scaledEndTime - oldEndTime;
+
+      const nextFrames = modifiedEpisode.frames.map((frame, idx) => {
+        let timestamp = frame.timestamp;
+        if (idx >= startIndex && idx <= endIndex) {
+          timestamp = baseTime + (frame.timestamp - baseTime) * scale;
+        } else if (idx > endIndex) {
+          timestamp = frame.timestamp + deltaAfter;
+        }
+        return {
+          ...frame,
+          timestamp,
+        };
+      });
+
+      const lastTimestamp =
+        nextFrames[nextFrames.length - 1]?.timestamp ?? modifiedEpisode.frames.at(-1)?.timestamp ?? 0;
+      const nextEpisode: Episode = {
+        ...modifiedEpisode,
+        frames: nextFrames,
+        metadata: modifiedEpisode.metadata
+          ? {
+              ...modifiedEpisode.metadata,
+              num_frames: nextFrames.length,
+              episode_length_sec: lastTimestamp / 1000,
+            }
+          : undefined,
+      };
+
+      setModifiedEpisode(nextEpisode);
+      pushToHistory(nextEpisode);
+      setCurrentFrame(startIndex);
+      preservedFrameRef.current = startIndex;
+      onSetGlobalFrame?.(startIndex);
+      toast.success(
+        resolved
+          ? `Retime ${scale.toFixed(2)}x (range)`
+          : `Retime ${scale.toFixed(2)}x (all)`
+      );
+    },
+    [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]
+  );
 
   const handleAutoTrimRange = useCallback(() => {
     const targetEpisode = modifiedEpisode ?? episode;
@@ -2108,6 +2180,37 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   <p>Trim to range</p>
                 </TooltipContent>
               </Tooltip>
+              <div className="flex items-center gap-1 px-1">
+                <span className="text-[10px] text-muted-foreground">Speed</span>
+                <NumberInput
+                  value={retimeScale}
+                  onValueChange={setRetimeScale}
+                  min={0.1}
+                  max={10}
+                  step={0.05}
+                  compact={true}
+                  className="w-14"
+                />
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-6 px-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTimeScale(retimeScale);
+                      }}
+                      disabled={totalFrames < 2}
+                    >
+                      <span className="text-xs">Apply</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Scale time (range or full timeline)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </>
           )}
           {/* Save Button (only in edit mode) */}
