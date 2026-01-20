@@ -137,7 +137,6 @@ const requestSolverChain = (apiBaseUrl: string) => {
   return promise;
 };
 
-export const resolveSolverChain = (apiBaseUrl: string) => requestSolverChain(apiBaseUrl);
 
 export const getSolverChain = (apiBaseUrl: string) => {
   const cached = solverChainCache.get(apiBaseUrl);
