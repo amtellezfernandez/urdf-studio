@@ -60,6 +60,108 @@ export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 320;
 
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const resolveSmoothingWindowSize = (fps: number) => {
+  if (!Number.isFinite(fps) || fps <= 0) return 5;
+  const target = Math.round(fps * 0.15);
+  const clamped = Math.max(3, Math.min(9, target));
+  return clamped % 2 === 0 ? clamped + 1 : clamped;
+};
+
+const smoothSeries = (values: number[], windowSize: number, passes = 2) => {
+  if (values.length < 3) return values.slice();
+  const size = Math.max(3, windowSize);
+  const radius = Math.floor(size / 2);
+  let current = values.slice();
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    const next = current.map((value, idx) => {
+      if (idx === 0 || idx === current.length - 1) return values[idx];
+
+      let sum = 0;
+      let weightSum = 0;
+      for (let offset = -radius; offset <= radius; offset += 1) {
+        const target = idx + offset;
+        if (target < 0 || target >= current.length) continue;
+        const weight = offset === 0 ? 2 : 1;
+        sum += current[target] * weight;
+        weightSum += weight;
+      }
+      return weightSum > 0 ? sum / weightSum : value;
+    });
+    current = next;
+  }
+
+  return current;
+};
+
+const smoothRecordedFrames = (
+  frames: RecordedFrame[],
+  jointNames: string[],
+  fps: number
+) => {
+  if (frames.length < 3 || jointNames.length === 0) {
+    return frames.map((frame) => ({
+      timestamp: frame.timestamp,
+      jointPositions: { ...frame.jointPositions },
+    }));
+  }
+
+  const maxWindow = frames.length % 2 === 0 ? frames.length - 1 : frames.length;
+  const windowSize = Math.max(3, Math.min(resolveSmoothingWindowSize(fps), maxWindow));
+  const smoothedByJoint = new Map<string, number[]>();
+
+  for (const jointName of jointNames) {
+    const values: number[] = [];
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    let hasInvalid = false;
+
+    for (const frame of frames) {
+      const value = frame.jointPositions[jointName];
+      if (!Number.isFinite(value)) {
+        hasInvalid = true;
+        break;
+      }
+      values.push(value);
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+
+    if (hasInvalid || values.length !== frames.length) {
+      continue;
+    }
+
+    const smoothed = smoothSeries(values, windowSize, 2);
+    smoothed[0] = values[0];
+    smoothed[smoothed.length - 1] = values[values.length - 1];
+    smoothedByJoint.set(
+      jointName,
+      smoothed.map((value) => clampNumber(value, min, max))
+    );
+  }
+
+  if (smoothedByJoint.size === 0) {
+    return frames.map((frame) => ({
+      timestamp: frame.timestamp,
+      jointPositions: { ...frame.jointPositions },
+    }));
+  }
+
+  return frames.map((frame, index) => {
+    const nextPositions = { ...frame.jointPositions };
+    smoothedByJoint.forEach((values, jointName) => {
+      nextPositions[jointName] = values[index];
+    });
+    return {
+      timestamp: frame.timestamp,
+      jointPositions: nextPositions,
+    };
+  });
+};
+
 interface SidebarProps {
   isLoading?: boolean;
   availableJoints?: string[];
@@ -820,17 +922,35 @@ export const Sidebar = ({
     const metadata = recordingMetadataRef.current;
     recordingMetadataRef.current = null;
 
-    const framesToPersist = recordingFramesRef.current.map((frame) => ({
+    const recordedFrames = recordingFramesRef.current.map((frame) => ({
       timestamp: frame.timestamp,
       jointPositions: { ...frame.jointPositions },
     }));
     recordingFramesRef.current = [];
 
-    if (framesToPersist.length === 0) {
+    if (recordedFrames.length === 0) {
       setCurrentRecordingEpisodeId(null);
       toast.info("Recording cancelled - no frames captured");
       return;
     }
+
+    const calculatedFps = (() => {
+      if (recordedFrames.length < 2) return 0;
+      const start = recordedFrames[0].timestamp;
+      const end = recordedFrames[recordedFrames.length - 1].timestamp;
+      if (end <= start) return 0;
+      return (recordedFrames.length - 1) / ((end - start) / 1000);
+    })();
+
+    const smoothingFps =
+      metadata?.metadata?.fps ??
+      (calculatedFps > 0 ? calculatedFps : recordingFps);
+    const smoothingJointOrder = getJointOrderForFrames(recordedFrames);
+    const framesToPersist = smoothRecordedFrames(
+      recordedFrames,
+      smoothingJointOrder,
+      smoothingFps
+    );
 
     const episodeId =
       metadata?.episodeId ??
@@ -854,14 +974,6 @@ export const Sidebar = ({
         existingMetadata.joint_names.length > 0
           ? (existingMetadata.joint_names as string[])
           : getJointOrderForFrames(framesToPersist);
-
-      const calculatedFps = (() => {
-        if (framesToPersist.length < 2) return 0;
-        const start = framesToPersist[0].timestamp;
-        const end = framesToPersist[framesToPersist.length - 1].timestamp;
-        if (end <= start) return 0;
-        return (framesToPersist.length - 1) / ((end - start) / 1000);
-      })();
 
       // Use FPS from recording metadata (set when recording started), otherwise use calculated or user-specified default
       const fps =
