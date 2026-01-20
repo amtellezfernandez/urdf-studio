@@ -55,6 +55,7 @@ type ViewerLayoutProps = {
   setHasAnimationFrames: (hasFrames: boolean) => void;
   handleFrameChange: (frame: number, total: number) => void;
   setRobotBoundingBox: (box: THREE.Box3 | null) => void;
+  robotBoundingBox: THREE.Box3 | null;
   setRobot: (robot: URDFRobot | null) => void;
   handleIkApplied: (values: Record<string, number>) => void;
   handleViewerResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -103,6 +104,7 @@ export const ViewerLayout = ({
   setHasAnimationFrames,
   handleFrameChange,
   setRobotBoundingBox,
+  robotBoundingBox,
   setRobot,
   handleIkApplied,
   handleViewerResizeStart,
@@ -275,6 +277,8 @@ export const ViewerLayout = ({
                         onViewerOpenChange?.(true);
                       }
                     }}
+                    robotBoundingBox={robotBoundingBox}
+                    jointLimits={jointLimits}
                     inline={true}
                     globalCurrentFrame={currentFrame}
                     onSetGlobalFrame={(frame: number) => {

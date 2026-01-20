@@ -33,6 +33,7 @@ type RightSidebarPanelProps = {
     lowerLimit?: number,
     upperLimit?: number
   ) => void;
+  onJointVelocityChange: (jointName: string, velocity: number | null) => void;
   onJointNameChange: (oldName: string, newName: string) => void;
   onDeleteJoint: (jointName: string) => void;
   onJointLinkChange: (jointName: string, parentLink: string, childLink: string) => void;
@@ -72,6 +73,7 @@ export const RightSidebarPanel = ({
   onJointAxisChange,
   onResetAxis,
   onJointTypeChange,
+  onJointVelocityChange,
   onJointNameChange,
   onDeleteJoint,
   onJointLinkChange,
@@ -111,6 +113,7 @@ export const RightSidebarPanel = ({
       onJointAxisChange={onJointAxisChange}
       onResetAxis={onResetAxis}
       onJointTypeChange={onJointTypeChange}
+      onJointVelocityChange={onJointVelocityChange}
       onJointNameChange={onJointNameChange}
       onDeleteJoint={onDeleteJoint}
       onJointLinkChange={onJointLinkChange}

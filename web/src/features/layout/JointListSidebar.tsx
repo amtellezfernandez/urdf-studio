@@ -996,6 +996,7 @@ interface JointListSidebarProps {
   onJointAxisChange?: (jointName: string, axis: [number, number, number]) => void;
   onResetAxis?: (jointName: string) => void;
   onJointTypeChange?: (jointName: string, jointType: string, lowerLimit?: number, upperLimit?: number) => void;
+  onJointVelocityChange?: (jointName: string, velocity: number | null) => void;
   onJointNameChange?: (oldName: string, newName: string) => void;
   onDeleteJoint?: (jointName: string) => void;
   onJointLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
@@ -1036,6 +1037,7 @@ export const JointListSidebar = ({
   onJointAxisChange,
   onResetAxis,
   onJointTypeChange,
+  onJointVelocityChange,
   onJointNameChange,
   onDeleteJoint,
   onJointLinkChange,
@@ -1725,6 +1727,9 @@ export const JointListSidebar = ({
                   onLinkChange={onJointLinkChange}
                   onTypeChange={onJointTypeChange ? (newType, lowerLimit, upperLimit) => {
                     onJointTypeChange(selectedJoint, newType, lowerLimit, upperLimit);
+                  } : undefined}
+                  onVelocityChange={onJointVelocityChange ? (velocity) => {
+                    onJointVelocityChange(selectedJoint, velocity);
                   } : undefined}
                   onNameChange={onJointNameChange}
                   alwaysExpanded={true}

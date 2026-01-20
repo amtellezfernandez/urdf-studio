@@ -37,11 +37,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import { cn } from "@/shared/lib/utils";
 import { NumberInput } from "@/shared/ui/number-input";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { toAnimationFrames, type Episode, type RecordedFrame } from "@/features/dataset";
+import type * as THREE from "three";
+import type { JointLimits } from "@/features/urdf";
 
 // Constants
 const CANVAS_PADDING = 40;
@@ -53,11 +62,22 @@ const JOINT_COLORS = [
   "#ec4899", "#eab308", "#22c55e", "#3b82f6",
   "#a855f7", "#f97316", "#06b6d4", "#ef4444",
 ] as const;
+const CONSTRAINT_EPS = 1e-4;
+const VELOCITY_LIMIT_TOLERANCE = 0.05;
+const AXIS_OPTIONS = ["x", "y", "z"] as const;
+const CONSTRAINT_MODES = ["none", "height", "box", "wall"] as const;
+const WALL_SIDES = ["negative", "positive"] as const;
+
+type ConstraintMode = (typeof CONSTRAINT_MODES)[number];
+type AxisKey = (typeof AXIS_OPTIONS)[number];
+type WallSide = (typeof WALL_SIDES)[number];
 
 interface EpisodeViewer3DModalProps {
   episode: Episode | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  robotBoundingBox?: THREE.Box3 | null;
+  jointLimits?: JointLimits;
   currentEpisodeIndex?: number | null;
   allEpisodes?: Episode[];
   isPlayingAll?: boolean;
@@ -335,6 +355,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   episode,
   open,
   onOpenChange,
+  robotBoundingBox,
+  jointLimits,
   currentEpisodeIndex,
   allEpisodes = [],
   isPlayingAll = false,
@@ -373,6 +395,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   });
   const [retimeScale, setRetimeScale] = useState(1);
   const [retimeFps, setRetimeFps] = useState(0);
+  const [constraintMode, setConstraintMode] = useState<ConstraintMode>("none");
+  const [heightAxis, setHeightAxis] = useState<AxisKey>("z");
+  const [heightLimit, setHeightLimit] = useState<number>(1);
+  const [boxMin, setBoxMin] = useState({ x: -0.5, y: -0.5, z: -0.5 });
+  const [boxMax, setBoxMax] = useState({ x: 0.5, y: 0.5, z: 0.5 });
+  const [wallAxis, setWallAxis] = useState<AxisKey>("y");
+  const [wallSide, setWallSide] = useState<WallSide>("negative");
+  const [wallPosition, setWallPosition] = useState<number>(0);
+  const [violationFrames, setViolationFrames] = useState<number[]>([]);
+  const heightDirtyRef = useRef(false);
+  const boxDirtyRef = useRef(false);
+  const wallDirtyRef = useRef(false);
+  const violationFramesRef = useRef<Set<number>>(new Set());
 
   // Undo/Redo system (Blender-like)
   const [editHistory, setEditHistory] = useState<Episode[]>([]);
@@ -394,6 +429,135 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
   const preservedFrameRef = useRef<number | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  const getAxisValue = useCallback((vec: THREE.Vector3, axis: AxisKey) => {
+    if (axis === "x") return vec.x;
+    if (axis === "y") return vec.y;
+    return vec.z;
+  }, []);
+
+  const constraintSignature = useMemo(() => {
+    return JSON.stringify({
+      constraintMode,
+      heightAxis,
+      heightLimit,
+      boxMin,
+      boxMax,
+      wallAxis,
+      wallSide,
+      wallPosition,
+    });
+  }, [constraintMode, heightAxis, heightLimit, boxMin, boxMax, wallAxis, wallSide, wallPosition]);
+
+  const checkConstraintViolation = useCallback(
+    (bbox?: THREE.Box3 | null) => {
+      if (!bbox || bbox.isEmpty() || constraintMode === "none") return false;
+      if (constraintMode === "height") {
+        const maxValue = getAxisValue(bbox.max, heightAxis);
+        return maxValue > heightLimit + CONSTRAINT_EPS;
+      }
+      if (constraintMode === "box") {
+        const outsideMin =
+          bbox.min.x < boxMin.x - CONSTRAINT_EPS ||
+          bbox.min.y < boxMin.y - CONSTRAINT_EPS ||
+          bbox.min.z < boxMin.z - CONSTRAINT_EPS;
+        const outsideMax =
+          bbox.max.x > boxMax.x + CONSTRAINT_EPS ||
+          bbox.max.y > boxMax.y + CONSTRAINT_EPS ||
+          bbox.max.z > boxMax.z + CONSTRAINT_EPS;
+        return outsideMin || outsideMax;
+      }
+      if (constraintMode === "wall") {
+        const minValue = getAxisValue(bbox.min, wallAxis);
+        const maxValue = getAxisValue(bbox.max, wallAxis);
+        if (wallSide === "negative") {
+          return maxValue > wallPosition + CONSTRAINT_EPS;
+        }
+        return minValue < wallPosition - CONSTRAINT_EPS;
+      }
+      return false;
+    },
+    [
+      boxMax.x,
+      boxMax.y,
+      boxMax.z,
+      boxMin.x,
+      boxMin.y,
+      boxMin.z,
+      constraintMode,
+      getAxisValue,
+      heightAxis,
+      heightLimit,
+      wallAxis,
+      wallPosition,
+      wallSide,
+    ]
+  );
+
+  useEffect(() => {
+    violationFramesRef.current = new Set();
+    setViolationFrames([]);
+  }, [constraintSignature, constraintMode, episode?.id]);
+
+  useEffect(() => {
+    if (!episode || constraintMode === "none") return;
+    if (!robotBoundingBox || robotBoundingBox.isEmpty()) return;
+    if (episode.frames.length === 0) return;
+
+    const displayFrame = getCurrentFrameValue(
+      preservedFrameRef.current,
+      globalCurrentFrame,
+      currentFrame
+    );
+    const clampedFrame = Math.max(0, Math.min(displayFrame, episode.frames.length - 1));
+    const hasViolation = checkConstraintViolation(robotBoundingBox);
+    const currentSet = violationFramesRef.current;
+    const already = currentSet.has(clampedFrame);
+
+    if (hasViolation && !already) {
+      currentSet.add(clampedFrame);
+      setViolationFrames(Array.from(currentSet).sort((a, b) => a - b));
+    } else if (!hasViolation && already) {
+      currentSet.delete(clampedFrame);
+      setViolationFrames(Array.from(currentSet).sort((a, b) => a - b));
+    }
+  }, [
+    checkConstraintViolation,
+    constraintMode,
+    currentFrame,
+    episode,
+    globalCurrentFrame,
+    robotBoundingBox,
+  ]);
+
+  useEffect(() => {
+    if (!robotBoundingBox || robotBoundingBox.isEmpty()) return;
+    if (constraintMode === "height" && !heightDirtyRef.current) {
+      const next = getAxisValue(robotBoundingBox.max, heightAxis);
+      if (Number.isFinite(next)) {
+        setHeightLimit(next);
+      }
+    }
+    if (constraintMode === "box" && !boxDirtyRef.current) {
+      setBoxMin({
+        x: robotBoundingBox.min.x,
+        y: robotBoundingBox.min.y,
+        z: robotBoundingBox.min.z,
+      });
+      setBoxMax({
+        x: robotBoundingBox.max.x,
+        y: robotBoundingBox.max.y,
+        z: robotBoundingBox.max.z,
+      });
+    }
+    if (constraintMode === "wall" && !wallDirtyRef.current) {
+      const reference = wallSide === "negative" ? robotBoundingBox.max : robotBoundingBox.min;
+      const next = getAxisValue(reference, wallAxis);
+      if (Number.isFinite(next)) {
+        setWallPosition(next);
+      }
+    }
+  }, [constraintMode, getAxisValue, heightAxis, robotBoundingBox, wallAxis, wallSide]);
   
   // Handle canvas hover to change cursor
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -432,6 +596,67 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     return ranges;
   }, [episode, jointNames]);
+
+  const velocityViolations = useMemo(() => {
+    const activeEpisode = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
+    if (!activeEpisode || activeEpisode.frames.length < 2 || !jointLimits) {
+      return [];
+    }
+    const velocityLimits = new Map<string, number>();
+    Object.entries(jointLimits).forEach(([jointName, info]) => {
+      if (!info) return;
+      const limit = info.velocity;
+      if (Number.isFinite(limit) && (limit as number) > 0) {
+        velocityLimits.set(jointName, limit as number);
+      }
+    });
+    if (velocityLimits.size === 0) return [];
+
+    const violations: Array<{ frameIndex: number; jointName: string; ratio: number; velocity: number }> = [];
+
+    for (let i = 1; i < activeEpisode.frames.length; i += 1) {
+      const prev = activeEpisode.frames[i - 1];
+      const current = activeEpisode.frames[i];
+      const dtMs = current.timestamp - prev.timestamp;
+      if (!Number.isFinite(dtMs) || dtMs <= 0) continue;
+      const dt = dtMs / 1000;
+      let bestJoint = "";
+      let bestRatio = 0;
+      let bestVelocity = 0;
+
+      velocityLimits.forEach((limit, jointName) => {
+        const prevValue = prev.jointPositions[jointName];
+        const currValue = current.jointPositions[jointName];
+        if (!Number.isFinite(prevValue) || !Number.isFinite(currValue)) return;
+        const velocity = Math.abs(currValue - prevValue) / dt;
+        const ratio = velocity / limit;
+        if (ratio > bestRatio) {
+          bestRatio = ratio;
+          bestJoint = jointName;
+          bestVelocity = velocity;
+        }
+      });
+
+      if (bestRatio > 1 + VELOCITY_LIMIT_TOLERANCE && bestJoint) {
+        violations.push({
+          frameIndex: i,
+          jointName: bestJoint,
+          ratio: bestRatio,
+          velocity: bestVelocity,
+        });
+      }
+    }
+
+    return violations;
+  }, [episode, isEditMode, jointLimits, modifiedEpisode]);
+
+  const velocityViolationMap = useMemo(() => {
+    const map = new Map<number, { frameIndex: number; jointName: string; ratio: number; velocity: number }>();
+    velocityViolations.forEach((violation) => {
+      map.set(violation.frameIndex, violation);
+    });
+    return map;
+  }, [velocityViolations]);
 
   // Create stable color mapping for joints
   const jointColorMap = useMemo(() => {
@@ -774,7 +999,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   }, [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]);
 
   const handleTimeScale = useCallback(
-    (speed: number) => {
+    (speed: number, rangeOverride?: { start: number; end: number } | null, label?: string) => {
       if (!isEditMode || !modifiedEpisode) return;
       if (!Number.isFinite(speed) || speed <= 0) {
         toast.error("Enter a valid speed");
@@ -789,11 +1014,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         return;
       }
 
-      let resolved = getResolvedTrimRange(modifiedEpisode.frames.length);
+      let resolved = rangeOverride ?? getResolvedTrimRange(modifiedEpisode.frames.length);
       let startIndex = resolved?.start ?? 0;
       let endIndex = resolved?.end ?? modifiedEpisode.frames.length - 1;
       if (startIndex >= endIndex) {
         const lastIndex = modifiedEpisode.frames.length - 1;
+        if (rangeOverride) {
+          toast.error("Not enough frames to retime");
+          return;
+        }
         const expandedStart = Math.max(0, Math.min(startIndex, endIndex) - 1);
         const expandedEnd = Math.min(lastIndex, Math.max(startIndex, endIndex) + 1);
         if (expandedStart < expandedEnd) {
@@ -887,11 +1116,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       setCurrentFrame(startIndex);
       preservedFrameRef.current = startIndex;
       onSetGlobalFrame?.(startIndex);
-      toast.success(
-        resolved
-          ? `Speed ${speed.toFixed(2)}x (range)`
-          : `Speed ${speed.toFixed(2)}x (all)`
-      );
+      if (label) {
+        toast.success(label);
+      } else {
+        toast.success(
+          resolved
+            ? `Speed ${speed.toFixed(2)}x (range)`
+            : `Speed ${speed.toFixed(2)}x (all)`
+        );
+      }
     },
     [
       isEditMode,
@@ -902,8 +1135,48 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       jointNames,
       pushToHistory,
       onSetGlobalFrame,
+      setTrimRange,
     ]
   );
+
+  const handleAutoSlowToLimits = useCallback(() => {
+    if (!isEditMode || !modifiedEpisode) return;
+    if (velocityViolations.length === 0) {
+      toast.info("No velocity violations detected");
+      return;
+    }
+
+    const frames = modifiedEpisode.frames;
+    if (frames.length < 2) {
+      toast.error("Not enough frames to retime");
+      return;
+    }
+
+    let minFrame = Number.POSITIVE_INFINITY;
+    let maxFrame = Number.NEGATIVE_INFINITY;
+    let maxRatio = 0;
+    velocityViolations.forEach((violation) => {
+      minFrame = Math.min(minFrame, violation.frameIndex);
+      maxFrame = Math.max(maxFrame, violation.frameIndex);
+      maxRatio = Math.max(maxRatio, violation.ratio);
+    });
+
+    if (!Number.isFinite(minFrame) || !Number.isFinite(maxFrame) || maxRatio <= 1) {
+      toast.info("No velocity violations detected");
+      return;
+    }
+
+    const startIndex = Math.max(0, Math.min(frames.length - 2, minFrame - 1));
+    const endIndex = Math.min(frames.length - 1, maxFrame);
+    if (startIndex >= endIndex) {
+      toast.error("Not enough frames to retime");
+      return;
+    }
+
+    const effectiveRatio = Math.max(maxRatio, 1 + VELOCITY_LIMIT_TOLERANCE);
+    const targetSpeed = Math.min(1, 1 / effectiveRatio);
+    handleTimeScale(targetSpeed, { start: startIndex, end: endIndex }, "Auto slow to limits");
+  }, [handleTimeScale, isEditMode, modifiedEpisode, velocityViolations]);
 
   const handleRescaleFps = useCallback(() => {
     if (!isEditMode || !modifiedEpisode) return;
@@ -1669,6 +1942,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     return `${(calculatedTime / 1000).toFixed(2)}s`;
   }, [episode, modifiedEpisode, isEditMode, playbackSpeed]);
 
+  const totalFrames = episode?.frames.length ?? 0;
+  const resolvedTrimRange = useMemo(
+    () => getResolvedTrimRange(totalFrames),
+    [getResolvedTrimRange, totalFrames]
+  );
+
   // Draw canvas
   useLayoutEffect(() => {
     if (!episode || !canvasRef.current) return;
@@ -1777,8 +2056,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.restore();
 
     // Draw joint curves
-    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
     const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
+    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
 
     selectedJointNames.forEach((jointName) => {
       const color = jointColorMap.get(jointName) || JOINT_COLORS[0];
@@ -1896,6 +2175,52 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     });
 
+    if (violationFrames.length > 0 && totalFrames > 1) {
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+      ctx.lineWidth = 1;
+      violationFrames.forEach((frameIndex) => {
+        const clampedFrame = Math.max(0, Math.min(frameIndex, totalFrames - 1));
+        const x = CANVAS_PADDING + (graphWidth * clampedFrame) / (totalFrames - 1);
+        ctx.beginPath();
+        ctx.moveTo(x, height - CANVAS_PADDING);
+        ctx.lineTo(x, height - CANVAS_PADDING - 10);
+        ctx.stroke();
+      });
+    }
+
+    if (velocityViolations.length > 0 && totalFrames > 1) {
+      const markerSize = 4;
+      velocityViolations.forEach((violation) => {
+        const range = jointRanges[violation.jointName];
+        if (!range) return;
+        const frame = activeEpisode.frames[violation.frameIndex];
+        if (!frame) return;
+        const value = frame.jointPositions[violation.jointName];
+        if (!Number.isFinite(value)) return;
+        const rangePadding = (range.max - range.min) * 0.1 || 0.1;
+        const minVal = range.min - rangePadding;
+        const maxVal = range.max + rangePadding;
+        const valueRange = maxVal - minVal;
+        if (valueRange <= 0) return;
+        const x = CANVAS_PADDING + (graphWidth * violation.frameIndex) / (totalFrames - 1);
+        const normalizedValue = (value - minVal) / valueRange;
+        const y = height - CANVAS_PADDING - graphHeight * normalizedValue;
+
+        const jointColor = jointColorMap.get(violation.jointName) ?? "#ef4444";
+        ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
+        ctx.strokeStyle = jointColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y - markerSize);
+        ctx.lineTo(x + markerSize, y);
+        ctx.lineTo(x, y + markerSize);
+        ctx.lineTo(x - markerSize, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+
     // Draw current frame indicator
     if (episode.frames.length > 0) {
       const displayFrame = getCurrentFrameValue(
@@ -1921,7 +2246,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle, getResolvedTrimRange]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle, getResolvedTrimRange, resolvedTrimRange, violationFrames, velocityViolations]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -2071,7 +2396,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   if (!episode) return null;
 
-  const totalFrames = episode?.frames.length ?? 0;
   const timeEpisode = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
   const duration =
     totalFrames > 0 && timeEpisode
@@ -2079,7 +2403,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
-  const resolvedTrimRange = getResolvedTrimRange(totalFrames);
+  const clampedDisplayFrame = Math.max(0, Math.min(displayFrame, totalFrames - 1));
+  const currentVelocityViolation = velocityViolationMap.get(clampedDisplayFrame);
 
   const content = (
     <div
@@ -2223,6 +2548,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   <span className="text-muted-foreground/60">•</span>
                   <span className="tabular-nums text-muted-foreground">
                     In {resolvedTrimRange.start} Out {resolvedTrimRange.end}
+                  </span>
+                </>
+              )}
+              {currentVelocityViolation && (
+                <>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span className="tabular-nums text-red-400">
+                    vel x{currentVelocityViolation.ratio.toFixed(2)} {currentVelocityViolation.jointName}
                   </span>
                 </>
               )}
@@ -2414,6 +2747,25 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Speed: resample to keep FPS while changing duration</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAutoSlowToLimits();
+                      }}
+                      disabled={totalFrames < 2 || velocityViolations.length === 0}
+                    >
+                      <span className="text-xs">Auto</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Auto slow between velocity violations</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -2640,6 +2992,198 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       {/* Content - hidden when showOnlyHeader is true */}
       {!showOnlyHeader && (
       <>
+          <div className="flex items-center gap-2 px-3 py-1 border-b border-border/30 bg-muted/10">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              Constraints
+            </span>
+            <Select
+              value={constraintMode}
+              onValueChange={(value) => setConstraintMode(value as ConstraintMode)}
+            >
+              <SelectTrigger className="h-6 w-[92px] text-[10px] bg-background/60 border-border/40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#282828] border-[#3d3d3d]">
+                {CONSTRAINT_MODES.map((mode) => (
+                  <SelectItem
+                    key={mode}
+                    value={mode}
+                    className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                  >
+                    {mode}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {constraintMode === "height" && (
+              <div className="flex items-center gap-1">
+                <Select
+                  value={heightAxis}
+                  onValueChange={(value) => setHeightAxis(value as AxisKey)}
+                >
+                  <SelectTrigger className="h-6 w-[48px] text-[10px] bg-background/60 border-border/40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#282828] border-[#3d3d3d]">
+                    {AXIS_OPTIONS.map((axis) => (
+                      <SelectItem
+                        key={axis}
+                        value={axis}
+                        className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                      >
+                        {axis.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <NumberInput
+                  value={heightLimit}
+                  onValueChange={(value) => {
+                    heightDirtyRef.current = true;
+                    setHeightLimit(value);
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-16"
+                />
+                <span className="text-[9px] text-muted-foreground">max</span>
+              </div>
+            )}
+            {constraintMode === "box" && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-muted-foreground">min</span>
+                <NumberInput
+                  value={boxMin.x}
+                  onValueChange={(value) => {
+                    boxDirtyRef.current = true;
+                    setBoxMin((prev) => ({ ...prev, x: value }));
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-14"
+                />
+                <NumberInput
+                  value={boxMin.y}
+                  onValueChange={(value) => {
+                    boxDirtyRef.current = true;
+                    setBoxMin((prev) => ({ ...prev, y: value }));
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-14"
+                />
+                <NumberInput
+                  value={boxMin.z}
+                  onValueChange={(value) => {
+                    boxDirtyRef.current = true;
+                    setBoxMin((prev) => ({ ...prev, z: value }));
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-14"
+                />
+                <span className="text-[9px] text-muted-foreground">max</span>
+                <NumberInput
+                  value={boxMax.x}
+                  onValueChange={(value) => {
+                    boxDirtyRef.current = true;
+                    setBoxMax((prev) => ({ ...prev, x: value }));
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-14"
+                />
+                <NumberInput
+                  value={boxMax.y}
+                  onValueChange={(value) => {
+                    boxDirtyRef.current = true;
+                    setBoxMax((prev) => ({ ...prev, y: value }));
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-14"
+                />
+                <NumberInput
+                  value={boxMax.z}
+                  onValueChange={(value) => {
+                    boxDirtyRef.current = true;
+                    setBoxMax((prev) => ({ ...prev, z: value }));
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-14"
+                />
+              </div>
+            )}
+            {constraintMode === "wall" && (
+              <div className="flex items-center gap-1">
+                <Select
+                  value={wallAxis}
+                  onValueChange={(value) => setWallAxis(value as AxisKey)}
+                >
+                  <SelectTrigger className="h-6 w-[48px] text-[10px] bg-background/60 border-border/40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#282828] border-[#3d3d3d]">
+                    {AXIS_OPTIONS.map((axis) => (
+                      <SelectItem
+                        key={axis}
+                        value={axis}
+                        className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                      >
+                        {axis.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={wallSide}
+                  onValueChange={(value) => setWallSide(value as WallSide)}
+                >
+                  <SelectTrigger className="h-6 w-[54px] text-[10px] bg-background/60 border-border/40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#282828] border-[#3d3d3d]">
+                    <SelectItem
+                      value="negative"
+                      className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                    >
+                      &lt;=
+                    </SelectItem>
+                    <SelectItem
+                      value="positive"
+                      className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]"
+                    >
+                      &gt;=
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <NumberInput
+                  value={wallPosition}
+                  onValueChange={(value) => {
+                    wallDirtyRef.current = true;
+                    setWallPosition(value);
+                  }}
+                  step={0.01}
+                  compact
+                  className="w-16"
+                />
+              </div>
+            )}
+            {constraintMode !== "none" && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[9px] px-1.5 py-0 h-4 border-transparent",
+                  violationFrames.length > 0
+                    ? "border-red-500/40 text-red-400 bg-red-500/10"
+                    : "text-muted-foreground/70"
+                )}
+              >
+                violations {violationFrames.length}
+              </Badge>
+            )}
+          </div>
           {/* Graph Canvas */}
           <div className="flex-1 flex overflow-hidden">
             <div ref={canvasContainerRef} className="flex-1 relative bg-background overflow-hidden">

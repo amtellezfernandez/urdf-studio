@@ -315,11 +315,18 @@ const CreatedObjects = ({
   gpuMode = "high",
   endEffectorLink = null,
   onIkTargetClick,
+  orbitDefaults,
 }: {
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
   endEffectorLink?: string | null;
   onIkTargetClick?: (obj: CreatedObject) => void;
+  orbitDefaults: {
+    radius: number;
+    inclinationDeg: number;
+    phaseDeg: number;
+    secondaryOffsetDeg: number;
+  };
 }) => {
   const objects = useObjectStore((state) => state.objects);
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
@@ -1823,6 +1830,7 @@ export const Viewer3D = ({
                 gpuMode={gpuMode}
                 endEffectorLink={endEffectorLink}
                 onIkTargetClick={solveIkForObject}
+                orbitDefaults={orbitDefaults}
               />
             </>
           )}

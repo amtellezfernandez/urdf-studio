@@ -36,21 +36,20 @@ export const useIkRegistrySync = () => {
             requirements?: string[];
           }>;
         };
-        const serverSolvers: IkSolverMeta[] =
-          data?.solvers
-            ?.map((solver) => {
-              if (!solver?.id) return null;
-              return {
-                id: solver.id as IkSolverMeta["id"],
-                label: solver.label ?? solver.id,
-                description: solver.description,
-                mode: solver.mode,
-                capabilities: solver.capabilities ?? [],
-                requirements: solver.requirements ?? [],
-                source: "server" as const,
-              };
-            })
-            .filter((entry): entry is IkSolverMeta => !!entry) ?? [];
+        const serverSolvers: IkSolverMeta[] = (data?.solvers ?? []).flatMap((solver) => {
+          if (!solver?.id) return [];
+          return [
+            {
+              id: solver.id as IkSolverMeta["id"],
+              label: solver.label ?? solver.id,
+              description: solver.description,
+              mode: solver.mode,
+              capabilities: solver.capabilities ?? [],
+              requirements: solver.requirements ?? [],
+              source: "server" as const,
+            },
+          ];
+        });
 
         const localSolvers = isIkfastAvailable() ? LOCAL_SOLVER_DEFS : [];
         const merged = mergeSolvers(serverSolvers, localSolvers);

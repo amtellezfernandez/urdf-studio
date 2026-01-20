@@ -362,6 +362,7 @@ export const useIkSolver = ({
       requestTimeoutMs,
       robot,
       selectedSolverId,
+      setIkDebugState,
       urdfContent,
     ]
   );
@@ -529,6 +530,7 @@ export const useIkSolver = ({
       orbitTimeoutMs,
       robot,
       selectedSolverId,
+      setIkDebugState,
       setStoreJointValues,
       urdfContent,
     ]

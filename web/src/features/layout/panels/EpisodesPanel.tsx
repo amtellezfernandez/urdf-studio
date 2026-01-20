@@ -33,7 +33,9 @@ type EpisodesPanelProps = {
   applyFpsTarget: () => void;
   getEpisodeFps: (episode: Episode) => number;
   fpsTolerance?: number;
-  getEpisodeVelocityStatus: (episode: Episode) => { overCount: number; maxRatio: number };
+  getEpisodeVelocityStatus: (
+    episode: Episode
+  ) => { overCount: number; maxRatio: number; worstJoint: string | null; worstFrame: number | null; worstTimeSec: number | null };
   velocityTolerance?: number;
   startRecording: () => void;
   stopRecording: () => void;
@@ -432,6 +434,18 @@ export const EpisodesPanel = ({
                               >
                                 vel x{Math.max(1, velocityStatus.maxRatio).toFixed(2)}
                               </Badge>
+                              {velocityStatus.worstJoint && velocityStatus.worstFrame !== null && (
+                                <span
+                                  className="text-[9px] text-amber-300/80 font-mono"
+                                  title={
+                                    velocityStatus.worstTimeSec !== null
+                                      ? `Max at ${velocityStatus.worstTimeSec.toFixed(2)}s`
+                                      : "Max velocity frame"
+                                  }
+                                >
+                                  {velocityStatus.worstJoint}@F{velocityStatus.worstFrame}
+                                </span>
+                              )}
                             </>
                           )}
                           <span className="text-[10px] text-muted-foreground">•</span>

@@ -523,12 +523,15 @@ export const Sidebar = ({
       jointPositions: { ...frame.jointPositions },
     }));
 
-  const resolveJointNames = (metadata: EpisodeMetadata | undefined, frames: RecordedFrame[]) => {
-    if (Array.isArray(metadata?.joint_names) && metadata.joint_names.length > 0) {
-      return metadata.joint_names as string[];
-    }
-    return Array.from(new Set(frames.flatMap((frame) => Object.keys(frame.jointPositions))));
-  };
+  const resolveJointNames = useCallback(
+    (metadata: EpisodeMetadata | undefined, frames: RecordedFrame[]) => {
+      if (Array.isArray(metadata?.joint_names) && metadata.joint_names.length > 0) {
+        return metadata.joint_names as string[];
+      }
+      return Array.from(new Set(frames.flatMap((frame) => Object.keys(frame.jointPositions))));
+    },
+    []
+  );
 
   const computeEpisodeFps = useCallback((episode: Episode) => {
     if (!episode || episode.frames.length < 2) return 0;
@@ -616,7 +619,13 @@ export const Sidebar = ({
   const getEpisodeVelocityStatus = useCallback(
     (episode: Episode) => {
       if (!jointLimits || episode.frames.length < 2) {
-        return { overCount: 0, maxRatio: 0 };
+        return {
+          overCount: 0,
+          maxRatio: 0,
+          worstJoint: null,
+          worstFrame: null,
+          worstTimeSec: null,
+        };
       }
       const velocityLimits = Object.entries(jointLimits)
         .map(([jointName, info]) => ({
@@ -629,10 +638,17 @@ export const Sidebar = ({
             (entry.velocity as number) > 0
         ) as Array<{ jointName: string; velocity: number }>;
       if (velocityLimits.length === 0) {
-        return { overCount: 0, maxRatio: 0 };
+        return {
+          overCount: 0,
+          maxRatio: 0,
+          worstJoint: null,
+          worstFrame: null,
+          worstTimeSec: null,
+        };
       }
 
       const maxVelocities = new Map<string, number>();
+      const maxRatios = new Map<string, { ratio: number; frame: number; timeSec: number }>();
       velocityLimits.forEach(({ jointName }) => {
         maxVelocities.set(jointName, 0);
       });
@@ -643,7 +659,7 @@ export const Sidebar = ({
         const dtMs = current.timestamp - prev.timestamp;
         if (!Number.isFinite(dtMs) || dtMs <= 0) continue;
         const dt = dtMs / 1000;
-        velocityLimits.forEach(({ jointName }) => {
+        velocityLimits.forEach(({ jointName, velocity: limit }) => {
           const prevValue = prev.jointPositions[jointName];
           const currValue = current.jointPositions[jointName];
           if (!Number.isFinite(prevValue) || !Number.isFinite(currValue)) return;
@@ -652,22 +668,47 @@ export const Sidebar = ({
           if (velocity > existing) {
             maxVelocities.set(jointName, velocity);
           }
+          if (limit && limit > 0) {
+            const ratio = velocity / limit;
+            const existingRatio = maxRatios.get(jointName)?.ratio ?? 0;
+            if (ratio > existingRatio) {
+              maxRatios.set(jointName, {
+                ratio,
+                frame: i,
+                timeSec: current.timestamp / 1000,
+              });
+            }
+          }
         });
       }
 
       let overCount = 0;
       let maxRatio = 0;
+      let worstJoint: string | null = null;
+      let worstFrame: number | null = null;
+      let worstTimeSec: number | null = null;
       velocityLimits.forEach(({ jointName, velocity }) => {
-        const observed = maxVelocities.get(jointName) ?? 0;
         if (velocity <= 0) return;
-        const ratio = observed / velocity;
+        const ratioData = maxRatios.get(jointName);
+        const ratio = ratioData?.ratio ?? 0;
         if (ratio > 1 + VELOCITY_LIMIT_TOLERANCE) {
           overCount += 1;
-          if (ratio > maxRatio) maxRatio = ratio;
+        }
+        if (ratio > maxRatio) {
+          maxRatio = ratio;
+          worstJoint = jointName;
+          worstFrame = ratioData?.frame ?? null;
+          worstTimeSec = ratioData?.timeSec ?? null;
         }
       });
 
-      return { overCount, maxRatio };
+      return {
+        overCount,
+        maxRatio,
+        worstJoint,
+        worstFrame,
+        worstTimeSec,
+      };
     },
     [jointLimits]
   );
@@ -796,6 +837,7 @@ export const Sidebar = ({
       onViewerEpisodeChange,
       onViewerOpenChange,
       onViewerSplitViewChange,
+      resolveJointNames,
       setEpisodes,
       setCurrentPlayingEpisodeIndex,
     ]

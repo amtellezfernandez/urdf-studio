@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { changeJointAxis, changeJointType, renameJoint, renameLink } from "@/features/urdf";
+import { changeJointAxis, changeJointType, changeJointVelocity, renameJoint, renameLink } from "@/features/urdf";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import type { Dispatch, SetStateAction } from "react";
 
@@ -147,6 +147,30 @@ export const useUrdfEditHandlers = ({
     [setJointAxes, setJointLimits, updateUrdfFile, vizUrdfContent]
   );
 
+  const handleJointVelocityChange = useCallback(
+    (jointName: string, velocity: number | null) => {
+      if (!vizUrdfContent) {
+        toast.error("No URDF content available");
+        return;
+      }
+      const result = changeJointVelocity(vizUrdfContent, jointName, velocity);
+      if (!result.success) {
+        toast.error(result.error ?? `Failed to update joint "${jointName}" velocity`);
+        return;
+      }
+
+      updateUrdfFile(result.content);
+      if (result.jointLimits) {
+        setJointLimits(result.jointLimits);
+      }
+      if (result.jointAxes) {
+        setJointAxes(result.jointAxes);
+      }
+      toast.success(result.message ?? `Updated joint "${jointName}" velocity`);
+    },
+    [setJointAxes, setJointLimits, updateUrdfFile, vizUrdfContent]
+  );
+
   const handleJointNameChange = useCallback(
     (oldName: string, newName: string) => {
       if (!vizUrdfContent) {
@@ -261,6 +285,7 @@ export const useUrdfEditHandlers = ({
     handleJointAxisChange,
     handleResetAxis,
     handleJointTypeChange,
+    handleJointVelocityChange,
     handleJointNameChange,
     handleJointLinkChange,
     handleResetRotation,

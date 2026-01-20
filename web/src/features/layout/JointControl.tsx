@@ -46,6 +46,7 @@ interface JointControlProps {
   onLinkChange?: (jointName: string, parentLink: string, childLink: string) => void;
   onTypeChange?: (newType: string, lowerLimit?: number, upperLimit?: number) => void;
   onNameChange?: (oldName: string, newName: string) => void;
+  onVelocityChange?: (velocity: number | null) => void;
   alwaysExpanded?: boolean;
   hideValueDisplay?: boolean;
   robot?: URDFRobot | null; // Three.js robot object for getting link coordinates
@@ -125,6 +126,7 @@ export const JointControl = ({
   onLinkChange,
   onTypeChange,
   onNameChange,
+  onVelocityChange,
   alwaysExpanded = false,
   hideValueDisplay = false,
   robot,
@@ -170,13 +172,15 @@ export const JointControl = ({
     (value: number) => {
       const velocityRad = angleUnit === "deg" ? value * radPerDeg : value;
       setJointMaxVelocity(jointName, velocityRad);
+      onVelocityChange?.(velocityRad);
     },
-    [angleUnit, jointName, setJointMaxVelocity, radPerDeg]
+    [angleUnit, jointName, onVelocityChange, setJointMaxVelocity, radPerDeg]
   );
 
   const handleResetVelocity = useCallback(() => {
     setJointMaxVelocity(jointName, null);
-  }, [jointName, setJointMaxVelocity]);
+    onVelocityChange?.(globalMaxJointVelocity);
+  }, [globalMaxJointVelocity, jointName, onVelocityChange, setJointMaxVelocity]);
   
   // Delete confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);

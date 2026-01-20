@@ -8,6 +8,7 @@ import { rotateRobot90Degrees } from "../utils/rotateRobot";
 import { updateJointAxisInURDF } from "./updateJointAxis";
 import { updateJointNameInURDF } from "./updateJointName";
 import { updateJointTypeInURDF } from "./updateJointType";
+import { updateJointVelocityInURDF } from "./updateJointVelocity";
 import { updateLinkNameInURDF } from "./updateLinkName";
 
 interface UrdfEditResult {
@@ -131,6 +132,34 @@ export const changeJointType = (
     success: true,
     content: updatedContent,
     message: `Updated joint "${jointName}" type to ${newType}`,
+    jointLimits: parseJointLimitsFromURDF(updatedContent),
+    jointAxes: parseJointAxesFromURDF(updatedContent),
+  };
+};
+
+export const changeJointVelocity = (
+  urdfContent: string,
+  jointName: string,
+  velocity: number | null
+): UrdfEditResult => {
+  if (!urdfContent.trim()) {
+    return { success: false, content: urdfContent, error: "No URDF content available" };
+  }
+
+  const updatedContent = updateJointVelocityInURDF(urdfContent, jointName, velocity);
+
+  if (updatedContent === urdfContent) {
+    return {
+      success: false,
+      content: urdfContent,
+      error: `Unable to update joint "${jointName}" velocity`,
+    };
+  }
+
+  return {
+    success: true,
+    content: updatedContent,
+    message: `Updated joint "${jointName}" velocity`,
     jointLimits: parseJointLimitsFromURDF(updatedContent),
     jointAxes: parseJointAxesFromURDF(updatedContent),
   };
