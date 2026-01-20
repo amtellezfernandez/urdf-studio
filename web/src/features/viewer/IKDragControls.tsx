@@ -67,6 +67,7 @@ export const IKDragControls = ({
   const reachRadiusRef = useRef<number | null>(null);
   const baseLinkNameRef = useRef<string | null>(null);
   const clampedRef = useRef(false);
+  const [hasEndEffector, setHasEndEffector] = useState(false);
   const setIkDebugState = useIkDebugStore((s) => s.setState);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
@@ -107,6 +108,7 @@ export const IKDragControls = ({
   useEffect(() => {
     if (!robot || !endEffectorLink) {
       endEffectorObject.current = null;
+      setHasEndEffector(false);
       return;
     }
 
@@ -125,6 +127,7 @@ export const IKDragControls = ({
       robotAny?.getObjectByName?.(safeDecode(endEffectorLink));
 
     endEffectorObject.current = link;
+    setHasEndEffector(Boolean(link));
   }, [robot, endEffectorLink]);
 
   useEffect(() => {
@@ -249,6 +252,11 @@ export const IKDragControls = ({
       setIsClamped(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!enabled || !hasEndEffector) return;
+    syncTargetToEndEffector();
+  }, [enabled, hasEndEffector, syncTargetToEndEffector]);
 
   // Update target position to match end effector (runs on joint changes and initially)
   useFrame(() => {
@@ -688,7 +696,7 @@ export const IKDragControls = ({
     }
   }, [enabled, endDrag, onDragStateChange, setIkDebugState]);
 
-  if (!enabled || !endEffectorObject.current) {
+  if (!enabled || !hasEndEffector) {
     return null;
   }
 
