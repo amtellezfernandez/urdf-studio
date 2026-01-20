@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { URDFRobot } from "urdf-loader";
 import * as THREE from "three";
-import { computeLinkBoundingBox } from "@/features/camera/cameraPoseCompute";
+import { autoComputeCameraPoseDefault, computeLinkBoundingBox } from "@/features/camera/cameraPoseCompute";
 
 describe("computeLinkBoundingBox", () => {
   it("ignores child link geometry when computing bounds", () => {
@@ -40,5 +40,36 @@ describe("computeLinkBoundingBox", () => {
     const center = new THREE.Vector3();
     box?.getCenter(center);
     expect(center.x).toBeCloseTo(1);
+  });
+});
+
+describe("autoComputeCameraPoseDefault", () => {
+  it("places camera behind the link and outside its bounds", () => {
+    const link = new THREE.Group();
+    link.name = "gripper";
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.08, 0.06),
+      new THREE.MeshBasicMaterial()
+    );
+    link.add(mesh);
+    link.updateMatrixWorld(true);
+
+    const robot = { links: { gripper: link } } as unknown as URDFRobot;
+    const robotBounds = new THREE.Box3().setFromObject(link);
+    const pose = autoComputeCameraPoseDefault(robot, "gripper", {
+      robotBoundingBox: robotBounds,
+      marginForward: 0.02,
+      marginUp: 0.01,
+    });
+
+    expect(pose).not.toBeNull();
+    const position = new THREE.Vector3(...(pose?.xyz ?? [0, 0, 0]));
+    const bounds = computeLinkBoundingBox(robot, "gripper");
+    expect(bounds?.containsPoint(position)).toBe(false);
+    expect(position.x).toBeLessThan(-0.05);
+
+    const rotation = new THREE.Euler(...(pose?.rpy ?? [0, 0, 0]), "ZYX");
+    const forward = new THREE.Vector3(1, 0, 0).applyEuler(rotation).normalize();
+    expect(forward.x).toBeGreaterThan(0.5);
   });
 });

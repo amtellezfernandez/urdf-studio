@@ -5,7 +5,7 @@ import { toAnimationFrames, useDatasetActions } from "@/features/dataset";
 import type { Episode } from "@/features/dataset";
 import { toast } from "sonner";
 import { useCameraStore } from "@/shared/store/useCameraStore";
-import { useCameraPanels } from "@/features/camera";
+import { autoComputeCameraPoseDefault, useCameraPanels } from "@/features/camera";
 import type { FileWithPath } from "@/shared/types/file";
 import type { URDFRobot } from "urdf-loader";
 import { useUrdfEditHandlers } from "@/features/layout/page/useUrdfEditHandlers";
@@ -93,6 +93,7 @@ const Index = () => {
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [pendingDemoEpisodes, setPendingDemoEpisodes] = useState<Episode[] | null>(null);
   const [pendingDemoScene, setPendingDemoScene] = useState(false);
+  const [pendingDemoLoad, setPendingDemoLoad] = useState(false);
   const {
     isPlaying,
     setIsPlaying,
@@ -241,6 +242,11 @@ const Index = () => {
       /frame|dummy|target|origin|marker|site/i.test(name);
     const isPreferred = (name: string) => /(gripper|tool|ee|end_effector)/i.test(name);
 
+    const preferredFrame = availableLinks.find(
+      (link) => /(gripper_frame|tool0|tcp|ee_frame)/i.test(link)
+    );
+    if (preferredFrame) return preferredFrame;
+
     if (endEffectorLink) {
       if (!isFrameLike(endEffectorLink)) return endEffectorLink;
       const parent = resolveParentLinkFromRobot(endEffectorLink);
@@ -265,55 +271,20 @@ const Index = () => {
         (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
       );
       if (!hasGripperCamera) {
-        let pose = {
-          xyz: [0.02, 0, 0.08] as [number, number, number],
-          rpy: [0, 0, 0] as [number, number, number],
-        };
-        if (robot) {
-          const linkObj =
-            robot.links?.[cameraLink] ??
-            robot.getObjectByName?.(cameraLink) ??
-            robot.getObjectByName?.(decodeURIComponent(cameraLink));
-          if (linkObj) {
-            linkObj.updateMatrixWorld(true);
-            const linkWorld = linkObj.matrixWorld.clone();
-            const linkWorldInverse = linkWorld.clone().invert();
-            const localOffset = new THREE.Vector3(0, 0, 0.08);
-            const worldPos = localOffset.clone().applyMatrix4(linkWorld);
-            const target =
-              robotBoundingBox?.getCenter(new THREE.Vector3()) ??
-              linkObj.getWorldPosition(new THREE.Vector3());
-            const rotationCorrection = new THREE.Quaternion().setFromAxisAngle(
-              new THREE.Vector3(0, 1, 0),
-              Math.PI / 2
-            );
-            const correctionInverse = rotationCorrection.clone().invert();
-            const lookAtMatrix = new THREE.Matrix4().lookAt(
-              worldPos,
-              target,
-              new THREE.Vector3(0, 0, 1)
-            );
-            const worldLookQuat = new THREE.Quaternion().setFromRotationMatrix(
-              lookAtMatrix
-            );
-            const worldBaseQuat = worldLookQuat.clone().multiply(correctionInverse);
-            const worldMatrix = new THREE.Matrix4().compose(
-              worldPos,
-              worldBaseQuat,
-              new THREE.Vector3(1, 1, 1)
-            );
-            const localMatrix = linkWorldInverse.multiply(worldMatrix);
-            const localPos = new THREE.Vector3();
-            const localQuat = new THREE.Quaternion();
-            const localScale = new THREE.Vector3();
-            localMatrix.decompose(localPos, localQuat, localScale);
-            const localEuler = new THREE.Euler().setFromQuaternion(localQuat, "ZYX");
-            pose = {
-              xyz: [localPos.x, localPos.y, localPos.z],
-              rpy: [localEuler.x, localEuler.y, localEuler.z],
-            };
-          }
-        }
+        const aimLink =
+          availableLinks.find((link) =>
+            /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
+          ) ?? null;
+        const pose =
+          autoComputeCameraPoseDefault(robot, cameraLink, {
+            aimLink,
+            robotBoundingBox,
+            marginForward: 0.035,
+            marginUp: 0.015,
+          }) ?? {
+            xyz: [0.02, 0, 0.08] as [number, number, number],
+            rpy: [0, 0, 0] as [number, number, number],
+          };
         addCamera({
           name: "Gripper Top",
           parent_link: cameraLink,
@@ -400,6 +371,7 @@ const Index = () => {
     resolveDemoCameraLink,
     robotBoundingBox,
     robot,
+    availableLinks,
   ]);
 
   const playDemoEpisode = useCallback(
@@ -455,6 +427,7 @@ const Index = () => {
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(demoFile);
         void loadFilesFromFolder(dataTransfer.files);
+        setPendingDemoLoad(true);
         toast.success("Loaded demo robot");
       } catch {
         toast.error("Failed to load demo robot");
@@ -508,6 +481,7 @@ const Index = () => {
       }
 
       void loadFilesFromFolder(dataTransfer.files);
+      setPendingDemoLoad(true);
       toast.success(`Loaded ${data.label ?? "SO-ARM100"} sample`);
     } catch (error) {
       const message =
@@ -555,6 +529,32 @@ const Index = () => {
     datasetActions.loadDemoEpisodes(pendingDemoEpisodes);
     setPendingDemoEpisodes(null);
   }, [datasetActions, pendingDemoEpisodes]);
+
+  useEffect(() => {
+    if (!pendingDemoLoad || !hasLoadedFiles) return;
+    if (datasetActions?.hasEpisodes) {
+      setPendingDemoLoad(false);
+      return;
+    }
+    const jointNames = resolveDemoJointNames();
+    if (jointNames.length === 0) return;
+    const demoEpisodes = createDemoEpisodes({
+      jointNames,
+      jointLimits,
+    });
+    if (datasetActions?.loadDemoEpisodes) {
+      datasetActions.loadDemoEpisodes(demoEpisodes);
+    } else {
+      setPendingDemoEpisodes(demoEpisodes);
+    }
+    setPendingDemoLoad(false);
+  }, [
+    datasetActions,
+    hasLoadedFiles,
+    jointLimits,
+    pendingDemoLoad,
+    resolveDemoJointNames,
+  ]);
 
   useEffect(() => {
     if (!pendingDemoScene) return;

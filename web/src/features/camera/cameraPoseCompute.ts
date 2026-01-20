@@ -18,10 +18,18 @@ interface CameraPoseConfig {
 }
 
 interface AutoComputeOptions {
+  aimLink?: string | null; // Link to aim the camera toward (world direction)
+  robotBoundingBox?: THREE.Box3 | null;
   marginForward?: number; // Distance in front of the link (meters)
   marginUp?: number; // Height above link center (meters)
-  marginRight?: number; // Offset to the right (meters)
 }
+
+const DEFAULT_MARGIN_FORWARD = 0.03;
+const DEFAULT_MARGIN_UP = 0.02;
+const MIN_BACK_OFFSET = 0.05;
+
+const resolveLinkObject = (robot: URDFRobot | null, linkName: string) =>
+  robot?.links?.[linkName] ?? robot?.getObjectByName?.(linkName) ?? null;
 
 /**
  * Compute bounding box for a specific link in the robot
@@ -30,7 +38,7 @@ export function computeLinkBoundingBox(robot: URDFRobot | null, linkName: string
   if (!robot) return null;
 
   // Get the link object from the robot
-  const linkObject = robot.links?.[linkName] ?? robot.getObjectByName?.(linkName);
+  const linkObject = resolveLinkObject(robot, linkName);
   if (!linkObject) {
     console.warn(`Link "${linkName}" not found in robot`);
     return null;
@@ -88,17 +96,15 @@ export function computeLinkBoundingBox(robot: URDFRobot | null, linkName: string
  * Auto-compute camera pose relative to parent link
  *
  * Algorithm:
- * 1. Compute parent link's bounding box in its local frame
- * 2. Position camera at the center of the link
- * 3. Orient camera to look forward along +X axis (90° rotation around Z)
+ * 1. Find an aim direction using a helper link or the robot bounding box.
+ * 2. Offset the camera forward along the aim direction to avoid occlusion.
+ * 3. Align the camera's +X axis with the aim direction (URDF camera convention).
  *
- * Camera convention: Three.js cameras look down -Z axis
- * Robot convention: +X is forward, +Y is left, +Z is up
- * Solution: Rotate camera 90° around Z to align camera's -Z with robot's +X
+ * Camera convention: X=forward, Y=left, Z=up.
  *
  * @param robot - The URDF robot object
  * @param parentLink - Name of the parent link
- * @param options - Margin offsets (unused, kept for compatibility)
+ * @param options - Aim link and offsets
  * @returns Camera pose in parent link's coordinate frame
  */
 function autoComputeCameraPose(
@@ -106,50 +112,107 @@ function autoComputeCameraPose(
   parentLink: string,
   options: AutoComputeOptions = {},
 ): CameraPoseConfig | null {
-  const bbox = computeLinkBoundingBox(robot, parentLink);
-  if (!bbox) {
-    return null;
-  }
-
-  // Get the link object to work in local coordinates
-  const linkObject = robot.links?.[parentLink] ?? robot.getObjectByName?.(parentLink);
+  const linkObject = resolveLinkObject(robot, parentLink);
   if (!linkObject) {
     return null;
   }
-
-  // Transform bounding box to local coordinates
   linkObject.updateMatrixWorld(true);
-  const linkWorldMatrixInverse = linkObject.matrixWorld.clone().invert();
+  const parentWorld = linkObject.matrixWorld.clone();
+  const parentWorldInverse = parentWorld.clone().invert();
+  const parentPosition = new THREE.Vector3();
+  const parentQuat = new THREE.Quaternion();
+  parentWorld.decompose(parentPosition, parentQuat, new THREE.Vector3());
 
-  const localBBox = bbox.clone().applyMatrix4(linkWorldMatrixInverse);
+  const worldUp = new THREE.Vector3(0, 0, 1);
+  const linkForward = new THREE.Vector3(1, 0, 0).applyQuaternion(parentQuat).normalize();
+  const linkUp = new THREE.Vector3(0, 0, 1).applyQuaternion(parentQuat).normalize();
+  const aimDirection = new THREE.Vector3();
+  let hasAim = false;
+  let outwardDirection: THREE.Vector3 | null = null;
 
-  // Get center of the link in local coordinates
-  const localCenter = new THREE.Vector3();
-  localBBox.getCenter(localCenter);
+  if (options.aimLink) {
+    const aimObject = resolveLinkObject(robot, options.aimLink);
+    if (aimObject) {
+      aimObject.updateMatrixWorld(true);
+      const aimPosition = new THREE.Vector3().setFromMatrixPosition(aimObject.matrixWorld);
+      aimDirection.copy(aimPosition).sub(parentPosition);
+      if (aimDirection.length() > 1e-4) {
+        aimDirection.normalize();
+        hasAim = true;
+      }
+    }
+  }
 
-  // Position camera at the center of the link
-  const localPosition = localCenter.clone();
+  if (options.robotBoundingBox) {
+    const center = options.robotBoundingBox.getCenter(new THREE.Vector3());
+    const candidate = parentPosition.clone().sub(center);
+    if (candidate.length() > 1e-4) {
+      outwardDirection = candidate.normalize();
+    }
+  }
 
-  // Camera orientation: rotate 90° around Z axis to look along +X
-  // In URDF RPY convention (ZYX intrinsic order):
-  // - Roll (around X): 0
-  // - Pitch (around Y): 0
-  // - Yaw (around Z): 90° (π/2 radians)
-  // This makes the camera's -Z axis point along the link's +X axis (forward)
-  const localRotation: [number, number, number] = [0, 0, Math.PI / 2];
+  if (!hasAim) {
+    aimDirection.copy(linkForward).normalize();
+  }
+
+  if (outwardDirection && aimDirection.dot(outwardDirection) < 0) {
+    aimDirection.multiplyScalar(-1);
+  }
+
+  const bbox =
+    computeLinkBoundingBox(robot, parentLink) ??
+    (options.aimLink ? computeLinkBoundingBox(robot, options.aimLink) : null);
+  let backOffset = options.marginForward ?? DEFAULT_MARGIN_FORWARD;
+  if (bbox) {
+    const size = bbox.getSize(new THREE.Vector3());
+    backOffset = Math.max(MIN_BACK_OFFSET, size.length() * 0.6 + backOffset);
+  } else {
+    backOffset = Math.max(MIN_BACK_OFFSET, backOffset + 0.06);
+  }
+  const upOffset = options.marginUp ?? DEFAULT_MARGIN_UP;
+
+  const upAxis = Math.abs(linkUp.dot(aimDirection)) > 0.9 ? worldUp : linkUp;
+  const worldPosition = parentPosition
+    .clone()
+    .sub(aimDirection.clone().multiplyScalar(backOffset))
+    .add(upAxis.clone().multiplyScalar(upOffset));
+
+  const xAxis = aimDirection.clone().normalize();
+  const upRef = Math.abs(xAxis.dot(upAxis)) > 0.9 ? worldUp : upAxis;
+  const yAxis = new THREE.Vector3().crossVectors(upRef, xAxis).normalize();
+  const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
+
+  const worldRotation = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+  const worldQuat = new THREE.Quaternion().setFromRotationMatrix(worldRotation);
+  const worldMatrix = new THREE.Matrix4().compose(
+    worldPosition,
+    worldQuat,
+    new THREE.Vector3(1, 1, 1)
+  );
+
+  const localMatrix = parentWorldInverse.multiply(worldMatrix);
+  const localPosition = new THREE.Vector3();
+  const localQuat = new THREE.Quaternion();
+  const localScale = new THREE.Vector3();
+  localMatrix.decompose(localPosition, localQuat, localScale);
+  const localEuler = new THREE.Euler().setFromQuaternion(localQuat, "ZYX");
 
   return {
     xyz: [localPosition.x, localPosition.y, localPosition.z],
-    rpy: localRotation,
+    rpy: [localEuler.x, localEuler.y, localEuler.z],
   };
 }
 
 /**
  * Auto-compute camera pose with default settings
- * Positions camera at the center of the link
+ * Positions camera behind the link to keep the gripper in view
  */
-export function autoComputeCameraPoseDefault(robot: URDFRobot | null, parentLink: string): CameraPoseConfig | null {
-  return autoComputeCameraPose(robot, parentLink);
+export function autoComputeCameraPoseDefault(
+  robot: URDFRobot | null,
+  parentLink: string,
+  options?: AutoComputeOptions
+): CameraPoseConfig | null {
+  return autoComputeCameraPose(robot, parentLink, options);
 }
 
 /**
