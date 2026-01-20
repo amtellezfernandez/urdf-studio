@@ -35,6 +35,7 @@ const Index = () => {
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const addCamera = useCameraStore((state) => state.addCamera);
+  const updateCamera = useCameraStore((state) => state.updateCamera);
   const objects = useObjectStore((state) => state.objects);
   const addObject = useObjectStore((state) => state.addObject);
   const objectCount = objects.length;
@@ -288,26 +289,34 @@ const Index = () => {
 
     const cameraLink = resolveDemoCameraLink();
     if (cameraLink) {
-      const hasGripperCamera = cameras.some(
-        (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
-      );
-      if (!hasGripperCamera) {
-        const aimLink =
-          availableLinks.find((link) =>
-            /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
-          ) ?? null;
-        const pose =
-          autoComputeCameraPoseDefault(robot, cameraLink, {
-            aimLink,
-            targetPosition,
-            robotBoundingBox,
-            marginForward: 0.05,
-            marginUp: 0.02,
-            rollOffset: Math.PI / 2,
-          }) ?? {
-            xyz: [0.02, 0, 0.08] as [number, number, number],
-            rpy: [0, 0, 0] as [number, number, number],
-          };
+      const aimLink =
+        availableLinks.find((link) =>
+          /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
+        ) ?? null;
+      const pose =
+        autoComputeCameraPoseDefault(robot, cameraLink, {
+          aimLink,
+          targetPosition,
+          robotBoundingBox,
+          marginForward: 0.05,
+          marginUp: 0.02,
+          rollOffset: Math.PI / 2,
+        }) ?? {
+          xyz: [0.02, 0, 0.08] as [number, number, number],
+          rpy: [0, 0, 0] as [number, number, number],
+        };
+      const existingCamera = cameras.find((cam) => cam.name === "Gripper Top");
+      if (existingCamera) {
+        updateCamera(existingCamera.id, {
+          parent_link: cameraLink,
+          pose,
+          intrinsics: {
+            width: 640,
+            height: 480,
+            fov_deg: 70,
+          },
+        });
+      } else {
         addCamera({
           name: "Gripper Top",
           parent_link: cameraLink,
@@ -371,6 +380,7 @@ const Index = () => {
     addCamera,
     addObject,
     cameras,
+    updateCamera,
     objectCount,
     resolveDemoCameraLink,
     robotBoundingBox,
