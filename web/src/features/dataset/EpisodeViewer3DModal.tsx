@@ -793,13 +793,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       let startIndex = resolved?.start ?? 0;
       let endIndex = resolved?.end ?? modifiedEpisode.frames.length - 1;
       if (startIndex >= endIndex) {
-        startIndex = 0;
-        endIndex = modifiedEpisode.frames.length - 1;
-        resolved = null;
-        setTrimRange({ start: null, end: null });
-        if (startIndex >= endIndex) {
-          toast.error("Not enough frames to retime");
-          return;
+        const lastIndex = modifiedEpisode.frames.length - 1;
+        const expandedStart = Math.max(0, Math.min(startIndex, endIndex) - 1);
+        const expandedEnd = Math.min(lastIndex, Math.max(startIndex, endIndex) + 1);
+        if (expandedStart < expandedEnd) {
+          startIndex = expandedStart;
+          endIndex = expandedEnd;
+          resolved = { start: startIndex, end: endIndex };
+          setTrimRange({ start: startIndex, end: endIndex });
+        } else {
+          startIndex = 0;
+          endIndex = lastIndex;
+          resolved = null;
+          setTrimRange({ start: null, end: null });
+          if (startIndex >= endIndex) {
+            toast.error("Not enough frames to retime");
+            return;
+          }
         }
       }
 
