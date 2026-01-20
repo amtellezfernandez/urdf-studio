@@ -740,6 +740,33 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       return;
     }
 
+    let maxRange = 0;
+    const jointStats = new Map<string, { min: number; max: number }>();
+    for (const jointName of jointNames) {
+      jointStats.set(jointName, { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY });
+    }
+    for (const frame of targetEpisode.frames) {
+      for (const jointName of jointNames) {
+        const value = frame.jointPositions[jointName];
+        if (!Number.isFinite(value)) continue;
+        const stats = jointStats.get(jointName);
+        if (!stats) continue;
+        stats.min = Math.min(stats.min, value);
+        stats.max = Math.max(stats.max, value);
+      }
+    }
+    jointStats.forEach((stats) => {
+      if (Number.isFinite(stats.min) && Number.isFinite(stats.max)) {
+        maxRange = Math.max(maxRange, stats.max - stats.min);
+      }
+    });
+
+    if (maxRange < 1e-3) {
+      toast.info("Movement too small to auto trim");
+      return;
+    }
+
+    const epsilon = Math.max(1e-4, maxRange * 0.01);
     const perFrameDelta: number[] = [];
     for (let i = 1; i < targetEpisode.frames.length; i += 1) {
       let maxDelta = 0;
@@ -754,8 +781,6 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
       perFrameDelta.push(maxDelta);
     }
-
-    const epsilon = 1e-4;
     const minRun = 2;
     const isMoving = perFrameDelta.map((delta) => delta > epsilon);
     let first = -1;
@@ -796,6 +821,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     const start = Math.max(0, first - 1);
     const end = Math.min(targetEpisode.frames.length - 1, Math.max(first, last) + 1);
+    if (start <= 1 && end >= targetEpisode.frames.length - 2) {
+      toast.info("Already trimmed");
+      return;
+    }
     setTrimRange({ start, end });
     setCurrentFrame(start);
     preservedFrameRef.current = start;
