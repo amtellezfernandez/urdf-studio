@@ -349,6 +349,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const [saveAsNew, setSaveAsNew] = useState(false);
   const [newEpisodeName, setNewEpisodeName] = useState("");
   const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
+  const [trimRange, setTrimRange] = useState<{ start: number | null; end: number | null }>({
+    start: null,
+    end: null,
+  });
 
   // Undo/Redo system (Blender-like)
   const [editHistory, setEditHistory] = useState<Episode[]>([]);
@@ -501,6 +505,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setEditingJoint(null);
     setSelectedPointIndex(null);
     setTangentHandles(new Map());
+    setTrimRange({ start: null, end: null });
     setShowSaveDialog(false);
     setSaveAsNew(false);
     setNewEpisodeName("");
@@ -638,6 +643,94 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     setTangentHandles(new Map());
     toast.success(`Smoothed ${editingJoint} trajectory`);
   }, [isEditMode, editingJoint, modifiedEpisode, pushToHistory]);
+
+  const getResolvedTrimRange = useCallback(
+    (frameCount: number) => {
+      if (trimRange.start === null || trimRange.end === null || frameCount <= 0) return null;
+      const maxIndex = Math.max(0, frameCount - 1);
+      const rawStart = Math.max(0, Math.min(trimRange.start, maxIndex));
+      const rawEnd = Math.max(0, Math.min(trimRange.end, maxIndex));
+      return {
+        start: Math.min(rawStart, rawEnd),
+        end: Math.max(rawStart, rawEnd),
+      };
+    },
+    [trimRange]
+  );
+
+  const resolveCurrentFrame = useCallback(
+    () => getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame),
+    [globalCurrentFrame, currentFrame]
+  );
+
+  const handleSetTrimPoint = useCallback(
+    (edge: "start" | "end") => {
+      const frame = resolveCurrentFrame();
+      setTrimRange((prev) => ({ ...prev, [edge]: frame }));
+      toast.info(edge === "start" ? `Set In at F${frame}` : `Set Out at F${frame}`);
+    },
+    [resolveCurrentFrame]
+  );
+
+  const handleClearTrimRange = useCallback(() => {
+    setTrimRange({ start: null, end: null });
+    toast.info("Cleared range");
+  }, []);
+
+  const handleTrimToRange = useCallback(() => {
+    if (!isEditMode || !modifiedEpisode) return;
+    const resolved = getResolvedTrimRange(modifiedEpisode.frames.length);
+    if (!resolved) {
+      toast.error("Set In and Out before trimming");
+      return;
+    }
+
+    const { start, end } = resolved;
+    const originalFrames = modifiedEpisode.frames;
+    const startFrame = originalFrames[start];
+    const endFrame = originalFrames[end];
+    if (!startFrame || !endFrame) {
+      toast.error("Invalid trim range");
+      return;
+    }
+
+    const baseTimestamp = startFrame.timestamp;
+    const nextFrames = originalFrames.slice(start, end + 1).map((frame) => ({
+      timestamp: frame.timestamp - baseTimestamp,
+      jointPositions: { ...frame.jointPositions },
+    }));
+
+    if (nextFrames.length === 0) {
+      toast.error("Trim range produced no frames");
+      return;
+    }
+
+    const nextEpisode: Episode = {
+      ...modifiedEpisode,
+      frames: nextFrames,
+      metadata: modifiedEpisode.metadata
+        ? {
+            ...modifiedEpisode.metadata,
+            num_frames: nextFrames.length,
+            episode_length_sec:
+              nextFrames[nextFrames.length - 1]?.timestamp !== undefined
+                ? nextFrames[nextFrames.length - 1].timestamp / 1000
+                : modifiedEpisode.metadata.episode_length_sec,
+          }
+        : undefined,
+    };
+
+    setModifiedEpisode(nextEpisode);
+    pushToHistory(nextEpisode);
+    setSelectedPointIndex(null);
+    setDraggingHandle(null);
+    setTangentHandles(new Map());
+    setTrimRange({ start: null, end: null });
+    setCurrentFrame(0);
+    preservedFrameRef.current = 0;
+    onSetGlobalFrame?.(0);
+    toast.success("Trimmed to range");
+  }, [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]);
 
 
   // Keyboard shortcuts (Blender-like)
@@ -1208,6 +1301,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (!episode || episode.frames.length === 0) return "0.00s";
     
     const totalFrames = episode.frames.length;
+    const resolvedTrimRange = getResolvedTrimRange(totalFrames);
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
     const effectiveSpeed = playbackSpeed || 1.0;
     const frameDuration = totalFrames > 1 
@@ -1268,6 +1362,39 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ctx.moveTo(CANVAS_PADDING, y);
       ctx.lineTo(width - CANVAS_PADDING, y);
       ctx.stroke();
+    }
+
+    if (resolvedTrimRange && totalFrames > 1) {
+      const startX =
+        CANVAS_PADDING + (graphWidth * resolvedTrimRange.start) / (totalFrames - 1);
+      const endX =
+        CANVAS_PADDING + (graphWidth * resolvedTrimRange.end) / (totalFrames - 1);
+      const leftX = Math.min(startX, endX);
+      const rightX = Math.max(startX, endX);
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fillRect(CANVAS_PADDING, CANVAS_PADDING, leftX - CANVAS_PADDING, graphHeight);
+      ctx.fillRect(rightX, CANVAS_PADDING, width - CANVAS_PADDING - rightX, graphHeight);
+
+      ctx.strokeStyle = "#52525b";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(leftX, CANVAS_PADDING);
+      ctx.lineTo(leftX, height - CANVAS_PADDING);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(rightX, CANVAS_PADDING);
+      ctx.lineTo(rightX, height - CANVAS_PADDING);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "#a1a1aa";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("IN", leftX, CANVAS_PADDING - 4);
+      ctx.fillText("OUT", rightX, CANVAS_PADDING - 4);
     }
 
     // Draw axes
@@ -1437,7 +1564,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle, getResolvedTrimRange]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -1583,6 +1710,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const duration = totalFrames > 0 && episode ? episode.frames[totalFrames - 1].timestamp : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
+  const resolvedTrimRange = getResolvedTrimRange(totalFrames);
 
   const content = (
     <div
@@ -1705,6 +1833,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <span className="tabular-nums text-muted-foreground">
                 {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds}s` : "0.00/0.00s"}
               </span>
+              {isEditMode && resolvedTrimRange && (
+                <>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    In {resolvedTrimRange.start} Out {resolvedTrimRange.end}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1768,6 +1904,82 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Smooth current joint curve</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetTrimPoint("start");
+                    }}
+                    disabled={totalFrames === 0}
+                  >
+                    <span className="text-xs">In</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Set In (current frame)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetTrimPoint("end");
+                    }}
+                    disabled={totalFrames === 0}
+                  >
+                    <span className="text-xs">Out</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Set Out (current frame)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearTrimRange();
+                    }}
+                    disabled={!resolvedTrimRange}
+                  >
+                    <span className="text-xs">Clear</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Clear range</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTrimToRange();
+                    }}
+                    disabled={!resolvedTrimRange}
+                  >
+                    <span className="text-xs">Trim</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Trim to range</p>
                 </TooltipContent>
               </Tooltip>
             </>
