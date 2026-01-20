@@ -94,6 +94,7 @@ const Index = () => {
   const [pendingDemoEpisodes, setPendingDemoEpisodes] = useState<Episode[] | null>(null);
   const [pendingDemoScene, setPendingDemoScene] = useState(false);
   const [pendingDemoLoad, setPendingDemoLoad] = useState(false);
+  const [hasAutoLoadedDemo, setHasAutoLoadedDemo] = useState(false);
   const {
     isPlaying,
     setIsPlaying,
@@ -265,41 +266,6 @@ const Index = () => {
   }, [availableLinks, endEffectorLink, resolveParentLinkFromRobot]);
 
   const prepareDemoScene = useCallback(() => {
-    const cameraLink = resolveDemoCameraLink();
-    if (cameraLink) {
-      const hasGripperCamera = cameras.some(
-        (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
-      );
-      if (!hasGripperCamera) {
-        const aimLink =
-          availableLinks.find((link) =>
-            /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
-          ) ?? null;
-        const pose =
-          autoComputeCameraPoseDefault(robot, cameraLink, {
-            aimLink,
-            robotBoundingBox,
-            marginForward: 0.035,
-            marginUp: 0.015,
-          }) ?? {
-            xyz: [0.02, 0, 0.08] as [number, number, number],
-            rpy: [0, 0, 0] as [number, number, number],
-          };
-        addCamera({
-          name: "Gripper Top",
-          parent_link: cameraLink,
-          pose,
-          intrinsics: {
-            width: 640,
-            height: 480,
-            fov_deg: 70,
-          },
-        });
-      }
-    }
-
-    if (objectCount > 0) return Boolean(cameraLink);
-
     const baseCenter = robotBoundingBox
       ? robotBoundingBox.getCenter(new THREE.Vector3())
       : new THREE.Vector3(0, 0, 0);
@@ -318,6 +284,44 @@ const Index = () => {
       baseCenter.y,
       baseZ + pedestalSize.z / 2
     );
+    const targetPosition = pedestalPosition.clone().add(new THREE.Vector3(0, 0, 0.08));
+
+    const cameraLink = resolveDemoCameraLink();
+    if (cameraLink) {
+      const hasGripperCamera = cameras.some(
+        (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
+      );
+      if (!hasGripperCamera) {
+        const aimLink =
+          availableLinks.find((link) =>
+            /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
+          ) ?? null;
+        const pose =
+          autoComputeCameraPoseDefault(robot, cameraLink, {
+            aimLink,
+            targetPosition,
+            robotBoundingBox,
+            marginForward: 0.05,
+            marginUp: 0.02,
+            rollOffset: Math.PI / 2,
+          }) ?? {
+            xyz: [0.02, 0, 0.08] as [number, number, number],
+            rpy: [0, 0, 0] as [number, number, number],
+          };
+        addCamera({
+          name: "Gripper Top",
+          parent_link: cameraLink,
+          pose,
+          intrinsics: {
+            width: 640,
+            height: 480,
+            fov_deg: 70,
+          },
+        });
+      }
+    }
+
+    if (objectCount > 0) return Boolean(cameraLink);
 
     addObject({
       type: "cube",
@@ -553,6 +557,27 @@ const Index = () => {
     hasLoadedFiles,
     jointLimits,
     pendingDemoLoad,
+    resolveDemoJointNames,
+  ]);
+
+  useEffect(() => {
+    if (hasAutoLoadedDemo || !hasLoadedFiles || !datasetActions?.loadDemoEpisodes) {
+      return;
+    }
+    if (datasetActions.hasEpisodes) return;
+    const jointNames = resolveDemoJointNames();
+    if (jointNames.length === 0) return;
+    const demoEpisodes = createDemoEpisodes({
+      jointNames,
+      jointLimits,
+    });
+    datasetActions.loadDemoEpisodes(demoEpisodes);
+    setHasAutoLoadedDemo(true);
+  }, [
+    datasetActions,
+    hasAutoLoadedDemo,
+    hasLoadedFiles,
+    jointLimits,
     resolveDemoJointNames,
   ]);
 

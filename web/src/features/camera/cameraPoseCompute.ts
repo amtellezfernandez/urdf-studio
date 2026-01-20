@@ -20,8 +20,12 @@ interface CameraPoseConfig {
 interface AutoComputeOptions {
   aimLink?: string | null; // Link to aim the camera toward (world direction)
   robotBoundingBox?: THREE.Box3 | null;
+  targetPosition?: THREE.Vector3 | [number, number, number] | null;
   marginForward?: number; // Distance in front of the link (meters)
   marginUp?: number; // Height above link center (meters)
+  rollOffset?: number; // Extra rotation around camera X (radians)
+  pitchOffset?: number; // Extra rotation around camera Y (radians)
+  yawOffset?: number; // Extra rotation around camera Z (radians)
 }
 
 const DEFAULT_MARGIN_FORWARD = 0.03;
@@ -130,15 +134,29 @@ function autoComputeCameraPose(
   let hasAim = false;
   let outwardDirection: THREE.Vector3 | null = null;
 
+  if (options.targetPosition) {
+    const target =
+      options.targetPosition instanceof THREE.Vector3
+        ? options.targetPosition
+        : new THREE.Vector3(...options.targetPosition);
+    aimDirection.copy(target).sub(parentPosition);
+    if (aimDirection.length() > 1e-4) {
+      aimDirection.normalize();
+      hasAim = true;
+    }
+  }
+
   if (options.aimLink) {
     const aimObject = resolveLinkObject(robot, options.aimLink);
     if (aimObject) {
       aimObject.updateMatrixWorld(true);
       const aimPosition = new THREE.Vector3().setFromMatrixPosition(aimObject.matrixWorld);
-      aimDirection.copy(aimPosition).sub(parentPosition);
-      if (aimDirection.length() > 1e-4) {
-        aimDirection.normalize();
-        hasAim = true;
+      if (!hasAim) {
+        aimDirection.copy(aimPosition).sub(parentPosition);
+        if (aimDirection.length() > 1e-4) {
+          aimDirection.normalize();
+          hasAim = true;
+        }
       }
     }
   }
@@ -177,7 +195,19 @@ function autoComputeCameraPose(
     .sub(aimDirection.clone().multiplyScalar(backOffset))
     .add(upAxis.clone().multiplyScalar(upOffset));
 
-  const xAxis = aimDirection.clone().normalize();
+  let lookDirection = aimDirection.clone();
+  if (options.targetPosition) {
+    const target =
+      options.targetPosition instanceof THREE.Vector3
+        ? options.targetPosition
+        : new THREE.Vector3(...options.targetPosition);
+    const candidate = target.clone().sub(worldPosition);
+    if (candidate.length() > 1e-4) {
+      lookDirection = candidate.normalize();
+    }
+  }
+
+  const xAxis = lookDirection.clone().normalize();
   const upRef = Math.abs(xAxis.dot(upAxis)) > 0.9 ? worldUp : upAxis;
   const yAxis = new THREE.Vector3().crossVectors(upRef, xAxis).normalize();
   const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
@@ -196,6 +226,9 @@ function autoComputeCameraPose(
   const localScale = new THREE.Vector3();
   localMatrix.decompose(localPosition, localQuat, localScale);
   const localEuler = new THREE.Euler().setFromQuaternion(localQuat, "ZYX");
+  localEuler.x += options.rollOffset ?? 0;
+  localEuler.y += options.pitchOffset ?? 0;
+  localEuler.z += options.yawOffset ?? 0;
 
   return {
     xyz: [localPosition.x, localPosition.y, localPosition.z],

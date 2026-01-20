@@ -4,3 +4,6 @@
 [submodule "vendor/so-arm100"]
 	path = vendor/so-arm100
 	url = https://github.com/TheRobotStudio/SO-ARM100
+[submodule "third_party/linkforge"]
+	path = third_party/linkforge
+	url = https://github.com/arounamounchili/linkforge

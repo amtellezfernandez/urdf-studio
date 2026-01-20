@@ -72,4 +72,33 @@ describe("autoComputeCameraPoseDefault", () => {
     const forward = new THREE.Vector3(1, 0, 0).applyEuler(rotation).normalize();
     expect(forward.x).toBeGreaterThan(0.5);
   });
+
+  it("aims at a provided target position even when link forward is flipped", () => {
+    const link = new THREE.Group();
+    link.name = "gripper";
+    link.rotation.y = Math.PI;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.08, 0.06),
+      new THREE.MeshBasicMaterial()
+    );
+    link.add(mesh);
+    link.updateMatrixWorld(true);
+
+    const robot = { links: { gripper: link } } as unknown as URDFRobot;
+    const target = new THREE.Vector3(0.3, 0, 0);
+    const pose = autoComputeCameraPoseDefault(robot, "gripper", {
+      targetPosition: target,
+      marginForward: 0.02,
+      marginUp: 0.01,
+    });
+
+    expect(pose).not.toBeNull();
+    const rotation = new THREE.Euler(...(pose?.rpy ?? [0, 0, 0]), "ZYX");
+    const parentQuat = new THREE.Quaternion().setFromEuler(link.rotation);
+    const forward = new THREE.Vector3(1, 0, 0)
+      .applyEuler(rotation)
+      .applyQuaternion(parentQuat)
+      .normalize();
+    expect(forward.x).toBeGreaterThan(0.5);
+  });
 });
