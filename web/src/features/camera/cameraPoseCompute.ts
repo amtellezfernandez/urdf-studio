@@ -26,6 +26,7 @@ interface AutoComputeOptions {
   rollOffset?: number; // Extra rotation around camera X (radians)
   pitchOffset?: number; // Extra rotation around camera Y (radians)
   yawOffset?: number; // Extra rotation around camera Z (radians)
+  useWorldUp?: boolean; // Force camera to stay upright in world space
 }
 
 const DEFAULT_MARGIN_FORWARD = 0.03;
@@ -189,7 +190,11 @@ function autoComputeCameraPose(
   }
   const upOffset = options.marginUp ?? DEFAULT_MARGIN_UP;
 
-  const upAxis = Math.abs(linkUp.dot(aimDirection)) > 0.9 ? worldUp : linkUp;
+  const upAxis = options.useWorldUp
+    ? worldUp
+    : Math.abs(linkUp.dot(aimDirection)) > 0.9
+    ? worldUp
+    : linkUp;
   const worldPosition = parentPosition
     .clone()
     .sub(aimDirection.clone().multiplyScalar(backOffset))

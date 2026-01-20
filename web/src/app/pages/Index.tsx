@@ -36,6 +36,7 @@ const Index = () => {
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const addCamera = useCameraStore((state) => state.addCamera);
   const updateCamera = useCameraStore((state) => state.updateCamera);
+  const selectCamera = useCameraStore((state) => state.selectCamera);
   const objects = useObjectStore((state) => state.objects);
   const addObject = useObjectStore((state) => state.addObject);
   const objectCount = objects.length;
@@ -94,8 +95,6 @@ const Index = () => {
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [pendingDemoEpisodes, setPendingDemoEpisodes] = useState<Episode[] | null>(null);
   const [pendingDemoScene, setPendingDemoScene] = useState(false);
-  const [pendingDemoLoad, setPendingDemoLoad] = useState(false);
-  const [hasAutoLoadedDemo, setHasAutoLoadedDemo] = useState(false);
   const {
     isPlaying,
     setIsPlaying,
@@ -291,8 +290,10 @@ const Index = () => {
     if (cameraLink) {
       const aimLink =
         availableLinks.find((link) =>
-          /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
-        ) ?? null;
+          /(gripper_link|tool0|tool|tcp|end_effector|ee)/i.test(link)
+        ) ??
+        resolveParentLinkFromRobot(cameraLink) ??
+        null;
       const pose =
         autoComputeCameraPoseDefault(robot, cameraLink, {
           aimLink,
@@ -301,6 +302,7 @@ const Index = () => {
           marginForward: 0.05,
           marginUp: 0.02,
           rollOffset: Math.PI / 2,
+          useWorldUp: true,
         }) ?? {
           xyz: [0.02, 0, 0.08] as [number, number, number],
           rpy: [0, 0, 0] as [number, number, number],
@@ -316,6 +318,7 @@ const Index = () => {
             fov_deg: 70,
           },
         });
+        selectCamera(existingCamera.id);
       } else {
         addCamera({
           name: "Gripper Top",
@@ -327,6 +330,12 @@ const Index = () => {
             fov_deg: 70,
           },
         });
+        const created = useCameraStore
+          .getState()
+          .cameras.find((cam) => cam.name === "Gripper Top");
+        if (created) {
+          selectCamera(created.id);
+        }
       }
     }
 
@@ -381,8 +390,10 @@ const Index = () => {
     addObject,
     cameras,
     updateCamera,
+    selectCamera,
     objectCount,
     resolveDemoCameraLink,
+    resolveParentLinkFromRobot,
     robotBoundingBox,
     robot,
     availableLinks,
@@ -441,7 +452,6 @@ const Index = () => {
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(demoFile);
         void loadFilesFromFolder(dataTransfer.files);
-        setPendingDemoLoad(true);
         toast.success("Loaded demo robot");
       } catch {
         toast.error("Failed to load demo robot");
@@ -495,7 +505,6 @@ const Index = () => {
       }
 
       void loadFilesFromFolder(dataTransfer.files);
-      setPendingDemoLoad(true);
       toast.success(`Loaded ${data.label ?? "SO-ARM100"} sample`);
     } catch (error) {
       const message =
@@ -543,53 +552,6 @@ const Index = () => {
     datasetActions.loadDemoEpisodes(pendingDemoEpisodes);
     setPendingDemoEpisodes(null);
   }, [datasetActions, pendingDemoEpisodes]);
-
-  useEffect(() => {
-    if (!pendingDemoLoad || !hasLoadedFiles) return;
-    if (datasetActions?.hasEpisodes) {
-      setPendingDemoLoad(false);
-      return;
-    }
-    const jointNames = resolveDemoJointNames();
-    if (jointNames.length === 0) return;
-    const demoEpisodes = createDemoEpisodes({
-      jointNames,
-      jointLimits,
-    });
-    if (datasetActions?.loadDemoEpisodes) {
-      datasetActions.loadDemoEpisodes(demoEpisodes);
-    } else {
-      setPendingDemoEpisodes(demoEpisodes);
-    }
-    setPendingDemoLoad(false);
-  }, [
-    datasetActions,
-    hasLoadedFiles,
-    jointLimits,
-    pendingDemoLoad,
-    resolveDemoJointNames,
-  ]);
-
-  useEffect(() => {
-    if (hasAutoLoadedDemo || !hasLoadedFiles || !datasetActions?.loadDemoEpisodes) {
-      return;
-    }
-    if (datasetActions.hasEpisodes) return;
-    const jointNames = resolveDemoJointNames();
-    if (jointNames.length === 0) return;
-    const demoEpisodes = createDemoEpisodes({
-      jointNames,
-      jointLimits,
-    });
-    datasetActions.loadDemoEpisodes(demoEpisodes);
-    setHasAutoLoadedDemo(true);
-  }, [
-    datasetActions,
-    hasAutoLoadedDemo,
-    hasLoadedFiles,
-    jointLimits,
-    resolveDemoJointNames,
-  ]);
 
   useEffect(() => {
     if (!pendingDemoScene) return;
