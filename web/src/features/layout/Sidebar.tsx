@@ -59,6 +59,7 @@ const loadJSZip = (() => {
 export const DEFAULT_SIDEBAR_WIDTH = 220;
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 320;
+const FPS_MISMATCH_TOLERANCE = 0.5;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -501,6 +502,7 @@ export const Sidebar = ({
   const [currentPlayingEpisodeIndex, setCurrentPlayingEpisodeIndex] = useState<number | null>(null);
   const [recordingFps, setRecordingFps] = useState<number>(30); // Default FPS for recording
   const [recordingStats, setRecordingStats] = useState<{ frames: number; seconds: number }>({ frames: 0, seconds: 0 });
+  const [targetFps, setTargetFps] = useState<number>(30);
   const hfIdentityRef = useRef<HfIdentity | null>(null);
   const recordingStartTime = useRef<number>(0);
   const recordingIntervalRef = useRef<number | null>(null);
@@ -526,6 +528,89 @@ export const Sidebar = ({
     }
     return Array.from(new Set(frames.flatMap((frame) => Object.keys(frame.jointPositions))));
   };
+
+  const computeEpisodeFps = useCallback((episode: Episode) => {
+    if (!episode || episode.frames.length < 2) return 0;
+    const first = episode.frames[0].timestamp;
+    const last = episode.frames[episode.frames.length - 1].timestamp;
+    const durationMs = last - first;
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
+    return (episode.frames.length - 1) / (durationMs / 1000);
+  }, []);
+
+  const resampleEpisodeToFps = useCallback(
+    (episode: Episode, targetFps: number) => {
+      if (!episode || episode.frames.length < 2) return episode;
+      if (!Number.isFinite(targetFps) || targetFps <= 0) return episode;
+      const frames = episode.frames;
+      const baseTime = frames[0].timestamp;
+      const sourceTimes = frames.map((frame) => frame.timestamp - baseTime);
+      const duration = sourceTimes[sourceTimes.length - 1];
+      if (!Number.isFinite(duration) || duration <= 0) return episode;
+
+      const targetCount = Math.max(2, Math.round((duration / 1000) * targetFps) + 1);
+      if (targetCount === frames.length) {
+        return {
+          ...episode,
+          metadata: episode.metadata
+            ? { ...episode.metadata, fps: targetFps }
+            : episode.metadata,
+        };
+      }
+
+      const jointNames = resolveJointNames(episode.metadata, frames);
+      const lastSourceIndex = frames.length - 1;
+      let sourceIndex = 0;
+
+      const nextFrames = Array.from({ length: targetCount }, (_, idx) => {
+        const tNew = (duration * idx) / (targetCount - 1);
+
+        while (
+          sourceIndex < lastSourceIndex - 1 &&
+          sourceTimes[sourceIndex + 1] < tNew
+        ) {
+          sourceIndex += 1;
+        }
+
+        const t0 = sourceTimes[sourceIndex] ?? 0;
+        const t1 = sourceTimes[sourceIndex + 1] ?? t0;
+        const alpha = t1 > t0 ? (tNew - t0) / (t1 - t0) : 0;
+        const frameA = frames[sourceIndex];
+        const frameB = frames[sourceIndex + 1] ?? frameA;
+
+        const jointPositions: Record<string, number> = {};
+        jointNames.forEach((jointName) => {
+          const v0 = frameA.jointPositions[jointName];
+          const v1 = frameB.jointPositions[jointName] ?? v0;
+          if (!Number.isFinite(v0) || !Number.isFinite(v1)) {
+            jointPositions[jointName] = Number.isFinite(v0) ? v0 : v1 ?? 0;
+          } else {
+            jointPositions[jointName] = v0 + (v1 - v0) * alpha;
+          }
+        });
+
+        return {
+          timestamp: baseTime + tNew,
+          jointPositions,
+        };
+      });
+
+      const nextEpisode: Episode = {
+        ...episode,
+        frames: nextFrames,
+        metadata: episode.metadata
+          ? {
+              ...episode.metadata,
+              fps: targetFps,
+              num_frames: nextFrames.length,
+              episode_length_sec: duration / 1000,
+            }
+          : episode.metadata,
+      };
+      return nextEpisode;
+    },
+    [resolveJointNames]
+  );
 
   const handleEpisodeSave = useCallback(
     (episodeToSave: Episode, saveAsNew: boolean, newName?: string) => {
@@ -1075,6 +1160,30 @@ export const Sidebar = ({
       `Stopped recording. Episode ${recordedEpisodeNumber} saved with ${framesToPersist.length} frames`
     );
   }, [clearRecordingInterval, currentRecordingEpisodeId, episodes.length, setEpisodes, getJointOrderForFrames, recordingFps, robotBaseName]);
+
+  const applyTargetFps = useCallback(() => {
+    if (!Number.isFinite(targetFps) || targetFps <= 0) {
+      toast.error("Enter a valid target FPS");
+      return;
+    }
+    setEpisodes((prev) => {
+      let updatedCount = 0;
+      const next = prev.map((episode) => {
+        const fps = computeEpisodeFps(episode);
+        if (fps <= 0) return episode;
+        const mismatch = Math.abs(fps - targetFps) > FPS_MISMATCH_TOLERANCE;
+        if (!mismatch) return episode;
+        updatedCount += 1;
+        return resampleEpisodeToFps(episode, targetFps);
+      });
+      if (updatedCount === 0) {
+        toast.info("All episodes already match target FPS");
+        return prev;
+      }
+      toast.success(`Applied ${targetFps} FPS to ${updatedCount} episode(s)`);
+      return next;
+    });
+  }, [computeEpisodeFps, resampleEpisodeToFps, targetFps, setEpisodes]);
 
   const loadEpisodesFromDataFile = useCallback(
     async (file: File, options?: { suppressToast?: boolean; sourceName?: string }) => {
@@ -3441,6 +3550,11 @@ export const Sidebar = ({
           recordingStats={recordingStats}
           recordingFps={recordingFps}
           setRecordingFps={setRecordingFps}
+          fpsTarget={targetFps}
+          setFpsTarget={setTargetFps}
+          applyFpsTarget={applyTargetFps}
+          getEpisodeFps={computeEpisodeFps}
+          fpsTolerance={FPS_MISMATCH_TOLERANCE}
           startRecording={startRecording}
           stopRecording={stopRecording}
           handleFileUpload={handleFileUpload}

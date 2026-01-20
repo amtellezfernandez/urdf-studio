@@ -28,6 +28,11 @@ type EpisodesPanelProps = {
   recordingStats: { frames: number; seconds: number };
   recordingFps: number;
   setRecordingFps: (fps: number) => void;
+  fpsTarget: number;
+  setFpsTarget: (fps: number) => void;
+  applyFpsTarget: () => void;
+  getEpisodeFps: (episode: Episode) => number;
+  fpsTolerance?: number;
   startRecording: () => void;
   stopRecording: () => void;
   handleFileUpload: (files: FileList | null) => void | Promise<void>;
@@ -57,6 +62,11 @@ export const EpisodesPanel = ({
   recordingStats,
   recordingFps,
   setRecordingFps,
+  fpsTarget,
+  setFpsTarget,
+  applyFpsTarget,
+  getEpisodeFps,
+  fpsTolerance = 0.5,
   startRecording,
   stopRecording,
   handleFileUpload,
@@ -77,15 +87,22 @@ export const EpisodesPanel = ({
   setPlaybackSpeed,
   onToggleCollapse,
   isCollapsed,
-}: EpisodesPanelProps) => (
-  <div
-    className="overflow-hidden flex flex-col p-1.5 border-b border-border/20"
-    style={{
-      flex: `0 0 ${((1 - episodesViewHeight) * 100)}%`,
-      minHeight: "50px",
-    }}
-  >
-    <div className="flex-1 overflow-y-auto blender-scrollbar">
+}: EpisodesPanelProps) => {
+  const fpsMismatchCount = episodes.reduce((count, episode) => {
+    const fps = getEpisodeFps(episode);
+    if (fps <= 0 || fpsTarget <= 0) return count;
+    return Math.abs(fps - fpsTarget) > fpsTolerance ? count + 1 : count;
+  }, 0);
+
+  return (
+    <div
+      className="overflow-hidden flex flex-col p-1.5 border-b border-border/20"
+      style={{
+        flex: `0 0 ${((1 - episodesViewHeight) * 100)}%`,
+        minHeight: "50px",
+      }}
+    >
+      <div className="flex-1 overflow-y-auto blender-scrollbar">
       {/* Blender-style Menu Bar */}
       <div className="flex items-center gap-1.5 border-b border-border/50 pb-1 mb-1.5">
         {/* Record Button - Always Visible */}
@@ -168,6 +185,36 @@ export const EpisodesPanel = ({
           }}
           className="hidden"
         />
+      </div>
+
+      <div className="flex items-center gap-2 px-1.5 py-1 border-b border-border/50 mb-1.5">
+        <span className="text-[10px] text-muted-foreground">Target FPS</span>
+        <NumberInput
+          value={fpsTarget}
+          onValueChange={setFpsTarget}
+          min={1}
+          max={240}
+          step={1}
+          compact={true}
+          className="w-14"
+        />
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-6 px-2 text-xs"
+          onClick={applyFpsTarget}
+          disabled={episodes.length === 0}
+        >
+          Apply All
+        </Button>
+        {fpsMismatchCount > 0 && (
+          <Badge
+            variant="outline"
+            className="text-[9px] px-1.5 py-0 h-4 border-amber-500/40 text-amber-400 bg-amber-500/10"
+          >
+            {fpsMismatchCount} mismatch
+          </Badge>
+        )}
       </div>
 
       {/* Blender-style Timeline Controls */}
@@ -272,6 +319,11 @@ export const EpisodesPanel = ({
                     ? episode.frames[episode.frames.length - 1].timestamp
                     : 0;
                 const durationSeconds = (duration / 1000).toFixed(1);
+                const episodeFps = getEpisodeFps(episode);
+                const isFpsMismatch =
+                  fpsTarget > 0 &&
+                  episodeFps > 0 &&
+                  Math.abs(episodeFps - fpsTarget) > fpsTolerance;
                 const isPlaying =
                   currentPlayingEpisodeIndex === index && isPlayingAll;
                 const episodeCurrentFrame =
@@ -341,6 +393,17 @@ export const EpisodesPanel = ({
                           <span className="text-[10px] text-muted-foreground">
                             {durationSeconds}s
                           </span>
+                          {isFpsMismatch && (
+                            <>
+                              <span className="text-[10px] text-muted-foreground">•</span>
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1 py-0 h-3.5 border-amber-500/40 text-amber-400 bg-amber-500/10"
+                              >
+                                fps {episodeFps.toFixed(1)}
+                              </Badge>
+                            </>
+                          )}
                           <span className="text-[10px] text-muted-foreground">•</span>
                           <span
                             className={`text-[10px] font-mono tabular-nums ${
@@ -470,4 +533,5 @@ export const EpisodesPanel = ({
       </div>
     )}
   </div>
-);
+  );
+};
