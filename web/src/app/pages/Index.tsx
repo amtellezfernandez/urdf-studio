@@ -527,6 +527,7 @@ const Index = () => {
     showUrdfEditor,
     urdfEditorSplitView,
     recordingViewHeight,
+    angleUnit,
     urdfContentVersion,
     urdfFile,
     meshFiles,

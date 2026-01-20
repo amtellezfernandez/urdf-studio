@@ -67,6 +67,7 @@ interface EpisodeViewer3DModalProps {
   inline?: boolean; // If true, render inline instead of as modal
   showOnlyHeader?: boolean; // If true, only show the header (for collapsed view)
   onSaveEpisode?: (episode: Episode, saveAsNew: boolean, newName?: string) => void; // Callback to save/update episode
+  angleUnit?: "rad" | "deg";
 }
 
 // Helper to get current frame value
@@ -327,6 +328,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   inline = false,
   showOnlyHeader = false,
   onSaveEpisode,
+  angleUnit = "rad",
 }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const playbackSpeed = useViewerPlaybackStore((state) => state.playbackSpeed);
@@ -1208,6 +1210,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (!episode || episode.frames.length === 0) return "0.00s";
     
     const totalFrames = episode.frames.length;
+    const axisUnitLabel = angleUnit === "deg" ? "deg" : "rad";
+    const axisScale = angleUnit === "deg" ? (180 / Math.PI) : 1;
+    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
+    const axisJointName =
+      editingJoint ??
+      (selectedJointNames.length > 0 ? selectedJointNames[0] : null);
+    const axisRange = axisJointName ? jointRanges[axisJointName] : undefined;
+    const axisPadding = axisRange
+      ? (axisRange.max - axisRange.min) * 0.1 || 0.1
+      : 0;
+    const axisMin = axisRange ? axisRange.min - axisPadding : 0;
+    const axisMax = axisRange ? axisRange.max + axisPadding : 1;
+    const axisSpan = axisMax - axisMin || 1;
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
     const effectiveSpeed = playbackSpeed || 1.0;
     const frameDuration = totalFrames > 1 
@@ -1268,6 +1283,21 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ctx.moveTo(CANVAS_PADDING, y);
       ctx.lineTo(width - CANVAS_PADDING, y);
       ctx.stroke();
+
+      if (axisRange) {
+        const t = 1 - i / 5;
+        const axisValue = (axisMin + axisSpan * t) * axisScale;
+        const precision = angleUnit === "deg" ? 1 : 2;
+        ctx.fillStyle = "#71717a";
+        ctx.font = "9px monospace";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          `${axisValue.toFixed(precision)} ${axisUnitLabel}`,
+          CANVAS_PADDING - 6,
+          y
+        );
+      }
     }
 
     // Draw axes
@@ -1288,11 +1318,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.save();
     ctx.translate(15, height / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText("Joint Position", 0, 0);
+    ctx.fillText(`Joint Position (${axisUnitLabel})`, 0, 0);
     ctx.restore();
 
     // Draw joint curves
-    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
     const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
 
     selectedJointNames.forEach((jointName) => {
@@ -1437,7 +1466,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle, angleUnit]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {

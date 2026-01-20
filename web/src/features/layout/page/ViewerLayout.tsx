@@ -28,6 +28,7 @@ type ViewerLayoutProps = {
   showUrdfEditor: boolean;
   urdfEditorSplitView: boolean;
   recordingViewHeight: number;
+  angleUnit: "rad" | "deg";
   urdfContentVersion: number;
   urdfFile: File | null;
   meshFiles: MeshFiles;
@@ -76,6 +77,7 @@ export const ViewerLayout = ({
   showUrdfEditor,
   urdfEditorSplitView,
   recordingViewHeight,
+  angleUnit,
   urdfContentVersion,
   urdfFile,
   meshFiles,
@@ -276,6 +278,7 @@ export const ViewerLayout = ({
                       }
                     }}
                     inline={true}
+                    angleUnit={angleUnit}
                     globalCurrentFrame={currentFrame}
                     onSetGlobalFrame={(frame: number) => {
                       viewerPlayback.setFrame(frame);
