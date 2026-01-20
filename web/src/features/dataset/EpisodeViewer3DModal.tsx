@@ -1208,6 +1208,16 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     if (!episode || episode.frames.length === 0) return "0.00s";
     
     const totalFrames = episode.frames.length;
+    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
+    const axisJointName =
+      editingJoint ??
+      (selectedJointNames.length > 0 ? selectedJointNames[0] : null);
+    const axisRange = axisJointName ? jointRanges[axisJointName] : undefined;
+    const axisPadding = axisRange
+      ? (axisRange.max - axisRange.min) * 0.1 || 0.1
+      : 0;
+    const axisMin = axisRange ? axisRange.min - axisPadding : undefined;
+    const axisMax = axisRange ? axisRange.max + axisPadding : undefined;
     const totalDuration = episode.frames[totalFrames - 1].timestamp - episode.frames[0].timestamp;
     const effectiveSpeed = playbackSpeed || 1.0;
     const frameDuration = totalFrames > 1 
@@ -1291,8 +1301,25 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     ctx.fillText("Joint Position", 0, 0);
     ctx.restore();
 
+    if (
+      axisRange &&
+      Number.isFinite(axisMin) &&
+      Number.isFinite(axisMax) &&
+      axisMin !== undefined &&
+      axisMax !== undefined
+    ) {
+      const axisMid = (axisMin + axisMax) / 2;
+      const labelX = CANVAS_PADDING - 6;
+      ctx.fillStyle = "#71717a";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(axisMax.toFixed(3), labelX, CANVAS_PADDING);
+      ctx.fillText(axisMid.toFixed(3), labelX, CANVAS_PADDING + graphHeight / 2);
+      ctx.fillText(axisMin.toFixed(3), labelX, height - CANVAS_PADDING);
+    }
+
     // Draw joint curves
-    const selectedJointNames = jointNames.filter((name) => selectedJoints.has(name));
     const activeEpisode = (isEditMode && modifiedEpisode) ? modifiedEpisode : episode;
 
     selectedJointNames.forEach((jointName) => {
