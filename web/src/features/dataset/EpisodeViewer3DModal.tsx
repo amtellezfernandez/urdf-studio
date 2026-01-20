@@ -106,16 +106,21 @@ const calculateFrameFromMouse = (
     viewerPlayback.stopAnimation();
   };
 
-  const computeEpisodeFps = (candidate?: Episode | null) => {
+  const computeEffectiveFps = (candidate?: Episode | null) => {
     if (!candidate || candidate.frames.length < 2) return 0;
-    const metaFps = candidate.metadata?.fps;
-    if (Number.isFinite(metaFps) && metaFps > 0) {
-      return metaFps;
-    }
     const durationMs =
       candidate.frames[candidate.frames.length - 1].timestamp - candidate.frames[0].timestamp;
     if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
     return (candidate.frames.length - 1) / (durationMs / 1000);
+  };
+
+  const computeRecordedFps = (candidate?: Episode | null) => {
+    if (!candidate) return 0;
+    const metaFps = candidate.metadata?.fps;
+    if (Number.isFinite(metaFps) && metaFps > 0) {
+      return metaFps;
+    }
+    return computeEffectiveFps(candidate);
   };
 
 // Simple moving-average smoother for joint trajectories
@@ -437,18 +442,23 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     return map;
   }, [jointNames]);
 
-  const activeFps = useMemo(() => {
+  const effectiveFps = useMemo(() => {
     const target = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
-    return computeEpisodeFps(target);
+    return computeEffectiveFps(target);
+  }, [episode, modifiedEpisode, isEditMode]);
+
+  const recordedFps = useMemo(() => {
+    const target = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
+    return computeRecordedFps(target);
   }, [episode, modifiedEpisode, isEditMode]);
 
   useEffect(() => {
-    if (activeFps <= 0) return;
+    if (effectiveFps <= 0) return;
     setRetimeFps((prev) => {
-      const next = Number(activeFps.toFixed(2));
+      const next = Number(effectiveFps.toFixed(2));
       return Math.abs(prev - next) < 1e-3 ? prev : next;
     });
-  }, [activeFps]);
+  }, [effectiveFps]);
 
   // Listen to global frame updates from 3D viewer when playing
   useEffect(() => {
@@ -764,14 +774,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   }, [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]);
 
   const handleTimeScale = useCallback(
-    (scale: number) => {
+    (speed: number) => {
       if (!isEditMode || !modifiedEpisode) return;
-      if (!Number.isFinite(scale) || scale <= 0) {
-        toast.error("Enter a valid scale");
+      if (!Number.isFinite(speed) || speed <= 0) {
+        toast.error("Enter a valid speed");
         return;
       }
-      if (Math.abs(scale - 1) < 1e-4) {
-        toast.info("Scale is already 1x");
+      if (Math.abs(speed - 1) < 1e-4) {
+        toast.info("Speed is already 1x");
         return;
       }
       if (modifiedEpisode.frames.length < 2) {
@@ -787,6 +797,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         return;
       }
 
+      const scale = 1 / speed;
       const baseTime = modifiedEpisode.frames[startIndex].timestamp;
       const oldEndTime = modifiedEpisode.frames[endIndex].timestamp;
       const scaledEndTime = baseTime + (oldEndTime - baseTime) * scale;
@@ -826,8 +837,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       onSetGlobalFrame?.(startIndex);
       toast.success(
         resolved
-          ? `Retime ${scale.toFixed(2)}x (range)`
-          : `Retime ${scale.toFixed(2)}x (all)`
+          ? `Retime ${speed.toFixed(2)}x (range)`
+          : `Retime ${speed.toFixed(2)}x (all)`
       );
     },
     [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]
@@ -843,31 +854,58 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       toast.error("Not enough frames to rescale");
       return;
     }
-    const baseTime = modifiedEpisode.frames[0].timestamp;
-    const oldDuration =
-      modifiedEpisode.frames[modifiedEpisode.frames.length - 1].timestamp - baseTime;
-    if (!Number.isFinite(oldDuration) || oldDuration <= 0) {
+    const sourceFrames = modifiedEpisode.frames;
+    const baseTime = sourceFrames[0].timestamp;
+    const sourceTimes = sourceFrames.map((frame) => frame.timestamp - baseTime);
+    const sourceDuration = sourceTimes[sourceTimes.length - 1];
+    if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
       toast.error("Invalid timing data");
       return;
     }
 
-    const desiredDurationMs = ((modifiedEpisode.frames.length - 1) / retimeFps) * 1000;
-    const scale = desiredDurationMs / oldDuration;
-    if (!Number.isFinite(scale) || scale <= 0) {
-      toast.error("Invalid FPS scale");
-      return;
-    }
-    if (Math.abs(scale - 1) < 1e-4) {
+    const targetCount = Math.max(2, Math.round((sourceDuration / 1000) * retimeFps) + 1);
+    if (targetCount === sourceFrames.length) {
       toast.info("FPS already matches");
       return;
     }
 
-    const nextFrames = modifiedEpisode.frames.map((frame) => ({
-      ...frame,
-      timestamp: baseTime + (frame.timestamp - baseTime) * scale,
-    }));
-    const lastTimestamp =
-      nextFrames[nextFrames.length - 1]?.timestamp ?? modifiedEpisode.frames.at(-1)?.timestamp ?? 0;
+    const lastSourceIndex = sourceFrames.length - 1;
+    let sourceIndex = 0;
+
+    const nextFrames = Array.from({ length: targetCount }, (_, idx) => {
+      const tNew =
+        targetCount === 1 ? 0 : (sourceDuration * idx) / (targetCount - 1);
+
+      while (
+        sourceIndex < lastSourceIndex - 1 &&
+        sourceTimes[sourceIndex + 1] < tNew
+      ) {
+        sourceIndex += 1;
+      }
+
+      const t0 = sourceTimes[sourceIndex] ?? 0;
+      const t1 = sourceTimes[sourceIndex + 1] ?? t0;
+      const alpha = t1 > t0 ? (tNew - t0) / (t1 - t0) : 0;
+      const frameA = sourceFrames[sourceIndex];
+      const frameB = sourceFrames[sourceIndex + 1] ?? frameA;
+
+      const jointPositions: Record<string, number> = {};
+      for (const jointName of jointNames) {
+        const v0 = frameA.jointPositions[jointName];
+        const v1 = frameB.jointPositions[jointName] ?? v0;
+        if (!Number.isFinite(v0) || !Number.isFinite(v1)) {
+          jointPositions[jointName] = Number.isFinite(v0) ? v0 : v1 ?? 0;
+        } else {
+          jointPositions[jointName] = v0 + (v1 - v0) * alpha;
+        }
+      }
+
+      return {
+        timestamp: tNew,
+        jointPositions,
+      };
+    });
+
     const nextEpisode: Episode = {
       ...modifiedEpisode,
       frames: nextFrames,
@@ -876,18 +914,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
             ...modifiedEpisode.metadata,
             fps: retimeFps,
             num_frames: nextFrames.length,
-            episode_length_sec: lastTimestamp / 1000,
+            episode_length_sec: sourceDuration / 1000,
           }
         : undefined,
     };
 
     setModifiedEpisode(nextEpisode);
     pushToHistory(nextEpisode);
+    setTrimRange({ start: null, end: null });
     setCurrentFrame(0);
     preservedFrameRef.current = 0;
     onSetGlobalFrame?.(0);
-    toast.success(`Rescaled to ${retimeFps.toFixed(2)} FPS`);
-  }, [isEditMode, modifiedEpisode, retimeFps, pushToHistory, onSetGlobalFrame]);
+    toast.success(`Resampled to ${retimeFps.toFixed(2)} FPS`);
+  }, [isEditMode, modifiedEpisode, retimeFps, jointNames, pushToHistory, onSetGlobalFrame]);
 
   const handleAutoTrimRange = useCallback(() => {
     const targetEpisode = modifiedEpisode ?? episode;
@@ -2102,11 +2141,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <span className="tabular-nums text-muted-foreground">
                 {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds}s` : "0.00/0.00s"}
               </span>
-              {activeFps > 0 && (
+              {recordedFps > 0 && (
                 <>
                   <span className="text-muted-foreground/60">•</span>
                   <span className="tabular-nums text-muted-foreground">
-                    {activeFps.toFixed(2)} fps
+                    rec {recordedFps.toFixed(2)} fps
+                  </span>
+                </>
+              )}
+              {effectiveFps > 0 && (
+                <>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    eff {effectiveFps.toFixed(2)} fps
                   </span>
                 </>
               )}
@@ -2305,7 +2352,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Scale time (range or full timeline)</p>
+                    <p>Retime: 2x = faster, 0.5x = slower</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -2336,7 +2383,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Rescale timeline to FPS</p>
+                    <p>Resample frames to target FPS</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
