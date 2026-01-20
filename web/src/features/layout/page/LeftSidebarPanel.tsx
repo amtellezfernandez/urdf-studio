@@ -4,6 +4,7 @@ import { ChevronsRight } from "lucide-react";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import type { MeshFiles, ViewerEpisode } from "@/shared/types/feature";
+import type { Episode } from "@/features/dataset";
 import { SIDEBAR_RESIZER_WIDTH } from "@/features/layout/page/constants";
 
 type LeftSidebarPanelProps = {
@@ -64,6 +65,7 @@ type LeftSidebarPanelProps = {
     exportToLocal: () => void;
     exportToHuggingFace: () => void;
     openRerunViewer: () => void;
+    loadDemoEpisodes: (episodes: Episode[]) => void;
     isImportingFromHF: boolean;
     isExportingDataset: boolean;
     isUploadingToHF: boolean;

@@ -15,16 +15,17 @@ import { PageLayout } from "@/features/layout/page/PageLayout";
 
 import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/shared/types/feature";
 import { useUrdfLoader, useUrdfSelection } from "@/features/urdf";
-import { useObjectCreatorStore } from "@/features/objects";
+import { useObjectCreatorStore, useObjectStore } from "@/features/objects";
 import { useLayout } from "@/features/layout";
 import { useExportHandlers, useJointMappingPersistence } from "@/features/dataset/exports";
 import { useThemeAndGPUMode } from "@/features/theme";
 import { DEMO_ROBOT_URDF } from "@/shared/samples/demoRobot";
-import { createDemoEpisode } from "@/shared/samples/demoMotion";
+import { createDemoEpisodes } from "@/shared/samples/demoMotion";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { API_BASE_URL } from "@/shared/config/api";
 import { useIkConfigSync } from "@/features/ik/useIkConfigSync";
 import { useIkRegistrySync } from "@/features/ik/useIkRegistrySync";
+import * as THREE from "three";
 
 const Index = () => {
   useIkConfigSync();
@@ -32,6 +33,10 @@ const Index = () => {
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
+  const addCamera = useCameraStore((state) => state.addCamera);
+  const objects = useObjectStore((state) => state.objects);
+  const addObject = useObjectStore((state) => state.addObject);
+  const objectCount = objects.length;
   const {
     selectedJoint,
     setSelectedJoint,
@@ -201,26 +206,130 @@ const Index = () => {
     setJointValues(values);
   }, [setJointValues]);
 
+  const prepareDemoScene = useCallback(() => {
+    if (endEffectorLink) {
+      const hasGripperCamera = cameras.some(
+        (cam) => cam.parent_link === endEffectorLink && cam.name === "Gripper Top"
+      );
+      if (!hasGripperCamera) {
+        addCamera({
+          name: "Gripper Top",
+          parent_link: endEffectorLink,
+          pose: {
+            xyz: [0, 0, 0.06],
+            rpy: [-1.2, 0, 0],
+          },
+          intrinsics: {
+            width: 640,
+            height: 480,
+            fov_deg: 70,
+          },
+        });
+      }
+    }
+
+    if (objectCount > 0) return;
+
+    const baseCenter = robotBoundingBox
+      ? robotBoundingBox.getCenter(new THREE.Vector3())
+      : new THREE.Vector3(0, 0, 0);
+    const baseSize = robotBoundingBox
+      ? robotBoundingBox.getSize(new THREE.Vector3())
+      : new THREE.Vector3(0.5, 0.4, 0.4);
+    const baseZ = robotBoundingBox ? robotBoundingBox.min.z : 0;
+    const forwardOffset = Math.max(0.35, baseSize.x * 0.6 + 0.2);
+    const pedestalSize = new THREE.Vector3(
+      Math.max(0.22, baseSize.x * 0.4),
+      Math.max(0.18, baseSize.y * 0.3),
+      0.06
+    );
+    const pedestalPosition = new THREE.Vector3(
+      baseCenter.x + forwardOffset,
+      baseCenter.y,
+      baseZ + pedestalSize.z / 2
+    );
+
+    addObject({
+      type: "cube",
+      position: pedestalPosition,
+      size: pedestalSize,
+      color: "#1f2937",
+      trackedJointName: null,
+      isIkTarget: false,
+    });
+
+    const cubeSize = new THREE.Vector3(0.08, 0.08, 0.08);
+    addObject({
+      type: "cube",
+      position: pedestalPosition.clone().add(
+        new THREE.Vector3(-0.06, -0.05, (pedestalSize.z + cubeSize.z) / 2)
+      ),
+      size: cubeSize,
+      color: "#f97316",
+      trackedJointName: null,
+      isIkTarget: false,
+    });
+
+    addObject({
+      type: "cube",
+      position: pedestalPosition.clone().add(
+        new THREE.Vector3(0.05, 0.06, (pedestalSize.z + cubeSize.z) / 2)
+      ),
+      size: cubeSize,
+      color: "#38bdf8",
+      trackedJointName: null,
+      isIkTarget: false,
+    });
+
+    const wallSize = new THREE.Vector3(0.05, 0.22, 0.18);
+    addObject({
+      type: "cube",
+      position: pedestalPosition.clone().add(
+        new THREE.Vector3(0.12, 0, (pedestalSize.z + wallSize.z) / 2)
+      ),
+      size: wallSize,
+      color: "#64748b",
+      trackedJointName: null,
+      isIkTarget: false,
+    });
+  }, [addCamera, addObject, cameras, endEffectorLink, objectCount, robotBoundingBox]);
+
   const playDemoEpisode = useCallback(
     (jointNames: string[]) => {
       if (jointNames.length === 0) {
         toast.error("Demo motion requires a robot with joints loaded.");
         return;
       }
-      const demoEpisode = createDemoEpisode({
+      const demoEpisodes = createDemoEpisodes({
         jointNames,
         jointLimits,
       });
-      setViewerEpisode(demoEpisode);
+      const firstEpisode = demoEpisodes[0];
+      if (datasetActions?.loadDemoEpisodes) {
+        datasetActions.loadDemoEpisodes(demoEpisodes);
+      }
+      prepareDemoScene();
+      if (!firstEpisode) {
+        toast.error("Demo motion has no frames.");
+        return;
+      }
+      setViewerEpisode(firstEpisode);
       setIsViewerOpen(true);
-      viewerPlayback.playEpisode(toAnimationFrames(demoEpisode), { autoplay: true });
+      viewerPlayback.playEpisode(toAnimationFrames(firstEpisode), { autoplay: true });
       setTimeout(() => {
         if (!hasAnimationFrames) {
-          viewerPlayback.playEpisode(toAnimationFrames(demoEpisode), { autoplay: true });
+          viewerPlayback.playEpisode(toAnimationFrames(firstEpisode), { autoplay: true });
         }
       }, 300);
     },
-    [hasAnimationFrames, jointLimits, setIsViewerOpen, setViewerEpisode]
+    [
+      datasetActions,
+      hasAnimationFrames,
+      jointLimits,
+      prepareDemoScene,
+      setIsViewerOpen,
+      setViewerEpisode,
+    ]
   );
 
   const handleLoadQuickStart = useCallback(async () => {

@@ -251,6 +251,7 @@ interface SidebarProps {
     exportToLocal: () => void;
     exportToHuggingFace: () => void;
     openRerunViewer: () => void;
+    loadDemoEpisodes: (episodes: Episode[]) => void;
     isImportingFromHF: boolean;
     isExportingDataset: boolean;
     isUploadingToHF: boolean;
@@ -3252,6 +3253,25 @@ export const Sidebar = ({
     setEpisodes,
   ]);
 
+  const loadDemoEpisodes = useCallback(
+    (episodesToLoad: Episode[]) => {
+      if (!Array.isArray(episodesToLoad) || episodesToLoad.length === 0) {
+        toast.error("No demo episodes available");
+        return;
+      }
+      const normalized = renumberEpisodes(episodesToLoad);
+      setEpisodes(normalized);
+      setPlaybackMode(null);
+      setIsPlayingAll(false);
+      isPlayingAllRef.current = false;
+      currentLoadedEpisodeRef.current = null;
+      setCurrentPlayingEpisodeIndex(0);
+      viewerPlayback.stopAnimation();
+      viewerPlayback.setFrame(0);
+    },
+    [setEpisodes, setPlaybackMode, setIsPlayingAll, setCurrentPlayingEpisodeIndex]
+  );
+
   // Expose dataset actions to parent component
   useEffect(() => {
     if (onDatasetActionsReady) {
@@ -3269,6 +3289,7 @@ export const Sidebar = ({
             setIsRerunViewerModalOpen(true);
           }
         },
+        loadDemoEpisodes,
         isImportingFromHF: isImportingFromHFDataset,
         isExportingDataset,
         isUploadingToHF,
@@ -3281,6 +3302,7 @@ export const Sidebar = ({
     loadEpisodesFromHuggingFaceDataset,
     exportDatasetToLeRobotFormat,
     uploadEpisodesToHuggingFace,
+    loadDemoEpisodes,
     isImportingFromHFDataset,
     isExportingDataset,
     isUploadingToHF,

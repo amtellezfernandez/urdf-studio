@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import type { Episode } from "./episodes";
 
 type DatasetActions = {
   loadFromLocal: () => void;
@@ -6,6 +7,7 @@ type DatasetActions = {
   exportToLocal: () => void;
   exportToHuggingFace: () => void;
   openRerunViewer: () => void;
+  loadDemoEpisodes: (episodes: Episode[]) => void;
   isImportingFromHF: boolean;
   isExportingDataset: boolean;
   isUploadingToHF: boolean;
