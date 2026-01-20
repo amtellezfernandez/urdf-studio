@@ -10,7 +10,8 @@
     "lint": "eslint --config config/eslint.config.js .",
     "test": "vitest run --config config/vite.config.ts",
     "typecheck": "tsc -b --pretty false config/tsconfig.json",
-    "smoke": "npm run lint && npm run typecheck",
+    "dead-code": "node tools/scripts/dead-code-check.js",
+    "smoke": "npm run lint && npm run typecheck && npm run dead-code",
     "preview": "vite preview --config config/vite.config.ts",
     "setup": "node tools/scripts/setup.js",
     "start": "node tools/scripts/run.js"
