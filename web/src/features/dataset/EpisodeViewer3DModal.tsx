@@ -789,12 +789,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         return;
       }
 
-      const resolved = getResolvedTrimRange(modifiedEpisode.frames.length);
-      const startIndex = resolved?.start ?? 0;
-      const endIndex = resolved?.end ?? modifiedEpisode.frames.length - 1;
+      let resolved = getResolvedTrimRange(modifiedEpisode.frames.length);
+      let startIndex = resolved?.start ?? 0;
+      let endIndex = resolved?.end ?? modifiedEpisode.frames.length - 1;
       if (startIndex >= endIndex) {
-        toast.error("Select a valid range to retime");
-        return;
+        startIndex = 0;
+        endIndex = modifiedEpisode.frames.length - 1;
+        resolved = null;
+        setTrimRange({ start: null, end: null });
+        if (startIndex >= endIndex) {
+          toast.error("Not enough frames to retime");
+          return;
+        }
       }
 
       const baseFps = recordedFps > 0 ? recordedFps : effectiveFps > 0 ? effectiveFps : 30;
