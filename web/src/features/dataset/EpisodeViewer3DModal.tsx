@@ -101,10 +101,22 @@ const calculateFrameFromMouse = (
 // NOTE: We only call viewer3dStopAnimation, NOT viewer3dPlayAnimation(false)
 // because the parent's onSetGlobalFrame will call stopAllPlayback() which clears frames,
 // and calling viewer3dPlayAnimation with cleared frames would trigger "upload data first" error
-const updateViewerFrame = (frame: number) => {
-  viewerPlayback.setFrame(frame);
-  viewerPlayback.stopAnimation();
-};
+  const updateViewerFrame = (frame: number) => {
+    viewerPlayback.setFrame(frame);
+    viewerPlayback.stopAnimation();
+  };
+
+  const computeEpisodeFps = (candidate?: Episode | null) => {
+    if (!candidate || candidate.frames.length < 2) return 0;
+    const metaFps = candidate.metadata?.fps;
+    if (Number.isFinite(metaFps) && metaFps > 0) {
+      return metaFps;
+    }
+    const durationMs =
+      candidate.frames[candidate.frames.length - 1].timestamp - candidate.frames[0].timestamp;
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
+    return (candidate.frames.length - 1) / (durationMs / 1000);
+  };
 
 // Simple moving-average smoother for joint trajectories
 const smoothSeries = (values: number[], windowSize = 5, passes = 2) => {
@@ -355,6 +367,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     end: null,
   });
   const [retimeScale, setRetimeScale] = useState(1);
+  const [retimeFps, setRetimeFps] = useState(0);
 
   // Undo/Redo system (Blender-like)
   const [editHistory, setEditHistory] = useState<Episode[]>([]);
@@ -423,6 +436,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     });
     return map;
   }, [jointNames]);
+
+  const activeFps = useMemo(() => {
+    const target = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
+    return computeEpisodeFps(target);
+  }, [episode, modifiedEpisode, isEditMode]);
+
+  useEffect(() => {
+    if (activeFps <= 0) return;
+    setRetimeFps((prev) => {
+      const next = Number(activeFps.toFixed(2));
+      return Math.abs(prev - next) < 1e-3 ? prev : next;
+    });
+  }, [activeFps]);
 
   // Listen to global frame updates from 3D viewer when playing
   useEffect(() => {
@@ -806,6 +832,62 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     },
     [isEditMode, modifiedEpisode, getResolvedTrimRange, pushToHistory, onSetGlobalFrame]
   );
+
+  const handleRescaleFps = useCallback(() => {
+    if (!isEditMode || !modifiedEpisode) return;
+    if (!Number.isFinite(retimeFps) || retimeFps <= 0) {
+      toast.error("Enter a valid FPS");
+      return;
+    }
+    if (modifiedEpisode.frames.length < 2) {
+      toast.error("Not enough frames to rescale");
+      return;
+    }
+    const baseTime = modifiedEpisode.frames[0].timestamp;
+    const oldDuration =
+      modifiedEpisode.frames[modifiedEpisode.frames.length - 1].timestamp - baseTime;
+    if (!Number.isFinite(oldDuration) || oldDuration <= 0) {
+      toast.error("Invalid timing data");
+      return;
+    }
+
+    const desiredDurationMs = ((modifiedEpisode.frames.length - 1) / retimeFps) * 1000;
+    const scale = desiredDurationMs / oldDuration;
+    if (!Number.isFinite(scale) || scale <= 0) {
+      toast.error("Invalid FPS scale");
+      return;
+    }
+    if (Math.abs(scale - 1) < 1e-4) {
+      toast.info("FPS already matches");
+      return;
+    }
+
+    const nextFrames = modifiedEpisode.frames.map((frame) => ({
+      ...frame,
+      timestamp: baseTime + (frame.timestamp - baseTime) * scale,
+    }));
+    const lastTimestamp =
+      nextFrames[nextFrames.length - 1]?.timestamp ?? modifiedEpisode.frames.at(-1)?.timestamp ?? 0;
+    const nextEpisode: Episode = {
+      ...modifiedEpisode,
+      frames: nextFrames,
+      metadata: modifiedEpisode.metadata
+        ? {
+            ...modifiedEpisode.metadata,
+            fps: retimeFps,
+            num_frames: nextFrames.length,
+            episode_length_sec: lastTimestamp / 1000,
+          }
+        : undefined,
+    };
+
+    setModifiedEpisode(nextEpisode);
+    pushToHistory(nextEpisode);
+    setCurrentFrame(0);
+    preservedFrameRef.current = 0;
+    onSetGlobalFrame?.(0);
+    toast.success(`Rescaled to ${retimeFps.toFixed(2)} FPS`);
+  }, [isEditMode, modifiedEpisode, retimeFps, pushToHistory, onSetGlobalFrame]);
 
   const handleAutoTrimRange = useCallback(() => {
     const targetEpisode = modifiedEpisode ?? episode;
@@ -2020,6 +2102,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
               <span className="tabular-nums text-muted-foreground">
                 {episode ? `${calculateTime(displayFrame).replace('s', '')}/${durationSeconds}s` : "0.00/0.00s"}
               </span>
+              {activeFps > 0 && (
+                <>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {activeFps.toFixed(2)} fps
+                  </span>
+                </>
+              )}
               {isEditMode && resolvedTrimRange && (
                 <>
                   <span className="text-muted-foreground/60">•</span>
@@ -2216,6 +2306,37 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Scale time (range or full timeline)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex items-center gap-1 px-1">
+                <span className="text-[10px] text-muted-foreground">FPS</span>
+                <NumberInput
+                  value={retimeFps}
+                  onValueChange={setRetimeFps}
+                  min={1}
+                  max={240}
+                  step={1}
+                  compact={true}
+                  className="w-14"
+                />
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-6 px-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRescaleFps();
+                      }}
+                      disabled={totalFrames < 2}
+                    >
+                      <span className="text-xs">Set</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Rescale timeline to FPS</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
