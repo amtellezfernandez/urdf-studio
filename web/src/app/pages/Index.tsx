@@ -20,7 +20,6 @@ import { useObjectCreatorStore, useObjectStore } from "@/features/objects";
 import { useLayout } from "@/features/layout";
 import { useExportHandlers, useJointMappingPersistence } from "@/features/dataset/exports";
 import { useThemeAndGPUMode } from "@/features/theme";
-import { DEMO_ROBOT_URDF } from "@/shared/samples/demoRobot";
 import { createDemoEpisodes } from "@/shared/samples/demoMotion";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { API_BASE_URL } from "@/shared/config/api";
@@ -93,8 +92,6 @@ const Index = () => {
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const [pendingDemoEpisodes, setPendingDemoEpisodes] = useState<Episode[] | null>(null);
   const [pendingDemoScene, setPendingDemoScene] = useState(false);
-  const [pendingDemoLoad, setPendingDemoLoad] = useState(false);
-  const [hasAutoLoadedDemo, setHasAutoLoadedDemo] = useState(false);
   const {
     isPlaying,
     setIsPlaying,
@@ -420,24 +417,6 @@ const Index = () => {
   );
 
   const handleLoadQuickStart = useCallback(async () => {
-    const fallbackToDemo = (reason?: string) => {
-      if (reason) {
-        toast.error(reason);
-      }
-      try {
-        const demoFile = new File([DEMO_ROBOT_URDF], "demo_robot.urdf", {
-          type: "application/xml",
-        });
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(demoFile);
-        void loadFilesFromFolder(dataTransfer.files);
-        setPendingDemoLoad(true);
-        toast.success("Loaded demo robot");
-      } catch {
-        toast.error("Failed to load demo robot");
-      }
-    };
-
     try {
       const response = await fetch(`${API_BASE_URL}/samples/quickstart`);
       if (!response.ok) {
@@ -485,13 +464,11 @@ const Index = () => {
       }
 
       void loadFilesFromFolder(dataTransfer.files);
-      setPendingDemoLoad(true);
       toast.success(`Loaded ${data.label ?? "SO-ARM100"} sample`);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Quick start load failed";
-      console.warn("Quick start load failed, falling back to demo:", error);
-      fallbackToDemo(message);
+      const message = error instanceof Error ? error.message : "Quick start load failed";
+      console.warn("Quick start load failed:", error);
+      toast.error(message);
     }
   }, [loadFilesFromFolder]);
 
@@ -533,53 +510,6 @@ const Index = () => {
     datasetActions.loadDemoEpisodes(pendingDemoEpisodes);
     setPendingDemoEpisodes(null);
   }, [datasetActions, pendingDemoEpisodes]);
-
-  useEffect(() => {
-    if (!pendingDemoLoad || !hasLoadedFiles) return;
-    if (datasetActions?.hasEpisodes) {
-      setPendingDemoLoad(false);
-      return;
-    }
-    const jointNames = resolveDemoJointNames();
-    if (jointNames.length === 0) return;
-    const demoEpisodes = createDemoEpisodes({
-      jointNames,
-      jointLimits,
-    });
-    if (datasetActions?.loadDemoEpisodes) {
-      datasetActions.loadDemoEpisodes(demoEpisodes);
-    } else {
-      setPendingDemoEpisodes(demoEpisodes);
-    }
-    setPendingDemoLoad(false);
-  }, [
-    datasetActions,
-    hasLoadedFiles,
-    jointLimits,
-    pendingDemoLoad,
-    resolveDemoJointNames,
-  ]);
-
-  useEffect(() => {
-    if (hasAutoLoadedDemo || !hasLoadedFiles || !datasetActions?.loadDemoEpisodes) {
-      return;
-    }
-    if (datasetActions.hasEpisodes) return;
-    const jointNames = resolveDemoJointNames();
-    if (jointNames.length === 0) return;
-    const demoEpisodes = createDemoEpisodes({
-      jointNames,
-      jointLimits,
-    });
-    datasetActions.loadDemoEpisodes(demoEpisodes);
-    setHasAutoLoadedDemo(true);
-  }, [
-    datasetActions,
-    hasAutoLoadedDemo,
-    hasLoadedFiles,
-    jointLimits,
-    resolveDemoJointNames,
-  ]);
 
   useEffect(() => {
     if (!pendingDemoScene) return;

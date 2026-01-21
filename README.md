@@ -6,6 +6,11 @@ URDF Studio loads robot URDFs, lets you manipulate joints and keyframes, and rep
 - Node.js and npm
 - Python 3
 - `uv` (https://astral.sh/uv) for Python virtual environments
+- Build tools for native Python deps (Linux):
+  ```bash
+  sudo apt-get update
+  sudo apt-get install python3-dev build-essential
+  ```
 
 ## Setup
 ```bash

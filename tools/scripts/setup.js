@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import readline from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +59,15 @@ function logUrl(url, text) {
   log(`  ${text}: ${colors.pinkBright}${underline}${url}${colors.reset}`);
 }
 
+function isInteractive() {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+function getUvEnv() {
+  const uvCacheDir = process.env.UV_CACHE_DIR || join(rootDir, '.uv-cache');
+  return { ...process.env, UV_CACHE_DIR: uvCacheDir };
+}
+
 function question(query) {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -76,7 +85,9 @@ async function installDependencies() {
   logArrow('Installing dependencies...');
   
   try {
-    if (!existsSync(join(rootDir, 'node_modules'))) {
+    const nodeModulesPath = join(rootDir, 'node_modules');
+    const viteBin = join(nodeModulesPath, '.bin', 'vite');
+    if (!existsSync(nodeModulesPath) || !existsSync(viteBin)) {
       execSync('npm install', { stdio: 'inherit', cwd: rootDir, shell: true });
     } else {
       const inquirerPath = join(rootDir, 'node_modules', 'inquirer');
@@ -122,7 +133,23 @@ async function setupHuggingFace() {
   const config = loadConfig();
   const currentToken = config.huggingfaceToken || '';
   const configPath = getConfigPath();
-  
+
+  if (process.env.URDF_STUDIO_SKIP_TOKENS) {
+    logInfo('Token setup skipped (URDF_STUDIO_SKIP_TOKENS is set).');
+    return;
+  }
+
+  if (!isInteractive()) {
+    logInfo('Non-interactive session detected. Skipping HuggingFace token setup.');
+    return;
+  }
+
+  const hfAnswer = (await question('  Set up HuggingFace token now? (y/N): ')).trim().toLowerCase();
+  if (hfAnswer !== 'y' && hfAnswer !== 'yes') {
+    logInfo('HuggingFace token setup skipped by user.');
+    return;
+  }
+
   if (currentToken) {
     const maskedToken = currentToken.substring(0, 8) + '...' + currentToken.substring(currentToken.length - 4);
     logInfo(`Current token: ${colors.pinkBright}${maskedToken}${colors.reset}`);
@@ -161,15 +188,21 @@ async function setupHuggingFace() {
   log('');
   
   // Ask for token input (completely hidden)
-  const inquirer = (await import('inquirer')).default;
-  const { token } = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'token',
-      message: `${colors.pinkBright}  Enter your HuggingFace token (or press Enter to skip):${colors.reset}`,
-      mask: '', // Completely hidden
-    },
-  ]);
+  let token = '';
+  try {
+    const inquirer = (await import('inquirer')).default;
+    ({ token } = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'token',
+        message: `${colors.pinkBright}  Enter your HuggingFace token (or press Enter to skip):${colors.reset}`,
+        mask: '', // Completely hidden
+      },
+    ]));
+  } catch (e) {
+    logInfo(`Token prompt unavailable (${e?.message || 'unknown error'}).`);
+    token = (await question('  Enter your HuggingFace token (visible input, or press Enter to skip): ')).trim();
+  }
   
   if (token?.trim()) {
     config.huggingfaceToken = token.trim();
@@ -189,7 +222,23 @@ async function setupGitHub() {
   const config = loadConfig();
   const currentToken = config.githubToken || '';
   const configPath = getConfigPath();
-  
+
+  if (process.env.URDF_STUDIO_SKIP_TOKENS) {
+    logInfo('Token setup skipped (URDF_STUDIO_SKIP_TOKENS is set).');
+    return;
+  }
+
+  if (!isInteractive()) {
+    logInfo('Non-interactive session detected. Skipping GitHub token setup.');
+    return;
+  }
+
+  const ghAnswer = (await question('  Set up GitHub token now? (y/N): ')).trim().toLowerCase();
+  if (ghAnswer !== 'y' && ghAnswer !== 'yes') {
+    logInfo('GitHub token setup skipped by user.');
+    return;
+  }
+
   if (currentToken) {
     const maskedToken = currentToken.substring(0, 8) + '...' + currentToken.substring(currentToken.length - 4);
     logInfo(`Current token: ${colors.purpleBright}${maskedToken}${colors.reset}`);
@@ -235,15 +284,21 @@ async function setupGitHub() {
   log('');
   
   // Ask for token input (completely hidden)
-  const inquirer = (await import('inquirer')).default;
-  const { token } = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'token',
-      message: `${colors.purpleBright}  Enter your GitHub token (or press Enter to skip):${colors.reset}`,
-      mask: '', // Completely hidden
-    },
-  ]);
+  let token = '';
+  try {
+    const inquirer = (await import('inquirer')).default;
+    ({ token } = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'token',
+        message: `${colors.purpleBright}  Enter your GitHub token (or press Enter to skip):${colors.reset}`,
+        mask: '', // Completely hidden
+      },
+    ]));
+  } catch (e) {
+    logInfo(`Token prompt unavailable (${e?.message || 'unknown error'}).`);
+    token = (await question('  Enter your GitHub token (visible input, or press Enter to skip): ')).trim();
+  }
   
   if (token?.trim()) {
     config.githubToken = token.trim();
@@ -271,13 +326,15 @@ function findUv() {
   }
 
   // Try to find uv in PATH
-  try {
-    const result = execSync('command -v uv', { stdio: 'pipe', encoding: 'utf-8', shell: true }).trim();
-    if (result && existsSync(result)) {
-      return result;
+  const pathEnv = process.env.PATH || '';
+  for (const dir of pathEnv.split(':')) {
+    if (!dir) {
+      continue;
     }
-  } catch (e) {
-    // Not in PATH
+    const candidate = join(dir, 'uv');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
   }
 
   return null;
@@ -315,7 +372,12 @@ async function checkRerun() {
         // Fallback to any available python3
         pythonPath = 'python3';
       }
-      execSync(`"${uvPath}" venv --python ${pythonPath}`, { cwd: rootDir, stdio: 'inherit', shell: true });
+      execSync(`"${uvPath}" venv --python ${pythonPath}`, {
+        cwd: rootDir,
+        stdio: 'inherit',
+        shell: true,
+        env: getUvEnv()
+      });
       logSuccess('Virtual environment created');
     } catch (e) {
       log('✗ Failed to create virtual environment', colors.yellow);
@@ -327,28 +389,21 @@ async function checkRerun() {
 
   // Check if rerun-sdk is already installed
   try {
-    execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, { stdio: 'pipe' });
-    const version = execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, {
-      stdio: 'pipe',
-      encoding: 'utf-8'
-    }).trim();
-    logSuccess(`Rerun SDK already installed (version ${version})`);
+    execFileSync(venvPython, ['-c', 'import rerun; print(rerun.__version__)'], { stdio: 'inherit' });
+    logSuccess('Rerun SDK already installed');
   } catch (e) {
     // Not installed, proceed with installation
     logInfo('Installing rerun-sdk in virtual environment...');
     try {
-      execSync(`"${uvPath}" pip install --python ${venvPython} rerun-sdk`, {
+      execFileSync(uvPath, ['pip', 'install', '--python', venvPython, 'rerun-sdk'], {
         cwd: rootDir,
         stdio: 'inherit',
-        shell: true
+        env: getUvEnv()
       });
 
       // Verify installation
-      const version = execSync(`${venvPython} -c "import rerun; print(rerun.__version__)"`, {
-        stdio: 'pipe',
-        encoding: 'utf-8'
-      }).trim();
-      logSuccess(`Rerun SDK installed successfully (version ${version})`);
+      execFileSync(venvPython, ['-c', 'import rerun; print(rerun.__version__)'], { stdio: 'inherit' });
+      logSuccess('Rerun SDK installed successfully');
       logInfo('   Virtual environment: .venv/');
     } catch (installError) {
       log('✗ Failed to install rerun-sdk', colors.yellow);
@@ -361,11 +416,10 @@ async function checkRerun() {
   }
   // Check if placo is already installed
   try {
-    const version = execSync(
-      `${venvPython} -c "import placo; print(getattr(placo, '__version__', 'unknown'))"`,
-      { stdio: 'pipe', encoding: 'utf-8' }
-    ).trim();
-    logSuccess(`Placo already installed (version ${version})`);
+    execFileSync(venvPython, ['-c', "import placo; print(getattr(placo, '__version__', 'unknown'))"], {
+      stdio: 'inherit'
+    });
+    logSuccess('Placo already installed');
     return true;
   } catch (e) {
     // Not installed, proceed with installation
@@ -374,18 +428,17 @@ async function checkRerun() {
   // Install placo in the virtual environment
   logInfo('Installing placo in virtual environment...');
   try {
-    execSync(`"${uvPath}" pip install --python ${venvPython} placo`, {
+    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, 'placo'], {
       cwd: rootDir,
       stdio: 'inherit',
-      shell: true
+      env: getUvEnv()
     });
 
     // Verify installation
-    const version = execSync(
-      `${venvPython} -c "import placo; print(getattr(placo, '__version__', 'unknown'))"`,
-      { stdio: 'pipe', encoding: 'utf-8' }
-    ).trim();
-    logSuccess(`Placo installed successfully (version ${version})`);
+    execFileSync(venvPython, ['-c', "import placo; print(getattr(placo, '__version__', 'unknown'))"], {
+      stdio: 'inherit'
+    });
+    logSuccess('Placo installed successfully');
     logInfo('   Virtual environment: .venv/');
     return true;
   } catch (installError) {
@@ -398,12 +451,84 @@ async function checkRerun() {
   }
 }
 
+async function installBackendDeps() {
+  log('');
+  logArrow('🔧 Installing backend Python dependencies');
+  log('');
+
+  const venvPath = join(rootDir, '.venv');
+  const venvPython = join(venvPath, 'bin', 'python3');
+  const uvPath = findUv();
+
+  if (!existsSync(venvPython)) {
+    logInfo('Python virtual environment not found. Run setup first.');
+    return false;
+  }
+  if (!uvPath) {
+    log('✗ uv not found. Please install uv first:', colors.yellow);
+    return false;
+  }
+
+  const deps = [
+    'fastapi',
+    'uvicorn',
+    'pydantic',
+    'numpy',
+    'yourdfpy',
+    'jax',
+    'jaxlib',
+    'jax_dataclasses',
+    'jaxlie',
+    'jaxls'
+  ];
+  logInfo(`Installing: ${deps.join(', ')}`);
+  try {
+    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...deps], {
+      cwd: rootDir,
+      stdio: 'inherit',
+      env: getUvEnv()
+    });
+    const pyrokiPath = join(rootDir, 'vendor', 'pyroki');
+    if (existsSync(pyrokiPath)) {
+      let pythonInclude = '';
+      try {
+        pythonInclude = execFileSync(
+          venvPython,
+          ['-c', "import sysconfig; print(sysconfig.get_path('include'))"],
+          { encoding: 'utf-8' }
+        ).trim();
+      } catch (e) {
+        pythonInclude = '';
+      }
+      if (!pythonInclude || !existsSync(join(pythonInclude, 'Python.h'))) {
+        log('✗ Python headers not found (Python.h). Install python3-dev and try again.', colors.yellow);
+        logInfo('   Example (Debian/Ubuntu): sudo apt-get install python3-dev build-essential');
+        return false;
+      }
+      logInfo('Installing: pyroki (editable)');
+      execFileSync(uvPath, ['pip', 'install', '--python', venvPython, '-e', pyrokiPath], {
+        cwd: rootDir,
+        stdio: 'inherit',
+        env: getUvEnv()
+      });
+    }
+    logSuccess('Backend dependencies installed');
+    return true;
+  } catch (e) {
+    log('✗ Failed to install backend dependencies', colors.yellow);
+    logInfo(`   You can try installing manually:`);
+    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 ${deps.join(' ')}`);
+    return false;
+  }
+}
+
 async function main() {
   console.log(banner);
   
   try {
     await installDependencies();
     await checkRerun();
+    await installBackendDeps();
     await setupHuggingFace();
     await setupGitHub();
     

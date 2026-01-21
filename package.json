@@ -47,6 +47,7 @@
     "react-router-dom": "^6.30.1",
     "reactflow": "^11.11.4",
     "sonner": "^1.7.4",
+    "hls.js": "^1.5.15",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.160.1",

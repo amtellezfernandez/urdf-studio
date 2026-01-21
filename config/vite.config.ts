@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(webRoot, "src"),
+      "hls.js": path.resolve(rootDir, "node_modules", "hls.js", "dist", "hls.js"),
     },
   },
   build: {

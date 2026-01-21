@@ -2,6 +2,7 @@ node_modules
 .urdf-studio-config.json
 .npmrc
 .venv
+.uv-cache
 amd-hackathon/
 **/dist/
 bun.lockb
