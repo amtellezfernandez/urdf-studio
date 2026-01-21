@@ -57,7 +57,7 @@ export const BlenderPanel = ({ title, defaultOpen = true, children, className, a
 };
 
 interface BlenderPropertyRowProps {
-  label: string;
+  label: string | React.ReactNode;
   children: React.ReactNode;
   className?: string;
   labelWidth?: string;
@@ -80,4 +80,3 @@ export const BlenderPropertyRow = ({
     </div>
   );
 };
-

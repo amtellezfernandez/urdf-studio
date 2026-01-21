@@ -283,7 +283,8 @@ const Index = () => {
     );
     const targetPosition = pedestalPosition.clone().add(new THREE.Vector3(0, 0, 0.08));
 
-    const cameraLink = resolveDemoCameraLink();
+    const demoGripperLink = availableLinks.find((link) => /gripper_frame_link/i.test(link));
+    const cameraLink = demoGripperLink ?? resolveDemoCameraLink();
     if (cameraLink) {
       const hasGripperCamera = cameras.some(
         (cam) => cam.parent_link === cameraLink && cam.name === "Gripper Top"
@@ -294,17 +295,26 @@ const Index = () => {
             /(gripper_frame|tool0|tool|tcp|end_effector|ee)/i.test(link)
           ) ?? null;
         const pose =
-          autoComputeCameraPoseDefault(robot, cameraLink, {
-            aimLink,
-            targetPosition,
-            robotBoundingBox,
-            marginForward: 0.05,
-            marginUp: 0.02,
-            rollOffset: Math.PI / 2,
-          }) ?? {
-            xyz: [0.02, 0, 0.08] as [number, number, number],
-            rpy: [0, 0, 0] as [number, number, number],
-          };
+          demoGripperLink
+            ? {
+                xyz: [-0.020000000000000004, 3.469446951953614e-18, -0.05000000000000001] as [
+                  number,
+                  number,
+                  number
+                ],
+                rpy: [0, Math.PI / 2, 0] as [number, number, number],
+              }
+            : autoComputeCameraPoseDefault(robot, cameraLink, {
+                aimLink,
+                targetPosition,
+                robotBoundingBox,
+                marginForward: 0.05,
+                marginUp: 0.02,
+                rollOffset: Math.PI / 2,
+              }) ?? {
+                xyz: [0.02, 0, 0.08] as [number, number, number],
+                rpy: [0, 0, 0] as [number, number, number],
+              };
         addCamera({
           name: "Gripper Top",
           parent_link: cameraLink,

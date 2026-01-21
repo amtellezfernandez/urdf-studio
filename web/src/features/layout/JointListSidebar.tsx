@@ -684,6 +684,13 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
 
   const radToDeg = (rad: number) => (rad * 180) / Math.PI;
   const degToRad = (deg: number) => (deg * Math.PI) / 180;
+  const axisLabel = (label: string, colorClass: string, suffix?: string) => (
+    <span className="inline-flex items-center gap-1">
+      <span className={`h-1.5 w-1.5 rounded-full ${colorClass}`} />
+      <span>{label}</span>
+      {suffix ? <span className="text-[9px] text-muted-foreground/70">{suffix}</span> : null}
+    </span>
+  );
 
   return (
     <div className="p-1" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
@@ -713,7 +720,9 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             </Select>
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Position X">
+          <div className="pt-1 text-[9px] text-muted-foreground/70 uppercase tracking-wide">Pose</div>
+
+          <BlenderPropertyRow label={axisLabel("Pos X", "bg-[#ff6b6b]", "m")}>
             <NumberInput
               value={camera.pose.xyz[0]}
               onValueChange={(val) => {
@@ -726,7 +735,7 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Position Y">
+          <BlenderPropertyRow label={axisLabel("Pos Y", "bg-[#57d38c]", "m")}>
             <NumberInput
               value={camera.pose.xyz[1]}
               onValueChange={(val) => {
@@ -739,7 +748,7 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Position Z">
+          <BlenderPropertyRow label={axisLabel("Pos Z", "bg-[#5aa9ff]", "m")}>
             <NumberInput
               value={camera.pose.xyz[2]}
               onValueChange={(val) => {
@@ -752,7 +761,11 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Roll">
+          <div className="pt-1 text-[9px] text-muted-foreground/70 uppercase tracking-wide">
+            Rotation <span className="normal-case">(deg, RPY: X/Y/Z)</span>
+          </div>
+
+          <BlenderPropertyRow label={axisLabel("Roll (X)", "bg-[#ff6b6b]", "deg")}>
             <NumberInput
               value={radToDeg(camera.pose.rpy[0])}
               onValueChange={(val) => {
@@ -765,7 +778,7 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Pitch">
+          <BlenderPropertyRow label={axisLabel("Pitch (Y)", "bg-[#57d38c]", "deg")}>
             <NumberInput
               value={radToDeg(camera.pose.rpy[1])}
               onValueChange={(val) => {
@@ -778,7 +791,7 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Yaw">
+          <BlenderPropertyRow label={axisLabel("Yaw (Z)", "bg-[#5aa9ff]", "deg")}>
             <NumberInput
               value={radToDeg(camera.pose.rpy[2])}
               onValueChange={(val) => {
@@ -791,7 +804,9 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Width">
+          <div className="pt-1 text-[9px] text-muted-foreground/70 uppercase tracking-wide">Intrinsics</div>
+
+          <BlenderPropertyRow label="Width (px)">
             <NumberInput
               value={camera.intrinsics.width}
               onValueChange={(val) => {
@@ -806,7 +821,7 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="Height">
+          <BlenderPropertyRow label="Height (px)">
             <NumberInput
               value={camera.intrinsics.height}
               onValueChange={(val) => {
@@ -821,7 +836,7 @@ const CameraEditorPanel = ({ cameraId, availableLinks }: CameraEditorPanelProps)
             />
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow label="FOV">
+          <BlenderPropertyRow label="FOV (deg)">
             <NumberInput
               value={camera.intrinsics.fov_deg}
               onValueChange={(val) => {
