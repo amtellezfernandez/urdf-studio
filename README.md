@@ -19,6 +19,11 @@ npm run setup
 
 This installs npm dependencies, creates a Python virtual environment, and installs the backend Python deps (Rerun SDK, Placo). It also prompts for optional Hugging Face and GitHub tokens.
 
+If you want the Quick Start sample (SO-ARM100), initialize the submodules:
+```bash
+git submodule update --init --recursive
+```
+
 ## Run
 ```bash
 npm run start
