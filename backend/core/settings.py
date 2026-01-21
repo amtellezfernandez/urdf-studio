@@ -21,6 +21,13 @@ def _read_str(key: str, fallback: str) -> str:
     return raw if raw else fallback
 
 
+def _read_bool(key: str, fallback: bool) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return fallback
+    return raw.strip().lower() not in {"0", "false", "no", ""}
+
+
 def _build_cors_origins(web_host: str, web_port: int) -> list[str]:
     candidates = {web_host, "localhost", "127.0.0.1"}
     if web_host in {"0.0.0.0", "::"}:
@@ -38,6 +45,7 @@ class Settings:
     rerun_web_port: int
     rerun_ws_port: int
     cors_origins: list[str]
+    enable_metrics: bool
 
 
 def load_settings() -> Settings:
@@ -50,6 +58,7 @@ def load_settings() -> Settings:
     rerun_web_port = _read_int("URDF_RERUN_WEB_PORT", get_config_value(config, ["rerun", "webPort"], 9090))
     rerun_ws_port = _read_int("URDF_RERUN_WS_PORT", get_config_value(config, ["rerun", "wsPort"], 9876))
     cors_origins = _build_cors_origins(web_host, web_port)
+    enable_metrics = _read_bool("URDF_STUDIO_METRICS", False)
     return Settings(
         web_host=web_host,
         web_port=web_port,
@@ -59,6 +68,7 @@ def load_settings() -> Settings:
         rerun_web_port=rerun_web_port,
         rerun_ws_port=rerun_ws_port,
         cors_origins=cors_origins,
+        enable_metrics=enable_metrics,
     )
 
 

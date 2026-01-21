@@ -61,6 +61,14 @@ export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 320;
 const FPS_MISMATCH_TOLERANCE = 0.5;
 const VELOCITY_LIMIT_TOLERANCE = 0.05;
+const metricsEnabled =
+  typeof window !== "undefined" &&
+  Boolean((window as any).__URDF_METRICS__ || import.meta.env.VITE_ENABLE_METRICS === "1");
+
+const logMetric = (name: string, payload: Record<string, unknown>) => {
+  if (!metricsEnabled || typeof performance === "undefined") return;
+  console.debug(`[metrics] ${name}`, { t_ms: performance.now(), ...payload });
+};
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -2044,11 +2052,14 @@ export const Sidebar = ({
 
       // Generate v3 dataset format using common helper
       const datasetName = `${robotBaseName}_v3`;
+      const packStart = metricsEnabled ? performance.now() : 0;
       const JSZip = await loadJSZip();
       const zip = new JSZip();
       await generateV3DatasetArchive(episodes, robotBaseName, zip, datasetName, robotName, availableJointsStore);
       const blob = await zip.generateAsync({ type: "blob" });
-      
+      const packDurationMs = metricsEnabled ? performance.now() - packStart : 0;
+      const blobSize = blob.size ?? 0;
+
       // Get total frames for success message
       const episodeData = buildEpisodeDataForV3(episodes, robotBaseName, robotName, availableJointsStore);
       const { totalFrames } = episodeData;
@@ -2059,6 +2070,7 @@ export const Sidebar = ({
         `Uploading v3 dataset to Hugging Face Space ${targetSpace.owner}/${targetSpace.name}...`
       );
 
+      const uploadStart = metricsEnabled ? performance.now() : 0;
       const response = await fetch(
         `https://huggingface.co/api/spaces/${encodeURIComponent(targetSpace.owner)}/${encodeURIComponent(targetSpace.name)}/upload?path=${encodeURIComponent(`${datasetName}.zip`)}`,
         {
@@ -2074,6 +2086,17 @@ export const Sidebar = ({
         const errorText = await response.text();
         throw new Error(errorText || "Upload failed");
       }
+
+      const uploadDurationMs = metricsEnabled ? performance.now() - uploadStart : 0;
+      logMetric("dataset.upload.hf", {
+        datasetName,
+        episodes: episodes.length,
+        totalFrames,
+        blobBytes: blobSize,
+        packDurationMs,
+        uploadDurationMs,
+        space: `${targetSpace.owner}/${targetSpace.name}`,
+      });
 
       toast.success(
         `Uploaded v3 dataset (${episodes.length} episodes, ${totalFrames} frames) to Hugging Face Space ${targetSpace.owner}/${targetSpace.name}`
@@ -2110,16 +2133,31 @@ export const Sidebar = ({
     setIsExportingDataset(true);
     try {
       const datasetName = `${robotBaseName}_v3`;
+      const exportStart = metricsEnabled ? performance.now() : 0;
       const JSZip = await loadJSZip();
       const zip = new JSZip();
       await generateV3DatasetArchive(episodes, robotBaseName, zip, datasetName, robotName, availableJointsStore);
       const blob = await zip.generateAsync({ type: "blob" });
+      const { totalFrames } = buildEpisodeDataForV3(
+        episodes,
+        robotBaseName,
+        robotName,
+        availableJointsStore
+      );
+      const exportDurationMs = metricsEnabled ? performance.now() - exportStart : 0;
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `${datasetName}.zip`;
       link.click();
       URL.revokeObjectURL(url);
+      logMetric("dataset.export.local", {
+        datasetName,
+        episodes: episodes.length,
+        totalFrames,
+        blobBytes: blob.size ?? 0,
+        durationMs: exportDurationMs,
+      });
       toast.success("LeRobotDataset v3 archive generated");
     } catch (error) {
       console.error(error);
@@ -2136,6 +2174,7 @@ export const Sidebar = ({
     }
 
     const datasetName = `temp_mix_${Date.now()}`;
+    const exportStart = metricsEnabled ? performance.now() : 0;
     const JSZip = await loadJSZip();
     const zip = new JSZip();
     await generateV3DatasetArchive(
@@ -2148,6 +2187,21 @@ export const Sidebar = ({
     );
 
     const blob = await zip.generateAsync({ type: "blob" });
+    const { totalFrames } = buildEpisodeDataForV3(
+      episodes,
+      robotBaseName,
+      robotName,
+      availableJointsStore
+    );
+    if (metricsEnabled) {
+      logMetric("dataset.export.temp", {
+        datasetName,
+        episodes: episodes.length,
+        totalFrames,
+        blobBytes: blob.size ?? 0,
+        durationMs: performance.now() - exportStart,
+      });
+    }
     return blob;
   }, [episodes, robotBaseName, robotName, availableJointsStore]);
 

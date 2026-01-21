@@ -19,6 +19,14 @@ const cancelledRequests = new Set<string>();
 const queue: IkSolveRequest[] = [];
 const inFlight = new Set<string>();
 const MAX_CONCURRENT = 2;
+const metricsEnabled =
+  typeof performance !== "undefined" &&
+  Boolean((self as any).__URDF_METRICS__ || (import.meta as any).env?.VITE_ENABLE_METRICS === "1");
+
+const logMetric = (name: string, payload: Record<string, unknown>) => {
+  if (!metricsEnabled) return;
+  console.debug(`[metrics] ${name}`, { t_ms: performance.now(), ...payload });
+};
 
 const postResult = (response: IkSolveResponse) => {
   self.postMessage(response);
@@ -44,9 +52,12 @@ const solveWithBackend = async (
   error?: string;
   status?: IkSolveResponse["status"];
 }> => {
+  const start = metricsEnabled ? performance.now() : 0;
   const controller = new AbortController();
   inFlightControllers.set(request.requestId, controller);
   const timeout = setTimeout(() => controller.abort(), remainingMs);
+  let status: IkSolveResponse["status"] | undefined;
+  let okFlag = false;
 
   try {
     const payload = {
@@ -67,29 +78,43 @@ const solveWithBackend = async (
     });
 
     if (!response.ok) {
-      return { ok: false, error: await parseErrorMessage(response), status: "solver_error" };
+      status = "solver_error";
+      return { ok: false, error: await parseErrorMessage(response), status };
     }
 
     const data = (await response.json()) as IkResponsePayload;
     if (!data?.solution) {
-      return { ok: false, error: "IK solve returned no solution", status: "solver_error" };
+      status = "solver_error";
+      return { ok: false, error: "IK solve returned no solution", status };
     }
 
+    okFlag = true;
     return { ok: true, result: data };
   } catch (error) {
     if (controller.signal.aborted) {
-      const status = cancelledRequests.has(request.requestId) ? "cancelled" : "timeout";
+      status = cancelledRequests.has(request.requestId) ? "cancelled" : "timeout";
       return { ok: false, error: "IK solve aborted", status };
     }
+    status = "solver_error";
     return {
       ok: false,
       error: error instanceof Error ? error.message : "IK solve failed",
-      status: "solver_error",
+      status,
     };
   } finally {
     clearTimeout(timeout);
     if (inFlightControllers.get(request.requestId) === controller) {
       inFlightControllers.delete(request.requestId);
+    }
+    if (metricsEnabled) {
+      logMetric("ik.backend", {
+        endpoint,
+        solver: strategy.solverId,
+        ok: okFlag,
+        status,
+        durationMs: performance.now() - start,
+        remainingBudgetMs: remainingMs,
+      });
     }
   }
 };
