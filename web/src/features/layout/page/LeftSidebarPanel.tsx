@@ -3,7 +3,7 @@ import { Sidebar } from "@/features/layout/Sidebar";
 import { ChevronsRight } from "lucide-react";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import type { JointAxisMap, JointLimits } from "@/features/urdf";
-import type { MeshFiles, ViewerEpisode } from "@/shared/types/feature";
+import type { JointLimitMode, MeshFiles, ViewerEpisode } from "@/shared/types/feature";
 import type { Episode } from "@/features/dataset";
 import { SIDEBAR_RESIZER_WIDTH } from "@/features/layout/page/constants";
 
@@ -71,6 +71,8 @@ type LeftSidebarPanelProps = {
     isUploadingToHF: boolean;
     hasEpisodes: boolean;
     isRerunViewerOpen: boolean;
+    limitCorrectionMode: JointLimitMode;
+    setLimitCorrectionMode: (mode: JointLimitMode) => void;
   }) => void;
   onSidebarResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
 };

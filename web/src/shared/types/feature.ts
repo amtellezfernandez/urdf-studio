@@ -6,6 +6,7 @@ export interface MeshFiles {
 export type RotationAxis = "x" | "y" | "z";
 export type UrdfViewMode = "original" | "modified" | "split";
 export type AngleUnit = "rad" | "deg";
+export type JointLimitMode = "report" | "clamp" | "shift";
 
 type DirectoryPickerOptions = FileSystemGetDirectoryOptions & {
   mode?: "read" | "readwrite";
@@ -53,6 +54,7 @@ export interface JointMapping {
   urdfJoint: string;
   offset?: number;
   inverted?: boolean;
+  limitMode?: JointLimitMode;
 }
 
 export interface SavedMapping {

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { Episode } from "./episodes";
+import type { JointLimitMode } from "@/shared/types/feature";
 
 type DatasetActions = {
   loadFromLocal: () => void;
@@ -13,6 +14,8 @@ type DatasetActions = {
   isUploadingToHF: boolean;
   hasEpisodes: boolean;
   isRerunViewerOpen: boolean;
+  limitCorrectionMode: JointLimitMode;
+  setLimitCorrectionMode: (mode: JointLimitMode) => void;
 };
 
 export const useDatasetActions = () => {

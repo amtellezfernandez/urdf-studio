@@ -5,6 +5,8 @@ import type { URDFRobot } from "urdf-loader";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
+import { getJointLimits } from "@/features/urdf";
+import type { JointLimits } from "@/features/urdf";
 import {
   buildIkOrientationPayload,
   extractLinkPose,
@@ -27,6 +29,7 @@ type UseIkSolverParams = {
   robot: URDFRobot | null;
   urdfContent: string | null;
   endEffectorLink: string | null;
+  jointLimits?: JointLimits;
   onIkApplied?: (values: Record<string, number>) => void;
   onManualJointChange?: () => void;
 };
@@ -37,6 +40,7 @@ export const useIkSolver = ({
   robot,
   urdfContent,
   endEffectorLink,
+  jointLimits,
   onIkApplied,
   onManualJointChange,
 }: UseIkSolverParams) => {
@@ -63,6 +67,7 @@ export const useIkSolver = ({
     key: "",
     inFlight: false,
   });
+  const lastLimitToastRef = useRef(0);
   const setIkDebugState = useIkDebugStore((s) => s.setState);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
@@ -75,6 +80,42 @@ export const useIkSolver = ({
     setting: IkOrientationSetting,
     fallback: OrientationMode
   ): OrientationMode => (setting === "auto" ? fallback : setting);
+
+  const clampSolutionToLimits = useCallback(
+    (solution: Record<string, number>) => {
+      if (!jointLimits || Object.keys(jointLimits).length === 0) {
+        return { solution, clampedJoints: [] as string[] };
+      }
+      const clamped: Record<string, number> = { ...solution };
+      const clampedJoints: string[] = [];
+      Object.entries(solution).forEach(([jointName, value]) => {
+        if (!Number.isFinite(value)) return;
+        const limits = getJointLimits(jointLimits, jointName);
+        if (!Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) {
+          return;
+        }
+        if (value < limits.lower || value > limits.upper) {
+          clamped[jointName] = Math.min(limits.upper, Math.max(limits.lower, value));
+          clampedJoints.push(jointName);
+        }
+      });
+
+      if (clampedJoints.length > 0) {
+        const now = Date.now();
+        if (now - lastLimitToastRef.current > 2000) {
+          toast.warning(
+            `IK solution clamped to limits for ${clampedJoints.length} joint${
+              clampedJoints.length === 1 ? "" : "s"
+            }`
+          );
+          lastLimitToastRef.current = now;
+        }
+      }
+
+      return { solution: clamped, clampedJoints };
+    },
+    [jointLimits]
+  );
 
   const ikDragEnabled =
     dragMode === "drag-handle" && !!robot && !!urdfContent && !!endEffectorLink;
@@ -492,11 +533,14 @@ export const useIkSolver = ({
             return;
           }
 
-          currentJointValues = result.result.solution;
+          const { solution: clampedSolution } = clampSolutionToLimits(
+            result.result.solution
+          );
+          currentJointValues = clampedSolution;
 
           if (!orbitFollowAbortRef.current) {
-            setStoreJointValues(result.result.solution);
-            onIkApplied?.(result.result.solution);
+            setStoreJointValues(clampedSolution);
+            onIkApplied?.(clampedSolution);
           }
         } catch (err) {
           console.error("Error during orbit following:", err);
@@ -523,6 +567,7 @@ export const useIkSolver = ({
     },
     [
       apiBaseUrl,
+      clampSolutionToLimits,
       endEffectorLink,
       ikResult,
       onIkApplied,
@@ -611,7 +656,8 @@ export const useIkSolver = ({
         Object.assign(blended, solution);
       }
 
-      lastIkAppliedRef.current = blended;
+      const { solution: clampedSolution } = clampSolutionToLimits(blended);
+      lastIkAppliedRef.current = clampedSolution;
       lastIkApplyTimeRef.current = now;
 
       console.log("[Viewer3D] IK solution received:", solution);
@@ -621,15 +667,23 @@ export const useIkSolver = ({
         console.log(
           `[Viewer3D] Applying via ${robotAny.setJointValues ? "setJointValues" : "setJointValue"}`
         );
-        applyJointValues(robotAny, blended, { filter: false });
+        applyJointValues(robotAny, clampedSolution, { filter: false });
       } else {
         console.error("[Viewer3D] Robot has no setJointValues or setJointValue method!");
       }
       console.log("[Viewer3D] Updating store with solution");
-      setStoreJointValues(blended);
-      onIkApplied?.(blended);
+      setStoreJointValues(clampedSolution);
+      onIkApplied?.(clampedSolution);
     },
-    [onIkApplied, onManualJointChange, robot, selectedSolverId, setStoreJointValues, solverTuning]
+    [
+      clampSolutionToLimits,
+      onIkApplied,
+      onManualJointChange,
+      robot,
+      selectedSolverId,
+      setStoreJointValues,
+      solverTuning,
+    ]
   );
 
   const handleIkDragStateChange = useCallback((dragging: boolean) => {

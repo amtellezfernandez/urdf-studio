@@ -1375,9 +1375,33 @@ export const Viewer3D = ({
     robot,
     urdfContent,
     endEffectorLink,
+    jointLimits,
     onIkApplied,
     onManualJointChange: animationController.markManualJointChange,
   });
+
+  const clampIkSolutionForApply = useCallback(
+    (solution: Record<string, number>) => {
+      if (!jointLimits || Object.keys(jointLimits).length === 0) {
+        return { solution, clampedJoints: [] as string[] };
+      }
+      const clamped: Record<string, number> = { ...solution };
+      const clampedJoints: string[] = [];
+      Object.entries(solution).forEach(([jointName, value]) => {
+        if (!Number.isFinite(value)) return;
+        const limits = getJointLimits(jointLimits, jointName);
+        if (!Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) {
+          return;
+        }
+        if (value < limits.lower || value > limits.upper) {
+          clamped[jointName] = Math.min(limits.upper, Math.max(limits.lower, value));
+          clampedJoints.push(jointName);
+        }
+      });
+      return { solution: clamped, clampedJoints };
+    },
+    [jointLimits]
+  );
 
   // Use selectedLink from props
   const selectedLink = selectedLinkProp;
@@ -1872,9 +1896,20 @@ export const Viewer3D = ({
           onClose={() => setIkDialogOpen(false)}
           onApply={() => {
             if (ikResult) {
-              setStoreJointValues(ikResult.solution);
-              onIkApplied?.(ikResult.solution);
-              toast.success("Applied IK solution");
+              const { solution, clampedJoints } = clampIkSolutionForApply(
+                ikResult.solution
+              );
+              setStoreJointValues(solution);
+              onIkApplied?.(solution);
+              if (clampedJoints.length > 0) {
+                toast.warning(
+                  `Applied IK solution with limit clamping (${clampedJoints.length} joint${
+                    clampedJoints.length === 1 ? "" : "s"
+                  })`
+                );
+              } else {
+                toast.success("Applied IK solution");
+              }
             }
           }}
           onFollowOrbit={() => {

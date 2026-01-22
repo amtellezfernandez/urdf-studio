@@ -48,9 +48,17 @@ import { cn } from "@/shared/lib/utils";
 import { NumberInput } from "@/shared/ui/number-input";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
-import { toAnimationFrames, type Episode, type RecordedFrame } from "@/features/dataset";
+import {
+  applyJointLimitCorrectionsToFrames,
+  computeJointLimitViolations,
+  summarizeJointLimitCorrections,
+  toAnimationFrames,
+  type Episode,
+  type RecordedFrame,
+} from "@/features/dataset";
 import type * as THREE from "three";
 import type { JointLimits } from "@/features/urdf";
+import type { JointLimitMode } from "@/shared/types/feature";
 
 // Constants
 const CANVAS_PADDING = 40;
@@ -395,6 +403,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   });
   const [retimeScale, setRetimeScale] = useState(1);
   const [retimeFps, setRetimeFps] = useState(0);
+  const [limitFixMode, setLimitFixMode] = useState<JointLimitMode>("report");
   const [constraintMode, setConstraintMode] = useState<ConstraintMode>("none");
   const [heightAxis, setHeightAxis] = useState<AxisKey>("z");
   const [heightLimit, setHeightLimit] = useState<number>(1);
@@ -657,6 +666,37 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     });
     return map;
   }, [velocityViolations]);
+
+  const limitViolations = useMemo(() => {
+    const activeEpisode = isEditMode && modifiedEpisode ? modifiedEpisode : episode;
+    if (!activeEpisode || activeEpisode.frames.length === 0 || !jointLimits) {
+      return [];
+    }
+    return computeJointLimitViolations(activeEpisode.frames, jointLimits);
+  }, [episode, isEditMode, jointLimits, modifiedEpisode]);
+
+  const limitViolationMap = useMemo(() => {
+    const map = new Map<number, { frameIndex: number; joints: string[] }>();
+    limitViolations.forEach((violation) => {
+      const existing = map.get(violation.frameIndex);
+      if (existing) {
+        if (!existing.joints.includes(violation.jointName)) {
+          existing.joints.push(violation.jointName);
+        }
+      } else {
+        map.set(violation.frameIndex, {
+          frameIndex: violation.frameIndex,
+          joints: [violation.jointName],
+        });
+      }
+    });
+    return map;
+  }, [limitViolations]);
+
+  const limitViolationFrames = useMemo(
+    () => Array.from(limitViolationMap.keys()).sort((a, b) => a - b),
+    [limitViolationMap]
+  );
 
   // Create stable color mapping for joints
   const jointColorMap = useMemo(() => {
@@ -1177,6 +1217,69 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
     const targetSpeed = Math.min(1, 1 / effectiveRatio);
     handleTimeScale(targetSpeed, { start: startIndex, end: endIndex }, "Auto slow to limits");
   }, [handleTimeScale, isEditMode, modifiedEpisode, velocityViolations]);
+
+  const handleFixLimitViolations = useCallback(() => {
+    if (!isEditMode || !modifiedEpisode) return;
+    if (!jointLimits || Object.keys(jointLimits).length === 0) {
+      toast.info("No joint limits available");
+      return;
+    }
+    if (limitFixMode === "report") {
+      if (limitViolations.length === 0) {
+        toast.info("No joint limit violations detected");
+      } else {
+        toast.info(
+          `${limitViolations.length} joint limit violation${
+            limitViolations.length === 1 ? "" : "s"
+          } detected`
+        );
+      }
+      return;
+    }
+
+    const modeByJoint: Record<string, JointLimitMode> = {};
+    Object.keys(jointLimits).forEach((jointName) => {
+      modeByJoint[jointName] = limitFixMode;
+    });
+
+    const { frames: correctedFrames, summaries, violations } =
+      applyJointLimitCorrectionsToFrames(
+        modifiedEpisode.frames,
+        jointLimits,
+        modeByJoint
+      );
+    const report = summarizeJointLimitCorrections(summaries, violations);
+    const shiftedJoints = summaries.filter(
+      (summary) =>
+        summary.mode === "shift" &&
+        summary.shiftOffset !== null &&
+        Math.abs(summary.shiftOffset) > 0
+    ).length;
+
+    if (report.totalViolations === 0 && report.totalClamped === 0 && shiftedJoints === 0) {
+      toast.info("No joint limit fixes applied");
+      return;
+    }
+
+    const nextEpisode: Episode = {
+      ...modifiedEpisode,
+      frames: correctedFrames,
+    };
+    setModifiedEpisode(nextEpisode);
+    pushToHistory(nextEpisode);
+    const actionLabel =
+      limitFixMode === "clamp"
+        ? `Clamped ${report.totalClamped} values`
+        : `Shifted ${shiftedJoints} joint${shiftedJoints === 1 ? "" : "s"}`;
+    toast.success(actionLabel);
+  }, [
+    isEditMode,
+    jointLimits,
+    limitFixMode,
+    limitViolations.length,
+    modifiedEpisode,
+    pushToHistory,
+  ]);
 
   const handleRescaleFps = useCallback(() => {
     if (!isEditMode || !modifiedEpisode) return;
@@ -2188,6 +2291,19 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       });
     }
 
+    if (limitViolationFrames.length > 0 && totalFrames > 1) {
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.8)";
+      ctx.lineWidth = 1;
+      limitViolationFrames.forEach((frameIndex) => {
+        const clampedFrame = Math.max(0, Math.min(frameIndex, totalFrames - 1));
+        const x = CANVAS_PADDING + (graphWidth * clampedFrame) / (totalFrames - 1);
+        ctx.beginPath();
+        ctx.moveTo(x, height - CANVAS_PADDING - 12);
+        ctx.lineTo(x, height - CANVAS_PADDING - 22);
+        ctx.stroke();
+      });
+    }
+
     if (velocityViolations.length > 0 && totalFrames > 1) {
       const markerSize = 4;
       velocityViolations.forEach((violation) => {
@@ -2246,7 +2362,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       const timeText = calculateTime(clampedFrame);
       ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
     }
-  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle, getResolvedTrimRange, resolvedTrimRange, violationFrames, velocityViolations]);
+  }, [episode, currentFrame, globalCurrentFrame, selectedJoints, jointNames, jointRanges, jointColorMap, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, modifiedEpisode, tangentHandles, draggingHandle, getResolvedTrimRange, resolvedTrimRange, violationFrames, velocityViolations, limitViolationFrames]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -2405,6 +2521,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
   const clampedDisplayFrame = Math.max(0, Math.min(displayFrame, totalFrames - 1));
   const currentVelocityViolation = velocityViolationMap.get(clampedDisplayFrame);
+  const currentLimitViolation = limitViolationMap.get(clampedDisplayFrame);
 
   const content = (
     <div
@@ -2556,6 +2673,15 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   <span className="text-muted-foreground/60">•</span>
                   <span className="tabular-nums text-red-400">
                     vel x{currentVelocityViolation.ratio.toFixed(2)} {currentVelocityViolation.jointName}
+                  </span>
+                </>
+              )}
+              {currentLimitViolation && (
+                <>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span className="tabular-nums text-amber-400">
+                    limit {currentLimitViolation.joints.length}{" "}
+                    {currentLimitViolation.joints[0]}
                   </span>
                 </>
               )}
@@ -2797,6 +2923,41 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Resample frames to target FPS</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex items-center gap-1 px-1">
+                <span className="text-[10px] text-muted-foreground">Limits</span>
+                <Select
+                  value={limitFixMode}
+                  onValueChange={(value) => setLimitFixMode(value as JointLimitMode)}
+                >
+                  <SelectTrigger className="h-6 w-24 px-1 text-[10px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="report">Report</SelectItem>
+                    <SelectItem value="clamp">Clamp</SelectItem>
+                    <SelectItem value="shift">Shift</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-6 px-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFixLimitViolations();
+                      }}
+                      disabled={limitFixMode === "report" || limitViolations.length === 0}
+                    >
+                      <span className="text-xs">Fix</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Apply joint limit fixes to this episode</p>
                   </TooltipContent>
                 </Tooltip>
               </div>

@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/ui/tabs";
 import { X, AlertCircle, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimits } from "@/features/urdf";
-import type { JointMapping, SavedMapping } from "@/shared/types/feature";
+import type { JointLimitMode, JointMapping, SavedMapping } from "@/shared/types/feature";
 
 interface JointMappingDialogProps {
   isOpen: boolean;
@@ -485,6 +485,14 @@ export const JointMappingDialog = ({
     );
   };
 
+  const handleLimitModeChange = (datasetJoint: string, mode: JointLimitMode) => {
+    setMappings((prev) =>
+      prev.map((m) =>
+        m.datasetJoint === datasetJoint ? { ...m, limitMode: mode } : m
+      )
+    );
+  };
+
   const handleUndoConversion = () => {
     setDegToRad(false);
     setAutoConverted(false);
@@ -728,6 +736,7 @@ export const JointMappingDialog = ({
                 <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Offset</th>
                 <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Final</th>
                 <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">URDF Limits</th>
+                <th className="text-right px-1.5 py-0.5 font-normal text-[#9d9d9d] text-[9px]">Limit Mode</th>
               </tr>
             </thead>
             <tbody>
@@ -979,6 +988,55 @@ export const JointMappingDialog = ({
                       })() : (
                         <span className="text-[#5d5d5d] text-[9px]">—</span>
                       )}
+                    </td>
+
+                    {/* Limit Mode Column */}
+                    <td className="px-1.5 py-0.5">
+                      {(() => {
+                        const urdfLimit = mapping.urdfJoint ? jointLimits[mapping.urdfJoint] : undefined;
+                        const hasFiniteLimits =
+                          urdfLimit &&
+                          urdfLimit.lower !== null &&
+                          urdfLimit.upper !== null &&
+                          Number.isFinite(urdfLimit.lower) &&
+                          Number.isFinite(urdfLimit.upper);
+                        if (!hasFiniteLimits || !mapping.urdfJoint || mapping.urdfJoint === "?") {
+                          return <span className="text-[#5d5d5d] text-[9px]">—</span>;
+                        }
+                        const currentMode = mapping.limitMode ?? "report";
+                        return (
+                          <Select
+                            value={currentMode}
+                            onValueChange={(value) =>
+                              handleLimitModeChange(mapping.datasetJoint, value as JointLimitMode)
+                            }
+                          >
+                            <SelectTrigger className="h-5 text-[9px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] font-mono px-1.5">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#282828] border-[#3d3d3d]">
+                              <SelectItem
+                                value="report"
+                                className="text-[9px] text-[#9d9d9d] hover:bg-[#3d3d3d] py-0.5"
+                              >
+                                Report
+                              </SelectItem>
+                              <SelectItem
+                                value="clamp"
+                                className="text-[9px] text-[#d4d4d4] hover:bg-[#3d3d3d] py-0.5"
+                              >
+                                Clamp
+                              </SelectItem>
+                              <SelectItem
+                                value="shift"
+                                className="text-[9px] text-[#d4d4d4] hover:bg-[#3d3d3d] py-0.5"
+                              >
+                                Shift
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );

@@ -8,3 +8,4 @@ export * from "./io/episodeTypes";
 export * from "./v3Dataset";
 export * from "./jointMappingUtils";
 export * from "./useDatasetActions";
+export * from "./jointLimitCorrections";

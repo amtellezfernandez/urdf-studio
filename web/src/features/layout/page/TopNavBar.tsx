@@ -8,7 +8,7 @@ import {
   DropdownMenuSubTrigger,
 } from "@/shared/ui/dropdown-menu";
 import { cn } from "@/shared/lib/utils";
-import type { AngleUnit, RotationAxis, UrdfViewMode } from "@/shared/types/feature";
+import type { AngleUnit, JointLimitMode, RotationAxis, UrdfViewMode } from "@/shared/types/feature";
 
 type DatasetActions = {
   loadFromLocal: () => void;
@@ -19,6 +19,8 @@ type DatasetActions = {
   isExportingDataset: boolean;
   isUploadingToHF: boolean;
   hasEpisodes: boolean;
+  limitCorrectionMode: JointLimitMode;
+  setLimitCorrectionMode: (mode: JointLimitMode) => void;
 };
 
 type TopNavBarProps = {
@@ -412,6 +414,36 @@ export const TopNavBar = ({
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+          {datasetActions && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]">
+                Limit Corrections
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-48 bg-[#282828] border-[#3d3d3d]">
+                <DropdownMenuItem
+                  onClick={() => datasetActions.setLimitCorrectionMode("report")}
+                  className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                >
+                  {datasetActions.limitCorrectionMode === "report" ? "[x] " : "[ ] "}
+                  Report only
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => datasetActions.setLimitCorrectionMode("clamp")}
+                  className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                >
+                  {datasetActions.limitCorrectionMode === "clamp" ? "[x] " : "[ ] "}
+                  Clamp to limits
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => datasetActions.setLimitCorrectionMode("shift")}
+                  className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+                >
+                  {datasetActions.limitCorrectionMode === "shift" ? "[x] " : "[ ] "}
+                  Shift to fit
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     )}

@@ -1,5 +1,11 @@
 import type { Episode } from "./episodes";
 import { RECORDING_INTERVAL_MS } from "./episodes";
+import type { JointLimits } from "@/features/urdf/parsing/parseJointLimits";
+import type { JointLimitMode } from "@/shared/types/feature";
+import {
+  applyJointLimitCorrectionsToFrames,
+  summarizeJointLimitCorrections,
+} from "./jointLimitCorrections";
 
 type JSZipInstance = import("jszip");
 
@@ -212,7 +218,11 @@ export const generateV3DatasetArchive = async (
   zip: JSZipInstance,
   datasetName: string,
   robotName?: string | undefined,
-  urdfJointOrder?: string[]
+  urdfJointOrder?: string[],
+  limitCorrection?: {
+    mode: JointLimitMode;
+    jointLimits: JointLimits;
+  }
 ): Promise<void> => {
   const datasetFolder = zip.folder(datasetName);
   if (!datasetFolder) {
@@ -228,9 +238,76 @@ export const generateV3DatasetArchive = async (
     throw new Error("Failed to allocate dataset directories");
   }
 
+  let episodesForExport = episodes;
+  let limitCorrectionsInfo: Record<string, unknown> | null = null;
+
+  if (
+    limitCorrection &&
+    limitCorrection.mode !== "report" &&
+    Object.keys(limitCorrection.jointLimits).length > 0
+  ) {
+    const modeByJoint: Record<string, JointLimitMode> = {};
+    Object.keys(limitCorrection.jointLimits).forEach((jointName) => {
+      modeByJoint[jointName] = limitCorrection.mode;
+    });
+
+    let totalViolations = 0;
+    let totalClamped = 0;
+    const jointSummary = new Map<string, { violations: number; clamped: number; shiftOffset: number | null }>();
+
+    episodesForExport = episodes.map((episode) => {
+      const { frames: correctedFrames, summaries, violations } =
+        applyJointLimitCorrectionsToFrames(
+          episode.frames,
+          limitCorrection.jointLimits,
+          modeByJoint
+        );
+      const report = summarizeJointLimitCorrections(summaries, violations);
+      totalViolations += report.totalViolations;
+      totalClamped += report.totalClamped;
+
+      report.joints.forEach((summary) => {
+        const existing = jointSummary.get(summary.jointName);
+        if (existing) {
+          existing.violations += summary.violations;
+          existing.clamped += summary.clamped;
+          if (summary.shiftOffset !== null) {
+            existing.shiftOffset = summary.shiftOffset;
+          }
+        } else {
+          jointSummary.set(summary.jointName, {
+            violations: summary.violations,
+            clamped: summary.clamped,
+            shiftOffset: summary.shiftOffset,
+          });
+        }
+      });
+
+      if (correctedFrames === episode.frames) {
+        return episode;
+      }
+      return {
+        ...episode,
+        frames: correctedFrames,
+      };
+    });
+
+    limitCorrectionsInfo = {
+      mode: limitCorrection.mode,
+      total_violations: totalViolations,
+      total_clamped: totalClamped,
+      joints: Array.from(jointSummary.entries()).map(([jointName, summary]) => ({
+        joint: jointName,
+        violations: summary.violations,
+        clamped: summary.clamped,
+        shift_offset: summary.shiftOffset,
+      })),
+    };
+  }
+
   // Use common helper to build episode data
   const episodeData = buildEpisodeDataForV3(
-    episodes,
+    episodesForExport,
     robotBaseName,
     robotName,
     urdfJointOrder
@@ -301,6 +378,7 @@ export const generateV3DatasetArchive = async (
         names: null,
       },
     },
+    ...(limitCorrectionsInfo ? { limit_corrections: limitCorrectionsInfo } : {}),
   };
 
   // Write info.json (required)

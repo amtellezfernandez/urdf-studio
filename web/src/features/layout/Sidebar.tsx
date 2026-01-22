@@ -6,6 +6,8 @@ import type { JointAxisMap, JointLimits } from "@/features/urdf";
 import { type CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import {
   buildEpisodeDataForV3,
+  applyJointLimitCorrectionsToFrames,
+  summarizeJointLimitCorrections,
   createEpisode,
   generateV3DatasetArchive,
   getSortedJointList,
@@ -30,7 +32,7 @@ import {
 import { RerunViewer3DModal } from "@/features/dataset/RerunViewer3DModal";
 import { JointMappingDialog } from "@/features/dataset/JointMappingDialog";
 import { useCameraStore } from "@/shared/store/useCameraStore";
-import type { JointMapping } from "@/shared/types/feature";
+import type { JointLimitMode, JointMapping } from "@/shared/types/feature";
 import { useHfToken } from "@/features/layout/hooks/useHfToken";
 import { EpisodesPanel } from "@/features/layout/panels/EpisodesPanel";
 import { EpisodePreviewPanel } from "@/features/layout/panels/EpisodePreviewPanel";
@@ -265,6 +267,8 @@ interface SidebarProps {
     isUploadingToHF: boolean;
     hasEpisodes: boolean;
     isRerunViewerOpen: boolean;
+    limitCorrectionMode: JointLimitMode;
+    setLimitCorrectionMode: (mode: JointLimitMode) => void;
   }) => void;
   episodesViewHeight?: number;
   onEpisodesResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -365,6 +369,7 @@ export const Sidebar = ({
   const [isImportingFromHF, setIsImportingFromHF] = useState(false);
   const [isImportingFromHFDataset, setIsImportingFromHFDataset] = useState(false);
   const [isExportingDataset, setIsExportingDataset] = useState(false);
+  const [exportLimitMode, setExportLimitMode] = useState<JointLimitMode>("report");
 
   useEffect(() => {
     hfIdentityRef.current = null;
@@ -1296,6 +1301,25 @@ export const Sidebar = ({
     });
   }, [computeEpisodeFps, resampleEpisodeToFps, targetFps, setEpisodes]);
 
+  const applyLimitCorrections = useCallback(
+    (
+      frames: RecordedFrame[],
+      modeByJoint: Record<string, JointLimitMode | undefined> = {}
+    ) => {
+      if (!jointLimits || Object.keys(jointLimits).length === 0) {
+        return { frames, report: null };
+      }
+      const { frames: corrected, summaries, violations } =
+        applyJointLimitCorrectionsToFrames(frames, jointLimits, modeByJoint);
+      const report = summarizeJointLimitCorrections(summaries, violations);
+      if (report.totalViolations === 0 && report.totalClamped === 0) {
+        return { frames: corrected, report: null };
+      }
+      return { frames: corrected, report };
+    },
+    [jointLimits]
+  );
+
   const loadEpisodesFromDataFile = useCallback(
     async (file: File, options?: { suppressToast?: boolean; sourceName?: string }) => {
       try {
@@ -1353,6 +1377,8 @@ export const Sidebar = ({
 
         let totalFramesLoaded = 0;
         let episodesAdded = 0;
+        let totalLimitViolations = 0;
+        let totalLimitClamped = 0;
 
         setEpisodes((prev) => {
           const nextEpisodes = [...prev];
@@ -1362,6 +1388,11 @@ export const Sidebar = ({
               jointPositions: frame.joints,
             }));
             if (frames.length === 0) continue;
+            const { frames: correctedFrames, report } = applyLimitCorrections(frames);
+            if (report) {
+              totalLimitViolations += report.totalViolations;
+              totalLimitClamped += report.totalClamped;
+            }
             totalFramesLoaded += frames.length;
             episodesAdded += 1;
 
@@ -1402,13 +1433,14 @@ export const Sidebar = ({
                 ...episode.metadata?.additional,
                 sourceType: episode.metadata?.additional?.sourceType || 'local',
                 sourceName: episode.metadata?.additional?.sourceName || options?.sourceName || file.name,
+                ...(report ? { limitCorrections: report } : {}),
               },
             };
 
             const newEpisode = createEpisode(
               `episode-${Date.now()}-${Math.random().toString(36).slice(2)}`,
               metadataNumber,
-              frames,
+              correctedFrames,
               episodeMetadata
             );
 
@@ -1446,6 +1478,14 @@ export const Sidebar = ({
           );
         }
 
+        if (totalLimitViolations > 0) {
+          toast.warning(
+            `Detected ${totalLimitViolations} joint limit violation${
+              totalLimitViolations === 1 ? "" : "s"
+            } while importing${totalLimitClamped > 0 ? ` (${totalLimitClamped} clamped)` : ""}`
+          );
+        }
+
         return true;
       } catch (error) {
         console.error(`Error loading animation data from ${file.name}:`, error);
@@ -1456,7 +1496,7 @@ export const Sidebar = ({
         return false;
       }
     },
-    [availableJointsStore, setEpisodes]
+    [availableJointsStore, applyLimitCorrections, setEpisodes]
   );
 
   const loadEpisodesFromArchiveZip = useCallback(
@@ -1498,6 +1538,8 @@ export const Sidebar = ({
 
             let totalFramesLoaded = 0;
             let episodesAdded = 0;
+            let totalLimitViolations = 0;
+            let totalLimitClamped = 0;
 
             // Process each data file
             for (const dataEntry of dataEntries) {
@@ -1635,6 +1677,11 @@ export const Sidebar = ({
                   });
 
                   if (frames.length === 0) continue;
+                  const { frames: correctedFrames, report } = applyLimitCorrections(frames);
+                  if (report) {
+                    totalLimitViolations += report.totalViolations;
+                    totalLimitClamped += report.totalClamped;
+                  }
 
                   totalFramesLoaded += frames.length;
                   episodesAdded += 1;
@@ -1672,13 +1719,14 @@ export const Sidebar = ({
                     additional: {
                       sourceType: 'local',
                       sourceName: 'local_dataset',
+                      ...(report ? { limitCorrections: report } : {}),
                     },
                   };
 
                   const newEpisode = createEpisode(
                     `episode-${Date.now()}-${Math.random().toString(36).slice(2)}-${episodeIndex}`,
                     episodeIndex + 1,
-                    frames,
+                    correctedFrames,
                     episodeMetadata
                   );
 
@@ -1705,6 +1753,14 @@ export const Sidebar = ({
                     }
                     return renumberEpisodes(nextEpisodes);
                   });
+                }
+
+                if (totalLimitViolations > 0) {
+                  toast.warning(
+                    `Detected ${totalLimitViolations} joint limit violation${
+                      totalLimitViolations === 1 ? "" : "s"
+                    } while importing${totalLimitClamped > 0 ? ` (${totalLimitClamped} clamped)` : ""}`
+                  );
                 }
               } catch (error) {
                 console.error(`Failed to load ${dataEntry.name} from archive:`, error);
@@ -1788,7 +1844,7 @@ export const Sidebar = ({
         );
       }
     },
-    [loadEpisodesFromDataFile, setEpisodes, robotBaseName]
+    [applyLimitCorrections, loadEpisodesFromDataFile, setEpisodes, robotBaseName]
   );
 
   const exportEpisodeToDataFile = useCallback((episode: Episode) => {
@@ -2055,7 +2111,15 @@ export const Sidebar = ({
       const packStart = metricsEnabled ? performance.now() : 0;
       const JSZip = await loadJSZip();
       const zip = new JSZip();
-      await generateV3DatasetArchive(episodes, robotBaseName, zip, datasetName, robotName, availableJointsStore);
+      await generateV3DatasetArchive(
+        episodes,
+        robotBaseName,
+        zip,
+        datasetName,
+        robotName,
+        availableJointsStore,
+        { mode: exportLimitMode, jointLimits }
+      );
       const blob = await zip.generateAsync({ type: "blob" });
       const packDurationMs = metricsEnabled ? performance.now() - packStart : 0;
       const blobSize = blob.size ?? 0;
@@ -2122,6 +2186,8 @@ export const Sidebar = ({
     robotBaseName,
     robotName,
     availableJointsStore,
+    exportLimitMode,
+    jointLimits,
   ]);
 
   const exportDatasetToLeRobotFormat = useCallback(async () => {
@@ -2136,7 +2202,15 @@ export const Sidebar = ({
       const exportStart = metricsEnabled ? performance.now() : 0;
       const JSZip = await loadJSZip();
       const zip = new JSZip();
-      await generateV3DatasetArchive(episodes, robotBaseName, zip, datasetName, robotName, availableJointsStore);
+      await generateV3DatasetArchive(
+        episodes,
+        robotBaseName,
+        zip,
+        datasetName,
+        robotName,
+        availableJointsStore,
+        { mode: exportLimitMode, jointLimits }
+      );
       const blob = await zip.generateAsync({ type: "blob" });
       const { totalFrames } = buildEpisodeDataForV3(
         episodes,
@@ -2165,7 +2239,7 @@ export const Sidebar = ({
     } finally {
       setIsExportingDataset(false);
     }
-  }, [episodes, robotBaseName, robotName, availableJointsStore]);
+  }, [episodes, robotBaseName, robotName, availableJointsStore, exportLimitMode, jointLimits]);
 
   // Helper function to export current episodes as blob for dataset mixing
   const exportCurrentEpisodesAsBlob = useCallback(async (): Promise<Blob> => {
@@ -2183,7 +2257,8 @@ export const Sidebar = ({
       zip,
       datasetName,
       robotName,
-      availableJointsStore
+      availableJointsStore,
+      { mode: exportLimitMode, jointLimits }
     );
 
     const blob = await zip.generateAsync({ type: "blob" });
@@ -2203,7 +2278,7 @@ export const Sidebar = ({
       });
     }
     return blob;
-  }, [episodes, robotBaseName, robotName, availableJointsStore]);
+  }, [episodes, robotBaseName, robotName, availableJointsStore, exportLimitMode, jointLimits]);
 
   const loadEpisodesFromHuggingFace = useCallback(async () => {
     if (isImportingFromHF) return;
@@ -2918,6 +2993,7 @@ export const Sidebar = ({
           const jointMapping: Record<string, string> = {};
           const jointOffsets: Record<string, number> = {};
           const jointInversions: Record<string, boolean> = {};
+          const limitModesByJoint: Record<string, JointLimitMode | undefined> = {};
           for (const mapping of mappings) {
             if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
               jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
@@ -2926,6 +3002,9 @@ export const Sidebar = ({
               }
               if (mapping.inverted !== undefined && mapping.inverted) {
                 jointInversions[mapping.datasetJoint] = true;
+              }
+              if (mapping.limitMode) {
+                limitModesByJoint[mapping.urdfJoint] = mapping.limitMode;
               }
             }
           }
@@ -2949,6 +3028,8 @@ export const Sidebar = ({
           // Convert ONLY the first episode
           const newEpisodes: Episode[] = [];
           const degToRadConst = Math.PI / 180;
+          let totalLimitViolations = 0;
+          let totalLimitClamped = 0;
 
           // Process only first episode
           for (const [episodeIndex, episodeRows] of firstEpisodeMap.entries()) {
@@ -3006,6 +3087,14 @@ export const Sidebar = ({
             });
 
             if (frames.length === 0) continue;
+            const { frames: correctedFrames, report } = applyLimitCorrections(
+              frames,
+              limitModesByJoint
+            );
+            if (report) {
+              totalLimitViolations += report.totalViolations;
+              totalLimitClamped += report.totalClamped;
+            }
 
             // Calculate FPS from timestamps
             let fps = 30; // default
@@ -3019,19 +3108,20 @@ export const Sidebar = ({
             const episodeMetadata: EpisodeMetadata = {
               episode_index: episodeIndex,
               fps,
-              joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
+              joint_names: Object.keys(correctedFrames[0]?.jointPositions ?? {}),
               num_frames: frames.length,
               robot_type: "unknown",
               additional: {
                 sourceType: 'hf',
                 sourceName: parsedPath,
+                ...(report ? { limitCorrections: report } : {}),
               },
             };
 
             const episode: Episode = {
               id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
               number: episodes.length + newEpisodes.length + 1,
-              frames,
+              frames: correctedFrames,
               createdAt: Date.now(),
               metadata: episodeMetadata,
             };
@@ -3061,6 +3151,14 @@ export const Sidebar = ({
             `Loaded first episode from ${parsedPath}. Other episodes are loading in background.`,
             { duration: 3000 }
           );
+
+          if (totalLimitViolations > 0) {
+            toast.warning(
+              `Detected ${totalLimitViolations} joint limit violation${
+                totalLimitViolations === 1 ? "" : "s"
+              } during import${totalLimitClamped > 0 ? ` (${totalLimitClamped} clamped)` : ""}`
+            );
+          }
 
           // Close dialog and reset state
           setShowHfMappingDialog(false);
@@ -3098,6 +3196,7 @@ export const Sidebar = ({
           const jointMapping: Record<string, string> = {};
           const jointOffsets: Record<string, number> = {};
           const jointInversions: Record<string, boolean> = {};
+          const limitModesByJoint: Record<string, JointLimitMode | undefined> = {};
           for (const mapping of mappings) {
             if (mapping.urdfJoint && mapping.urdfJoint !== "?") {
               jointMapping[mapping.datasetJoint] = mapping.urdfJoint;
@@ -3106,6 +3205,9 @@ export const Sidebar = ({
               }
               if (mapping.inverted !== undefined && mapping.inverted) {
                 jointInversions[mapping.datasetJoint] = true;
+              }
+              if (mapping.limitMode) {
+                limitModesByJoint[mapping.urdfJoint] = mapping.limitMode;
               }
             }
           }
@@ -3129,6 +3231,8 @@ export const Sidebar = ({
           // Convert ALL episodes
           const newEpisodes: Episode[] = [];
           const degToRadConst = Math.PI / 180;
+          let totalLimitViolations = 0;
+          let totalLimitClamped = 0;
 
           // Process all episodes
           for (const [episodeIndex, episodeRows] of allEpisodesMap.entries()) {
@@ -3186,6 +3290,14 @@ export const Sidebar = ({
             });
 
             if (frames.length === 0) continue;
+            const { frames: correctedFrames, report } = applyLimitCorrections(
+              frames,
+              limitModesByJoint
+            );
+            if (report) {
+              totalLimitViolations += report.totalViolations;
+              totalLimitClamped += report.totalClamped;
+            }
 
             // Calculate FPS from timestamps
             let fps = 30; // default
@@ -3199,19 +3311,20 @@ export const Sidebar = ({
             const episodeMetadata: EpisodeMetadata = {
               episode_index: episodeIndex,
               fps,
-              joint_names: Object.keys(frames[0]?.jointPositions ?? {}),
+              joint_names: Object.keys(correctedFrames[0]?.jointPositions ?? {}),
               num_frames: frames.length,
               robot_type: "unknown",
               additional: {
                 sourceType: 'hf',
                 sourceName: parsedPath,
+                ...(report ? { limitCorrections: report } : {}),
               },
             };
 
             const episode: Episode = {
               id: `hf-${parsedPath.replace("/", "-")}-${episodeIndex}-${Date.now()}`,
               number: episodes.length + newEpisodes.length + 1,
-              frames,
+              frames: correctedFrames,
               createdAt: Date.now(),
               metadata: episodeMetadata,
             };
@@ -3241,6 +3354,14 @@ export const Sidebar = ({
             `Loaded ${newEpisodes.length} episode(s) from ${parsedPath}`,
             { duration: 2000 }
           );
+
+          if (totalLimitViolations > 0) {
+            toast.warning(
+              `Detected ${totalLimitViolations} joint limit violation${
+                totalLimitViolations === 1 ? "" : "s"
+              } during import${totalLimitClamped > 0 ? ` (${totalLimitClamped} clamped)` : ""}`
+            );
+          }
 
           // Close dialog and reset state
           setShowHfMappingDialog(false);
@@ -3300,6 +3421,7 @@ export const Sidebar = ({
     }
   }, [
     availableJointsStore,
+    applyLimitCorrections,
     episodes.length,
     hfToken,
     isImportingFromHFDataset,
@@ -3349,6 +3471,8 @@ export const Sidebar = ({
         isUploadingToHF,
         hasEpisodes: episodes.length > 0,
         isRerunViewerOpen: isRerunViewerModalOpen,
+        limitCorrectionMode: exportLimitMode,
+        setLimitCorrectionMode: setExportLimitMode,
       });
     }
   }, [
@@ -3360,6 +3484,7 @@ export const Sidebar = ({
     isImportingFromHFDataset,
     isExportingDataset,
     isUploadingToHF,
+    exportLimitMode,
     episodes,
     episodes.length,
     currentPlayingEpisodeIndex,
