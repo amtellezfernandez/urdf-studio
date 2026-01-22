@@ -108,3 +108,8 @@ Then click **Load SO-ARM100** in the Quick Start panel.
 - [Setup](docs/SETUP.md)
 - [Teleoperation](docs/TELEOPERATION.md)
 - [Dev notes](docs/dev_notes.md)
+
+## License and Contributions
+- Proprietary license: see [LICENSE](LICENSE)
+- Contributions require written permission and a CLA: see [CLA.md](CLA.md)
+- Contributing guidelines: see [CONTRIBUTING.md](CONTRIBUTING.md)
