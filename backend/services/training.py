@@ -514,13 +514,96 @@ async def evaluate_policy(request: EvaluateRequest) -> EvaluateResponse:
     Returns:
         Evaluation results with action sequences
     """
-    # TODO: Implement policy evaluation
-    # This would:
-    # 1. Load the checkpoint
-    # 2. Run inference for num_episodes
-    # 3. Return action sequences for visualization
+    import asyncio
+    import subprocess
 
-    return EvaluateResponse(
-        success=False,
-        error="Policy evaluation not yet implemented",
-    )
+    from backend.core.paths import SCRIPTS_DIR
+    from backend.models.training import EpisodeResult
+
+    script_path = SCRIPTS_DIR / "eval_policy.py"
+
+    # Build command
+    cmd = [
+        "python3",
+        str(script_path),
+        "--checkpoint",
+        request.checkpoint_path,
+        "--num-episodes",
+        str(request.num_episodes),
+        "--max-steps",
+        str(request.max_steps),
+    ]
+
+    if request.initial_state:
+        cmd.extend(["--initial-state", json.dumps(request.initial_state)])
+
+    if request.urdf:
+        # Write URDF to temp file
+        import tempfile
+
+        urdf_file = Path(tempfile.mktemp(suffix=".urdf"))
+        urdf_file.write_text(request.urdf)
+        cmd.extend(["--urdf", str(urdf_file)])
+
+    logger.info(f"Running evaluation: {' '.join(cmd)}")
+
+    try:
+        # Run evaluation script
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout
+            ),
+        )
+
+        if result.returncode != 0:
+            logger.error(f"Evaluation failed: {result.stderr}")
+            return EvaluateResponse(
+                success=False,
+                error=f"Evaluation script failed: {result.stderr}",
+            )
+
+        # Parse output
+        output = json.loads(result.stdout)
+
+        # Convert to response model
+        episodes = [
+            EpisodeResult(
+                episode_index=ep["episode_index"],
+                actions=ep["actions"],
+                observations=ep.get("observations"),
+                timestamps=ep.get("timestamps"),
+            )
+            for ep in output.get("episodes", [])
+        ]
+
+        return EvaluateResponse(
+            success=output.get("success", False),
+            episodes=episodes,
+            metrics=output.get("metrics", {}),
+            error=output.get("error"),
+        )
+
+    except subprocess.TimeoutExpired:
+        logger.error("Evaluation timed out")
+        return EvaluateResponse(
+            success=False,
+            error="Evaluation timed out after 5 minutes",
+        )
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse evaluation output: {e}")
+        return EvaluateResponse(
+            success=False,
+            error=f"Invalid evaluation output: {e}",
+        )
+
+    except Exception as e:
+        logger.error(f"Evaluation error: {e}")
+        return EvaluateResponse(
+            success=False,
+            error=str(e),
+        )

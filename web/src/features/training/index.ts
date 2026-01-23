@@ -10,6 +10,7 @@ export { TrackerConfig } from "./TrackerConfig";
 export { ComputeSelector } from "./ComputeSelector";
 export { TrainingReview } from "./TrainingReview";
 export { TrainingProgress } from "./TrainingProgress";
+export { PolicyEvaluator } from "./PolicyEvaluator";
 
 export { useTrainingStore } from "./useTrainingStore";
 export * from "./types";
