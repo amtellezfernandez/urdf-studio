@@ -97,15 +97,17 @@ class LocalCompute:
         if env:
             job_env.update(env)
         job_env["URDF_STUDIO_JOB_ID"] = job_id
-        job_env["URDF_STUDIO_JOB_DIR"] = str(job_dir)
+        job_env["URDF_STUDIO_JOB_DIR"] = str(job_dir.resolve())
 
-        # Build command
-        script_path = Path(script)
+        # Build command - use absolute paths since subprocess runs in job_dir
+        script_path = Path(script).resolve()
+        config_file_abs = config_file.resolve()
+
         if script_path.exists():
-            cmd = [self._python_path, str(script_path), "--config", str(config_file)]
+            cmd = [self._python_path, str(script_path), "--config", str(config_file_abs)]
         else:
             # Assume script is a module name
-            cmd = [self._python_path, "-m", script, "--config", str(config_file)]
+            cmd = [self._python_path, "-m", script, "--config", str(config_file_abs)]
 
         # Start subprocess
         try:

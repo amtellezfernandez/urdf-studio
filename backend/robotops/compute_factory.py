@@ -94,11 +94,16 @@ COMPUTE_REGISTRY: Dict[str, type] = {
     "runpod": RunPodCompute,
 }
 
+# Cache of compute backend instances (to preserve job state)
+_COMPUTE_INSTANCES: Dict[str, ComputeBackend] = {}
+
 
 def get_compute(
     config: Union[ComputeConfig, Dict[str, Any], None] = None,
 ) -> ComputeBackend:
-    """Create a compute backend from configuration.
+    """Get or create a compute backend from configuration.
+
+    Compute backends are cached to preserve job state between calls.
 
     Args:
         config: Compute configuration. Can be:
@@ -107,7 +112,7 @@ def get_compute(
             - None (returns LocalCompute)
 
     Returns:
-        A ComputeBackend instance
+        A ComputeBackend instance (cached)
 
     Examples:
         # Using ComputeConfig
@@ -120,17 +125,24 @@ def get_compute(
         compute = get_compute()
     """
     if config is None:
-        return LocalCompute()
-
-    if isinstance(config, dict):
+        config = ComputeConfig(type="local")
+    elif isinstance(config, dict):
         config = ComputeConfig(**config)
 
     compute_type = config.type
+
+    # Return cached instance if available
+    if compute_type in _COMPUTE_INSTANCES:
+        return _COMPUTE_INSTANCES[compute_type]
+
     compute_cls = COMPUTE_REGISTRY.get(compute_type)
 
     if compute_cls is None:
         logger.warning(f"Unknown compute type: {compute_type}, using local")
-        return LocalCompute(output_dir=config.output_dir)
+        compute_type = "local"
+        if compute_type in _COMPUTE_INSTANCES:
+            return _COMPUTE_INSTANCES[compute_type]
+        compute_cls = LocalCompute
 
     # Build kwargs based on compute type
     kwargs: Dict[str, Any] = {"output_dir": config.output_dir}
@@ -157,8 +169,10 @@ def get_compute(
     for field in extra_fields:
         kwargs[field] = getattr(config, field)
 
-    logger.info(f"Creating {compute_type} compute backend")
-    return compute_cls(**kwargs)
+    logger.info(f"Creating {compute_type} compute backend (cached)")
+    instance = compute_cls(**kwargs)
+    _COMPUTE_INSTANCES[compute_type] = instance
+    return instance
 
 
 def register_compute(name: str, compute_cls: type) -> None:

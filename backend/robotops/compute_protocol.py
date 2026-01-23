@@ -54,9 +54,13 @@ class JobProgress:
         """Overall training progress (0.0 - 1.0)."""
         if self.total_epochs == 0:
             return 0.0
+        # When current_epoch equals total_epochs, training is complete
+        if self.current_epoch >= self.total_epochs:
+            return 1.0
+        # Otherwise, combine epoch progress with step progress
         epoch_fraction = self.current_epoch / self.total_epochs
         step_fraction = self.epoch_progress / self.total_epochs
-        return epoch_fraction + step_fraction
+        return min(1.0, epoch_fraction + step_fraction)
 
 
 @dataclass

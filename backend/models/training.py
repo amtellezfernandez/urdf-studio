@@ -447,11 +447,27 @@ class EvaluateRequest(BaseModel):
     )
 
 
+class EpisodeResult(BaseModel):
+    """Result from a single evaluation episode."""
+
+    episode_index: int = Field(description="Episode index")
+    actions: List[List[float]] = Field(description="Action sequence")
+    observations: Optional[List[List[float]]] = Field(
+        default=None, description="Observation sequence"
+    )
+    rewards: Optional[List[float]] = Field(
+        default=None, description="Reward sequence"
+    )
+    timestamps: Optional[List[float]] = Field(
+        default=None, description="Timestamps"
+    )
+
+
 class EvaluateResponse(BaseModel):
     """Response from policy evaluation."""
 
     success: bool = Field(description="Whether evaluation succeeded")
-    episodes: List[Dict[str, Any]] = Field(
+    episodes: List[EpisodeResult] = Field(
         default_factory=list, description="Episode action sequences"
     )
     metrics: Dict[str, float] = Field(

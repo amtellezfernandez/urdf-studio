@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from backend.models.training import (
     ComputeConfig,
     DatasetConfig,
+    EpisodeResult,
     EvaluateRequest,
     EvaluateResponse,
     JobStatus,
@@ -141,6 +142,11 @@ def _hash_config(config: Dict[str, Any]) -> str:
     return hashlib.sha256(config_str.encode()).hexdigest()[:12]
 
 
+def _get_enum_value(value) -> str:
+    """Get string value from enum or string."""
+    return value.value if hasattr(value, "value") else str(value)
+
+
 def _create_lineage(
     request: TrainingStartRequest,
     started_at: str,
@@ -149,10 +155,10 @@ def _create_lineage(
     dataset_id = request.dataset.repo_id or request.dataset.local_path or "unknown"
 
     return TrainingLineage(
-        dataset_source=request.dataset.source.value,
+        dataset_source=_get_enum_value(request.dataset.source),
         dataset_id=dataset_id,
         dataset_version=request.dataset.version,
-        model_architecture=request.model.architecture.value,
+        model_architecture=_get_enum_value(request.model.architecture),
         model_config_hash=_hash_config(request.model.config),
         training_config_hash=_hash_config(request.training.model_dump()),
         robot_name=request.robot_name,
@@ -181,7 +187,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
 
         # Initialize experiment tracker
         tracker_config = {
-            "type": request.tracker.type.value,
+            "type": _get_enum_value(request.tracker.type),
             "tracking_uri": request.tracker.tracking_uri,
             "experiment_name": request.tracker.experiment_name,
             "project": request.tracker.project,
@@ -191,7 +197,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
         tracker = get_tracker(tracker_config)
 
         # Start tracking run
-        run_name = request.training.run_name or f"{request.model.architecture.value}_{job_id}"
+        run_name = request.training.run_name or f"{_get_enum_value(request.model.architecture)}_{job_id}"
         tracker.init_run(
             run_name=run_name,
             config={
@@ -202,7 +208,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             },
             tags={
                 "job_id": job_id,
-                "architecture": request.model.architecture.value,
+                "architecture": _get_enum_value(request.model.architecture),
             },
         )
 
@@ -219,7 +225,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
 
         # Initialize compute backend
         compute_config = {
-            "type": request.compute.type.value,
+            "type": _get_enum_value(request.compute.type),
             "api_key": request.compute.api_key,
             "default_gpu": request.compute.gpu,
             "output_dir": request.training.output_dir,
@@ -253,9 +259,10 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
         )
 
         # Store job info
+        compute_backend = _get_enum_value(request.compute.type)
         _jobs[job_id] = {
             "compute_job_id": compute_job_id,
-            "compute_backend": request.compute.type.value,
+            "compute_backend": compute_backend,
             "tracker": tracker,
             "tracker_url": tracker.get_run_url(),
             "lineage": lineage,
@@ -267,7 +274,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
         return TrainingStartResponse(
             success=True,
             job_id=job_id,
-            message=f"Training started on {request.compute.type.value}",
+            message=f"Training started on {compute_backend}",
             tracker_url=tracker.get_run_url(),
             lineage=lineage,
         )
@@ -319,11 +326,14 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
 
     # Get status from compute backend
     try:
+        request = job_info.get("request")
+        output_dir = "./outputs"
+        if request and hasattr(request, "training"):
+            output_dir = request.training.output_dir
+
         compute_config = {
             "type": job_info.get("compute_backend", "local"),
-            "output_dir": job_info.get("request", {}).training.output_dir
-            if job_info.get("request")
-            else "./outputs",
+            "output_dir": output_dir,
         }
         compute = get_compute(compute_config)
 
@@ -347,7 +357,7 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
             # Finish tracker run
             tracker = job_info.get("tracker")
             if tracker:
-                tracker.finish_run(status.value)
+                tracker.finish_run(_get_enum_value(status))
 
         # Build progress
         progress = None
@@ -462,11 +472,15 @@ def list_jobs(
         lineage = job_info.get("lineage")
         request = job_info.get("request")
 
+        run_name = None
+        if request and hasattr(request, "training") and request.training:
+            run_name = request.training.run_name
+
         jobs.append(
             TrainingJobSummary(
                 job_id=job_id,
                 status=status,
-                run_name=request.training.run_name if request else None,
+                run_name=run_name,
                 model_architecture=lineage.model_architecture if lineage else "unknown",
                 dataset_id=lineage.dataset_id if lineage else "unknown",
                 started_at=job_info.get("started_at", ""),
@@ -518,7 +532,6 @@ async def evaluate_policy(request: EvaluateRequest) -> EvaluateResponse:
     import subprocess
 
     from backend.core.paths import SCRIPTS_DIR
-    from backend.models.training import EpisodeResult
 
     script_path = SCRIPTS_DIR / "eval_policy.py"
 
