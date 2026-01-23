@@ -9,6 +9,7 @@ import {
 } from "@/shared/ui/dropdown-menu";
 import { cn } from "@/shared/lib/utils";
 import type { AngleUnit, JointLimitMode, RotationAxis, UrdfViewMode } from "@/shared/types/feature";
+import { useTrainingStore } from "@/features/training";
 
 type DatasetActions = {
   loadFromLocal: () => void;
@@ -91,7 +92,10 @@ export const TopNavBar = ({
   exportCamerasAsJSON,
   exportCamerasAsYAML,
   hasCamerasToExport,
-}: TopNavBarProps) => (
+}: TopNavBarProps) => {
+  const { openDialog: openTrainingDialog, activeJobId } = useTrainingStore();
+
+  return (
   <div className="fixed top-0 left-0 right-0 z-50 h-7 bg-[#282828] border-b border-[#3d3d3d] flex items-center px-1">
     <img
       src="/assets/urdf-studio-logo.png"
@@ -524,5 +528,26 @@ export const TopNavBar = ({
         </DropdownMenuContent>
       </DropdownMenu>
     )}
+    {showMenus && (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="h-5 px-2.5 text-[11px] font-normal text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d] rounded-none border-l border-[#3d3d3d] flex items-center transition-none ml-1">
+            Training
+            {activeJobId && (
+              <span className="ml-1.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-48 bg-[#282828] border-[#3d3d3d]">
+          <DropdownMenuItem
+            onClick={openTrainingDialog}
+            className="text-[11px] cursor-pointer text-[#d4d4d4] hover:text-white hover:bg-[#3d3d3d]"
+          >
+            {activeJobId ? "View Training Progress" : "Start Training"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )}
   </div>
 );
+};

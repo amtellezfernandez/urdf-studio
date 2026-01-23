@@ -9,6 +9,11 @@ const CreationDialogs = lazy(() =>
     default: module.CreationDialogs,
   }))
 );
+const TrainingDialog = lazy(() =>
+  import("@/features/training").then((module) => ({
+    default: module.TrainingDialog,
+  }))
+);
 
 type PageDialogsProps = {
   mappingPanelsProps: ComponentProps<typeof import("@/features/layout/page/MappingPanels").MappingPanels>;
@@ -21,5 +26,6 @@ export const PageDialogs = ({ mappingPanelsProps, creationDialogsProps }: PageDi
   <Suspense fallback={null}>
     <MappingPanels {...mappingPanelsProps} />
     <CreationDialogs {...creationDialogsProps} />
+    <TrainingDialog />
   </Suspense>
 );

@@ -1,0 +1,374 @@
+/**
+ * Main training dialog component.
+ * Provides a wizard-style interface for configuring and launching training jobs.
+ */
+
+import { useCallback, useEffect } from "react";
+import { X, ChevronLeft, ChevronRight, Play, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/shared/ui/button";
+import { useTrainingStore, selectCanStartTraining, selectIsJobRunning } from "./useTrainingStore";
+import { DatasetSelector } from "./DatasetSelector";
+import { ModelSelector } from "./ModelSelector";
+import { HyperparameterForm } from "./HyperparameterForm";
+import { TrackerConfig } from "./TrackerConfig";
+import { ComputeSelector } from "./ComputeSelector";
+import { TrainingReview } from "./TrainingReview";
+import { TrainingProgress } from "./TrainingProgress";
+import { API_BASE_URL } from "@/shared/config/api";
+import type { TrainingStartResponse, TrainingStatusResponse } from "./types";
+
+const STEP_TITLES = {
+  dataset: "Select Dataset",
+  model: "Choose Model",
+  training: "Training Parameters",
+  tracker: "Experiment Tracking",
+  compute: "Compute Backend",
+  review: "Review & Launch",
+};
+
+export function TrainingDialog() {
+  const {
+    isDialogOpen,
+    closeDialog,
+    currentStep,
+    nextStep,
+    prevStep,
+    setStep,
+    datasetConfig,
+    modelConfig,
+    trainingParams,
+    trackerConfig,
+    computeConfig,
+    activeJobId,
+    jobStatus,
+    isSubmitting,
+    error,
+    setActiveJobId,
+    setJobStatus,
+    setIsSubmitting,
+    setError,
+    setIsPolling,
+    setPollIntervalId,
+    pollIntervalId,
+    resetConfig,
+  } = useTrainingStore();
+
+  const canStartTraining = useTrainingStore(selectCanStartTraining);
+  const isJobRunning = useTrainingStore(selectIsJobRunning);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+      }
+    };
+  }, [pollIntervalId]);
+
+  // Poll job status
+  const pollStatus = useCallback(async (jobId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/training/status/${jobId}`);
+      if (!response.ok) throw new Error("Failed to fetch status");
+
+      const status: TrainingStatusResponse = await response.json();
+      setJobStatus(status);
+
+      // Stop polling if job is done
+      if (["completed", "failed", "cancelled"].includes(status.status)) {
+        setIsPolling(false);
+        if (pollIntervalId) {
+          clearInterval(pollIntervalId);
+          setPollIntervalId(null);
+        }
+
+        if (status.status === "completed") {
+          toast.success("Training completed!");
+        } else if (status.status === "failed") {
+          toast.error(`Training failed: ${status.error || "Unknown error"}`);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to poll status:", e);
+    }
+  }, [pollIntervalId, setJobStatus, setIsPolling, setPollIntervalId]);
+
+  // Start training
+  const handleStartTraining = async () => {
+    if (!datasetConfig || !modelConfig) {
+      setError("Please complete dataset and model configuration");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Convert to API format (camelCase -> snake_case handled by backend)
+      const request = {
+        dataset: {
+          source: datasetConfig.source,
+          repo_id: datasetConfig.repoId,
+          local_path: datasetConfig.localPath,
+          version: datasetConfig.version,
+        },
+        model: {
+          architecture: modelConfig.architecture,
+          config: modelConfig.config,
+          pretrained_path: modelConfig.pretrainedPath,
+        },
+        training: {
+          batch_size: trainingParams.batchSize,
+          learning_rate: trainingParams.learningRate,
+          epochs: trainingParams.epochs,
+          seed: trainingParams.seed,
+          gradient_accumulation_steps: trainingParams.gradientAccumulationSteps,
+          max_grad_norm: trainingParams.maxGradNorm,
+          weight_decay: trainingParams.weightDecay,
+          lr_scheduler: trainingParams.lrScheduler,
+          warmup_steps: trainingParams.warmupSteps,
+          checkpoint_interval: trainingParams.checkpointInterval,
+          keep_last_n_checkpoints: trainingParams.keepLastNCheckpoints,
+          early_stopping_patience: trainingParams.earlyStoppingPatience,
+          output_dir: trainingParams.outputDir,
+          run_name: trainingParams.runName,
+        },
+        tracker: {
+          type: trackerConfig.type,
+          tracking_uri: trackerConfig.trackingUri,
+          experiment_name: trackerConfig.experimentName,
+          project: trackerConfig.project,
+          entity: trackerConfig.entity,
+        },
+        compute: {
+          type: computeConfig.type,
+          gpu: computeConfig.gpu,
+          device: computeConfig.device,
+          api_key: computeConfig.apiKey,
+          use_spot: computeConfig.useSpot,
+          timeout_hours: computeConfig.timeoutHours,
+        },
+      };
+
+      const response = await fetch(`${API_BASE_URL}/training/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to start training");
+      }
+
+      const result: TrainingStartResponse = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+
+      setActiveJobId(result.jobId);
+      toast.success(`Training started: ${result.jobId}`);
+
+      if (result.trackerUrl) {
+        toast.info(`Track progress: ${result.trackerUrl}`);
+      }
+
+      // Start polling
+      setIsPolling(true);
+      const intervalId = window.setInterval(() => {
+        pollStatus(result.jobId);
+      }, 2000);
+      setPollIntervalId(intervalId);
+
+      // Initial poll
+      pollStatus(result.jobId);
+
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      setError(message);
+      toast.error(`Failed to start training: ${message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Cancel training
+  const handleCancelTraining = async () => {
+    if (!activeJobId) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/training/cancel/${activeJobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) throw new Error("Failed to cancel");
+
+      toast.info("Training cancelled");
+      setIsPolling(false);
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        setPollIntervalId(null);
+      }
+    } catch (e) {
+      toast.error("Failed to cancel training");
+    }
+  };
+
+  // Check if step is valid for navigation
+  const canProceed = (step: string): boolean => {
+    switch (step) {
+      case "dataset":
+        return datasetConfig !== null;
+      case "model":
+        return modelConfig !== null;
+      default:
+        return true;
+    }
+  };
+
+  if (!isDialogOpen) return null;
+
+  // Show progress view if job is running
+  if (activeJobId && jobStatus) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl m-4 max-h-[90vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <h2 className="text-sm font-medium">Training Progress</h2>
+            <Button variant="ghost" size="sm" onClick={closeDialog}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Progress content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <TrainingProgress
+              jobId={activeJobId}
+              status={jobStatus}
+              onCancel={handleCancelTraining}
+            />
+          </div>
+
+          {/* Footer */}
+          <div className="border-t px-4 py-3 flex justify-end gap-2">
+            {isJobRunning ? (
+              <Button variant="destructive" onClick={handleCancelTraining}>
+                Cancel Training
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => {
+                  setActiveJobId(null);
+                  setJobStatus(null);
+                  resetConfig();
+                }}>
+                  New Training
+                </Button>
+                <Button onClick={closeDialog}>Close</Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl m-4 max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <div>
+            <h2 className="text-sm font-medium">
+              {STEP_TITLES[currentStep]}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Step {Object.keys(STEP_TITLES).indexOf(currentStep) + 1} of {Object.keys(STEP_TITLES).length}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={closeDialog}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex gap-1 px-4 py-2 border-b bg-muted/30">
+          {Object.keys(STEP_TITLES).map((step, index) => (
+            <button
+              key={step}
+              onClick={() => setStep(step as keyof typeof STEP_TITLES)}
+              disabled={index > 0 && !canProceed(Object.keys(STEP_TITLES)[index - 1])}
+              className={`flex-1 h-1.5 rounded-full transition-colors ${
+                step === currentStep
+                  ? "bg-primary"
+                  : index < Object.keys(STEP_TITLES).indexOf(currentStep)
+                  ? "bg-primary/50"
+                  : "bg-muted"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {error && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          {currentStep === "dataset" && <DatasetSelector />}
+          {currentStep === "model" && <ModelSelector />}
+          {currentStep === "training" && <HyperparameterForm />}
+          {currentStep === "tracker" && <TrackerConfig />}
+          {currentStep === "compute" && <ComputeSelector />}
+          {currentStep === "review" && <TrainingReview />}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t px-4 py-3 flex justify-between">
+          <Button
+            variant="outline"
+            onClick={prevStep}
+            disabled={currentStep === "dataset"}
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+
+          {currentStep === "review" ? (
+            <Button
+              onClick={handleStartTraining}
+              disabled={!canStartTraining || isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Start Training
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button
+              onClick={nextStep}
+              disabled={!canProceed(currentStep)}
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
