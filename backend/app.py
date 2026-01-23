@@ -13,6 +13,7 @@ from backend.api.lerobot import router as lerobot_router
 from backend.api.pyroki import router as pyroki_router
 from backend.api.rerun import router as rerun_router
 from backend.api.samples import router as samples_router
+from backend.api.training import router as training_router
 from backend.core.settings import settings
 
 
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(rerun_router)
     app.include_router(samples_router)
     app.include_router(datasets_router)
+    app.include_router(training_router)
     return app
 
 
