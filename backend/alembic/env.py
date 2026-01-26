@@ -25,14 +25,27 @@ if config.config_file_name is not None:
 
 
 def get_database_url() -> str:
-    """Get database URL from environment or default location.
+    """Get database URL from config or environment.
 
-    Uses URDF_DATA_DIR env var if set, otherwise defaults to
-    ~/.urdf-studio/data/jobs.db
+    Priority:
+    1. URL set via config.set_main_option() (used by migrations.py)
+    2. URDF_DATA_DIR env var
+    3. Default: ~/.urdf-studio/data/jobs.db
 
     Returns:
         SQLite database URL string
     """
+    # First check if URL was explicitly set in config (e.g., by migrations.py)
+    url = config.get_main_option("sqlalchemy.url")
+    if url and not url.endswith("/data/jobs.db"):
+        # Custom URL was set, use it directly
+        # Extract path and ensure parent directory exists
+        if url.startswith("sqlite:///"):
+            db_path = Path(url.replace("sqlite:///", ""))
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+        return url
+
+    # Fall back to environment variable or default
     data_dir = os.environ.get(
         "URDF_DATA_DIR",
         str(Path.home() / ".urdf-studio" / "data")

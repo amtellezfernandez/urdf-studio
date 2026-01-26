@@ -10,101 +10,61 @@ This migration:
 3. Creates necessary indexes
 """
 
-from __future__ import annotations
-
-import logging
-
-import aiosqlite
-
-logger = logging.getLogger(__name__)
-
-# SQL statements for the migration
-CREATE_EXPERIMENTS_TABLE = """
-CREATE TABLE IF NOT EXISTS experiments (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    description TEXT,
-    notes TEXT,
-    tags TEXT,  -- JSON array
-
-    -- Dataset reference
-    dataset_source TEXT NOT NULL,
-    dataset_repo_id TEXT,
-    dataset_local_path TEXT,
-    dataset_version TEXT,
-    dataset_resolved_revision TEXT,
-
-    -- Robot reference
-    robot_name TEXT,
-    urdf_hash TEXT,
-
-    -- Environment (nullable for v0.1)
-    environment_config TEXT,
-
-    -- Timestamps
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-"""
-
-ADD_EXPERIMENT_ID_COLUMN = """
-ALTER TABLE jobs ADD COLUMN experiment_id TEXT REFERENCES experiments(id);
-"""
-
-CREATE_JOBS_EXPERIMENT_INDEX = """
-CREATE INDEX IF NOT EXISTS idx_jobs_experiment ON jobs(experiment_id);
-"""
-
-CREATE_EXPERIMENTS_NAME_INDEX = """
-CREATE INDEX IF NOT EXISTS idx_experiments_name ON experiments(name);
-"""
-
-CREATE_EXPERIMENTS_CREATED_INDEX = """
-CREATE INDEX IF NOT EXISTS idx_experiments_created ON experiments(created_at);
-"""
+from alembic import op
+import sqlalchemy as sa
 
 
-async def upgrade(db: aiosqlite.Connection) -> None:
-    """Run the migration."""
-    logger.info("Running migration 002_experiments: Creating experiments table")
+# revision identifiers, used by Alembic.
+revision = "002"
+down_revision = "001"
+branch_labels = None
+depends_on = None
 
+
+def upgrade() -> None:
+    """Create experiments table and add experiment_id to jobs."""
     # Create experiments table
-    await db.execute(CREATE_EXPERIMENTS_TABLE)
-    logger.info("Created experiments table")
+    op.execute("""
+        CREATE TABLE experiments (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            notes TEXT,
+            tags TEXT,
 
-    # Check if experiment_id column already exists in jobs
-    cursor = await db.execute("PRAGMA table_info(jobs)")
-    columns = await cursor.fetchall()
-    column_names = [col[1] for col in columns]
+            -- Dataset reference
+            dataset_source TEXT NOT NULL,
+            dataset_repo_id TEXT,
+            dataset_local_path TEXT,
+            dataset_version TEXT,
+            dataset_resolved_revision TEXT,
 
-    if "experiment_id" not in column_names:
-        await db.execute(ADD_EXPERIMENT_ID_COLUMN)
-        logger.info("Added experiment_id column to jobs table")
-    else:
-        logger.info("experiment_id column already exists in jobs table")
+            -- Robot reference
+            robot_name TEXT,
+            urdf_hash TEXT,
+
+            -- Environment (nullable for v0.1)
+            environment_config TEXT,
+
+            -- Timestamps
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+    # Add experiment_id column to jobs table
+    op.execute("ALTER TABLE jobs ADD COLUMN experiment_id TEXT REFERENCES experiments(id)")
 
     # Create indexes
-    await db.execute(CREATE_JOBS_EXPERIMENT_INDEX)
-    await db.execute(CREATE_EXPERIMENTS_NAME_INDEX)
-    await db.execute(CREATE_EXPERIMENTS_CREATED_INDEX)
-    logger.info("Created indexes for experiments")
-
-    await db.commit()
-    logger.info("Migration 002_experiments completed successfully")
+    op.execute("CREATE INDEX idx_jobs_experiment ON jobs(experiment_id)")
+    op.execute("CREATE INDEX idx_experiments_name ON experiments(name)")
+    op.execute("CREATE INDEX idx_experiments_created ON experiments(created_at)")
 
 
-async def downgrade(db: aiosqlite.Connection) -> None:
-    """Revert the migration."""
-    logger.info("Reverting migration 002_experiments")
-
-    # SQLite doesn't support DROP COLUMN directly in older versions
-    # We need to recreate the jobs table without experiment_id
-    # For now, we'll just drop the experiments table
-
-    await db.execute("DROP INDEX IF EXISTS idx_jobs_experiment")
-    await db.execute("DROP INDEX IF EXISTS idx_experiments_name")
-    await db.execute("DROP INDEX IF EXISTS idx_experiments_created")
-    await db.execute("DROP TABLE IF EXISTS experiments")
-
-    await db.commit()
-    logger.info("Migration 002_experiments reverted")
+def downgrade() -> None:
+    """Drop experiments table and related indexes."""
+    op.execute("DROP INDEX IF EXISTS idx_jobs_experiment")
+    op.execute("DROP INDEX IF EXISTS idx_experiments_name")
+    op.execute("DROP INDEX IF EXISTS idx_experiments_created")
+    op.execute("DROP TABLE IF EXISTS experiments")
+    # Note: SQLite doesn't support DROP COLUMN, so experiment_id remains in jobs

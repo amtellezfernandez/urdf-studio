@@ -165,7 +165,8 @@ class TestUpgradeDowngrade:
         assert success
 
         current = get_current_revision(temp_db)
-        assert current == "001"
+        head = get_head_revision()
+        assert current == head
 
         # Downgrade to base
         success = downgrade(temp_db, revision="base")
