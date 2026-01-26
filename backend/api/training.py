@@ -172,6 +172,18 @@ async def evaluate_policy(request: EvaluateRequest) -> EvaluateResponse:
 # ============================================================================
 
 
+@router.get("/metrics/{job_id}")
+async def get_job_metrics(job_id: str) -> dict:
+    """Get metrics history for a training job for visualization."""
+    return await training_service.get_job_metrics(job_id)
+
+
+@router.get("/logs/{job_id}")
+async def get_job_logs(job_id: str, tail: int = Query(default=100, ge=1, le=1000)) -> dict:
+    """Get training logs (last N lines)."""
+    return await training_service.get_job_logs(job_id, tail)
+
+
 @router.get("/compute/instances")
 async def list_compute_instances() -> dict:
     """List available compute instances across all backends.

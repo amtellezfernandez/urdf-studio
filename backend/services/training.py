@@ -806,3 +806,124 @@ async def evaluate_policy(request: EvaluateRequest) -> EvaluateResponse:
             success=False,
             error=str(e),
         )
+
+
+async def get_job_metrics(job_id: str) -> dict:
+    """Get metrics history for a training job for visualization.
+
+    Reads from outputs/{job_id}/metrics.jsonl (one JSON per line) or
+    outputs/{job_id}/progress.json as a fallback.
+
+    Args:
+        job_id: Job ID to get metrics for
+
+    Returns:
+        Dictionary with metrics grouped by metric name, each containing
+        a list of data points with step, epoch, value, and timestamp.
+    """
+    metrics: Dict[str, List[Dict[str, Any]]] = {}
+
+    # Try metrics.jsonl first (preferred format)
+    metrics_jsonl_path = Path("outputs") / job_id / "metrics.jsonl"
+    progress_json_path = Path("outputs") / job_id / "progress.json"
+
+    try:
+        if metrics_jsonl_path.exists():
+            with open(metrics_jsonl_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        # Each entry should have metric name and value
+                        # Expected format: {"step": 1, "epoch": 0, "loss": 0.5, "learning_rate": 0.001, "timestamp": 123}
+                        step = entry.get("step", 0)
+                        epoch = entry.get("epoch", 0)
+                        timestamp = entry.get("timestamp")
+
+                        # Extract all metrics from the entry
+                        for key, value in entry.items():
+                            if key in ("step", "epoch", "timestamp"):
+                                continue
+                            if isinstance(value, (int, float)):
+                                if key not in metrics:
+                                    metrics[key] = []
+                                metrics[key].append({
+                                    "step": step,
+                                    "epoch": epoch,
+                                    "value": value,
+                                    "timestamp": timestamp,
+                                })
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse metrics line: {line[:100]}")
+                        continue
+
+        elif progress_json_path.exists():
+            # Fallback to progress.json
+            with open(progress_json_path, "r") as f:
+                progress_data = json.load(f)
+
+            # Extract metrics from progress.json structure
+            if "metrics_history" in progress_data:
+                # If there's a metrics_history field, use it directly
+                for metric_name, values in progress_data["metrics_history"].items():
+                    metrics[metric_name] = values
+            elif "metrics" in progress_data:
+                # Single snapshot of metrics - wrap in list
+                current_metrics = progress_data["metrics"]
+                step = progress_data.get("current_step", 0)
+                epoch = progress_data.get("current_epoch", 0)
+
+                for key, value in current_metrics.items():
+                    if isinstance(value, (int, float)):
+                        metrics[key] = [{
+                            "step": step,
+                            "epoch": epoch,
+                            "value": value,
+                            "timestamp": None,
+                        }]
+
+    except FileNotFoundError:
+        logger.debug(f"No metrics file found for job {job_id}")
+    except Exception as e:
+        logger.error(f"Error reading metrics for job {job_id}: {e}")
+
+    return {"metrics": metrics}
+
+
+async def get_job_logs(job_id: str, tail: int = 100) -> dict:
+    """Get training logs (last N lines).
+
+    Reads from outputs/{job_id}/train.log.
+
+    Args:
+        job_id: Job ID to get logs for
+        tail: Number of lines to return (default 100)
+
+    Returns:
+        Dictionary with logs string and total line count.
+    """
+    log_path = Path("outputs") / job_id / "train.log"
+
+    try:
+        if not log_path.exists():
+            return {"logs": "", "total_lines": 0}
+
+        with open(log_path, "r") as f:
+            all_lines = f.readlines()
+
+        total_lines = len(all_lines)
+
+        # Get last N lines
+        tail_lines = all_lines[-tail:] if tail < total_lines else all_lines
+        logs = "".join(tail_lines)
+
+        return {"logs": logs, "total_lines": total_lines}
+
+    except FileNotFoundError:
+        logger.debug(f"No log file found for job {job_id}")
+        return {"logs": "", "total_lines": 0}
+    except Exception as e:
+        logger.error(f"Error reading logs for job {job_id}: {e}")
+        return {"logs": f"Error reading logs: {e}", "total_lines": 0}
