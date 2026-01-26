@@ -208,7 +208,9 @@ export default function RobotOps() {
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden">
-        {activeTab === "experiments" && <ExperimentDashboard />}
+        {activeTab === "experiments" && (
+          <ExperimentDashboard onSelectJob={(jobId) => setSelectedJobId(jobId)} />
+        )}
         {activeTab === "metrics" && (
           <div className="h-full p-6 overflow-auto">
             <div className="max-w-5xl mx-auto">

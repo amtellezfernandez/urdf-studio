@@ -135,8 +135,19 @@ function OverviewTab() {
 // Jobs Tab with Split View
 // ============================================================================
 
-function JobsTab() {
+interface JobsTabProps {
+  onSelectJob?: (jobId: string) => void;
+}
+
+function JobsTab({ onSelectJob }: JobsTabProps) {
   const { selectedJobId } = useExperimentStore();
+
+  // Notify parent when a job is selected
+  useEffect(() => {
+    if (selectedJobId && onSelectJob) {
+      onSelectJob(selectedJobId);
+    }
+  }, [selectedJobId, onSelectJob]);
 
   return (
     <div className="flex h-[calc(100vh-16rem)] gap-4">
@@ -164,7 +175,11 @@ function JobsTab() {
 // Main Component
 // ============================================================================
 
-export function ExperimentDashboard() {
+interface ExperimentDashboardProps {
+  onSelectJob?: (jobId: string) => void;
+}
+
+export function ExperimentDashboard({ onSelectJob }: ExperimentDashboardProps) {
   const { reset } = useExperimentStore();
   const hasActiveJobs = useExperimentStore(selectHasActiveJobs);
 
@@ -212,7 +227,7 @@ export function ExperimentDashboard() {
           </TabsContent>
 
           <TabsContent value="jobs" className="flex-1 overflow-hidden">
-            <JobsTab />
+            <JobsTab onSelectJob={onSelectJob} />
           </TabsContent>
         </Tabs>
       </div>
