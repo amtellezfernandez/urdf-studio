@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -255,6 +256,8 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             env={
                 "URDF_STUDIO_JOB_ID": job_id,
                 "PYTHONUNBUFFERED": "1",
+                "HF_TOKEN": os.environ.get("HF_TOKEN", ""),
+                "HUGGINGFACE_TOKEN": os.environ.get("HUGGINGFACE_TOKEN", ""),
             },
         )
 

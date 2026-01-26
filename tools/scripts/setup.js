@@ -451,6 +451,15 @@ async function checkRerun() {
   }
 }
 
+function hasNvidiaGPU() {
+  try {
+    execSync('nvidia-smi', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function installBackendDeps() {
   log('');
   logArrow('🔧 Installing backend Python dependencies');
@@ -469,7 +478,8 @@ async function installBackendDeps() {
     return false;
   }
 
-  const deps = [
+  // Core dependencies
+  const coreDeps = [
     'fastapi',
     'uvicorn',
     'pydantic',
@@ -479,15 +489,56 @@ async function installBackendDeps() {
     'jaxlib',
     'jax_dataclasses',
     'jaxlie',
-    'jaxls'
+    'jaxls',
   ];
-  logInfo(`Installing: ${deps.join(', ')}`);
+
+  // LeRobot and ML dependencies
+  const mlDeps = [
+    'lerobot',
+    'transformers',
+    'datasets',
+    'huggingface_hub',
+    'safetensors',
+  ];
+
+  // Experiment tracking
+  const trackingDeps = [
+    'wandb',
+    'mlflow',
+  ];
+
+  const allDeps = [...coreDeps, ...mlDeps, ...trackingDeps];
+
+  // Detect GPU for PyTorch installation
+  const hasGPU = hasNvidiaGPU();
+  const torchIndex = hasGPU
+    ? 'https://download.pytorch.org/whl/cu121'
+    : 'https://download.pytorch.org/whl/cpu';
+
+  logInfo(`GPU detected: ${hasGPU ? 'Yes (using CUDA 12.1)' : 'No (using CPU-only)'}`);
+  logInfo(`Installing: ${allDeps.join(', ')}`);
+
   try {
-    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...deps], {
+    // Install PyTorch first with appropriate index
+    logInfo('Installing PyTorch...');
+    execFileSync(uvPath, [
+      'pip', 'install', '--python', venvPython,
+      '--extra-index-url', torchIndex,
+      'torch', 'torchvision'
+    ], {
       cwd: rootDir,
       stdio: 'inherit',
       env: getUvEnv()
     });
+
+    // Install other dependencies
+    logInfo('Installing LeRobot and dependencies...');
+    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...allDeps], {
+      cwd: rootDir,
+      stdio: 'inherit',
+      env: getUvEnv()
+    });
+
     const pyrokiPath = join(rootDir, 'vendor', 'pyroki');
     if (existsSync(pyrokiPath)) {
       let pythonInclude = '';
@@ -517,7 +568,8 @@ async function installBackendDeps() {
   } catch (e) {
     log('✗ Failed to install backend dependencies', colors.yellow);
     logInfo(`   You can try installing manually:`);
-    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 ${deps.join(' ')}`);
+    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 --extra-index-url ${torchIndex} torch torchvision`);
+    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 ${allDeps.join(' ')}`);
     return false;
   }
 }

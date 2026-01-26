@@ -1,0 +1,150 @@
+# =============================================================================
+# URDF Studio - Docker Compose Configuration
+# =============================================================================
+# Usage:
+#   GPU:  docker compose up -d
+#   CPU:  docker compose --profile cpu up -d
+#   Dev:  docker compose --profile dev up -d
+#
+# Environment variables:
+#   HUGGINGFACE_TOKEN - Required for most LeRobot datasets
+#   HF_TOKEN          - Alternative HuggingFace token variable
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend: FastAPI + Training (GPU)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: trainer
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outputs:/app/outputs
+      - hf-cache:/app/.cache/huggingface
+      - ./backend:/app/backend:ro  # Mount for development
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN:-}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      - mlflow
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Backend: CPU-only variant
+  # ---------------------------------------------------------------------------
+  backend-cpu:
+    profiles: ["cpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outputs:/app/outputs
+      - hf-cache:/app/.cache/huggingface
+      - ./backend:/app/backend:ro
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN:-}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - mlflow
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Frontend: Vite + React
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Frontend: Development mode
+  # ---------------------------------------------------------------------------
+  frontend-dev:
+    profiles: ["dev"]
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # MLflow: Experiment tracking server (optional)
+  # ---------------------------------------------------------------------------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  hf-cache:
+    name: urdf-studio-hf-cache
+  mlflow-data:
+    name: urdf-studio-mlflow
+  node_modules:
+    name: urdf-studio-node-modules
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  default:
+    name: urdf-studio-network

@@ -8,6 +8,10 @@ Usage:
     python eval_policy.py --checkpoint path/to/checkpoint.pt --num-episodes 5
 
 The script outputs JSON with action sequences for each episode.
+
+Requirements:
+    - LeRobot must be installed
+    - A valid checkpoint file is required
 """
 
 from __future__ import annotations
@@ -19,7 +23,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
+import torch
+from lerobot.common.policies.factory import make_policy
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,9 +41,11 @@ def load_checkpoint(checkpoint_path: str) -> Dict[str, Any]:
 
     Returns:
         Checkpoint data including model state and config
-    """
-    import torch
 
+    Raises:
+        FileNotFoundError: If checkpoint file doesn't exist
+        ValueError: If checkpoint format is unsupported
+    """
     checkpoint_path = Path(checkpoint_path)
 
     if not checkpoint_path.exists():
@@ -52,9 +59,11 @@ def load_checkpoint(checkpoint_path: str) -> Dict[str, Any]:
         config_path = checkpoint_path.with_suffix(".json")
         config = json.loads(config_path.read_text()) if config_path.exists() else {}
         return {"state_dict": state_dict, "config": config}
-    else:
+    elif checkpoint_path.suffix == ".pt":
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
         return checkpoint
+    else:
+        raise ValueError(f"Unsupported checkpoint format: {checkpoint_path.suffix}")
 
 
 def create_policy(architecture: str, config: Dict[str, Any], state_dict: Dict[str, Any]):
@@ -67,31 +76,21 @@ def create_policy(architecture: str, config: Dict[str, Any], state_dict: Dict[st
 
     Returns:
         Loaded policy model
+
+    Raises:
+        ValueError: If architecture is unknown
+        RuntimeError: If model loading fails
     """
-    try:
-        # Try LeRobot policy loading first
-        from lerobot.common.policies.factory import make_policy
+    logger.info(f"Creating {architecture} policy")
 
-        policy = make_policy(architecture, **config)
-        policy.load_state_dict(state_dict)
-        return policy
-    except ImportError:
-        logger.warning("LeRobot not available, using generic loading")
+    # Get dataset stats from config if available
+    dataset_stats = config.get("dataset_stats", {})
 
-    # Fallback: try to instantiate based on architecture
-    import torch.nn as nn
-
-    if architecture == "act":
-        from lerobot.common.policies.act.modeling_act import ACTPolicy
-
-        policy = ACTPolicy(config)
-    elif architecture == "diffusion_policy":
-        from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
-
-        policy = DiffusionPolicy(config)
-    else:
-        raise ValueError(f"Unknown architecture: {architecture}")
-
+    policy = make_policy(
+        name=architecture,
+        dataset_stats=dataset_stats,
+        **config.get("config", {}),
+    )
     policy.load_state_dict(state_dict)
     return policy
 
@@ -115,9 +114,8 @@ def run_inference(
     Returns:
         List of episode results with action sequences
     """
-    import torch
-
     policy.eval()
+    device = next(policy.parameters()).device
     episodes = []
 
     with torch.no_grad():
@@ -128,34 +126,28 @@ def run_inference(
             observations = []
             timestamps = []
 
-            # Create dummy observation (would come from simulation in real use)
-            # For visualization, we'll generate a trajectory
-            obs = torch.zeros(1, action_dim)
+            # Create initial observation
+            obs = torch.zeros(1, action_dim, device=device)
             if initial_state:
                 for i, (name, value) in enumerate(initial_state.items()):
                     if i < action_dim:
                         obs[0, i] = value
 
             for step in range(max_steps):
-                try:
-                    # Run policy inference
-                    action = policy.select_action({"observation.state": obs})
+                # Run policy inference
+                action = policy.select_action({"observation.state": obs})
 
-                    if isinstance(action, torch.Tensor):
-                        action = action.cpu().numpy()
-                    if action.ndim > 1:
-                        action = action[0]  # Take first action if batched
+                if isinstance(action, torch.Tensor):
+                    action = action.cpu().numpy()
+                if action.ndim > 1:
+                    action = action[0]  # Take first action if batched
 
-                    actions.append(action.tolist())
-                    observations.append(obs[0].tolist())
-                    timestamps.append(step * 0.02)  # 50Hz
+                actions.append(action.tolist())
+                observations.append(obs[0].cpu().tolist())
+                timestamps.append(step * 0.02)  # 50Hz
 
-                    # Update observation with action (simple forward model)
-                    obs = torch.tensor(action).unsqueeze(0).float()
-
-                except Exception as e:
-                    logger.warning(f"Inference error at step {step}: {e}")
-                    break
+                # Update observation with action (simple forward model)
+                obs = torch.tensor(action, device=device).unsqueeze(0).float()
 
             episodes.append(
                 {
@@ -167,54 +159,6 @@ def run_inference(
             )
 
     return episodes
-
-
-def generate_demo_trajectory(
-    action_dim: int = 7,
-    num_steps: int = 100,
-    initial_state: Optional[Dict[str, float]] = None,
-) -> Dict[str, Any]:
-    """Generate a demonstration trajectory for testing.
-
-    This creates a smooth sinusoidal trajectory that can be visualized
-    even without a trained policy.
-
-    Args:
-        action_dim: Number of action dimensions
-        num_steps: Number of steps in trajectory
-        initial_state: Optional starting joint positions
-
-    Returns:
-        Episode result with action sequence
-    """
-    import numpy as np
-
-    actions = []
-    observations = []
-    timestamps = []
-
-    # Start from initial state or zeros
-    if initial_state:
-        start = np.array([initial_state.get(f"joint_{i}", 0.0) for i in range(action_dim)])
-    else:
-        start = np.zeros(action_dim)
-
-    # Generate smooth sinusoidal motion
-    t = np.linspace(0, 2 * np.pi, num_steps)
-
-    for i, ti in enumerate(t):
-        # Each joint moves at different frequencies
-        action = start + 0.5 * np.sin(ti * np.arange(1, action_dim + 1) * 0.5)
-        actions.append(action.tolist())
-        observations.append(start.tolist())
-        timestamps.append(i * 0.02)  # 50Hz
-
-    return {
-        "episode_index": 0,
-        "actions": actions,
-        "observations": observations,
-        "timestamps": timestamps,
-    }
 
 
 def evaluate(
@@ -235,74 +179,54 @@ def evaluate(
 
     Returns:
         Evaluation results
+
+    Raises:
+        FileNotFoundError: If checkpoint doesn't exist
+        RuntimeError: If evaluation fails
     """
-    try:
-        # Load checkpoint
-        logger.info(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = load_checkpoint(checkpoint_path)
+    # Load checkpoint
+    logger.info(f"Loading checkpoint from {checkpoint_path}")
+    checkpoint = load_checkpoint(checkpoint_path)
 
-        # Get architecture and config from checkpoint
-        config = checkpoint.get("config", {})
-        architecture = config.get("architecture", "act")
-        state_dict = checkpoint.get("state_dict", checkpoint)
+    # Get architecture and config from checkpoint
+    config = checkpoint.get("config", {})
+    architecture = config.get("architecture", "act")
+    state_dict = checkpoint.get("model_state_dict", checkpoint.get("state_dict", checkpoint))
 
-        # Determine action dimension from state dict or config
-        action_dim = config.get("action_dim", 7)
+    # Determine action dimension from state dict or config
+    action_dim = config.get("action_dim", 7)
 
-        # Create and load policy
-        logger.info(f"Creating {architecture} policy")
-        policy = create_policy(architecture, config, state_dict)
+    # Create and load policy
+    logger.info(f"Creating {architecture} policy")
+    policy = create_policy(architecture, config, state_dict)
 
-        # Run inference
-        logger.info(f"Running inference for {num_episodes} episodes")
-        episodes = run_inference(
-            policy,
-            initial_state=initial_state,
-            num_episodes=num_episodes,
-            max_steps=max_steps,
-            action_dim=action_dim,
-        )
+    # Set device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    policy.to(device)
 
-        # Calculate metrics
-        total_steps = sum(len(ep["actions"]) for ep in episodes)
-        metrics = {
-            "total_episodes": len(episodes),
-            "total_steps": total_steps,
-            "avg_episode_length": total_steps / len(episodes) if episodes else 0,
-        }
+    # Run inference
+    logger.info(f"Running inference for {num_episodes} episodes")
+    episodes = run_inference(
+        policy,
+        initial_state=initial_state,
+        num_episodes=num_episodes,
+        max_steps=max_steps,
+        action_dim=action_dim,
+    )
 
-        return {
-            "success": True,
-            "episodes": episodes,
-            "metrics": metrics,
-        }
+    # Calculate metrics
+    total_steps = sum(len(ep["actions"]) for ep in episodes)
+    metrics = {
+        "total_episodes": len(episodes),
+        "total_steps": total_steps,
+        "avg_episode_length": total_steps / len(episodes) if episodes else 0,
+    }
 
-    except FileNotFoundError as e:
-        logger.error(f"Checkpoint not found: {e}")
-        return {"success": False, "error": str(e), "episodes": [], "metrics": {}}
-
-    except Exception as e:
-        logger.error(f"Evaluation failed: {e}")
-
-        # Fallback: generate demo trajectory for visualization
-        logger.info("Generating demo trajectory for visualization")
-        demo = generate_demo_trajectory(
-            action_dim=7,
-            num_steps=min(max_steps, 200),
-            initial_state=initial_state,
-        )
-
-        return {
-            "success": True,
-            "episodes": [demo],
-            "metrics": {
-                "total_episodes": 1,
-                "total_steps": len(demo["actions"]),
-                "avg_episode_length": len(demo["actions"]),
-                "demo_mode": True,
-            },
-            "warning": f"Used demo trajectory due to: {e}",
-        }
+    return {
+        "success": True,
+        "episodes": episodes,
+        "metrics": metrics,
+    }
 
 
 def main():
@@ -343,11 +267,6 @@ def main():
         default=None,
         help="Output JSON file path",
     )
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Generate demo trajectory (no checkpoint needed)",
-    )
 
     args = parser.parse_args()
 
@@ -364,23 +283,7 @@ def main():
             urdf = urdf_path.read_text()
 
     # Run evaluation
-    if args.demo:
-        # Generate demo trajectory without checkpoint
-        demo = generate_demo_trajectory(
-            action_dim=7,
-            num_steps=200,
-            initial_state=initial_state,
-        )
-        result = {
-            "success": True,
-            "episodes": [demo],
-            "metrics": {
-                "total_episodes": 1,
-                "total_steps": len(demo["actions"]),
-                "demo_mode": True,
-            },
-        }
-    else:
+    try:
         result = evaluate(
             checkpoint_path=args.checkpoint,
             num_episodes=args.num_episodes,
@@ -388,6 +291,12 @@ def main():
             initial_state=initial_state,
             urdf=urdf,
         )
+    except FileNotFoundError as e:
+        logger.error(f"Checkpoint not found: {e}")
+        result = {"success": False, "error": str(e), "episodes": [], "metrics": {}}
+    except Exception as e:
+        logger.error(f"Evaluation failed: {e}", exc_info=True)
+        result = {"success": False, "error": str(e), "episodes": [], "metrics": {}}
 
     # Output results
     output_json = json.dumps(result, indent=2)
