@@ -28,12 +28,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import httpx
 
 from backend.sdk.models import (
+    Artifact,
     ComputeBackend,
+    DatasetInfo,
     EpisodeResult,
     EvaluationResult,
     FKResult,
@@ -683,6 +686,112 @@ class DatasetsClient:
     def __init__(self, http: httpx.AsyncClient):
         self._http = http
 
+    async def browse(self, limit: int = 20) -> List[DatasetInfo]:
+        """Browse available LeRobot datasets.
+
+        Args:
+            limit: Maximum datasets to return
+
+        Returns:
+            List of DatasetInfo for available datasets
+        """
+        resp = await self._http.get("/datasets/browse", params={"limit": limit})
+
+        if resp.status_code == 404:
+            # Endpoint not implemented, return empty list
+            return []
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        return [
+            DatasetInfo(
+                repo_id=d["repo_id"],
+                description=d.get("description"),
+                downloads=d.get("downloads"),
+                likes=d.get("likes"),
+                robot_type=d.get("robot_type"),
+                num_episodes=d.get("num_episodes"),
+                total_frames=d.get("total_frames"),
+                fps=d.get("fps"),
+                features=d.get("features"),
+                created_at=d.get("created_at"),
+                updated_at=d.get("updated_at"),
+            )
+            for d in data.get("datasets", [])
+        ]
+
+    async def search(self, query: str, limit: int = 20) -> List[DatasetInfo]:
+        """Search for datasets by query.
+
+        Args:
+            query: Search query string
+            limit: Maximum datasets to return
+
+        Returns:
+            List of matching DatasetInfo
+        """
+        resp = await self._http.get(
+            "/datasets/search",
+            params={"query": query, "limit": limit},
+        )
+
+        if resp.status_code == 404:
+            # Endpoint not implemented, return empty list
+            return []
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        return [
+            DatasetInfo(
+                repo_id=d["repo_id"],
+                description=d.get("description"),
+                downloads=d.get("downloads"),
+                likes=d.get("likes"),
+                robot_type=d.get("robot_type"),
+                num_episodes=d.get("num_episodes"),
+                total_frames=d.get("total_frames"),
+                fps=d.get("fps"),
+                features=d.get("features"),
+                created_at=d.get("created_at"),
+                updated_at=d.get("updated_at"),
+            )
+            for d in data.get("datasets", [])
+        ]
+
+    async def info(self, repo_id: str) -> Optional[DatasetInfo]:
+        """Get detailed info about a dataset.
+
+        Args:
+            repo_id: HuggingFace dataset repo ID (e.g., "lerobot/pusht")
+
+        Returns:
+            DatasetInfo or None if not found
+        """
+        # URL encode the repo_id since it contains a slash
+        resp = await self._http.get(f"/datasets/info/{repo_id}")
+
+        if resp.status_code == 404:
+            return None
+
+        resp.raise_for_status()
+        d = resp.json()
+
+        return DatasetInfo(
+            repo_id=d["repo_id"],
+            description=d.get("description"),
+            downloads=d.get("downloads"),
+            likes=d.get("likes"),
+            robot_type=d.get("robot_type"),
+            num_episodes=d.get("num_episodes"),
+            total_frames=d.get("total_frames"),
+            fps=d.get("fps"),
+            features=d.get("features"),
+            created_at=d.get("created_at"),
+            updated_at=d.get("updated_at"),
+        )
+
     async def mix(
         self,
         datasets: List[str],
@@ -711,6 +820,129 @@ class DatasetsClient:
         resp = await self._http.post("/datasets/mix", json=payload)
         resp.raise_for_status()
         return resp.json()
+
+
+class ArtifactsClient:
+    """Artifact management operations."""
+
+    def __init__(self, http: httpx.AsyncClient):
+        self._http = http
+
+    async def list(self, job_id: str) -> List[Artifact]:
+        """List artifacts for a training job.
+
+        Args:
+            job_id: Training job ID
+
+        Returns:
+            List of Artifact for the job
+        """
+        resp = await self._http.get(f"/training/artifacts/{job_id}")
+
+        if resp.status_code == 404:
+            return []
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        return [
+            Artifact(
+                name=a["name"],
+                path=a["path"],
+                size_bytes=a.get("size_bytes"),
+                artifact_type=a.get("artifact_type"),
+                created_at=a.get("created_at"),
+                checksum=a.get("checksum"),
+            )
+            for a in data.get("artifacts", [])
+        ]
+
+    async def download(
+        self,
+        job_id: str,
+        artifact_path: str,
+        dest: str,
+    ) -> Path:
+        """Download an artifact.
+
+        Args:
+            job_id: Training job ID
+            artifact_path: Path to artifact within job
+            dest: Local destination directory or file path
+
+        Returns:
+            Path to downloaded file
+        """
+        resp = await self._http.get(
+            f"/training/artifacts/{job_id}/download",
+            params={"path": artifact_path},
+        )
+
+        if resp.status_code == 404:
+            raise APIError(f"Artifact not found: {artifact_path}", 404)
+
+        resp.raise_for_status()
+
+        # Determine output path
+        dest_path = Path(dest)
+        if dest_path.is_dir():
+            # Use artifact filename
+            filename = artifact_path.split("/")[-1]
+            dest_path = dest_path / filename
+
+        # Write content
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(resp.content)
+
+        return dest_path
+
+    async def upload(
+        self,
+        job_id: str,
+        artifact_path: str,
+        src: str,
+    ) -> Artifact:
+        """Upload an artifact.
+
+        Args:
+            job_id: Training job ID
+            artifact_path: Path for artifact within job
+            src: Local source file path
+
+        Returns:
+            Created Artifact
+        """
+        src_path = Path(src)
+        if not src_path.exists():
+            raise SDKError(f"Source file not found: {src}")
+
+        # Read file content
+        content = src_path.read_bytes()
+        content_b64 = base64.b64encode(content).decode("utf-8")
+
+        resp = await self._http.post(
+            f"/training/artifacts/{job_id}/upload",
+            json={
+                "path": artifact_path,
+                "content_base64": content_b64,
+                "filename": src_path.name,
+            },
+        )
+
+        if resp.status_code == 404:
+            raise APIError(f"Job not found: {job_id}", 404)
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        return Artifact(
+            name=data.get("name", artifact_path),
+            path=data.get("path", artifact_path),
+            size_bytes=data.get("size_bytes", len(content)),
+            artifact_type=data.get("artifact_type"),
+            created_at=data.get("created_at"),
+            checksum=data.get("checksum"),
+        )
 
 
 class VisualizationClient:
@@ -787,6 +1019,7 @@ class URDFStudioClient:
         training: Training job management
         samples: Sample robot access
         datasets: Dataset operations
+        artifacts: Artifact management
         visualization: Rerun visualization
     """
 
@@ -811,6 +1044,7 @@ class URDFStudioClient:
         self._training: Optional[TrainingClient] = None
         self._samples: Optional[SamplesClient] = None
         self._datasets: Optional[DatasetsClient] = None
+        self._artifacts: Optional[ArtifactsClient] = None
         self._visualization: Optional[VisualizationClient] = None
 
     async def connect(self) -> "URDFStudioClient":
@@ -833,6 +1067,7 @@ class URDFStudioClient:
         self._training = TrainingClient(self._http)
         self._samples = SamplesClient(self._http)
         self._datasets = DatasetsClient(self._http)
+        self._artifacts = ArtifactsClient(self._http)
         self._visualization = VisualizationClient(self._http)
 
         # Verify connection
@@ -892,6 +1127,13 @@ class URDFStudioClient:
         if not self._datasets:
             raise SDKError("Client not connected. Call connect() first.")
         return self._datasets
+
+    @property
+    def artifacts(self) -> ArtifactsClient:
+        """Artifact management operations."""
+        if not self._artifacts:
+            raise SDKError("Client not connected. Call connect() first.")
+        return self._artifacts
 
     @property
     def visualization(self) -> VisualizationClient:
