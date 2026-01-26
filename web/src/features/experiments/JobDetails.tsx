@@ -2,7 +2,7 @@
  * JobDetails component - Detailed view of a single training job
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   X,
   ExternalLink,
@@ -18,6 +18,7 @@ import {
   Terminal,
   BarChart2,
   Info,
+  Upload,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ import { API_BASE_URL } from "@/shared/config/api";
 import { cn } from "@/shared/lib/utils";
 
 import { useExperimentStore } from "./useExperimentStore";
+import { ExportToHFDialog } from "./ExportToHFDialog";
 import type { TrainingJob, JobStatus } from "./types";
 
 // ============================================================================
@@ -280,6 +282,7 @@ function LogsSection({ job }: { job: TrainingJob }) {
 
 export function JobDetails() {
   const { selectedJob, selectJob, updateJob } = useExperimentStore();
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Cancel job mutation
   const cancelMutation = useMutation({
@@ -358,6 +361,16 @@ export function JobDetails() {
               <span className="ml-2">Cancel</span>
             </Button>
           )}
+          {selectedJob.status === "completed" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExportDialog(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Export to HuggingFace
+            </Button>
+          )}
           {selectedJob.trackerUrl && (
             <Button
               variant="outline"
@@ -431,6 +444,14 @@ export function JobDetails() {
           <LogsSection job={selectedJob} />
         </TabsContent>
       </Tabs>
+
+      {/* Export to HuggingFace Dialog */}
+      <ExportToHFDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        runId={selectedJob.id}
+        checkpoints={["final_model"]}
+      />
     </div>
   );
 }
