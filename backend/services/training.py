@@ -41,8 +41,12 @@ from backend.models.training import (
 )
 from backend.robotops import get_compute, get_tracker
 from backend.robotops.compute_protocol import JobState
+from backend.services.job_store import get_job_store, JobRecord
 
 logger = logging.getLogger(__name__)
+
+# Flag to track if we've loaded jobs from the store
+_jobs_loaded = False
 
 
 # ============================================================================
@@ -126,10 +130,98 @@ MODEL_ARCHITECTURES: Dict[str, ModelArchitectureInfo] = {
 
 
 # ============================================================================
-# Job Storage (In-memory for now, would be Redis/DB in production)
+# Job Storage (In-memory cache backed by SQLite persistence)
 # ============================================================================
 
 _jobs: Dict[str, Dict[str, Any]] = {}
+
+
+async def _ensure_jobs_loaded() -> None:
+    """Load active jobs from persistent store on first access."""
+    global _jobs_loaded
+
+    if _jobs_loaded:
+        return
+
+    try:
+        store = get_job_store()
+        # Load running and pending jobs from database
+        active_statuses = [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.QUEUED]
+
+        for status in active_statuses:
+            jobs = await store.list_jobs(status=status, limit=100)
+            for job_record in jobs:
+                if job_record.job_id not in _jobs:
+                    _jobs[job_record.job_id] = {
+                        "compute_job_id": job_record.compute_job_id,
+                        "compute_backend": job_record.compute_backend,
+                        "tracker": None,  # Cannot restore tracker state
+                        "tracker_url": job_record.tracker_url,
+                        "lineage": None,  # Would need to restore from config
+                        "request": None,  # Would need to restore from config
+                        "status": job_record.status,
+                        "started_at": job_record.started_at,
+                        "config": job_record.config,
+                    }
+                    logger.info(f"Loaded job from store: {job_record.job_id} (status: {job_record.status})")
+
+        _jobs_loaded = True
+        logger.info(f"Loaded {len(_jobs)} active jobs from persistent store")
+
+    except Exception as e:
+        logger.warning(f"Failed to load jobs from store: {e}")
+        _jobs_loaded = True  # Don't retry on failure
+
+
+async def _persist_job(job_id: str, job_info: Dict[str, Any]) -> None:
+    """Persist job state to the store."""
+    try:
+        store = get_job_store()
+
+        # Check if job exists
+        existing = await store.get_job(job_id)
+
+        if existing is None:
+            # Create new job record
+            request = job_info.get("request")
+            lineage = job_info.get("lineage")
+
+            config = {}
+            if request:
+                config = {
+                    "dataset": request.dataset.model_dump() if hasattr(request.dataset, 'model_dump') else {},
+                    "model": request.model.model_dump() if hasattr(request.model, 'model_dump') else {},
+                    "training": request.training.model_dump() if hasattr(request.training, 'model_dump') else {},
+                }
+
+            await store.create_job(
+                job_id=job_id,
+                config=config,
+                compute_backend=job_info.get("compute_backend", "local"),
+                compute_job_id=job_info.get("compute_job_id"),
+                run_name=request.training.run_name if request and request.training else None,
+                model_architecture=lineage.model_architecture if lineage else None,
+                dataset_id=lineage.dataset_id if lineage else None,
+            )
+
+            # Update with tracker URL if available
+            if job_info.get("tracker_url"):
+                await store.update_job(job_id, tracker_url=job_info.get("tracker_url"))
+
+        else:
+            # Update existing job
+            status = job_info.get("status")
+            await store.update_job(
+                job_id=job_id,
+                status=status,
+                error=job_info.get("error"),
+                finished_at=job_info.get("finished_at"),
+                tracker_url=job_info.get("tracker_url"),
+                compute_job_id=job_info.get("compute_job_id"),
+            )
+
+    except Exception as e:
+        logger.error(f"Failed to persist job {job_id}: {e}")
 
 
 # ============================================================================
@@ -177,6 +269,9 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
     Returns:
         Response with job ID and status
     """
+    # Ensure jobs are loaded from persistent store
+    await _ensure_jobs_loaded()
+
     job_id = f"train_{uuid.uuid4().hex[:8]}"
     started_at = datetime.now().isoformat()
 
@@ -261,7 +356,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             },
         )
 
-        # Store job info
+        # Store job info in memory
         compute_backend = _get_enum_value(request.compute.type)
         _jobs[job_id] = {
             "compute_job_id": compute_job_id,
@@ -273,6 +368,9 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "status": JobStatus.RUNNING,
             "started_at": started_at,
         }
+
+        # Persist to database
+        await _persist_job(job_id, _jobs[job_id])
 
         return TrainingStartResponse(
             success=True,
@@ -292,6 +390,9 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "finished_at": datetime.now().isoformat(),
         }
 
+        # Persist failed job
+        await _persist_job(job_id, _jobs[job_id])
+
         return TrainingStartResponse(
             success=False,
             job_id=job_id,
@@ -308,6 +409,31 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
     Returns:
         Current status of the job
     """
+    # Ensure jobs are loaded from persistent store
+    await _ensure_jobs_loaded()
+
+    # Try to load from store if not in memory
+    if job_id not in _jobs:
+        try:
+            store = get_job_store()
+            job_record = await store.get_job(job_id)
+            if job_record:
+                _jobs[job_id] = {
+                    "compute_job_id": job_record.compute_job_id,
+                    "compute_backend": job_record.compute_backend,
+                    "tracker": None,
+                    "tracker_url": job_record.tracker_url,
+                    "lineage": None,
+                    "request": None,
+                    "status": job_record.status,
+                    "started_at": job_record.started_at,
+                    "finished_at": job_record.finished_at,
+                    "error": job_record.error,
+                    "config": job_record.config,
+                }
+        except Exception as e:
+            logger.warning(f"Failed to load job {job_id} from store: {e}")
+
     if job_id not in _jobs:
         return TrainingStatusResponse(
             job_id=job_id,
@@ -354,6 +480,7 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
         status = status_map.get(compute_status.state, JobStatus.RUNNING)
 
         # Update stored status
+        old_status = job_info.get("status")
         job_info["status"] = status
         if status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
             job_info["finished_at"] = datetime.now().isoformat()
@@ -361,6 +488,10 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
             tracker = job_info.get("tracker")
             if tracker:
                 tracker.finish_run(_get_enum_value(status))
+
+        # Persist status change to database
+        if old_status != status:
+            await _persist_job(job_id, job_info)
 
         # Build progress
         progress = None
@@ -442,6 +573,9 @@ async def cancel_training(job_id: str, reason: Optional[str] = None) -> bool:
             if tracker:
                 tracker.finish_run("cancelled")
 
+            # Persist cancellation
+            await _persist_job(job_id, job_info)
+
             logger.info(f"Cancelled job {job_id}: {reason}")
 
         return cancelled
@@ -451,7 +585,7 @@ async def cancel_training(job_id: str, reason: Optional[str] = None) -> bool:
         return False
 
 
-def list_jobs(
+async def list_jobs(
     limit: int = 50,
     status_filter: Optional[JobStatus] = None,
 ) -> TrainingJobsListResponse:
@@ -464,6 +598,35 @@ def list_jobs(
     Returns:
         List of job summaries
     """
+    # First, load from persistent store
+    try:
+        store = get_job_store()
+        stored_jobs = await store.list_jobs(status=status_filter, limit=limit)
+
+        jobs = []
+        for job_record in stored_jobs:
+            jobs.append(
+                TrainingJobSummary(
+                    job_id=job_record.job_id,
+                    status=job_record.status,
+                    run_name=job_record.run_name,
+                    model_architecture=job_record.model_architecture or "unknown",
+                    dataset_id=job_record.dataset_id or "unknown",
+                    started_at=job_record.started_at or "",
+                    finished_at=job_record.finished_at,
+                    compute_backend=job_record.compute_backend,
+                )
+            )
+
+        return TrainingJobsListResponse(
+            jobs=jobs[:limit],
+            total=len(jobs),
+        )
+
+    except Exception as e:
+        logger.warning(f"Failed to list jobs from store: {e}, falling back to memory")
+
+    # Fallback to in-memory jobs
     jobs = []
 
     for job_id, job_info in _jobs.items():

@@ -26,11 +26,13 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -63,6 +65,51 @@ def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from JSON file."""
     with open(config_path) as f:
         return json.load(f)
+
+
+def set_seed(seed: int) -> None:
+    """Set random seeds for reproducibility.
+
+    Args:
+        seed: Random seed value
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # Make CuDNN deterministic (may impact performance)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    logger.info(f"Set random seed: {seed}")
+
+
+def get_tracker(tracker_config: Optional[Dict[str, Any]]) -> Optional[Any]:
+    """Initialize experiment tracker from config.
+
+    Args:
+        tracker_config: Tracker configuration dict with 'type' key
+
+    Returns:
+        Initialized tracker or None if disabled
+    """
+    if not tracker_config:
+        return None
+
+    tracker_type = tracker_config.get("type", "none")
+    if tracker_type == "none":
+        return None
+
+    try:
+        from backend.robotops import get_tracker as _get_tracker
+        tracker = _get_tracker(tracker_config)
+        logger.info(f"Initialized {tracker_type} tracker")
+        return tracker
+    except ImportError:
+        logger.warning("Could not import tracker backend, metrics will not be logged")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to initialize tracker: {e}")
+        return None
 
 
 def write_progress(
@@ -132,6 +179,7 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
             - dataset: Dataset configuration (source, repo_id or local_path)
             - model: Model configuration (architecture, config)
             - training: Training parameters (epochs, batch_size, learning_rate, etc.)
+            - tracker: Tracker configuration (type, tracking_uri, etc.)
         job_dir: Directory for saving outputs
 
     Raises:
@@ -144,6 +192,44 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
     dataset_config = config.get("dataset", {})
     model_config = config.get("model", {})
     training_config = config.get("training", {})
+    tracker_config = config.get("tracker", {})
+
+    # =========================================================================
+    # 0. Set seed for reproducibility
+    # =========================================================================
+    seed = training_config.get("seed", 42)
+    set_seed(seed)
+
+    # =========================================================================
+    # 0b. Initialize experiment tracker
+    # =========================================================================
+    tracker = get_tracker(tracker_config)
+    job_id = os.environ.get("URDF_STUDIO_JOB_ID", "unknown")
+
+    if tracker:
+        run_name = training_config.get("run_name") or f"{model_config.get('architecture', 'policy')}_{job_id}"
+        tracker.init_run(
+            run_name=run_name,
+            config={
+                "dataset": dataset_config,
+                "model": model_config,
+                "training": training_config,
+                "seed": seed,
+            },
+            tags={"job_id": job_id},
+        )
+        # Log dataset lineage
+        dataset_id = dataset_config.get("repo_id") or dataset_config.get("local_path") or "unknown"
+        tracker.log_dataset_lineage(
+            dataset_id=dataset_id,
+            version=dataset_config.get("version", "latest"),
+            source=dataset_config.get("source", "huggingface"),
+        )
+        # Log model config
+        tracker.log_model_config(
+            architecture=model_config.get("architecture", "act"),
+            config=model_config.get("config", {}),
+        )
 
     # =========================================================================
     # 1. Setup configs
@@ -276,19 +362,32 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
             epoch_steps += 1
             global_step += 1
 
-            # Write progress
+            # Write progress to file (for status polling)
+            metrics_dict = {
+                "loss": loss_val,
+                "learning_rate": learning_rate,
+                "epoch_avg_loss": epoch_loss / epoch_steps,
+            }
             write_progress(
                 job_dir=job_dir,
                 current_epoch=epoch,
                 total_epochs=total_epochs,
                 current_step=global_step,
                 total_steps=total_steps,
-                metrics={
-                    "loss": loss_val,
-                    "learning_rate": learning_rate,
-                    "epoch_avg_loss": epoch_loss / epoch_steps,
-                },
+                metrics=metrics_dict,
             )
+
+            # Log metrics to experiment tracker (real-time)
+            if tracker:
+                tracker.log_metrics(
+                    metrics={
+                        "train/loss": loss_val,
+                        "train/learning_rate": learning_rate,
+                        "train/epoch_avg_loss": epoch_loss / epoch_steps,
+                        "train/epoch": epoch,
+                    },
+                    step=global_step,
+                )
 
             # Log periodically
             if (step + 1) % log_interval == 0:
@@ -346,6 +445,21 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
         total_steps=total_steps,
         metrics={"loss": avg_loss, "learning_rate": 0, "status": "completed"},
     )
+
+    # Log final metrics and finish tracker
+    if tracker:
+        tracker.log_metrics(
+            metrics={
+                "train/final_loss": avg_loss,
+                "train/total_steps": total_steps,
+                "train/total_epochs": total_epochs,
+            },
+            step=total_steps,
+        )
+        # Log final model as artifact
+        tracker.log_artifact(str(final_model_dir), "model")
+        tracker.finish_run("completed")
+        logger.info(f"Logged training results to tracker: {tracker.get_run_url()}")
 
     logger.info("Training completed successfully!")
 

@@ -6,9 +6,18 @@
 #   CPU:  docker compose --profile cpu up -d
 #   Dev:  docker compose --profile dev up -d
 #
-# Environment variables:
+# Services:
+#   - backend/backend-cpu: FastAPI backend with training support
+#   - frontend: React frontend
+#   - mlflow: Experiment tracking (http://localhost:5000)
+#   - minio: S3-compatible storage (http://localhost:9001 for console)
+#
+# Environment variables (see .env.example):
 #   HUGGINGFACE_TOKEN - Required for most LeRobot datasets
 #   HF_TOKEN          - Alternative HuggingFace token variable
+#   MINIO_ROOT_USER   - MinIO admin username (default: minioadmin)
+#   MINIO_ROOT_PASSWORD - MinIO admin password (default: minioadmin)
+#   WANDB_API_KEY     - Optional: Weights & Biases API key
 # =============================================================================
 
 services:
@@ -32,6 +41,11 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - WANDB_API_KEY=${WANDB_API_KEY:-}
       - PYTHONUNBUFFERED=1
+      # S3/MinIO configuration
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=artifacts
     deploy:
       resources:
         reservations:
@@ -69,6 +83,11 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - WANDB_API_KEY=${WANDB_API_KEY:-}
       - PYTHONUNBUFFERED=1
+      # S3/MinIO configuration
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=artifacts
     depends_on:
       - mlflow
     restart: unless-stopped
@@ -110,7 +129,43 @@ services:
       - backend
 
   # ---------------------------------------------------------------------------
-  # MLflow: Experiment tracking server (optional)
+  # MinIO: S3-compatible object storage for artifacts
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb myminio/mlflow --ignore-existing;
+      mc mb myminio/artifacts --ignore-existing;
+      mc anonymous set download myminio/mlflow;
+      exit 0;
+      "
+
+  # ---------------------------------------------------------------------------
+  # MLflow: Experiment tracking server
   # ---------------------------------------------------------------------------
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.9.2
@@ -118,12 +173,19 @@ services:
       - "5000:5000"
     volumes:
       - mlflow-data:/mlflow
+    environment:
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
     command: >
       mlflow server
       --backend-store-uri sqlite:///mlflow/mlflow.db
-      --default-artifact-root /mlflow/artifacts
+      --default-artifact-root s3://mlflow/
       --host 0.0.0.0
       --port 5000
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -139,6 +201,8 @@ volumes:
     name: urdf-studio-hf-cache
   mlflow-data:
     name: urdf-studio-mlflow
+  minio-data:
+    name: urdf-studio-minio
   node_modules:
     name: urdf-studio-node-modules
 
