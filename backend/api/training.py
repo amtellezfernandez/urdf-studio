@@ -111,7 +111,7 @@ async def list_jobs(
                 detail=f"Invalid status: {status}. Valid values: {[s.value for s in JobStatus]}",
             )
 
-    return training_service.list_jobs(limit=limit, status_filter=status_filter)
+    return await training_service.list_jobs(limit=limit, status_filter=status_filter)
 
 
 # ============================================================================

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.artifacts import router as artifacts_router
 from backend.api.datasets import router as datasets_router
+from backend.api.evaluations import router as evaluations_router
 from backend.api.experiments import router as experiments_router
 from backend.api.health import router as health_router
 from backend.api.ik import router as ik_router
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(datasets_router)
     app.include_router(training_router)
     app.include_router(experiments_router)
+    app.include_router(evaluations_router)
     app.include_router(artifacts_router)
     return app
 
