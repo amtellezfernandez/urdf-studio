@@ -8,10 +8,12 @@ Usage:
     python eval_policy.py --checkpoint path/to/checkpoint.pt --num-episodes 5
 
 The script outputs JSON with action sequences for each episode.
+Optionally renders MP4 video from image observations.
 
 Requirements:
     - LeRobot must be installed
     - A valid checkpoint file is required
+    - imageio and imageio-ffmpeg for video rendering (optional)
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import torch
 from lerobot.common.policies.factory import make_policy
 
@@ -161,12 +164,172 @@ def run_inference(
     return episodes
 
 
+def has_image_observations(episode: Dict[str, Any]) -> bool:
+    """Check if episode contains image observations.
+
+    Args:
+        episode: Episode data dictionary
+
+    Returns:
+        True if episode has image observations
+    """
+    observations = episode.get("observations", [])
+    if not observations:
+        return False
+
+    # Check first observation
+    first_obs = observations[0]
+
+    # Handle dict observations (e.g., {"image": [...], "state": [...]})
+    if isinstance(first_obs, dict):
+        for key, value in first_obs.items():
+            if "image" in key.lower() or "rgb" in key.lower() or "camera" in key.lower():
+                return True
+            # Check if value looks like an image (3D array with channel dim)
+            if isinstance(value, (list, np.ndarray)):
+                arr = np.array(value) if isinstance(value, list) else value
+                if arr.ndim >= 3 and arr.shape[-1] in [1, 3, 4]:
+                    return True
+        return False
+
+    # Handle array observations directly
+    if isinstance(first_obs, (list, np.ndarray)):
+        arr = np.array(first_obs) if isinstance(first_obs, list) else first_obs
+        # Image if 3D with channel dim or 4D (batch, H, W, C)
+        if arr.ndim >= 3 and arr.shape[-1] in [1, 3, 4]:
+            return True
+
+    return False
+
+
+def extract_image_frames(episode: Dict[str, Any]) -> List[np.ndarray]:
+    """Extract image frames from episode observations.
+
+    Args:
+        episode: Episode data dictionary
+
+    Returns:
+        List of image frames as numpy arrays (H, W, C)
+    """
+    observations = episode.get("observations", [])
+    frames = []
+
+    for obs in observations:
+        frame = None
+
+        # Handle dict observations
+        if isinstance(obs, dict):
+            for key, value in obs.items():
+                if "image" in key.lower() or "rgb" in key.lower() or "camera" in key.lower():
+                    frame = np.array(value) if isinstance(value, list) else value
+                    break
+
+            # Try any 3D array if no image key found
+            if frame is None:
+                for key, value in obs.items():
+                    arr = np.array(value) if isinstance(value, list) else value
+                    if isinstance(arr, np.ndarray) and arr.ndim >= 3:
+                        frame = arr
+                        break
+
+        # Handle array observations directly
+        elif isinstance(obs, (list, np.ndarray)):
+            arr = np.array(obs) if isinstance(obs, list) else obs
+            if arr.ndim >= 3:
+                frame = arr
+
+        if frame is not None:
+            # Ensure frame is (H, W, C) format
+            if frame.ndim == 4:
+                frame = frame[0]  # Remove batch dim
+            if frame.shape[0] in [1, 3, 4] and frame.shape[0] < frame.shape[-1]:
+                # Channel-first format, convert to channel-last
+                frame = np.transpose(frame, (1, 2, 0))
+            # Convert to uint8 if needed
+            if frame.dtype != np.uint8:
+                if frame.max() <= 1.0:
+                    frame = (frame * 255).astype(np.uint8)
+                else:
+                    frame = frame.astype(np.uint8)
+            # Handle grayscale
+            if frame.ndim == 2:
+                frame = np.stack([frame] * 3, axis=-1)
+            elif frame.shape[-1] == 1:
+                frame = np.concatenate([frame] * 3, axis=-1)
+            elif frame.shape[-1] == 4:
+                frame = frame[:, :, :3]  # Remove alpha channel
+
+            frames.append(frame)
+
+    return frames
+
+
+def render_video(
+    episodes: List[Dict[str, Any]],
+    output_dir: Path,
+    fps: int = 30,
+) -> List[str]:
+    """Render MP4 videos from image observations.
+
+    Args:
+        episodes: List of episode data
+        output_dir: Directory to save videos
+        fps: Frames per second
+
+    Returns:
+        List of video file paths created
+    """
+    video_paths = []
+
+    try:
+        import imageio
+    except ImportError:
+        logger.warning("imageio not installed, skipping video rendering")
+        return video_paths
+
+    for ep_idx, episode in enumerate(episodes):
+        if not has_image_observations(episode):
+            logger.info(f"Episode {ep_idx}: No image observations, skipping video")
+            continue
+
+        frames = extract_image_frames(episode)
+        if not frames:
+            logger.info(f"Episode {ep_idx}: No frames extracted, skipping video")
+            continue
+
+        output_path = output_dir / f"episode_{ep_idx}.mp4"
+
+        try:
+            logger.info(f"Rendering video for episode {ep_idx} ({len(frames)} frames)")
+            writer = imageio.get_writer(
+                str(output_path),
+                fps=fps,
+                codec="libx264",
+                quality=8,
+            )
+
+            for frame in frames:
+                writer.append_data(frame)
+
+            writer.close()
+            video_paths.append(str(output_path))
+            logger.info(f"Video saved to {output_path}")
+
+        except Exception as e:
+            logger.warning(f"Failed to render video for episode {ep_idx}: {e}")
+
+    return video_paths
+
+
 def evaluate(
     checkpoint_path: str,
     num_episodes: int = 1,
     max_steps: int = 1000,
     initial_state: Optional[Dict[str, float]] = None,
     urdf: Optional[str] = None,
+    seed: Optional[int] = None,
+    render_video_flag: bool = False,
+    output_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Main evaluation function.
 
@@ -176,6 +339,9 @@ def evaluate(
         max_steps: Max steps per episode
         initial_state: Optional initial joint state
         urdf: Optional URDF content for context
+        seed: Optional random seed
+        render_video_flag: Whether to render video from image observations
+        output_dir: Directory to save outputs (videos, etc.)
 
     Returns:
         Evaluation results
@@ -184,6 +350,11 @@ def evaluate(
         FileNotFoundError: If checkpoint doesn't exist
         RuntimeError: If evaluation fails
     """
+    # Set seed if provided
+    if seed is not None:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+
     # Load checkpoint
     logger.info(f"Loading checkpoint from {checkpoint_path}")
     checkpoint = load_checkpoint(checkpoint_path)
@@ -222,11 +393,25 @@ def evaluate(
         "avg_episode_length": total_steps / len(episodes) if episodes else 0,
     }
 
-    return {
+    # Render videos if requested and image observations are available
+    video_paths = []
+    if render_video_flag and output_dir:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        video_paths = render_video(episodes, output_dir)
+        if video_paths:
+            metrics["videos_rendered"] = len(video_paths)
+
+    result = {
         "success": True,
         "episodes": episodes,
         "metrics": metrics,
     }
+
+    if video_paths:
+        result["video_paths"] = video_paths
+
+    return result
 
 
 def main():
