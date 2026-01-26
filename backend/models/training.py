@@ -277,6 +277,12 @@ class TrainingStartRequest(BaseModel):
         description="Robot name (for lineage tracking)",
     )
 
+    # Optional: Experiment linkage
+    experiment_id: Optional[str] = Field(
+        default=None,
+        description="Experiment ID to link this job to",
+    )
+
 
 class TrainingCancelRequest(BaseModel):
     """Request to cancel a training job."""

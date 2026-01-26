@@ -42,6 +42,7 @@ from backend.models.training import (
 from backend.robotops import get_compute, get_tracker
 from backend.robotops.compute_protocol import JobState
 from backend.services.job_store import get_job_store, JobRecord
+from backend.services.hf_resolver import resolve_dataset_revision
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +194,9 @@ async def _persist_job(job_id: str, job_info: Dict[str, Any]) -> None:
                     "model": request.model.model_dump() if hasattr(request.model, 'model_dump') else {},
                     "training": request.training.model_dump() if hasattr(request.training, 'model_dump') else {},
                 }
+                # Include resolved dataset revision if available
+                if job_info.get("resolved_revision"):
+                    config["dataset"]["resolved_revision"] = job_info.get("resolved_revision")
 
             await store.create_job(
                 job_id=job_id,
@@ -208,6 +212,11 @@ async def _persist_job(job_id: str, job_info: Dict[str, Any]) -> None:
             if job_info.get("tracker_url"):
                 await store.update_job(job_id, tracker_url=job_info.get("tracker_url"))
 
+            # Link to experiment if specified
+            experiment_id = job_info.get("experiment_id")
+            if experiment_id:
+                await _link_job_to_experiment(job_id, experiment_id)
+
         else:
             # Update existing job
             status = job_info.get("status")
@@ -222,6 +231,17 @@ async def _persist_job(job_id: str, job_info: Dict[str, Any]) -> None:
 
     except Exception as e:
         logger.error(f"Failed to persist job {job_id}: {e}")
+
+
+async def _link_job_to_experiment(job_id: str, experiment_id: str) -> None:
+    """Link a job to an experiment in the database."""
+    try:
+        from backend.services.experiments import get_experiments_service
+        service = get_experiments_service()
+        await service.link_job_to_experiment(job_id, experiment_id)
+        logger.info(f"Linked job {job_id} to experiment {experiment_id}")
+    except Exception as e:
+        logger.warning(f"Failed to link job {job_id} to experiment {experiment_id}: {e}")
 
 
 # ============================================================================
