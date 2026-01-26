@@ -25,6 +25,16 @@ logger = logging.getLogger(__name__)
 DB_DIR = Path(os.environ.get("URDF_DATA_DIR", Path.home() / ".urdf-studio" / "data"))
 DB_FILE = DB_DIR / "jobs.db"
 
+# Migration support flag
+_MIGRATIONS_AVAILABLE = True
+try:
+    from backend.services.migrations import (
+        create_all_tables_fallback,
+        run_migrations,
+    )
+except ImportError:
+    _MIGRATIONS_AVAILABLE = False
+
 
 @dataclass
 class JobRecord:
@@ -99,55 +109,85 @@ class JobStore:
             yield db
 
     async def initialize(self) -> None:
-        """Initialize the database schema."""
+        """Initialize the database schema.
+
+        Attempts to run Alembic migrations first. If migrations fail or
+        Alembic is not available, falls back to direct table creation
+        for backward compatibility.
+        """
         if self._initialized:
             return
 
-        async with self._get_db() as db:
-            # Jobs table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS jobs (
-                    job_id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL,
-                    config TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    started_at TEXT,
-                    finished_at TEXT,
-                    error TEXT,
-                    compute_backend TEXT DEFAULT 'local',
-                    compute_job_id TEXT,
-                    tracker_url TEXT,
-                    run_name TEXT,
-                    model_architecture TEXT,
-                    dataset_id TEXT
-                )
-            """)
+        # Ensure database directory exists
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Metrics history table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS metrics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    job_id TEXT NOT NULL,
-                    step INTEGER NOT NULL,
-                    epoch INTEGER NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    metrics TEXT NOT NULL,
-                    FOREIGN KEY (job_id) REFERENCES jobs (job_id)
-                )
-            """)
+        # Try to run migrations first
+        if _MIGRATIONS_AVAILABLE:
+            try:
+                success = await run_migrations(self.db_path)
+                if success:
+                    self._initialized = True
+                    logger.info(f"Initialized job store at {self.db_path} (via migrations)")
+                    return
+                else:
+                    logger.warning("Migrations failed, falling back to direct table creation")
+            except Exception as e:
+                logger.warning(f"Migration error: {e}, falling back to direct table creation")
 
-            # Indexes
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs (created_at)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_model ON jobs (model_architecture)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_metrics_job ON metrics (job_id)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_metrics_step ON metrics (job_id, step)")
-
-            await db.commit()
-
+        # Fallback: create tables directly
+        await self._create_tables_fallback()
         self._initialized = True
-        logger.info(f"Initialized job store at {self.db_path}")
+        logger.info(f"Initialized job store at {self.db_path} (fallback)")
+
+    async def _create_tables_fallback(self) -> None:
+        """Create tables directly without Alembic (fallback method)."""
+        if _MIGRATIONS_AVAILABLE:
+            # Use the sync fallback from migrations module
+            create_all_tables_fallback(self.db_path)
+        else:
+            # Inline fallback if migrations module not available
+            async with self._get_db() as db:
+                # Jobs table
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS jobs (
+                        job_id TEXT PRIMARY KEY,
+                        status TEXT NOT NULL,
+                        config TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        started_at TEXT,
+                        finished_at TEXT,
+                        error TEXT,
+                        compute_backend TEXT DEFAULT 'local',
+                        compute_job_id TEXT,
+                        tracker_url TEXT,
+                        run_name TEXT,
+                        model_architecture TEXT,
+                        dataset_id TEXT
+                    )
+                """)
+
+                # Metrics history table
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS metrics (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        job_id TEXT NOT NULL,
+                        step INTEGER NOT NULL,
+                        epoch INTEGER NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        metrics TEXT NOT NULL,
+                        FOREIGN KEY (job_id) REFERENCES jobs (job_id)
+                    )
+                """)
+
+                # Indexes
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs (created_at)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_model ON jobs (model_architecture)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_metrics_job ON metrics (job_id)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_metrics_step ON metrics (job_id, step)")
+
+                await db.commit()
 
     async def create_job(
         self,

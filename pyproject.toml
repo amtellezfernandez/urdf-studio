@@ -41,6 +41,9 @@ dependencies = [
 
     # IK solver
     "placo>=0.8.0",
+
+    # Database migrations
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]
