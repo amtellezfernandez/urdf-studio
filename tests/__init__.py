@@ -1,0 +1,1 @@
+"""URDF Studio tests."""

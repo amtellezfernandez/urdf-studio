@@ -312,3 +312,48 @@ class EvaluationResult:
     def num_episodes(self) -> int:
         """Number of evaluated episodes."""
         return len(self.episodes)
+
+
+# ============================================================================
+# Dataset Models
+# ============================================================================
+
+
+@dataclass
+class DatasetInfo:
+    """Information about a LeRobot dataset."""
+
+    repo_id: str
+    description: Optional[str] = None
+    downloads: Optional[int] = None
+    likes: Optional[int] = None
+    robot_type: Optional[str] = None
+    num_episodes: Optional[int] = None
+    total_frames: Optional[int] = None
+    fps: Optional[float] = None
+    features: Optional[List[str]] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    def __repr__(self) -> str:
+        return f"DatasetInfo({self.repo_id})"
+
+
+# ============================================================================
+# Artifact Models
+# ============================================================================
+
+
+@dataclass
+class Artifact:
+    """Training artifact (checkpoint, log, etc.)."""
+
+    name: str
+    path: str
+    size_bytes: Optional[int] = None
+    artifact_type: Optional[str] = None
+    created_at: Optional[str] = None
+    checksum: Optional[str] = None
+
+    def __repr__(self) -> str:
+        return f"Artifact({self.name}, {self.artifact_type})"
