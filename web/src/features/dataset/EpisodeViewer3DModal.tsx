@@ -111,6 +111,7 @@ import {
   resolveFrameIndexFromTimeOffset,
   resolveFrameTimeOffsetSec,
   resolveFrameX,
+  resolveTimeX,
   resolveMsPerPx,
   normalizeChartValue,
   resolveCombinedChartValueRange,
@@ -463,6 +464,8 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
+  const playbackTimeMsRef = useRef<number>(0);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -1422,6 +1425,57 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       window.removeEventListener('viewer3d:frameUpdate', handleFrameUpdate);
     };
   }, [open, currentEpisodeIndex, captureRuntimeJointFrame]);
+
+  // Track continuous playback time (sub-frame precision) via a ref so we can
+  // draw the graph cursor smoothly without triggering React re-renders.
+  useEffect(() => {
+    const handlePlaybackTime = (e: Event) => {
+      playbackTimeMsRef.current = (e as CustomEvent<{ timeMs: number }>).detail.timeMs;
+    };
+    window.addEventListener('viewer3d:playbackTime', handlePlaybackTime);
+    return () => window.removeEventListener('viewer3d:playbackTime', handlePlaybackTime);
+  }, []);
+
+  // Smooth cursor overlay — draws only the time-position cursor on a separate
+  // canvas via rAF so the main data canvas is not redrawn every frame.
+  useEffect(() => {
+    const cursorCanvas = cursorCanvasRef.current;
+    if (!cursorCanvas) return;
+    let rafId = 0;
+
+    const drawCursor = () => {
+      const frames = effectiveEpisode?.frames;
+      if (!frames || frames.length === 0) {
+        rafId = requestAnimationFrame(drawCursor);
+        return;
+      }
+      const ctx = cursorCanvas.getContext('2d');
+      if (!ctx) { rafId = requestAnimationFrame(drawCursor); return; }
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cssWidth = cursorCanvas.width / dpr;
+      const cssHeight = cursorCanvas.height / dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+      const graphWidth = cssWidth - CANVAS_PADDING * 2;
+      const x = resolveTimeX(frames, playbackTimeMsRef.current, graphWidth);
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(x, CANVAS_PADDING);
+      ctx.lineTo(x, cssHeight - CANVAS_PADDING);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      rafId = requestAnimationFrame(drawCursor);
+    };
+
+    rafId = requestAnimationFrame(drawCursor);
+    return () => cancelAnimationFrame(rafId);
+  }, [effectiveEpisode]);
 
   // Update preserved frame when not playing
   useEffect(() => {
@@ -3153,6 +3207,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
     }
+    // Keep cursor overlay canvas in sync with main canvas dimensions.
+    const cursorCanvas = cursorCanvasRef.current;
+    if (cursorCanvas && (cursorCanvas.width !== pixelWidth || cursorCanvas.height !== pixelHeight)) {
+      cursorCanvas.width = pixelWidth;
+      cursorCanvas.height = pixelHeight;
+      cursorCanvas.style.width = `${width}px`;
+      cursorCanvas.style.height = `${height}px`;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const graphHeight = height - CANVAS_PADDING * 2;
     const graphWidth = width - CANVAS_PADDING * 2;
@@ -3683,7 +3745,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     });
 
-    // Draw current frame indicator
+    // Current frame cursor is drawn on the overlay canvas (cursorCanvasRef) via
+    // requestAnimationFrame so it updates at sub-frame precision during playback.
+    // When paused/scrubbing, sync the playback time ref to the exact frame so
+    // the overlay cursor still shows the correct position.
     if (activeEpisode.frames.length > 0) {
       const displayFrame = getCurrentFrameValue(
         preservedFrameRef.current,
@@ -3691,22 +3756,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
         currentFrame
       );
       const clampedFrame = Math.max(0, Math.min(displayFrame, activeEpisode.frames.length - 1));
-      const x = frameXs[clampedFrame] ?? CANVAS_PADDING;
-
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.moveTo(x, CANVAS_PADDING);
-      ctx.lineTo(x, height - CANVAS_PADDING);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "12px monospace";
-      ctx.textAlign = "center";
-      const timeText = calculateTime(clampedFrame);
-      ctx.fillText(`F${clampedFrame} (${timeText})`, x, CANVAS_PADDING - 10);
+      const frameTimestamp = activeEpisode.frames[clampedFrame]?.timestamp;
+      if (frameTimestamp !== undefined) {
+        playbackTimeMsRef.current = frameTimestamp;
+      }
     }
   }, [effectiveEpisode, currentFrame, globalCurrentFrame, selectedDisplayJointNames, selectedChartValueRange, jointRanges, resolveEpisodeSignalColor, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, tangentHandles, draggingHandle, getResolvedTrimRange, resolvedTrimRange, violationFrames, velocityViolations, limitViolations, mjlabIssueMarkers, constraintMode, constraintViolationZones, showOnlyHeader, jointPositionUnitLabel, resolveDisplayJointFrameValue]);
 
@@ -4758,6 +4811,12 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           {/* Graph Canvas */}
           <div className="flex-1 flex overflow-hidden">
             <div ref={canvasContainerRef} className="flex-1 relative bg-background overflow-hidden">
+              {/* Cursor overlay — drawn separately at rAF rate for sub-frame smoothness */}
+              <canvas
+                ref={cursorCanvasRef}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                style={{ background: 'transparent', zIndex: 1 }}
+              />
               <canvas
                 ref={canvasRef}
                 className="w-full h-full"

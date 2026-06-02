@@ -542,6 +542,18 @@ const resolveClosestFrameIndexByTime = (frames: RecordedFrame[], targetTime: num
     : upper;
 };
 
+// Like resolveFrameX but accepts a continuous time value (ms) instead of an
+// integer frame index. Used to draw the playback cursor at sub-frame precision.
+export const resolveTimeX = (frames: RecordedFrame[], timeMs: number, graphWidth: number) => {
+  if (!frames || frames.length <= 1 || graphWidth <= 0) {
+    return CANVAS_PADDING;
+  }
+  const { start, span } = getTimeBounds(frames);
+  if (span <= 0) return CANVAS_PADDING;
+  const normalized = Math.max(0, Math.min(1, (timeMs - start) / span));
+  return CANVAS_PADDING + graphWidth * normalized;
+};
+
 export const resolveFrameX = (frames: RecordedFrame[], frameIndex: number, graphWidth: number) => {
   if (!frames || frames.length <= 1 || graphWidth <= 0) {
     return CANVAS_PADDING;

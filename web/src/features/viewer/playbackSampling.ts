@@ -62,6 +62,31 @@ export const resolveNearestFrameIndexAtTimestamp = (
 };
 
 
+// Linearly interpolate joint values between the two frames bracketing `timestamp`.
+// Used to smooth the 3D robot display without changing what the graph reports.
+export const resolveInterpolatedJointValues = (
+  frames: AnimationFrame[],
+  timestamp: number
+): Record<string, number> => {
+  if (frames.length === 0) return {};
+  const upperIdx = resolveFrameIndexAtOrAfterTimestamp(frames, timestamp);
+  const lowerIdx = Math.max(0, upperIdx - 1);
+  const lower = frames[lowerIdx]!;
+  const upper = frames[upperIdx]!;
+  if (lowerIdx === upperIdx || lower.timestamp === upper.timestamp) {
+    return { ...lower.joints };
+  }
+  const t = Math.max(0, Math.min(1,
+    (timestamp - lower.timestamp) / (upper.timestamp - lower.timestamp)
+  ));
+  const result: Record<string, number> = {};
+  for (const [name, lo] of Object.entries(lower.joints)) {
+    const hi = upper.joints[name];
+    result[name] = hi !== undefined ? lo + (hi - lo) * t : lo;
+  }
+  return result;
+};
+
 export const buildFrameLockedJointValues = (
   previous: Record<string, number>,
   frameJoints: Record<string, number>,

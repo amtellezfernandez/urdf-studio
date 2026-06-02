@@ -14,6 +14,7 @@ import {
 } from "@/shared/lib/robotBasePose";
 import {
   buildFrameLockedJointValues,
+  resolveInterpolatedJointValues,
 } from "@/features/viewer/playbackSampling";
 import { shouldApplyManualFrameLock } from "@/features/viewer/playback/frameLockPolicy";
 import { shouldApplyPlaybackBasePose } from "@/features/viewer/playback/basePoseApplyPolicy";
@@ -324,14 +325,34 @@ export const useUrdfAnimation = ({
       return;
     }
 
+    // During playback, apply time-interpolated joints to the 3D robot so motion
+    // appears smooth between discrete recorded frames. The store and graph always
+    // receive exact frame-locked values. Both 3D and graph derive from the same
+    // `currentTime`, so they can never be out of sync — the cursor moves to the
+    // precise time position while the robot pose matches it exactly.
+    // When paused or scrubbing, fall back to exact frame values (no interpolation).
+    const displayJoints = isPlaying && animationFrames && animationFrames.length > 1
+      ? resolveInterpolatedJointValues(animationFrames, currentTime)
+      : frameLockedJoints;
+
     const shouldSyncJoints =
       hasFrameJoints &&
-      hasJointMapChanged(frameLockedJoints, lastAppliedJointsRef.current);
+      (isPlaying || hasJointMapChanged(frameLockedJoints, lastAppliedJointsRef.current));
     if (shouldSyncJoints) {
-      applyJointValues(robotRef.current, frameLockedJoints, { filter: false });
+      applyJointValues(robotRef.current, displayJoints, { filter: false });
       robotRef.current.updateMatrixWorld?.(true);
       lastAppliedJointsRef.current = frameLockedJoints;
       lastAppliedDataJointsRef.current = frameLockedDataJoints;
+    }
+
+    // Broadcast continuous playback time so the episode viewer's graph cursor
+    // can move at sub-frame precision. Uses a window event (same bridge pattern
+    // as viewer3d:frameUpdate) to avoid threading a callback through the deep
+    // Viewer3D → ViewerLayout → Index prop chain.
+    if (isPlaying && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("viewer3d:playbackTime", { detail: { timeMs: currentTime } })
+      );
     }
 
     if (hasFrameJoints) {
