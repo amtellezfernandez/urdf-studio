@@ -554,6 +554,62 @@ export const resolveTimeX = (frames: RecordedFrame[], timeMs: number, graphWidth
   return CANVAS_PADDING + graphWidth * normalized;
 };
 
+export const resolvePlaybackCursorTimeMs = ({
+  frames,
+  playbackTimeMs,
+  lastPlaybackEventAtMs,
+  nowMs,
+  playbackSpeed,
+  isPlaying,
+  fallbackFrameIndex = 0,
+  previousCursorTimeMs,
+}: {
+  frames: RecordedFrame[];
+  playbackTimeMs: number;
+  lastPlaybackEventAtMs: number;
+  nowMs: number;
+  playbackSpeed: number;
+  isPlaying: boolean;
+  fallbackFrameIndex?: number;
+  previousCursorTimeMs?: number;
+}) => {
+  if (!frames || frames.length === 0) return 0;
+
+  const { start, end } = getTimeBounds(frames);
+  const normalizedFallbackFrame = Number.isFinite(fallbackFrameIndex)
+    ? Math.max(0, Math.min(Math.floor(fallbackFrameIndex), frames.length - 1))
+    : 0;
+  const fallbackTime = frames[normalizedFallbackFrame]?.timestamp ?? start;
+  const baseTime = Number.isFinite(playbackTimeMs) ? playbackTimeMs : fallbackTime;
+  const clampedBaseTime = Math.max(start, Math.min(baseTime, end));
+
+  let resolvedTime = clampedBaseTime;
+
+  if (
+    !isPlaying ||
+    !Number.isFinite(lastPlaybackEventAtMs) ||
+    !Number.isFinite(nowMs)
+  ) {
+    return resolvedTime;
+  }
+
+  const safePlaybackSpeed =
+    Number.isFinite(playbackSpeed) && playbackSpeed > 0 ? playbackSpeed : 0;
+  const elapsedMs = Math.max(0, nowMs - lastPlaybackEventAtMs);
+  resolvedTime = Math.max(
+    start,
+    Math.min(clampedBaseTime + elapsedMs * safePlaybackSpeed, end)
+  );
+
+  if (Number.isFinite(previousCursorTimeMs)) {
+    return Math.max(
+      resolvedTime,
+      Math.max(start, Math.min(previousCursorTimeMs, end))
+    );
+  }
+  return resolvedTime;
+};
+
 export const resolveFrameX = (frames: RecordedFrame[], frameIndex: number, graphWidth: number) => {
   if (!frames || frames.length <= 1 || graphWidth <= 0) {
     return CANVAS_PADDING;

@@ -9,6 +9,7 @@ import {
   buildJointPositionYAxisTicks,
   findClosestPointOnCurve,
   formatJointPositionYAxisTick,
+  resolvePlaybackCursorTimeMs,
   resolveCombinedChartValueRange,
   resolvePaddedChartValueRange,
 } from "@/features/dataset/episode-viewer/modalHelpers";
@@ -233,6 +234,71 @@ describe("applyEpisodeViewerFrameSelection", () => {
       ["current", EPISODE_EDITOR_INITIAL_FRAME_INDEX],
       ["preserved", EPISODE_EDITOR_INITIAL_FRAME_INDEX],
     ]);
+  });
+});
+
+describe("resolvePlaybackCursorTimeMs", () => {
+  const cursorFrames = [
+    { timestamp: 100, jointPositions: {} },
+    { timestamp: 300, jointPositions: {} },
+    { timestamp: 600, jointPositions: {} },
+  ];
+
+  it("extrapolates from the last playback event while playing", () => {
+    const cursorTime = resolvePlaybackCursorTimeMs({
+      frames: cursorFrames,
+      playbackTimeMs: 300,
+      lastPlaybackEventAtMs: 1000,
+      nowMs: 1050,
+      playbackSpeed: 2,
+      isPlaying: true,
+      fallbackFrameIndex: 0,
+    });
+
+    expect(cursorTime).toBe(400);
+  });
+
+  it("clamps extrapolated time to the episode timestamp range", () => {
+    const cursorTime = resolvePlaybackCursorTimeMs({
+      frames: cursorFrames,
+      playbackTimeMs: 590,
+      lastPlaybackEventAtMs: 1000,
+      nowMs: 1100,
+      playbackSpeed: 1,
+      isPlaying: true,
+      fallbackFrameIndex: 0,
+    });
+
+    expect(cursorTime).toBe(600);
+  });
+
+  it("falls back to the selected frame when playback time is invalid", () => {
+    const cursorTime = resolvePlaybackCursorTimeMs({
+      frames: cursorFrames,
+      playbackTimeMs: Number.NaN,
+      lastPlaybackEventAtMs: Number.NEGATIVE_INFINITY,
+      nowMs: 1000,
+      playbackSpeed: 1,
+      isPlaying: false,
+      fallbackFrameIndex: 1,
+    });
+
+    expect(cursorTime).toBe(300);
+  });
+
+  it("does not move backward during playback when a stale event arrives", () => {
+    const cursorTime = resolvePlaybackCursorTimeMs({
+      frames: cursorFrames,
+      playbackTimeMs: 300,
+      lastPlaybackEventAtMs: 1000,
+      nowMs: 1000,
+      playbackSpeed: 1,
+      isPlaying: true,
+      fallbackFrameIndex: 0,
+      previousCursorTimeMs: 360,
+    });
+
+    expect(cursorTime).toBe(360);
   });
 });
 
