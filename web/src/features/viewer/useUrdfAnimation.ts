@@ -66,6 +66,7 @@ export const useUrdfAnimation = ({
   const playbackEndedRef = useRef(false);
   const lastAppliedJointsRef = useRef<Record<string, number>>({});
   const lastAppliedDataJointsRef = useRef<Record<string, number>>({});
+  const lastAppliedDisplayJointsRef = useRef<Record<string, number> | null>(null);
   const lastAppliedBasePoseRef = useRef<AnimationFrame["basePose"] | null>(null);
   const invalidValueWarnedRef = useRef(false);
   const lastPausedManualFrameTimeRef = useRef<number | null>(null);
@@ -99,6 +100,7 @@ export const useUrdfAnimation = ({
         jointValues: storeJointValues,
         dataZeroJointValues: useJointStore.getState().getActiveDataZeroJointValues(),
       });
+      lastAppliedDisplayJointsRef.current = null;
       lastStoreJointSyncTimeRef.current = null;
     }
   }, [isPlaying, storeJointValues]);
@@ -106,6 +108,7 @@ export const useUrdfAnimation = ({
   useEffect(() => {
     dataZeroOffsetChangedRef.current = true;
     lastAppliedJointsRef.current = {};
+    lastAppliedDisplayJointsRef.current = null;
   }, [activeDataZeroJointValues]);
 
   useEffect(() => {
@@ -285,6 +288,14 @@ export const useUrdfAnimation = ({
       }
     }
 
+    // Broadcast continuous playback time before joint/base-pose application so
+    // timeline overlays stay smooth even when robot writes are skipped.
+    if (isPlaying && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("viewer3d:playbackTime", { detail: { timeMs: currentTime } })
+      );
+    }
+
     const skipForManualDragOverride =
       isPlaying && animationController.isManualDragActiveRef.current;
     const shouldForceApplyDataZeroOffset = dataZeroOffsetChangedRef.current;
@@ -331,28 +342,32 @@ export const useUrdfAnimation = ({
     // `currentTime`, so they can never be out of sync — the cursor moves to the
     // precise time position while the robot pose matches it exactly.
     // When paused or scrubbing, fall back to exact frame values (no interpolation).
-    const displayJoints = isPlaying && animationFrames && animationFrames.length > 1
-      ? resolveInterpolatedJointValues(animationFrames, currentTime)
-      : frameLockedJoints;
+    const interpolatedDataJoints =
+      isPlaying && animationFrames.length > 1
+        ? buildFrameLockedJointValues(
+            lastAppliedDataJointsRef.current,
+            resolveInterpolatedJointValues(animationFrames, currentTime)
+          ).joints
+        : frameLockedDataJoints;
+    const displayJoints =
+      interpolatedDataJoints === frameLockedDataJoints
+        ? frameLockedJoints
+        : applyJointDataZeroOffset({
+            jointValues: interpolatedDataJoints,
+            dataZeroJointValues: activeDataZeroJointValues,
+          });
 
+    const previousDisplayJoints = isPlaying
+      ? lastAppliedDisplayJointsRef.current
+      : lastAppliedJointsRef.current;
     const shouldSyncJoints =
-      hasFrameJoints &&
-      (isPlaying || hasJointMapChanged(frameLockedJoints, lastAppliedJointsRef.current));
+      hasFrameJoints && hasJointMapChanged(displayJoints, previousDisplayJoints);
     if (shouldSyncJoints) {
       applyJointValues(robotRef.current, displayJoints, { filter: false });
       robotRef.current.updateMatrixWorld?.(true);
       lastAppliedJointsRef.current = frameLockedJoints;
       lastAppliedDataJointsRef.current = frameLockedDataJoints;
-    }
-
-    // Broadcast continuous playback time so the episode viewer's graph cursor
-    // can move at sub-frame precision. Uses a window event (same bridge pattern
-    // as viewer3d:frameUpdate) to avoid threading a callback through the deep
-    // Viewer3D → ViewerLayout → Index prop chain.
-    if (isPlaying && typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("viewer3d:playbackTime", { detail: { timeMs: currentTime } })
-      );
+      lastAppliedDisplayJointsRef.current = displayJoints;
     }
 
     if (hasFrameJoints) {

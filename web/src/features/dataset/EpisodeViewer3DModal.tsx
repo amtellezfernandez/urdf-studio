@@ -50,6 +50,7 @@ import {
   applyJointDataZeroOffset,
   removeJointDataZeroOffset,
 } from "@/shared/lib/jointDataZero";
+import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import {
   applyJointLimitCorrectionsToFrames,
@@ -466,6 +467,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
   const playbackTimeMsRef = useRef<number>(0);
+  const lastPlaybackTimeEventAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingTimelineRef = useRef<boolean>(false);
   const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -477,6 +479,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const warnedTimestampEpisodeIdRef = useRef<string | null>(null);
   const runtimeJointSeriesRef = useRef<Map<string, number[]>>(new Map());
+  const playbackSpeed = useViewerPlaybackStore((state) => state.playbackSpeed);
   const [runtimeJointSeriesVersion, setRuntimeJointSeriesVersion] = useState(0);
   const autoSelectedRuntimeJointNamesRef = useRef<Set<string>>(new Set());
   const setModifiedEpisodeTracked = useCallback((nextEpisode: Episode | null) => {
@@ -1430,7 +1433,10 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   // draw the graph cursor smoothly without triggering React re-renders.
   useEffect(() => {
     const handlePlaybackTime = (e: Event) => {
-      playbackTimeMsRef.current = (e as CustomEvent<{ timeMs: number }>).detail.timeMs;
+      const timeMs = (e as CustomEvent<{ timeMs?: number }>).detail?.timeMs;
+      if (typeof timeMs !== "number" || !Number.isFinite(timeMs)) return;
+      playbackTimeMsRef.current = timeMs;
+      lastPlaybackTimeEventAtRef.current = performance.now();
     };
     window.addEventListener('viewer3d:playbackTime', handlePlaybackTime);
     return () => window.removeEventListener('viewer3d:playbackTime', handlePlaybackTime);
@@ -1459,7 +1465,18 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ctx.clearRect(0, 0, cssWidth, cssHeight);
 
       const graphWidth = cssWidth - CANVAS_PADDING * 2;
-      const x = resolveTimeX(frames, playbackTimeMsRef.current, graphWidth);
+      const basePlaybackTimeMs = playbackTimeMsRef.current;
+      const lastEventAtMs = lastPlaybackTimeEventAtRef.current;
+      const canExtrapolatePlaybackTime =
+        isPlayingAll &&
+        Number.isFinite(basePlaybackTimeMs) &&
+        Number.isFinite(lastEventAtMs);
+      const extrapolatedPlaybackTimeMs = canExtrapolatePlaybackTime
+        ? basePlaybackTimeMs +
+          Math.max(0, performance.now() - lastEventAtMs) *
+            (Number.isFinite(playbackSpeed) ? playbackSpeed : 1)
+        : basePlaybackTimeMs;
+      const x = resolveTimeX(frames, extrapolatedPlaybackTimeMs, graphWidth);
 
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
@@ -1475,7 +1492,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
 
     rafId = requestAnimationFrame(drawCursor);
     return () => cancelAnimationFrame(rafId);
-  }, [effectiveEpisode]);
+  }, [effectiveEpisode, isPlayingAll, playbackSpeed]);
 
   // Update preserved frame when not playing
   useEffect(() => {
@@ -1899,8 +1916,13 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   );
 
   const resolveCurrentFrame = useCallback(
-    () => getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame),
-    [globalCurrentFrame, currentFrame]
+    () => {
+      if (isPlayingAll) {
+        return globalCurrentFrame ?? currentFrame ?? preservedFrameRef.current ?? 0;
+      }
+      return getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
+    },
+    [globalCurrentFrame, currentFrame, isPlayingAll]
   );
 
   const ensureTimelineEditingSession = useCallback(() => {
@@ -3745,10 +3767,11 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       }
     });
 
-    // Current frame cursor is drawn on the overlay canvas (cursorCanvasRef) via
-    // requestAnimationFrame so it updates at sub-frame precision during playback.
-    // When paused/scrubbing, sync the playback time ref to the exact frame so
-    // the overlay cursor still shows the correct position.
+    // Current frame cursor is drawn by the overlay canvas (cursorCanvasRef) via
+    // requestAnimationFrame. When paused or scrubbing, sync the time ref to the
+    // exact frame timestamp so the cursor sits precisely on the frame.
+    // During playback the window event viewer3d:playbackTime keeps the ref up to
+    // date at sub-frame precision; do not overwrite it here in that case.
     if (activeEpisode.frames.length > 0) {
       const displayFrame = getCurrentFrameValue(
         preservedFrameRef.current,
@@ -3757,11 +3780,14 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       );
       const clampedFrame = Math.max(0, Math.min(displayFrame, activeEpisode.frames.length - 1));
       const frameTimestamp = activeEpisode.frames[clampedFrame]?.timestamp;
-      if (frameTimestamp !== undefined) {
+      // Only update from integer-frame data when paused/scrubbing.
+      // During playback the viewer3d:playbackTime event provides sub-frame time.
+      const isViewerPlaying = (performance.now() - lastPlaybackTimeEventAtRef.current) < 200;
+      if (frameTimestamp !== undefined && !isPlayingAll && !isViewerPlaying) {
         playbackTimeMsRef.current = frameTimestamp;
       }
     }
-  }, [effectiveEpisode, currentFrame, globalCurrentFrame, selectedDisplayJointNames, selectedChartValueRange, jointRanges, resolveEpisodeSignalColor, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, tangentHandles, draggingHandle, getResolvedTrimRange, resolvedTrimRange, violationFrames, velocityViolations, limitViolations, mjlabIssueMarkers, constraintMode, constraintViolationZones, showOnlyHeader, jointPositionUnitLabel, resolveDisplayJointFrameValue]);
+  }, [effectiveEpisode, currentFrame, globalCurrentFrame, selectedDisplayJointNames, selectedChartValueRange, jointRanges, resolveEpisodeSignalColor, size, containerSize, calculateTime, isEditMode, editingJoint, selectedPointIndex, tangentHandles, draggingHandle, getResolvedTrimRange, resolvedTrimRange, violationFrames, velocityViolations, limitViolations, mjlabIssueMarkers, constraintMode, constraintViolationZones, showOnlyHeader, jointPositionUnitLabel, resolveDisplayJointFrameValue, isPlayingAll]);
 
   // Mouse handlers for dragging
   const handleMouseDownHeader = useCallback((e: React.MouseEvent) => {
@@ -4000,7 +4026,9 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
       ? effectiveEpisode.frames[effectiveEpisode.frames.length - 1].timestamp
       : 0;
   const durationSeconds = (duration / 1000).toFixed(1);
-  const displayFrame = getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
+  const displayFrame = isPlayingAll
+    ? globalCurrentFrame ?? currentFrame ?? preservedFrameRef.current ?? 0
+    : getCurrentFrameValue(preservedFrameRef.current, globalCurrentFrame, currentFrame);
   const clampedDisplayFrame = Math.max(0, Math.min(displayFrame, totalFrames - 1));
   const currentVelocityViolation = velocityViolationMap.get(clampedDisplayFrame);
   const currentLimitViolation = limitViolationMap.get(clampedDisplayFrame);

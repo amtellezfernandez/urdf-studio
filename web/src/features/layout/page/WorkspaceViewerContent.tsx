@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
+import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { VIEWER_RESIZER_HEIGHT } from "@/features/layout/page/constants";
 import { ViewerHost } from "@/features/layout/page/ViewerHost";
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
@@ -60,6 +61,7 @@ export const WorkspaceViewerContent = ({
   episodeSaveHandler,
 }: WorkspaceViewerContentProps) => {
   const workspaceModeUi = getWorkspaceModeUiPolicy(workspaceMode);
+  const isPlaybackActive = useViewerPlaybackStore((state) => state.isPlaying);
 
   if (showUrdfEditor) {
     return (
@@ -147,6 +149,7 @@ export const WorkspaceViewerContent = ({
               robot={robot}
               jointLimits={jointLimits}
               inline={true}
+              isPlayingAll={isPlaybackActive}
               globalCurrentFrame={currentFrame}
               onSetGlobalFrame={(frame: number) => {
                 viewerPlayback.setFrame(frame);
