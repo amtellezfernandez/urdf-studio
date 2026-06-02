@@ -1,0 +1,25 @@
+export const MATERIAL_APPLY_PARAMS = {
+  defaultAlpha: 1,
+  rgbComponentCount: 3,
+  rgbaComponentCount: 4,
+  so100PrimaryRgb: [1.0, 0.82, 0.12],
+  so100DarkRgb: [0.1, 0.1, 0.1],
+  lekiwiRobotKeyword: "lekiwi",
+  lekiwiDarkMaterialKeywords: [
+    "sts3215",
+    "motor",
+    "metal",
+    "wheel",
+    "tire",
+    "tyre",
+    "black",
+  ],
+  lekiwiDarkMeshKeywords: [
+    "wheel",
+    "tire",
+    "tyre",
+    "motor",
+    "servo",
+    "sts3215",
+  ],
+} as const;

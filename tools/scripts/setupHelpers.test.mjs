@@ -1,0 +1,100 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  buildSetupRoadmapSections,
+  buildSetupSummarySections,
+  isTruthyEnvValue,
+  selectInstalledStalePythonDependencies,
+  shouldInstallGlobalIlu,
+} from './setupHelpers.js';
+import { OPENARM_HARDWARE_PIP_DEPENDENCIES } from './openArmHardwareParams.js';
+import {
+  GITHUB_CLI_LOGIN_COMMAND,
+  GLOBAL_ILU_INSTALL_ENV,
+  GLOBAL_ILU_INSTALL_FLAG,
+  LOCAL_ILU_COMMAND,
+} from './setupParams.js';
+
+test('isTruthyEnvValue recognizes supported truthy values', () => {
+  assert.equal(isTruthyEnvValue('1'), true);
+  assert.equal(isTruthyEnvValue(' true '), true);
+  assert.equal(isTruthyEnvValue('YES'), true);
+  assert.equal(isTruthyEnvValue('0'), false);
+  assert.equal(isTruthyEnvValue('no'), false);
+});
+
+test('shouldInstallGlobalIlu accepts setup flag', () => {
+  assert.equal(shouldInstallGlobalIlu({ args: [GLOBAL_ILU_INSTALL_FLAG], env: {} }), true);
+});
+
+test('shouldInstallGlobalIlu accepts truthy env', () => {
+  assert.equal(
+    shouldInstallGlobalIlu({
+      args: [],
+      env: { [GLOBAL_ILU_INSTALL_ENV]: 'yes' },
+    }),
+    true
+  );
+});
+
+test('selectInstalledStalePythonDependencies only returns stale packages present in the environment', () => {
+  assert.deepEqual(
+    selectInstalledStalePythonDependencies({
+      staleDependencies: ['libcoal', 'libpinocchio', 'lib.pinocchio', 'libmissing'],
+      installedPackageNames: ['LIBCOAL', 'pinocchio', 'lib_pinocchio', 'pytest'],
+    }),
+    ['libcoal', 'lib.pinocchio']
+  );
+});
+
+test('buildSetupSummarySections reports local and global ilu usage', () => {
+  const sections = buildSetupSummarySections({
+    globalIluAttempted: true,
+    globalIluInstalled: false,
+    mjlabRuntimeResult: {
+      ok: true,
+      installed: true,
+      skipped: false,
+    },
+  });
+
+  assert.deepEqual(sections[0], {
+    heading: 'Run',
+    lines: ['Start URDF Studio: npm run start'],
+  });
+  assert.deepEqual(sections[1], {
+    heading: 'i-love-urdf CLI',
+    lines: [
+      `Local i-love-urdf CLI: ${LOCAL_ILU_COMMAND}`,
+      `Global ilu install did not complete. Local ${LOCAL_ILU_COMMAND} still works.`,
+    ],
+  });
+  assert.deepEqual(sections[2], {
+    heading: 'GitHub Access',
+    lines: [
+      `Recommended: ${GITHUB_CLI_LOGIN_COMMAND}`,
+      'URDF Studio can reuse gh auth, GH_TOKEN, or GITHUB_TOKEN without saving a local token.',
+    ],
+  });
+  assert.deepEqual(sections[3], {
+    heading: 'OpenArm Hardware',
+    lines: [
+      `Installed into the unified Python runtime: ${OPENARM_HARDWARE_PIP_DEPENDENCIES.join(', ')}.`,
+      'Check CAN, Feetech, and OpenArm Mini imports with npm run openarm:doctor.',
+    ],
+  });
+  assert.deepEqual(sections[4], {
+    heading: 'MJLab',
+    lines: ['MJLab validation runtime is available.'],
+  });
+});
+
+test('buildSetupRoadmapSections reports setup steps without override labels', () => {
+  const sections = buildSetupRoadmapSections();
+
+  assert.equal(sections[0].heading, 'Setup steps');
+  assert.ok(sections[0].lines.includes('Unified Python backend/training runtime'));
+  assert.ok(sections[0].lines.includes('MJLab validation runtime'));
+  assert.equal(sections.length, 1);
+});

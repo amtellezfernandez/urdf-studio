@@ -1,0 +1,444 @@
+import { useState, useEffect, useRef } from "react";
+import { Input } from "@/shared/ui/input";
+import { Button } from "@/shared/ui/button";
+import { BlenderPanel } from "@/shared/ui/blender-panel";
+import { Plus, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
+import {
+  addCollisionToLink,
+  addInertialToLink,
+  removeCollisionFromLink,
+  removeInertialFromLink,
+  removeVisualFromLink,
+} from "@/features/urdf/editor/updateLinkData";
+import type { LinkData } from "@/shared/lib/urdfBrowser";
+import { cn } from "@/shared/lib/utils";
+import { toast } from "sonner";
+import { VisualControl } from "@/features/urdf/editor/link-editor/VisualControl";
+import { CollisionControl } from "@/features/urdf/editor/link-editor/CollisionControl";
+import { InertialControl } from "@/features/urdf/editor/link-editor/InertialControl";
+import { InertialDraftGeneratorControls } from "@/features/urdf/editor/link-editor/InertialDraftGeneratorControls";
+import {
+  INERTIAL_SYNTHESIS_DEFAULT_DENSITY_PRESET_ID,
+  type InertialDensityPresetId,
+} from "@/features/urdf/inertia/inertialSynthesisParams";
+
+// Collision visibility state type
+export interface CollisionVisibility {
+  [linkName: string]: {
+    [collisionIndex: number]: boolean;
+  };
+}
+
+interface LinkControlProps {
+  linkData: LinkData;
+  urdfContent?: string;
+  onMaterialChange?: (linkName: string, materialName: string, color: string) => void;
+  onLinkNameChange?: (oldName: string, newName: string) => void;
+  onUrdfChange?: (newContent: string) => void;
+  meshFiles?: Record<string, Blob>;
+  isHighlighted?: boolean;
+  onSelect?: () => void;
+  collisionVisibility?: { [index: number]: boolean };
+  onCollisionVisibilityChange?: (index: number, visible: boolean) => void;
+  alwaysExpanded?: boolean;
+  endEffectorLink?: string | null;
+  endEffectorCandidates?: string[];
+  onMarkAsEndEffector?: (linkName: string | null) => void;
+  analysisValid?: boolean;
+  onGenerateInertialDraft?: (linkName: string, densityPresetId: InertialDensityPresetId) => void;
+  voxelDerivedInertialLinks?: string[];
+}
+
+export const LinkControl = ({
+  linkData,
+  urdfContent,
+  onMaterialChange,
+  onLinkNameChange,
+  onUrdfChange,
+  meshFiles = {},
+  isHighlighted,
+  onSelect,
+  collisionVisibility = {},
+  onCollisionVisibilityChange,
+  alwaysExpanded = false,
+  endEffectorLink,
+  endEffectorCandidates = [],
+  onMarkAsEndEffector,
+  analysisValid = false,
+  onGenerateInertialDraft,
+  voxelDerivedInertialLinks = [],
+}: LinkControlProps) => {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(linkData.name);
+  const [activeSection, setActiveSection] = useState<"visual" | "collision" | "inertial">("visual");
+  const [inertialDensityPresetId, setInertialDensityPresetId] = useState<InertialDensityPresetId>(
+    INERTIAL_SYNTHESIS_DEFAULT_DENSITY_PRESET_ID
+  );
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const discreteDeleteButtonClass =
+    "h-5 px-0 text-[9px] font-medium text-destructive/80 hover:bg-transparent hover:text-destructive";
+  const isVoxelDerivedInertialLink = voxelDerivedInertialLinks.includes(linkData.name);
+
+  useEffect(() => {
+    setEditedName(linkData.name);
+  }, [linkData.name]);
+
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  const handleNameDoubleClick = () => {
+    if (onLinkNameChange) {
+      setIsEditingName(true);
+    }
+  };
+
+  const handleNameBlur = () => {
+    if (onLinkNameChange && editedName.trim() && editedName !== linkData.name) {
+      onLinkNameChange(linkData.name, editedName.trim());
+    } else {
+      setEditedName(linkData.name);
+    }
+    setIsEditingName(false);
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    } else if (e.key === "Escape") {
+      setEditedName(linkData.name);
+      setIsEditingName(false);
+    }
+  };
+
+  // Visual is always mesh - no need to add more visuals
+
+  const handleAddCollision = () => {
+    if (!urdfContent || !onUrdfChange) return;
+    const newContent = addCollisionToLink(
+      urdfContent,
+      linkData.name,
+      "box",
+      { size: "1 1 1" },
+      { xyz: [0, 0, 0], rpy: [0, 0, 0] }
+    );
+    onUrdfChange(newContent);
+    toast.success("Collision added");
+  };
+
+  const handleAddInertial = () => {
+    if (!urdfContent || !onUrdfChange) return;
+    const newContent = addInertialToLink(
+      urdfContent,
+      linkData.name,
+      1.0,
+      { ixx: 0.01, ixy: 0, ixz: 0, iyy: 0.01, iyz: 0, izz: 0.01 },
+      { xyz: [0, 0, 0], rpy: [0, 0, 0] }
+    );
+    onUrdfChange(newContent);
+    toast.success("Inertial added");
+  };
+
+  const handleRemoveVisual = (index: number) => {
+    if (!urdfContent || !onUrdfChange) return;
+    const newContent = removeVisualFromLink(urdfContent, linkData.name, index);
+    onUrdfChange(newContent);
+    toast.success("Visual removed");
+  };
+
+  const handleRemoveCollision = (index: number) => {
+    if (!urdfContent || !onUrdfChange) return;
+    const newContent = removeCollisionFromLink(urdfContent, linkData.name, index);
+    onUrdfChange(newContent);
+    toast.success("Collision removed");
+  };
+
+  const handleRemoveInertial = () => {
+    if (!urdfContent || !onUrdfChange) return;
+    const newContent = removeInertialFromLink(urdfContent, linkData.name);
+    onUrdfChange(newContent);
+    toast.success("Inertial removed");
+  };
+
+  // Keep the chooser in a sensible state if the current end-effector falls out of candidates.
+  useEffect(() => {
+    if (!onMarkAsEndEffector) return;
+    if (endEffectorCandidates.length !== 1) return;
+    const soleCandidate = endEffectorCandidates[0];
+    if (endEffectorLink === soleCandidate) return;
+    onMarkAsEndEffector(soleCandidate);
+  }, [endEffectorCandidates, endEffectorLink, onMarkAsEndEffector]);
+
+  return (
+    <div onMouseEnter={onSelect}>
+      <BlenderPanel 
+        title={alwaysExpanded ? null : (isEditingName ? (
+            <Input
+              ref={nameInputRef}
+              value={editedName}
+              onChange={(e) => setEditedName(e.target.value)}
+              onBlur={handleNameBlur}
+              onKeyDown={handleNameKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              className="h-5 text-xs px-1 bg-input/50 border-border/20 text-foreground"
+              placeholder="Link name"
+            />
+          ) : (
+            <span
+              className={cn(
+                "text-xs font-medium cursor-text hover:text-primary transition-colors truncate text-left flex items-center gap-1",
+                isHighlighted ? "text-primary" : "text-foreground"
+              )}
+              onDoubleClick={handleNameDoubleClick}
+              title={onLinkNameChange ? "Double-click to rename" : undefined}
+            >
+              {linkData.name}
+              {analysisValid && (
+                <span className="px-1 border border-emerald-400/60 rounded-none text-emerald-300 text-[9px] font-mono">
+                  [analysis]
+                </span>
+              )}
+            </span>
+          ))}
+        defaultOpen={alwaysExpanded}
+        alwaysExpanded={alwaysExpanded}
+        className={alwaysExpanded ? "mb-0" : ""}
+      >
+        {/* End Effector Button */}
+        {onMarkAsEndEffector && (
+          <div className="px-1 pt-0.5 pb-1 border-b border-border/15">
+            <Button
+              variant={endEffectorLink === linkData.name ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (endEffectorLink === linkData.name) {
+                  onMarkAsEndEffector(null);
+                  toast.success("End effector unmarked");
+                } else {
+                  onMarkAsEndEffector(linkData.name);
+                  toast.success(`Marked "${linkData.name}" as end effector`);
+                }
+              }}
+              className={cn(
+                "h-6 px-2 text-[10px] w-full",
+                endEffectorLink === linkData.name && "bg-primary text-primary-foreground"
+              )}
+            >
+              {endEffectorLink === linkData.name ? "✓ End Effector" : "Mark as End Effector"}
+            </Button>
+            {endEffectorCandidates.length > 1 && (
+              <div className="mt-1 space-y-1">
+                <div className="text-[9px] text-muted-foreground/80">
+                  Multiple candidates detected.
+                </div>
+                <Select
+                  value={endEffectorLink ?? "__none__"}
+                  onValueChange={(value) =>
+                    onMarkAsEndEffector?.(value === "__none__" ? null : value)
+                  }
+                >
+                  <SelectTrigger className="h-6 text-[10px]">
+                    <SelectValue placeholder="Pick end effector" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" className="text-[11px]">
+                      None (clear)
+                    </SelectItem>
+                    {endEffectorCandidates.map((name) => (
+                      <SelectItem key={name} value={name} className="text-[11px]">
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Section Selector */}
+        <div className="flex items-center gap-0.5 px-1 py-0.5 mb-0.5 border-b border-border/15">
+          <button
+            onClick={() => setActiveSection("visual")}
+            className={cn(
+              "px-1 py-0.5 text-[9px] font-medium rounded-sm transition-colors",
+              activeSection === "visual"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+          >
+            Visual
+          </button>
+          <button
+            onClick={() => setActiveSection("collision")}
+            className={cn(
+              "px-1 py-0.5 text-[9px] font-medium rounded-sm transition-colors",
+              activeSection === "collision"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+          >
+            Collision
+          </button>
+          <button
+            onClick={() => setActiveSection("inertial")}
+            className={cn(
+              "px-1 py-0.5 text-[9px] font-medium rounded-sm transition-colors",
+              activeSection === "inertial"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+          >
+            Inertial
+          </button>
+        </div>
+
+        {/* Visual Section */}
+        {activeSection === "visual" && (
+          <div className="space-y-0.5">
+            {linkData.visuals.length === 0 ? (
+              <div className="text-[9px] text-muted-foreground/70 pb-1">
+                No visual element found
+              </div>
+            ) : (
+              linkData.visuals.map((visual, index) => (
+                <VisualControl
+                  key={index}
+                  linkName={linkData.name}
+                  visual={visual}
+                  index={index}
+                  linkData={linkData}
+                  urdfContent={urdfContent}
+                  onMaterialChange={onMaterialChange}
+                  onUrdfChange={onUrdfChange}
+                  onRemove={() => handleRemoveVisual(index)}
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Collision Section */}
+        {activeSection === "collision" && (
+          <div className="space-y-0.5">
+            {linkData.collisions.length === 0 ? (
+              <div className="text-[9px] text-muted-foreground/70 pb-1">
+                No collision elements
+                {onUrdfChange && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-1.5 text-[9px] ml-1.5"
+                    onClick={handleAddCollision}
+                  >
+                    <Plus className="w-2.5 h-2.5 mr-0.5" />
+                    Add
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <>
+                {linkData.collisions.map((collision, index) => (
+                  <CollisionControl
+                    key={index}
+                    linkName={linkData.name}
+                    collision={collision}
+                    index={index}
+                    linkData={linkData}
+                    urdfContent={urdfContent}
+                    onUrdfChange={onUrdfChange}
+                    meshFiles={meshFiles}
+                    onRemove={() => handleRemoveCollision(index)}
+                    isVisible={collisionVisibility[index] ?? true}
+                    onVisibilityChange={(visible) => onCollisionVisibilityChange?.(index, visible)}
+                  />
+                ))}
+                {onUrdfChange && (
+                  <div className="pt-0.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5 text-[9px] w-full"
+                      onClick={handleAddCollision}
+                    >
+                      <Plus className="w-2.5 h-2.5 mr-0.5" />
+                      Add Collision
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Inertial Section */}
+        {activeSection === "inertial" && (
+          <div className="space-y-0.5">
+            {!linkData.inertial ? (
+              <div className="text-[9px] text-muted-foreground/70 pb-1">
+                No inertial element
+                {onUrdfChange && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5 text-[9px]"
+                      onClick={handleAddInertial}
+                    >
+                      <Plus className="w-2.5 h-2.5 mr-0.5" />
+                      Add
+                    </Button>
+                    {onGenerateInertialDraft ? (
+                      <InertialDraftGeneratorControls
+                        densityPresetId={inertialDensityPresetId}
+                        onDensityPresetChange={setInertialDensityPresetId}
+                        onGenerate={() =>
+                          onGenerateInertialDraft(linkData.name, inertialDensityPresetId)
+                        }
+                        size="compact"
+                      />
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <InertialControl
+                  linkName={linkData.name}
+                  inertial={linkData.inertial}
+                  urdfContent={urdfContent}
+                  onUrdfChange={onUrdfChange}
+                  onGenerateFromGeometry={onGenerateInertialDraft}
+                  voxelDerived={isVoxelDerivedInertialLink}
+                />
+                {onUrdfChange && (
+                  <div className="pt-0.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={discreteDeleteButtonClass}
+                      onClick={handleRemoveInertial}
+                    >
+                      <Trash2 className="w-2.5 h-2.5 mr-0.5" />
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </BlenderPanel>
+    </div>
+  );
+};

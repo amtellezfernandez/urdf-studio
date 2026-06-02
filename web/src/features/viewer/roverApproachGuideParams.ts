@@ -1,0 +1,18 @@
+export const ROVER_APPROACH_GUIDE_PARAMS = {
+  liftMeters: 0.004,
+  routeLiftMeters: 0.006,
+  minLengthMeters: 0.001,
+  color: "#38bdf8",
+  opacity: 0.32,
+  routeColor: "#a855f7",
+  routeOpacity: 0.6,
+  arrowLengthMeters: 0.032,
+  arrowRadiusMeters: 0.007,
+  arrowSpacingMeters: 0.085,
+  maxArrowCount: 48,
+  maxRoutePointCount: 64,
+  routeCornerTrimM: 0.12,
+  routeCornerCurveSamples: 8,
+  routeCornerSmoothingMinTurnRad: Math.PI / 18,
+  maxRouteRenderPointCount: 256,
+} as const;

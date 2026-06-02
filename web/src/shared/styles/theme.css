@@ -1,0 +1,236 @@
+/* Apple-style design system - Minimalistic, classic, clean */
+
+@layer base {
+  :root {
+    /* Dark mode by default - Apple-inspired color palette */
+    --background: 0 0% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 210 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 15%;
+    --ring: 210 100% 50%;
+
+    --radius: 0.5rem;
+
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -1px rgb(0 0 0 / 0.3);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -2px rgb(0 0 0 / 0.4);
+
+    --panel-bg: 0 0% 10%;
+    --sidebar-bg: 0 0% 12%;
+    --node-bg: 0 0% 10%;
+
+    --sidebar-background: 0 0% 12%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 210 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* Global dark scrollbar for html and body elements */
+  html,
+  body {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 0% 20% / 0.8) transparent;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  html::-webkit-scrollbar-track,
+  body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 20% / 0.8);
+    border-radius: 3px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+
+  html::-webkit-scrollbar-thumb:hover,
+  body::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 30% / 0.9);
+    background-clip: padding-box;
+  }
+
+  html::-webkit-scrollbar-corner,
+  body::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-feature-settings: "kern" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .panel {
+    @apply bg-[hsl(var(--panel-bg))];
+  }
+
+  .sidebar-panel {
+    @apply bg-[hsl(var(--sidebar-bg))];
+  }
+
+  .node-card {
+    @apply bg-[hsl(var(--node-bg))] rounded-lg shadow-sm p-4;
+  }
+
+  /* Blender-style scrollbar - thin, always visible, doesn't shift content */
+  .blender-scrollbar {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 0% 20% / 0.8) transparent;
+    /* Reserve space for scrollbar to prevent content shift */
+    scrollbar-gutter: stable;
+  }
+
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  .blender-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .blender-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .blender-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 20% / 0.8);
+    border-radius: 3px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    min-height: 20px;
+  }
+
+  .blender-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 30% / 0.9);
+    background-clip: padding-box;
+  }
+
+  .blender-scrollbar::-webkit-scrollbar-thumb:active {
+    background: hsl(0 0% 40% / 1);
+    background-clip: padding-box;
+  }
+
+  .blender-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Minimal dark scrollbar - smaller, darker, more subtle */
+  .minimal-scrollbar {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 0% 15% / 0.8) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 15% / 0.8);
+    border-radius: 1.5px;
+    border: 0;
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 25% / 0.9);
+  }
+
+  .minimal-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Micro scrollbar - ultra-thin and discrete */
+  .micro-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 0% 12% / 0.45) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .micro-scrollbar::-webkit-scrollbar {
+    width: 2px;
+    height: 2px;
+  }
+
+  .micro-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .micro-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 12% / 0.45);
+    border-radius: 999px;
+  }
+
+  .micro-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 18% / 0.65);
+  }
+
+  .micro-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Blender-style number font - clean sans-serif for numbers */
+  .blender-number {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: 0;
+  }
+}

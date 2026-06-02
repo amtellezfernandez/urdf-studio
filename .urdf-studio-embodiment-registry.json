@@ -1,0 +1,175 @@
+{
+  "embodiments": {
+    "unknown:b114f8039c59697a78c829c979bfead4be47c88fa0d52e5f73fa9a9026d889e5": {
+      "base_frame": "base_link",
+      "ee_frame": "tool0",
+      "embodiment_id": "unknown:b114f8039c59697a78c829c979bfead4be47c88fa0d52e5f73fa9a9026d889e5",
+      "kinematic_fingerprint": "b114f8039c59697a78c829c979bfead4be47c88fa0d52e5f73fa9a9026d889e5",
+      "kinematic_fingerprint_version": "v1",
+      "robot_type": "lerobot/svla_so101_pickplace",
+      "srdf_sha256": null,
+      "urdf_sha256": "3a65d2d35e68a8d2f0c2cc176d19b884506543c93ba72980145b80abe276022c"
+    },
+    "unknown:cf2534c76656ec533e810be167cbfd6bcaa30dd3cde4c98d32e8a52a10f1cacb": {
+      "base_frame": "base_link",
+      "ee_frame": "tool0",
+      "embodiment_id": "unknown:cf2534c76656ec533e810be167cbfd6bcaa30dd3cde4c98d32e8a52a10f1cacb",
+      "kinematic_fingerprint": "cf2534c76656ec533e810be167cbfd6bcaa30dd3cde4c98d32e8a52a10f1cacb",
+      "kinematic_fingerprint_version": "v1",
+      "robot_type": "lerobot/svla_so101_pickplace",
+      "srdf_sha256": null,
+      "urdf_sha256": "0d3bb301d38cd62320516656f5a7e00abc4ee26171bca4a57b957040d6c74d1b"
+    },
+    "unknown:f19a3c4828fcb05d6bd986d54d0490d892b510e93cfdb23bad9177fbd8abf150": {
+      "base_frame": "base_link",
+      "ee_frame": "tool0",
+      "embodiment_id": "unknown:f19a3c4828fcb05d6bd986d54d0490d892b510e93cfdb23bad9177fbd8abf150",
+      "kinematic_fingerprint": "f19a3c4828fcb05d6bd986d54d0490d892b510e93cfdb23bad9177fbd8abf150",
+      "kinematic_fingerprint_version": "v1",
+      "robot_type": "pepijn223/lekiwi_drive_in_circle",
+      "srdf_sha256": null,
+      "urdf_sha256": "ea7e922e3e260e6b63391949cf97b08225b164460f9316db68b8d87508258300"
+    },
+    "unknown:f271268501580ec26c8311748e74e0449c142cab78d2729664cf2bf37d8e9a36": {
+      "base_frame": "base_link",
+      "ee_frame": "tool0",
+      "embodiment_id": "unknown:f271268501580ec26c8311748e74e0449c142cab78d2729664cf2bf37d8e9a36",
+      "kinematic_fingerprint": "f271268501580ec26c8311748e74e0449c142cab78d2729664cf2bf37d8e9a36",
+      "kinematic_fingerprint_version": "v1",
+      "robot_type": "lerobot/svla_so101_pickplace",
+      "srdf_sha256": null,
+      "urdf_sha256": "e7ecb9fac3f736143e7a4ed6aefa5f02bcf2d8e710fc2767fc45cc29259184d2"
+    }
+  },
+  "mappings": {
+    "map:23ed396d5344e68e": {
+      "created_at": "2026-04-22T17:03:49.981000Z",
+      "created_by": "urdf-studio",
+      "joint_rules": [
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "shoulder_pan",
+          "target_joint": "shoulder_pan",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "shoulder_lift",
+          "target_joint": "shoulder_lift",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "elbow_flex",
+          "target_joint": "elbow_flex",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "wrist_flex",
+          "target_joint": "wrist_flex",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "wrist_roll",
+          "target_joint": "wrist_roll",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "gripper",
+          "target_joint": "gripper",
+          "unit": "deg"
+        }
+      ],
+      "mapping_id": "map:23ed396d5344e68e",
+      "source": {
+        "embodiment_id": "unknown:b114f8039c59697a78c829c979bfead4be47c88fa0d52e5f73fa9a9026d889e5",
+        "representation_id": "rep:joint_pos_abs:indexed:v1"
+      },
+      "target": {
+        "embodiment_id": "urdfstudio:so101_new_calib:v1",
+        "representation_id": "rep:joint_pos_abs:semantic:v1"
+      },
+      "version": "v1"
+    },
+    "map:61482089825624c1": {
+      "created_at": "2026-02-24T19:44:26.332000Z",
+      "created_by": "urdf-studio",
+      "joint_rules": [
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "shoulder_pan",
+          "target_joint": "STS3215_03a-v1_Revolute-45",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "shoulder_lift",
+          "target_joint": "STS3215_03a-v1-1_Revolute-49",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "elbow_flex",
+          "target_joint": "STS3215_03a-v1-2_Revolute-51",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "wrist_flex",
+          "target_joint": "STS3215_03a-v1-3_Revolute-53",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "wrist_roll",
+          "target_joint": "STS3215_03a_Wrist_Roll-v1_Revolute-55",
+          "unit": "deg"
+        },
+        {
+          "invert": false,
+          "offset": 0.0,
+          "scale": 1.0,
+          "source_joint": "gripper",
+          "target_joint": "STS3215_03a-v1-4_Revolute-57",
+          "unit": "deg"
+        }
+      ],
+      "mapping_id": "map:61482089825624c1",
+      "source": {
+        "embodiment_id": "unknown:f19a3c4828fcb05d6bd986d54d0490d892b510e93cfdb23bad9177fbd8abf150",
+        "representation_id": "rep:joint_pos_abs:indexed:v1"
+      },
+      "target": {
+        "embodiment_id": "urdfstudio:lekiwi:v1",
+        "representation_id": "rep:joint_pos_abs:semantic:v1"
+      },
+      "version": "v1"
+    }
+  },
+  "version": 1
+}

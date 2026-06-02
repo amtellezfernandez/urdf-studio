@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  frontend_checks:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Validate i-love-urdf package integration
+        run: node tools/scripts/i-love-urdf-cli-smoke.js
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Demo mode boundaries
+        run: npm run demo:mode:check
+
+  frontend_tests:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  duplication_check:
+    name: Duplication check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Check code duplication
+        run: npm run duplicate-check
+
+  architecture_check:
+    name: Architecture check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Verify architecture constraints
+        run: npm run architecture-check
+
+  policy_check:
+    name: Policy check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Verify policy constraints
+        run: npm run policy-check
+
+  build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    needs: [frontend_checks, frontend_tests, duplication_check, architecture_check, policy_check]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile backend modules
+        run: python -m compileall backend

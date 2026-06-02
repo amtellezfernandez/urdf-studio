@@ -1,0 +1,75 @@
+{
+  "label": "SO101",
+  "files": [
+    {
+      "path": "robot.urdf",
+      "url": "../robot.urdf",
+      "mime": "application/xml"
+    },
+    {
+      "path": "assets/base_motor_holder_so101_v1.stl",
+      "url": "../assets/base_motor_holder_so101_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/base_so101_v2.stl",
+      "url": "../assets/base_so101_v2.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/motor_holder_so101_base_v1.stl",
+      "url": "../assets/motor_holder_so101_base_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/motor_holder_so101_wrist_v1.stl",
+      "url": "../assets/motor_holder_so101_wrist_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/moving_jaw_so101_v1.stl",
+      "url": "../assets/moving_jaw_so101_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/rotation_pitch_so101_v1.stl",
+      "url": "../assets/rotation_pitch_so101_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/sts3215_03a_no_horn_v1.stl",
+      "url": "../assets/sts3215_03a_no_horn_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/sts3215_03a_v1.stl",
+      "url": "../assets/sts3215_03a_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/under_arm_so101_v1.stl",
+      "url": "../assets/under_arm_so101_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/upper_arm_so101_v1.stl",
+      "url": "../assets/upper_arm_so101_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/waveshare_mounting_plate_so101_v2.stl",
+      "url": "../assets/waveshare_mounting_plate_so101_v2.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/wrist_roll_follower_so101_v1.stl",
+      "url": "../assets/wrist_roll_follower_so101_v1.stl",
+      "mime": "model/stl"
+    },
+    {
+      "path": "assets/wrist_roll_pitch_so101_v2.stl",
+      "url": "../assets/wrist_roll_pitch_so101_v2.stl",
+      "mime": "model/stl"
+    }
+  ]
+}

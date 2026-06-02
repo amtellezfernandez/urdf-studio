@@ -1,0 +1,10 @@
+{
+  "world_layout": {
+    "objects": [],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "environment": {
+    "preset": "default"
+  }
+}

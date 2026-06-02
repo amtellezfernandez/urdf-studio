@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from typing import Final
+
+CAM_TO_SIM_SESSION_ID_NBYTES: Final = 8
+CAM_TO_SIM_STREAM_ID_NBYTES: Final = 8
+CAM_TO_SIM_FRAME_ID_NBYTES: Final = 8
+CAM_TO_SIM_SESSION_ACCESS_TOKEN_NBYTES: Final = 16
+CAM_TO_SIM_QR_IMAGE_SIZE_PX: Final = 320
+
+CAM_TO_SIM_SESSIONS_DIRNAME: Final = "runtime_sessions"
+CAM_TO_SIM_REFERENCE_DIRNAME: Final = "reference"
+CAM_TO_SIM_R2R2R_REFERENCE_DIRNAME: Final = "real2render2real"
+CAM_TO_SIM_SESSION_METADATA_FILENAME: Final = "session.json"
+CAM_TO_SIM_SESSION_ACCESS_FILENAME: Final = "session-access.json"
+CAM_TO_SIM_STREAMS_FILENAME: Final = "streams.json"
+CAM_TO_SIM_PHONE_FRAMES_DIRNAME: Final = "phone_frames"
+CAM_TO_SIM_PHONE_FRAMES_FILENAME: Final = "phone-frames.json"
+CAM_TO_SIM_R2R2R_EXPORT_DIRNAME: Final = "r2r2r_export"
+CAM_TO_SIM_R2R2R_EXPORT_FRAMES_DIRNAME: Final = "frames"
+CAM_TO_SIM_R2R2R_EXPORT_POSES_FILENAME: Final = "poses.jsonl"
+CAM_TO_SIM_R2R2R_EXPORT_FRAMES_MANIFEST_FILENAME: Final = "frames.jsonl"
+CAM_TO_SIM_R2R2R_EXPORT_INTRINSICS_FILENAME: Final = "intrinsics.jsonl"
+CAM_TO_SIM_R2R2R_EXPORT_IMU_FILENAME: Final = "imu.jsonl"
+CAM_TO_SIM_R2R2R_EXPORT_DEPTH_FILENAME: Final = "depth.jsonl"
+CAM_TO_SIM_R2R2R_EXPORT_MANIFEST_FILENAME: Final = "manifest.json"
+CAM_TO_SIM_R2R2R_CAPTURE_READINESS_FILENAME: Final = "capture-readiness.json"
+CAM_TO_SIM_GEOMETRY_JOBS_DIRNAME: Final = "geometry_jobs"
+CAM_TO_SIM_GEOMETRY_JOB_REPORT_FILENAME: Final = "geometry-job-report.json"
+CAM_TO_SIM_GEOMETRY_JOB_CONFIG_FILENAME: Final = "geometry-config.json"
+CAM_TO_SIM_GEOMETRY_JOB_RESULT_FILENAME: Final = "geometry-mesh-result.json"
+CAM_TO_SIM_GEOMETRY_JOB_PROXY_URDF_FILENAME: Final = "geometry-proxy.urdf"
+CAM_TO_SIM_REFERENCE_SYNC_FILENAME: Final = "reference-sync.json"
+
+CAM_TO_SIM_DEFAULT_DEVICE_LABEL: Final = "phone"
+CAM_TO_SIM_DEFAULT_STREAM_SOURCE: Final = "phone"
+CAM_TO_SIM_DEVICE_LABEL_MAX_LENGTH: Final = 80
+CAM_TO_SIM_STREAM_SOURCE_MAX_LENGTH: Final = 80
+CAM_TO_SIM_VIDEO_STREAM_URL_MAX_LENGTH: Final = 4_096
+CAM_TO_SIM_STREAM_NOTE_MAX_LENGTH: Final = 512
+CAM_TO_SIM_PHONE_FRAME_SOURCE_MAX_LENGTH: Final = 80
+CAM_TO_SIM_PHONE_FRAME_MAX_BYTES: Final = 4_000_000
+CAM_TO_SIM_MAX_STREAM_RECORDS_PER_SESSION: Final = 64
+CAM_TO_SIM_MAX_PHONE_FRAMES_PER_SESSION: Final = 1_024
+CAM_TO_SIM_MAX_PHONE_FRAME_TOTAL_BYTES: Final = 256_000_000
+
+CAM_TO_SIM_REFERENCE_COPY_DIRS: Final[tuple[str, ...]] = (
+    "scripts",
+    "real2render2real/utils",
+)
+CAM_TO_SIM_REFERENCE_COPY_FILES: Final[tuple[str, ...]] = (
+    "README.md",
+    "env_real_to_sim.sh",
+    "env_data_gen.sh",
+)

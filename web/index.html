@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/assets/urdf-studio-logo-local.png" />
+    <title>URDF Visualizer</title>
+    <meta name="description" content="Visualize and interact with URDF robot models" />
+    <meta name="author" content="URDF Visualizer" />
+
+    <meta property="og:title" content="URDF Visualizer" />
+    <meta property="og:description" content="Visualize and interact with URDF robot models" />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root {
+        color-scheme: dark;
+        background: hsl(0 0% 8%);
+      }
+
+      body {
+        margin: 0;
+        background: hsl(0 0% 8%);
+        color: hsl(0 0% 98%);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+
+      .urdf-studio-boot-fallback {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      .urdf-studio-boot-fallback__panel {
+        max-width: 420px;
+        border: 1px solid hsl(0 0% 20%);
+        border-radius: 8px;
+        background: hsl(0 0% 10%);
+        padding: 18px;
+        box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+      }
+
+      .urdf-studio-boot-fallback__title {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .urdf-studio-boot-fallback__body {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: hsl(0 0% 72%);
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <div id="root">
+      <div class="urdf-studio-boot-fallback" role="status">
+        <div class="urdf-studio-boot-fallback__panel">
+          <div class="urdf-studio-boot-fallback__title">Loading URDF Studio</div>
+          <div class="urdf-studio-boot-fallback__body">
+            Studio is loading fresh browser assets and will keep retrying.
+          </div>
+          <noscript>
+            <div class="urdf-studio-boot-fallback__body">
+              JavaScript is required to run URDF Studio. Enable JavaScript and reload.
+            </div>
+          </noscript>
+        </div>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const bootRecovery = {
+          bodySelector: ".urdf-studio-boot-fallback__body",
+          entryRetryParam: "urdfStudioEntryRetry",
+          entryScriptSelector: "script[data-urdf-studio-entry]",
+          fallbackSelector: ".urdf-studio-boot-fallback",
+          pageRetryParam: "urdfStudioBootRetry",
+          retryDelayMs: 2500,
+          retryIncrement: 1,
+          retryText: "Still waiting for the JavaScript bundle. Retrying fresh asset load",
+        };
+
+        const getFallbackBody = (root) =>
+          root.querySelector(bootRecovery.bodySelector);
+
+        const isFallbackStillVisible = () => {
+          const root = document.getElementById("root");
+          return root?.querySelector(bootRecovery.fallbackSelector) ? root : null;
+        };
+
+        const updateRetryText = (root, retryCount) => {
+          const body = getFallbackBody(root);
+          if (!body) return;
+
+          body.textContent = `${bootRecovery.retryText} ${retryCount}.`;
+        };
+
+        const buildFreshEntryUrl = (entryScript, retryCount) => {
+          const entryUrl = new URL(
+            entryScript.getAttribute("src") || entryScript.src,
+            window.location.href,
+          );
+          entryUrl.searchParams.set(
+            bootRecovery.entryRetryParam,
+            String(retryCount),
+          );
+          return entryUrl.href;
+        };
+
+        const retryEntryScript = (retryCount) => {
+          const entryScript = document.querySelector(
+            bootRecovery.entryScriptSelector,
+          );
+          if (!entryScript) return;
+
+          const retryScript = document.createElement("script");
+          retryScript.type = "module";
+          retryScript.src = buildFreshEntryUrl(entryScript, retryCount);
+          retryScript.dataset.urdfStudioEntryRetry = "true";
+          document.body.appendChild(retryScript);
+        };
+
+        const retryPageWithFreshEntry = (retryCount) => {
+          const params = new URLSearchParams(window.location.search);
+          const currentPageRetry = Number(
+            params.get(bootRecovery.pageRetryParam) || "0",
+          );
+          if (currentPageRetry >= bootRecovery.retryIncrement) {
+            return;
+          }
+
+          params.set(
+            bootRecovery.pageRetryParam,
+            String(currentPageRetry + bootRecovery.retryIncrement),
+          );
+          params.set(bootRecovery.entryRetryParam, String(retryCount));
+          window.location.replace(
+            `${window.location.pathname}?${params.toString()}${window.location.hash}`,
+          );
+        };
+
+        const scheduleRecovery = (retryCount) => {
+          window.setTimeout(() => {
+            const root = isFallbackStillVisible();
+            if (!root) return;
+
+            updateRetryText(root, retryCount);
+            retryEntryScript(retryCount);
+
+            window.setTimeout(() => {
+              if (!isFallbackStillVisible()) return;
+
+              retryPageWithFreshEntry(retryCount);
+              scheduleRecovery(retryCount + bootRecovery.retryIncrement);
+            }, bootRecovery.retryDelayMs);
+          }, bootRecovery.retryDelayMs);
+        };
+
+        const getInitialRetryCount = () => {
+          const params = new URLSearchParams(window.location.search);
+          const retryCount = Number(
+            params.get(bootRecovery.entryRetryParam) || "0",
+          );
+          return Number.isFinite(retryCount)
+            ? retryCount + bootRecovery.retryIncrement
+            : bootRecovery.retryIncrement;
+        };
+
+        scheduleRecovery(getInitialRetryCount());
+      })();
+    </script>
+    <script type="module" src="/src/app/main.tsx" data-urdf-studio-entry></script>
+  </body>
+</html>
