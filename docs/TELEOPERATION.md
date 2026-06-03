@@ -355,8 +355,6 @@ The IK native daemon is separate from robot teleoperation. It is for local IK/dr
 - HTTP: `POST /target` pushes IK targets.
 - WS: `GET /telemetry` streams solver output.
 
-See `docs/IKD_API.md` for full payload definitions.
-
 ## Operational Checks
 
 1. Start Studio: `npm run start`.

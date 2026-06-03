@@ -1,22 +1,25 @@
-# Documentation
+# URDF Studio Documentation
 
-- [Setup](SETUP.md)
+This index is for product documentation: how to install, launch, operate, and understand the public file/session formats. Internal implementation notes and research scratch docs are intentionally not listed here.
+
+## Start Here
+
+- [User Guide](USER_GUIDE.md) - first launch, UI map, workflows, command reference, troubleshooting.
+- [Setup Guide](SETUP.md) - prerequisites, setup behavior, launch modes, ports, tokens, and runtime checks.
+- [Root README](../README.md) - shortest path from clone to running app.
+
+## Operating Guides
+
 - [Teleoperation](TELEOPERATION.md)
-- [IKD API](IKD_API.md)
-- [IKD Architecture](IKD_ARCHITECTURE.md)
-- [IK Solver Deep Dive](IK_SOLVER_DEEP_DIVE.md)
-- [MJX System Identification](MJX_SYSTEM_ID.md)
-- [WSP Spec v0.1](specs/WSP_v0.1.md)
-- [WSP Manifest Schema](specs/WSP_manifest.schema.json)
-- [World Sharing Roadmap](WORLD_SHARING_ROADMAP.md)
-- [SoTA Commission Manipulation Plan](SOTA_COMMISSION_MANIPULATION_PLAN.md)
-- [World Bridge Architecture](world_bridge_architecture.md)
-- [Studio Architecture Layers](studio-architecture.md)
-- [Architecture Index](architecture/ARCH_INDEX.md)
-- [Architecture Code Truth](architecture/ARCH_CODE_TRUTH.md)
-- [Architecture Defaults](architecture/ARCH_DEFAULTS.md)
-- [Architecture Known Gaps](architecture/ARCH_KNOWN_GAPS.md)
-- Third-party integration notes: [XoQ/xoq-can](../third_party/xoq-can/README.md), [antfields-demo](../third_party/antfields-demo/README.md)
+- [Team Session Setup](TEAM_SESSION_SETUP.md)
 - [Health vs Readiness](health/HEALTH_VS_READINESS.md)
-- [Competitive Perf Plan](COMPETITIVE_PERF_PLAN.md)
-- [Dev notes](dev_notes.md)
+
+## Public Specs
+
+- [World Scene Package v0.1](specs/WSP_v0.1.md)
+- [ROS Viz Stream v1](specs/ROSVIZ_STREAM_V1.md)
+
+## Third-Party Notes
+
+- [XoQ/xoq-can](../third_party/xoq-can/README.md)
+- [antfields-demo](../third_party/antfields-demo/README.md)

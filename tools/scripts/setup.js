@@ -217,7 +217,21 @@ async function setupUrdfOpsWorkspace() {
 
   try {
     const lockfilePath = join(opsRuntime.root, 'package-lock.json');
-    runNpmInstallIn(opsRuntime.root, [existsSync(lockfilePath) ? 'ci' : 'install', ...SETUP_NPM_INSTALL_FLAGS]);
+    const viteBinPath = join(
+      opsRuntime.nodeModulesPath,
+      '.bin',
+      process.platform === 'win32' ? 'vite.cmd' : 'vite'
+    );
+    if (existsSync(opsRuntime.nodeModulesPath) && existsSync(viteBinPath)) {
+      logSuccess('URDF Ops dependencies already installed');
+      return true;
+    }
+
+    const installCommand = existsSync(lockfilePath) ? 'ci' : 'install';
+    logInfo(`Installing URDF Ops dependencies with npm ${installCommand}...`);
+    runNpmInstallIn(opsRuntime.root, [installCommand, ...SETUP_NPM_INSTALL_FLAGS], {
+      stdio: 'inherit',
+    });
     logSuccess('URDF Ops dependencies installed');
     return true;
   } catch (error) {

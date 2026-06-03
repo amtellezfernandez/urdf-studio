@@ -1,29 +1,62 @@
 # URDF Studio Setup
 
+This is the detailed setup and launch guide. For the product/UI walkthrough, see [User Guide](USER_GUIDE.md).
+
 ## Quick Start
 
 ### 1. Run Setup
 ```bash
-cd ~/URDFStudio
+cd ~/studio/urdf-studio
 npm run setup
 ```
 
 This will:
-- Show the setup roadmap
-- Install all dependencies
+- Show the setup roadmap.
+- Install URDF Studio npm dependencies.
 - Set up the unified Python environment at `.venv-lerobot` with backend, Placo, LeRobot training, OpenArm hardware, MJLab, MuJoCo-Warp, and the MJX system-identification runtime
-- Prompt you to configure HuggingFace authentication
-- Prompt you to configure GitHub access
-- Install the local `i-love-urdf` CLI for this repo (`npx ilu`)
+- Provision the sibling URDF Ops checkout at `../urdf-ops` unless skipped or overridden.
+- Install URDF Ops npm dependencies when they are missing.
+- Prompt you to configure HuggingFace authentication.
+- Prompt you to configure GitHub access.
+- Install the local `i-love-urdf` CLI for this repo (`npx ilu`).
 
 Setup pins MuJoCo-Warp to the release that imports cleanly with the installed MuJoCo runtime.
+
+### URDF Ops workspace setup
+
+URDF Ops is the synchronized training/operations workspace that opens from the `UrdfOps` top-bar button. By default, setup uses a sibling checkout:
+
+```text
+~/studio/urdf-studio
+~/studio/urdf-ops
+```
+
+Override the checkout:
+
+```bash
+URDF_OPS_ROOT=/path/to/urdf-ops npm run setup
+```
+
+Skip URDF Ops setup temporarily:
+
+```bash
+URDF_STUDIO_SKIP_URDF_OPS_SETUP=1 npm run setup
+```
+
+If `../urdf-ops/node_modules/.bin/vite` already exists, setup prints:
+
+```text
+URDF Ops dependencies already installed
+```
+
+If dependencies are missing, setup prints the npm command it is running and streams the install output. This prevents the URDF Ops step from looking frozen.
 
 ### Install the `ilu` CLI globally too
 
 URDF Studio works without a global `ilu` install. If you want `ilu` on your shell `PATH` everywhere, run:
 
 ```bash
-cd ~/URDFStudio
+cd ~/studio/urdf-studio
 npm run setup -- --install-global-ilu
 ```
 
@@ -34,35 +67,46 @@ The setup script will install the exact `i-love-urdf` package version already in
 This clones `facebookresearch/vggt` into `./vggt/` and installs its Python requirements into `./.venv-lerobot/`.
 
 ```bash
-cd ~/URDFStudio
+cd ~/studio/urdf-studio
 npm run setup -- --twin
 ```
 
 Or, if you prefer to do it during `npm install`:
 
 ```bash
-cd ~/URDFStudio
+cd ~/studio/urdf-studio
 npm install --twin
 npm run setup
 ```
 
 ### 2. Start URDF Studio
 ```bash
-cd ~/URDFStudio
+cd ~/studio/urdf-studio
 npm run start
 ```
 
 This will start:
 - **Frontend**: `http://localhost:5173` (Vite + React)
 - **Backend API**: `http://localhost:8000` (FastAPI + Python)
+- **URDF Ops frontend**: `http://127.0.0.1:5174`
+- **URDF Ops API**: `http://127.0.0.1:8001`
 
 `npm run start` is the safe local default and keeps binds on loopback unless you override them explicitly.
 It also checks the official `origin/main` branch and refuses to start stale checkouts until you update them.
 
+Healthy startup prints a `Ready:` block with the Studio and Ops URLs. Verify both backends with:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8001/health
+```
+
+Use `npm run start` for demos, verification, and normal work. Use `npm run dev` only for frontend-only development; it does not start the Python backend, so `/api/*` requests can fail there.
+
 ### Phone/tunnel data mode
 
 ```bash
-cd ~/URDFStudio
+cd ~/studio/urdf-studio
 npm run data
 ```
 
@@ -128,32 +172,6 @@ git submodule update --init --recursive
 
 Then click **Load SO-ARM100** in the UI.
 
-### MJX System Identification
-
-Setup installs MJX, Optax, and the reusable `mujoco-sysid` package so synthetic system-identification benchmarks can run in the unified Python environment. The external source references live in:
-
-- `third_party/mujoco-sysid`
-- `third_party/mjx_sysid`
-
-See [MJX System Identification](MJX_SYSTEM_ID.md) for the reuse boundary and MVP build order.
-
-Run the SO100 MJX recovery benchmark with:
-
-```bash
-npm run sysid:so100
-```
-
-Run the SO100 differentiable geometry-repair benchmark with:
-
-```bash
-npm run sysid:so100:geometry
-```
-
-### IK Benchmark (SO-ARM100)
-```bash
-python backend/scripts/ik_benchmark.py
-```
-
 The integrated backend provides:
 - `GET  /health` – Health check (yourdfpy status)
 - `POST /ik/solve` – IK orchestration using configured solvers
@@ -162,9 +180,9 @@ The integrated backend provides:
 ## Commands
 
 - `npm run setup` - Install dependencies, local `ilu`, and auth prompts
-- `npm run start` - Start URDF Studio locally (default)
-- `npm run data` - Start URDF Studio with phone/tunnel data mode
-- `npm run dev` - Start Vite dev server only (for development)
+- `npm run start` - Start the full local Studio stack (default)
+- `npm run data` - Start Studio with phone/tunnel data mode
+- `npm run dev` - Start Vite frontend only (development mode; backend is not started)
 - `npm run typecheck` - Run TypeScript type checks
 - `npm run test:backend` - Run backend pytest with the unified Python env (`.venv-lerobot/bin/python3`)
 - `npm run smoke` - Run lint + typecheck
@@ -181,6 +199,55 @@ If you want full Vite + backend logs while developing:
 
 ```bash
 URDF_STUDIO_VERBOSE=1 npm run start
+```
+
+## Troubleshooting
+
+### Setup appears frozen at "Setting up URDF Ops workspace"
+
+That step manages the sibling `../urdf-ops` checkout. Check whether it exists and has dependencies:
+
+```bash
+ls -la ../urdf-ops
+test -d ../urdf-ops/node_modules && echo deps-present
+test -x ../urdf-ops/node_modules/.bin/vite && echo vite-present
+```
+
+If dependencies are present, rerun setup. It should skip the install and continue.
+
+If you need to continue without URDF Ops setup:
+
+```bash
+URDF_STUDIO_SKIP_URDF_OPS_SETUP=1 npm run setup
+```
+
+### UI opens but backend calls fail
+
+If you launched with `npm run dev`, this is expected because it starts the frontend only. Stop it and run:
+
+```bash
+npm run start
+```
+
+Then check:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+### URDF Ops does not open
+
+Check both Ops services:
+
+```bash
+curl http://127.0.0.1:8001/health
+curl -I http://127.0.0.1:5174
+```
+
+If ports are busy:
+
+```bash
+URDF_OPS_WEB_PORT=5176 URDF_OPS_API_PORT=8003 npm run start
 ```
 
 ## HuggingFace Token
