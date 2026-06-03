@@ -5,6 +5,10 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   frontend_checks:
@@ -12,18 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Rewrite GitHub SSH URLs to HTTPS
         run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.12.0
+          node-version: 20.19.6
           cache: npm
       - name: Install deps
         run: npm ci
       - name: Validate i-love-urdf package integration
-        run: node tools/scripts/i-love-urdf-cli-smoke.js
+        run: node tools/scripts/ilu-cli-smoke.js
       - name: Lint
         run: npm run lint
       - name: Typecheck
@@ -36,13 +40,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Rewrite GitHub SSH URLs to HTTPS
         run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.12.0
+          node-version: 20.19.6
           cache: npm
       - name: Install deps
         run: npm ci
@@ -54,13 +58,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Rewrite GitHub SSH URLs to HTTPS
         run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.12.0
+          node-version: 20.19.6
           cache: npm
       - name: Install deps
         run: npm ci
@@ -72,13 +76,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Rewrite GitHub SSH URLs to HTTPS
         run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.12.0
+          node-version: 20.19.6
           cache: npm
       - name: Install deps
         run: npm ci
@@ -90,13 +94,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Rewrite GitHub SSH URLs to HTTPS
         run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.12.0
+          node-version: 20.19.6
           cache: npm
       - name: Install deps
         run: npm ci
@@ -109,13 +113,13 @@ jobs:
     needs: [frontend_checks, frontend_tests, duplication_check, architecture_check, policy_check]
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Rewrite GitHub SSH URLs to HTTPS
         run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.12.0
+          node-version: 20.19.6
           cache: npm
       - name: Install deps
         run: npm ci
@@ -127,9 +131,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Compile backend modules
