@@ -490,7 +490,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
   }, []);
   const effectiveEpisode = resolveEditableEpisode(episode, modifiedEpisode, isEditMode);
   const defaultEditedEpisodeName = `Episode ${
-    episode?.number ? episode.number - 1 : allEpisodes.length
+    episode?.number ?? allEpisodes.length
   } (edited)`;
   const resetSaveDialogState = useCallback(() => {
     setShowSaveDialog(false);
@@ -2649,7 +2649,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           // Quick save: use last choice if available, otherwise show dialog
           if (lastSaveChoice === 'overwrite') {
             onSaveEpisode(modifiedEpisode, false);
-            toast.success(`Episode ${episode?.number ? episode.number - 1 : 0} updated`);
+            toast.success(`Episode ${episode?.number ?? 0} updated`);
           } else if (lastSaveChoice === 'new') {
             openSaveDialog(true);
           } else {
@@ -4113,7 +4113,7 @@ export const EpisodeViewer3DModal: React.FC<EpisodeViewer3DModalProps> = ({
           <div className="flex items-center gap-2 flex-1 min-w-0 pointer-events-none">
             <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">
-              Episode {episode ? episode.number - 1 : 0}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
+              Episode {episode?.number ?? 0}{isEditMode && hasChanges && <span className="text-orange-500 ml-1 text-lg font-bold">*</span>}
             </h3>
             {/* Timeline Controls */}
             {onPlayAllEpisodes && (

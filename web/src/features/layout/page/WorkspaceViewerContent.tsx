@@ -163,9 +163,9 @@ export const WorkspaceViewerContent = ({
         ) : (
           <div className="flex-1 min-h-0 flex items-center justify-center bg-background border-t border-border">
             <div className="flex flex-col items-center gap-3 text-center px-6">
-              <div className="text-sm font-medium text-muted-foreground">No episodes available</div>
+              <div className="text-sm font-medium text-muted-foreground">Select an episode to inspect replay</div>
               <div className="text-xs text-muted-foreground/70 max-w-md">
-                Record an episode or import episodes from files to view them here.
+                Use the episode list on the left, or record/import episodes to create a replay timeline.
               </div>
             </div>
           </div>

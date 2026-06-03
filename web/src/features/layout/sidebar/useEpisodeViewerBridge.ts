@@ -96,7 +96,9 @@ export const useEpisodeViewerBridge = ({
       currentPlayingEpisodeIndex,
     });
     if (!currentEpisode) {
-      onViewerEpisodeChange?.(null);
+      if (episodes.length === 0 || currentPlayingEpisodeIndex !== null) {
+        onViewerEpisodeChange?.(null);
+      }
       return;
     }
     onViewerSplitViewChange?.(true);

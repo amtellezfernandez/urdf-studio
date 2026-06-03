@@ -193,4 +193,44 @@ describe("useEpisodeViewerBridge", () => {
       root.unmount();
     });
   });
+
+  it("keeps the loaded viewer episode when episodes exist but no playback index is selected", async () => {
+    const onViewerEpisodeChange = vi.fn();
+    const stopReplayPlaybackState = vi.fn();
+    const resetReplayFrameToStart = vi.fn();
+    const setCurrentPlayingEpisodeIndex = vi.fn();
+
+    const optionsRef: { current: HookOptions } = {
+      current: {
+        episodes: [FIRST_EPISODE, SECOND_EPISODE],
+        currentPlayingEpisodeIndex: null,
+        currentFrame: 0,
+        totalFrames: 1,
+        onViewerEpisodeChange,
+        stopReplayPlaybackState,
+        resetReplayFrameToStart,
+        setCurrentPlayingEpisodeIndex,
+      },
+    };
+
+    const Harness = () => {
+      useEpisodeViewerBridge(optionsRef.current);
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+    });
+
+    expect(onViewerEpisodeChange).not.toHaveBeenCalled();
+    expect(stopReplayPlaybackState).not.toHaveBeenCalled();
+    expect(setCurrentPlayingEpisodeIndex).not.toHaveBeenCalled();
+    expect(resetReplayFrameToStart).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

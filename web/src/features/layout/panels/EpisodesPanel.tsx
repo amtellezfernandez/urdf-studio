@@ -847,6 +847,7 @@ export const EpisodesPanel = ({
             className="h-6 w-6 p-0"
             onClick={() => playAllEpisodes()}
             disabled={episodes.length === 0}
+            aria-label={isPlayingAll ? "Pause all episodes" : "Play all episodes"}
             title={isPlayingAll ? "Pause" : "Play"}
           >
             {isPlayingAll ? (
@@ -973,6 +974,15 @@ export const EpisodesPanel = ({
                           playEpisode(episode);
                         }}
                         disabled={!isPlaying && !canPlayEpisode}
+                        aria-label={
+                          isPlaying
+                            ? `Pause episode ${episode.number}`
+                            : isPipelineLoading
+                            ? `Loading episode ${episode.number}`
+                            : isLazyPlaceholder
+                            ? `Load and play episode ${episode.number}`
+                            : `Play episode ${episode.number}`
+                        }
                         title={
                           isPlaying
                             ? "Pause"

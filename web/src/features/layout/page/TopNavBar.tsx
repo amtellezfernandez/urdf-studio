@@ -151,9 +151,10 @@ export const TopNavBar = (props: TopNavBarProps) => {
             type="button"
             className="h-7 rounded-md border border-border/70 bg-background/50 px-2.5 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             onClick={props.onOpenTrainingMode}
-            title="Open UrdfOps training workspace"
+            aria-label="URDF Ops"
+            title="Open URDF Ops training workspace"
           >
-            UrdfOps
+            URDF Ops
           </button>
         ) : null}
         {workspaceModeUi.showStudioChrome && props.simulationPrepStatusLabel && props.onOpenSimulationPrep ? (

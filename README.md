@@ -109,7 +109,7 @@ If you run `npm run dev`, backend calls such as `/api/version`, `/api/ik/config`
 
 ### Open Training Tools
 
-Click `UrdfOps` in the top bar. Studio opens the synchronized URDF Ops session at `http://127.0.0.1:5174`.
+Click `URDF Ops` in the top bar. Studio opens the synchronized URDF Ops session at `http://127.0.0.1:5174`.
 
 ## Troubleshooting
 

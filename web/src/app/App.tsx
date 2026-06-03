@@ -67,7 +67,13 @@ const App = () => {
                 </button>
               </div>
             ) : null}
-            <BrowserRouter basename={baseName === "/" ? undefined : baseName}>
+            <BrowserRouter
+              basename={baseName === "/" ? undefined : baseName}
+              future={{
+                v7_relativeSplatPath: true,
+                v7_startTransition: true,
+              }}
+            >
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path={DATASET_REVIEW_ROUTE} element={<DatasetReviewStandalonePage />} />

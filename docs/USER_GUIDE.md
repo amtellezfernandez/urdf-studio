@@ -64,7 +64,7 @@ If this works, the viewer, dataset replay, graph overlay, and full-stack launch 
 ### Top Bar
 
 - `File`, `Utils`, `Worlds`, `View`, `Dataset`, `Create`, `IK`: main action menus.
-- `UrdfOps`: opens the synchronized training workspace.
+- `URDF Ops`: opens the synchronized training workspace.
 - `Sim Prep Review`: shows physics/readiness review state.
 - `Cams`, `Leader`, `Follower`: camera and teleoperation setup.
 - Share/action icons: session and collaboration controls.
@@ -131,7 +131,7 @@ If this works, the viewer, dataset replay, graph overlay, and full-stack launch 
 ### Open URDF Ops
 
 1. Launch with `npm run start`.
-2. Click `UrdfOps` in the top bar.
+2. Click `URDF Ops` in the top bar.
 3. Studio opens or reuses `http://127.0.0.1:5174`.
 
 URDF Ops is a sibling checkout at `../urdf-ops` by default. Override it with:

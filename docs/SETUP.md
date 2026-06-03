@@ -24,7 +24,7 @@ Setup pins MuJoCo-Warp to the release that imports cleanly with the installed Mu
 
 ### URDF Ops workspace setup
 
-URDF Ops is the synchronized training/operations workspace that opens from the `UrdfOps` top-bar button. By default, setup uses a sibling checkout:
+URDF Ops is the synchronized training/operations workspace that opens from the `URDF Ops` top-bar button. By default, setup uses a sibling checkout:
 
 ```text
 ~/studio/urdf-studio
