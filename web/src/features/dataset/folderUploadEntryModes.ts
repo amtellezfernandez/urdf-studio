@@ -58,6 +58,32 @@ export const FOLDER_UPLOAD_ENTRY_MODE_CONFIGS: readonly FolderUploadEntryModeCon
     isRuntime: false,
   },
   {
+    id: "assembly",
+    workspaceMode: "assembly",
+    label: "Assembly",
+    loaderDescription: "Combine robot sources or stage substitution workflows.",
+    robotLoaderTitle: "Sources",
+    showWorldLoader: false,
+    showCameraLoader: false,
+    showLoaders: true,
+    isCompact: false,
+    isAssembly: true,
+    isRuntime: false,
+  },
+  {
+    id: "runtime",
+    workspaceMode: "runtime",
+    label: "Runtime",
+    loaderDescription: "",
+    robotLoaderTitle: "",
+    showWorldLoader: false,
+    showCameraLoader: false,
+    showLoaders: false,
+    isCompact: true,
+    isAssembly: false,
+    isRuntime: true,
+  },
+  {
     id: "training",
     workspaceMode: "studio",
     label: "Training",
@@ -73,7 +99,9 @@ export const FOLDER_UPLOAD_ENTRY_MODE_CONFIGS: readonly FolderUploadEntryModeCon
 ] as const;
 
 export const VISIBLE_FOLDER_UPLOAD_ENTRY_MODE_CONFIGS: readonly FolderUploadEntryModeConfig[] =
-  FOLDER_UPLOAD_ENTRY_MODE_CONFIGS.filter((config) => config.id !== "gallery");
+  FOLDER_UPLOAD_ENTRY_MODE_CONFIGS.filter(
+    (config) => !["gallery", "assembly", "runtime"].includes(config.id)
+  );
 
 export const ASSEMBLY_ENTRY_WORKFLOW_CONFIGS: readonly AssemblyEntryWorkflowConfig[] = [
   {

@@ -59,7 +59,8 @@ Setup installs:
 
 - npm dependencies for URDF Studio
 - the Python environment at `.venv-lerobot`
-- backend, LeRobot, OpenArm hardware, MJLab, MuJoCo/MJX, Placo, and validation dependencies
+- backend, LeRobot, OpenArm hardware, MJLab, MuJoCo/MJX, and validation dependencies
+- the pinned Placo/Pinocchio collision stack used by OpenArm self-collision checks
 - the local `i-love-urdf` CLI, available as `npx ilu`
 - the sibling URDF Ops checkout at `../urdf-ops`, unless configured otherwise
 

@@ -38,10 +38,14 @@ describe("folderUploadEntryModes", () => {
     });
   });
 
-  it("exposes training as a visible pre-load entry mode", () => {
+  it("keeps only public entry modes visible before load", () => {
     const visibleEntryModeIds = VISIBLE_FOLDER_UPLOAD_ENTRY_MODE_CONFIGS.map((config) => config.id);
 
+    expect(visibleEntryModeIds).toEqual(["studio", "training"]);
     expect(visibleEntryModeIds).toContain("training");
+    expect(visibleEntryModeIds).not.toContain("gallery");
+    expect(visibleEntryModeIds).not.toContain("assembly");
+    expect(visibleEntryModeIds).not.toContain("runtime");
     expect(getFolderUploadEntryModeConfig("training")).toMatchObject({
       label: "Training",
       showLoaders: false,

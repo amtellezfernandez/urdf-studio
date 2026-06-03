@@ -13,14 +13,15 @@ npm run setup
 This will:
 - Show the setup roadmap.
 - Install URDF Studio npm dependencies.
-- Set up the unified Python environment at `.venv-lerobot` with backend, Placo, LeRobot training, OpenArm hardware, MJLab, MuJoCo-Warp, and the MJX system-identification runtime
+- Set up the unified Python environment at `.venv-lerobot` with backend, LeRobot training, OpenArm hardware, MJLab, MuJoCo-Warp, and the MJX system-identification runtime.
+- Install the pinned Placo/Pinocchio collision stack used by OpenArm self-collision checks.
 - Provision the sibling URDF Ops checkout at `../urdf-ops` unless skipped or overridden.
 - Install URDF Ops npm dependencies when they are missing.
 - Prompt you to configure HuggingFace authentication.
 - Prompt you to configure GitHub access.
 - Install the local `i-love-urdf` CLI for this repo (`npx ilu`).
 
-Setup pins MuJoCo-Warp to the release that imports cleanly with the installed MuJoCo runtime.
+Setup pins MuJoCo-Warp to the release that imports cleanly with the installed MuJoCo runtime. It also pins the Placo/Pinocchio native collision stack so `pinocchio`, `coal`, and `hppfcl` import cleanly from `.venv-lerobot`.
 
 ### URDF Ops workspace setup
 
@@ -220,6 +221,16 @@ If you need to continue without URDF Ops setup:
 ```bash
 URDF_STUDIO_SKIP_URDF_OPS_SETUP=1 npm run setup
 ```
+
+### OpenArm self-collision tests fail with missing `liburdfdom_sensor`
+
+Run setup again:
+
+```bash
+npm run setup
+```
+
+The backend setup pins `cmeel-urdfdom==4.0.1`, `coal==3.0.1`, and `placo==0.9.16` so Pinocchio loads the expected native `liburdfdom` libraries. If a local venv was created before this pin existed, setup repairs it in place.
 
 ### UI opens but backend calls fail
 

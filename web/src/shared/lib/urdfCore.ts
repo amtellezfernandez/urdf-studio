@@ -8,6 +8,7 @@ export {
   addInertialToLink,
   analyzeUrdf,
   analyzeUrdfDocument,
+  autoFitCollisionGeometry,
   buildAssemblyUrdf,
   buildPackageRootsFromRepositoryFiles,
   buildRepositoryFileEntriesFromPaths,
@@ -59,6 +60,8 @@ export {
 export type {
   AxisSpec,
   CollisionData,
+  CollisionAutoFitResult,
+  CollisionAutoFitType,
   CollisionEntry,
   InertialEntry,
   LinkGeometryParams,

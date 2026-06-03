@@ -57,6 +57,7 @@ export const useIluAssemblyBridge = ({
           return;
         }
 
+        onWorkspaceModeChange?.("assembly");
         clearGitHubSource();
         clearAssemblySelection();
         clearAssemblyPlacement();

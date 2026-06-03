@@ -1139,9 +1139,9 @@ export function FolderUploadRobotLoader({
             </a>
           </div>
           <div className="space-y-3">
-            <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
               <div
-                className={`flex shrink-0 items-center gap-1.5 rounded-md border border-dashed px-3 py-2.5 transition-colors ${
+                className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2.5 transition-colors sm:w-auto sm:shrink-0 ${
                   isRobotSourceDropActive
                     ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.06] text-foreground"
                     : "border-border/70 bg-background/55 text-muted-foreground"
@@ -1160,7 +1160,7 @@ export function FolderUploadRobotLoader({
                   </button>
                 </div>
               </div>
-              <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
+              <div className="flex w-full min-w-0 items-center gap-1.5 sm:flex-1">
                 <Input
                   type="text"
                   placeholder="owner/repo or https://github.com/owner/repo"

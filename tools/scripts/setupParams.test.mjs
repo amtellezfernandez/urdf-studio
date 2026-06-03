@@ -13,7 +13,9 @@ import {
 } from './setupParams.js';
 
 test('backend Python setup includes compatible Placo collision runtime', () => {
+  assert.ok(BACKEND_PYTHON_DEPENDENCIES.includes('cmeel-urdfdom==4.0.1'));
   assert.ok(BACKEND_PYTHON_DEPENDENCIES.includes('coal==3.0.1'));
+  assert.ok(BACKEND_PYTHON_DEPENDENCIES.includes('placo==0.9.16'));
   assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libcoal'));
   assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libpinocchio'));
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);

@@ -213,6 +213,16 @@ If you need to continue without URDF Ops setup:
 URDF_STUDIO_SKIP_URDF_OPS_SETUP=1 npm run setup
 ```
 
+### Backend Setup Or Collision Imports Fail
+
+Run setup again before launching:
+
+```bash
+npm run setup
+```
+
+Setup repairs the pinned native collision runtime used by OpenArm self-collision checks. For details, see [Setup](SETUP.md).
+
 ### Frontend Opens But API Calls Fail
 
 You likely ran `npm run dev`. Start the full stack:

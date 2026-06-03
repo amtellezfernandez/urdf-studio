@@ -4620,9 +4620,9 @@ export const FolderUploadScreen = memo(
     onDropFile: (file: File) => void | Promise<unknown>;
     disabled?: boolean;
   }) => (
-    <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+    <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
       <div
-        className={`flex shrink-0 items-center gap-1.5 rounded-md border border-dashed px-3 py-2.5 transition-colors ${
+        className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2.5 transition-colors sm:w-auto sm:shrink-0 ${
           isDropActive
             ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05] text-foreground"
             : "border-border/70 bg-background/35 text-muted-foreground"
@@ -4645,7 +4645,7 @@ export const FolderUploadScreen = memo(
           </button>
         </div>
       </div>
-      <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
+      <div className="flex w-full min-w-0 items-center gap-1.5 sm:flex-1">
         <Input
           type="text"
           placeholder={inputPlaceholder}
@@ -4954,7 +4954,7 @@ export const FolderUploadScreen = memo(
                       setEntryOption(option.id);
                     }}
                     disabled={entryLoadInteractionsDisabled}
-                    className={`rounded-md font-medium transition-all ${
+                    className={`inline-flex items-center gap-1.5 rounded-md font-medium transition-all ${
                       entryOption === option.id
                         ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
@@ -4963,7 +4963,8 @@ export const FolderUploadScreen = memo(
                     aria-label={option.id === "studio" ? "Single" : option.label}
                     title={option.id === "studio" ? "Single" : option.label}
                   >
-                    {option.id === "studio" ? <Sparkles className="h-4 w-4" /> : option.label}
+                    {option.id === "studio" ? <Sparkles className="h-4 w-4" /> : null}
+                    {option.id === "studio" ? "Single" : option.label}
                   </button>
                 ))}
               </div>

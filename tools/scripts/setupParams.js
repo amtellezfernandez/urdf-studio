@@ -25,8 +25,9 @@ export const BACKEND_PYTHON_DEPENDENCIES = [
   'jaxlie',
   'jaxls @ git+https://github.com/brentyi/jaxls.git@5f766d3b09364a96d83497de2325a835d0e23dc4',
   ...MJX_SYSTEM_ID_DEPENDENCIES,
+  'cmeel-urdfdom==4.0.1',
   'coal==3.0.1',
-  'placo',
+  'placo==0.9.16',
 ];
 export const BACKEND_PYTHON_STALE_DEPENDENCIES = ['libcoal', 'libpinocchio'];
 export const BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT = [
