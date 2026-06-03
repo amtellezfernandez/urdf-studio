@@ -15,6 +15,32 @@ URDF Studio has four local pieces in a normal run:
 
 `npm run start` launches all of them. `npm run dev` launches only the Studio frontend.
 
+## Visual Walkthrough
+
+The fastest way to understand the product is to load the sample motion and watch how the UI fills in.
+
+<p align="center">
+  <img src="assets/quickstart-load.gif" alt="URDF Studio loading the sample robot and episode workspace" width="900">
+</p>
+
+The workspace is built for repeated robotics work: a 3D viewer in the center, dataset and playback controls on the left, and scene/joint detail on the right.
+
+<p align="center">
+  <img src="assets/workspace-tour.gif" alt="URDF Studio workspace with robot inspection panels and scene controls" width="900">
+</p>
+
+Episode replay keeps the robot pose, frame counter, graph cursor, and joint curves synchronized.
+
+<p align="center">
+  <img src="assets/episode-replay.gif" alt="URDF Studio episode replay with synchronized graph cursor" width="900">
+</p>
+
+When you are ready to move from inspection into training operations, use `URDF Ops` in the top bar.
+
+<p align="center">
+  <img src="assets/ops-handoff.gif" alt="URDF Ops training workspace opened from URDF Studio" width="900">
+</p>
+
 ## First Launch
 
 ```bash

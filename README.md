@@ -4,6 +4,35 @@ URDF Studio is a local robotics workbench for loading URDF robots, inspecting sc
 
 Think of the app like a Blender-style robotics desktop: one command should open the full workspace, the UI should make the active robot/dataset/session obvious, and the docs should tell you what is running without making you reverse-engineer the stack.
 
+## See It First
+
+<p align="center">
+  <img src="docs/assets/quickstart-load.gif" alt="URDF Studio loading the built-in sample motion into the full robotics workspace" width="900">
+</p>
+
+One command opens the stack. One click loads a sample robot, scene objects, cameras, and replayable LeRobot episodes.
+
+<table>
+  <tr>
+    <td width="50%">
+      <strong>Blender-style robotics workspace</strong><br>
+      Inspect the robot, joints, links, cameras, scene objects, and world context in one dense desktop surface.<br><br>
+      <img src="docs/assets/workspace-tour.gif" alt="URDF Studio 3D workspace with robot, joints, scene objects, and side panels" width="100%">
+    </td>
+    <td width="50%">
+      <strong>Smooth episode replay</strong><br>
+      Play dataset episodes, watch the robot move, and review the synchronized joint graph and replay cursor.<br><br>
+      <img src="docs/assets/episode-replay.gif" alt="URDF Studio replaying an episode with the graph cursor and robot motion synchronized" width="100%">
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/assets/ops-handoff.gif" alt="URDF Studio opening the synchronized URDF Ops training workspace" width="900">
+</p>
+
+Studio also hands off to the synchronized URDF Ops workspace for training and operations workflows.
+
 ## Start Here
 
 ```bash
