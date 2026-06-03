@@ -115,4 +115,65 @@ describe("useIluAssemblyBridge", () => {
       root.unmount();
     });
   });
+
+  it("clears the attaching state when callbacks change before a failed attach settles", async () => {
+    let rejectManifest: (error: Error) => void = () => {};
+    const manifestPromise = new Promise<IluAssemblyManifest>((_, reject) => {
+      rejectManifest = reject;
+    });
+    fetchIluAssemblyManifest.mockReturnValue(manifestPromise);
+
+    const loadFilesFromFolder = vi.fn(async () => {});
+    const setAssemblySelectedUrdfPaths = vi.fn();
+
+    const Harness = ({ version }: { version: number }) => {
+      const { isAttachingIluAssembly } = useIluAssemblyBridge({
+        iluAssemblyParam: "missing-assembly",
+        loadFilesFromFolder,
+        clearGitHubSource: () => {
+          void version;
+        },
+        clearAssemblySelection: () => {
+          void version;
+        },
+        clearAssemblyPlacement: () => {
+          void version;
+        },
+        setAssemblySelectedUrdfPaths,
+        onWorkspaceModeChange: () => {
+          void version;
+        },
+      });
+      return createElement("span", null, isAttachingIluAssembly ? "loading" : "idle");
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness, { version: 1 }));
+      await Promise.resolve();
+    });
+    expect(container.textContent).toBe("loading");
+
+    await act(async () => {
+      root.render(createElement(Harness, { version: 2 }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      rejectManifest(new Error("Assembly not found"));
+      await manifestPromise.catch(() => {});
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe("idle");
+    expect(toast.error).toHaveBeenCalledWith("Assembly not found");
+    expect(loadFilesFromFolder).not.toHaveBeenCalled();
+    expect(setAssemblySelectedUrdfPaths).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

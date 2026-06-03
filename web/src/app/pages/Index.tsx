@@ -807,6 +807,7 @@ const Index = () => {
     effectiveRuntimePose,
     handleImportDemoWorldLayoutFromDialog,
     handlePlayDemoMotion,
+    runtimePreviewLoadError,
   } = useCameraRuntimeOrchestration({
     activeUrdfPath,
     addCamera,
@@ -3567,6 +3568,7 @@ const Index = () => {
       workspaceMode={workspaceMode}
       onWorkspaceModeChange={workspaceController.setMode}
       runtimePreviewMode={runtimePreviewMode}
+      runtimePreviewLoadError={runtimePreviewLoadError}
       runtimePreviewViewerProps={runtimePreviewViewerProps}
       thumbnailMode={thumbnailMode}
       thumbnailViewerProps={thumbnailViewerProps}

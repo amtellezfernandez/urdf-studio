@@ -390,7 +390,7 @@ export const useCameraRuntimeOrchestration = ({
     urdfAnalysis,
   });
 
-  useThumbnailBootstrap({
+  const { loadError: runtimePreviewLoadError } = useThumbnailBootstrap({
     hasLoadedFiles,
     loadBundledDemoRobot,
     loadFilesFromFolderWithFreshCameras,
@@ -603,5 +603,6 @@ export const useCameraRuntimeOrchestration = ({
     effectiveRuntimePose,
     handleImportDemoWorldLayoutFromDialog,
     handlePlayDemoMotion,
+    runtimePreviewLoadError: runtimePreviewMode ? runtimePreviewLoadError : null,
   };
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { loadThumbnailGitHubRobot } from "@/app/pages/index/thumbnailBootstrap";
 import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderState";
@@ -31,11 +31,40 @@ export const useThumbnailBootstrap = ({
   thumbnailParams,
 }: ThumbnailBootstrapParams) => {
   const thumbnailLoadRef = useRef<string | null>(null);
+  const latestActionsRef = useRef({
+    loadBundledDemoRobot,
+    loadFilesFromFolderWithFreshCameras,
+    setGPUMode,
+  });
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    latestActionsRef.current = {
+      loadBundledDemoRobot,
+      loadFilesFromFolderWithFreshCameras,
+      setGPUMode,
+    };
+  }, [loadBundledDemoRobot, loadFilesFromFolderWithFreshCameras, setGPUMode]);
+
+  useEffect(() => {
+    const isBootstrapMode = thumbnailMode || runtimePreviewMode;
+    if (!isBootstrapMode) {
+      thumbnailLoadRef.current = null;
+      setLoadError(null);
+      return;
+    }
+    if (hasLoadedFiles) {
+      setLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
     const reportThumbnailError = (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[thumbnail] Failed to load robot:", error);
+      if (!cancelled) {
+        setLoadError(message);
+      }
       if (typeof window === "undefined") {
         return;
       }
@@ -61,13 +90,12 @@ export const useThumbnailBootstrap = ({
     ].join("|");
 
     if (
-      (!thumbnailMode && !runtimePreviewMode) ||
-      hasLoadedFiles ||
       thumbnailLoadRef.current === loadSignature
     ) {
       return;
     }
     thumbnailLoadRef.current = loadSignature;
+    setLoadError(null);
 
     if (typeof window !== "undefined") {
       writeThumbnailRenderState(
@@ -84,31 +112,41 @@ export const useThumbnailBootstrap = ({
       );
     }
     if (thumbnailMode) {
-      setGPUMode("low");
+      latestActionsRef.current.setGPUMode("low");
     }
     if (runtimePreviewMode) {
-      setGPUMode("low");
+      latestActionsRef.current.setGPUMode("low");
     }
 
-    if (thumbnailParams.demo) {
-      loadBundledDemoRobot().catch(reportThumbnailError);
-      return;
-    }
+    const loadRobot = thumbnailParams.demo
+      ? latestActionsRef.current.loadBundledDemoRobot()
+      : loadThumbnailGitHubRobot({
+          loadFilesFromFolderWithFreshCameras:
+            latestActionsRef.current.loadFilesFromFolderWithFreshCameras,
+          repoUrl: thumbnailParams.repoUrl,
+          urdfTarget: thumbnailParams.urdfTarget,
+        });
+    loadRobot
+      .then(() => {
+        if (!cancelled) {
+          setLoadError(null);
+        }
+      })
+      .catch(reportThumbnailError);
 
-    loadThumbnailGitHubRobot({
-      loadFilesFromFolderWithFreshCameras,
-      repoUrl: thumbnailParams.repoUrl,
-      urdfTarget: thumbnailParams.urdfTarget,
-    }).catch(reportThumbnailError);
+    return () => {
+      cancelled = true;
+    };
   }, [
     hasLoadedFiles,
-    loadBundledDemoRobot,
-    loadFilesFromFolderWithFreshCameras,
     runtimePreviewMode,
-    setGPUMode,
     thumbnailMode,
     thumbnailParams.demo,
     thumbnailParams.repoUrl,
     thumbnailParams.urdfTarget,
   ]);
+
+  return {
+    loadError,
+  };
 };

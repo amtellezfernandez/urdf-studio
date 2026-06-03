@@ -33,6 +33,32 @@ export const useIluAssemblyBridge = ({
 }: UseIluAssemblyBridgeOptions) => {
   const [isAttachingIluAssembly, setIsAttachingIluAssembly] = useState(false);
   const lastBootstrappedIluAssemblyIdRef = useRef("");
+  const latestHandlersRef = useRef({
+    clearAssemblyPlacement,
+    clearAssemblySelection,
+    clearGitHubSource,
+    loadFilesFromFolder,
+    onWorkspaceModeChange,
+    setAssemblySelectedUrdfPaths,
+  });
+
+  useEffect(() => {
+    latestHandlersRef.current = {
+      clearAssemblyPlacement,
+      clearAssemblySelection,
+      clearGitHubSource,
+      loadFilesFromFolder,
+      onWorkspaceModeChange,
+      setAssemblySelectedUrdfPaths,
+    };
+  }, [
+    clearAssemblyPlacement,
+    clearAssemblySelection,
+    clearGitHubSource,
+    loadFilesFromFolder,
+    onWorkspaceModeChange,
+    setAssemblySelectedUrdfPaths,
+  ]);
 
   useEffect(() => {
     if (!iluAssemblyParam || lastBootstrappedIluAssemblyIdRef.current === iluAssemblyParam) {
@@ -57,11 +83,20 @@ export const useIluAssemblyBridge = ({
           return;
         }
 
-        onWorkspaceModeChange?.("assembly");
-        clearGitHubSource();
-        clearAssemblySelection();
-        clearAssemblyPlacement();
-        await loadFilesFromFolder(fileList, { preserveCameras: false });
+        const {
+          clearAssemblyPlacement: clearAssemblyPlacementLatest,
+          clearAssemblySelection: clearAssemblySelectionLatest,
+          clearGitHubSource: clearGitHubSourceLatest,
+          loadFilesFromFolder: loadFilesFromFolderLatest,
+          onWorkspaceModeChange: onWorkspaceModeChangeLatest,
+          setAssemblySelectedUrdfPaths: setAssemblySelectedUrdfPathsLatest,
+        } = latestHandlersRef.current;
+
+        onWorkspaceModeChangeLatest?.("assembly");
+        clearGitHubSourceLatest();
+        clearAssemblySelectionLatest();
+        clearAssemblyPlacementLatest();
+        await loadFilesFromFolderLatest(fileList, { preserveCameras: false });
 
         const sourceByPath = Object.fromEntries(
           Object.entries(manifest.sourceByPath || {}).map(([key, value]) => [
@@ -70,7 +105,11 @@ export const useIluAssemblyBridge = ({
           ])
         ) as Record<string, AssemblyRobotInstance["source"]>;
 
-        setAssemblySelectedUrdfPaths(manifest.selectedPaths, manifest.namesByPath, sourceByPath);
+        setAssemblySelectedUrdfPathsLatest(
+          manifest.selectedPaths,
+          manifest.namesByPath,
+          sourceByPath
+        );
         toast.success(
           `Attached ilu assembly with ${manifest.selectedPaths.length} robot${manifest.selectedPaths.length === 1 ? "" : "s"}`
         );
@@ -92,15 +131,7 @@ export const useIluAssemblyBridge = ({
     return () => {
       cancelled = true;
     };
-  }, [
-    clearAssemblyPlacement,
-    clearAssemblySelection,
-    clearGitHubSource,
-    iluAssemblyParam,
-    loadFilesFromFolder,
-    onWorkspaceModeChange,
-    setAssemblySelectedUrdfPaths,
-  ]);
+  }, [iluAssemblyParam]);
 
   return {
     isAttachingIluAssembly,

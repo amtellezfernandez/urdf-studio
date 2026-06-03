@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { ViewerHost } from "@/features/layout/page/ViewerHost";
 import { LoadingScreen } from "@/features/layout/page/LoadingScreen";
+import { Button } from "@/shared/ui/button";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 import type { WorkspaceMode } from "@/features/workspace/types";
 
@@ -15,6 +16,7 @@ type IndexModeGateProps = {
   workspaceMode: WorkspaceMode;
   onWorkspaceModeChange: (mode: string) => void;
   runtimePreviewMode: boolean;
+  runtimePreviewLoadError: string | null;
   runtimePreviewViewerProps: Viewer3DProps;
   thumbnailMode: boolean;
   thumbnailViewerProps: Viewer3DProps;
@@ -35,6 +37,30 @@ const LoadingScreenFrame = () => (
   </div>
 );
 
+const openStudioRoot = () => {
+  if (typeof window === "undefined") return;
+  window.location.assign(window.location.pathname || "/");
+};
+
+const RuntimePreviewErrorFrame = ({ message }: { message: string }) => (
+  <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+    <div className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-lg">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Runtime preview failed
+        </p>
+        <h1 className="text-xl font-semibold">Could not load the preview robot</h1>
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </div>
+      <div className="mt-5 flex justify-end">
+        <Button type="button" onClick={openStudioRoot}>
+          Open Studio
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
 export const IndexModeGate = ({
   demoMode,
   hasLoadedFiles,
@@ -46,6 +72,7 @@ export const IndexModeGate = ({
   workspaceMode,
   onWorkspaceModeChange,
   runtimePreviewMode,
+  runtimePreviewLoadError,
   runtimePreviewViewerProps,
   thumbnailMode,
   thumbnailViewerProps,
@@ -53,6 +80,10 @@ export const IndexModeGate = ({
   FolderUploadScreen,
 }: IndexModeGateProps) => {
   if (!hasLoadedFiles) {
+    if (runtimePreviewMode && runtimePreviewLoadError) {
+      return <RuntimePreviewErrorFrame message={runtimePreviewLoadError} />;
+    }
+
     if (isAttachingIluSession || runtimePreviewMode || demoMode) {
       return <LoadingScreenFrame />;
     }
