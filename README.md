@@ -180,14 +180,9 @@ npm run data -- --ack-public-tunnel
 
 ## Documentation
 
-- [User Guide](docs/USER_GUIDE.md)
-- [Setup Guide](docs/SETUP.md)
-- [Documentation Index](docs/README.md)
-- [Teleoperation](docs/TELEOPERATION.md)
-- [Team Session Setup](docs/TEAM_SESSION_SETUP.md)
-- [Health vs Readiness](docs/health/HEALTH_VS_READINESS.md)
-- [World Package Spec](docs/specs/WSP_v0.1.md)
-- [ROS Viz Stream Spec](docs/specs/ROSVIZ_STREAM_V1.md)
+- [User Guide](docs/USER_GUIDE.md) - first launch, UI map, workflows, and troubleshooting.
+- [Setup Guide](docs/SETUP.md) - installation, launch modes, ports, tokens, and runtime checks.
+- [Documentation Index](docs/README.md) - advanced operation guides and public file/session specs.
 
 ## Developer Checks
 
