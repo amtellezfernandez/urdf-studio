@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
+from backend.models.physical_state import WorldModelTrainingSample
 from backend.services.world_model_dataset import write_world_model_dataset_jsonl
 from backend.services.wsp_audit_benchmark import benchmark_audit_against_replay
 from backend.services.wsp_ci_report import build_wsp_ci_report, write_wsp_ci_report
@@ -23,6 +25,45 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _flip_replay_label(label: str) -> str:
+    if label == "pass":
+        return "fail"
+    if label == "fail":
+        return "pass"
+    return label
+
+
+def _apply_synthetic_label_noise(
+    samples: Sequence[WorldModelTrainingSample],
+    *,
+    noise_rate: float,
+    seed: int,
+) -> list[WorldModelTrainingSample]:
+    if not 0.0 <= noise_rate <= 1.0:
+        raise ValueError("stress_noise_rate must be between 0 and 1.")
+    stress_samples = [sample.model_copy(deep=True) for sample in samples]
+    flip_count = round(len(stress_samples) * noise_rate)
+    rng = random.Random(seed)
+    flip_indices = set(rng.sample(range(len(stress_samples)), flip_count)) if flip_count else set()
+    for index, sample in enumerate(stress_samples):
+        sample.metadata["stress_truth_source"] = "synthetic_ambiguity_label_noise"
+        sample.metadata["stress_label_noise_rate"] = noise_rate
+        if index not in flip_indices:
+            continue
+        original_label = str(sample.metadata.get("sim_replay_label", "unknown"))
+        flipped_label = _flip_replay_label(original_label)
+        sample.metadata["stress_label_noise"] = True
+        sample.metadata["stress_original_sim_replay_label"] = original_label
+        sample.metadata["sim_replay_label"] = flipped_label
+        targets = sample.metadata.get("sim_replay", {}).get("targets", {})
+        if isinstance(targets, dict):
+            for result in targets.values():
+                if isinstance(result, dict) and result.get("label") in {"pass", "fail"}:
+                    result["stress_original_label"] = result["label"]
+                    result["label"] = _flip_replay_label(str(result["label"]))
+    return stress_samples
+
+
 def run_wsp_lab_demo(
     *,
     output_dir: Path,
@@ -34,6 +75,7 @@ def run_wsp_lab_demo(
     min_auroc_lift: float = 0.1,
     min_unsafe_fn_reduction: float = 0.2,
     require_wsp_position_mae_not_worse: bool = True,
+    stress_noise_rate: float = 0.0,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,6 +86,8 @@ def run_wsp_lab_demo(
     labeled_manifest_path = output_dir / "wsp_failure_corpus_labeled_manifest.json"
     replay_summary_path = output_dir / "wsp_replay_summary.json"
     audit_benchmark_path = output_dir / "wsp_audit_benchmark.json"
+    stress_labeled_path = output_dir / "wsp_stress_labeled_corpus.jsonl"
+    stress_audit_benchmark_path = output_dir / "wsp_stress_audit_benchmark.json"
     raw_report_path = output_dir / "raw_log_baseline_report.json"
     raw_model_path = output_dir / "raw_log_baseline_model.json"
     wsp_report_path = output_dir / "wsp_graph_baseline_report.json"
@@ -92,6 +136,37 @@ def run_wsp_lab_demo(
         "benchmark": audit_benchmark,
     }
     _write_json(audit_benchmark_path, audit_report)
+
+    stress_audit_benchmark = None
+    if stress_noise_rate > 0:
+        stress_samples = _apply_synthetic_label_noise(
+            labeled_samples,
+            noise_rate=stress_noise_rate,
+            seed=seed + 2000,
+        )
+        write_world_model_dataset_jsonl(
+            stress_samples,
+            output_path=stress_labeled_path,
+            dataset_id="wsp-failure-corpus-demo-stress-label-noise",
+            metadata={
+                "mode": "synthetic_ambiguity_label_noise",
+                "stress_noise_rate": stress_noise_rate,
+            },
+        )
+        stress_audit_benchmark = benchmark_audit_against_replay(stress_samples)
+        _write_json(
+            stress_audit_benchmark_path,
+            {
+                "ok": True,
+                "mode": "synthetic_ambiguity_label_noise",
+                "purpose": (
+                    "This is not simulator truth. It deliberately perturbs replay labels to "
+                    "show how perfect deterministic verification metrics degrade under ambiguous field labels."
+                ),
+                "stress_noise_rate": stress_noise_rate,
+                "benchmark": stress_audit_benchmark,
+            },
+        )
 
     raw_report, raw_model = train_raw_log_baseline(
         labeled_samples,
@@ -160,15 +235,54 @@ def run_wsp_lab_demo(
             and model_lift["ok"]
             and ci_report["status"] == "BLOCK"
         ),
+        "validation_mode": "phase_1_deterministic_verification",
         "claim": (
-            "WSP is robotics data/eval infrastructure: it standardizes robot rollouts, "
-            "validates physical executability against simulator replay, improves invalid-action "
-            "prediction over raw logs, and blocks unsafe model regressions in CI."
+            "WSP is an operational robotics data/eval compiler: it standardizes robot rollouts, "
+            "runs deterministic executability checks against simulator-labeled transitions, "
+            "trains baseline models, and blocks unsafe policy regressions in CI."
         ),
+        "evidence_scope": (
+            "These metrics verify the closed-loop compiler, adapter, schema, replay-label, model-training, "
+            "and CI data flow on a deterministic synthetic corpus. They are not a production robustness claim."
+        ),
+        "limitations": [
+            "The 1.000 audit precision/recall values are expected in this deterministic verification corpus.",
+            "The learned model can exploit clean generator boundaries; the AUROC is a pipeline smoke result, not a real-world model benchmark.",
+            "Noisy contact, solver ambiguity, calibration drift, missing telemetry, and multi-vendor log gaps still need real-data evaluation.",
+        ],
+        "next_milestone": (
+            "Ingest noisy partner telemetry from ROS2/MCAP, MuJoCo/Genesis logs, and LeRobot-style episodes, "
+            "then rerun the same WSP audit/model/CI loop against real ambiguous factory data."
+        ),
+        "stage_script": {
+            "safe_claim": (
+                "We have a working deterministic verification slice for robotics data/eval infrastructure."
+            ),
+            "do_not_claim": [
+                "Do not claim production real-world precision/recall from this synthetic corpus.",
+                "Do not claim this is a complete world model.",
+                "Do not claim perfect contact physics generalization.",
+            ],
+            "pivot": (
+                "The perfect numbers prove data-flow integrity; the product value is that the same pipeline "
+                "can now accept messy logs and become a real evaluation gate."
+            ),
+        },
         "terminal_replay": [
-            f"1. Generated {corpus_summary['sample_count']} WSP transitions with {corpus_summary['rejected_count']} rejected rollouts.",
-            f"2. Attached MuJoCo/Genesis replay labels with agreement rate {replay_summary['audit_replay_agreement_rate']:.3f}.",
-            f"3. Audit benchmark precision={audit_benchmark['invalid_detection']['precision']:.3f}, recall={audit_benchmark['invalid_detection']['recall']:.3f}.",
+            (
+                "1. Deterministic verification: generated "
+                f"{corpus_summary['sample_count']} WSP transitions with "
+                f"{corpus_summary['rejected_count']} fixed-failure rollouts."
+            ),
+            (
+                "2. Attached MuJoCo/Genesis export-oracle labels with agreement rate "
+                f"{replay_summary['audit_replay_agreement_rate']:.3f} to check schema/data-flow integrity."
+            ),
+            (
+                "3. Fixed-failure audit precision="
+                f"{audit_benchmark['invalid_detection']['precision']:.3f}, recall="
+                f"{audit_benchmark['invalid_detection']['recall']:.3f}; this is not a real-world robustness score."
+            ),
             (
                 "4. Model lift: raw AUROC "
                 f"{model_lift['raw_log_baseline']['metrics']['invalid_action_auroc']:.3f} -> "
@@ -201,5 +315,19 @@ def run_wsp_lab_demo(
             "ci_status": ci_report["status"],
         },
     }
+    if stress_audit_benchmark is not None:
+        summary["stress_test"] = {
+            "mode": "synthetic_ambiguity_label_noise",
+            "purpose": (
+                "Optional presentation guardrail: shows that the perfect deterministic metrics are not "
+                "being pitched as real-world performance."
+            ),
+            "stress_noise_rate": stress_noise_rate,
+            "audit_precision": stress_audit_benchmark["invalid_detection"]["precision"],
+            "audit_recall": stress_audit_benchmark["invalid_detection"]["recall"],
+            "unsafe_false_negative_rate": stress_audit_benchmark["invalid_detection"]["false_negative_rate"],
+        }
+        summary["artifacts"]["stress_labeled_corpus"] = str(stress_labeled_path)
+        summary["artifacts"]["stress_audit_benchmark"] = str(stress_audit_benchmark_path)
     _write_json(summary_path, summary)
     return summary

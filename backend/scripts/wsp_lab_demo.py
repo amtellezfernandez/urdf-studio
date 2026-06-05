@@ -22,6 +22,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--min-auroc-lift", type=float, default=0.1)
     parser.add_argument("--min-unsafe-fn-reduction", type=float, default=0.2)
     parser.add_argument("--allow-position-mae-regression", action="store_true")
+    parser.add_argument(
+        "--stress-noise-rate",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional synthetic ambiguity stress rate. This deliberately perturbs replay labels "
+            "to demonstrate that deterministic perfect metrics are not real-world claims."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -37,6 +46,7 @@ def main() -> int:
         min_auroc_lift=args.min_auroc_lift,
         min_unsafe_fn_reduction=args.min_unsafe_fn_reduction,
         require_wsp_position_mae_not_worse=not args.allow_position_mae_regression,
+        stress_noise_rate=args.stress_noise_rate,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if summary["success"] else 1
