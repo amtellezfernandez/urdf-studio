@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
-from backend.services.robot_reality_log import compile_robot_reality_log_payload
+from backend.services.robot_reality_log import compile_robot_reality_log_file, compile_robot_reality_log_payload
 from backend.services.world_model_dataset import build_world_model_training_samples
+
+
+FIXTURE_PATH = Path("backend/fixtures/wsp/observed-pallet-push.robot-log.json")
 
 
 def _robot_log_payload() -> dict:
@@ -95,3 +99,14 @@ def test_robot_reality_log_accepts_json_string_payload() -> None:
 
     assert trace.frames[0].frame_id == "observed-pallet-push-001:0"
     assert trace.frames[1].frame_id == "observed-pallet-push-001:500"
+
+
+def test_robot_reality_log_fixture_compiles_to_trainable_samples() -> None:
+    trace = compile_robot_reality_log_file(FIXTURE_PATH)
+    samples = build_world_model_training_samples(trace)
+
+    assert trace.trace_id == "observed-pallet-push-001"
+    assert len(samples) == 1
+    assert samples[0].trace_id == "observed-pallet-push-001"
+    assert samples[0].state_tokens.metadata["schema_version"] == "wsp-physical-token-sequence-v1"
+    assert samples[0].next_state_tokens.metadata["entity_feature_dim"] == 18

@@ -1,0 +1,108 @@
+{
+  "trace_id": "observed-pallet-push-001",
+  "source": "warehouse-cell-log",
+  "frame_convention": "studio-y-up",
+  "frames": [
+    {
+      "time_ms": 0,
+      "entities": [
+        {
+          "id": "robot_1",
+          "type": "robot",
+          "geometry": "box",
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.1
+          },
+          "size": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "battery": 0.82
+        },
+        {
+          "id": "pallet_7",
+          "type": "pallet",
+          "geometry": "box",
+          "pose": [
+            1.0,
+            0.0,
+            0.1
+          ],
+          "size": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "mass_kg": 120.0,
+          "friction": 0.31
+        }
+      ],
+      "action": {
+        "id": "observed_push",
+        "type": "push",
+        "actor": "robot_1",
+        "object": "pallet_7",
+        "params": {
+          "delta_xyz": [
+            0.2,
+            0.0,
+            0.0
+          ],
+          "max_force_n": 120.0
+        },
+        "duration_ms": 500
+      }
+    },
+    {
+      "time_ms": 500,
+      "entities": [
+        {
+          "id": "robot_1",
+          "type": "robot",
+          "geometry": "box",
+          "position_xyz": [
+            0.05,
+            0.0,
+            0.1
+          ],
+          "size_xyz": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "velocity": [
+            0.05,
+            0.0,
+            0.0
+          ],
+          "battery": 0.8
+        },
+        {
+          "id": "pallet_7",
+          "type": "pallet",
+          "geometry": "box",
+          "position_xyz": [
+            1.2,
+            0.0,
+            0.1
+          ],
+          "size_xyz": [
+            0.4,
+            0.4,
+            0.2
+          ],
+          "velocity": [
+            0.2,
+            0.0,
+            0.0
+          ],
+          "mass_kg": 120.0,
+          "friction": 0.31
+        }
+      ]
+    }
+  ]
+}

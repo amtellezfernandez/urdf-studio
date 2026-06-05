@@ -9,6 +9,7 @@ from backend.services.correction_planner import build_repair_plan, rollout_corre
 from backend.services.executability_audit import audit_physical_rollout_trace
 from backend.services.physical_rollout_baseline import rollout_action
 from backend.services.physical_state_compiler import compile_physical_state_payload
+from backend.services.robot_reality_log import compile_robot_reality_log_file
 from backend.services.simulator_export import (
     export_rollout_trace_to_genesis_scene,
     export_rollout_trace_to_mujoco_mjcf,
@@ -25,6 +26,7 @@ from backend.services.world_model_dataset import (
 
 
 DEFAULT_WSP_DEMO_SCENE_PATH = Path("web/public/world-layouts/hkhack-pallet-dock.world-package.json")
+DEFAULT_WSP_DEMO_OBSERVED_LOG_PATH = Path("backend/fixtures/wsp/observed-pallet-push.robot-log.json")
 DEFAULT_WSP_DEMO_BRANCH_ID = "stop_and_replan"
 DEFAULT_WSP_DEMO_STEP_COUNT = 2
 DEFAULT_WSP_DEMO_STEP_MS = 500
@@ -49,6 +51,7 @@ def build_default_wsp_demo_action() -> ActionToken:
 def run_wsp_demo_pipeline(
     *,
     scene_path: Path = DEFAULT_WSP_DEMO_SCENE_PATH,
+    observed_log_path: Path | None = DEFAULT_WSP_DEMO_OBSERVED_LOG_PATH,
     output_dir: Path,
     action: ActionToken | None = None,
     branch_id: str = DEFAULT_WSP_DEMO_BRANCH_ID,
@@ -96,8 +99,19 @@ def run_wsp_demo_pipeline(
             metadata={"split": "corrected_executable_rollout"},
         ),
     ]
+    observed_trace = compile_robot_reality_log_file(observed_log_path) if observed_log_path is not None else None
+    observed_world_model_samples = (
+        build_world_model_training_samples(
+            observed_trace,
+            metadata={"split": "observed_robot_reality_log"},
+        )
+        if observed_trace is not None
+        else []
+    )
+    world_model_samples.extend(observed_world_model_samples)
 
     compiled_path = output_dir / "compiled_tokens.json"
+    observed_trace_path = output_dir / "observed_trace.json"
     rollout_path = output_dir / "predicted_trace.json"
     audit_path = output_dir / "executability_report.json"
     repair_path = output_dir / "correction_branches.json"
@@ -111,6 +125,8 @@ def run_wsp_demo_pipeline(
     summary_path = output_dir / "summary.json"
 
     compiled_path.write_text(compiled.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    if observed_trace is not None:
+        observed_trace_path.write_text(observed_trace.model_dump_json(indent=2) + "\n", encoding="utf-8")
     rollout_path.write_text(rollout.model_dump_json(indent=2) + "\n", encoding="utf-8")
     audit_path.write_text(audit_report.model_dump_json(indent=2) + "\n", encoding="utf-8")
     repair_path.write_text(repair_plan.model_dump_json(indent=2) + "\n", encoding="utf-8")
@@ -145,6 +161,23 @@ def run_wsp_demo_pipeline(
         report_path=world_model_baseline_report_path,
         model_path=world_model_baseline_model_path,
     )
+    artifacts = {
+        "compiled_tokens": str(compiled_path),
+        "predicted_trace": str(rollout_path),
+        "executability_report": str(audit_path),
+        "correction_branches": str(repair_path),
+        "mujoco_export_status": str(mujoco_export_status_path),
+        "genesis_export_status": str(genesis_export_status_path),
+        "corrected_mjcf": str(corrected_mjcf_path),
+        "corrected_genesis_scene": str(corrected_genesis_path),
+        "world_model_samples": str(world_model_samples_path),
+        "world_model_dataset_manifest": str(world_model_manifest_path),
+        "world_model_dataset_readiness": str(world_model_readiness_path),
+        "world_model_baseline_report": str(world_model_baseline_report_path),
+        "world_model_baseline_model": str(world_model_baseline_model_path),
+    }
+    if observed_trace is not None:
+        artifacts["observed_trace"] = str(observed_trace_path)
 
     summary = {
         "ok": (
@@ -164,21 +197,8 @@ def run_wsp_demo_pipeline(
             "world-model training samples -> trainability smoke baseline."
         ),
         "scene_path": str(scene_path),
-        "artifacts": {
-            "compiled_tokens": str(compiled_path),
-            "predicted_trace": str(rollout_path),
-            "executability_report": str(audit_path),
-            "correction_branches": str(repair_path),
-            "mujoco_export_status": str(mujoco_export_status_path),
-            "genesis_export_status": str(genesis_export_status_path),
-            "corrected_mjcf": str(corrected_mjcf_path),
-            "corrected_genesis_scene": str(corrected_genesis_path),
-            "world_model_samples": str(world_model_samples_path),
-            "world_model_dataset_manifest": str(world_model_manifest_path),
-            "world_model_dataset_readiness": str(world_model_readiness_path),
-            "world_model_baseline_report": str(world_model_baseline_report_path),
-            "world_model_baseline_model": str(world_model_baseline_model_path),
-        },
+        "observed_log_path": str(observed_log_path) if observed_log_path is not None else None,
+        "artifacts": artifacts,
         "compile": {
             "entity_count": len(compiled.frame.entities),
             "text_token_count": len(compiled.tokens.text_tokens),
@@ -238,6 +258,8 @@ def run_wsp_demo_pipeline(
             "executable_count": world_model_manifest.executable_count,
             "rejected_count": world_model_manifest.rejected_count,
             "source_trace_ids": world_model_manifest.source_trace_ids,
+            "observed_trace_id": observed_trace.trace_id if observed_trace is not None else None,
+            "observed_sample_count": len(observed_world_model_samples),
             "schema_version": world_model_manifest.schema_version,
             "sample_schema_version": world_model_manifest.sample_schema_version,
             "feature_schema": world_model_manifest.feature_schema,

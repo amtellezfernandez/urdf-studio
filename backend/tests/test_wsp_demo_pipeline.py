@@ -25,6 +25,9 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert summary["dataset"]["sample_count"] >= 3
     assert summary["dataset"]["executable_count"] >= 1
     assert summary["dataset"]["rejected_count"] >= 1
+    assert summary["dataset"]["observed_trace_id"] == "observed-pallet-push-001"
+    assert summary["dataset"]["observed_sample_count"] == 1
+    assert "observed-pallet-push-001" in summary["dataset"]["source_trace_ids"]
     assert summary["dataset"]["schema_version"] == "wsp-world-model-dataset-v1"
     assert summary["dataset"]["sample_schema_version"] == "wsp-world-model-sample-v1"
     assert summary["dataset"]["readiness"]["ready"] is True
@@ -59,6 +62,7 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert {row["task"] for row in sample_rows} == {"action_conditioned_next_state"}
     assert any(row["executable"] is False for row in sample_rows)
     assert any(row["executable"] is True for row in sample_rows)
+    assert any(row["metadata"]["split"] == "observed_robot_reality_log" for row in sample_rows)
     assert all(row["state_tokens"]["text_tokens"] for row in sample_rows)
     assert all(row["action"]["action_id"] for row in sample_rows)
     assert all(row["next_state_tokens"]["continuous_features"] for row in sample_rows)

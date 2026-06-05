@@ -40,6 +40,7 @@ Expected artifacts:
 
 ```text
 /tmp/wsp-demo/compiled_tokens.json
+/tmp/wsp-demo/observed_trace.json
 /tmp/wsp-demo/predicted_trace.json
 /tmp/wsp-demo/executability_report.json
 /tmp/wsp-demo/correction_branches.json
@@ -61,6 +62,13 @@ Observed robot reality logs can be compiled separately:
 npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
 ```
 
+The default demo ingests the fixture log at
+`backend/fixtures/wsp/observed-pallet-push.robot-log.json`. To skip observed logs:
+
+```bash
+npm run wsp:demo -- --observed-log "" --out-dir /tmp/wsp-demo-no-observed-log
+```
+
 The demo should report:
 
 ```text
@@ -73,6 +81,7 @@ verification: position/size/quaternion/collision equivalence
 dataset: executable and rejected transition samples for model training
 readiness: fixed feature schema, vocab maps, and label distribution
 baseline: action-conditioned next-state training smoke test
+observed: robot-state/action log transitions included in the same JSONL package
 ```
 
 ## Acceptance Criteria
@@ -94,6 +103,7 @@ collision:false survives into simulator verification
 world-model sample JSONL contains state/action/next-state tokens
 world-model sample JSONL contains both rejected and executable labels
 observed robot-state/action log -> WSP trace -> world-model samples
+one-command demo includes observed robot-log samples
 dataset readiness check enforces stable feature dimensions and vocab metadata
 trainability smoke test consumes JSONL and reports held-out next-state error
 ```

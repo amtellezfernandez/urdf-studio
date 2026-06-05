@@ -29,6 +29,7 @@ npm run wsp:demo -- --out-dir /tmp/wsp-demo
 That command writes:
 
 - `/tmp/wsp-demo/compiled_tokens.json`
+- `/tmp/wsp-demo/observed_trace.json`
 - `/tmp/wsp-demo/predicted_trace.json`
 - `/tmp/wsp-demo/executability_report.json`
 - `/tmp/wsp-demo/correction_branches.json`
@@ -53,6 +54,13 @@ Compile an observed robot-state/action log into a WSP trace:
 
 ```bash
 npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
+```
+
+The default demo also ingests `backend/fixtures/wsp/observed-pallet-push.robot-log.json`.
+Use an empty observed-log value to run with only simulator-generated rollouts:
+
+```bash
+npm run wsp:demo -- --observed-log "" --out-dir /tmp/wsp-demo-no-observed-log
 ```
 
 Run a deterministic rollout:
@@ -143,6 +151,8 @@ executability label, audit score, and optional simulator export provenance.
 The dataset manifest records the stable entity feature schema, entity/action vocab maps,
 constraint vocab, and sample schema version. The readiness check fails on feature-dimension
 drift or duplicate sample ids.
+The one-command demo includes both generated rollout transitions and observed robot-log
+transitions in the same JSONL package.
 
 The baseline trainer is intentionally small and dependency-free. It fits an
 action-conditioned mean-delta transition model over the fixed WSP feature schema,
@@ -173,6 +183,7 @@ Ready:
 - JSONL world-model transition samples with executable/rejected labels
 - dataset schema/readiness gate for fixed feature dimensions and vocab maps
 - trainability smoke baseline over WSP JSONL state/action/next-state samples
+- one-command demo dataset that mixes repaired simulator transitions and observed robot-log transitions
 
 Not ready:
 

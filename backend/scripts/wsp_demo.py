@@ -6,6 +6,7 @@ from pathlib import Path
 
 from backend.models.physical_state import ActionToken
 from backend.services.wsp_demo_pipeline import (
+    DEFAULT_WSP_DEMO_OBSERVED_LOG_PATH,
     DEFAULT_WSP_DEMO_BRANCH_ID,
     DEFAULT_WSP_DEMO_SCENE_PATH,
     DEFAULT_WSP_DEMO_STEP_COUNT,
@@ -17,6 +18,11 @@ from backend.services.wsp_demo_pipeline import (
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the full WSP-0.1 demo pipeline.")
     parser.add_argument("--scene", default=str(DEFAULT_WSP_DEMO_SCENE_PATH), help="World package/layout input path.")
+    parser.add_argument(
+        "--observed-log",
+        default=str(DEFAULT_WSP_DEMO_OBSERVED_LOG_PATH),
+        help="Observed robot-state/action log to compile into the same world-model dataset. Use an empty value to skip.",
+    )
     parser.add_argument("--out-dir", default="/tmp/wsp-demo", help="Directory for generated artifacts.")
     parser.add_argument("--action-json", default="", help="Optional ActionToken JSON object.")
     parser.add_argument("--branch", default=DEFAULT_WSP_DEMO_BRANCH_ID, help="Repair branch id to export.")
@@ -30,6 +36,7 @@ def main() -> int:
     action = ActionToken.model_validate_json(args.action_json) if args.action_json else None
     summary = run_wsp_demo_pipeline(
         scene_path=Path(args.scene),
+        observed_log_path=Path(args.observed_log) if args.observed_log else None,
         output_dir=Path(args.out_dir),
         action=action,
         branch_id=args.branch,
