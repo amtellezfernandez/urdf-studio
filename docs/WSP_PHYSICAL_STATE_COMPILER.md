@@ -69,6 +69,11 @@ npm run wsp:export -- /tmp/wsp-rollout.json \
   --out /tmp/wsp-corrected.xml
 ```
 
+MuJoCo export converts physical frames declared as `studio-y-up` into simulator `z-up`
+coordinates with the same `studio-y-up-to-z-up` mapping used by the static world-layout
+transfer gate. The export also preserves primitive color metadata and explicit
+`collision: false` objects as non-colliding MJCF geoms.
+
 The audit currently checks:
 
 - entity quaternion validity

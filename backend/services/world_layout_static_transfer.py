@@ -46,6 +46,7 @@ class WorldLayoutObject:
     size_xyz: tuple[float, float, float]
     color: str
     is_hidden: bool = False
+    collision: bool = True
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,7 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
         size_xyz=size,
         color=raw_color.strip() if isinstance(raw_color, str) and raw_color.strip() else "#3b82f6",
         is_hidden=value.get("is_hidden") is True,
+        collision=value.get("collision", True) is not False,
     )
 
 
@@ -287,7 +289,7 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=sim_size,
                     rgba=rgba,
-                    collision=True,
+                    collision=obj.collision,
                 )
             )
             continue
@@ -306,7 +308,7 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=(diameter, diameter, diameter),
                     rgba=rgba,
-                    collision=True,
+                    collision=obj.collision,
                 )
             )
             continue
@@ -325,7 +327,7 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=(diameter, diameter, obj.size_xyz[2]),
                     rgba=rgba,
-                    collision=True,
+                    collision=obj.collision,
                 )
             )
             continue

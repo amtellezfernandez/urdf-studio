@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from xml.etree import ElementTree as ET
+
+import pytest
+
 from backend.models.physical_state import ActionToken, PhysicalEntity, PhysicalStateFrame
 from backend.services.correction_planner import build_repair_plan, rollout_correction_branch
 from backend.services.executability_audit import audit_physical_rollout_trace, audit_physical_state_frame
@@ -141,3 +145,50 @@ def test_contact_stability_failure_generates_repair_plan_and_exportable_branch(t
     assert repaired_export.branch_id == "stop_and_replan"
     assert "<mujoco" in repaired_mjcf
     assert (tmp_path / "repaired.xml").exists()
+
+
+def test_mujoco_export_converts_studio_y_up_frame_to_simulator_z_up() -> None:
+    frame = PhysicalStateFrame(
+        frame_id="frame-map-smoke",
+        t_ms=0,
+        frame_convention="studio-y-up",
+        entities=[
+            PhysicalEntity(
+                entity_id="rotated-box",
+                entity_type="object",
+                geometry_type="box",
+                position_xyz=[0.25, 0.15, -0.2],
+                size_xyz=[0.4, 0.2, 0.3],
+                metadata={"color": "#ef4444"},
+            ),
+            PhysicalEntity(
+                entity_id="hidden-box",
+                entity_type="object",
+                geometry_type="box",
+                position_xyz=[1.0, 1.0, 1.0],
+                size_xyz=[0.2, 0.2, 0.2],
+                metadata={"is_hidden": True},
+            ),
+        ],
+    )
+
+    mjcf, export_status = export_rollout_trace_to_mujoco_mjcf(
+        rollout_action(
+            frame,
+            ActionToken(action_id="wait", action_type="wait", params={"duration_ms": 0}),
+            step_count=1,
+            step_ms=1,
+        )
+    )
+
+    root = ET.fromstring(mjcf)
+    geom = root.find(".//geom[@name='rotated-box']")
+    assert geom is not None
+    assert [float(value) for value in geom.attrib["pos"].split()] == pytest.approx([0.25, 0.2, 0.15])
+    assert [float(value) for value in geom.attrib["size"].split()] == pytest.approx([0.2, 0.15, 0.1])
+    assert [float(value) for value in geom.attrib["rgba"].split()] == pytest.approx([239 / 255, 68 / 255, 68 / 255, 1.0])
+    assert root.find(".//geom[@name='hidden-box']") is None
+    assert export_status.success is True
+    assert export_status.metrics["source_frame_convention"] == "studio-y-up"
+    assert export_status.metrics["mujoco_frame_map"] == "studio-y-up-to-z-up"
+    assert export_status.metrics["skipped_hidden_count"] == 1

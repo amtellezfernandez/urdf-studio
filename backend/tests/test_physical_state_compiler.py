@@ -30,6 +30,7 @@ def _static_layout_payload() -> dict:
                     "rotation_rpy_rad": [0.0, 0.0, 0.0],
                     "size_xyz": [0.3, 0.3, 0.2],
                     "color": "#ef4444",
+                    "collision": False,
                 },
             ],
             "scenario_time_ms": 0,
@@ -50,6 +51,7 @@ def test_compile_static_layout_to_physical_state_tokens() -> None:
     assert compiled.tokens.entity_ids == ["robot-proxy", "pallet-7"]
     assert compiled.tokens.metadata["entity_count"] == 2
     assert compiled.tokens.constraint_mask["collision"] is False
+    assert compiled.frame.entities[1].metadata["collision"] is False
     assert [entity.entity_id for entity in decode_physical_token_sequence(compiled.tokens).entities] == [
         "robot-proxy",
         "pallet-7",

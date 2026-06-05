@@ -173,7 +173,7 @@ def compile_static_world_layout(layout: StaticWorldLayout) -> PhysicalCompilerOu
                 "source_type": obj.primitive_type,
                 "color": obj.color,
                 "is_hidden": obj.is_hidden,
-                "collision": True,
+                "collision": obj.collision,
             },
         )
         for index, obj in enumerate(layout.objects)

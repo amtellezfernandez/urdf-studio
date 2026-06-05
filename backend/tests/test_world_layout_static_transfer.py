@@ -153,6 +153,7 @@ def test_varied_static_layout_primitives_and_rotations_load_in_mujoco() -> None:
                     "rotation_rpy_rad": [0.25, -0.35, 0.45],
                     "size_xyz": [0.4, 0.2, 0.3],
                     "color": "#f97316",
+                    "collision": False,
                 },
                 {
                     "id": "rotated-cylinder",
@@ -201,3 +202,5 @@ def test_varied_static_layout_primitives_and_rotations_load_in_mujoco() -> None:
     assert report["backends"]["mujoco"]["max_position_error_m"] <= 1e-6
     assert report["backends"]["mujoco"]["max_size_error_m"] <= 1e-6
     assert report["backends"]["mujoco"]["max_quat_error"] <= 1e-6
+    assert report["primitives"][0]["collision"] is False
+    assert report["backends"]["mujoco"]["objects"][0]["loaded_collision"] is False
