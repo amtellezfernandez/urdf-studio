@@ -47,6 +47,7 @@
     "wsp:loop-gate": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_loop_gate \"$@\"; else python3 -m backend.scripts.wsp_loop_gate \"$@\"; fi' --",
     "wsp:generate-corpus": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_generate_corpus \"$@\"; else python3 -m backend.scripts.wsp_generate_corpus \"$@\"; fi' --",
     "wsp:replay-label": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_replay_label \"$@\"; else python3 -m backend.scripts.wsp_replay_label \"$@\"; fi' --",
+    "wsp:benchmark-audit": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_benchmark_audit \"$@\"; else python3 -m backend.scripts.wsp_benchmark_audit \"$@\"; fi' --",
     "openarm:doctor": "node tools/scripts/openArmHardware.js --doctor",
     "openarm:install": "node tools/scripts/openArmHardware.js --install",
     "openarm:print-command": "node tools/scripts/openArmHardware.js --print-command",
