@@ -3,6 +3,8 @@ from __future__ import annotations
 from backend.models.physical_state import ActionToken, PhysicalStateFrame, PhysicalTokenSequence
 
 
+TOKEN_SCHEMA_VERSION = "wsp-physical-token-sequence-v1"
+
 ENTITY_TYPE_IDS = {
     "unknown": 0,
     "robot": 1,
@@ -49,6 +51,27 @@ CONSTRAINT_TYPES = (
     "scale",
     "frame",
     "custom",
+)
+
+ENTITY_FEATURE_SCHEMA = (
+    "position_x_m",
+    "position_y_m",
+    "position_z_m",
+    "quat_w",
+    "quat_x",
+    "quat_y",
+    "quat_z",
+    "size_x_m",
+    "size_y_m",
+    "size_z_m",
+    "velocity_x_mps",
+    "velocity_y_mps",
+    "velocity_z_mps",
+    "mass_kg",
+    "friction",
+    "battery_fraction",
+    "movable",
+    "confidence",
 )
 
 
@@ -125,10 +148,16 @@ def build_physical_token_sequence(
         relation_edges=relation_edges,
         constraint_mask=constraint_mask,
         metadata={
+            "schema_version": TOKEN_SCHEMA_VERSION,
             "entity_count": len(frame.entities),
             "relation_count": len(frame.relations),
             "constraint_count": len(frame.constraints),
             "frame_convention": frame.frame_convention,
+            "entity_feature_schema": list(ENTITY_FEATURE_SCHEMA),
+            "entity_feature_dim": len(ENTITY_FEATURE_SCHEMA),
+            "entity_type_vocab": ENTITY_TYPE_IDS,
+            "action_type_vocab": ACTION_TYPE_IDS,
+            "constraint_types": list(CONSTRAINT_TYPES),
             "frame_snapshot": frame.model_dump(mode="json"),
             "action_snapshot": action.model_dump(mode="json") if action is not None else None,
         },

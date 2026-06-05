@@ -287,5 +287,22 @@ class WorldModelDatasetManifest(BaseModel):
     executable_count: int = Field(ge=0)
     rejected_count: int = Field(ge=0)
     source_trace_ids: list[str] = Field(default_factory=list)
+    sample_schema_version: str | None = None
+    feature_schema: list[str] = Field(default_factory=list)
+    entity_type_vocab: dict[str, int] = Field(default_factory=dict)
+    action_type_vocab: dict[str, int] = Field(default_factory=dict)
+    constraint_types: list[str] = Field(default_factory=list)
     output_path: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldModelDatasetReadinessReport(BaseModel):
+    ready: bool
+    dataset_id: str | None = None
+    sample_count: int = Field(ge=0)
+    executable_count: int = Field(ge=0)
+    rejected_count: int = Field(ge=0)
+    feature_dim: int = Field(ge=0)
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)

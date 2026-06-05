@@ -41,6 +41,7 @@
     "wsp:export": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_export \"$@\"; else python3 -m backend.scripts.wsp_export \"$@\"; fi' --",
     "wsp:ingest-log": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_ingest_log \"$@\"; else python3 -m backend.scripts.wsp_ingest_log \"$@\"; fi' --",
     "wsp:dataset": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_dataset \"$@\"; else python3 -m backend.scripts.wsp_dataset \"$@\"; fi' --",
+    "wsp:dataset:check": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_dataset_check \"$@\"; else python3 -m backend.scripts.wsp_dataset_check \"$@\"; fi' --",
     "wsp:demo": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_demo \"$@\"; else python3 -m backend.scripts.wsp_demo \"$@\"; fi' --",
     "openarm:doctor": "node tools/scripts/openArmHardware.js --doctor",
     "openarm:install": "node tools/scripts/openArmHardware.js --install",

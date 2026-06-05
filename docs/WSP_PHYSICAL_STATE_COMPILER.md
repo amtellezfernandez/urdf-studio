@@ -34,6 +34,7 @@ That command writes:
 - `/tmp/wsp-demo/export_status.genesis.json`
 - `/tmp/wsp-demo/world_model_samples.jsonl`
 - `/tmp/wsp-demo/world_model_dataset_manifest.json`
+- `/tmp/wsp-demo/world_model_dataset_readiness.json`
 - `/tmp/wsp-demo/summary.json`
 
 Compile a static layout or world package:
@@ -100,6 +101,14 @@ npm run wsp:dataset -- /tmp/wsp-rollout.json \
   --manifest-out /tmp/wsp-world-model-dataset.json
 ```
 
+Check the JSONL package is model-ready:
+
+```bash
+npm run wsp:dataset:check -- /tmp/wsp-world-model-samples.jsonl \
+  --require-balanced-labels \
+  --out /tmp/wsp-world-model-readiness.json
+```
+
 MuJoCo export converts physical frames declared as `studio-y-up` into simulator `z-up`
 coordinates with the same `studio-y-up-to-z-up` mapping used by the static world-layout
 transfer gate. The export also preserves primitive color metadata and explicit
@@ -115,6 +124,9 @@ which is 0.001mm.
 World-model sample export writes one JSONL row per transition. Each row contains the
 state tokens, action token, next-state tokens, tensor-ready continuous features,
 executability label, audit score, and optional simulator export provenance.
+The dataset manifest records the stable entity feature schema, entity/action vocab maps,
+constraint vocab, and sample schema version. The readiness check fails on feature-dimension
+drift or duplicate sample ids.
 
 The audit currently checks:
 
@@ -137,6 +149,7 @@ Ready:
 - executable pass/fail reports plus correction branches
 - MuJoCo MJCF and Genesis scene export for executable traces and selected repair branches
 - JSONL world-model transition samples with executable/rejected labels
+- dataset schema/readiness gate for fixed feature dimensions and vocab maps
 
 Not ready:
 

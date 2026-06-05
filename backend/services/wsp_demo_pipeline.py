@@ -15,6 +15,7 @@ from backend.services.simulator_export import (
 )
 from backend.services.world_model_dataset import (
     build_world_model_training_samples,
+    validate_world_model_dataset_samples,
     write_world_model_dataset_jsonl,
 )
 
@@ -100,6 +101,7 @@ def run_wsp_demo_pipeline(
     genesis_export_status_path = output_dir / "export_status.genesis.json"
     world_model_samples_path = output_dir / "world_model_samples.jsonl"
     world_model_manifest_path = output_dir / "world_model_dataset_manifest.json"
+    world_model_readiness_path = output_dir / "world_model_dataset_readiness.json"
     summary_path = output_dir / "summary.json"
 
     compiled_path.write_text(compiled.model_dump_json(indent=2) + "\n", encoding="utf-8")
@@ -118,6 +120,13 @@ def run_wsp_demo_pipeline(
             "source_scene_path": str(scene_path),
         },
     )
+    world_model_readiness = validate_world_model_dataset_samples(
+        world_model_samples,
+        dataset_id=world_model_manifest.dataset_id,
+        require_executable_and_rejected=True,
+        require_simulator_exports=False,
+    )
+    world_model_readiness_path.write_text(world_model_readiness.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
     summary = {
         "ok": (
@@ -128,6 +137,7 @@ def run_wsp_demo_pipeline(
             and world_model_manifest.sample_count > 0
             and world_model_manifest.executable_count > 0
             and world_model_manifest.rejected_count > 0
+            and world_model_readiness.ready
         ),
         "claim": (
             "WSP-0.1 demonstrates scene -> physical-state tokens -> action rollout -> "
@@ -146,6 +156,7 @@ def run_wsp_demo_pipeline(
             "corrected_genesis_scene": str(corrected_genesis_path),
             "world_model_samples": str(world_model_samples_path),
             "world_model_dataset_manifest": str(world_model_manifest_path),
+            "world_model_dataset_readiness": str(world_model_readiness_path),
         },
         "compile": {
             "entity_count": len(compiled.frame.entities),
@@ -207,6 +218,9 @@ def run_wsp_demo_pipeline(
             "rejected_count": world_model_manifest.rejected_count,
             "source_trace_ids": world_model_manifest.source_trace_ids,
             "schema_version": world_model_manifest.schema_version,
+            "sample_schema_version": world_model_manifest.sample_schema_version,
+            "feature_schema": world_model_manifest.feature_schema,
+            "readiness": world_model_readiness.model_dump(mode="json"),
         },
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

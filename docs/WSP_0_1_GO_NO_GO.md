@@ -48,6 +48,7 @@ Expected artifacts:
 /tmp/wsp-demo/export_status.genesis.json
 /tmp/wsp-demo/world_model_samples.jsonl
 /tmp/wsp-demo/world_model_dataset_manifest.json
+/tmp/wsp-demo/world_model_dataset_readiness.json
 /tmp/wsp-demo/summary.json
 ```
 
@@ -67,6 +68,7 @@ repair: correction branches
 export: MuJoCo and Genesis success
 verification: position/size/quaternion/collision equivalence
 dataset: executable and rejected transition samples for model training
+readiness: fixed feature schema, vocab maps, and label distribution
 ```
 
 ## Acceptance Criteria
@@ -88,6 +90,7 @@ collision:false survives into simulator verification
 world-model sample JSONL contains state/action/next-state tokens
 world-model sample JSONL contains both rejected and executable labels
 observed robot-state/action log -> WSP trace -> world-model samples
+dataset readiness check enforces stable feature dimensions and vocab metadata
 ```
 
 ## Commands To Prove It
@@ -111,6 +114,11 @@ npm run wsp:dataset -- \
   --branch stop_and_replan \
   --out /tmp/wsp-demo/world-model-samples.jsonl \
   --manifest-out /tmp/wsp-demo/world-model-dataset.json
+
+npm run wsp:dataset:check -- \
+  /tmp/wsp-demo/world-model-samples.jsonl \
+  --require-balanced-labels \
+  --out /tmp/wsp-demo/world-model-readiness.json
 
 npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
 ```
@@ -136,6 +144,7 @@ npm run scalar-constants:check
 - Genesis scene export of the same corrected final state.
 - Simulator equivalence verification for position, size, quaternion, type, missing objects, and collision flags.
 - JSONL state/action/next-state samples with executable/rejected labels for world-model training.
+- Dataset readiness gate with stable feature schema, vocab maps, and feature-dimension checks.
 
 ## What Is Not Ready
 

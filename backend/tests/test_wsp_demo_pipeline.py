@@ -26,6 +26,9 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert summary["dataset"]["executable_count"] >= 1
     assert summary["dataset"]["rejected_count"] >= 1
     assert summary["dataset"]["schema_version"] == "wsp-world-model-dataset-v1"
+    assert summary["dataset"]["sample_schema_version"] == "wsp-world-model-sample-v1"
+    assert summary["dataset"]["readiness"]["ready"] is True
+    assert summary["dataset"]["readiness"]["feature_dim"] == len(summary["dataset"]["feature_schema"])
     assert summary["export"]["success"] is True
     assert summary["export"]["mujoco"]["success"] is True
     assert summary["export"]["mujoco"]["smoke_passed"] is True
@@ -55,3 +58,11 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert all(row["state_tokens"]["text_tokens"] for row in sample_rows)
     assert all(row["action"]["action_id"] for row in sample_rows)
     assert all(row["next_state_tokens"]["continuous_features"] for row in sample_rows)
+    assert all(row["state_tokens"]["metadata"]["schema_version"] == "wsp-physical-token-sequence-v1" for row in sample_rows)
+    assert all(row["state_tokens"]["metadata"]["entity_feature_dim"] == 18 for row in sample_rows)
+
+    readiness = json.loads(Path(summary["artifacts"]["world_model_dataset_readiness"]).read_text(encoding="utf-8"))
+    assert readiness["ready"] is True
+    assert readiness["errors"] == []
+    assert readiness["executable_count"] == summary["dataset"]["executable_count"]
+    assert readiness["rejected_count"] == summary["dataset"]["rejected_count"]
