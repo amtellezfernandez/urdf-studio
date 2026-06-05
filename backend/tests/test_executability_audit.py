@@ -195,6 +195,9 @@ def test_mujoco_export_converts_studio_y_up_frame_to_simulator_z_up() -> None:
     assert export_status.metrics["source_frame_convention"] == "studio-y-up"
     assert export_status.metrics["mujoco_frame_map"] == "studio-y-up-to-z-up"
     assert export_status.metrics["skipped_hidden_count"] == 1
+    assert export_status.metrics["mujoco_max_position_error_m"] <= 1e-6
+    assert export_status.metrics["mujoco_max_size_error_m"] <= 1e-6
+    assert export_status.metrics["mujoco_collision_mismatch_count"] == 0
 
 
 def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_path) -> None:
@@ -249,4 +252,6 @@ def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_pat
     assert (tmp_path / "corrected.genesis-scene.json").exists()
     if export_status.smoke_passed:
         assert export_status.metrics["genesis_entity_count"] == 1
-        assert export_status.metrics["max_position_error_m"] <= 1e-6
+        assert export_status.metrics["genesis_max_position_error_m"] <= 1e-6
+        assert export_status.metrics["genesis_max_size_error_m"] <= 1e-6
+        assert export_status.metrics["genesis_collision_mismatch_count"] == 0

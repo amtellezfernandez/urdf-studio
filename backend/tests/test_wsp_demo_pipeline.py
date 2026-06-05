@@ -24,9 +24,15 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert summary["export"]["success"] is True
     assert summary["export"]["mujoco"]["success"] is True
     assert summary["export"]["mujoco"]["smoke_passed"] is True
+    assert summary["export"]["mujoco"]["metrics"]["mujoco_max_position_error_m"] <= 1e-6
+    assert summary["export"]["mujoco"]["metrics"]["mujoco_max_size_error_m"] <= 1e-6
+    assert summary["export"]["mujoco"]["metrics"]["mujoco_collision_mismatch_count"] == 0
     assert summary["export"]["genesis"]["success"] is True
     if summary["export"]["genesis"]["smoke_passed"]:
         assert summary["export"]["genesis"]["metrics"]["genesis_entity_count"] >= 4
+        assert summary["export"]["genesis"]["metrics"]["genesis_max_position_error_m"] <= 1e-6
+        assert summary["export"]["genesis"]["metrics"]["genesis_max_size_error_m"] <= 1e-6
+        assert summary["export"]["genesis"]["metrics"]["genesis_collision_mismatch_count"] == 0
     else:
         assert summary["export"]["genesis"]["error"] is None
 

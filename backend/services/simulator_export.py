@@ -12,12 +12,17 @@ from scipy.spatial.transform import Rotation
 
 from backend.models.physical_state import PhysicalEntity, PhysicalRolloutTrace, SimulatorExportState
 from backend.services.executability_audit import audit_physical_rollout_trace
-from backend.services.world_layout_static_transfer import STUDIO_Y_UP_TO_Z_UP, WorldLayoutFrameMap
+from backend.services.world_layout_static_transfer import (
+    STUDIO_Y_UP_TO_Z_UP,
+    SimPrimitive,
+    WorldLayoutFrameMap,
+    check_genesis_transfer,
+    check_mujoco_transfer,
+)
 
 
 INVALID_MJCF_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]")
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
-_GENESIS_INITIALIZED = False
 
 
 @dataclass(frozen=True)
@@ -55,7 +60,7 @@ def _frame_matrix(frame_map: WorldLayoutFrameMap) -> np.ndarray:
         return STUDIO_Y_UP_TO_Z_UP
     if frame_map == "identity":
         return np.eye(3)
-    raise ValueError(f"Unsupported MuJoCo export frame map: {frame_map}")
+    raise ValueError(f"Unsupported simulator export frame map: {frame_map}")
 
 
 def _transform_position(position_xyz: Sequence[float], frame_map: WorldLayoutFrameMap) -> list[float]:
@@ -165,6 +170,25 @@ def _mujoco_geom_size(primitive: ExportPrimitive) -> list[float]:
     raise ValueError(f"Unsupported MuJoCo export primitive type: {primitive.sim_type}")
 
 
+def _to_static_transfer_primitive(primitive: ExportPrimitive) -> SimPrimitive:
+    return SimPrimitive(
+        source_id=primitive.entity_id,
+        source_name=primitive.entity_id,
+        sim_name=primitive.sim_name,
+        source_type=primitive.sim_type,
+        sim_type=primitive.sim_type,
+        position_xyz=tuple(primitive.position_xyz),
+        quat_wxyz=tuple(primitive.quat_wxyz),
+        size_xyz=tuple(primitive.size_xyz),
+        rgba=primitive.rgba,
+        collision=primitive.collision,
+    )
+
+
+def _to_static_transfer_primitives(primitives: Sequence[ExportPrimitive]) -> tuple[SimPrimitive, ...]:
+    return tuple(_to_static_transfer_primitive(primitive) for primitive in primitives)
+
+
 def _collect_export_primitives(
     trace: PhysicalRolloutTrace,
     *,
@@ -259,15 +283,25 @@ def export_rollout_trace_to_mujoco_mjcf(
     mjcf_text = ET.tostring(root, encoding="unicode")
     smoke_passed = False
     smoke_error: str | None = None
+    smoke_metrics: dict[str, Any] = {}
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(mjcf_text + "\n", encoding="utf-8")
 
     try:
-        import mujoco
-
-        mujoco.MjModel.from_xml_string(mjcf_text)
-        smoke_passed = True
+        smoke_report = check_mujoco_transfer(_to_static_transfer_primitives(primitives), mjcf_text=mjcf_text)
+        smoke_passed = smoke_report["ok"] is True
+        smoke_metrics = {
+            "mujoco_loaded_count": smoke_report["loaded_count"],
+            "mujoco_max_position_error_m": smoke_report["max_position_error_m"],
+            "mujoco_max_size_error_m": smoke_report["max_size_error_m"],
+            "mujoco_max_quat_error": smoke_report["max_quat_error"],
+            "mujoco_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
+            "mujoco_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
+            "mujoco_missing_count": len(smoke_report["missing_source_ids"]),
+        }
+        if not smoke_passed:
+            smoke_error = "MuJoCo exported primitive verification failed."
     except ImportError:
         warnings.append("MuJoCo is not installed; MJCF XML was generated but not smoke-loaded.")
     except Exception as exc:
@@ -290,6 +324,7 @@ def export_rollout_trace_to_mujoco_mjcf(
             "audit_score": report.score,
             "source_frame_convention": final_frame.frame_convention,
             "mujoco_frame_map": frame_map,
+            **smoke_metrics,
         },
     )
     return mjcf_text, status
@@ -313,76 +348,6 @@ def _primitive_to_genesis_record(primitive: ExportPrimitive) -> dict[str, Any]:
         record["radius_m"] = primitive.size_xyz[0] / 2.0
         record["height_m"] = primitive.size_xyz[2]
     return record
-
-
-def _ensure_genesis_initialized(gs: Any) -> None:
-    global _GENESIS_INITIALIZED
-    if _GENESIS_INITIALIZED:
-        return
-    try:
-        gs.init(backend=gs.cpu, logging_level="warning")
-    except Exception as exc:
-        if "already" not in str(exc).lower() and "initialized" not in str(exc).lower():
-            raise
-    _GENESIS_INITIALIZED = True
-
-
-def _build_genesis_scene(primitives: Sequence[ExportPrimitive]) -> dict[str, float | int]:
-    import genesis as gs
-
-    _ensure_genesis_initialized(gs)
-    scene = gs.Scene(show_viewer=False)
-    entities: list[tuple[ExportPrimitive, Any]] = []
-    for primitive in primitives:
-        if primitive.sim_type == "box":
-            morph = gs.morphs.Box(
-                size=primitive.size_xyz,
-                pos=primitive.position_xyz,
-                quat=primitive.quat_wxyz,
-                fixed=True,
-                collision=primitive.collision,
-            )
-        elif primitive.sim_type == "sphere":
-            morph = gs.morphs.Sphere(
-                radius=max(primitive.size_xyz) / 2.0,
-                pos=primitive.position_xyz,
-                quat=primitive.quat_wxyz,
-                fixed=True,
-                collision=primitive.collision,
-            )
-        elif primitive.sim_type == "cylinder":
-            morph = gs.morphs.Cylinder(
-                radius=primitive.size_xyz[0] / 2.0,
-                height=primitive.size_xyz[2],
-                pos=primitive.position_xyz,
-                quat=primitive.quat_wxyz,
-                fixed=True,
-                collision=primitive.collision,
-            )
-        else:
-            raise ValueError(f"Unsupported Genesis primitive type: {primitive.sim_type}")
-        surface = gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3])
-        entities.append((primitive, scene.add_entity(morph, surface=surface, name=primitive.sim_name)))
-    scene.build()
-
-    max_position_error = 0.0
-    max_quat_error = 0.0
-    for primitive, entity in entities:
-        loaded_position = np.array(entity.get_pos().tolist(), dtype=float)
-        expected_position = np.array(primitive.position_xyz, dtype=float)
-        max_position_error = max(max_position_error, float(np.linalg.norm(loaded_position - expected_position)))
-        loaded_quat = np.array(entity.get_quat().tolist(), dtype=float)
-        expected_quat = np.array(primitive.quat_wxyz, dtype=float)
-        quat_error = min(
-            float(np.linalg.norm(loaded_quat - expected_quat)),
-            float(np.linalg.norm(loaded_quat + expected_quat)),
-        )
-        max_quat_error = max(max_quat_error, quat_error)
-    return {
-        "genesis_entity_count": len(entities),
-        "max_position_error_m": max_position_error,
-        "max_quat_error": max_quat_error,
-    }
 
 
 def export_rollout_trace_to_genesis_scene(
@@ -417,10 +382,21 @@ def export_rollout_trace_to_genesis_scene(
 
     smoke_passed = False
     smoke_error: str | None = None
-    smoke_metrics: dict[str, float | int] = {}
+    smoke_metrics: dict[str, Any] = {}
     try:
-        smoke_metrics = _build_genesis_scene(primitives)
-        smoke_passed = True
+        smoke_report = check_genesis_transfer(_to_static_transfer_primitives(primitives))
+        smoke_passed = smoke_report["ok"] is True
+        smoke_metrics = {
+            "genesis_entity_count": smoke_report["loaded_count"],
+            "genesis_max_position_error_m": smoke_report["max_position_error_m"],
+            "genesis_max_size_error_m": smoke_report["max_size_error_m"],
+            "genesis_max_quat_error": smoke_report["max_quat_error"],
+            "genesis_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
+            "genesis_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
+            "genesis_missing_count": len(smoke_report["missing_source_ids"]),
+        }
+        if not smoke_passed:
+            smoke_error = "Genesis exported primitive verification failed."
     except ImportError:
         warnings.append("Genesis is not installed; Genesis scene JSON was generated but not smoke-built.")
     except Exception as exc:

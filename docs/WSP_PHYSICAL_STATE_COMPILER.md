@@ -89,6 +89,11 @@ transfer gate. The export also preserves primitive color metadata and explicit
 converted final-frame primitives and performs a headless scene-build smoke check when
 Genesis is installed.
 
+Both simulator exporters reuse the static world-layout transfer verifier. Their status
+artifacts report loaded primitive counts, position/size/quaternion error, missing
+objects, type mismatches, and collision mismatches. The current tolerance is `1e-6m`,
+which is 0.001mm.
+
 The audit currently checks:
 
 - entity quaternion validity
