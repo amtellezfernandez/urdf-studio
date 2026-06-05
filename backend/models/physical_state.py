@@ -258,3 +258,34 @@ class SimulatorExportState(BaseModel):
     error: str | None = None
     warnings: list[str] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldModelTrainingSample(BaseModel):
+    sample_id: str = Field(..., min_length=1)
+    schema_version: Literal["wsp-world-model-sample-v1"] = "wsp-world-model-sample-v1"
+    task: Literal["action_conditioned_next_state"] = "action_conditioned_next_state"
+    trace_id: str = Field(..., min_length=1)
+    step_index: int = Field(..., ge=0)
+    state_frame_id: str = Field(..., min_length=1)
+    next_state_frame_id: str = Field(..., min_length=1)
+    action: ActionToken
+    state_tokens: PhysicalTokenSequence
+    next_state_tokens: PhysicalTokenSequence
+    executable: bool
+    executability_decision: ExecutabilityDecision
+    executability_score: float = Field(ge=0.0, le=1.0)
+    violation_count: int = Field(ge=0)
+    correction_branch_id: str | None = None
+    simulator_exports: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldModelDatasetManifest(BaseModel):
+    dataset_id: str = Field(..., min_length=1)
+    schema_version: Literal["wsp-world-model-dataset-v1"] = "wsp-world-model-dataset-v1"
+    sample_count: int = Field(ge=0)
+    executable_count: int = Field(ge=0)
+    rejected_count: int = Field(ge=0)
+    source_trace_ids: list[str] = Field(default_factory=list)
+    output_path: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

@@ -25,6 +25,7 @@ scene/world package
   -> executability audit
   -> corrective branch generation
   -> MuJoCo + Genesis simulator export verification
+  -> JSONL world-model training samples
 ```
 
 ## One-Command Demo
@@ -44,6 +45,8 @@ Expected artifacts:
 /tmp/wsp-demo/corrected_state.genesis-scene.json
 /tmp/wsp-demo/export_status.mujoco.json
 /tmp/wsp-demo/export_status.genesis.json
+/tmp/wsp-demo/world_model_samples.jsonl
+/tmp/wsp-demo/world_model_dataset_manifest.json
 /tmp/wsp-demo/summary.json
 ```
 
@@ -56,6 +59,7 @@ audit: reject original rollout
 repair: correction branches
 export: MuJoCo and Genesis success
 verification: position/size/quaternion/collision equivalence
+dataset: executable and rejected transition samples for model training
 ```
 
 ## Acceptance Criteria
@@ -74,6 +78,8 @@ corrected branch export is accepted
 MuJoCo export loads and verifies within 1e-6m tolerance
 Genesis export builds headless and verifies within 1e-6m tolerance
 collision:false survives into simulator verification
+world-model sample JSONL contains state/action/next-state tokens
+world-model sample JSONL contains both rejected and executable labels
 ```
 
 ## Commands To Prove It
@@ -90,6 +96,13 @@ npm run wsp:demo -- --out-dir /tmp/wsp-demo
 npm run world:layout:transfer:check -- \
   web/public/world-layouts/hkhack-pallet-dock.world-package.json \
   --write-mjcf /tmp/hkhack-transfer.mjcf.xml
+
+npm run wsp:dataset -- \
+  /tmp/wsp-demo/predicted_trace.json \
+  --repair-plan /tmp/wsp-demo/correction_branches.json \
+  --branch stop_and_replan \
+  --out /tmp/wsp-demo/world-model-samples.jsonl \
+  --manifest-out /tmp/wsp-demo/world-model-dataset.json
 ```
 
 Full branch guard:
@@ -111,10 +124,12 @@ npm run scalar-constants:check
 - MuJoCo MJCF export of corrected executable final state.
 - Genesis scene export of the same corrected final state.
 - Simulator equivalence verification for position, size, quaternion, type, missing objects, and collision flags.
+- JSONL state/action/next-state samples with executable/rejected labels for world-model training.
 
 ## What Is Not Ready
 
 - Learned next-state model.
+- Training job for the next-state model.
 - Real robot log ingestion.
 - Full robot reachability and joint-limit rollout auditing.
 - High-fidelity contact dynamics.
@@ -142,6 +157,9 @@ Show correction branches and select stop_and_replan or another executable branch
 
 2:40 Export:
 Show corrected branch exported to MuJoCo and Genesis with simulator equivalence metrics.
+
+2:55 Dataset:
+Show JSONL samples with state tokens, action tokens, next-state targets, and labels.
 ```
 
 Closing line:

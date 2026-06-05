@@ -32,6 +32,8 @@ That command writes:
 - `/tmp/wsp-demo/corrected_state.genesis-scene.json`
 - `/tmp/wsp-demo/export_status.mujoco.json`
 - `/tmp/wsp-demo/export_status.genesis.json`
+- `/tmp/wsp-demo/world_model_samples.jsonl`
+- `/tmp/wsp-demo/world_model_dataset_manifest.json`
 - `/tmp/wsp-demo/summary.json`
 
 Compile a static layout or world package:
@@ -82,6 +84,16 @@ npm run wsp:export -- /tmp/wsp-rollout.json \
   --out /tmp/wsp-corrected.genesis-scene.json
 ```
 
+Export rollout transitions as trainable world-model samples:
+
+```bash
+npm run wsp:dataset -- /tmp/wsp-rollout.json \
+  --repair-plan /tmp/wsp-repair.json \
+  --branch stop_and_replan \
+  --out /tmp/wsp-world-model-samples.jsonl \
+  --manifest-out /tmp/wsp-world-model-dataset.json
+```
+
 MuJoCo export converts physical frames declared as `studio-y-up` into simulator `z-up`
 coordinates with the same `studio-y-up-to-z-up` mapping used by the static world-layout
 transfer gate. The export also preserves primitive color metadata and explicit
@@ -93,6 +105,10 @@ Both simulator exporters reuse the static world-layout transfer verifier. Their 
 artifacts report loaded primitive counts, position/size/quaternion error, missing
 objects, type mismatches, and collision mismatches. The current tolerance is `1e-6m`,
 which is 0.001mm.
+
+World-model sample export writes one JSONL row per transition. Each row contains the
+state tokens, action token, next-state tokens, tensor-ready continuous features,
+executability label, audit score, and optional simulator export provenance.
 
 The audit currently checks:
 
@@ -113,10 +129,12 @@ Ready:
 - deterministic action rollout for `navigate`, `push`, `translate`, `move_object`, `reserve_dock`, `wait`, `handoff_to_human`, `inspect`, `replan`, and `set_pose`
 - executable pass/fail reports plus correction branches
 - MuJoCo MJCF and Genesis scene export for executable traces and selected repair branches
+- JSONL world-model transition samples with executable/rejected labels
 
 Not ready:
 
 - learned next-state prediction
+- training loop for a learned next-state model
 - robot reachability and full joint-limit rollout auditing
 - high-fidelity contact dynamics or frictional simulation
 - time-series Genesis playback and Isaac/Gazebo export of corrected dynamic traces

@@ -13,6 +13,10 @@ from backend.services.simulator_export import (
     export_rollout_trace_to_genesis_scene,
     export_rollout_trace_to_mujoco_mjcf,
 )
+from backend.services.world_model_dataset import (
+    build_world_model_training_samples,
+    write_world_model_dataset_jsonl,
+)
 
 
 DEFAULT_WSP_DEMO_SCENE_PATH = Path("web/public/world-layouts/hkhack-pallet-dock.world-package.json")
@@ -71,6 +75,22 @@ def run_wsp_demo_pipeline(
         output_path=corrected_genesis_path,
         branch_id=branch.branch_id if branch is not None else None,
     )
+    simulator_exports = {
+        "mujoco": mujoco_export_status.model_dump(mode="json"),
+        "genesis": genesis_export_status.model_dump(mode="json"),
+    }
+    world_model_samples = [
+        *build_world_model_training_samples(
+            rollout,
+            metadata={"split": "original_rejected_rollout"},
+        ),
+        *build_world_model_training_samples(
+            repaired_trace,
+            correction_branch_id=branch.branch_id if branch is not None else None,
+            simulator_exports=simulator_exports,
+            metadata={"split": "corrected_executable_rollout"},
+        ),
+    ]
 
     compiled_path = output_dir / "compiled_tokens.json"
     rollout_path = output_dir / "predicted_trace.json"
@@ -78,6 +98,8 @@ def run_wsp_demo_pipeline(
     repair_path = output_dir / "correction_branches.json"
     mujoco_export_status_path = output_dir / "export_status.mujoco.json"
     genesis_export_status_path = output_dir / "export_status.genesis.json"
+    world_model_samples_path = output_dir / "world_model_samples.jsonl"
+    world_model_manifest_path = output_dir / "world_model_dataset_manifest.json"
     summary_path = output_dir / "summary.json"
 
     compiled_path.write_text(compiled.model_dump_json(indent=2) + "\n", encoding="utf-8")
@@ -86,6 +108,16 @@ def run_wsp_demo_pipeline(
     repair_path.write_text(repair_plan.model_dump_json(indent=2) + "\n", encoding="utf-8")
     mujoco_export_status_path.write_text(mujoco_export_status.model_dump_json(indent=2) + "\n", encoding="utf-8")
     genesis_export_status_path.write_text(genesis_export_status.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    world_model_manifest = write_world_model_dataset_jsonl(
+        world_model_samples,
+        output_path=world_model_samples_path,
+        dataset_id=f"{compiled.frame.frame_id}:wsp-world-model-samples",
+        manifest_path=world_model_manifest_path,
+        metadata={
+            "claim": "compiler_layer_between_robot_reality_and_trainable_world_models",
+            "source_scene_path": str(scene_path),
+        },
+    )
 
     summary = {
         "ok": (
@@ -93,10 +125,14 @@ def run_wsp_demo_pipeline(
             and len(repair_plan.branches) > 0
             and mujoco_export_status.success
             and genesis_export_status.success
+            and world_model_manifest.sample_count > 0
+            and world_model_manifest.executable_count > 0
+            and world_model_manifest.rejected_count > 0
         ),
         "claim": (
             "WSP-0.1 demonstrates scene -> physical-state tokens -> action rollout -> "
-            "executability audit -> repair branches -> MuJoCo and Genesis export."
+            "executability audit -> repair branches -> MuJoCo and Genesis export -> "
+            "world-model training samples."
         ),
         "scene_path": str(scene_path),
         "artifacts": {
@@ -108,6 +144,8 @@ def run_wsp_demo_pipeline(
             "genesis_export_status": str(genesis_export_status_path),
             "corrected_mjcf": str(corrected_mjcf_path),
             "corrected_genesis_scene": str(corrected_genesis_path),
+            "world_model_samples": str(world_model_samples_path),
+            "world_model_dataset_manifest": str(world_model_manifest_path),
         },
         "compile": {
             "entity_count": len(compiled.frame.entities),
@@ -161,6 +199,14 @@ def run_wsp_demo_pipeline(
                 "error": genesis_export_status.error,
                 "metrics": genesis_export_status.metrics,
             },
+        },
+        "dataset": {
+            "dataset_id": world_model_manifest.dataset_id,
+            "sample_count": world_model_manifest.sample_count,
+            "executable_count": world_model_manifest.executable_count,
+            "rejected_count": world_model_manifest.rejected_count,
+            "source_trace_ids": world_model_manifest.source_trace_ids,
+            "schema_version": world_model_manifest.schema_version,
         },
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
