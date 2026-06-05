@@ -44,6 +44,7 @@
     "wsp:dataset:check": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_dataset_check \"$@\"; else python3 -m backend.scripts.wsp_dataset_check \"$@\"; fi' --",
     "wsp:train-baseline": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_train_baseline \"$@\"; else python3 -m backend.scripts.wsp_train_baseline \"$@\"; fi' --",
     "wsp:demo": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_demo \"$@\"; else python3 -m backend.scripts.wsp_demo \"$@\"; fi' --",
+    "wsp:loop-gate": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_loop_gate \"$@\"; else python3 -m backend.scripts.wsp_loop_gate \"$@\"; fi' --",
     "openarm:doctor": "node tools/scripts/openArmHardware.js --doctor",
     "openarm:install": "node tools/scripts/openArmHardware.js --install",
     "openarm:print-command": "node tools/scripts/openArmHardware.js --print-command",

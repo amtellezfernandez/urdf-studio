@@ -36,6 +36,17 @@ observed robot-state/action log
 npm run wsp:demo -- --out-dir /tmp/wsp-demo
 ```
 
+Run the repeated real CLI loop gate:
+
+```bash
+npm run wsp:loop-gate -- --iterations 2 --out-dir /tmp/wsp-loop-gate
+```
+
+The loop gate shells out through the WSP CLIs for compile, observed-log ingest,
+rollout, audit, repair, MuJoCo export, Genesis export, dataset export, readiness
+check, and baseline training. This is the command-level proof that the loop works
+outside service-only tests.
+
 Expected artifacts:
 
 ```text
@@ -106,6 +117,7 @@ observed robot-state/action log -> WSP trace -> world-model samples
 one-command demo includes observed robot-log samples
 dataset readiness check enforces stable feature dimensions and vocab metadata
 trainability smoke test consumes JSONL and reports held-out next-state error
+real CLI loop gate passes repeated end-to-end runs
 ```
 
 ## Commands To Prove It
@@ -142,6 +154,10 @@ npm run wsp:train-baseline -- \
   --out /tmp/wsp-demo/world-model-baseline-report.json \
   --model-out /tmp/wsp-demo/world-model-baseline.json
 
+npm run wsp:loop-gate -- \
+  --iterations 2 \
+  --out-dir /tmp/wsp-loop-gate
+
 npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
 ```
 
@@ -168,6 +184,7 @@ npm run scalar-constants:check
 - JSONL state/action/next-state samples with executable/rejected labels for world-model training.
 - Dataset readiness gate with stable feature schema, vocab maps, and feature-dimension checks.
 - Trainability smoke baseline that fits and evaluates action-conditioned next-state deltas over WSP JSONL.
+- Repeated real CLI loop gate for command-level compile -> trainability proof.
 
 ## What Is Not Ready
 

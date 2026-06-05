@@ -26,7 +26,19 @@ Run the full WSP-0.1 loop in one command:
 npm run wsp:demo -- --out-dir /tmp/wsp-demo
 ```
 
-That command writes:
+Run the real repeated CLI loop gate:
+
+```bash
+npm run wsp:loop-gate -- --iterations 2 --out-dir /tmp/wsp-loop-gate
+```
+
+The loop gate executes the same commands a user would run: compile, ingest observed
+log, rollout, audit, repair, MuJoCo export, Genesis export, dataset export,
+readiness check, and baseline training. It fails if any artifact is missing, the
+unsafe rollout is not rejected, the corrected exports do not verify within `1e-6m`,
+the mixed JSONL is not label-balanced, or the baseline cannot train on the result.
+
+The demo command writes:
 
 - `/tmp/wsp-demo/compiled_tokens.json`
 - `/tmp/wsp-demo/observed_trace.json`
