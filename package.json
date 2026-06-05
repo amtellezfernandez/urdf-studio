@@ -39,6 +39,7 @@
     "wsp:audit": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_audit \"$@\"; else python3 -m backend.scripts.wsp_audit \"$@\"; fi' --",
     "wsp:repair": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_repair \"$@\"; else python3 -m backend.scripts.wsp_repair \"$@\"; fi' --",
     "wsp:export": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_export \"$@\"; else python3 -m backend.scripts.wsp_export \"$@\"; fi' --",
+    "wsp:ingest-log": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_ingest_log \"$@\"; else python3 -m backend.scripts.wsp_ingest_log \"$@\"; fi' --",
     "wsp:dataset": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_dataset \"$@\"; else python3 -m backend.scripts.wsp_dataset \"$@\"; fi' --",
     "wsp:demo": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.wsp_demo \"$@\"; else python3 -m backend.scripts.wsp_demo \"$@\"; fi' --",
     "openarm:doctor": "node tools/scripts/openArmHardware.js --doctor",

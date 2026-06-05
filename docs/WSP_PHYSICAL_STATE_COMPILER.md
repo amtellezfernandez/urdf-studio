@@ -42,6 +42,12 @@ Compile a static layout or world package:
 npm run wsp:compile -- web/public/world-layouts/hkhack-pallet-dock.world-package.json --out /tmp/wsp-compiled.json
 ```
 
+Compile an observed robot-state/action log into a WSP trace:
+
+```bash
+npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
+```
+
 Run a deterministic rollout:
 
 ```bash
@@ -126,6 +132,7 @@ Ready:
 
 - typed physical entities, relations, constraints, actions, frames, rollout traces, and executability reports
 - static layout and world package compilation into physical state tokens
+- observed robot-state/action log ingestion into WSP rollout traces
 - deterministic action rollout for `navigate`, `push`, `translate`, `move_object`, `reserve_dock`, `wait`, `handoff_to_human`, `inspect`, `replan`, and `set_pose`
 - executable pass/fail reports plus correction branches
 - MuJoCo MJCF and Genesis scene export for executable traces and selected repair branches
@@ -135,6 +142,7 @@ Not ready:
 
 - learned next-state prediction
 - training loop for a learned next-state model
+- rich real-log adapters beyond the current JSON/JSONL observed state/action format
 - robot reachability and full joint-limit rollout auditing
 - high-fidelity contact dynamics or frictional simulation
 - time-series Genesis playback and Isaac/Gazebo export of corrected dynamic traces

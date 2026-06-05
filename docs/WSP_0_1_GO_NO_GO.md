@@ -19,6 +19,7 @@ The implemented vertical slice is:
 
 ```text
 scene/world package
+observed robot-state/action log
   -> PhysicalStateFrame
   -> state/action token sequence
   -> deterministic next-state rollout
@@ -48,6 +49,12 @@ Expected artifacts:
 /tmp/wsp-demo/world_model_samples.jsonl
 /tmp/wsp-demo/world_model_dataset_manifest.json
 /tmp/wsp-demo/summary.json
+```
+
+Observed robot reality logs can be compiled separately:
+
+```bash
+npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
 ```
 
 The demo should report:
@@ -80,6 +87,7 @@ Genesis export builds headless and verifies within 1e-6m tolerance
 collision:false survives into simulator verification
 world-model sample JSONL contains state/action/next-state tokens
 world-model sample JSONL contains both rejected and executable labels
+observed robot-state/action log -> WSP trace -> world-model samples
 ```
 
 ## Commands To Prove It
@@ -103,6 +111,8 @@ npm run wsp:dataset -- \
   --branch stop_and_replan \
   --out /tmp/wsp-demo/world-model-samples.jsonl \
   --manifest-out /tmp/wsp-demo/world-model-dataset.json
+
+npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
 ```
 
 Full branch guard:
@@ -118,6 +128,7 @@ npm run scalar-constants:check
 
 - Typed physical state, action, token, rollout, audit, correction, and export models.
 - Static layout and world package compilation into physical-state tokens.
+- Observed robot-state/action log ingestion into WSP traces.
 - Deterministic action rollout for the WSP-0.1 protocol.
 - Executability audit with real rejection cases.
 - Repair branches for invalid traces.
@@ -130,7 +141,7 @@ npm run scalar-constants:check
 
 - Learned next-state model.
 - Training job for the next-state model.
-- Real robot log ingestion.
+- Production adapters for every real robot log format.
 - Full robot reachability and joint-limit rollout auditing.
 - High-fidelity contact dynamics.
 - Time-series simulator playback.
