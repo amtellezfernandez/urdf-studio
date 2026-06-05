@@ -253,6 +253,7 @@ def export_rollout_trace_to_mujoco_mjcf(
     *,
     output_path: Path | None = None,
     branch_id: str | None = None,
+    smoke_load: bool = True,
 ) -> tuple[str, SimulatorExportState]:
     primitives, frame_map, skipped_hidden_count, warnings, failure = _collect_export_primitives(
         trace,
@@ -288,24 +289,27 @@ def export_rollout_trace_to_mujoco_mjcf(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(mjcf_text + "\n", encoding="utf-8")
 
-    try:
-        smoke_report = check_mujoco_transfer(_to_static_transfer_primitives(primitives), mjcf_text=mjcf_text)
-        smoke_passed = smoke_report["ok"] is True
-        smoke_metrics = {
-            "mujoco_loaded_count": smoke_report["loaded_count"],
-            "mujoco_max_position_error_m": smoke_report["max_position_error_m"],
-            "mujoco_max_size_error_m": smoke_report["max_size_error_m"],
-            "mujoco_max_quat_error": smoke_report["max_quat_error"],
-            "mujoco_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
-            "mujoco_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
-            "mujoco_missing_count": len(smoke_report["missing_source_ids"]),
-        }
-        if not smoke_passed:
-            smoke_error = "MuJoCo exported primitive verification failed."
-    except ImportError:
-        warnings.append("MuJoCo is not installed; MJCF XML was generated but not smoke-loaded.")
-    except Exception as exc:
-        smoke_error = str(exc)
+    if smoke_load:
+        try:
+            smoke_report = check_mujoco_transfer(_to_static_transfer_primitives(primitives), mjcf_text=mjcf_text)
+            smoke_passed = smoke_report["ok"] is True
+            smoke_metrics = {
+                "mujoco_loaded_count": smoke_report["loaded_count"],
+                "mujoco_max_position_error_m": smoke_report["max_position_error_m"],
+                "mujoco_max_size_error_m": smoke_report["max_size_error_m"],
+                "mujoco_max_quat_error": smoke_report["max_quat_error"],
+                "mujoco_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
+                "mujoco_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
+                "mujoco_missing_count": len(smoke_report["missing_source_ids"]),
+            }
+            if not smoke_passed:
+                smoke_error = "MuJoCo exported primitive verification failed."
+        except ImportError:
+            warnings.append("MuJoCo is not installed; MJCF XML was generated but not smoke-loaded.")
+        except Exception as exc:
+            smoke_error = str(exc)
+    else:
+        warnings.append("MuJoCo smoke load skipped for replay labeling throughput.")
 
     report = audit_physical_rollout_trace(trace)
     status = SimulatorExportState(
@@ -324,6 +328,7 @@ def export_rollout_trace_to_mujoco_mjcf(
             "audit_score": report.score,
             "source_frame_convention": final_frame.frame_convention,
             "mujoco_frame_map": frame_map,
+            "smoke_load_requested": smoke_load,
             **smoke_metrics,
         },
     )
@@ -355,6 +360,7 @@ def export_rollout_trace_to_genesis_scene(
     *,
     output_path: Path | None = None,
     branch_id: str | None = None,
+    smoke_load: bool = True,
 ) -> tuple[dict[str, Any], SimulatorExportState]:
     primitives, frame_map, skipped_hidden_count, warnings, failure = _collect_export_primitives(
         trace,
@@ -383,24 +389,27 @@ def export_rollout_trace_to_genesis_scene(
     smoke_passed = False
     smoke_error: str | None = None
     smoke_metrics: dict[str, Any] = {}
-    try:
-        smoke_report = check_genesis_transfer(_to_static_transfer_primitives(primitives))
-        smoke_passed = smoke_report["ok"] is True
-        smoke_metrics = {
-            "genesis_entity_count": smoke_report["loaded_count"],
-            "genesis_max_position_error_m": smoke_report["max_position_error_m"],
-            "genesis_max_size_error_m": smoke_report["max_size_error_m"],
-            "genesis_max_quat_error": smoke_report["max_quat_error"],
-            "genesis_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
-            "genesis_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
-            "genesis_missing_count": len(smoke_report["missing_source_ids"]),
-        }
-        if not smoke_passed:
-            smoke_error = "Genesis exported primitive verification failed."
-    except ImportError:
-        warnings.append("Genesis is not installed; Genesis scene JSON was generated but not smoke-built.")
-    except Exception as exc:
-        smoke_error = str(exc)
+    if smoke_load:
+        try:
+            smoke_report = check_genesis_transfer(_to_static_transfer_primitives(primitives))
+            smoke_passed = smoke_report["ok"] is True
+            smoke_metrics = {
+                "genesis_entity_count": smoke_report["loaded_count"],
+                "genesis_max_position_error_m": smoke_report["max_position_error_m"],
+                "genesis_max_size_error_m": smoke_report["max_size_error_m"],
+                "genesis_max_quat_error": smoke_report["max_quat_error"],
+                "genesis_collision_mismatch_count": len(smoke_report["collision_mismatch_source_ids"]),
+                "genesis_type_mismatch_count": len(smoke_report["type_mismatch_source_ids"]),
+                "genesis_missing_count": len(smoke_report["missing_source_ids"]),
+            }
+            if not smoke_passed:
+                smoke_error = "Genesis exported primitive verification failed."
+        except ImportError:
+            warnings.append("Genesis is not installed; Genesis scene JSON was generated but not smoke-built.")
+        except Exception as exc:
+            smoke_error = str(exc)
+    else:
+        warnings.append("Genesis smoke build skipped for replay labeling throughput.")
 
     report = audit_physical_rollout_trace(trace)
     status = SimulatorExportState(
@@ -419,6 +428,7 @@ def export_rollout_trace_to_genesis_scene(
             "audit_score": report.score,
             "source_frame_convention": final_frame.frame_convention,
             "genesis_frame_map": frame_map,
+            "smoke_load_requested": smoke_load,
             **smoke_metrics,
         },
     )
