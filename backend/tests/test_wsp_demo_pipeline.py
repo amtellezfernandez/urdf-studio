@@ -22,7 +22,13 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert summary["repair"]["branch_count"] >= 1
     assert summary["repair"]["selected_branch_id"] == "stop_and_replan"
     assert summary["export"]["success"] is True
-    assert summary["export"]["smoke_passed"] is True
+    assert summary["export"]["mujoco"]["success"] is True
+    assert summary["export"]["mujoco"]["smoke_passed"] is True
+    assert summary["export"]["genesis"]["success"] is True
+    if summary["export"]["genesis"]["smoke_passed"]:
+        assert summary["export"]["genesis"]["metrics"]["genesis_entity_count"] >= 4
+    else:
+        assert summary["export"]["genesis"]["error"] is None
 
     for artifact_path in summary["artifacts"].values():
         assert Path(artifact_path).exists()

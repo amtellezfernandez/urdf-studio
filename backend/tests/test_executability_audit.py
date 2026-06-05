@@ -8,7 +8,10 @@ from backend.models.physical_state import ActionToken, PhysicalEntity, PhysicalS
 from backend.services.correction_planner import build_repair_plan, rollout_correction_branch
 from backend.services.executability_audit import audit_physical_rollout_trace, audit_physical_state_frame
 from backend.services.physical_rollout_baseline import rollout_action
-from backend.services.simulator_export import export_rollout_trace_to_mujoco_mjcf
+from backend.services.simulator_export import (
+    export_rollout_trace_to_genesis_scene,
+    export_rollout_trace_to_mujoco_mjcf,
+)
 
 
 def _frame_with_boxes(*, overlap: bool) -> PhysicalStateFrame:
@@ -192,3 +195,58 @@ def test_mujoco_export_converts_studio_y_up_frame_to_simulator_z_up() -> None:
     assert export_status.metrics["source_frame_convention"] == "studio-y-up"
     assert export_status.metrics["mujoco_frame_map"] == "studio-y-up-to-z-up"
     assert export_status.metrics["skipped_hidden_count"] == 1
+
+
+def test_genesis_export_uses_same_simulator_frame_and_collision_contract(tmp_path) -> None:
+    frame = PhysicalStateFrame(
+        frame_id="genesis-frame-map-smoke",
+        t_ms=0,
+        frame_convention="studio-y-up",
+        entities=[
+            PhysicalEntity(
+                entity_id="lane-a3",
+                entity_type="lane",
+                geometry_type="box",
+                position_xyz=[1.5, 0.6, 0.025],
+                size_xyz=[2.2, 0.2, 0.05],
+                metadata={"color": "#f59e0b", "collision": False},
+            ),
+            PhysicalEntity(
+                entity_id="hidden-box",
+                entity_type="object",
+                geometry_type="box",
+                position_xyz=[1.0, 1.0, 1.0],
+                size_xyz=[0.2, 0.2, 0.2],
+                metadata={"is_hidden": True},
+            ),
+        ],
+    )
+
+    scene, export_status = export_rollout_trace_to_genesis_scene(
+        rollout_action(
+            frame,
+            ActionToken(action_id="wait", action_type="wait", params={"duration_ms": 0}),
+            step_count=1,
+            step_ms=1,
+        ),
+        output_path=tmp_path / "corrected.genesis-scene.json",
+    )
+
+    assert scene["target"] == "genesis"
+    assert scene["genesis_frame_map"] == "studio-y-up-to-z-up"
+    assert len(scene["entities"]) == 1
+    entity = scene["entities"][0]
+    assert entity["name"] == "lane-a3"
+    assert entity["type"] == "box"
+    assert entity["position_xyz"] == pytest.approx([1.5, -0.025, 0.6])
+    assert entity["size_xyz"] == pytest.approx([2.2, 0.05, 0.2])
+    assert entity["collision"] is False
+    assert export_status.success is True
+    assert export_status.target == "genesis"
+    assert export_status.metrics["source_frame_convention"] == "studio-y-up"
+    assert export_status.metrics["genesis_frame_map"] == "studio-y-up-to-z-up"
+    assert export_status.metrics["skipped_hidden_count"] == 1
+    assert (tmp_path / "corrected.genesis-scene.json").exists()
+    if export_status.smoke_passed:
+        assert export_status.metrics["genesis_entity_count"] == 1
+        assert export_status.metrics["max_position_error_m"] <= 1e-6

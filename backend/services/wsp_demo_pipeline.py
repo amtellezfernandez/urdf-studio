@@ -9,7 +9,10 @@ from backend.services.correction_planner import build_repair_plan, rollout_corre
 from backend.services.executability_audit import audit_physical_rollout_trace
 from backend.services.physical_rollout_baseline import rollout_action
 from backend.services.physical_state_compiler import compile_physical_state_payload
-from backend.services.simulator_export import export_rollout_trace_to_mujoco_mjcf
+from backend.services.simulator_export import (
+    export_rollout_trace_to_genesis_scene,
+    export_rollout_trace_to_mujoco_mjcf,
+)
 
 
 DEFAULT_WSP_DEMO_SCENE_PATH = Path("web/public/world-layouts/hkhack-pallet-dock.world-package.json")
@@ -57,9 +60,15 @@ def run_wsp_demo_pipeline(
     repaired_trace = rollout_correction_branch(rollout, branch) if branch is not None else rollout
 
     corrected_mjcf_path = output_dir / "corrected_state.mjcf.xml"
-    _mjcf, export_status = export_rollout_trace_to_mujoco_mjcf(
+    _mjcf, mujoco_export_status = export_rollout_trace_to_mujoco_mjcf(
         repaired_trace,
         output_path=corrected_mjcf_path,
+        branch_id=branch.branch_id if branch is not None else None,
+    )
+    corrected_genesis_path = output_dir / "corrected_state.genesis-scene.json"
+    _genesis_scene, genesis_export_status = export_rollout_trace_to_genesis_scene(
+        repaired_trace,
+        output_path=corrected_genesis_path,
         branch_id=branch.branch_id if branch is not None else None,
     )
 
@@ -67,20 +76,27 @@ def run_wsp_demo_pipeline(
     rollout_path = output_dir / "predicted_trace.json"
     audit_path = output_dir / "executability_report.json"
     repair_path = output_dir / "correction_branches.json"
-    export_status_path = output_dir / "export_status.json"
+    mujoco_export_status_path = output_dir / "export_status.mujoco.json"
+    genesis_export_status_path = output_dir / "export_status.genesis.json"
     summary_path = output_dir / "summary.json"
 
     compiled_path.write_text(compiled.model_dump_json(indent=2) + "\n", encoding="utf-8")
     rollout_path.write_text(rollout.model_dump_json(indent=2) + "\n", encoding="utf-8")
     audit_path.write_text(audit_report.model_dump_json(indent=2) + "\n", encoding="utf-8")
     repair_path.write_text(repair_plan.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    export_status_path.write_text(export_status.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    mujoco_export_status_path.write_text(mujoco_export_status.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    genesis_export_status_path.write_text(genesis_export_status.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
     summary = {
-        "ok": audit_report.success is False and len(repair_plan.branches) > 0 and export_status.success,
+        "ok": (
+            audit_report.success is False
+            and len(repair_plan.branches) > 0
+            and mujoco_export_status.success
+            and genesis_export_status.success
+        ),
         "claim": (
             "WSP-0.1 demonstrates scene -> physical-state tokens -> action rollout -> "
-            "executability audit -> repair branches -> MuJoCo export."
+            "executability audit -> repair branches -> MuJoCo and Genesis export."
         ),
         "scene_path": str(scene_path),
         "artifacts": {
@@ -88,8 +104,10 @@ def run_wsp_demo_pipeline(
             "predicted_trace": str(rollout_path),
             "executability_report": str(audit_path),
             "correction_branches": str(repair_path),
-            "export_status": str(export_status_path),
+            "mujoco_export_status": str(mujoco_export_status_path),
+            "genesis_export_status": str(genesis_export_status_path),
             "corrected_mjcf": str(corrected_mjcf_path),
+            "corrected_genesis_scene": str(corrected_genesis_path),
         },
         "compile": {
             "entity_count": len(compiled.frame.entities),
@@ -126,11 +144,23 @@ def run_wsp_demo_pipeline(
             ],
         },
         "export": {
-            "success": export_status.success,
-            "target": export_status.target,
-            "smoke_passed": export_status.smoke_passed,
-            "error": export_status.error,
-            "metrics": export_status.metrics,
+            "success": mujoco_export_status.success and genesis_export_status.success,
+            "target": "mujoco+genesis",
+            "smoke_passed": mujoco_export_status.smoke_passed and genesis_export_status.smoke_passed,
+            "mujoco": {
+                "success": mujoco_export_status.success,
+                "target": mujoco_export_status.target,
+                "smoke_passed": mujoco_export_status.smoke_passed,
+                "error": mujoco_export_status.error,
+                "metrics": mujoco_export_status.metrics,
+            },
+            "genesis": {
+                "success": genesis_export_status.success,
+                "target": genesis_export_status.target,
+                "smoke_passed": genesis_export_status.smoke_passed,
+                "error": genesis_export_status.error,
+                "metrics": genesis_export_status.metrics,
+            },
         },
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

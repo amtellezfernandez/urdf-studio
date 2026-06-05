@@ -251,7 +251,7 @@ class RepairPlan(BaseModel):
 
 class SimulatorExportState(BaseModel):
     success: bool
-    target: Literal["mujoco"]
+    target: Literal["mujoco", "genesis"]
     branch_id: str | None = None
     output_path: str | None = None
     smoke_passed: bool

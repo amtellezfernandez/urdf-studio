@@ -29,6 +29,9 @@ That command writes:
 - `/tmp/wsp-demo/executability_report.json`
 - `/tmp/wsp-demo/correction_branches.json`
 - `/tmp/wsp-demo/corrected_state.mjcf.xml`
+- `/tmp/wsp-demo/corrected_state.genesis-scene.json`
+- `/tmp/wsp-demo/export_status.mujoco.json`
+- `/tmp/wsp-demo/export_status.genesis.json`
 - `/tmp/wsp-demo/summary.json`
 
 Compile a static layout or world package:
@@ -69,10 +72,22 @@ npm run wsp:export -- /tmp/wsp-rollout.json \
   --out /tmp/wsp-corrected.xml
 ```
 
+Export the same executable final frame to a Genesis scene artifact:
+
+```bash
+npm run wsp:export -- /tmp/wsp-rollout.json \
+  --repair-plan /tmp/wsp-repair.json \
+  --branch stop_and_replan \
+  --target genesis \
+  --out /tmp/wsp-corrected.genesis-scene.json
+```
+
 MuJoCo export converts physical frames declared as `studio-y-up` into simulator `z-up`
 coordinates with the same `studio-y-up-to-z-up` mapping used by the static world-layout
 transfer gate. The export also preserves primitive color metadata and explicit
-`collision: false` objects as non-colliding MJCF geoms.
+`collision: false` objects as non-colliding MJCF geoms. Genesis export uses the same
+converted final-frame primitives and performs a headless scene-build smoke check when
+Genesis is installed.
 
 The audit currently checks:
 
@@ -92,12 +107,12 @@ Ready:
 - static layout and world package compilation into physical state tokens
 - deterministic action rollout for `navigate`, `push`, `translate`, `move_object`, `reserve_dock`, `wait`, `handoff_to_human`, `inspect`, `replan`, and `set_pose`
 - executable pass/fail reports plus correction branches
-- MuJoCo MJCF export for executable traces and selected repair branches
+- MuJoCo MJCF and Genesis scene export for executable traces and selected repair branches
 
 Not ready:
 
 - learned next-state prediction
 - robot reachability and full joint-limit rollout auditing
 - high-fidelity contact dynamics or frictional simulation
-- Genesis/Isaac/Gazebo export of corrected dynamic traces
+- time-series Genesis playback and Isaac/Gazebo export of corrected dynamic traces
 - UI integration
