@@ -16,6 +16,21 @@ It is not a learned world model yet. The purpose is to make the physical state l
 
 ## Commands
 
+Run the full WSP-0.1 loop in one command:
+
+```bash
+npm run wsp:demo -- --out-dir /tmp/wsp-demo
+```
+
+That command writes:
+
+- `/tmp/wsp-demo/compiled_tokens.json`
+- `/tmp/wsp-demo/predicted_trace.json`
+- `/tmp/wsp-demo/executability_report.json`
+- `/tmp/wsp-demo/correction_branches.json`
+- `/tmp/wsp-demo/corrected_state.mjcf.xml`
+- `/tmp/wsp-demo/summary.json`
+
 Compile a static layout or world package:
 
 ```bash
