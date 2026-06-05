@@ -79,15 +79,20 @@ def _compile_object_record(obj: dict[str, Any], index: int, *, source_ref: str) 
     size = _read_vector3(obj.get("size_xyz") or obj.get("size"), [0.01, 0.01, 0.01])
     rpy = _read_vector3(obj.get("rotation_rpy_rad"), [0.0, 0.0, 0.0])
     mass = obj.get("mass_kg")
+    friction = obj.get("friction")
+    battery = obj.get("battery")
+    raw_entity_type = obj.get("entity_type") or obj.get("role") or obj.get("semantic_type")
     return PhysicalEntity(
         entity_id=entity_id,
-        entity_type="object",
+        entity_type=raw_entity_type if raw_entity_type in {"robot", "object", "pallet", "dock", "lane", "zone", "surface", "target", "camera", "human", "tool"} else "object",
         label=obj.get("name") if isinstance(obj.get("name"), str) else entity_id,
         geometry_type=_geometry_type(raw_type),  # type: ignore[arg-type]
         position_xyz=position,
         quat_wxyz=_rpy_to_quat_wxyz(rpy),
         size_xyz=size,
         mass_kg=float(mass) if isinstance(mass, int | float) and mass > 0 else None,
+        friction=float(friction) if isinstance(friction, int | float) and friction >= 0 else None,
+        battery=float(battery) if isinstance(battery, int | float) and 0 <= battery <= 1 else None,
         movable=obj.get("movable") is not False,
         confidence=float(obj.get("confidence", 1.0)) if isinstance(obj.get("confidence", 1.0), int | float) else 1.0,
         source_ref=source_ref,
@@ -96,6 +101,8 @@ def _compile_object_record(obj: dict[str, Any], index: int, *, source_ref: str) 
             "color": obj.get("color"),
             "is_hidden": obj.get("is_hidden") is True,
             "collision": obj.get("collision", True) is not False,
+            "dock_status": obj.get("dock_status"),
+            "reserved_by": obj.get("reserved_by"),
         },
     )
 
@@ -110,12 +117,13 @@ def compile_world_scene_package(manifest: WorldScenePackageManifest) -> Physical
                 entity_id="robot",
                 entity_type="robot",
                 label=_robot_name_from_urdf(snapshot.urdf_xml),
-                geometry_type="mesh",
+                geometry_type="unknown",
                 movable=True,
                 source_ref=f"world_package:{manifest.package_id}@{manifest.version}",
                 metadata={
                     "urdf_sha256": urdf_sha256,
                     "joint_positions": snapshot.joint_positions,
+                    "collision": False,
                 },
             )
         )

@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0.0",
+  "package_id": "hkhack-pallet-dock",
+  "version": "0.1.0",
+  "title": "HKHack Pallet Dock Smoke",
+  "description": "Minimal WSP-0.1 fixture for physical-state tokenization, rollout audit, repair, and MuJoCo export.",
+  "created_at": "2026-06-05T08:40:00+02:00",
+  "runtime_targets": [],
+  "interface": {
+    "observation_modalities": ["state"],
+    "action_semantics": "state_action_tokens",
+    "timestep_ms": 500,
+    "frame_convention": "studio-y-up"
+  },
+  "artifacts": [],
+  "world_snapshot": {
+    "urdf_xml": "<robot name=\"hkhack_robot\"/>",
+    "joint_positions": {},
+    "cameras": [],
+    "objects": [
+      {
+        "id": "robot_1",
+        "name": "Robot 1",
+        "type": "cube",
+        "entity_type": "robot",
+        "position_xyz": [0.0, 0.0, 0.1],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.2, 0.2, 0.2],
+        "battery": 0.8,
+        "color": "#3b82f6"
+      },
+      {
+        "id": "pallet_7",
+        "name": "Pallet 7",
+        "type": "cube",
+        "entity_type": "pallet",
+        "position_xyz": [1.0, 0.0, 0.1],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.4, 0.4, 0.2],
+        "mass_kg": 120.0,
+        "friction": 0.31,
+        "color": "#ef4444"
+      },
+      {
+        "id": "dock_d2",
+        "name": "Dock D2",
+        "type": "cube",
+        "entity_type": "dock",
+        "position_xyz": [2.0, 0.0, 0.1],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.45, 0.45, 0.2],
+        "movable": false,
+        "dock_status": "free",
+        "color": "#22c55e"
+      },
+      {
+        "id": "lane_a3",
+        "name": "Lane A3",
+        "type": "cube",
+        "entity_type": "lane",
+        "position_xyz": [1.5, 0.6, 0.025],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [2.2, 0.2, 0.05],
+        "movable": false,
+        "collision": false,
+        "color": "#f59e0b"
+      }
+    ],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "provenance": {
+    "source": "hkhack-wsp-0.1-fixture"
+  },
+  "security": {
+    "attestation_refs": []
+  }
+}

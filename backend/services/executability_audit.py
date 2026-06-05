@@ -15,6 +15,9 @@ from backend.models.physical_state import (
 
 QUATERNION_NORM_TOLERANCE = 1e-3
 DEFAULT_COLLISION_MARGIN_M = 0.0
+DEFAULT_CONTACT_FRICTION = 0.35
+DEFAULT_PUSH_DURATION_MS = 1000
+DEFAULT_BATTERY_RESERVE = 0.1
 
 
 def _check(
@@ -108,6 +111,7 @@ def _audit_action_refs(frame: PhysicalStateFrame, actions: list[ActionToken]) ->
             ("actor", action.actor_id),
             ("object", action.object_id),
             ("target", action.target_id),
+            ("destination", action.destination_id),
         ):
             if entity_id is None:
                 continue
@@ -121,6 +125,124 @@ def _audit_action_refs(frame: PhysicalStateFrame, actions: list[ActionToken]) ->
                     subject_ref=f"{action.action_id}:{role}:{entity_id}",
                 )
             )
+    return checks
+
+
+def _entity_by_id(frame: PhysicalStateFrame, entity_id: str | None) -> PhysicalEntity | None:
+    if entity_id is None:
+        return None
+    return next((entity for entity in frame.entities if entity.entity_id == entity_id), None)
+
+
+def _vector_norm(values: object) -> float:
+    if not isinstance(values, list | tuple):
+        return 0.0
+    try:
+        return math.sqrt(sum(float(component) * float(component) for component in values))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _audit_push_contact_stability(frame: PhysicalStateFrame, actions: list[ActionToken]) -> list[ExecutabilityCheckResult]:
+    checks: list[ExecutabilityCheckResult] = []
+    for action in actions:
+        if action.action_type != "push":
+            continue
+        target = _entity_by_id(frame, action.object_id)
+        if target is None:
+            continue
+        mass_kg = target.mass_kg
+        available_force = action.params.get("max_force_n")
+        if not isinstance(mass_kg, int | float) or not isinstance(available_force, int | float):
+            checks.append(
+                _check(
+                    "contact_stability",
+                    False,
+                    "warn",
+                    "Push contact stability cannot be proven without object mass and max force.",
+                    subject_ref=f"{action.action_id}:{action.object_id}",
+                )
+            )
+            continue
+        friction = target.friction if target.friction is not None else DEFAULT_CONTACT_FRICTION
+        duration_s = max(
+            ((action.duration_ms or DEFAULT_PUSH_DURATION_MS) / 1000.0),
+            1e-3,
+        )
+        delta_m = _vector_norm(action.params.get("delta_xyz"))
+        acceleration = (2.0 * delta_m) / (duration_s * duration_s)
+        required_force = float(mass_kg) * ((9.81 * friction) + acceleration)
+        passed = required_force <= float(available_force)
+        checks.append(
+            _check(
+                "contact_stability",
+                passed,
+                "allow" if passed else "reject",
+                "Push contact force is stable." if passed else "Predicted push exceeds stable contact force.",
+                subject_ref=f"{action.action_id}:{action.object_id}",
+                metrics={
+                    "mass_kg": float(mass_kg),
+                    "friction": friction,
+                    "delta_m": delta_m,
+                    "duration_s": duration_s,
+                    "required_force_n": required_force,
+                    "available_force_n": float(available_force),
+                    "force_margin_n": float(available_force) - required_force,
+                },
+            )
+        )
+    return checks
+
+
+def _audit_battery(frame: PhysicalStateFrame, actions: list[ActionToken]) -> list[ExecutabilityCheckResult]:
+    checks: list[ExecutabilityCheckResult] = []
+    for action in actions:
+        actor = _entity_by_id(frame, action.actor_id)
+        if actor is None or actor.battery is None:
+            continue
+        reserve = float(action.params.get("min_battery_reserve", DEFAULT_BATTERY_RESERVE))
+        expected_cost = float(action.params.get("battery_cost", 0.0))
+        remaining = actor.battery - expected_cost
+        passed = remaining >= reserve
+        checks.append(
+            _check(
+                "battery_reserve",
+                passed,
+                "allow" if passed else "reject",
+                "Battery reserve is sufficient." if passed else "Action violates battery reserve.",
+                subject_ref=f"{action.action_id}:{actor.entity_id}",
+                metrics={
+                    "battery": actor.battery,
+                    "battery_cost": expected_cost,
+                    "remaining_battery": remaining,
+                    "min_battery_reserve": reserve,
+                },
+            )
+        )
+    return checks
+
+
+def _audit_dock_availability(frame: PhysicalStateFrame, actions: list[ActionToken]) -> list[ExecutabilityCheckResult]:
+    checks: list[ExecutabilityCheckResult] = []
+    for action in actions:
+        if action.action_type not in {"reserve_dock", "push", "navigate", "place"}:
+            continue
+        dock = _entity_by_id(frame, action.destination_id or action.target_id)
+        if dock is None or dock.entity_type != "dock":
+            continue
+        status = str(dock.metadata.get("dock_status", "free"))
+        reserved_by = dock.metadata.get("reserved_by")
+        passed = status in {"free", "available"} or reserved_by == action.actor_id
+        checks.append(
+            _check(
+                "dock_availability",
+                passed,
+                "allow" if passed else "reject",
+                "Dock is available for the action." if passed else "Dock is not available for the action.",
+                subject_ref=f"{action.action_id}:{dock.entity_id}",
+                metrics={"dock_status": status, "reserved_by": reserved_by, "actor_id": action.actor_id},
+            )
+        )
     return checks
 
 
@@ -197,12 +319,17 @@ def audit_physical_state_frame(
     checks = [
         *_audit_entity_geometry(frame),
         *_audit_action_refs(frame, action_list),
+        *_audit_push_contact_stability(frame, action_list),
+        *_audit_battery(frame, action_list),
+        *_audit_dock_availability(frame, action_list),
         *_audit_collision_clearance(frame, collision_margin_m),
     ]
     decision, reject_count, warn_count, stop_count = _summarize(checks)
+    score = max(0.0, 1.0 - (reject_count * 0.25) - (warn_count * 0.05) - (stop_count * 0.5))
     return ExecutabilityReport(
         success=decision == "allow",
         decision=decision,  # type: ignore[arg-type]
+        score=score,
         check_count=len(checks),
         reject_count=reject_count,
         warn_count=warn_count,
@@ -239,9 +366,11 @@ def audit_physical_rollout_trace(
                 )
             )
     decision, reject_count, warn_count, stop_count = _summarize(checks)
+    score = max(0.0, 1.0 - (reject_count * 0.25) - (warn_count * 0.05) - (stop_count * 0.5))
     return ExecutabilityReport(
         success=decision == "allow",
         decision=decision,  # type: ignore[arg-type]
+        score=score,
         check_count=len(checks),
         reject_count=reject_count,
         warn_count=warn_count,

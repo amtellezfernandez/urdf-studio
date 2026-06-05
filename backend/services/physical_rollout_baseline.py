@@ -28,10 +28,48 @@ def _move_entity(frame: PhysicalStateFrame, entity_id: str | None, delta_xyz: li
         return
 
 
+def _entity_position(frame: PhysicalStateFrame, entity_id: str | None) -> list[float] | None:
+    if entity_id is None:
+        return None
+    for entity in frame.entities:
+        if entity.entity_id == entity_id:
+            return list(entity.position_xyz)
+    return None
+
+
+def _read_destination_delta(frame: PhysicalStateFrame, action: ActionToken, step_count: int) -> list[float]:
+    actor_id = action.actor_id or action.object_id
+    actor_position = _entity_position(frame, actor_id)
+    if actor_position is None:
+        return [0.0, 0.0, 0.0]
+    destination = action.params.get("destination_xyz")
+    if not (isinstance(destination, list | tuple) and len(destination) == 3):
+        destination = _entity_position(frame, action.destination_id or action.target_id)
+    if not (isinstance(destination, list | tuple) and len(destination) == 3):
+        return [0.0, 0.0, 0.0]
+    return [
+        (float(destination[0]) - actor_position[0]) / max(1, step_count),
+        (float(destination[1]) - actor_position[1]) / max(1, step_count),
+        (float(destination[2]) - actor_position[2]) / max(1, step_count),
+    ]
+
+
+def _set_entity_metadata(frame: PhysicalStateFrame, entity_id: str | None, updates: dict) -> None:
+    if entity_id is None:
+        return
+    for entity in frame.entities:
+        if entity.entity_id != entity_id:
+            continue
+        entity.metadata = {**entity.metadata, **updates}
+        return
+
+
 def _apply_action_step(frame: PhysicalStateFrame, action: ActionToken, *, step_count: int) -> PhysicalStateFrame:
     next_frame = frame.model_copy(deep=True)
     delta = _read_delta(action, step_count)
-    if action.action_type in {"translate", "move_object"}:
+    if action.action_type == "navigate":
+        _move_entity(next_frame, action.actor_id, _read_destination_delta(frame, action, step_count))
+    elif action.action_type in {"translate", "move_object"}:
         _move_entity(next_frame, action.object_id or action.actor_id, delta)
     elif action.action_type == "push":
         _move_entity(next_frame, action.object_id, delta)
@@ -45,6 +83,16 @@ def _apply_action_step(frame: PhysicalStateFrame, action: ActionToken, *, step_c
                     entity.position_xyz = [float(component) for component in raw_position]
                     entity.velocity_xyz = [0.0, 0.0, 0.0]
                     break
+    elif action.action_type == "reserve_dock":
+        _set_entity_metadata(
+            next_frame,
+            action.destination_id or action.target_id,
+            {"dock_status": "reserved", "reserved_by": action.actor_id},
+        )
+    elif action.action_type == "handoff_to_human":
+        _set_entity_metadata(next_frame, action.object_id or action.target_id, {"handoff_requested": True})
+    elif action.action_type in {"wait", "inspect", "replan", "noop"}:
+        pass
     return next_frame
 
 

@@ -7,17 +7,31 @@ ENTITY_TYPE_IDS = {
     "unknown": 0,
     "robot": 1,
     "object": 2,
-    "surface": 3,
-    "zone": 4,
-    "target": 5,
+    "pallet": 3,
+    "dock": 4,
+    "lane": 5,
+    "zone": 6,
+    "surface": 7,
+    "target": 8,
+    "camera": 9,
+    "human": 10,
+    "tool": 11,
 }
 
 ACTION_TYPE_IDS = {
     "noop": 0,
-    "translate": 1,
-    "push": 2,
-    "move_object": 3,
-    "set_pose": 4,
+    "navigate": 1,
+    "translate": 2,
+    "push": 3,
+    "pick": 4,
+    "place": 5,
+    "move_object": 6,
+    "reserve_dock": 7,
+    "wait": 8,
+    "handoff_to_human": 9,
+    "inspect": 10,
+    "replan": 11,
+    "set_pose": 12,
     "custom": 99,
 }
 
@@ -25,9 +39,13 @@ CONSTRAINT_TYPES = (
     "collision",
     "joint_limit",
     "contact",
+    "contact_stability",
     "reachability",
     "battery",
     "capacity",
+    "deadline",
+    "temperature",
+    "dock_availability",
     "scale",
     "frame",
     "custom",
@@ -41,12 +59,16 @@ def _format_float(value: float) -> str:
 def _entity_feature_vector(entity) -> list[float]:
     size = entity.size_xyz or [0.0, 0.0, 0.0]
     mass = entity.mass_kg or 0.0
+    friction = entity.friction if entity.friction is not None else 0.0
+    battery = entity.battery if entity.battery is not None else 0.0
     return [
         *entity.position_xyz,
         *entity.quat_wxyz,
         *size,
         *entity.velocity_xyz,
         mass,
+        friction,
+        battery,
         1.0 if entity.movable else 0.0,
         entity.confidence,
     ]
@@ -57,10 +79,12 @@ def build_physical_token_sequence(
     action: ActionToken | None = None,
 ) -> PhysicalTokenSequence:
     text_tokens = [f"<TIME_{frame.t_ms:06d}>"]
+    entity_ids: list[str] = []
     entity_type_ids: list[int] = []
     continuous_features: list[list[float]] = []
 
     for entity in frame.entities:
+        entity_ids.append(entity.entity_id)
         entity_type_ids.append(ENTITY_TYPE_IDS.get(entity.entity_type, ENTITY_TYPE_IDS["unknown"]))
         continuous_features.append(_entity_feature_vector(entity))
         pose = " ".join(_format_float(component) for component in entity.position_xyz)
@@ -75,7 +99,7 @@ def build_physical_token_sequence(
         action_ids.append(ACTION_TYPE_IDS.get(action.action_type, ACTION_TYPE_IDS["custom"]))
         text_tokens.append(
             f"<ACTION id={action.action_id} type={action.action_type} actor={action.actor_id or ''} "
-            f"object={action.object_id or ''} target={action.target_id or ''}>"
+            f"object={action.object_id or ''} target={action.target_id or ''} destination={action.destination_id or ''}>"
         )
 
     relation_edges = [
@@ -94,6 +118,7 @@ def build_physical_token_sequence(
     return PhysicalTokenSequence(
         frame_id=frame.frame_id,
         text_tokens=text_tokens,
+        entity_ids=entity_ids,
         entity_type_ids=entity_type_ids,
         action_ids=action_ids,
         continuous_features=continuous_features,
@@ -104,5 +129,14 @@ def build_physical_token_sequence(
             "relation_count": len(frame.relations),
             "constraint_count": len(frame.constraints),
             "frame_convention": frame.frame_convention,
+            "frame_snapshot": frame.model_dump(mode="json"),
+            "action_snapshot": action.model_dump(mode="json") if action is not None else None,
         },
     )
+
+
+def decode_physical_token_sequence(sequence: PhysicalTokenSequence) -> PhysicalStateFrame:
+    snapshot = sequence.metadata.get("frame_snapshot")
+    if not isinstance(snapshot, dict):
+        raise ValueError("PhysicalTokenSequence does not contain a frame_snapshot for roundtrip decoding.")
+    return PhysicalStateFrame.model_validate(snapshot)
