@@ -4,7 +4,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from backend.models.physical_state import ActionToken, PhysicalEntity, PhysicalStateFrame
+from backend.models.physical_state import ActionToken, ConstraintToken, PhysicalEntity, PhysicalStateFrame
 from backend.services.correction_planner import build_repair_plan, rollout_correction_branch
 from backend.services.executability_audit import audit_physical_rollout_trace, audit_physical_state_frame
 from backend.services.physical_rollout_baseline import rollout_action
@@ -53,6 +53,73 @@ def test_audit_allows_clear_static_frame() -> None:
     assert report.success is True
     assert report.decision == "allow"
     assert report.reject_count == 0
+
+
+def test_audit_rejects_declared_joint_limit_violation() -> None:
+    frame = PhysicalStateFrame(
+        frame_id="joint-limit-smoke",
+        t_ms=0,
+        entities=[
+            PhysicalEntity(
+                entity_id="robot-1",
+                entity_type="robot",
+                geometry_type="box",
+                position_xyz=[0.0, 0.0, 0.1],
+                size_xyz=[0.2, 0.2, 0.2],
+            )
+        ],
+        constraints=[
+            ConstraintToken(
+                constraint_id="joint-limit-1",
+                constraint_type="joint_limit",
+                subject_id="robot-1",
+                target_entity_ids=["robot-1"],
+                params={"joint_name": "shoulder_pan", "position": 2.4, "lower": -1.57, "upper": 1.57},
+            )
+        ],
+    )
+
+    report = audit_physical_state_frame(frame)
+
+    assert report.success is False
+    assert any(check.check_id == "joint_limit" for check in report.checks)
+
+
+def test_audit_rejects_declared_reachability_violation() -> None:
+    frame = PhysicalStateFrame(
+        frame_id="reachability-smoke",
+        t_ms=0,
+        entities=[
+            PhysicalEntity(
+                entity_id="robot-1",
+                entity_type="robot",
+                geometry_type="box",
+                position_xyz=[0.0, 0.0, 0.1],
+                size_xyz=[0.2, 0.2, 0.2],
+            ),
+            PhysicalEntity(
+                entity_id="dock-1",
+                entity_type="dock",
+                geometry_type="box",
+                position_xyz=[2.0, 0.0, 0.1],
+                size_xyz=[0.2, 0.2, 0.2],
+            ),
+        ],
+        constraints=[
+            ConstraintToken(
+                constraint_id="reachability-1",
+                constraint_type="reachability",
+                subject_id="robot-1",
+                target_entity_ids=["dock-1"],
+                params={"max_distance_m": 0.5},
+            )
+        ],
+    )
+
+    report = audit_physical_state_frame(frame)
+
+    assert report.success is False
+    assert any(check.check_id == "reachability" for check in report.checks)
 
 
 def test_rollout_audit_rejects_missing_action_reference() -> None:

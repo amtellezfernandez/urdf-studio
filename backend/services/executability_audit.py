@@ -246,6 +246,77 @@ def _audit_dock_availability(frame: PhysicalStateFrame, actions: list[ActionToke
     return checks
 
 
+def _read_constraint_number(params: dict, *keys: str) -> float | None:
+    for key in keys:
+        value = params.get(key)
+        if isinstance(value, int | float) and math.isfinite(float(value)):
+            return float(value)
+    return None
+
+
+def _distance_between_entities(frame: PhysicalStateFrame, source_id: str | None, target_id: str | None) -> float | None:
+    source = _entity_by_id(frame, source_id)
+    target = _entity_by_id(frame, target_id)
+    if source is None or target is None:
+        return None
+    return math.sqrt(
+        sum(
+            (source.position_xyz[axis] - target.position_xyz[axis])
+            * (source.position_xyz[axis] - target.position_xyz[axis])
+            for axis in range(3)
+        )
+    )
+
+
+def _audit_declared_constraints(frame: PhysicalStateFrame) -> list[ExecutabilityCheckResult]:
+    checks: list[ExecutabilityCheckResult] = []
+    for constraint in frame.constraints:
+        if constraint.constraint_type == "joint_limit":
+            position = _read_constraint_number(constraint.params, "position", "actual", "value")
+            lower = _read_constraint_number(constraint.params, "lower", "min")
+            upper = _read_constraint_number(constraint.params, "upper", "max")
+            has_bounds = position is not None and lower is not None and upper is not None
+            passed = has_bounds and lower <= position <= upper
+            checks.append(
+                _check(
+                    "joint_limit",
+                    passed,
+                    "allow" if passed else "reject",
+                    "Joint state is within limits." if passed else "Joint state violates declared limits.",
+                    subject_ref=constraint.constraint_id,
+                    metrics={
+                        "joint_name": constraint.params.get("joint_name"),
+                        "position": position,
+                        "lower": lower,
+                        "upper": upper,
+                    },
+                )
+            )
+        elif constraint.constraint_type == "reachability":
+            max_distance = _read_constraint_number(constraint.params, "max_distance_m", "max_reach_m")
+            target_id = constraint.target_entity_ids[0] if constraint.target_entity_ids else None
+            distance = _read_constraint_number(constraint.params, "distance_m")
+            if distance is None:
+                distance = _distance_between_entities(frame, constraint.subject_id, target_id)
+            passed = distance is not None and max_distance is not None and distance <= max_distance
+            checks.append(
+                _check(
+                    "reachability",
+                    passed,
+                    "allow" if passed else "reject",
+                    "Target is reachable." if passed else "Target exceeds declared reachability limits.",
+                    subject_ref=constraint.constraint_id,
+                    metrics={
+                        "subject_id": constraint.subject_id,
+                        "target_id": target_id,
+                        "distance_m": distance,
+                        "max_distance_m": max_distance,
+                    },
+                )
+            )
+    return checks
+
+
 def _audit_collision_clearance(frame: PhysicalStateFrame, margin_m: float) -> list[ExecutabilityCheckResult]:
     checks: list[ExecutabilityCheckResult] = []
     collision_entities = [entity for entity in frame.entities if _collision_enabled(entity)]
@@ -322,6 +393,7 @@ def audit_physical_state_frame(
         *_audit_push_contact_stability(frame, action_list),
         *_audit_battery(frame, action_list),
         *_audit_dock_availability(frame, action_list),
+        *_audit_declared_constraints(frame),
         *_audit_collision_clearance(frame, collision_margin_m),
     ]
     decision, reject_count, warn_count, stop_count = _summarize(checks)
