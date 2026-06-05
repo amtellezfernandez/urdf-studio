@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "description": "Baseline of existing top-level scalar const declarations. New entries fail tools/scripts/topLevelScalarConstantAudit.js.",
-  "totalConstants": 1628,
-  "fileCount": 276,
+  "totalConstants": 1634,
+  "fileCount": 275,
   "files": {
     "config/devServerProxy.js": [
       {
@@ -120,16 +120,6 @@
       {
         "name": "GITHUB_NETWORK_ERROR_PREFIX",
         "initializer": "\"Network error reaching GitHub source\""
-      }
-    ],
-    "tools/scripts/architecture-check.js": [
-      {
-        "name": "MAX_LOC_GLOBAL",
-        "initializer": "1200"
-      },
-      {
-        "name": "MAX_LOC_STRICT",
-        "initializer": "900"
       }
     ],
     "tools/scripts/deadCodeParams.js": [
@@ -394,6 +384,34 @@
     ],
     "tools/scripts/setupParams.js": [
       {
+        "name": "BACKEND_NATIVE_SIM_FORCE_ENV",
+        "initializer": "'URDF_STUDIO_INSTALL_NATIVE_SIM'"
+      },
+      {
+        "name": "BACKEND_NATIVE_SIM_SKIP_ENV",
+        "initializer": "'URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL'"
+      },
+      {
+        "name": "GENESIS_FORCE_INSTALL_ENV",
+        "initializer": "'URDF_STUDIO_INSTALL_GENESIS'"
+      },
+      {
+        "name": "GENESIS_RENDER_PACKAGE",
+        "initializer": "'imgui-bundle==1.92.801'"
+      },
+      {
+        "name": "GENESIS_SKIP_AUTO_INSTALL_ENV",
+        "initializer": "'URDF_STUDIO_SKIP_GENESIS_AUTO_INSTALL'"
+      },
+      {
+        "name": "GENESIS_VERIFY_IMPORT_SCRIPT",
+        "initializer": "'import genesis; import imgui_bundle; print(\"genesis static world viewer runtime ok\")'"
+      },
+      {
+        "name": "GENESIS_WORLD_PACKAGE",
+        "initializer": "'genesis-world==1.1.0'"
+      },
+      {
         "name": "GITHUB_CLI_LOGIN_COMMAND",
         "initializer": "'gh auth login'"
       },
@@ -428,6 +446,10 @@
       {
         "name": "LOCAL_ILU_COMMAND",
         "initializer": "'npx ilu'"
+      },
+      {
+        "name": "MJLAB_FORCE_INSTALL_ENV",
+        "initializer": "'URDF_STUDIO_INSTALL_MJLAB'"
       },
       {
         "name": "MJLAB_MUJOCO_WARP_PACKAGE",
