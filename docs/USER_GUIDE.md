@@ -8,8 +8,8 @@ URDF Studio has four local pieces in a normal run:
 
 | Piece | URL | Purpose |
 | --- | --- | --- |
-| Studio frontend | `http://localhost:5173` | Main robotics workspace |
-| Studio backend | `http://localhost:8000` | IK, robot mastering, datasets, health, runtime services |
+| Studio frontend | `http://127.0.0.1:5173` | Main robotics workspace |
+| Studio backend | `http://127.0.0.1:8000` | IK, robot mastering, datasets, health, runtime services |
 | URDF Ops frontend | `http://127.0.0.1:5174` | Training and operations workspace |
 | URDF Ops backend | `http://127.0.0.1:8001` | URDF Ops API |
 
@@ -53,7 +53,7 @@ When startup is healthy, the terminal prints:
 
 ```text
 Ready:
-Open URDF Studio: http://localhost:5173
+Open URDF Studio: http://127.0.0.1:5173
 Open URDF Ops: http://127.0.0.1:5174
 ```
 
@@ -73,7 +73,7 @@ Expected responses:
 
 ## First Smoke Test
 
-1. Open `http://localhost:5173`.
+1. Open `http://127.0.0.1:5173`.
 2. Click `Play Sample Motion`.
 3. Wait for `lekiwi.urdf loaded`.
 4. In the `Episodes` panel, click the play button on episode `1`.

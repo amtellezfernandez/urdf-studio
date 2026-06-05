@@ -87,8 +87,8 @@ npm run start
 ```
 
 This will start:
-- **Frontend**: `http://localhost:5173` (Vite + React)
-- **Backend API**: `http://localhost:8000` (FastAPI + Python)
+- **Frontend**: `http://127.0.0.1:5173` (Vite + React)
+- **Backend API**: `http://127.0.0.1:8000` (FastAPI + Python)
 - **URDF Ops frontend**: `http://127.0.0.1:5174`
 - **URDF Ops API**: `http://127.0.0.1:8001`
 
@@ -126,7 +126,13 @@ If the tunnel cannot be established, startup now fails closed instead of silentl
 npm run start -- --web-port 3001 --api-port 9001
 ```
 
-For non-loopback binds, you must opt in explicitly:
+For intentional collaboration, prefer the guarded team launcher:
+
+```bash
+npm run team
+```
+
+For raw non-loopback binds, you must opt in explicitly:
 
 ```bash
 npm run start -- --web-bind-host 0.0.0.0 --allow-remote --ack-remote-exposure

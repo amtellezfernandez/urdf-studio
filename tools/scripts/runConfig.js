@@ -318,8 +318,28 @@ export function shouldExposeIkdRuntime({
   return Boolean(shouldStartIkd && ikdManifestAvailable && cargoAvailable);
 }
 
+export function resolveLocalNetworkUrl(runtimeConfig, { networkInterfaces = os.networkInterfaces } = {}) {
+  if (!isRemoteBindHost(runtimeConfig.web.bindHost)) {
+    return null;
+  }
+  const interfaces = networkInterfaces();
+  for (const details of Object.values(interfaces).flat()) {
+    if (!details || details.internal || !details.address) {
+      continue;
+    }
+    if (
+      details.family === RUN_TEAM_MODE_NETWORK_FAMILY ||
+      details.family === RUN_TEAM_MODE_NETWORK_FAMILY_NUMBER
+    ) {
+      return `http://${details.address}:${runtimeConfig.web.port}`;
+    }
+  }
+  return null;
+}
+
 export function buildStartupOverviewLines({
   dataMode = false,
+  localNetworkUrl = null,
   remoteExposureIssues = [],
   runtimeConfig,
   runtimeDemoMode = false,
@@ -351,6 +371,9 @@ export function buildStartupOverviewLines({
         ? 'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.'
         : 'Sharing: localhost links work only on this computer.'
     );
+    if (localNetworkUrl) {
+      lines.push(`Direct access: ${localNetworkUrl}`);
+    }
   }
 
   if (dataMode) {

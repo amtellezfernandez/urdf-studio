@@ -29,7 +29,7 @@ import {
 } from './runConfig.js';
 
 const BASE_RUNTIME_CONFIG = {
-  web: { host: 'localhost', port: 5173, bindHost: '127.0.0.1' },
+  web: { host: '127.0.0.1', port: 5173, bindHost: '127.0.0.1' },
   api: { host: '127.0.0.1', port: 8000, bindHost: '127.0.0.1' },
   ikd: { enabled: true, host: '127.0.0.1', port: 8088, controlHz: 500, telemetryHz: 60, staleTargetMs: 250, useForDrag: true },
   teleop: { enabled: false, host: '127.0.0.1', httpPort: 8091, webtransportPort: 8092, nativeQuicPort: 8093 },
@@ -129,7 +129,7 @@ test('applyTeamModeRuntimeProfile exposes only the team profile services', () =>
 test('applyTeamSharingGatewayRuntimeProfile exposes only a gated frontend', () => {
   const profiled = applyTeamSharingGatewayRuntimeProfile(BASE_RUNTIME_CONFIG);
 
-  assert.equal(profiled.web.host, 'localhost');
+  assert.equal(profiled.web.host, '127.0.0.1');
   assert.equal(profiled.web.bindHost, '0.0.0.0');
   assert.equal(profiled.api.host, '127.0.0.1');
   assert.equal(profiled.api.bindHost, '127.0.0.1');
@@ -158,9 +158,22 @@ test('startup overview gives in-session team-sharing local instructions', () => 
   });
 
   assert.deepEqual(lines, [
-    'Open URDF Studio: http://localhost:5173',
+    'Open URDF Studio: http://127.0.0.1:5173',
     'Access: local by default; remote browsers are blocked until Team sharing is on.',
     'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.',
+  ]);
+});
+
+test('startup overview gives loopback-only local instructions by default', () => {
+  const lines = buildStartupOverviewLines({
+    runtimeConfig: BASE_RUNTIME_CONFIG,
+    runtimeUrls: buildRuntimeUrls(BASE_RUNTIME_CONFIG),
+  });
+
+  assert.deepEqual(lines, [
+    'Open URDF Studio: http://127.0.0.1:5173',
+    'Access: only this laptop.',
+    'Sharing: localhost links work only on this computer.',
   ]);
 });
 
@@ -270,7 +283,7 @@ test('remote bind guard allows non-loopback exposure with opt-in', () => {
 test('runtime env overrides propagate effective hosts and ports', () => {
   const env = applyRuntimeEnvOverrides({}, BASE_RUNTIME_CONFIG);
   assert.deepEqual(env, {
-    URDF_WEB_HOST: 'localhost',
+    URDF_WEB_HOST: '127.0.0.1',
     URDF_WEB_PORT: '5173',
     URDF_WEB_BIND_HOST: '127.0.0.1',
     URDF_API_HOST: '127.0.0.1',

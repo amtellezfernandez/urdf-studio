@@ -28,6 +28,7 @@ from backend.api.teleop_mjlab import router as teleop_mjlab_router
 from backend.api.teleop_replay import router as teleop_replay_router
 from backend.api.runtime_sessions import router as runtime_sessions_router
 from backend.api.samples import router as samples_router
+from backend.api.simulation_prep import router as simulation_prep_router
 from backend.api.world_bridge import router as world_bridge_router
 from backend.api.world_registry import router as world_registry_router
 from backend.api.world_rollouts import router as world_rollouts_router
@@ -145,6 +146,7 @@ def create_app() -> FastAPI:
     app.include_router(cam_to_sim_router)
     app.include_router(collaboration_http_router)
     app.include_router(collaboration_ws_router)
+    app.include_router(simulation_prep_router)
 
     @app.exception_handler(NotImplementedError)
     async def not_implemented_handler(request: Request, exc: NotImplementedError):

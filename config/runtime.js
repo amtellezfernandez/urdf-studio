@@ -58,7 +58,7 @@ const fileConfig = readConfigFile();
 
 export const runtimeConfig = {
   web: {
-    host: readString("URDF_WEB_HOST", getConfigValue(fileConfig, ["web", "host"], "localhost")),
+    host: readString("URDF_WEB_HOST", getConfigValue(fileConfig, ["web", "host"], "127.0.0.1")),
     port: readNumber("URDF_WEB_PORT", getConfigValue(fileConfig, ["web", "port"], 5173)),
     bindHost: readString("URDF_WEB_BIND_HOST", getConfigValue(fileConfig, ["web", "bindHost"], "127.0.0.1")),
   },

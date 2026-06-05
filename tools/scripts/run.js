@@ -13,10 +13,10 @@ import {
   applyRuntimeEnvOverrides,
   applyRobotGatewayEnvSelection,
   applyTeamModeRuntimeProfile,
-  applyTeamSharingGatewayRuntimeProfile,
   assertRemoteBindingsAllowed,
   buildSecurityPostureLines,
   buildStartupOverviewLines,
+  resolveLocalNetworkUrl,
   buildTeamModeGuideLines,
   buildLoopbackApiBaseUrl,
   buildTeamSharingWebBaseUrl,
@@ -543,11 +543,11 @@ async function main() {
     parsedRunArgs.runtimeDemoMode ||
     /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_RUNTIME_DEMO || '');
   const mergedRuntimeConfigBase = mergeRuntimeConfig(baseRuntimeConfig, parsedRunArgs.overrides);
-  const teamModeHost = resolveTeamModeHost({ explicitHost: parsedRunArgs.teamHost });
-  const useTeamSharingGateway = !parsedRunArgs.teamMode && !isDataMode;
-  const exposedFrontendRuntimeConfig = useTeamSharingGateway
-    ? applyTeamSharingGatewayRuntimeProfile(mergedRuntimeConfigBase)
-    : mergedRuntimeConfigBase;
+  const teamModeHost = parsedRunArgs.teamMode
+    ? resolveTeamModeHost({ explicitHost: parsedRunArgs.teamHost })
+    : null;
+  const useTeamSharingGateway = false;
+  const exposedFrontendRuntimeConfig = mergedRuntimeConfigBase;
   const teamRuntimeConfig = parsedRunArgs.teamMode
     ? applyTeamModeRuntimeProfile(mergedRuntimeConfigBase, { publicHost: teamModeHost })
     : exposedFrontendRuntimeConfig;
@@ -1008,6 +1008,7 @@ async function main() {
   log('  Ready:', colors.reset);
   for (const overviewLine of buildStartupOverviewLines({
     dataMode: isDataMode,
+    localNetworkUrl: resolveLocalNetworkUrl(runtimeConfig),
     remoteExposureIssues,
     runtimeConfig,
     runtimeDemoMode: isRuntimeDemoMode,

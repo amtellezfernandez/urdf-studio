@@ -247,32 +247,54 @@ def _stage_mesh_file(source: Path, destination: Path) -> None:
         shutil.copy2(source, destination)
 
 
+def _collect_urdf_mesh_sources_by_basename(urdf_path: Path) -> dict[str, Path]:
+    document = ET.parse(urdf_path)
+    root = document.getroot()
+    mesh_sources: dict[str, Path] = {}
+
+    for mesh in root.findall(".//mesh[@filename]"):
+        mesh_reference = (mesh.get("filename") or "").strip()
+        if not mesh_reference:
+            continue
+
+        mesh_file_path = _resolve_mesh_path(urdf_path, mesh_reference)
+        if not mesh_file_path.exists():
+            raise FileNotFoundError(f"Mesh reference '{mesh_reference}' resolved to missing path {mesh_file_path}.")
+
+        mesh_file_name = mesh_file_path.name
+        resolved_source = mesh_file_path.resolve()
+        previous_source = mesh_sources.get(mesh_file_name)
+        if previous_source is not None and previous_source != resolved_source:
+            raise ValueError(
+                "MuJoCo stages direct URDF meshes by basename. "
+                f"Found conflicting sources for '{mesh_file_name}': "
+                f"{previous_source} and {resolved_source}."
+            )
+
+        mesh_sources[mesh_file_name] = resolved_source
+
+    return mesh_sources
+
+
 @contextmanager
 def prepare_mujoco_simulation_assets(urdf_path: Path) -> Iterator[PreparedMujocoSimulationAssets]:
     expectations = collect_urdf_collision_mesh_geometries(urdf_path)
     if len(expectations) == 0:
         raise ValueError(f"{urdf_path} does not contain any collision mesh geometries to validate.")
+    mesh_sources = _collect_urdf_mesh_sources_by_basename(urdf_path)
 
     with tempfile.TemporaryDirectory(prefix="simulation-prep-mujoco-") as workspace:
         workspace_dir = Path(workspace)
         staged_urdf_path = workspace_dir / SIMULATION_PREP_MUJOCO_STAGE_URDF_FILENAME
         mesh_validation_mjcf_path = workspace_dir / SIMULATION_PREP_MUJOCO_STAGE_MJCF_FILENAME
 
-        shutil.copy2(urdf_path, staged_urdf_path)
+        staged_urdf_path.write_text(
+            _rewrite_mesh_paths_to_basenames(urdf_path.read_text(encoding="utf-8")),
+            encoding="utf-8",
+        )
 
-        staged_mesh_sources: dict[str, Path] = {}
-        for expectation in expectations:
-            previous_source = staged_mesh_sources.get(expectation.mesh_file_name)
-            resolved_source = expectation.mesh_file_path.resolve()
-            if previous_source is not None and previous_source != resolved_source:
-                raise ValueError(
-                    "MuJoCo stages direct URDF meshes by basename. "
-                    f"Found conflicting sources for '{expectation.mesh_file_name}': "
-                    f"{previous_source} and {resolved_source}."
-                )
-
-            staged_mesh_sources[expectation.mesh_file_name] = resolved_source
-            staged_mesh_path = workspace_dir / expectation.mesh_file_name
+        for mesh_file_name, resolved_source in mesh_sources.items():
+            staged_mesh_path = workspace_dir / mesh_file_name
             if not staged_mesh_path.exists():
                 _stage_mesh_file(resolved_source, staged_mesh_path)
 
@@ -407,3 +429,159 @@ def quaternions_match(actual: Float4, expected: Float4, tolerance: float) -> boo
 def quaternion_has_unit_norm(quaternion: Float4, tolerance: float) -> bool:
     norm = math.sqrt(sum(component * component for component in quaternion))
     return abs(norm - 1.0) <= tolerance
+
+
+def _extract_mesh_basename(mesh_reference: str) -> str:
+    stripped = mesh_reference.strip()
+    if MESH_REFERENCE_SCHEME_SEPARATOR in stripped:
+        _, after_scheme = stripped.split(MESH_REFERENCE_SCHEME_SEPARATOR, 1)
+        return Path(after_scheme).name
+    return Path(stripped).name
+
+
+def _rewrite_mesh_paths_to_basenames(urdf_content: str) -> str:
+    root = ET.fromstring(urdf_content)
+    for mesh in root.findall(".//mesh[@filename]"):
+        ref = (mesh.get("filename") or "").strip()
+        if ref:
+            mesh.set("filename", _extract_mesh_basename(ref))
+    return ET.tostring(root, encoding="unicode")
+
+
+def run_simulation_prep_validation(
+    urdf_content: str,
+    mesh_files_by_name: dict[str, bytes],
+) -> "SimulationPrepValidationReport":
+    from backend.models.simulation_prep import (
+        SimulationPrepGeometryResult,
+        SimulationPrepSmokeSimResult,
+        SimulationPrepValidationReport,
+    )
+
+    warnings: list[str] = []
+
+    mujoco_available = False
+    try:
+        import mujoco  # noqa: F401
+        mujoco_available = True
+    except ImportError:
+        warnings.append("MuJoCo is not installed. Install with: uv pip install --python .venv-lerobot/bin/python3 mujoco")
+
+    try:
+        rewritten_urdf = _rewrite_mesh_paths_to_basenames(urdf_content)
+    except ET.ParseError as exc:
+        return SimulationPrepValidationReport(
+            success=False,
+            error=f"URDF XML parse error: {exc}",
+            geometry_count=0,
+            geometries=[],
+            smoke_simulation=None,
+            mujoco_available=mujoco_available,
+            warnings=warnings,
+        )
+
+    with tempfile.TemporaryDirectory(prefix="simulation-prep-validate-") as workspace_raw:
+        workspace = Path(workspace_raw)
+        urdf_path = workspace / SIMULATION_PREP_MUJOCO_STAGE_URDF_FILENAME
+        urdf_path.write_text(rewritten_urdf, encoding="utf-8")
+
+        staged_basenames: set[str] = set()
+        for name, data in mesh_files_by_name.items():
+            basename = Path(name).name
+            (workspace / basename).write_bytes(data)
+            staged_basenames.add(basename)
+
+        try:
+            expectations = collect_urdf_collision_mesh_geometries(urdf_path)
+        except ValueError:
+            expectations = ()
+        except FileNotFoundError as exc:
+            return SimulationPrepValidationReport(
+                success=False,
+                error=str(exc),
+                geometry_count=0,
+                geometries=[],
+                smoke_simulation=None,
+                mujoco_available=mujoco_available,
+                warnings=warnings,
+            )
+
+        geometry_results: list[SimulationPrepGeometryResult] = []
+
+        if not mujoco_available:
+            for exp in expectations:
+                geometry_results.append(SimulationPrepGeometryResult(
+                    geom_name=exp.geom_name,
+                    mesh_file=exp.mesh_file_name,
+                    staged=exp.mesh_file_name in staged_basenames,
+                    mujoco_loaded=None,
+                    authored_position=None,
+                    authored_quaternion=None,
+                    scale=list(exp.scale),
+                    error=None,
+                ))
+            return SimulationPrepValidationReport(
+                success=True,
+                error=None,
+                geometry_count=len(expectations),
+                geometries=geometry_results,
+                smoke_simulation=None,
+                mujoco_available=False,
+                warnings=warnings,
+            )
+
+        compiled_geometries: dict[str, CompiledMujocoMeshGeometry] = {}
+        mesh_load_error: str | None = None
+        if expectations:
+            mjcf_path = workspace / SIMULATION_PREP_MUJOCO_STAGE_MJCF_FILENAME
+            mjcf_path.write_text(_build_mesh_validation_mjcf(expectations), encoding="utf-8")
+            try:
+                mesh_model = load_mujoco_model(mjcf_path)
+                compiled_geometries = collect_compiled_mesh_geometries(mesh_model)
+            except Exception as exc:
+                mesh_load_error = str(exc)
+
+        for exp in expectations:
+            compiled = compiled_geometries.get(exp.validation_geom_name)
+            error: str | None = mesh_load_error if (mesh_load_error and compiled is None) else None
+            geometry_results.append(SimulationPrepGeometryResult(
+                geom_name=exp.geom_name,
+                mesh_file=exp.mesh_file_name,
+                staged=exp.mesh_file_name in staged_basenames,
+                mujoco_loaded=compiled is not None,
+                authored_position=list(compiled.authored_position) if compiled else None,
+                authored_quaternion=list(compiled.authored_quaternion) if compiled else None,
+                scale=list(compiled.mesh_scale) if compiled else list(exp.scale),
+                error=error,
+            ))
+
+        smoke_result: SimulationPrepSmokeSimResult | None = None
+        try:
+            full_model = load_mujoco_model(urdf_path)
+            run_headless_smoke_simulation(full_model)
+            smoke_result = SimulationPrepSmokeSimResult(
+                ran=True,
+                steps=SIMULATION_PREP_MUJOCO_SMOKE_STEP_COUNT,
+                passed=True,
+                error=None,
+            )
+        except Exception as exc:
+            smoke_result = SimulationPrepSmokeSimResult(
+                ran=True,
+                steps=SIMULATION_PREP_MUJOCO_SMOKE_STEP_COUNT,
+                passed=False,
+                error=str(exc),
+            )
+
+        meshes_ok = all(g.mujoco_loaded is not False for g in geometry_results)
+        smoke_ok = smoke_result is None or smoke_result.passed
+
+        return SimulationPrepValidationReport(
+            success=meshes_ok and smoke_ok,
+            error=None,
+            geometry_count=len(expectations),
+            geometries=geometry_results,
+            smoke_simulation=smoke_result,
+            mujoco_available=True,
+            warnings=warnings,
+        )

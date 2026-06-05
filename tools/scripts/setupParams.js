@@ -21,6 +21,7 @@ export const GENESIS_RENDER_PACKAGE = 'imgui-bundle==1.92.801';
 export const GENESIS_PYTHON_DEPENDENCIES = [GENESIS_WORLD_PACKAGE, GENESIS_RENDER_PACKAGE];
 export const BACKEND_PYTHON_PORTABLE_DEPENDENCIES = [
   'fastapi',
+  'python-multipart',
   'uvicorn',
   'pydantic',
   'huggingface_hub',
@@ -54,7 +55,7 @@ export const BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT = [
   'for package_name, expected_version in expected_versions.items():',
   '    actual_version = metadata.version(package_name)',
   '    assert actual_version == expected_version, f"{package_name}=={actual_version}, expected {expected_version}"',
-  'for module_name in ("fastapi", "uvicorn", "pytest", "yourdfpy", "hppfcl", "pinocchio", "placo"):',
+  'for module_name in ("fastapi", "multipart", "uvicorn", "pytest", "yourdfpy", "hppfcl", "pinocchio", "placo"):',
   '    importlib.import_module(module_name)',
   'print("backend python portable runtime ok")',
 ].join('\n');

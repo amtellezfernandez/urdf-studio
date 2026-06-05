@@ -173,7 +173,18 @@ export default defineConfig(({ mode }) => {
         deny: devServerFileDenyList,
       },
       proxy: buildDevServerProxy({ runtimeConfig, runtimeUrls }),
-      ...(mode === "test" || process.env.VITEST ? { hmr: false, ws: false } : {}),
+      // In WSL2 the Windows host resets idle TCP connections, which Vite
+      // misreads as "server down" and calls location.reload(), causing the
+      // recurring white-screen reload loop. Pinning the HMR WebSocket to the
+      // configured browser-facing host keeps it routed through the WSL2
+      // localhost proxy when used, and clientPort prevents port mismatches.
+      hmr: (mode === "test" || process.env.VITEST)
+        ? false
+        : {
+            host: runtimeConfig.web.host,
+            clientPort: runtimeConfig.web.port,
+          },
+      ...(mode === "test" || process.env.VITEST ? { ws: false } : {}),
     },
     plugins: [
       createTeamSharingGate(),

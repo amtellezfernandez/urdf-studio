@@ -43,7 +43,7 @@ npm run start
 
 Open:
 
-- URDF Studio: `http://localhost:5173`
+- URDF Studio: `http://127.0.0.1:5173`
 - URDF Ops: `http://127.0.0.1:5174`
 
 Use `npm run start` for the real app. It starts the frontend, backend, and synchronized URDF Ops session. Use `npm run dev` only when you intentionally want the frontend without the backend.
@@ -52,14 +52,14 @@ Use `npm run start` for the real app. It starts the frontend, backend, and synch
 
 After `npm run start`, the terminal prints a `Ready:` block. A healthy local run has:
 
-- Studio frontend on `http://localhost:5173`
-- Studio backend on `http://localhost:8000`
+- Studio frontend on `http://127.0.0.1:5173`
+- Studio backend on `http://127.0.0.1:8000`
 - URDF Ops frontend on `http://127.0.0.1:5174`
 - URDF Ops backend on `http://127.0.0.1:8001`
 
 Fast smoke test:
 
-1. Open `http://localhost:5173`.
+1. Open `http://127.0.0.1:5173`.
 2. Click `Play Sample Motion`.
 3. In `Episodes`, click the first episode play button once.
 4. The button should change to pause, the frame counter should advance, and the graph cursor should move smoothly.
@@ -109,6 +109,7 @@ npm run setup -- --twin
 | Command | Use For | Starts Backend? | Starts URDF Ops? |
 | --- | --- | --- | --- |
 | `npm run start` | Normal local app | Yes | Yes, or reuses it |
+| `npm run team` | Intentional same-Wi-Fi/Tailnet sharing | Yes | Yes, or reuses it |
 | `npm run dev` | Frontend-only UI work | No | No |
 | `npm run data` | Phone/tunnel data mode | Yes | Yes, plus restricted public ingress |
 | `npm run start -- --help` | Runtime options | N/A | N/A |
@@ -194,7 +195,13 @@ URDF_OPS_WEB_PORT=5176 URDF_OPS_API_PORT=8003 npm run start
 
 ## Security Defaults
 
-`npm run start` binds locally by default. Remote access requires explicit acknowledgement:
+`npm run start` binds locally by default. For intentional collaboration, prefer the guarded team launcher:
+
+```bash
+npm run team
+```
+
+Raw non-loopback binds remain available for explicit advanced use and require acknowledgement:
 
 ```bash
 npm run start -- --web-bind-host 0.0.0.0 --allow-remote --ack-remote-exposure
