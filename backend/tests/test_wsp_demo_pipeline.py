@@ -29,6 +29,10 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert summary["dataset"]["sample_schema_version"] == "wsp-world-model-sample-v1"
     assert summary["dataset"]["readiness"]["ready"] is True
     assert summary["dataset"]["readiness"]["feature_dim"] == len(summary["dataset"]["feature_schema"])
+    assert summary["dataset"]["baseline"]["success"] is True
+    assert summary["dataset"]["baseline"]["sample_count"] == summary["dataset"]["sample_count"]
+    assert summary["dataset"]["baseline"]["feature_dim"] == 18
+    assert summary["dataset"]["baseline"]["matched_entity_count"] > 0
     assert summary["export"]["success"] is True
     assert summary["export"]["mujoco"]["success"] is True
     assert summary["export"]["mujoco"]["smoke_passed"] is True
@@ -66,3 +70,9 @@ def test_wsp_demo_pipeline_writes_full_claim_artifacts(tmp_path) -> None:
     assert readiness["errors"] == []
     assert readiness["executable_count"] == summary["dataset"]["executable_count"]
     assert readiness["rejected_count"] == summary["dataset"]["rejected_count"]
+
+    baseline_report = json.loads(Path(summary["artifacts"]["world_model_baseline_report"]).read_text(encoding="utf-8"))
+    baseline_model = json.loads(Path(summary["artifacts"]["world_model_baseline_model"]).read_text(encoding="utf-8"))
+    assert baseline_report["success"] is True
+    assert baseline_report["metrics"]["baseline_schema_version"] == "wsp-action-delta-baseline-v1"
+    assert baseline_model["schema_version"] == "wsp-action-delta-baseline-v1"

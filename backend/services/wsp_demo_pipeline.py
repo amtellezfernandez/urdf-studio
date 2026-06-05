@@ -13,6 +13,10 @@ from backend.services.simulator_export import (
     export_rollout_trace_to_genesis_scene,
     export_rollout_trace_to_mujoco_mjcf,
 )
+from backend.services.world_model_baseline import (
+    train_world_model_transition_baseline,
+    write_world_model_baseline_artifacts,
+)
 from backend.services.world_model_dataset import (
     build_world_model_training_samples,
     validate_world_model_dataset_samples,
@@ -102,6 +106,8 @@ def run_wsp_demo_pipeline(
     world_model_samples_path = output_dir / "world_model_samples.jsonl"
     world_model_manifest_path = output_dir / "world_model_dataset_manifest.json"
     world_model_readiness_path = output_dir / "world_model_dataset_readiness.json"
+    world_model_baseline_report_path = output_dir / "world_model_baseline_report.json"
+    world_model_baseline_model_path = output_dir / "world_model_baseline_model.json"
     summary_path = output_dir / "summary.json"
 
     compiled_path.write_text(compiled.model_dump_json(indent=2) + "\n", encoding="utf-8")
@@ -127,6 +133,18 @@ def run_wsp_demo_pipeline(
         require_simulator_exports=False,
     )
     world_model_readiness_path.write_text(world_model_readiness.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    world_model_baseline_report, world_model_baseline_model = train_world_model_transition_baseline(
+        world_model_samples,
+        dataset_id=world_model_manifest.dataset_id,
+        min_samples=2,
+        require_executable_and_rejected=True,
+    )
+    write_world_model_baseline_artifacts(
+        world_model_baseline_report,
+        world_model_baseline_model,
+        report_path=world_model_baseline_report_path,
+        model_path=world_model_baseline_model_path,
+    )
 
     summary = {
         "ok": (
@@ -138,11 +156,12 @@ def run_wsp_demo_pipeline(
             and world_model_manifest.executable_count > 0
             and world_model_manifest.rejected_count > 0
             and world_model_readiness.ready
+            and world_model_baseline_report.success
         ),
         "claim": (
             "WSP-0.1 demonstrates scene -> physical-state tokens -> action rollout -> "
             "executability audit -> repair branches -> MuJoCo and Genesis export -> "
-            "world-model training samples."
+            "world-model training samples -> trainability smoke baseline."
         ),
         "scene_path": str(scene_path),
         "artifacts": {
@@ -157,6 +176,8 @@ def run_wsp_demo_pipeline(
             "world_model_samples": str(world_model_samples_path),
             "world_model_dataset_manifest": str(world_model_manifest_path),
             "world_model_dataset_readiness": str(world_model_readiness_path),
+            "world_model_baseline_report": str(world_model_baseline_report_path),
+            "world_model_baseline_model": str(world_model_baseline_model_path),
         },
         "compile": {
             "entity_count": len(compiled.frame.entities),
@@ -221,6 +242,7 @@ def run_wsp_demo_pipeline(
             "sample_schema_version": world_model_manifest.sample_schema_version,
             "feature_schema": world_model_manifest.feature_schema,
             "readiness": world_model_readiness.model_dump(mode="json"),
+            "baseline": world_model_baseline_report.model_dump(mode="json"),
         },
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

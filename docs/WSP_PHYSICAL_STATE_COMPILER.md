@@ -10,9 +10,13 @@ scene or world package
   -> executability audit
   -> corrective branch generation
   -> simulator-state export
+  -> world-model sample export
+  -> trainability smoke baseline
 ```
 
-It is not a learned world model yet. The purpose is to make the physical state layer explicit enough to plug into learned rollouts later.
+It is not a production learned world model yet. The purpose is to make the physical
+state layer explicit enough to plug into learned rollouts and prove that the exported
+samples can be consumed by a model-training loop.
 
 ## Commands
 
@@ -35,6 +39,8 @@ That command writes:
 - `/tmp/wsp-demo/world_model_samples.jsonl`
 - `/tmp/wsp-demo/world_model_dataset_manifest.json`
 - `/tmp/wsp-demo/world_model_dataset_readiness.json`
+- `/tmp/wsp-demo/world_model_baseline_report.json`
+- `/tmp/wsp-demo/world_model_baseline_model.json`
 - `/tmp/wsp-demo/summary.json`
 
 Compile a static layout or world package:
@@ -109,6 +115,16 @@ npm run wsp:dataset:check -- /tmp/wsp-world-model-samples.jsonl \
   --out /tmp/wsp-world-model-readiness.json
 ```
 
+Run the trainability smoke test:
+
+```bash
+npm run wsp:train-baseline -- /tmp/wsp-world-model-samples.jsonl \
+  --require-balanced-labels \
+  --min-samples 2 \
+  --out /tmp/wsp-world-model-baseline-report.json \
+  --model-out /tmp/wsp-world-model-baseline.json
+```
+
 MuJoCo export converts physical frames declared as `studio-y-up` into simulator `z-up`
 coordinates with the same `studio-y-up-to-z-up` mapping used by the static world-layout
 transfer gate. The export also preserves primitive color metadata and explicit
@@ -127,6 +143,12 @@ executability label, audit score, and optional simulator export provenance.
 The dataset manifest records the stable entity feature schema, entity/action vocab maps,
 constraint vocab, and sample schema version. The readiness check fails on feature-dimension
 drift or duplicate sample ids.
+
+The baseline trainer is intentionally small and dependency-free. It fits an
+action-conditioned mean-delta transition model over the fixed WSP feature schema,
+evaluates held-out state/action/next-state rows, and writes a report with feature
+MAE, position MAE, split counts, readiness metadata, and the learned baseline artifact.
+This is a trainability smoke test, not the final world model.
 
 The audit currently checks:
 
@@ -150,11 +172,12 @@ Ready:
 - MuJoCo MJCF and Genesis scene export for executable traces and selected repair branches
 - JSONL world-model transition samples with executable/rejected labels
 - dataset schema/readiness gate for fixed feature dimensions and vocab maps
+- trainability smoke baseline over WSP JSONL state/action/next-state samples
 
 Not ready:
 
 - learned next-state prediction
-- training loop for a learned next-state model
+- production training loop for a learned next-state model
 - rich real-log adapters beyond the current JSON/JSONL observed state/action format
 - robot reachability and full joint-limit rollout auditing
 - high-fidelity contact dynamics or frictional simulation

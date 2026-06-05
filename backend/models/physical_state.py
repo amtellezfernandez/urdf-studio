@@ -306,3 +306,21 @@ class WorldModelDatasetReadinessReport(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldModelBaselineReport(BaseModel):
+    success: bool
+    dataset_id: str | None = None
+    model_type: Literal["action_delta_baseline"] = "action_delta_baseline"
+    sample_count: int = Field(ge=0)
+    train_sample_count: int = Field(ge=0)
+    eval_sample_count: int = Field(ge=0)
+    feature_dim: int = Field(ge=0)
+    matched_entity_count: int = Field(ge=0)
+    action_type_count: int = Field(ge=0)
+    mean_absolute_error: float | None = Field(default=None, ge=0.0)
+    position_mean_absolute_error_m: float | None = Field(default=None, ge=0.0)
+    max_absolute_error: float | None = Field(default=None, ge=0.0)
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)

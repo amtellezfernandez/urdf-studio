@@ -27,6 +27,7 @@ observed robot-state/action log
   -> corrective branch generation
   -> MuJoCo + Genesis simulator export verification
   -> JSONL world-model training samples
+  -> trainability smoke baseline
 ```
 
 ## One-Command Demo
@@ -49,6 +50,8 @@ Expected artifacts:
 /tmp/wsp-demo/world_model_samples.jsonl
 /tmp/wsp-demo/world_model_dataset_manifest.json
 /tmp/wsp-demo/world_model_dataset_readiness.json
+/tmp/wsp-demo/world_model_baseline_report.json
+/tmp/wsp-demo/world_model_baseline_model.json
 /tmp/wsp-demo/summary.json
 ```
 
@@ -69,6 +72,7 @@ export: MuJoCo and Genesis success
 verification: position/size/quaternion/collision equivalence
 dataset: executable and rejected transition samples for model training
 readiness: fixed feature schema, vocab maps, and label distribution
+baseline: action-conditioned next-state training smoke test
 ```
 
 ## Acceptance Criteria
@@ -91,6 +95,7 @@ world-model sample JSONL contains state/action/next-state tokens
 world-model sample JSONL contains both rejected and executable labels
 observed robot-state/action log -> WSP trace -> world-model samples
 dataset readiness check enforces stable feature dimensions and vocab metadata
+trainability smoke test consumes JSONL and reports held-out next-state error
 ```
 
 ## Commands To Prove It
@@ -120,6 +125,13 @@ npm run wsp:dataset:check -- \
   --require-balanced-labels \
   --out /tmp/wsp-demo/world-model-readiness.json
 
+npm run wsp:train-baseline -- \
+  /tmp/wsp-demo/world-model-samples.jsonl \
+  --require-balanced-labels \
+  --min-samples 2 \
+  --out /tmp/wsp-demo/world-model-baseline-report.json \
+  --model-out /tmp/wsp-demo/world-model-baseline.json
+
 npm run wsp:ingest-log -- observed_robot_log.json --out /tmp/wsp-observed-trace.json
 ```
 
@@ -145,11 +157,12 @@ npm run scalar-constants:check
 - Simulator equivalence verification for position, size, quaternion, type, missing objects, and collision flags.
 - JSONL state/action/next-state samples with executable/rejected labels for world-model training.
 - Dataset readiness gate with stable feature schema, vocab maps, and feature-dimension checks.
+- Trainability smoke baseline that fits and evaluates action-conditioned next-state deltas over WSP JSONL.
 
 ## What Is Not Ready
 
 - Learned next-state model.
-- Training job for the next-state model.
+- Production training job for a learned next-state model.
 - Production adapters for every real robot log format.
 - Full robot reachability and joint-limit rollout auditing.
 - High-fidelity contact dynamics.
