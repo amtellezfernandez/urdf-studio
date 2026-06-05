@@ -20,9 +20,18 @@ import {
   URDF_OPS_SKIP_SETUP_ENV,
 } from './urdfOpsParams.js';
 import {
-  BACKEND_PYTHON_DEPENDENCIES,
+  BACKEND_PYTHON_JAX_DEPENDENCIES,
+  BACKEND_PYTHON_PLACO_DEPENDENCIES,
+  BACKEND_PYTHON_PORTABLE_DEPENDENCIES,
+  BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT,
+  BACKEND_NATIVE_SIM_FORCE_ENV,
+  BACKEND_NATIVE_SIM_SKIP_ENV,
   BACKEND_PYTHON_STALE_DEPENDENCIES,
   BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT,
+  GENESIS_FORCE_INSTALL_ENV,
+  GENESIS_PYTHON_DEPENDENCIES,
+  GENESIS_SKIP_AUTO_INSTALL_ENV,
+  GENESIS_VERIFY_IMPORT_SCRIPT,
   GITHUB_CLI_LOGIN_COMMAND,
   GITHUB_FINE_GRAINED_TOKEN_URL,
   GLOBAL_ILU_INSTALL_COMMAND,
@@ -32,7 +41,9 @@ import {
   LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT,
   LOCAL_ILU_COMMAND,
   MJLAB_DEPENDENCIES,
+  MJLAB_FORCE_INSTALL_ENV,
   MJLAB_SKIP_AUTO_INSTALL_ENV,
+  MJX_SYSTEM_ID_DEPENDENCIES,
   MJLAB_VERIFY_IMPORT_SCRIPT,
   PYTHON_ENV_DIRNAME,
   SETUP_NPM_INSTALL_FLAGS,
@@ -799,11 +810,134 @@ function findPythonForLeRobot() {
 }
 
 function shouldInstallOfficialLeRobot() {
-  return !isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL);
+  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL)) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env.URDF_STUDIO_INSTALL_LEROBOT)) {
+    return true;
+  }
+  return process.platform !== 'darwin';
+}
+
+function getLeRobotToolchainSkipMessage() {
+  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL)) {
+    return 'Official LeRobot training runtime skipped by URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL.';
+  }
+  return 'Official LeRobot training runtime skipped on macOS. Set URDF_STUDIO_INSTALL_LEROBOT=1 to force install.';
 }
 
 function shouldInstallMjlab() {
-  return !isTruthyEnvValue(process.env[MJLAB_SKIP_AUTO_INSTALL_ENV]);
+  if (isTruthyEnvValue(process.env[MJLAB_SKIP_AUTO_INSTALL_ENV])) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env[MJLAB_FORCE_INSTALL_ENV])) {
+    return true;
+  }
+  return process.platform !== 'darwin';
+}
+
+function shouldInstallOpenArmHardwareRuntime() {
+  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL)) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env.URDF_STUDIO_INSTALL_OPENARM_HARDWARE)) {
+    return true;
+  }
+  return process.platform !== 'darwin';
+}
+
+function getOpenArmHardwareRuntimeSkipMessage() {
+  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL)) {
+    return 'OpenArm hardware runtime skipped by URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL.';
+  }
+  return 'OpenArm hardware runtime skipped on macOS. Set URDF_STUDIO_INSTALL_OPENARM_HARDWARE=1 to force install.';
+}
+
+function shouldInstallBackendNativeSimRuntime() {
+  if (isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_SKIP_ENV])) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_FORCE_ENV])) {
+    return true;
+  }
+  return process.platform !== 'darwin';
+}
+
+function getBackendNativeSimSkipMessage() {
+  if (isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_SKIP_ENV])) {
+    return `Native simulation backend runtime skipped by ${BACKEND_NATIVE_SIM_SKIP_ENV}.`;
+  }
+  if (process.platform === 'darwin') {
+    return [
+      'Native simulation backend runtime skipped on macOS.',
+      'The pinned JAX/MJX system-id packages are not available for every macOS architecture.',
+      `Set ${BACKEND_NATIVE_SIM_FORCE_ENV}=1 to force install.`,
+    ].join(' ');
+  }
+  return `Native simulation backend runtime skipped. Set ${BACKEND_NATIVE_SIM_FORCE_ENV}=1 to force install.`;
+}
+
+function resolveBackendPythonDependencies() {
+  const baseDependencies = [
+    ...BACKEND_PYTHON_PORTABLE_DEPENDENCIES,
+    ...BACKEND_PYTHON_PLACO_DEPENDENCIES,
+  ];
+  if (!shouldInstallBackendNativeSimRuntime()) {
+    return baseDependencies;
+  }
+  return [
+    ...baseDependencies,
+    ...BACKEND_PYTHON_JAX_DEPENDENCIES,
+    ...MJX_SYSTEM_ID_DEPENDENCIES,
+  ];
+}
+
+function resolveBackendPythonVerifyImportScript() {
+  if (!shouldInstallBackendNativeSimRuntime()) {
+    return BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT;
+  }
+  return BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT;
+}
+
+function shouldInstallGenesisRuntime() {
+  if (isTruthyEnvValue(process.env[GENESIS_SKIP_AUTO_INSTALL_ENV])) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env[GENESIS_FORCE_INSTALL_ENV])) {
+    return true;
+  }
+  return process.platform === 'linux';
+}
+
+function getGenesisRuntimeSkipMessage() {
+  if (isTruthyEnvValue(process.env[GENESIS_SKIP_AUTO_INSTALL_ENV])) {
+    return `Genesis static world viewer runtime skipped by ${GENESIS_SKIP_AUTO_INSTALL_ENV}.`;
+  }
+  if (process.platform === 'darwin') {
+    return [
+      'Genesis static world viewer runtime skipped on macOS.',
+      'The pinned Genesis viewer packages include native wheels that are not consistently available for macOS.',
+      `MuJoCo static layout checks still install; set ${GENESIS_FORCE_INSTALL_ENV}=1 to force Genesis install.`,
+    ].join(' ');
+  }
+  return [
+    `Genesis static world viewer runtime skipped on ${process.platform}.`,
+    `Set ${GENESIS_FORCE_INSTALL_ENV}=1 to force install.`,
+  ].join(' ');
+}
+
+function getMjlabRuntimeSkipMessage() {
+  if (isTruthyEnvValue(process.env[MJLAB_SKIP_AUTO_INSTALL_ENV])) {
+    return `MJLab validation runtime skipped by ${MJLAB_SKIP_AUTO_INSTALL_ENV}.`;
+  }
+  if (process.platform === 'darwin') {
+    return [
+      'MJLab validation runtime skipped on macOS.',
+      'The pinned MuJoCo-Warp/Warp wheels are not available for every macOS architecture.',
+      `Set ${MJLAB_FORCE_INSTALL_ENV}=1 to force install.`,
+    ].join(' ');
+  }
+  return `MJLab validation runtime skipped. Set ${MJLAB_FORCE_INSTALL_ENV}=1 to force install.`;
 }
 
 function listInstalledPythonPackageNames(venvPython) {
@@ -859,6 +993,10 @@ function printCapturedCommandOutput(result) {
 
 async function installOfficialLeRobotToolchain() {
   if (!shouldInstallOfficialLeRobot()) {
+    log('');
+    logArrow('🤖 Checking official LeRobot training toolchain');
+    log('');
+    logInfo(getLeRobotToolchainSkipMessage());
     return true;
   }
 
@@ -919,6 +1057,14 @@ async function installOfficialLeRobotToolchain() {
 }
 
 async function installOpenArmHardwareRuntime() {
+  if (!shouldInstallOpenArmHardwareRuntime()) {
+    log('');
+    logArrow('🦾 Checking OpenArm hardware runtime');
+    log('');
+    logInfo(getOpenArmHardwareRuntimeSkipMessage());
+    return true;
+  }
+
   log('');
   logArrow('🦾 Installing OpenArm hardware runtime');
   log('');
@@ -972,6 +1118,10 @@ async function installOpenArmHardwareRuntime() {
 
 async function installMjlabRuntime() {
   if (!shouldInstallMjlab()) {
+    log('');
+    logArrow('🧪 Checking MJLab validation runtime');
+    log('');
+    logInfo(getMjlabRuntimeSkipMessage());
     return { ok: true, installed: false, skipped: true };
   }
 
@@ -1040,6 +1190,12 @@ async function installBackendDeps() {
     return false;
   }
 
+  const backendPythonDependencies = resolveBackendPythonDependencies();
+  const backendVerifyImportScript = resolveBackendPythonVerifyImportScript();
+  if (!shouldInstallBackendNativeSimRuntime()) {
+    logInfo(getBackendNativeSimSkipMessage());
+  }
+
   try {
     const installedPackageNames = listInstalledPythonPackageNames(venvPython);
     const installedStaleDependencies = selectInstalledStalePythonDependencies({
@@ -1063,22 +1219,22 @@ async function installBackendDeps() {
     logInfo('Continuing after stale backend package cleanup could not inspect or remove obsolete packages.');
   }
 
-  const existingBackendCheck = runPythonImportCheck(venvPython, BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT);
+  const existingBackendCheck = runPythonImportCheck(venvPython, backendVerifyImportScript);
   if (existingBackendCheck.ok) {
     logSuccess('Backend Python runtime ready');
     return true;
   }
   logInfo('Installing or repairing backend Python packages...');
-  logInfo(`Installing: ${BACKEND_PYTHON_DEPENDENCIES.join(', ')}`);
+  logInfo(`Installing: ${backendPythonDependencies.join(', ')}`);
 
   try {
-    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...BACKEND_PYTHON_DEPENDENCIES], {
+    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...backendPythonDependencies], {
       cwd: rootDir,
       stdio: 'inherit',
       env: getUvEnv()
     });
     logInfo('Verifying backend Python runtime...');
-    const installedBackendCheck = runPythonImportCheck(venvPython, BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT);
+    const installedBackendCheck = runPythonImportCheck(venvPython, backendVerifyImportScript);
     if (!installedBackendCheck.ok) {
       printCapturedCommandOutput(installedBackendCheck);
       throw new Error(installedBackendCheck.output || 'Backend Python import check failed after install.');
@@ -1088,8 +1244,61 @@ async function installBackendDeps() {
   } catch (e) {
     log('✗ Failed to install backend dependencies', colors.yellow);
     logInfo(`   You can try installing manually:`);
-    logInfo(`     "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${BACKEND_PYTHON_DEPENDENCIES.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
+    logInfo(`     "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${backendPythonDependencies.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
     return false;
+  }
+}
+
+async function installGenesisRuntime() {
+  if (!shouldInstallGenesisRuntime()) {
+    log('');
+    logArrow('🌐 Checking Genesis static world viewer runtime');
+    log('');
+    logInfo(getGenesisRuntimeSkipMessage());
+    return { ok: true, installed: false, skipped: true };
+  }
+
+  log('');
+  logArrow('🌐 Installing Genesis static world viewer runtime');
+  log('');
+
+  const venvPython = getManagedPythonPath();
+  const uvPath = findUv();
+  if (!existsSync(venvPython)) {
+    logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
+    return { ok: false, installed: false, skipped: false };
+  }
+  if (!uvPath) {
+    log('✗ uv not found. Genesis setup requires uv.', colors.yellow);
+    return { ok: false, installed: false, skipped: false };
+  }
+
+  const existingGenesisCheck = runPythonImportCheck(venvPython, GENESIS_VERIFY_IMPORT_SCRIPT);
+  if (existingGenesisCheck.ok) {
+    logSuccess('Genesis static world viewer runtime ready');
+    return { ok: true, installed: true, skipped: false };
+  }
+
+  try {
+    logInfo(`Installing Genesis packages in ${PYTHON_ENV_DIRNAME}...`);
+    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...GENESIS_PYTHON_DEPENDENCIES], {
+      cwd: rootDir,
+      stdio: 'inherit',
+      env: getUvEnv(),
+    });
+
+    const installedGenesisCheck = runPythonImportCheck(venvPython, GENESIS_VERIFY_IMPORT_SCRIPT);
+    if (!installedGenesisCheck.ok) {
+      printCapturedCommandOutput(installedGenesisCheck);
+      throw new Error(installedGenesisCheck.output || 'Genesis import check failed after install.');
+    }
+    logSuccess('Genesis static world viewer runtime installed');
+    return { ok: true, installed: true, skipped: false };
+  } catch (e) {
+    log('✗ Failed to install Genesis static world viewer runtime', colors.yellow);
+    logInfo('Try manually on a compatible Linux environment:');
+    logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${GENESIS_PYTHON_DEPENDENCIES.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
+    return { ok: false, installed: false, skipped: false };
   }
 }
 
@@ -1131,6 +1340,10 @@ async function main() {
     const backendDepsInstalled = await installBackendDeps();
     if (!backendDepsInstalled) {
       throw new Error('Backend dependencies installation failed');
+    }
+    const genesisRuntimeResult = await installGenesisRuntime();
+    if (!genesisRuntimeResult.ok) {
+      throw new Error('Genesis static world viewer runtime installation failed');
     }
     const lerobotToolchainInstalled = await installOfficialLeRobotToolchain();
     if (!lerobotToolchainInstalled) {
