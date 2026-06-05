@@ -5,12 +5,53 @@ import type {
   WorldLabsCapabilitiesResponse,
   WorldLabsGenerateRequest,
   WorldLabsGenerateResponse,
+  WorldLabsListWorldsRequest,
+  WorldLabsListWorldsResponse,
   WorldLabsOperationStatusResponse,
+  WorldLabsWorldImportResponse,
 } from "@/features/world-share/worldLabsTypes";
 
 const WORLD_LABS_API_ROOT = `${API_BASE_URL}/worlds/world-labs`;
 const WORLD_LABS_API_OPTIONS = {
   requiredBackends: FEATURE_GATES.worldsRegistry.requiredBackends,
+};
+const WORLD_LABS_WORLD_ID_QUERY_KEYS = ["world_id", "worldId", "id"] as const;
+
+const cleanWorldLabsWorldId = (value: string) =>
+  decodeURIComponent(value.trim()).replace(/^worlds?\//i, "").replace(/\/+$/, "");
+
+export const parseWorldLabsWorldId = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    const url = new URL(trimmed);
+    for (const key of WORLD_LABS_WORLD_ID_QUERY_KEYS) {
+      const queryValue = url.searchParams.get(key);
+      if (queryValue) return cleanWorldLabsWorldId(queryValue);
+    }
+    const segments = url.pathname.split("/").filter(Boolean);
+    const worldMarkerIndex = segments.findIndex((segment) =>
+      ["world", "worlds"].includes(segment.toLowerCase())
+    );
+    const markedWorldId = worldMarkerIndex >= 0 ? segments[worldMarkerIndex + 1] : null;
+    if (markedWorldId) return cleanWorldLabsWorldId(markedWorldId);
+    const oneSegmentWorldId = segments.length === 1 ? segments[0] : null;
+    if (
+      oneSegmentWorldId &&
+      !["dashboard", "explore", "library", "world", "worlds"].includes(
+        oneSegmentWorldId.toLowerCase()
+      )
+    ) {
+      return cleanWorldLabsWorldId(oneSegmentWorldId);
+    }
+    return "";
+  } catch {
+    const queryMatch = trimmed.match(/[?&](?:world_id|worldId|id)=([^&#\s]+)/);
+    if (queryMatch?.[1]) return cleanWorldLabsWorldId(queryMatch[1]);
+  }
+
+  return cleanWorldLabsWorldId(trimmed);
 };
 
 const readErrorText = async (response: Response) => {
@@ -67,4 +108,17 @@ export const getWorldLabsOperation = (operationId: string) =>
   getJson<WorldLabsOperationStatusResponse>(
     `/operations/${encodeURIComponent(operationId)}`,
     "World Labs operation"
+  );
+
+export const listWorldLabsWorlds = (request: WorldLabsListWorldsRequest = {}) =>
+  postJson<WorldLabsListWorldsResponse>(
+    "/worlds:list",
+    request,
+    "World Labs library"
+  );
+
+export const importWorldLabsWorld = (worldId: string) =>
+  getJson<WorldLabsWorldImportResponse>(
+    `/worlds/${encodeURIComponent(worldId)}`,
+    "World Labs world import"
   );

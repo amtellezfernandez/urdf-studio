@@ -4,7 +4,7 @@ import json
 from io import BytesIO
 from urllib.request import Request
 
-from backend.models.world_labs import WorldLabsGenerateRequest
+from backend.models.world_labs import WorldLabsGenerateRequest, WorldLabsListWorldsRequest
 from backend.services.world_labs import WorldLabsService
 
 
@@ -100,5 +100,85 @@ def test_world_labs_operation_maps_completed_world_to_wsp_package() -> None:
     assert status.world_package is not None
     assert status.world_package.package_id == "world-labs-world-abc"
     assert status.world_package.provenance["source"] == "world_labs"
+    assert status.world_package.provenance["source_registry"] == "world-labs-marble"
+    assert status.world_package.provenance["preview_image_url"] == "https://cdn.example.test/thumb.jpg"
+    assert status.world_package.provenance["tags"] == ["world-labs", "marble", "generated", "wsp"]
     assert status.world_package.provenance["world_marble_url"] == "https://marble.worldlabs.ai/world/world_abc"
+    assert status.world_package.provenance["share"]["world_id"] == "world_abc"
     assert any(artifact.kind == "world_labs_collider_mesh" for artifact in status.world_package.artifacts)
+
+
+def test_world_labs_lists_persistent_worlds() -> None:
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(request: Request, timeout: int):
+        captured["url"] = request.full_url
+        captured["body"] = json.loads((request.data or b"{}").decode("utf-8"))
+        return FakeHttpResponse(
+            {
+                "worlds": [
+                    {
+                        "world_id": "world_abc",
+                        "display_name": "Warehouse loading bay",
+                        "world_marble_url": "https://marble.worldlabs.ai/world/world_abc",
+                        "permission": {"public": False},
+                        "assets": {"thumbnail_url": "https://cdn.example.test/thumb.jpg"},
+                    }
+                ],
+                "next_page_token": "next-1",
+            }
+        )
+
+    service = WorldLabsService(
+        api_key="test-key",
+        api_base_url="https://api.example.test/marble/v1",
+        urlopen=fake_urlopen,
+    )
+    worlds = service.list_worlds(WorldLabsListWorldsRequest(page_size=10, tags=["wsp"]))
+
+    assert captured["url"] == "https://api.example.test/marble/v1/worlds:list"
+    assert captured["body"] == {"page_size": 10, "tags": ["wsp"]}
+    assert worlds.next_page_token == "next-1"
+    assert len(worlds.worlds) == 1
+    assert worlds.worlds[0].world_id == "world_abc"
+    assert worlds.worlds[0].public is False
+    assert worlds.worlds[0].thumbnail_url == "https://cdn.example.test/thumb.jpg"
+
+
+def test_world_labs_imports_existing_world_as_wsp_fork() -> None:
+    def fake_urlopen(request: Request, timeout: int):
+        assert request.full_url == "https://api.example.test/marble/v1/worlds/world_abc"
+        return FakeHttpResponse(
+            {
+                "world": {
+                    "world_id": "world_abc",
+                    "display_name": "Warehouse loading bay",
+                    "world_marble_url": "https://marble.worldlabs.ai/world/world_abc",
+                    "assets": {
+                        "thumbnail_url": "https://cdn.example.test/thumb.jpg",
+                        "mesh": {"collider_mesh_url": "https://cdn.example.test/collider.glb"},
+                        "splats": {
+                            "semantics_metadata": {
+                                "metric_scale_factor": 0.5,
+                                "ground_plane_offset": 0.02,
+                            }
+                        },
+                    },
+                }
+            }
+        )
+
+    service = WorldLabsService(
+        api_key="test-key",
+        api_base_url="https://api.example.test/marble/v1",
+        urlopen=fake_urlopen,
+    )
+    imported = service.import_world("world_abc")
+
+    assert imported.world_id == "world_abc"
+    assert imported.metric_scale_factor == 0.5
+    assert imported.world_package.package_id == "world-labs-world-abc"
+    assert imported.world_package.provenance["operation_id"] is None
+    assert imported.world_package.provenance["share"]["world_marble_url"] == (
+        "https://marble.worldlabs.ai/world/world_abc"
+    )

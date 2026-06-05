@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.models.world_scene_package import WorldScenePackageManifest
 
@@ -70,3 +70,49 @@ class WorldLabsOperationStatusResponse(BaseModel):
     ground_plane_offset: float | None = None
     world_package: WorldScenePackageManifest | None = None
     raw_response: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldLabsWorldSummary(BaseModel):
+    world_id: str
+    display_name: str | None = None
+    world_marble_url: str | None = None
+    thumbnail_url: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    public: bool | None = None
+    raw_world: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldLabsListWorldsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    page_size: int = Field(default=20, ge=1, le=100)
+    page_token: str | None = None
+    tags: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("tags")
+    @classmethod
+    def _normalize_tags(cls, value: list[str]) -> list[str]:
+        tags: list[str] = []
+        for raw_tag in value:
+            tag = raw_tag.strip()
+            if tag and tag not in tags:
+                tags.append(tag)
+        return tags
+
+
+class WorldLabsListWorldsResponse(BaseModel):
+    worlds: list[WorldLabsWorldSummary]
+    next_page_token: str | None = None
+    raw_response: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldLabsWorldImportResponse(BaseModel):
+    world_id: str
+    world_marble_url: str | None = None
+    thumbnail_url: str | None = None
+    collider_mesh_url: str | None = None
+    metric_scale_factor: float | None = None
+    ground_plane_offset: float | None = None
+    world_package: WorldScenePackageManifest
+    raw_world: dict[str, Any] = Field(default_factory=dict)

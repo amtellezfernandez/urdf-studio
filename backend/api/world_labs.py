@@ -7,7 +7,10 @@ from backend.models.world_labs import (
     WorldLabsCapabilitiesResponse,
     WorldLabsGenerateRequest,
     WorldLabsGenerateResponse,
+    WorldLabsListWorldsRequest,
+    WorldLabsListWorldsResponse,
     WorldLabsOperationStatusResponse,
+    WorldLabsWorldImportResponse,
 )
 from backend.services.world_labs import (
     WORLD_LABS_DOCS_URL,
@@ -52,5 +55,27 @@ def get_world_labs_operation(
 ) -> WorldLabsOperationStatusResponse:
     try:
         return world_labs_service.get_operation(operation_id)
+    except WorldLabsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/worlds:list", response_model=WorldLabsListWorldsResponse)
+def list_world_labs_worlds(
+    request: WorldLabsListWorldsRequest,
+    _access: None = Depends(require_simulator_operator_access),
+) -> WorldLabsListWorldsResponse:
+    try:
+        return world_labs_service.list_worlds(request)
+    except WorldLabsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/worlds/{world_id}", response_model=WorldLabsWorldImportResponse)
+def import_world_labs_world(
+    world_id: str,
+    _access: None = Depends(require_simulator_operator_access),
+) -> WorldLabsWorldImportResponse:
+    try:
+        return world_labs_service.import_world(world_id)
     except WorldLabsError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

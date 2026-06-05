@@ -12,7 +12,11 @@ from backend.core.settings import settings
 from backend.models.world_labs import (
     WorldLabsGenerateRequest,
     WorldLabsGenerateResponse,
+    WorldLabsListWorldsRequest,
+    WorldLabsListWorldsResponse,
     WorldLabsOperationStatusResponse,
+    WorldLabsWorldImportResponse,
+    WorldLabsWorldSummary,
 )
 from backend.models.world_scene_package import (
     WorldArtifactRef,
@@ -70,6 +74,20 @@ def _nested_value(value: dict[str, Any], *keys: str) -> Any:
     return current
 
 
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _world_from_response(raw: dict[str, Any]) -> dict[str, Any]:
+    world = _as_record(raw.get("world"))
+    if world:
+        return world
+    response = _as_record(raw.get("response"))
+    if response:
+        return response
+    return raw
+
+
 def _world_id_from_operation(raw: dict[str, Any], world: dict[str, Any]) -> str | None:
     for candidate in (
         world.get("world_id"),
@@ -80,6 +98,51 @@ def _world_id_from_operation(raw: dict[str, Any], world: dict[str, Any]) -> str 
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
     return None
+
+
+def _world_id_from_world(world: dict[str, Any], *, fallback: str | None = None) -> str | None:
+    for candidate in (world.get("world_id"), world.get("id"), fallback):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _world_permission_is_public(world: dict[str, Any]) -> bool | None:
+    permission = _as_record(world.get("permission"))
+    public = permission.get("public")
+    return public if isinstance(public, bool) else None
+
+
+def _string_value(value: Any) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _number_value(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) else None
+
+
+def _world_assets(world: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    assets = _as_record(world.get("assets"))
+    semantics = _nested_record(assets, "splats", "semantics_metadata")
+    mesh = _nested_record(assets, "mesh")
+    return assets, semantics, mesh
+
+
+def _world_summary(world: dict[str, Any]) -> WorldLabsWorldSummary | None:
+    world_id = _world_id_from_world(world)
+    if not world_id:
+        return None
+    assets, _, _ = _world_assets(world)
+    return WorldLabsWorldSummary(
+        world_id=world_id,
+        display_name=_string_value(world.get("display_name")),
+        world_marble_url=_string_value(world.get("world_marble_url")),
+        thumbnail_url=_string_value(assets.get("thumbnail_url")),
+        created_at=_string_value(world.get("created_at")),
+        updated_at=_string_value(world.get("updated_at")),
+        public=_world_permission_is_public(world),
+        raw_world=world,
+    )
 
 
 class WorldLabsService:
@@ -168,9 +231,7 @@ class WorldLabsService:
     def get_operation(self, operation_id: str) -> WorldLabsOperationStatusResponse:
         raw = self._request_json(f"/operations/{operation_id}", method="GET")
         world = _as_record(raw.get("response"))
-        assets = _as_record(world.get("assets"))
-        semantics = _nested_record(assets, "splats", "semantics_metadata")
-        mesh = _nested_record(assets, "mesh")
+        assets, semantics, mesh = _world_assets(world)
         thumbnail_url = assets.get("thumbnail_url")
         world_id = _world_id_from_operation(raw, world)
         metric_scale_factor = semantics.get("metric_scale_factor")
@@ -201,11 +262,59 @@ class WorldLabsService:
             raw_response=raw,
         )
 
+    def list_worlds(self, request: WorldLabsListWorldsRequest) -> WorldLabsListWorldsResponse:
+        payload = request.model_dump(mode="json", exclude_none=True)
+        raw = self._request_json("/worlds:list", method="POST", payload=payload)
+        raw_worlds = (
+            _as_list(raw.get("worlds"))
+            or _as_list(raw.get("items"))
+            or _as_list(raw.get("results"))
+        )
+        worlds = [
+            summary
+            for summary in (_world_summary(_as_record(raw_world)) for raw_world in raw_worlds)
+            if summary is not None
+        ]
+        next_page_token = raw.get("next_page_token") or raw.get("nextPageToken")
+        return WorldLabsListWorldsResponse(
+            worlds=worlds,
+            next_page_token=next_page_token if isinstance(next_page_token, str) else None,
+            raw_response=raw,
+        )
+
+    def import_world(self, world_id: str) -> WorldLabsWorldImportResponse:
+        resolved_world_id = world_id.strip()
+        if not resolved_world_id:
+            raise WorldLabsError("World Labs world_id is required.")
+        raw = self._request_json(f"/worlds/{resolved_world_id}", method="GET")
+        world = _world_from_response(raw)
+        actual_world_id = _world_id_from_world(world, fallback=resolved_world_id)
+        if not actual_world_id:
+            raise WorldLabsError("World Labs world response did not include world_id.")
+        assets, semantics, mesh = _world_assets(world)
+        thumbnail_url = _string_value(assets.get("thumbnail_url"))
+        collider_mesh_url = _string_value(mesh.get("collider_mesh_url"))
+        world_package = self.build_world_scene_package(
+            world,
+            operation_id=_string_value(world.get("operation_id")),
+            world_id=actual_world_id,
+        )
+        return WorldLabsWorldImportResponse(
+            world_id=actual_world_id,
+            world_marble_url=_string_value(world.get("world_marble_url")),
+            thumbnail_url=thumbnail_url,
+            collider_mesh_url=collider_mesh_url,
+            metric_scale_factor=_number_value(semantics.get("metric_scale_factor")),
+            ground_plane_offset=_number_value(semantics.get("ground_plane_offset")),
+            world_package=world_package,
+            raw_world=world,
+        )
+
     def build_world_scene_package(
         self,
         world: dict[str, Any],
         *,
-        operation_id: str,
+        operation_id: str | None,
         world_id: str | None = None,
     ) -> WorldScenePackageManifest:
         resolved_world_id = world_id or str(world.get("world_id") or operation_id)
@@ -303,6 +412,9 @@ class WorldLabsService:
             provenance={
                 "source": "world_labs",
                 "provider": "World Labs",
+                "source_registry": "world-labs-marble",
+                "preview_image_url": thumbnail_url,
+                "tags": ["world-labs", "marble", "generated", "wsp"],
                 "operation_id": operation_id,
                 "world_id": resolved_world_id,
                 "world_marble_url": world_marble_url,
@@ -310,6 +422,13 @@ class WorldLabsService:
                 "collider_mesh_url": collider_mesh_url,
                 "metric_scale_factor": metric_scale_factor,
                 "ground_plane_offset": ground_plane_offset,
+                "share": {
+                    "provider": "World Labs Marble",
+                    "world_id": resolved_world_id,
+                    "operation_id": operation_id,
+                    "world_marble_url": world_marble_url,
+                    "thumbnail_url": thumbnail_url,
+                },
                 "raw_world": world,
                 "notes": [
                     "Generated geometry is a candidate world asset, not a certified robot-executable scene.",

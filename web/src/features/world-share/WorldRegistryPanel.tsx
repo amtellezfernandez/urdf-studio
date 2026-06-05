@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BookOpen,
   ExternalLink,
   Loader2,
   PackageOpen,
@@ -25,10 +26,15 @@ import {
   generateWorldLabsWorld,
   getWorldLabsCapabilities,
   getWorldLabsOperation,
+  importWorldLabsWorld,
+  listWorldLabsWorlds,
+  parseWorldLabsWorldId,
 } from "@/features/world-share/worldLabsApi";
 import type {
   WorldLabsCapabilitiesResponse,
   WorldLabsOperationStatusResponse,
+  WorldLabsWorldImportResponse,
+  WorldLabsWorldSummary,
 } from "@/features/world-share/worldLabsTypes";
 import type {
   WorldScenePackageListEntry,
@@ -114,6 +120,9 @@ const resolveWorldLabsProgress = (operation: WorldLabsOperationStatusResponse | 
   return progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
 };
 
+const resolveWorldLabsDisplayName = (world: WorldLabsWorldSummary) =>
+  world.display_name || world.world_id;
+
 export const WorldRegistryPanel = ({
   open,
   onOpenChange,
@@ -172,6 +181,14 @@ export const WorldRegistryPanel = ({
     useState<WorldLabsOperationStatusResponse | null>(null);
   const [generatedWorldPackage, setGeneratedWorldPackage] =
     useState<WorldScenePackageManifest | null>(null);
+  const [worldLabsWorldIdDraft, setWorldLabsWorldIdDraft] = useState("");
+  const [worldLabsLibraryLoading, setWorldLabsLibraryLoading] = useState(false);
+  const [worldLabsLibraryWorlds, setWorldLabsLibraryWorlds] = useState<WorldLabsWorldSummary[]>([]);
+  const [worldLabsLibraryNextPageToken, setWorldLabsLibraryNextPageToken] =
+    useState<string | null>(null);
+  const [worldLabsImportingWorldId, setWorldLabsImportingWorldId] = useState<string | null>(null);
+  const [worldLabsImportedWorld, setWorldLabsImportedWorld] =
+    useState<WorldLabsWorldImportResponse | null>(null);
   const worldLabsPollTimeoutRef = useRef<number | null>(null);
   const worldLabsPollCountRef = useRef(0);
 
@@ -332,6 +349,73 @@ export const WorldRegistryPanel = ({
     }
   }, [generatedWorldPackage, onPublishGeneratedWorldPackage]);
 
+  const handleListWorldLabsWorlds = useCallback(
+    async (pageToken?: string | null) => {
+      if (worldLabsCapabilities && !worldLabsCapabilities.configured) {
+        setWorldLabsError(
+          worldLabsCapabilities.missing_reason ||
+            "WORLD_LABS_API_KEY is not configured on the backend."
+        );
+        return;
+      }
+      setWorldLabsLibraryLoading(true);
+      setWorldLabsError(null);
+      try {
+        const response = await listWorldLabsWorlds({
+          page_size: 20,
+          page_token: pageToken || null,
+        });
+        setWorldLabsLibraryWorlds((current) =>
+          pageToken ? [...current, ...response.worlds] : response.worlds
+        );
+        setWorldLabsLibraryNextPageToken(response.next_page_token || null);
+      } catch (error) {
+        setWorldLabsError(error instanceof Error ? error.message : "Failed to list World Labs worlds");
+      } finally {
+        setWorldLabsLibraryLoading(false);
+      }
+    },
+    [worldLabsCapabilities]
+  );
+
+  const handleImportWorldLabsWorld = useCallback(
+    async (worldId: string) => {
+      const normalizedWorldId = parseWorldLabsWorldId(worldId);
+      if (!normalizedWorldId) {
+        setWorldLabsError("World Labs Marble link or world_id is required.");
+        return;
+      }
+      setWorldLabsImportingWorldId(normalizedWorldId);
+      setWorldLabsError(null);
+      try {
+        const imported = await importWorldLabsWorld(normalizedWorldId);
+        setWorldLabsImportedWorld(imported);
+        setWorldLabsWorldIdDraft(imported.world_id);
+        toast.success(`WSP fork ready: ${imported.world_package.package_id}`);
+      } catch (error) {
+        setWorldLabsError(error instanceof Error ? error.message : "Failed to import World Labs world");
+      } finally {
+        setWorldLabsImportingWorldId(null);
+      }
+    },
+    []
+  );
+
+  const handlePublishImportedWorldPackage = useCallback(async () => {
+    if (!worldLabsImportedWorld || !onPublishGeneratedWorldPackage) return;
+    setWorldLabsPublishing(true);
+    setWorldLabsError(null);
+    try {
+      await onPublishGeneratedWorldPackage(worldLabsImportedWorld.world_package);
+    } catch (error) {
+      setWorldLabsError(
+        error instanceof Error ? error.message : "Failed to publish imported World Labs fork"
+      );
+    } finally {
+      setWorldLabsPublishing(false);
+    }
+  }, [onPublishGeneratedWorldPackage, worldLabsImportedWorld]);
+
   const worldLabsConfigured = worldLabsCapabilities?.configured === true;
   const worldLabsModels = worldLabsCapabilities?.models.length
     ? worldLabsCapabilities.models
@@ -343,6 +427,8 @@ export const WorldRegistryPanel = ({
     worldLabsGenerating || worldLabsPolling || worldLabsCapabilitiesLoading || !worldLabsConfigured;
   const canPublishGeneratedPackage =
     Boolean(generatedWorldPackage && onPublishGeneratedWorldPackage) && !worldLabsPublishing;
+  const canPublishImportedPackage =
+    Boolean(worldLabsImportedWorld && onPublishGeneratedWorldPackage) && !worldLabsPublishing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -350,7 +436,7 @@ export const WorldRegistryPanel = ({
         <DialogHeader>
           <DialogTitle className="text-[#f0f0f0]">Worlds</DialogTitle>
           <DialogDescription className="text-[#a8a8a8]">
-            Generate World Labs worlds and browse published world packages.
+            Import World Labs Marble worlds as WSP forks and browse published world packages.
           </DialogDescription>
           {gate && !gate.enabled ? (
             <DialogDescription className="text-amber-500">
@@ -367,7 +453,7 @@ export const WorldRegistryPanel = ({
                 <div>
                   <div className="text-sm font-medium text-[#f0f0f0]">World Labs Marble</div>
                   <div className="text-xs text-[#9e9e9e]">
-                    Generated worlds import as WSP candidate packages.
+                    Marble remains the source of truth; WSP stores robotics forks.
                   </div>
                 </div>
                 <Badge
@@ -437,6 +523,254 @@ export const WorldRegistryPanel = ({
                 {worldLabsError}
               </div>
             ) : null}
+
+            <div className="mt-3 rounded-md border border-[#353535] bg-[#1f1f1f] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-emerald-300" />
+                  <div>
+                    <div className="text-sm font-medium text-[#f2f2f2]">World Labs Library</div>
+                    <div className="text-xs text-[#9e9e9e]">
+                      Original worlds stay in Marble; WSP forks are optional.
+                    </div>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                  >
+                    canonical-in-marble
+                  </Badge>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+                  onClick={() => void handleListWorldLabsWorlds(null)}
+                  disabled={worldLabsLibraryLoading || !worldLabsConfigured}
+                  title={
+                    worldLabsConfigured
+                      ? undefined
+                      : worldLabsCapabilities?.missing_reason ||
+                        "Configure WORLD_LABS_API_KEY on the backend."
+                  }
+                >
+                  {worldLabsLibraryLoading ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <RefreshCw />
+                  )}
+                  List worlds
+                </Button>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={worldLabsWorldIdDraft}
+                  onChange={(event) => setWorldLabsWorldIdDraft(event.target.value)}
+                  placeholder="Marble link or world_id"
+                  className="h-9 min-w-0 flex-1 rounded-md border border-[#3d3d3d] bg-[#252526] px-3 text-sm text-[#e2e2e2] outline-none focus:border-[#5a5a5a]"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                  onClick={() => void handleImportWorldLabsWorld(worldLabsWorldIdDraft)}
+                  disabled={worldLabsImportingWorldId !== null || !worldLabsConfigured}
+                  title={
+                    worldLabsConfigured
+                      ? undefined
+                      : worldLabsCapabilities?.missing_reason ||
+                        "Configure WORLD_LABS_API_KEY on the backend."
+                  }
+                >
+                  {worldLabsImportingWorldId ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <PackageOpen />
+                  )}
+                  Fork to WSP
+                </Button>
+              </div>
+
+              {worldLabsLibraryWorlds.length > 0 ? (
+                <div className="mt-3 max-h-48 overflow-auto rounded-md border border-[#333333]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-[#262626] text-[#b9b9b9]">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">World</th>
+                        <th className="px-3 py-2 font-medium">Access</th>
+                        <th className="px-3 py-2 font-medium">Updated</th>
+                        <th className="px-3 py-2 font-medium text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {worldLabsLibraryWorlds.map((world) => (
+                        <tr key={world.world_id} className="border-t border-[#333333]">
+                          <td className="px-3 py-2">
+                            <div className="font-medium text-[#f2f2f2]">
+                              {resolveWorldLabsDisplayName(world)}
+                            </div>
+                            <div className="text-[#9e9e9e]">{world.world_id}</div>
+                          </td>
+                          <td className="px-3 py-2 text-[#c5c5c5]">
+                            {world.public === true
+                              ? "public"
+                              : world.public === false
+                                ? "private"
+                                : "account"}
+                          </td>
+                          <td className="px-3 py-2 text-[#c5c5c5]">
+                            {world.updated_at ? formatTimestamp(world.updated_at) : "n/a"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex justify-end gap-2">
+                              {world.world_marble_url ? (
+                                <Button
+                                  type="button"
+                                  asChild
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+                                >
+                                  <a href={world.world_marble_url} target="_blank" rel="noreferrer">
+                                    <ExternalLink />
+                                    Open
+                                  </a>
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+                                onClick={() => void handleImportWorldLabsWorld(world.world_id)}
+                                disabled={worldLabsImportingWorldId === world.world_id}
+                              >
+                                {worldLabsImportingWorldId === world.world_id ? (
+                                  <Loader2 className="animate-spin" />
+                                ) : (
+                                  <PackageOpen />
+                                )}
+                                Fork
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {worldLabsLibraryNextPageToken ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-8 border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+                  onClick={() => void handleListWorldLabsWorlds(worldLabsLibraryNextPageToken)}
+                  disabled={worldLabsLibraryLoading}
+                >
+                  {worldLabsLibraryLoading ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <RefreshCw />
+                  )}
+                  More
+                </Button>
+              ) : null}
+
+              {worldLabsImportedWorld ? (
+                <div className="mt-3 grid gap-3 rounded-md border border-[#333333] bg-[#242424] p-3 md:grid-cols-[180px_minmax(0,1fr)]">
+                  <div className="aspect-video overflow-hidden rounded-md border border-[#353535] bg-[#151515]">
+                    {worldLabsImportedWorld.thumbnail_url ? (
+                      <img
+                        src={worldLabsImportedWorld.thumbnail_url}
+                        alt={worldLabsImportedWorld.world_package.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-[#8f8f8f]">
+                        No thumbnail
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-[#f2f2f2]">
+                      {worldLabsImportedWorld.world_package.title}
+                    </div>
+                    <div className="mt-1 text-xs text-[#9e9e9e]">
+                      {worldLabsImportedWorld.world_package.package_id} · source{" "}
+                      {worldLabsImportedWorld.world_id}
+                    </div>
+                    <div className="mt-2 grid gap-1 text-xs text-[#c9c9c9] sm:grid-cols-3">
+                      <div>
+                        scale {formatWorldLabsMetric(worldLabsImportedWorld.metric_scale_factor)}
+                      </div>
+                      <div>
+                        ground {formatWorldLabsMetric(worldLabsImportedWorld.ground_plane_offset)}
+                      </div>
+                      <div>{worldLabsImportedWorld.world_package.artifacts.length} artifacts</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {worldLabsImportedWorld.world_marble_url ? (
+                        <Button
+                          type="button"
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+                        >
+                          <a
+                            href={worldLabsImportedWorld.world_marble_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink />
+                            Open Marble
+                          </a>
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                        onClick={() =>
+                          onLoadGeneratedWorldPackage(worldLabsImportedWorld.world_package)
+                        }
+                      >
+                        <PackageOpen />
+                        Load fork
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 border-[#3d3d3d] bg-[#252526] text-[#d4d4d4] hover:bg-[#323233] hover:text-white"
+                        onClick={() => void handlePublishImportedWorldPackage()}
+                        disabled={!canPublishImportedPackage}
+                      >
+                        {worldLabsPublishing ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <UploadCloud />
+                        )}
+                        Publish fork
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 text-xs text-[#bdbdbd]">
+              <Sparkles className="h-4 w-4 text-cyan-300" />
+              <span className="font-medium text-[#e2e2e2]">Optional new Marble generation</span>
+              <Badge variant="outline" className="border-[#3d3d3d] bg-[#252526] text-[#bdbdbd]">
+                secondary
+              </Badge>
+            </div>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
               <label className="block text-xs text-[#bdbdbd]">
@@ -518,7 +852,7 @@ export const WorldRegistryPanel = ({
                   ) : (
                     <Sparkles />
                   )}
-                  {worldLabsPolling ? "Generating..." : "Generate world"}
+                  {worldLabsPolling ? "Generating..." : "Generate in Marble"}
                 </Button>
               </div>
             </div>
@@ -602,7 +936,7 @@ export const WorldRegistryPanel = ({
                           onClick={() => onLoadGeneratedWorldPackage(generatedWorldPackage)}
                         >
                           <PackageOpen />
-                          Load package
+                          Load fork
                         </Button>
                         <Button
                           type="button"
@@ -617,7 +951,7 @@ export const WorldRegistryPanel = ({
                           ) : (
                             <UploadCloud />
                           )}
-                          Publish locally
+                          Publish fork
                         </Button>
                       </div>
                     </div>
@@ -625,6 +959,7 @@ export const WorldRegistryPanel = ({
                 ) : null}
               </div>
             ) : null}
+
           </section>
 
           <div className="flex items-center gap-2">
