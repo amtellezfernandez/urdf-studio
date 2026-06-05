@@ -755,10 +755,12 @@ const Index = () => {
     handleExportWorldRolloutCampaign,
     handleImportWorldRolloutResults,
     handleListWorldScenePackages,
+    handleLoadGeneratedWorldScenePackage,
     handleLoadWorldScenePackageFromRegistry,
     handleOpenWorldHubBrowser,
     handlePublishCurrentWorldScenePackage,
     handlePublishCurrentWorldScenePackageToHub,
+    handlePublishGeneratedWorldScenePackage,
     handleRunLocalWorldRollout,
     handleSubmitWorldPublishDialog,
     handleValidateCurrentWorldScenePackage,
@@ -3658,6 +3660,8 @@ const Index = () => {
             loading={worldRegistryLoading}
             onRefresh={refreshWorldRegistry}
             onLoadPackage={handleLoadWorldScenePackageFromRegistry}
+            onLoadGeneratedWorldPackage={handleLoadGeneratedWorldScenePackage}
+            onPublishGeneratedWorldPackage={handlePublishGeneratedWorldScenePackage}
             gate={resolveFeatureGateAvailability(FEATURE_GATES.worldsRegistry)}
           />
           <WorldPublishDialog

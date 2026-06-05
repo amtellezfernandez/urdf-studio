@@ -561,6 +561,26 @@ export const useWorldSceneManager = ({
     [applyImportedWorldScenePackage, worldRegistryVersionCache]
   );
 
+  const handleLoadGeneratedWorldScenePackage = useCallback(
+    (manifest: WorldScenePackageManifest) => {
+      applyImportedWorldScenePackage(manifest);
+      setWorldRegistryOpen(false);
+    },
+    [applyImportedWorldScenePackage]
+  );
+
+  const handlePublishGeneratedWorldScenePackage = useCallback(
+    async (manifest: WorldScenePackageManifest) => {
+      requireFeatureGate(FEATURE_GATES.worldsRegistry, "Generated world package publish");
+      const publish = await publishWorldScenePackage(manifest, "registry");
+      toast.success(
+        `Published ${publish.package_id}@${publish.version} (${publish.digest_sha256.slice(0, 12)}...)`
+      );
+      await refreshWorldRegistry();
+    },
+    [refreshWorldRegistry]
+  );
+
   const handleListWorldScenePackages = useCallback(async () => {
     try {
       requireFeatureGate(FEATURE_GATES.worldsRegistry, "World registry");
@@ -762,10 +782,12 @@ export const useWorldSceneManager = ({
     worldRolloutReview,
     worldRolloutReviewOpen,
     handleListWorldScenePackages,
+    handleLoadGeneratedWorldScenePackage,
     handleLoadWorldScenePackageFromRegistry,
     handleOpenWorldHubBrowser,
     handlePublishCurrentWorldScenePackage,
     handlePublishCurrentWorldScenePackageToHub,
+    handlePublishGeneratedWorldScenePackage,
     handleSubmitWorldPublishDialog,
     handleValidateCurrentWorldScenePackage,
     isImportingWorldLayout,

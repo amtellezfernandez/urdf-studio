@@ -107,6 +107,9 @@ class Settings:
     world_rollout_max_output_chars: int
     world_rollout_max_workers: int
     world_rollout_max_queued_jobs: int
+    world_labs_api_key: str | None
+    world_labs_api_base_url: str
+    world_labs_timeout_seconds: int
     cors_origins: list[str]
     enable_metrics: bool
 
@@ -339,6 +342,19 @@ def load_settings() -> Settings:
             DEFAULT_WORLD_ROLLOUT_MAX_QUEUED_JOBS,
         ),
     )
+    world_labs_api_key = _read_str("WORLD_LABS_API_KEY", "").strip() or None
+    world_labs_api_base_url = _read_str(
+        "WORLD_LABS_API_BASE_URL",
+        get_config_value(
+            config,
+            ["worldLabs", "apiBaseUrl"],
+            "https://api.worldlabs.ai/marble/v1",
+        ),
+    ).rstrip("/")
+    world_labs_timeout_seconds = _read_int(
+        "WORLD_LABS_TIMEOUT_SECONDS",
+        get_config_value(config, ["worldLabs", "timeoutSeconds"], 30),
+    )
     cors_origins = list(
         dict.fromkeys(
             _build_cors_origins(web_host, web_port)
@@ -395,6 +411,9 @@ def load_settings() -> Settings:
         world_rollout_max_output_chars=world_rollout_max_output_chars,
         world_rollout_max_workers=world_rollout_max_workers,
         world_rollout_max_queued_jobs=world_rollout_max_queued_jobs,
+        world_labs_api_key=world_labs_api_key,
+        world_labs_api_base_url=world_labs_api_base_url,
+        world_labs_timeout_seconds=world_labs_timeout_seconds,
         cors_origins=cors_origins,
         enable_metrics=enable_metrics,
     )
