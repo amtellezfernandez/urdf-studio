@@ -52,7 +52,11 @@ import {
   WorldLabsSplatLayer,
   useWorldLabsPrimarySceneActive,
 } from "@/features/viewer/WorldLabsSceneLayers";
-import { resolveWorldLabsSo101DemoTransform } from "@/features/viewer/worldLabsSo101DemoTransform";
+import { useWorldLabsSplatGroundProbeStore } from "@/features/viewer/worldLabsSplatGroundProbe";
+import {
+  applyWorldLabsSplatGroundProbeToRobot,
+  resolveWorldLabsSo101DemoTransform,
+} from "@/features/viewer/worldLabsSo101DemoTransform";
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
 import {
   resolveOpenArmDemoTableCalibrationPlanesFromPointCloudFrames,
@@ -1265,6 +1269,7 @@ const URDFModel = ({
   const sceneGroupRef = useRef<THREE.Group>(null);
   const robotGroupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<URDFRobot | null>(null);
+  const worldLabsSplatGroundingKeyRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [robotReady, setRobotReady] = useState(false);
   const meshAbortRef = useRef<AbortController | null>(null);
@@ -1274,6 +1279,9 @@ const URDFModel = ({
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
+  const worldLabsSplatGroundProbe = useWorldLabsSplatGroundProbeStore(
+    (state) => state.groundProbe
+  );
   const assemblyStoredPoses = useAssemblyPlacementStore((state) => state.poses);
   const setAssemblyPoses = useAssemblyPlacementStore((state) => state.setPoses);
   const setAssemblyRadii = useAssemblyPlacementStore((state) => state.setRadii);
@@ -1361,9 +1369,35 @@ const URDFModel = ({
       robotGroupRef.current.remove(child);
     }
     robotRef.current = null;
+    worldLabsSplatGroundingKeyRef.current = null;
     assemblyRobotsRef.current = [];
     setRobotReady(false);
   }, []);
+
+  const applyWorldLabsSplatGrounding = useCallback(
+    (targetRobot: URDFRobot): boolean => {
+      if (!worldLabsSplatGroundProbe) {
+        return false;
+      }
+      const groundingKey = `${worldLabsSplatGroundProbe.packageId}:${targetRobot.uuid}`;
+      if (worldLabsSplatGroundingKeyRef.current === groundingKey) {
+        return false;
+      }
+
+      const result = applyWorldLabsSplatGroundProbeToRobot({
+        activePackageId: activeWorldScenePackageId,
+        groundProbe: worldLabsSplatGroundProbe,
+        robot: targetRobot,
+      });
+      if (!result.applied) {
+        return false;
+      }
+
+      worldLabsSplatGroundingKeyRef.current = groundingKey;
+      return true;
+    },
+    [activeWorldScenePackageId, worldLabsSplatGroundProbe]
+  );
 
   const collectAssemblyMeshProxies = useCallback((robot: URDFRobot): AssemblyMeshProxy[] => {
     const proxies: AssemblyMeshProxy[] = [];
@@ -1994,6 +2028,38 @@ const URDFModel = ({
       onRobotReadyChange?.(false);
     };
   }, [clearGroup, onRobotLoaded, onRobotReadyChange]);
+
+  useEffect(() => {
+    if (!robotReady || isAssemblyWorkspace || !worldLabsSplatGroundProbe) {
+      return;
+    }
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let attemptCount = 0;
+    const runProbe = () => {
+      if (cancelled) {
+        return;
+      }
+      const targetRobot = robotRef.current;
+      if (!targetRobot) {
+        return;
+      }
+      if (applyWorldLabsSplatGrounding(targetRobot)) {
+        return;
+      }
+      attemptCount += 1;
+      if (attemptCount < 4) {
+        timeoutId = window.setTimeout(runProbe, 1000);
+      }
+    };
+    runProbe();
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [applyWorldLabsSplatGrounding, isAssemblyWorkspace, robotReady, worldLabsSplatGroundProbe]);
 
   useEffect(() => {
     if (!robotGroupRef.current) return;

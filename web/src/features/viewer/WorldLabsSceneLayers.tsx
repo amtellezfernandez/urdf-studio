@@ -1,5 +1,5 @@
 import { Html } from "@react-three/drei";
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extend, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -10,6 +10,10 @@ import {
   findWorldSplatArtifact,
   useWorldSceneRuntimeStore,
 } from "@/features/world-share/worldSceneRuntimeStore";
+import {
+  createWorldLabsSplatGroundProbe,
+  useWorldLabsSplatGroundProbeStore,
+} from "@/features/viewer/worldLabsSplatGroundProbe";
 
 extend({ SparkRenderer, SplatMesh });
 
@@ -78,6 +82,17 @@ export const WorldLabsSplatLayer = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const sparkRef = useRef<SparkRenderer | null>(null);
   const splatRef = useRef<SplatMesh | null>(null);
+  const [sparkInstance, setSparkInstance] = useState<SparkRenderer | null>(null);
+  const [splatInstance, setSplatInstance] = useState<SplatMesh | null>(null);
+  const setGroundProbe = useWorldLabsSplatGroundProbeStore((state) => state.setGroundProbe);
+  const handleSparkRef = useCallback((instance: SparkRenderer | null) => {
+    sparkRef.current = instance;
+    setSparkInstance(instance);
+  }, []);
+  const handleSplatRef = useCallback((instance: SplatMesh | null) => {
+    splatRef.current = instance;
+    setSplatInstance(instance);
+  }, []);
 
   const splatScale = readFiniteMetadataNumber(
     activeWorldPackage?.provenance ?? {},
@@ -108,13 +123,35 @@ export const WorldLabsSplatLayer = () => {
 
   useEffect(() => {
     setLoadError(null);
-    if (!activeWorldPackage || !splatArtifact || !splatRef.current || !sparkRef.current) return;
+    if (!activeWorldPackage || !splatArtifact) {
+      setGroundProbe(null);
+      return;
+    }
+    if (!splatInstance || !sparkInstance) return;
 
     let cancelled = false;
-    sparkRef.current.raycast = ignoreRaycast;
-    splatRef.current.raycast = ignoreRaycast;
+    const splat = splatInstance;
+    const packageId = activeWorldPackage.packageId;
+    const nativeSplatRaycast = SplatMesh.prototype.raycast.bind(splat) as (
+      raycaster: THREE.Raycaster,
+      intersects: THREE.Intersection[]
+    ) => void;
+    sparkInstance.raycast = ignoreRaycast;
+    splat.raycast = ignoreRaycast;
 
-    void splatRef.current.initialized.catch((error) => {
+    setGroundProbe(
+      createWorldLabsSplatGroundProbe({
+        packageId,
+        raycast: (raycaster) => {
+          const intersections: THREE.Intersection[] = [];
+          splat.updateMatrixWorld(true);
+          nativeSplatRaycast(raycaster, intersections);
+          return intersections;
+        },
+      })
+    );
+
+    void splat.initialized.catch((error) => {
       if (cancelled) {
         return;
       }
@@ -124,7 +161,7 @@ export const WorldLabsSplatLayer = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeWorldPackage, splatArtifact]);
+  }, [activeWorldPackage, sparkInstance, splatArtifact, splatInstance, setGroundProbe]);
 
   if (!splatArtifact) return null;
 
@@ -133,7 +170,7 @@ export const WorldLabsSplatLayer = () => {
       {createElement(
         "sparkRenderer",
         {
-          ref: sparkRef,
+          ref: handleSparkRef,
           args: [sparkArgs],
           visible: true,
         },
@@ -145,7 +182,7 @@ export const WorldLabsSplatLayer = () => {
             scale: splatScale,
           },
           createElement("splatMesh", {
-            ref: splatRef,
+            ref: handleSplatRef,
             args: [splatArgs],
           })
         )
@@ -245,7 +282,7 @@ export const WorldLabsColliderLayer = ({
   );
 
   useEffect(() => {
-    if (!colliderArtifact) {
+    if (!colliderArtifact || !visible) {
       setColliderScene(null);
       return;
     }
@@ -292,7 +329,7 @@ export const WorldLabsColliderLayer = ({
   }, [colliderArtifact, colliderScale, groundPlaneOffset, visible]);
 
   useEffect(() => {
-    if (!autoFit || !colliderScene) {
+    if (!autoFit || !visible || !colliderScene) {
       return;
     }
     colliderScene.updateMatrixWorld(true);

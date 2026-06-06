@@ -24,7 +24,6 @@ import { EPISODE_CAMERA_PREVIEW_PARAMS } from "@/features/camera/episodeCameraPr
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import {
   WorldLabsEnvironmentLayer,
-  WorldLabsSplatLayer,
   useWorldLabsPrimarySceneActive,
 } from "@/features/viewer/WorldLabsSceneLayers";
 import { resolveWorldLabsSo101DemoTransform } from "@/features/viewer/worldLabsSo101DemoTransform";
@@ -753,7 +752,7 @@ export const EpisodeCameraPreview = ({
             key={cameraConfig.id}
             frameloop="always"
             style={{ width: "100%", height: "100%" }}
-            dpr={gpuMode === "low" ? [1, 1.25] : [1, 2]}
+            dpr={worldLabsPrimarySceneActive || gpuMode === "low" ? [1, 1] : [1, 2]}
             camera={{
               position: [0, 0, 2],
               fov: normalizedIntrinsics?.fov_deg ?? cameraConfig.intrinsics.fov_deg,
@@ -761,7 +760,11 @@ export const EpisodeCameraPreview = ({
               near: 0.05,
               far: sceneRadius ? Math.max(2, sceneRadius * 6) : 50,
             }}
-            gl={{ alpha: true, antialias: true }}
+            gl={{
+              alpha: true,
+              antialias: !worldLabsPrimarySceneActive,
+              powerPreference: worldLabsPrimarySceneActive ? "low-power" : "default",
+            }}
             onCreated={({ scene, camera, gl }) => {
               scene.up.set(0, 0, 1);
               camera.up.set(0, 0, 1);
@@ -778,7 +781,6 @@ export const EpisodeCameraPreview = ({
             {worldLabsPrimarySceneActive ? (
               <>
                 <WorldLabsEnvironmentLayer />
-                <WorldLabsSplatLayer />
               </>
             ) : (
               <PreviewSceneChrome gpuMode={gpuMode} />

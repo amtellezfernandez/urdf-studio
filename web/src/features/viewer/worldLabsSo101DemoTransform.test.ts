@@ -10,6 +10,8 @@ describe("resolveWorldLabsSo101DemoTransform", () => {
 
     expect(transform.scale).toBe(10);
     expect(transform.rotationRpy).toEqual([-Math.PI / 2, 0, 0]);
+    expect(transform.splatGroundProbe?.enabled).toBe(true);
+    expect(transform.splatGroundProbe?.minConfidence).toBeGreaterThan(0);
   });
 
   it("leaves non-demo robots unchanged", () => {
@@ -20,5 +22,6 @@ describe("resolveWorldLabsSo101DemoTransform", () => {
 
     expect(transform.scale).toBe(1);
     expect(transform.rotationRpy).toEqual([0, 0, 0]);
+    expect(transform.splatGroundProbe).toBeUndefined();
   });
 });
