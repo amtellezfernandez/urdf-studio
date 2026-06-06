@@ -21,6 +21,13 @@ const ignoreRaycast: THREE.Object3D["raycast"] = () => undefined;
 const WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION = [Math.PI / 2, 0, 0] as const;
 const WORLD_LABS_PANORAMA_YAW_RAD = Math.PI / 2;
 const WORLD_LABS_STUDIO_UP_AXIS = new THREE.Vector3(0, 0, 1);
+const WORLD_LABS_SPLAT_RENDER_PARAMS = {
+  lodSplatCount: 900_000,
+  lodRenderScale: 3,
+  maxPixelRadius: 256,
+  minSortIntervalMs: 80,
+  numLodFetchers: 1,
+} as const;
 
 const createWorldLabsEnvironmentRotation = () =>
   new THREE.Euler(
@@ -119,7 +126,11 @@ export const WorldLabsSplatLayer = () => {
     () => ({
       renderer,
       enableLod: true,
-      lodRenderScale: 2,
+      lodSplatCount: WORLD_LABS_SPLAT_RENDER_PARAMS.lodSplatCount,
+      lodRenderScale: WORLD_LABS_SPLAT_RENDER_PARAMS.lodRenderScale,
+      maxPixelRadius: WORLD_LABS_SPLAT_RENDER_PARAMS.maxPixelRadius,
+      minSortIntervalMs: WORLD_LABS_SPLAT_RENDER_PARAMS.minSortIntervalMs,
+      numLodFetchers: WORLD_LABS_SPLAT_RENDER_PARAMS.numLodFetchers,
       encodeLinear: false,
     }),
     [renderer]
