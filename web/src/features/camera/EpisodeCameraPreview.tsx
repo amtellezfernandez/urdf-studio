@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import URDFLoader, { type URDFRobot } from "urdf-loader";
 import { useCameraStore } from "@/shared/store/useCameraStore";
@@ -36,6 +36,14 @@ import {
   hasMeaningfulRobotBasePoseDelta,
 } from "@/shared/lib/robotBasePose";
 import type { RobotBasePose } from "@/shared/types/feature";
+import { useWorldLayoutEnvironmentStore } from "@/features/world-share/worldLayoutEnvironmentStore";
+import { WorldLayoutGlbElement } from "@/features/viewer/WorldLayoutGlbElement";
+import { WorldLayoutSplatLayer } from "@/features/viewer/WorldLayoutSplatLayer";
+import {
+  readWorldLayoutElementConfigs,
+  readWorldLayoutSplatConfig,
+} from "@/features/viewer/worldLayoutEnvironmentConfig";
+import type { WorldLayoutElementConfig } from "@/features/viewer/worldLayoutEnvironmentConfig";
 
 type PreviewRobot = URDFRobot;
 
@@ -43,14 +51,25 @@ const FLOAT_EPS = EPISODE_CAMERA_PREVIEW_PARAMS.floatComparisonEpsilon;
 const approxEqual = (a: number, b: number, eps = FLOAT_EPS) =>
   Math.abs(a - b) <= eps;
 
-const computeSceneMetrics = (robot: PreviewRobot | null, objects: CreatedObject[]) => {
+const unionBox = (target: THREE.Box3, source: THREE.Box3) => {
+  if (source.isEmpty()) return;
+  if (target.isEmpty()) {
+    target.copy(source);
+  } else {
+    target.union(source);
+  }
+};
+
+const computeSceneMetrics = (
+  robot: PreviewRobot | null,
+  objects: CreatedObject[],
+  worldLayoutElementBounds: Iterable<THREE.Box3> = []
+) => {
   const combinedBox = new THREE.Box3().makeEmpty();
 
   if (robot) {
     const robotBox = new THREE.Box3().setFromObject(robot);
-    if (!robotBox.isEmpty()) {
-      combinedBox.copy(robotBox);
-    }
+    unionBox(combinedBox, robotBox);
   }
 
   objects.forEach((obj) => {
@@ -60,12 +79,12 @@ const computeSceneMetrics = (robot: PreviewRobot | null, objects: CreatedObject[
       obj.position.clone().add(halfSize)
     );
 
-    if (combinedBox.isEmpty()) {
-      combinedBox.copy(objBox);
-    } else {
-      combinedBox.union(objBox);
-    }
+    unionBox(combinedBox, objBox);
   });
+
+  for (const bounds of worldLayoutElementBounds) {
+    unionBox(combinedBox, bounds);
+  }
 
   if (combinedBox.isEmpty()) {
     return { sceneRadius: null as number | null };
@@ -255,6 +274,35 @@ const PreviewSceneChrome = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => (
   </>
 );
 
+const PreviewWorldLayoutElements = ({
+  elements,
+  selectedElementId,
+  onBoundsChange,
+  onSelect,
+}: {
+  elements: WorldLayoutElementConfig[];
+  selectedElementId: string | null;
+  onBoundsChange: (id: string, bounds: THREE.Box3 | null) => void;
+  onSelect: (id: string) => void;
+}) => {
+  const ignoreHover = useCallback(() => undefined, []);
+
+  return (
+    <>
+      {elements.map((element) => (
+        <WorldLayoutGlbElement
+          key={`${element.asset.id}:${element.asset.url}`}
+          config={element}
+          isSelected={selectedElementId === element.asset.id}
+          onBoundsChange={onBoundsChange}
+          onHoverChange={ignoreHover}
+          onSelect={onSelect}
+        />
+      ))}
+    </>
+  );
+};
+
 const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
   const lastValuesRef = useRef<Record<string, number> | null>(null);
 
@@ -394,6 +442,7 @@ interface EpisodeCameraPreviewProps {
   gpuMode?: GPUMode;
   emptyStateMessage?: string;
   allowOperatorLiveCamera?: boolean;
+  renderWorldLayoutSplat?: boolean;
 }
 
 const OperatorLiveCameraVideo = ({ frame }: { frame: OperatorCameraVideoFrame }) => {
@@ -462,11 +511,21 @@ export const EpisodeCameraPreview = ({
   gpuMode = "high",
   emptyStateMessage = "No cameras available.",
   allowOperatorLiveCamera = false,
+  renderWorldLayoutSplat = false,
 }: EpisodeCameraPreviewProps) => {
   const activeCameraVideoFrame = useOperatorPerceptionStore((s) => s.activeCameraVideoFrame);
   const activeCameraVideoFrames = useOperatorPerceptionStore((s) => s.activeCameraVideoFrames);
   const cameras = useCameraStore((s) => s.cameras);
   const objects = useObjectStore((s) => s.objects);
+  const worldLayoutEnvironment = useWorldLayoutEnvironmentStore((s) => s.environment);
+  const worldLayoutSplatConfig = useMemo(
+    () => (renderWorldLayoutSplat ? readWorldLayoutSplatConfig(worldLayoutEnvironment) : null),
+    [renderWorldLayoutSplat, worldLayoutEnvironment]
+  );
+  const worldLayoutElements = useMemo(
+    () => readWorldLayoutElementConfigs(worldLayoutEnvironment),
+    [worldLayoutEnvironment]
+  );
   const cameraConfig = useMemo(() => {
     if (!cameraId) return cameras[0] ?? null;
     return cameras.find((c) => c.id === cameraId) ?? null;
@@ -479,10 +538,15 @@ export const EpisodeCameraPreview = ({
   const groupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<PreviewRobot | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const worldLayoutElementBoundsRef = useRef(new Map<string, THREE.Box3>());
   const [robot, setRobot] = useState<PreviewRobot | null>(null);
   const [sceneRadius, setSceneRadius] = useState<number | null>(null);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [worldLayoutBoundsVersion, setWorldLayoutBoundsVersion] = useState(0);
+  const [selectedWorldLayoutElementId, setSelectedWorldLayoutElementId] = useState<string | null>(
+    null
+  );
 
   const aspect = useMemo(() => {
     if (!normalizedIntrinsics) return 16 / 9;
@@ -530,6 +594,30 @@ export const EpisodeCameraPreview = ({
           : [],
     [activeCameraVideoFrame, activeCameraVideoFrames]
   );
+
+  const handleWorldLayoutElementBoundsChange = useCallback(
+    (id: string, bounds: THREE.Box3 | null) => {
+      if (bounds?.isEmpty() === false) {
+        worldLayoutElementBoundsRef.current.set(id, bounds.clone());
+      } else {
+        worldLayoutElementBoundsRef.current.delete(id);
+      }
+      setWorldLayoutBoundsVersion((version) => version + 1);
+    },
+    []
+  );
+
+  const handleWorldLayoutElementSelect = useCallback((id: string) => {
+    setSelectedWorldLayoutElementId((current) => (current === id ? null : id));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedWorldLayoutElementId) return;
+    if (worldLayoutElements.some((element) => element.asset.id === selectedWorldLayoutElementId)) {
+      return;
+    }
+    setSelectedWorldLayoutElementId(null);
+  }, [selectedWorldLayoutElementId, worldLayoutElements]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -621,7 +709,11 @@ export const EpisodeCameraPreview = ({
 
     const refresh = () => {
       if (cancelled) return;
-      const metrics = computeSceneMetrics(robot, objects);
+      const metrics = computeSceneMetrics(
+        robot,
+        objects,
+        worldLayoutElementBoundsRef.current.values()
+      );
 
       setSceneRadius((prev) => {
         if (prev === metrics.sceneRadius) return prev;
@@ -653,7 +745,7 @@ export const EpisodeCameraPreview = ({
         window.clearInterval(intervalId);
       }
     };
-  }, [robot, objects]);
+  }, [robot, objects, worldLayoutBoundsVersion]);
 
   if (allowOperatorLiveCamera && operatorLiveCameraFrames.length > 0) {
     return (
@@ -748,8 +840,21 @@ export const EpisodeCameraPreview = ({
             <directionalLight position={[5, 5, 5]} intensity={0.8} />
             <directionalLight position={[-5, 5, -5]} intensity={0.4} />
             <PreviewSceneChrome gpuMode={gpuMode} />
+            {worldLayoutSplatConfig ? (
+              <WorldLayoutSplatLayer
+                autoFitElements={false}
+                interactiveElements={false}
+                renderElements={false}
+              />
+            ) : null}
             <group ref={groupRef} />
             <PreviewObjects objects={objects} gpuMode={gpuMode} />
+            <PreviewWorldLayoutElements
+              elements={worldLayoutElements}
+              selectedElementId={selectedWorldLayoutElementId}
+              onBoundsChange={handleWorldLayoutElementBoundsChange}
+              onSelect={handleWorldLayoutElementSelect}
+            />
             <JointValueSync robot={robot} />
             <BasePoseSync robot={robot} />
             <RobotMountKeeper robot={robot} groupRef={groupRef} />

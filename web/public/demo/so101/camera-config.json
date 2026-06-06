@@ -1,6 +1,27 @@
 {
   "cameras": [
     {
+      "name": "so101_head_port_view",
+      "parent_joint": "gripper_frame_joint",
+      "pose": [
+        -0.55,
+        0.0,
+        0.09,
+        -1.7124490842634037,
+        0.2823977767996977,
+        1.049071348764591
+      ],
+      "intrinsics": {
+        "width": 1280,
+        "height": 720,
+        "fov_deg": 100,
+        "fx": 700,
+        "fy": 700,
+        "cx": 640,
+        "cy": 360
+      }
+    },
+    {
       "name": "so101_overhead_scene",
       "parent_joint": "base_link",
       "pose": [

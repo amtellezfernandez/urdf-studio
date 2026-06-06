@@ -33,6 +33,66 @@
         "scale": 0.5
       },
       {
+        "id": "grabbable-container-a",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [-0.08, 0.24, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.08],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-b",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.02, 0.24, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.05],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-c",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.12, 0.24, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.03],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-d",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [-0.03, 0.34, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.12],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-e",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.07, 0.34, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.1],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-f",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.02, 0.29, 0.041],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.02],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
         "id": "orange-rtg-crane",
         "name": "orange rubber-tyred gantry crane",
         "uri": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/0-orange-rtg-crane.glb",
@@ -69,7 +129,8 @@
       "Loaded from port-simple.zip.",
       "Default splat uses the 500k World Labs LOD instead of the 31 MB full-res SPZ.",
       "Splat uses a compact preview scale with the World Labs ground-plane offset scaled to keep the generated XZ floor on the studio XY floor. Robot transforms are not changed.",
-      "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale."
+      "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale.",
+      "Small grabbable container instances reuse the shipping-container mesh as a red pile near SO101."
     ]
   }
 }

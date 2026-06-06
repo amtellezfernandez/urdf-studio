@@ -17,6 +17,7 @@ export type WorldLayoutElementConfig = {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
+  materialColor?: string;
 };
 
 const SIMU_GEN_Y_UP_TO_STUDIO_XY_ROTATION: [number, number, number] = [Math.PI / 2, 0, 0];
@@ -120,6 +121,9 @@ export const readWorldLayoutElementConfigs = (
         entry.scale_xyz !== undefined || entry.scale !== undefined
           ? readScaleVector(entry.scale_xyz, entry.scale)
           : placement.scale,
+      ...(readNonEmptyString(entry.material_color ?? entry.color)
+        ? { materialColor: readNonEmptyString(entry.material_color ?? entry.color) }
+        : {}),
     }];
   });
 };

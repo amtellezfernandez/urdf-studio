@@ -52,6 +52,7 @@ export const WorldLayoutGlbElement = ({
   useEffect(() => {
     const loader = new GLTFLoader();
     let disposed = false;
+    const instanceMaterials: THREE.Material[] = [];
     setScene(null);
     setLoadError(null);
     onBoundsChange(config.asset.id, null);
@@ -61,6 +62,20 @@ export const WorldLayoutGlbElement = ({
       (gltf) => {
         if (disposed) return;
         const visual = createWorldLayoutElementVisual(gltf.scene, config.asset);
+        if (config.materialColor) {
+          visual.scene.traverse((child) => {
+            if (!(child instanceof THREE.Mesh)) return;
+            const material = new THREE.MeshStandardMaterial({
+              color: config.materialColor,
+              emissive: config.materialColor,
+              emissiveIntensity: 0.08,
+              metalness: 0.05,
+              roughness: 0.45,
+            });
+            child.material = material;
+            instanceMaterials.push(material);
+          });
+        }
         const metricScale = resolveWorldLayoutElementScale(
           config.asset.realWorldHeightM,
           visual.size.y
@@ -93,6 +108,7 @@ export const WorldLayoutGlbElement = ({
       disposed = true;
       onBoundsChange(config.asset.id, null);
       setScene(null);
+      instanceMaterials.forEach((material) => material.dispose());
     };
   }, [config, onBoundsChange]);
 

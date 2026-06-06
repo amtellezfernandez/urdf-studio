@@ -16,10 +16,27 @@ import { useWorldLayoutEnvironmentStore } from "@/features/world-share/worldLayo
 
 extend({ SparkRenderer, SplatMesh });
 
-export const WorldLayoutSplatLayer = () => {
+type WorldLayoutSplatLayerProps = {
+  autoFitElements?: boolean;
+  interactiveElements?: boolean;
+  renderElements?: boolean;
+  renderSplat?: boolean;
+};
+
+export const WorldLayoutSplatLayer = ({
+  autoFitElements = true,
+  interactiveElements = true,
+  renderElements = true,
+  renderSplat = true,
+}: WorldLayoutSplatLayerProps = {}) => {
   const environment = useWorldLayoutEnvironmentStore((state) => state.environment);
-  const config = useMemo(() => readWorldLayoutSplatConfig(environment), [environment]);
-  const elements = useMemo(() => readWorldLayoutElementConfigs(environment), [environment]);
+  const splatConfig = useMemo(() => readWorldLayoutSplatConfig(environment), [environment]);
+  const config = renderSplat ? splatConfig : null;
+  const shouldReadElements = renderElements || autoFitElements;
+  const elements = useMemo(
+    () => (shouldReadElements ? readWorldLayoutElementConfigs(environment) : []),
+    [environment, shouldReadElements]
+  );
   const renderer = useThree((state) => state.gl);
   const camera = useThree((state) => state.camera);
   const controls = useThree((state) => state.controls as CameraControlsLike | undefined);
@@ -49,8 +66,17 @@ export const WorldLayoutSplatLayer = () => {
   );
 
   const handleElementSelect = useCallback((id: string) => {
+    if (!interactiveElements) return;
     setSelectedElementId((current) => (current === id ? null : id));
-  }, []);
+  }, [interactiveElements]);
+
+  const handleElementHoverChange = useCallback(
+    (id: string | null) => {
+      if (!interactiveElements) return;
+      setHoveredElementId(id);
+    },
+    [interactiveElements]
+  );
 
   const sparkArgs = useMemo(
     () => ({
@@ -83,6 +109,7 @@ export const WorldLayoutSplatLayer = () => {
   }, [splatInstance]);
 
   useEffect(() => {
+    if (!interactiveElements) return;
     const canvas = renderer.domElement;
     if (!canvas) return;
     if (hoveredElementId) {
@@ -93,7 +120,7 @@ export const WorldLayoutSplatLayer = () => {
         canvas.style.cursor = "";
       }
     };
-  }, [hoveredElementId, renderer]);
+  }, [hoveredElementId, interactiveElements, renderer]);
 
   useEffect(() => {
     if (!selectedElementId) return;
@@ -102,6 +129,7 @@ export const WorldLayoutSplatLayer = () => {
   }, [elements, selectedElementId]);
 
   useEffect(() => {
+    if (!autoFitElements) return;
     if (elements.length === 0) {
       elementBoundsRef.current.clear();
       autoFitKeyRef.current = null;
@@ -118,7 +146,7 @@ export const WorldLayoutSplatLayer = () => {
     if (bounds.isEmpty()) return;
     fitCameraToBounds({ bounds, camera, controls, invalidate });
     autoFitKeyRef.current = fitKey;
-  }, [boundsVersion, camera, controls, elements, invalidate]);
+  }, [autoFitElements, boundsVersion, camera, controls, elements, invalidate]);
 
   if (!config && elements.length === 0) return null;
 
@@ -150,9 +178,9 @@ export const WorldLayoutSplatLayer = () => {
         <WorldLayoutGlbElement
           key={`${element.asset.id}:${element.asset.url}`}
           config={element}
-          isSelected={selectedElementId === element.asset.id}
+          isSelected={interactiveElements && selectedElementId === element.asset.id}
           onBoundsChange={handleElementBoundsChange}
-          onHoverChange={setHoveredElementId}
+          onHoverChange={handleElementHoverChange}
           onSelect={handleElementSelect}
         />
       ))}
