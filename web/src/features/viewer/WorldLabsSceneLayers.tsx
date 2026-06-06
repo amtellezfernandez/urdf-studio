@@ -20,6 +20,7 @@ extend({ SparkRenderer, SplatMesh });
 const ignoreRaycast: THREE.Object3D["raycast"] = () => undefined;
 const WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION = [Math.PI / 2, 0, 0] as const;
 const WORLD_LABS_PANORAMA_YAW_RAD = Math.PI / 2;
+const WORLD_LABS_STUDIO_UP_AXIS = new THREE.Vector3(0, 0, 1);
 
 const createWorldLabsEnvironmentRotation = () =>
   new THREE.Euler(
@@ -152,6 +153,7 @@ export const WorldLabsSplatLayer = () => {
     setGroundProbe(
       createWorldLabsSplatGroundProbe({
         packageId,
+        upAxis: WORLD_LABS_STUDIO_UP_AXIS,
         raycast: (raycaster) => {
           const intersections: THREE.Intersection[] = [];
           splat.updateMatrixWorld(true);

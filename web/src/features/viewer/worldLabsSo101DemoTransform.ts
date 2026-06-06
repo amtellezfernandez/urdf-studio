@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { WorldLabsSplatGroundProbe } from "@/features/viewer/worldLabsSplatGroundProbe";
 
+const STUDIO_UP_AXIS = new THREE.Vector3(0, 0, 1);
+
 export type WorldLabsSo101DemoTransform = {
   scale: number;
   rotationRpy: [number, number, number];
@@ -42,7 +44,7 @@ export const resolveWorldLabsSo101DemoTransform = ({
     robotName === "so101_new_calib"
   ) {
     return {
-      scale: 10,
+      scale: 1,
       rotationRpy: [0, 0, 0],
       jointPositions: {
         shoulder_pan: 0,
@@ -54,14 +56,14 @@ export const resolveWorldLabsSo101DemoTransform = ({
       },
       splatGroundProbe: {
         enabled: true,
-        clearance: 0.02,
-        maxDistance: 6,
-        maxSnapDelta: 3,
+        clearance: 0.01,
+        maxDistance: 2,
+        maxSnapDelta: 0.75,
         minConfidence: 0.35,
         minNormalUpDot: 0.5,
-        rayStartHeight: 2,
-        sampleRadius: 0.35,
-        surfaceTolerance: 0.22,
+        rayStartHeight: 0.8,
+        sampleRadius: 0.08,
+        surfaceTolerance: 0.05,
       },
     };
   }
@@ -99,14 +101,14 @@ export const applyWorldLabsSplatGroundProbeToRobot = ({
   robot.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(robot);
   const bottomOffset =
-    bounds.isEmpty() || !Number.isFinite(bounds.min.y)
+    bounds.isEmpty() || !Number.isFinite(bounds.min.z)
       ? 0
-      : bounds.min.y - robot.position.y;
+      : bounds.min.z - robot.position.z;
   const surface = groundProbe.probeDown(
     new THREE.Vector3(
       robot.position.x,
-      robot.position.y + probeConfig.rayStartHeight,
-      robot.position.z
+      robot.position.y,
+      robot.position.z + probeConfig.rayStartHeight
     ),
     {
       maxDistance: probeConfig.maxDistance,
@@ -119,20 +121,20 @@ export const applyWorldLabsSplatGroundProbeToRobot = ({
     return { applied: false, reason: "probe_miss" };
   }
 
-  const upDot = surface.normal.dot(new THREE.Vector3(0, 1, 0));
+  const upDot = surface.normal.dot(STUDIO_UP_AXIS);
   if (surface.confidence < probeConfig.minConfidence || upDot < probeConfig.minNormalUpDot) {
     return { applied: false, reason: "low_confidence" };
   }
 
-  const nextY = surface.point.y - bottomOffset + probeConfig.clearance;
+  const nextZ = surface.point.z - bottomOffset + probeConfig.clearance;
   if (
-    !Number.isFinite(nextY) ||
-    Math.abs(nextY - robot.position.y) > probeConfig.maxSnapDelta
+    !Number.isFinite(nextZ) ||
+    Math.abs(nextZ - robot.position.z) > probeConfig.maxSnapDelta
   ) {
     return { applied: false, reason: "snap_out_of_range" };
   }
 
-  robot.position.y = nextY;
+  robot.position.z = nextZ;
   robot.userData.worldLabsSplatGroundProbe = {
     confidence: surface.confidence,
     hitCount: surface.hitCount,
