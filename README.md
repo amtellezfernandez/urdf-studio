@@ -93,6 +93,12 @@ Setup installs:
 - the local `i-love-urdf` CLI, available as `npx ilu`
 - the sibling URDF Ops checkout at `../urdf-ops`, unless configured otherwise
 
+On macOS, setup skips the Placo/Pinocchio collision stack by default because the pinned native libraries are not consistently relocatable across macOS Python environments. Force it only if you need those checks:
+
+```bash
+URDF_STUDIO_INSTALL_COLLISION_STACK=1 npm run setup
+```
+
 URDF Ops setup is intentionally reusable. If `../urdf-ops` already has dependencies, setup now skips the redundant install instead of silently running a long `npm ci`.
 
 Useful setup options:

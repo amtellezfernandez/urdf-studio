@@ -10,6 +10,8 @@ export const LEROBOT_TOOLCHAIN_DIRNAME = '.venv-lerobot';
 export const PYTHON_ENV_DIRNAME = LEROBOT_TOOLCHAIN_DIRNAME;
 export const BACKEND_NATIVE_SIM_SKIP_ENV = 'URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL';
 export const BACKEND_NATIVE_SIM_FORCE_ENV = 'URDF_STUDIO_INSTALL_NATIVE_SIM';
+export const BACKEND_COLLISION_STACK_SKIP_ENV = 'URDF_STUDIO_SKIP_COLLISION_STACK_AUTO_INSTALL';
+export const BACKEND_COLLISION_STACK_FORCE_ENV = 'URDF_STUDIO_INSTALL_COLLISION_STACK';
 export const MJLAB_SKIP_AUTO_INSTALL_ENV = 'URDF_STUDIO_SKIP_MJLAB_AUTO_INSTALL';
 export const MJLAB_FORCE_INSTALL_ENV = 'URDF_STUDIO_INSTALL_MJLAB';
 export const MJLAB_MUJOCO_WARP_PACKAGE = 'mujoco-warp==3.9.0.1';
@@ -48,15 +50,26 @@ export const BACKEND_PYTHON_DEPENDENCIES = [
   ...BACKEND_PYTHON_PLACO_DEPENDENCIES,
 ];
 export const BACKEND_PYTHON_STALE_DEPENDENCIES = ['libcoal', 'libpinocchio'];
-export const BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT = [
+export const BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT = [
   'import importlib',
   'import importlib.metadata as metadata',
   'expected_versions = {"numpy": "2.2.6"}',
   'for package_name, expected_version in expected_versions.items():',
   '    actual_version = metadata.version(package_name)',
   '    assert actual_version == expected_version, f"{package_name}=={actual_version}, expected {expected_version}"',
-  'for module_name in ("fastapi", "multipart", "uvicorn", "pytest", "yourdfpy", "hppfcl", "pinocchio", "placo"):',
+  'for module_name in ("fastapi", "multipart", "uvicorn", "pytest", "yourdfpy"):',
   '    importlib.import_module(module_name)',
+  'print("backend python core runtime ok")',
+].join('\n');
+export const BACKEND_PYTHON_COLLISION_STACK_VERIFY_IMPORT_SCRIPT = [
+  'import importlib',
+  'for module_name in ("hppfcl", "pinocchio", "placo"):',
+  '    importlib.import_module(module_name)',
+  'print("backend python collision stack runtime ok")',
+].join('\n');
+export const BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT = [
+  BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT,
+  BACKEND_PYTHON_COLLISION_STACK_VERIFY_IMPORT_SCRIPT,
   'print("backend python portable runtime ok")',
 ].join('\n');
 export const BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT = [
