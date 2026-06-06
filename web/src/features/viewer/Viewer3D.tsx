@@ -1858,14 +1858,12 @@ const URDFModel = ({
           setRobotReady(true);
           onRobotReadyChange?.(true);
           updateMeshMaterialsForGpuMode(robot, gpuModeRef.current);
-          if (transformContract.strictParity) {
-            materialApplyScheduler.flush(robot);
-            setTimeout(() => {
-              if (!abortController.signal.aborted && robotRef.current === robot) {
-                materialApplyScheduler.flush(robot);
-              }
-            }, URDF_VISUAL_MATERIAL_APPLY_RETRY_DELAY_MS);
-          }
+          materialApplyScheduler.flush(robot);
+          setTimeout(() => {
+            if (!abortController.signal.aborted && robotRef.current === robot) {
+              materialApplyScheduler.flush(robot);
+            }
+          }, URDF_VISUAL_MATERIAL_APPLY_RETRY_DELAY_MS);
           const primaryStoredPose = isAssemblyWorkspace
             ? assemblyStoredPosesSnapshot[primaryModelId]
             : undefined;
@@ -1941,9 +1939,7 @@ const URDFModel = ({
               secondaryRobot.userData.assemblyIndex = index;
               robotGroupRef.current?.add(secondaryRobot);
               updateMeshMaterialsForGpuMode(secondaryRobot, gpuModeRef.current);
-              if (transformContract.strictParity) {
-                applyUrdfVisualMaterials(secondaryRobot);
-              }
+              applyUrdfVisualMaterials(secondaryRobot);
               assemblyRobots.push({
                 id: modelId,
                 robot: secondaryRobot,
