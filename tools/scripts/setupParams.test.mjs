@@ -37,6 +37,7 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.equal(BACKEND_NATIVE_SIM_FORCE_ENV, 'URDF_STUDIO_INSTALL_NATIVE_SIM');
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('fastapi'));
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('python-multipart'));
+  assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('pyarrow'));
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('yourdfpy'));
   assert.ok(!BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('jaxlib==0.6.2'));
   assert.ok(BACKEND_PYTHON_JAX_DEPENDENCIES.includes('jax==0.6.2'));
@@ -47,6 +48,7 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libcoal'));
   assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libpinocchio'));
   assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"yourdfpy"/);
+  assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"pyarrow"/);
   assert.doesNotMatch(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"multipart"/);

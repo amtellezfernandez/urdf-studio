@@ -28,6 +28,7 @@ export const BACKEND_PYTHON_PORTABLE_DEPENDENCIES = [
   'pydantic',
   'huggingface_hub',
   'numpy==2.2.6',
+  'pyarrow',
   'pytest',
   'yourdfpy',
 ];
@@ -57,7 +58,7 @@ export const BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT = [
   'for package_name, expected_version in expected_versions.items():',
   '    actual_version = metadata.version(package_name)',
   '    assert actual_version == expected_version, f"{package_name}=={actual_version}, expected {expected_version}"',
-  'for module_name in ("fastapi", "multipart", "uvicorn", "pytest", "yourdfpy"):',
+  'for module_name in ("fastapi", "multipart", "pyarrow", "uvicorn", "pytest", "yourdfpy"):',
   '    importlib.import_module(module_name)',
   'print("backend python core runtime ok")',
 ].join('\n');
