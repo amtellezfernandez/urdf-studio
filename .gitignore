@@ -29,6 +29,10 @@ third_party/weightslab/
 pyroki/
 vggt/
 cam-to-sim/runtime_sessions/
+reports/
+third_party/image-blaster/
+third_party/splat-collider-builder/
+third_party/third-person-controller-splat/
 
 # Machine-specific xacro runtime (wrappers point to local venv paths)
 .i-love-urdf/
