@@ -491,6 +491,22 @@ def _normalize_device_ports_category(raw_category: Any) -> str | None:
     return None
 
 
+def _normalize_macos_serial_port(port_str: str) -> str:
+    """Normalize macOS serial port path for cu/tty equivalence.
+
+    On macOS, /dev/cu.usbmodemXXXX and /dev/tty.usbmodemXXXX refer to the
+    same physical device. Normalize both to a common form so port matching
+    in device_ports.json works regardless of which variant the OS discovers.
+    """
+    port_str = port_str.strip()
+    if not port_str.startswith("/dev/"):
+        return port_str
+    basename = port_str[len("/dev/"):]
+    if basename.startswith("cu."):
+        basename = "tty." + basename[len("cu."):]
+    return "/dev/" + basename
+
+
 def _resolve_configured_port_status(
     configured_port: str | None,
     *,
@@ -505,8 +521,18 @@ def _resolve_configured_port_status(
         str(path),
         str(path.resolve(strict=False)),
         str(resolved_path),
+        _normalize_macos_serial_port(str(path)),
+        _normalize_macos_serial_port(str(path.resolve(strict=False))),
+        _normalize_macos_serial_port(str(resolved_path)),
     }
-    if str(configured_path) in candidates or str(configured_resolved) in candidates:
+    configured_str = str(configured_path)
+    configured_resolved_str = str(configured_resolved)
+    if (
+        configured_str in candidates
+        or configured_resolved_str in candidates
+        or _normalize_macos_serial_port(configured_str) in candidates
+        or _normalize_macos_serial_port(configured_resolved_str) in candidates
+    ):
         return "matched"
     if not configured_path.exists():
         return "stale"
