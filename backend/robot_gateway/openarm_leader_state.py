@@ -901,7 +901,16 @@ def _lerobot_action_position_to_model_rad(
     calibration_profile: str | None = None,
 ) -> float:
     if joint_name in ROBOT_GATEWAY_LEROBOT_GRIPPER_JOINT_NAMES:
-        return value / ROBOT_GATEWAY_LEROBOT_GRIPPER_UNITS_PER_RAD
+        # Map normalized gripper [0,100]% across the FULL URDF gripper joint
+        # range [lower, upper] so 0% -> fully closed (jaws touching) and
+        # 100% -> fully open. The previous mapping (value / UNITS_PER_RAD)
+        # spanned only [0, upper], leaving 0% ~10 deg open (jaws not touching).
+        # gripper_open_rad = 100 / UNITS_PER_RAD = 1.74533 (URDF upper).
+        gripper_open_rad = 100.0 / ROBOT_GATEWAY_LEROBOT_GRIPPER_UNITS_PER_RAD
+        gripper_closed_rad = -0.174533  # SO-101 URDF gripper joint lower limit
+        return gripper_closed_rad + (value / 100.0) * (
+            gripper_open_rad - gripper_closed_rad
+        )
     return (
         _resolve_lerobot_model_joint_direction(calibration_profile, joint_name)
         * math.radians(value)

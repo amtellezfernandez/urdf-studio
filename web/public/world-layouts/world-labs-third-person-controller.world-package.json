@@ -24,7 +24,13 @@
     }
   ],
   "interface": {
-    "observation_modalities": ["splat", "mesh", "collider", "rgb", "state"],
+    "observation_modalities": [
+      "splat",
+      "mesh",
+      "collider",
+      "rgb",
+      "state"
+    ],
     "action_semantics": "world_scene_static_layout",
     "timestep_ms": 33,
     "frame_convention": "world-labs-marble-proxy-studio-y-up"
@@ -68,23 +74,28 @@
   ],
   "world_snapshot": {
     "urdf_xml": "<robot name=\"world_labs_third_person_controller_open\"/>",
-    "joint_positions": {
-      "shoulder_pan": 0,
-      "shoulder_lift": -0.34,
-      "elbow_flex": -1.32,
-      "wrist_flex": -0.2,
-      "wrist_roll": 0,
-      "gripper": 0.35
-    },
+    "joint_positions": {},
     "cameras": [],
     "objects": [
       {
         "id": "world_labs_floor_proxy",
         "name": "World Labs floor proxy",
         "type": "cube",
-        "position_xyz": [2.4692, -0.45, -18.1741],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [94.4038, 0.4, 94.4038],
+        "position_xyz": [
+          2.4692,
+          -0.45,
+          -18.1741
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          94.4038,
+          0.4,
+          94.4038
+        ],
         "color": "#334155",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -94,9 +105,21 @@
         "id": "world_labs_platform_proxy",
         "name": "World Labs platform proxy",
         "type": "cube",
-        "position_xyz": [-5.7062, 1.6039, -1.3131],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [4.8159, 3.0616, 4.0427],
+        "position_xyz": [
+          -5.7062,
+          1.6039,
+          -1.3131
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          4.8159,
+          3.0616,
+          4.0427
+        ],
         "color": "#0f766e",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -106,9 +129,21 @@
         "id": "world_labs_table_proxy",
         "name": "World Labs table proxy",
         "type": "cube",
-        "position_xyz": [-1.9455, 1.5378, 5.0316],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [9.9477, 2.4067, 12.5582],
+        "position_xyz": [
+          -1.9455,
+          1.5378,
+          5.0316
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          9.9477,
+          2.4067,
+          12.5582
+        ],
         "color": "#475569",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -118,9 +153,21 @@
         "id": "world_labs_lounge_proxy",
         "name": "World Labs lounge proxy",
         "type": "cube",
-        "position_xyz": [14.9745, 1.4929, -4.7676],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [9.9477, 2.4067, 12.5582],
+        "position_xyz": [
+          14.9745,
+          1.4929,
+          -4.7676
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          9.9477,
+          2.4067,
+          12.5582
+        ],
         "color": "#52525b",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -130,9 +177,21 @@
         "id": "world_labs_corner_proxy",
         "name": "World Labs corner proxy",
         "type": "cube",
-        "position_xyz": [17.9981, 2.4517, 10.9021],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [11.9096, 4.0636, 8.9930],
+        "position_xyz": [
+          17.9981,
+          2.4517,
+          10.9021
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          11.9096,
+          4.0636,
+          8.993
+        ],
         "color": "#64748b",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -142,9 +201,21 @@
         "id": "world_labs_pillar_proxy",
         "name": "World Labs pillar proxy",
         "type": "cube",
-        "position_xyz": [-7.8376, 4.2899, -3.9536],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [3.5046, 8.1165, 3.2139],
+        "position_xyz": [
+          -7.8376,
+          4.2899,
+          -3.9536
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          3.5046,
+          8.1165,
+          3.2139
+        ],
         "color": "#1d4ed8",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -154,9 +225,21 @@
         "id": "world_labs_seat_proxy",
         "name": "World Labs seat proxy",
         "type": "cube",
-        "position_xyz": [1.7695, 0.8709, 11.7095],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [5.5341, 4.3210, 5.0751],
+        "position_xyz": [
+          1.7695,
+          0.8709,
+          11.7095
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          5.5341,
+          4.321,
+          5.0751
+        ],
         "color": "#7c3aed",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -166,9 +249,21 @@
         "id": "world_labs_column_proxy",
         "name": "World Labs column proxy",
         "type": "cylinder",
-        "position_xyz": [-8.1531, 0.9128, -18.5814],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [4.5640, 2.2991, 4.5640],
+        "position_xyz": [
+          -8.1531,
+          0.9128,
+          -18.5814
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          4.564,
+          2.2991,
+          4.564
+        ],
         "color": "#0891b2",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -178,9 +273,21 @@
         "id": "robot_start_marker",
         "name": "Robot start marker",
         "type": "sphere",
-        "position_xyz": [0.0, 0.12, 0.0],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [0.24, 0.24, 0.24],
+        "position_xyz": [
+          0.0,
+          0.12,
+          0.0
+        ],
+        "rotation_rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "size_xyz": [
+          0.24,
+          0.24,
+          0.24
+        ],
         "color": "#22c55e",
         "source": "world-scenario",
         "is_ik_target": false,
@@ -197,7 +304,14 @@
     "owner": "Ian Curtis",
     "license": "MIT",
     "license_ref": "/world-layouts/world-labs-third-person-controller/LICENSE.third-person-controller-splat",
-    "tags": ["world-labs", "marble", "gaussian-splat", "collider", "open-showcase", "wsp"],
+    "tags": [
+      "world-labs",
+      "marble",
+      "gaussian-splat",
+      "collider",
+      "open-showcase",
+      "wsp"
+    ],
     "source_commit": "a47742aafb00067c05522e366e451137cec7802b",
     "splat_uniform_scale": 1,
     "collider_glb_uniform_scale": 1,

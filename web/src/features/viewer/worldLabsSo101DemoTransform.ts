@@ -46,14 +46,6 @@ export const resolveWorldLabsSo101DemoTransform = ({
     return {
       scale: 1,
       rotationRpy: [0, 0, 0],
-      jointPositions: {
-        shoulder_pan: 0,
-        shoulder_lift: -0.34,
-        elbow_flex: -1.32,
-        wrist_flex: -0.2,
-        wrist_roll: 0,
-        gripper: 0.35,
-      },
       splatGroundProbe: {
         enabled: true,
         clearance: 0.01,
