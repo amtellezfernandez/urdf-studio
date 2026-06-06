@@ -21,7 +21,14 @@
     "elements_layout": {
       "kind": "compact_preview_stage",
       "frame_map": "simu-gen-y-up-to-studio-xy-floor",
-      "notes": "Generated object meshes use their normalized authoring scale so SO101 is visually comparable to the crane meshes instead of being tiny against real-world port dimensions."
+      "notes": "Generated object meshes use their normalized authoring scale so SO101 is visually comparable to the crane meshes instead of being tiny against real-world port dimensions.",
+      "physics_defaults": {
+        "body_type": "static",
+        "restitution": 0.0,
+        "friction": 1.0,
+        "linear_damping": 1.0,
+        "angular_damping": 1.0
+      }
     },
     "elements": [
       {
@@ -110,7 +117,7 @@
       },
       {
         "id": "blue-gantry-crane",
-        "name": "blue ship-to-shore gantry crane",
+        "name": "blue rubber-tyred gantry crane",
         "uri": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/0-blue-gantry-crane.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/object.json",
         "position_xyz": [-0.75, 1.45, 0.0],
@@ -130,7 +137,8 @@
       "Default splat uses the 500k World Labs LOD instead of the 31 MB full-res SPZ.",
       "Splat uses a compact preview scale with the World Labs ground-plane offset scaled to keep the generated XZ floor on the studio XY floor. Robot transforms are not changed.",
       "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale.",
-      "Small grabbable container instances reuse the shipping-container mesh as a red pile near SO101."
+      "Small grabbable container instances reuse the shipping-container mesh as a red pile near SO101.",
+      "World-layout meshes are treated as static non-bouncy scene geometry unless an element overrides physics defaults."
     ]
   }
 }

@@ -62,8 +62,7 @@ const unionBox = (target: THREE.Box3, source: THREE.Box3) => {
 
 const computeSceneMetrics = (
   robot: PreviewRobot | null,
-  objects: CreatedObject[],
-  worldLayoutElementBounds: Iterable<THREE.Box3> = []
+  objects: CreatedObject[]
 ) => {
   const combinedBox = new THREE.Box3().makeEmpty();
 
@@ -81,10 +80,6 @@ const computeSceneMetrics = (
 
     unionBox(combinedBox, objBox);
   });
-
-  for (const bounds of worldLayoutElementBounds) {
-    unionBox(combinedBox, bounds);
-  }
 
   if (combinedBox.isEmpty()) {
     return { sceneRadius: null as number | null };
@@ -276,16 +271,12 @@ const PreviewSceneChrome = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => (
 
 const PreviewWorldLayoutElements = ({
   elements,
-  selectedElementId,
-  onBoundsChange,
-  onSelect,
 }: {
   elements: WorldLayoutElementConfig[];
-  selectedElementId: string | null;
-  onBoundsChange: (id: string, bounds: THREE.Box3 | null) => void;
-  onSelect: (id: string) => void;
 }) => {
   const ignoreHover = useCallback(() => undefined, []);
+  const ignoreBounds = useCallback(() => undefined, []);
+  const ignoreSelect = useCallback(() => undefined, []);
 
   return (
     <>
@@ -293,10 +284,10 @@ const PreviewWorldLayoutElements = ({
         <WorldLayoutGlbElement
           key={`${element.asset.id}:${element.asset.url}`}
           config={element}
-          isSelected={selectedElementId === element.asset.id}
-          onBoundsChange={onBoundsChange}
+          isSelected={false}
+          onBoundsChange={ignoreBounds}
           onHoverChange={ignoreHover}
-          onSelect={onSelect}
+          onSelect={ignoreSelect}
         />
       ))}
     </>
@@ -538,15 +529,10 @@ export const EpisodeCameraPreview = ({
   const groupRef = useRef<THREE.Group>(null);
   const robotRef = useRef<PreviewRobot | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const worldLayoutElementBoundsRef = useRef(new Map<string, THREE.Box3>());
   const [robot, setRobot] = useState<PreviewRobot | null>(null);
   const [sceneRadius, setSceneRadius] = useState<number | null>(null);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const [worldLayoutBoundsVersion, setWorldLayoutBoundsVersion] = useState(0);
-  const [selectedWorldLayoutElementId, setSelectedWorldLayoutElementId] = useState<string | null>(
-    null
-  );
 
   const aspect = useMemo(() => {
     if (!normalizedIntrinsics) return 16 / 9;
@@ -594,30 +580,6 @@ export const EpisodeCameraPreview = ({
           : [],
     [activeCameraVideoFrame, activeCameraVideoFrames]
   );
-
-  const handleWorldLayoutElementBoundsChange = useCallback(
-    (id: string, bounds: THREE.Box3 | null) => {
-      if (bounds?.isEmpty() === false) {
-        worldLayoutElementBoundsRef.current.set(id, bounds.clone());
-      } else {
-        worldLayoutElementBoundsRef.current.delete(id);
-      }
-      setWorldLayoutBoundsVersion((version) => version + 1);
-    },
-    []
-  );
-
-  const handleWorldLayoutElementSelect = useCallback((id: string) => {
-    setSelectedWorldLayoutElementId((current) => (current === id ? null : id));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedWorldLayoutElementId) return;
-    if (worldLayoutElements.some((element) => element.asset.id === selectedWorldLayoutElementId)) {
-      return;
-    }
-    setSelectedWorldLayoutElementId(null);
-  }, [selectedWorldLayoutElementId, worldLayoutElements]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -709,11 +671,7 @@ export const EpisodeCameraPreview = ({
 
     const refresh = () => {
       if (cancelled) return;
-      const metrics = computeSceneMetrics(
-        robot,
-        objects,
-        worldLayoutElementBoundsRef.current.values()
-      );
+      const metrics = computeSceneMetrics(robot, objects);
 
       setSceneRadius((prev) => {
         if (prev === metrics.sceneRadius) return prev;
@@ -745,7 +703,7 @@ export const EpisodeCameraPreview = ({
         window.clearInterval(intervalId);
       }
     };
-  }, [robot, objects, worldLayoutBoundsVersion]);
+  }, [robot, objects]);
 
   if (allowOperatorLiveCamera && operatorLiveCameraFrames.length > 0) {
     return (
@@ -849,12 +807,7 @@ export const EpisodeCameraPreview = ({
             ) : null}
             <group ref={groupRef} />
             <PreviewObjects objects={objects} gpuMode={gpuMode} />
-            <PreviewWorldLayoutElements
-              elements={worldLayoutElements}
-              selectedElementId={selectedWorldLayoutElementId}
-              onBoundsChange={handleWorldLayoutElementBoundsChange}
-              onSelect={handleWorldLayoutElementSelect}
-            />
+            <PreviewWorldLayoutElements elements={worldLayoutElements} />
             <JointValueSync robot={robot} />
             <BasePoseSync robot={robot} />
             <RobotMountKeeper robot={robot} groupRef={groupRef} />
