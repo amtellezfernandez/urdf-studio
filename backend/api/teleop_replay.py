@@ -13,6 +13,7 @@ from backend.models.teleop_replay import (
     TeleopReplayValidationResult,
 )
 from backend.services.teleop_replay import (
+    TeleopReplayDependencyError,
     TeleopReplayInputError,
     build_teleop_replay_mjlab_export_gate,
     export_teleop_kinematic_lerobot,
@@ -118,6 +119,8 @@ def export_teleop_replay_recording_to_lerobot(
         return _attach_mjlab_export_gate_result(export_result, mjlab_result)
     except TeleopReplayInputError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except TeleopReplayDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/export/kinematic/lerobot", response_model=TeleopReplayExportResult)
@@ -143,3 +146,5 @@ def export_teleop_kinematic_recording_to_lerobot(
         return _attach_mjlab_export_gate_result(export_result, mjlab_result)
     except TeleopReplayInputError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except TeleopReplayDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
