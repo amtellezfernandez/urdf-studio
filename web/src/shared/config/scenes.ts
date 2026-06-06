@@ -5,7 +5,7 @@ const toBundledWorldLayoutUrl = (relativePath: string): string =>
 
 export const DEFAULT_WORLD_LAYOUT_URL =
   trimWorldLayoutUrl(import.meta.env.VITE_DEFAULT_WORLD_LAYOUT_URL) ||
-  toBundledWorldLayoutUrl("world-layouts/default.world-layout.json");
+  toBundledWorldLayoutUrl("world-layouts/hk-cargo-port.world-layout.json");
 
 const DEMO_WORLD_LAYOUT_URL =
   trimWorldLayoutUrl(import.meta.env.VITE_DEMO_WORLD_LAYOUT_URL) ||

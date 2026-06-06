@@ -901,7 +901,11 @@ def _lerobot_action_position_to_model_rad(
     calibration_profile: str | None = None,
 ) -> float:
     if joint_name in ROBOT_GATEWAY_LEROBOT_GRIPPER_JOINT_NAMES:
-        return value / ROBOT_GATEWAY_LEROBOT_GRIPPER_UNITS_PER_RAD
+        gripper_open_rad = 100.0 / ROBOT_GATEWAY_LEROBOT_GRIPPER_UNITS_PER_RAD
+        gripper_closed_rad = -0.174533
+        return gripper_closed_rad + (value / 100.0) * (
+            gripper_open_rad - gripper_closed_rad
+        )
     return (
         _resolve_lerobot_model_joint_direction(calibration_profile, joint_name)
         * math.radians(value)

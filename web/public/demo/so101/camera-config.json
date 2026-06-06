@@ -1,0 +1,46 @@
+{
+  "cameras": [
+    {
+      "name": "so101_overhead_scene",
+      "parent_joint": "base_link",
+      "pose": [
+        0.12,
+        0.0,
+        0.34,
+        0.0,
+        1.2217304763960306,
+        0.0
+      ],
+      "intrinsics": {
+        "width": 1280,
+        "height": 720,
+        "fov_deg": 78,
+        "fx": 920,
+        "fy": 920,
+        "cx": 640,
+        "cy": 360
+      }
+    },
+    {
+      "name": "so101_gripper_down",
+      "parent_joint": "gripper_frame_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.045,
+        0.0,
+        1.5707963267948966,
+        0.0
+      ],
+      "intrinsics": {
+        "width": 1280,
+        "height": 720,
+        "fov_deg": 72,
+        "fx": 960,
+        "fy": 960,
+        "cx": 640,
+        "cy": 360
+      }
+    }
+  ]
+}

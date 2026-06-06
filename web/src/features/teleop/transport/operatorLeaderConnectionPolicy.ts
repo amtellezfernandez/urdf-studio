@@ -263,6 +263,9 @@ export const findCompatibleLeaderControlPart = (
     if (leftCoversTarget !== rightCoversTarget) {
       return leftCoversTarget ? -1 : 1;
     }
+    if (left.configuredPortMatches !== right.configuredPortMatches) {
+      return left.configuredPortMatches ? -1 : 1;
+    }
     const leftRoleAffinity = scoreLeaderControlPartRoleAffinity(left);
     const rightRoleAffinity = scoreLeaderControlPartRoleAffinity(right);
     if (leftRoleAffinity !== rightRoleAffinity) {

@@ -1,0 +1,24 @@
+{
+  "world_layout": {
+    "name": "hk-cargo-port",
+    "objects": [],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "environment": {
+    "preset": "hk-cargo-port",
+    "visual": {
+      "kind": "splat",
+      "uri": "/world-layouts/hk-cargo-port/0-world-full_res.spz",
+      "position_xyz": [0.0, 0.0, 0.0],
+      "rotation_rpy_rad": [-1.5707963267948966, 0.0, 0.0],
+      "scale": 1.0
+    },
+    "thumbnail": "/world-layouts/hk-cargo-port/0-world-thumbnail.webp",
+    "metadata": "/world-layouts/hk-cargo-port/0-world.json",
+    "notes": [
+      "Loaded from port-simple.zip.",
+      "Splat is rotated around X so its generated XZ floor lands on the studio XY floor. Robot transforms are not changed."
+    ]
+  }
+}
