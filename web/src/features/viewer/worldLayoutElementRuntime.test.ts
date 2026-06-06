@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 import {
   createDefaultWorldLayoutElementPlacements,
   mapSimuGenYUpPositionToStudioXyFloor,
   resolveWorldLayoutElementScale,
+  setWorldLayoutElementHighlighted,
   type WorldLayoutElementAsset,
 } from "@/features/viewer/worldLayoutElementRuntime";
 
@@ -42,5 +44,23 @@ describe("world layout element runtime", () => {
 
   it("maps simu_gen Y-up placements onto the Studio XY floor without changing robot axes", () => {
     expect(mapSimuGenYUpPositionToStudioXyFloor([1, 0, -12])).toEqual([1, 12, 0]);
+  });
+
+  it("temporarily swaps selectable element materials and restores originals", () => {
+    const originalMaterial = new THREE.MeshStandardMaterial({ color: "#404040" });
+    const highlightMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff" });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), originalMaterial);
+    const root = new THREE.Group();
+    root.add(mesh);
+
+    setWorldLayoutElementHighlighted(root, true, highlightMaterial);
+    expect(mesh.material).toBe(highlightMaterial);
+
+    setWorldLayoutElementHighlighted(root, false, highlightMaterial);
+    expect(mesh.material).toBe(originalMaterial);
+
+    originalMaterial.dispose();
+    highlightMaterial.dispose();
+    mesh.geometry.dispose();
   });
 });

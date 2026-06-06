@@ -1,6 +1,6 @@
 import { Html } from "@react-three/drei";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { extend, useThree } from "@react-three/fiber";
+import { extend, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
@@ -9,6 +9,7 @@ import {
   getInitialWorldLayoutElementPlacements,
   mapSimuGenYUpPositionToStudioXyFloor,
   resolveWorldLayoutElementScale,
+  setWorldLayoutElementHighlighted,
   type WorldLayoutElementAsset,
   type WorldLayoutElementPlacement,
 } from "@/features/viewer/worldLayoutElementRuntime";
@@ -168,13 +169,40 @@ const fitCameraToBounds = ({
 
 const WorldLayoutGlbElement = ({
   config,
+  isSelected,
   onBoundsChange,
+  onHoverChange,
+  onSelect,
 }: {
   config: WorldLayoutElementConfig;
+  isSelected: boolean;
   onBoundsChange: (id: string, bounds: THREE.Box3 | null) => void;
+  onHoverChange: (id: string | null) => void;
+  onSelect: (id: string) => void;
 }) => {
   const [scene, setScene] = useState<THREE.Group | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const selectedMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#ffffff",
+        emissive: "#ffffff",
+        emissiveIntensity: 0.22,
+        metalness: 0.05,
+        roughness: 0.42,
+      }),
+    []
+  );
+
+  useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
+
+  useEffect(() => {
+    if (!scene) return;
+    setWorldLayoutElementHighlighted(scene, isSelected, selectedMaterial);
+    return () => {
+      setWorldLayoutElementHighlighted(scene, false, selectedMaterial);
+    };
+  }, [isSelected, scene, selectedMaterial]);
 
   useEffect(() => {
     const loader = new GLTFLoader();
@@ -223,7 +251,29 @@ const WorldLayoutGlbElement = ({
     };
   }, [config, onBoundsChange]);
 
-  if (scene) return <primitive object={scene} />;
+  if (scene) {
+    return (
+      <primitive
+        object={scene}
+        onClick={(event: ThreeEvent<MouseEvent>) => {
+          event.stopPropagation();
+          onSelect(config.asset.id);
+        }}
+        onPointerOver={(event: ThreeEvent<PointerEvent>) => {
+          event.stopPropagation();
+          onHoverChange(config.asset.id);
+        }}
+        onPointerMove={(event: ThreeEvent<PointerEvent>) => {
+          event.stopPropagation();
+          onHoverChange(config.asset.id);
+        }}
+        onPointerOut={(event: ThreeEvent<PointerEvent>) => {
+          event.stopPropagation();
+          onHoverChange(null);
+        }}
+      />
+    );
+  }
   if (!loadError) return null;
 
   return (
@@ -248,6 +298,8 @@ export const WorldLayoutSplatLayer = () => {
   const elementBoundsRef = useRef(new Map<string, THREE.Box3>());
   const autoFitKeyRef = useRef<string | null>(null);
   const [boundsVersion, setBoundsVersion] = useState(0);
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   const handleSplatRef = useCallback((instance: SplatMesh | null) => {
     setSplatInstance(instance);
   }, []);
@@ -262,6 +314,9 @@ export const WorldLayoutSplatLayer = () => {
     },
     []
   );
+  const handleElementSelect = useCallback((id: string) => {
+    setSelectedElementId((current) => (current === id ? null : id));
+  }, []);
   const sparkArgs = useMemo(
     () => ({
       renderer,
@@ -291,6 +346,25 @@ export const WorldLayoutSplatLayer = () => {
       cancelled = true;
     };
   }, [splatInstance]);
+
+  useEffect(() => {
+    const canvas = renderer.domElement;
+    if (!canvas) return;
+    if (hoveredElementId) {
+      canvas.style.cursor = "pointer";
+    }
+    return () => {
+      if (hoveredElementId) {
+        canvas.style.cursor = "";
+      }
+    };
+  }, [hoveredElementId, renderer]);
+
+  useEffect(() => {
+    if (!selectedElementId) return;
+    if (elements.some((element) => element.asset.id === selectedElementId)) return;
+    setSelectedElementId(null);
+  }, [elements, selectedElementId]);
 
   useEffect(() => {
     if (elements.length === 0) {
@@ -341,7 +415,10 @@ export const WorldLayoutSplatLayer = () => {
         <WorldLayoutGlbElement
           key={`${element.asset.id}:${element.asset.url}`}
           config={element}
+          isSelected={selectedElementId === element.asset.id}
           onBoundsChange={handleElementBoundsChange}
+          onHoverChange={setHoveredElementId}
+          onSelect={handleElementSelect}
         />
       ))}
       {loadError ? (

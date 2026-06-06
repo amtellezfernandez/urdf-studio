@@ -32,6 +32,8 @@ export type WorldLayoutElementVisual = {
   bounds: THREE.Box3;
 };
 
+const WORLD_LAYOUT_ELEMENT_ORIGINAL_MATERIAL_KEY = "worldLayoutElementOriginalMaterial";
+
 export const WORLD_LAYOUT_ELEMENT_SCALE = 0.5;
 const WORLD_LAYOUT_ELEMENT_MIN_METRIC_SCALE = 0.02;
 const WORLD_LAYOUT_ELEMENT_MAX_METRIC_SCALE = 200;
@@ -126,4 +128,20 @@ export function createWorldLayoutElementVisual(
     size,
     bounds: box.clone(),
   };
+}
+
+export function setWorldLayoutElementHighlighted(
+  root: THREE.Object3D,
+  highlighted: boolean,
+  highlightMaterial: THREE.Material
+): void {
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    if (!(WORLD_LAYOUT_ELEMENT_ORIGINAL_MATERIAL_KEY in child.userData)) {
+      child.userData[WORLD_LAYOUT_ELEMENT_ORIGINAL_MATERIAL_KEY] = child.material;
+    }
+    child.material = highlighted
+      ? highlightMaterial
+      : child.userData[WORLD_LAYOUT_ELEMENT_ORIGINAL_MATERIAL_KEY];
+  });
 }
