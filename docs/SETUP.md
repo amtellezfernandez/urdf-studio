@@ -21,7 +21,13 @@ This will:
 - Prompt you to configure GitHub access.
 - Install the local `i-love-urdf` CLI for this repo (`npx ilu`).
 
-Setup pins MuJoCo-Warp to the release that imports cleanly with the installed MuJoCo runtime. It also pins the Placo/Pinocchio native collision stack so `pinocchio`, `coal`, and `hppfcl` import cleanly from `.venv-lerobot`.
+Setup pins MuJoCo-Warp to the release that imports cleanly with the installed MuJoCo runtime. On Linux it also pins the Placo/Pinocchio native collision stack so `pinocchio`, `coal`, and `hppfcl` import cleanly from `.venv-lerobot`.
+
+On macOS, setup skips that collision stack by default because the pinned native libraries are not consistently relocatable across macOS Python environments. Force it only if you need the OpenArm collision checks:
+
+```bash
+URDF_STUDIO_INSTALL_COLLISION_STACK=1 npm run setup
+```
 
 ### URDF Ops workspace setup
 

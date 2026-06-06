@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  BACKEND_COLLISION_STACK_FORCE_ENV,
+  BACKEND_COLLISION_STACK_SKIP_ENV,
   BACKEND_NATIVE_SIM_FORCE_ENV,
   BACKEND_NATIVE_SIM_SKIP_ENV,
+  BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT,
   BACKEND_PYTHON_DEPENDENCIES,
   BACKEND_PYTHON_JAX_DEPENDENCIES,
   BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT,
@@ -28,6 +31,8 @@ import {
 } from './setupParams.js';
 
 test('backend Python setup separates portable and native simulation runtimes', () => {
+  assert.equal(BACKEND_COLLISION_STACK_SKIP_ENV, 'URDF_STUDIO_SKIP_COLLISION_STACK_AUTO_INSTALL');
+  assert.equal(BACKEND_COLLISION_STACK_FORCE_ENV, 'URDF_STUDIO_INSTALL_COLLISION_STACK');
   assert.equal(BACKEND_NATIVE_SIM_SKIP_ENV, 'URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL');
   assert.equal(BACKEND_NATIVE_SIM_FORCE_ENV, 'URDF_STUDIO_INSTALL_NATIVE_SIM');
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('fastapi'));
@@ -41,11 +46,15 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('placo==0.9.16'));
   assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libcoal'));
   assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libpinocchio'));
+  assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"yourdfpy"/);
+  assert.doesNotMatch(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"multipart"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"pinocchio"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"placo"/);
   assert.match(BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT, /"mujoco\.mjx"/);
+  assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /backend python core runtime ok/);
+  assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /backend python collision stack runtime ok/);
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /backend python portable runtime ok/);
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /backend python native simulation runtime ok/);
 });

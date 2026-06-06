@@ -20,14 +20,17 @@ import {
   URDF_OPS_SKIP_SETUP_ENV,
 } from './urdfOpsParams.js';
 import {
+  BACKEND_COLLISION_STACK_FORCE_ENV,
+  BACKEND_COLLISION_STACK_SKIP_ENV,
+  BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT,
   BACKEND_PYTHON_JAX_DEPENDENCIES,
+  BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT,
   BACKEND_PYTHON_PLACO_DEPENDENCIES,
   BACKEND_PYTHON_PORTABLE_DEPENDENCIES,
   BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT,
   BACKEND_NATIVE_SIM_FORCE_ENV,
   BACKEND_NATIVE_SIM_SKIP_ENV,
   BACKEND_PYTHON_STALE_DEPENDENCIES,
-  BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT,
   GENESIS_FORCE_INSTALL_ENV,
   GENESIS_PYTHON_DEPENDENCIES,
   GENESIS_SKIP_AUTO_INSTALL_ENV,
@@ -222,6 +225,7 @@ async function setupUrdfOpsWorkspace() {
     } catch (error) {
       log('✗ Failed to clone URDF Ops', colors.yellow);
       logInfo(`Set ${URDF_OPS_ROOT_ENV}=/path/to/urdf-ops if you already cloned it elsewhere.`);
+      logInfo(`Set ${URDF_OPS_SKIP_SETUP_ENV}=1 to continue without URDF Ops.`);
       return false;
     }
   }
@@ -877,11 +881,35 @@ function getBackendNativeSimSkipMessage() {
   return `Native simulation backend runtime skipped. Set ${BACKEND_NATIVE_SIM_FORCE_ENV}=1 to force install.`;
 }
 
+function shouldInstallBackendCollisionStack() {
+  if (isTruthyEnvValue(process.env[BACKEND_COLLISION_STACK_SKIP_ENV])) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env[BACKEND_COLLISION_STACK_FORCE_ENV])) {
+    return true;
+  }
+  return process.platform !== 'darwin';
+}
+
+function getBackendCollisionStackSkipMessage() {
+  if (isTruthyEnvValue(process.env[BACKEND_COLLISION_STACK_SKIP_ENV])) {
+    return `Backend collision stack skipped by ${BACKEND_COLLISION_STACK_SKIP_ENV}.`;
+  }
+  if (process.platform === 'darwin') {
+    return [
+      'Backend collision stack skipped on macOS.',
+      'The pinned Placo/Pinocchio native libraries are not consistently relocatable across macOS Python environments.',
+      `Set ${BACKEND_COLLISION_STACK_FORCE_ENV}=1 to force install.`,
+    ].join(' ');
+  }
+  return `Backend collision stack skipped. Set ${BACKEND_COLLISION_STACK_FORCE_ENV}=1 to force install.`;
+}
+
 function resolveBackendPythonDependencies() {
-  const baseDependencies = [
-    ...BACKEND_PYTHON_PORTABLE_DEPENDENCIES,
-    ...BACKEND_PYTHON_PLACO_DEPENDENCIES,
-  ];
+  const baseDependencies = [...BACKEND_PYTHON_PORTABLE_DEPENDENCIES];
+  if (shouldInstallBackendCollisionStack()) {
+    baseDependencies.push(...BACKEND_PYTHON_PLACO_DEPENDENCIES);
+  }
   if (!shouldInstallBackendNativeSimRuntime()) {
     return baseDependencies;
   }
@@ -893,10 +921,13 @@ function resolveBackendPythonDependencies() {
 }
 
 function resolveBackendPythonVerifyImportScript() {
+  const portableScript = shouldInstallBackendCollisionStack()
+    ? BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT
+    : BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT;
   if (!shouldInstallBackendNativeSimRuntime()) {
-    return BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT;
+    return portableScript;
   }
-  return BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT;
+  return [portableScript, BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT].join('\n');
 }
 
 function shouldInstallGenesisRuntime() {
@@ -1194,6 +1225,9 @@ async function installBackendDeps() {
   const backendVerifyImportScript = resolveBackendPythonVerifyImportScript();
   if (!shouldInstallBackendNativeSimRuntime()) {
     logInfo(getBackendNativeSimSkipMessage());
+  }
+  if (!shouldInstallBackendCollisionStack()) {
+    logInfo(getBackendCollisionStackSkipMessage());
   }
 
   try {
