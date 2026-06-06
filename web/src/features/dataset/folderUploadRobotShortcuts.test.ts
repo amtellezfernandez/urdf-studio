@@ -14,6 +14,10 @@ type ShortcutManifest = {
   files: Array<{ path: string; url: string }>;
 };
 
+type ShortcutCameraConfig = {
+  cameras: Array<{ name: string; parent_joint: string; pose: number[] }>;
+};
+
 const PUBLIC_DEMO_ROOT = fileURLToPath(new URL("../../../public/demo/", import.meta.url));
 
 const loadManifest = (shortcut: FolderUploadRobotShortcut): ShortcutManifest => {
@@ -32,6 +36,16 @@ const resolveManifestFilePath = (
     path.join(PUBLIC_DEMO_ROOT, shortcut.manifestUrl.replace(/^\/demo\//, ""))
   );
   return path.resolve(manifestDir, fileUrl);
+};
+
+const loadCameraConfig = (shortcut: FolderUploadRobotShortcut): ShortcutCameraConfig => {
+  const cameraConfigUrl = shortcut.cameraConfigUrl;
+  if (!cameraConfigUrl) return { cameras: [] };
+  const cameraConfigFilePath = path.join(
+    PUBLIC_DEMO_ROOT,
+    cameraConfigUrl.replace(/^\/demo\//, "")
+  );
+  return JSON.parse(readFileSync(cameraConfigFilePath, "utf8")) as ShortcutCameraConfig;
 };
 
 describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
@@ -78,6 +92,7 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
   it("points SO101 to a bundled manifest with camera config and no GitHub dependency", () => {
     const shortcut = FOLDER_UPLOAD_ROBOT_SHORTCUTS.so101;
     const manifest = loadManifest(shortcut);
+    const cameraConfig = loadCameraConfig(shortcut);
     const manifestPaths = new Set(manifest.files.map((file) => file.path));
     const urdfEntry = manifest.files[0];
 
@@ -86,6 +101,16 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     expect(manifest.label).toBe("SO101");
     expect(existsSync(path.join(PUBLIC_DEMO_ROOT, "so101/camera-config.json"))).toBe(true);
     expect(urdfEntry?.path).toBe("robot.urdf");
+    expect(cameraConfig.cameras.map((camera) => camera.name)).toEqual([
+      "so101_overhead_scene",
+      "so101_gripper_down",
+      "so101_port_oblique",
+    ]);
+    expect(cameraConfig.cameras.every((camera) => camera.pose.length === 6)).toBe(true);
+    expect(cameraConfig.cameras.find((camera) => camera.name === "so101_port_oblique"))
+      .toMatchObject({
+        parent_joint: "base_link",
+      });
 
     manifest.files.forEach((file) => {
       expect(file.path).not.toContain(".xacro");
