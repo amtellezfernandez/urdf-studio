@@ -1,7 +1,5 @@
 import * as THREE from "three";
-import type { URDFRobot } from "urdf-loader";
 import type { WorldLabsSplatGroundProbe } from "@/features/viewer/worldLabsSplatGroundProbe";
-import { applyJointValues } from "@/shared/lib/urdf-joints";
 
 const STUDIO_UP_AXIS = new THREE.Vector3(0, 0, 1);
 
@@ -74,30 +72,6 @@ export const resolveWorldLabsSo101DemoTransform = ({
     scale: 1,
     rotationRpy: [0, 0, 0],
   };
-};
-
-export const applyWorldLabsSo101DemoTransformToRobot = ({
-  activePackageId,
-  robot,
-  applyJointPositions = true,
-}: {
-  activePackageId: string | null | undefined;
-  robot: URDFRobot;
-  applyJointPositions?: boolean;
-}): WorldLabsSo101DemoTransform => {
-  const demoTransform = resolveWorldLabsSo101DemoTransform({
-    activePackageId,
-    robotName: robot.name,
-  });
-
-  robot.rotation.set(...demoTransform.rotationRpy);
-  robot.scale.setScalar(demoTransform.scale);
-  if (applyJointPositions && demoTransform.jointPositions) {
-    applyJointValues(robot, demoTransform.jointPositions);
-  }
-  robot.userData.worldLabsSo101DemoTransform = demoTransform;
-  robot.updateMatrixWorld?.(true);
-  return demoTransform;
 };
 
 export const applyWorldLabsSplatGroundProbeToRobot = ({

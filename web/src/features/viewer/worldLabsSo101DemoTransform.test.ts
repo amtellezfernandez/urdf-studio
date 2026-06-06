@@ -2,9 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import type { URDFRobot } from "urdf-loader";
 import {
-  applyWorldLabsSo101DemoTransformToRobot,
   applyWorldLabsSplatGroundProbeToRobot,
   resolveWorldLabsSo101DemoTransform,
 } from "./worldLabsSo101DemoTransform";
@@ -64,36 +62,6 @@ describe("resolveWorldLabsSo101DemoTransform", () => {
 
     expect(provenance.splat_uniform_scale).toBe(1);
     expect(provenance.collider_glb_uniform_scale).toBe(1);
-  });
-
-  it("applies the World Labs demo pose directly to parsed robot instances", () => {
-    const appliedJointPayloads: Record<string, number>[] = [];
-    const robot = new THREE.Group() as THREE.Group & {
-      joints: Record<string, THREE.Object3D>;
-      setJointValues: (values: Record<string, number>) => void;
-    };
-    robot.name = "so101_new_calib";
-    robot.rotation.set(0.5, -0.25, 0.75);
-    robot.scale.setScalar(7);
-    robot.joints = {};
-    robot.setJointValues = (values) => {
-      appliedJointPayloads.push({ ...values });
-    };
-
-    const transform = applyWorldLabsSo101DemoTransformToRobot({
-      activePackageId: "world-labs-third-person-controller-open",
-      robot: robot as unknown as URDFRobot,
-    });
-
-    expect(transform.jointPositions).toBeDefined();
-    expect(robot.scale.x).toBe(transform.scale);
-    expect(robot.scale.y).toBe(transform.scale);
-    expect(robot.scale.z).toBe(transform.scale);
-    expect([robot.rotation.x, robot.rotation.y, robot.rotation.z]).toEqual(
-      transform.rotationRpy
-    );
-    expect(robot.userData.worldLabsSo101DemoTransform).toBe(transform);
-    expect(appliedJointPayloads).toEqual([transform.jointPositions]);
   });
 
   it("grounds SO101 along the studio Z-up axis", () => {

@@ -26,10 +26,7 @@ import {
   WorldLabsEnvironmentLayer,
   useWorldLabsPrimarySceneActive,
 } from "@/features/viewer/WorldLabsSceneLayers";
-import {
-  type WorldLabsSo101DemoTransform,
-  applyWorldLabsSo101DemoTransformToRobot,
-} from "@/features/viewer/worldLabsSo101DemoTransform";
+import { resolveWorldLabsSo101DemoTransform } from "@/features/viewer/worldLabsSo101DemoTransform";
 import { useWorldSceneRuntimeStore } from "@/features/world-share/worldSceneRuntimeStore";
 import {
   useOperatorPerceptionStore,
@@ -51,37 +48,6 @@ type PreviewRobot = URDFRobot;
 const FLOAT_EPS = EPISODE_CAMERA_PREVIEW_PARAMS.floatComparisonEpsilon;
 const approxEqual = (a: number, b: number, eps = FLOAT_EPS) =>
   Math.abs(a - b) <= eps;
-
-const readPreviewDemoJointPositions = (
-  robot: PreviewRobot
-): Record<string, number> | null => {
-  const transform = robot.userData
-    .worldLabsSo101DemoTransform as WorldLabsSo101DemoTransform | undefined;
-  return transform?.jointPositions ?? null;
-};
-
-const shouldPreserveParsedDemoJointPose = (
-  robot: PreviewRobot,
-  storeJointValues: Record<string, number>,
-  initialJointValues: Record<string, number>
-) => {
-  const demoJointPositions = readPreviewDemoJointPositions(robot);
-  if (!demoJointPositions) return false;
-
-  const storeInitializedForDemo = Object.entries(demoJointPositions).every(
-    ([jointName, demoValue]) => approxEqual(initialJointValues[jointName] ?? Number.NaN, demoValue)
-  );
-  if (storeInitializedForDemo) return false;
-
-  return Object.entries(demoJointPositions).some(([jointName, demoValue]) => {
-    const storeValue = storeJointValues[jointName];
-    return (
-      typeof storeValue !== "number" ||
-      !Number.isFinite(storeValue) ||
-      !approxEqual(storeValue, demoValue)
-    );
-  });
-};
 
 const computeSceneMetrics = (robot: PreviewRobot | null, objects: CreatedObject[]) => {
   const combinedBox = new THREE.Box3().makeEmpty();
@@ -297,25 +263,10 @@ const PreviewSceneChrome = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => (
 
 const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
   const lastValuesRef = useRef<Record<string, number> | null>(null);
-  const lastRobotRef = useRef<PreviewRobot | null>(null);
 
   useFrame(() => {
-    if (!robot) {
-      lastRobotRef.current = null;
-      lastValuesRef.current = null;
-      return;
-    }
-    const jointState = useJointStore.getState();
-    const values = jointState.jointValues;
-    if (lastRobotRef.current !== robot) {
-      lastRobotRef.current = robot;
-      lastValuesRef.current = null;
-      if (shouldPreserveParsedDemoJointPose(robot, values, jointState.initialJointValues)) {
-        lastValuesRef.current = values;
-        robot.updateMatrixWorld?.(true);
-        return;
-      }
-    }
+    if (!robot) return;
+    const values = useJointStore.getState().jointValues;
     if (lastValuesRef.current === values) return;
     lastValuesRef.current = values;
     applyJointValues(robot, values);
@@ -650,10 +601,13 @@ export const EpisodeCameraPreview = ({
 
     try {
       const robot = loader.parse(urdfContent) as PreviewRobot;
-      applyWorldLabsSo101DemoTransformToRobot({
+      const demoTransform = resolveWorldLabsSo101DemoTransform({
         activePackageId: activeWorldScenePackageId,
-        robot,
+        robotName: robot.name,
       });
+      robot.scale.setScalar(demoTransform.scale);
+      robot.rotation.set(...demoTransform.rotationRpy);
+      robot.userData.worldLabsSo101DemoTransform = demoTransform;
       configurePreviewObject(robot, gpuMode);
       robotRef.current = robot;
       setRobot(robot);
@@ -795,7 +749,7 @@ export const EpisodeCameraPreview = ({
           }}
         >
           <Canvas
-            key={`${cameraConfig.id}:${activeWorldScenePackageId ?? "default"}`}
+            key={cameraConfig.id}
             frameloop="always"
             style={{ width: "100%", height: "100%" }}
             dpr={worldLabsPrimarySceneActive || gpuMode === "low" ? [1, 1] : [1, 2]}
