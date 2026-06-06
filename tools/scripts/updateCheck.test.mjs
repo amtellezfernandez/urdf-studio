@@ -8,6 +8,7 @@ import {
   parseTrackedDefaultBranch,
   resolveOfficialVersionStatus,
   shouldBypassOutdatedVersionGate,
+  shouldEnforceOutdatedVersionGate,
   VERSION_CHECK_STATES,
 } from './updateCheck.js';
 
@@ -20,6 +21,9 @@ function buildRunGitCommandStub() {
     const command = args.join(' ');
     if (command === 'rev-parse HEAD') {
       return CURRENT_SHA;
+    }
+    if (command === 'rev-parse --abbrev-ref HEAD') {
+      return 'main';
     }
     if (command === 'config --get remote.origin.url') {
       return 'git@github.com:amtellezfernandez/urdf-studio.git';
@@ -80,6 +84,7 @@ test('resolveOfficialVersionStatus reports outdated checkout from official compa
   assert.deepEqual(result, {
     state: VERSION_CHECK_STATES.behind,
     currentSha: CURRENT_SHA,
+    currentBranch: 'main',
     defaultBranch: 'main',
     latestSha: LATEST_SHA,
     repoSlug: 'amtellezfernandez/urdf-studio',
@@ -95,6 +100,7 @@ test('resolveOfficialVersionStatus reuses a fresh cache entry', async () => {
   const cachedResult = {
     state: VERSION_CHECK_STATES.current,
     currentSha: CURRENT_SHA,
+    currentBranch: 'main',
     defaultBranch: 'main',
     latestSha: CURRENT_SHA,
     repoSlug: 'amtellezfernandez/urdf-studio',
@@ -138,6 +144,7 @@ test('resolveOfficialVersionStatus prefers git remote ancestry when available', 
       const command = args.join(' ');
       calls.push(command);
       if (command === 'rev-parse HEAD') return CURRENT_SHA;
+      if (command === 'rev-parse --abbrev-ref HEAD') return 'main';
       if (command === 'config --get remote.origin.url') {
         return 'git@github.com:amtellezfernandez/urdf-studio.git';
       }
@@ -209,6 +216,26 @@ test('outdated version helpers format enforcement messages and bypass env', () =
       env: { URDF_STUDIO_ALLOW_OUTDATED: 'yes' },
     }),
     true
+  );
+  assert.equal(
+    shouldEnforceOutdatedVersionGate(result, {
+      allowOutdated: false,
+      env: {},
+    }),
+    true
+  );
+  assert.equal(
+    shouldEnforceOutdatedVersionGate(
+      {
+        ...result,
+        currentBranch: 'hkhack',
+      },
+      {
+        allowOutdated: false,
+        env: {},
+      }
+    ),
+    false
   );
   assert.match(
     formatOfficialVersionStatusMessage({

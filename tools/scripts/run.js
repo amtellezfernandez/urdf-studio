@@ -61,7 +61,7 @@ import {
   buildOutdatedVersionMessage,
   formatOfficialVersionStatusMessage,
   resolveOfficialVersionStatus,
-  shouldBypassOutdatedVersionGate,
+  shouldEnforceOutdatedVersionGate,
   VERSION_CHECK_STATES,
 } from './updateCheck.js';
 
@@ -527,9 +527,7 @@ async function main() {
     githubToken: backendGitHubAuth.token,
   });
   if (
-    (officialVersionStatus.state === VERSION_CHECK_STATES.behind ||
-      officialVersionStatus.state === VERSION_CHECK_STATES.diverged) &&
-    !shouldBypassOutdatedVersionGate({
+    shouldEnforceOutdatedVersionGate(officialVersionStatus, {
       allowOutdated: parsedRunArgs.allowOutdated,
       env: process.env,
     })

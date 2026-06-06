@@ -26,6 +26,8 @@ export const VERSION_CHECK_STATES = {
   unavailable: 'unavailable',
 };
 
+const DETACHED_HEAD_BRANCH_NAME = 'HEAD';
+
 function runGitCommand(args, { cwd, timeoutMs = RUN_UPDATE_CHECK_TIMEOUT_MS, execFileSyncImpl = execFileSync } = {}) {
   return execFileSyncImpl('git', args, {
     cwd,
@@ -100,6 +102,33 @@ export function shouldBypassOutdatedVersionGate({ allowOutdated = false, env = p
   return allowOutdated || isTruthyEnvValue(env[RUN_UPDATE_CHECK_ENV_KEYS.allowOutdated]);
 }
 
+export function isNonDefaultBranchCheckout(result) {
+  return Boolean(
+    result &&
+      typeof result.currentBranch === 'string' &&
+      result.currentBranch.trim() &&
+      result.currentBranch !== DETACHED_HEAD_BRANCH_NAME &&
+      result.currentBranch !== result.defaultBranch
+  );
+}
+
+export function shouldEnforceOutdatedVersionGate(
+  result,
+  { allowOutdated = false, env = process.env } = {}
+) {
+  if (
+    !result ||
+    (result.state !== VERSION_CHECK_STATES.behind &&
+      result.state !== VERSION_CHECK_STATES.diverged)
+  ) {
+    return false;
+  }
+  if (shouldBypassOutdatedVersionGate({ allowOutdated, env })) {
+    return false;
+  }
+  return !isNonDefaultBranchCheckout(result);
+}
+
 function shouldSkipUpdateCheck(env) {
   return isTruthyEnvValue(env[RUN_UPDATE_CHECK_ENV_KEYS.skip]);
 }
@@ -110,6 +139,12 @@ function buildCompareApiUrl({ repoSlug, defaultBranch, currentSha }) {
 
 function readLocalVersionMetadata({ cwd, runGitCommandImpl = runGitCommand } = {}) {
   const currentSha = runGitCommandImpl(['rev-parse', 'HEAD'], { cwd });
+  let currentBranch = null;
+  try {
+    currentBranch = runGitCommandImpl(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd });
+  } catch {
+    currentBranch = null;
+  }
   const remoteUrl = runGitCommandImpl(
     ['config', '--get', `remote.${RUN_UPDATE_CHECK_REMOTE_NAME}.url`],
     { cwd }
@@ -126,6 +161,7 @@ function readLocalVersionMetadata({ cwd, runGitCommandImpl = runGitCommand } = {
   const repoSlug = parseGitHubRepositorySlug(remoteUrl);
   return {
     currentSha,
+    currentBranch,
     defaultBranch: parseTrackedDefaultBranch(trackedDefaultBranch),
     repoSlug,
   };
@@ -151,13 +187,14 @@ function shortenSha(sha) {
   return typeof sha === 'string' && sha.length >= 7 ? sha.slice(0, 7) : sha || 'unknown';
 }
 
-function normalizeCompareResult(payload, { currentSha, defaultBranch, repoSlug }) {
+function normalizeCompareResult(payload, { currentSha, currentBranch, defaultBranch, repoSlug }) {
   const latestSha = typeof payload?.base_commit?.sha === 'string' ? payload.base_commit.sha : null;
   const status = typeof payload?.status === 'string' ? payload.status.trim().toLowerCase() : '';
   const behindBy = Number.isInteger(payload?.behind_by) ? payload.behind_by : 0;
   const aheadBy = Number.isInteger(payload?.ahead_by) ? payload.ahead_by : 0;
   const base = {
     currentSha,
+    currentBranch,
     defaultBranch,
     latestSha,
     repoSlug,
@@ -185,10 +222,11 @@ function normalizeCompareResult(payload, { currentSha, defaultBranch, repoSlug }
   };
 }
 
-function normalizeCustomCheckoutResult({ currentSha, defaultBranch, repoSlug }) {
+function normalizeCustomCheckoutResult({ currentSha, currentBranch, defaultBranch, repoSlug }) {
   return {
     state: VERSION_CHECK_STATES.custom,
     currentSha,
+    currentBranch,
     defaultBranch,
     latestSha: null,
     repoSlug,
@@ -216,7 +254,7 @@ function parseLeftRightCount(output) {
   };
 }
 
-function resolveStatusFromGitRemote({ cwd, currentSha, defaultBranch, repoSlug, runGitCommandImpl }) {
+function resolveStatusFromGitRemote({ cwd, currentSha, currentBranch, defaultBranch, repoSlug, runGitCommandImpl }) {
   runGitCommandImpl(
     ['fetch', '--quiet', '--no-tags', RUN_UPDATE_CHECK_REMOTE_NAME, defaultBranch],
     { cwd }
@@ -230,6 +268,7 @@ function resolveStatusFromGitRemote({ cwd, currentSha, defaultBranch, repoSlug, 
     return {
       state: VERSION_CHECK_STATES.current,
       currentSha,
+      currentBranch,
       defaultBranch,
       latestSha,
       repoSlug,
@@ -242,6 +281,7 @@ function resolveStatusFromGitRemote({ cwd, currentSha, defaultBranch, repoSlug, 
     return {
       state: VERSION_CHECK_STATES.behind,
       currentSha,
+      currentBranch,
       defaultBranch,
       latestSha,
       repoSlug,
@@ -254,6 +294,7 @@ function resolveStatusFromGitRemote({ cwd, currentSha, defaultBranch, repoSlug, 
     return {
       state: VERSION_CHECK_STATES.ahead,
       currentSha,
+      currentBranch,
       defaultBranch,
       latestSha,
       repoSlug,
@@ -265,6 +306,7 @@ function resolveStatusFromGitRemote({ cwd, currentSha, defaultBranch, repoSlug, 
   return {
     state: VERSION_CHECK_STATES.diverged,
     currentSha,
+    currentBranch,
     defaultBranch,
     latestSha,
     repoSlug,
@@ -307,7 +349,7 @@ export async function resolveOfficialVersionStatus({
     };
   }
 
-  const { currentSha, defaultBranch, repoSlug } = localVersionMetadata;
+  const { currentSha, currentBranch, defaultBranch, repoSlug } = localVersionMetadata;
   const cacheKey = `${repoSlug}:${defaultBranch}:${currentSha}`;
   const cachePath = getVersionCheckCachePath(cwd);
   const cachedResult = loadCacheImpl(cachePath);
@@ -320,6 +362,7 @@ export async function resolveOfficialVersionStatus({
     result = resolveStatusFromGitRemote({
       cwd,
       currentSha,
+      currentBranch,
       defaultBranch,
       repoSlug,
       runGitCommandImpl,
@@ -359,6 +402,7 @@ export async function resolveOfficialVersionStatus({
     return {
       state: VERSION_CHECK_STATES.unavailable,
       currentSha,
+      currentBranch,
       defaultBranch,
       latestSha: null,
       repoSlug,
@@ -369,11 +413,12 @@ export async function resolveOfficialVersionStatus({
   }
 
   if (response.status === 404) {
-    result = normalizeCustomCheckoutResult({ currentSha, defaultBranch, repoSlug });
+    result = normalizeCustomCheckoutResult({ currentSha, currentBranch, defaultBranch, repoSlug });
   } else if (!response.ok) {
     result = {
       state: VERSION_CHECK_STATES.unavailable,
       currentSha,
+      currentBranch,
       defaultBranch,
       latestSha: null,
       repoSlug,
@@ -383,7 +428,7 @@ export async function resolveOfficialVersionStatus({
     };
   } else {
     const payload = await response.json();
-    result = normalizeCompareResult(payload, { currentSha, defaultBranch, repoSlug });
+    result = normalizeCompareResult(payload, { currentSha, currentBranch, defaultBranch, repoSlug });
   }
 
   if (result.state !== VERSION_CHECK_STATES.unavailable) {
