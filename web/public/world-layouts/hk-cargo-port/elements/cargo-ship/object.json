@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "world": "port-simple",
+  "object": {
+    "id": "cargo-ship",
+    "name": "general cargo ship",
+    "description": "Mid-size general cargo vessel with white hull, white superstructure at the stern, cargo cranes on deck, and blue funnel markings. Docked at the berth.",
+    "estimated_size_m": { "height": 35, "width": 25, "length": 150 },
+    "estimated_mass_kg": 20000000,
+    "materials": [
+      "painted steel hull",
+      "painted steel superstructure"
+    ],
+    "source_images": [
+      "worlds/hk-port/source/1-gemini-generated-image-y8pnefy8pnefy8pn-plate.png"
+    ],
+    "evidence": [
+      {
+        "image": "worlds/hk-port/source/1-gemini-generated-image-y8pnefy8pnefy8pn-plate.png",
+        "location_in_image": "center, white hull vessel docked beside the Evergreen ship"
+      }
+    ],
+    "generate_as_3d_object": true,
+    "working_dir": "worlds/port-simple/output/cargo-ship"
+  },
+  "updated_at": "2026-06-06T14:56:00.209Z"
+}

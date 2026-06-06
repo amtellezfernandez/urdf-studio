@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "world": "port-simple",
+  "object": {
+    "id": "blue-gantry-crane",
+    "name": "blue ship-to-shore gantry crane",
+    "description": "Large ship-to-shore gantry crane with dark navy blue steel lattice structure, horizontal boom extending over the berth, white cab housing, and wheeled rail base. Multiple units visible in a row.",
+    "estimated_size_m": { "height": 60, "width": 27, "length": 60 },
+    "estimated_mass_kg": 1400000,
+    "materials": [
+      "painted steel",
+      "structural lattice steel"
+    ],
+    "source_images": [
+      "worlds/port-simple/source/0-port-simple.png"
+    ],
+    "evidence": [
+      {
+        "image": "worlds/port-simple/source/0-port-simple.png",
+        "location_in_image": "center and right foreground, multiple units in a row along the berth"
+      }
+    ],
+    "generate_as_3d_object": true,
+    "working_dir": "worlds/port-simple/output/blue-gantry-crane"
+  },
+  "updated_at": "2026-06-06T14:56:50.627Z"
+}
