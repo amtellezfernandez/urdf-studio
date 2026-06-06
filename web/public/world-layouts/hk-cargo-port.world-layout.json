@@ -9,19 +9,19 @@
     "preset": "hk-cargo-port",
     "visual": {
       "kind": "splat",
-      "uri": "/world-layouts/hk-cargo-port/0-world-full_res.spz",
-      "position_xyz": [0.0, 0.0, 6.6758757],
+      "uri": "/world-layouts/hk-cargo-port/0-world-500k.spz",
+      "position_xyz": [0.0, 0.0, 0.14725363980894962],
       "rotation_rpy_rad": [-1.5707963267948966, 0.0, 0.0],
-      "scale": 11.333974,
-      "metric_scale_factor": 11.333974,
+      "scale": 0.25,
+      "metric_scale_factor": 0.25,
       "ground_plane_offset": 6.6758757
     },
     "thumbnail": "/world-layouts/hk-cargo-port/0-world-thumbnail.webp",
     "metadata": "/world-layouts/hk-cargo-port/0-world.json",
     "elements_layout": {
-      "kind": "simu_gen_default_row",
+      "kind": "compact_preview_stage",
       "frame_map": "simu-gen-y-up-to-studio-xy-floor",
-      "notes": "Generated object meshes are scaled from object.json estimated_size_m.height and spaced by estimated footprint using the simu_gen default placement strategy."
+      "notes": "Generated object meshes use their normalized authoring scale so SO101 is visually comparable to the crane meshes instead of being tiny against real-world port dimensions."
     },
     "elements": [
       {
@@ -29,51 +29,47 @@
         "name": "shipping container",
         "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "real_world_height_m": 2.6,
-        "real_world_footprint_m": 6.1,
-        "real_world_mass_kg": 2300
+        "position_xyz": [-0.9, 0.85, 0.0],
+        "scale": 0.5
       },
       {
         "id": "orange-rtg-crane",
         "name": "orange rubber-tyred gantry crane",
         "uri": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/0-orange-rtg-crane.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/object.json",
-        "real_world_height_m": 22,
-        "real_world_footprint_m": 24,
-        "real_world_mass_kg": 130000
+        "position_xyz": [0.75, 1.15, 0.0],
+        "scale": 0.5
       },
       {
         "id": "cargo-ship",
         "name": "general cargo ship",
         "uri": "/world-layouts/hk-cargo-port/elements/cargo-ship/0-cargo-ship.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/cargo-ship/object.json",
-        "real_world_height_m": 35,
-        "real_world_footprint_m": 150,
-        "real_world_mass_kg": 20000000
+        "position_xyz": [0.1, 2.0, 0.0],
+        "scale": 0.5
       },
       {
         "id": "blue-gantry-crane",
         "name": "blue ship-to-shore gantry crane",
         "uri": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/0-blue-gantry-crane.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/object.json",
-        "real_world_height_m": 60,
-        "real_world_footprint_m": 60,
-        "real_world_mass_kg": 1400000
+        "position_xyz": [-0.75, 1.45, 0.0],
+        "scale": 0.5
       },
       {
         "id": "evergreen-container-ship",
         "name": "Evergreen container ship",
         "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/0-evergreen-container-ship.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/object.json",
-        "real_world_height_m": 50,
-        "real_world_footprint_m": 366,
-        "real_world_mass_kg": 150000000
+        "position_xyz": [-0.65, 2.45, 0.0],
+        "scale": 0.5
       }
     ],
     "notes": [
       "Loaded from port-simple.zip.",
-      "Splat uses the World Labs/simu_gen metric scale and ground-plane offset, then rotates around X so its generated XZ floor lands on the studio XY floor. Robot transforms are not changed.",
-      "Generated GLB elements are bundled from port-simple.zip and rendered with simu_gen metric scaling."
+      "Default splat uses the 500k World Labs LOD instead of the 31 MB full-res SPZ.",
+      "Splat uses a compact preview scale with the World Labs ground-plane offset scaled to keep the generated XZ floor on the studio XY floor. Robot transforms are not changed.",
+      "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale."
     ]
   }
 }
