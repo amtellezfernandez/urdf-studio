@@ -222,6 +222,7 @@ async function setupUrdfOpsWorkspace() {
     } catch (error) {
       log('✗ Failed to clone URDF Ops', colors.yellow);
       logInfo(`Set ${URDF_OPS_ROOT_ENV}=/path/to/urdf-ops if you already cloned it elsewhere.`);
+      logInfo(`Set ${URDF_OPS_SKIP_SETUP_ENV}=1 to continue without URDF Ops.`);
       return false;
     }
   }

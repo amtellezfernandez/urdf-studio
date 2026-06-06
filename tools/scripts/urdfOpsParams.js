@@ -1,4 +1,4 @@
-export const URDF_OPS_REPO_URL = 'git@github.com:amtellezfernandez/urdf-ops.git';
+export const URDF_OPS_REPO_URL = 'https://github.com/amtellezfernandez/urdf-ops.git';
 export const URDF_OPS_DIRNAME = 'urdf-ops';
 export const URDF_OPS_ROOT_ENV = 'URDF_OPS_ROOT';
 export const URDF_OPS_SKIP_SETUP_ENV = 'URDF_STUDIO_SKIP_URDF_OPS_SETUP';
