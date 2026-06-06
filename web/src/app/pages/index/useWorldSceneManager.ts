@@ -628,6 +628,9 @@ export const useWorldSceneManager = ({
       }
       if (manifest) {
         setActiveWorldScenePackage(manifest);
+        if (Object.keys(manifest.world_snapshot.joint_positions).length > 0) {
+          setJointValues(manifest.world_snapshot.joint_positions);
+        }
       } else if (options.clearActivePackageOnStaticImport !== false) {
         setActiveWorldScenePackage(null);
       }
@@ -636,7 +639,7 @@ export const useWorldSceneManager = ({
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
       }
     },
-    [applyImportedWorldSceneLayer, setActiveWorldScenePackage]
+    [applyImportedWorldSceneLayer, setActiveWorldScenePackage, setJointValues]
   );
 
   const handleImportWorldLayoutFromLinkDialog = useCallback(async () => {

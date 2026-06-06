@@ -665,6 +665,7 @@ const Index = () => {
   const [simulationPrepResetPoseRequestKey, setSimulationPrepResetPoseRequestKey] = useState<
     string | null
   >(null);
+  const pendingWorldSceneJointValuesRef = useRef<Record<string, number> | null>(null);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
@@ -738,6 +739,40 @@ const Index = () => {
     setRobotBoundingBox,
   } = useObjectCreatorStore();
   const [robot, setRobot] = useState<URDFRobot | null>(null);
+  const applyWorldSceneJointValues = useCallback(
+    (values: Record<string, number>) => {
+      const jointPose = Object.fromEntries(
+        Object.entries(values).filter(([, value]) => Number.isFinite(value))
+      );
+      if (Object.keys(jointPose).length === 0) {
+        pendingWorldSceneJointValuesRef.current = null;
+        setJointValues({});
+        return;
+      }
+
+      const loadedJointNames = Object.keys(robot?.joints ?? {});
+      if (loadedJointNames.length > 0) {
+        const nextValues = { ...jointValues };
+        let appliedJointCount = 0;
+        loadedJointNames.forEach((jointName) => {
+          const value = jointPose[jointName];
+          if (typeof value === "number") {
+            nextValues[jointName] = value;
+            appliedJointCount += 1;
+          }
+        });
+        if (appliedJointCount > 0) {
+          pendingWorldSceneJointValuesRef.current = null;
+          setJointValues(nextValues);
+          return;
+        }
+      }
+
+      pendingWorldSceneJointValuesRef.current = jointPose;
+      setJointValues(jointPose);
+    },
+    [jointValues, robot, setJointValues]
+  );
   const repeatedInertiaSymmetryLinkCentersLocal = useRepeatedInertiaSymmetryLinkCentersLocal(robot);
   const resolvedRobotName = useMemo(
     () => parseRobotNameFromUrdf(vizUrdfContent || originalUrdfContent),
@@ -800,7 +835,7 @@ const Index = () => {
     originalUrdfContent,
     resolvedRobotName,
     skipDefaultWorldLayoutAutoImportRef,
-    setJointValues,
+    setJointValues: applyWorldSceneJointValues,
     updateUrdfFile: updateUrdfFileWithCollaboration,
     vizUrdfContent,
     worldImportParams,
@@ -1877,11 +1912,23 @@ const Index = () => {
   });
 
   const handleRobotJointsLoaded = useCallback((joints: string[], angles: Record<string, number>) => {
+    const pendingWorldSceneJointValues = pendingWorldSceneJointValuesRef.current;
+    const nextAngles = { ...angles };
+    if (pendingWorldSceneJointValues) {
+      joints.forEach((jointName) => {
+        const value = pendingWorldSceneJointValues[jointName];
+        if (typeof value === "number") {
+          nextAngles[jointName] = value;
+        }
+      });
+      pendingWorldSceneJointValuesRef.current = null;
+    }
     startTransition(() => {
       setAvailableJoints(joints);
-      setJointValues(angles);
+      setJointValues(nextAngles);
       // Don't automatically select a joint - let user choose what to select
     });
+    return nextAngles;
   }, [setJointValues]);
 
   const handleEpisodesResizeStart = useCallback(

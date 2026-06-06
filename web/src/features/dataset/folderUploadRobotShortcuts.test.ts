@@ -82,7 +82,7 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     const urdfEntry = manifest.files[0];
 
     expect(shortcut.manifestUrl).toBe("/demo/so101/manifest.json");
-    expect(shortcut.cameraConfigUrl).toBeUndefined();
+    expect(shortcut.cameraConfigUrl).toBe("/demo/so101/camera-config.json");
     expect(shortcut.worldLayoutUrl).toBe(
       "/world-layouts/world-labs-third-person-controller.world-package.json"
     );

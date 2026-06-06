@@ -27,6 +27,8 @@ import {
   WorldLabsSplatLayer,
   useWorldLabsPrimarySceneActive,
 } from "@/features/viewer/WorldLabsSceneLayers";
+import { resolveWorldLabsSo101DemoTransform } from "@/features/viewer/worldLabsSo101DemoTransform";
+import { useWorldSceneRuntimeStore } from "@/features/world-share/worldSceneRuntimeStore";
 import {
   useOperatorPerceptionStore,
   type OperatorCameraVideoFrame,
@@ -473,6 +475,9 @@ export const EpisodeCameraPreview = ({
   const cameras = useCameraStore((s) => s.cameras);
   const objects = useObjectStore((s) => s.objects);
   const worldLabsPrimarySceneActive = useWorldLabsPrimarySceneActive();
+  const activeWorldScenePackageId = useWorldSceneRuntimeStore(
+    (state) => state.activePackage?.packageId ?? null
+  );
   const cameraConfig = useMemo(() => {
     if (!cameraId) return cameras[0] ?? null;
     return cameras.find((c) => c.id === cameraId) ?? null;
@@ -597,8 +602,13 @@ export const EpisodeCameraPreview = ({
 
     try {
       const robot = loader.parse(urdfContent) as PreviewRobot;
-      // Keep unit scale to preserve camera-to-robot geometry consistency with main viewer.
-      robot.scale.setScalar(1);
+      const demoTransform = resolveWorldLabsSo101DemoTransform({
+        activePackageId: activeWorldScenePackageId,
+        robotName: robot.name,
+      });
+      robot.scale.setScalar(demoTransform.scale);
+      robot.rotation.set(...demoTransform.rotationRpy);
+      robot.userData.worldLabsSo101DemoTransform = demoTransform;
       configurePreviewObject(robot, gpuMode);
       robotRef.current = robot;
       setRobot(robot);
@@ -618,7 +628,15 @@ export const EpisodeCameraPreview = ({
       materialApplyScheduler.cancel();
       abortController.abort();
     };
-  }, [urdfContent, meshFiles, gpuMode, cameraConfig, urdfBasePath, packageRoots]);
+  }, [
+    activeWorldScenePackageId,
+    urdfContent,
+    meshFiles,
+    gpuMode,
+    cameraConfig,
+    urdfBasePath,
+    packageRoots,
+  ]);
 
   useEffect(() => {
     let cancelled = false;

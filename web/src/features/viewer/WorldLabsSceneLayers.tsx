@@ -45,12 +45,12 @@ export const fitPerspectiveCameraToWorldBounds = ({
   const size = Math.max(sizeVector.length(), 1);
   const offset = new THREE.Vector3(
     THREE.MathUtils.clamp(size * 0.008, 0.8, 1.6),
-    THREE.MathUtils.clamp(size * 0.012, 1.2, 2.1),
-    THREE.MathUtils.clamp(size * 0.006, 0.7, 1.2)
+    THREE.MathUtils.clamp(size * 0.006, 0.7, 1.2),
+    THREE.MathUtils.clamp(size * 0.012, 1.2, 2.1)
   );
   camera.near = Math.max(0.01, size / 5000);
   camera.far = Math.max(1000, size * 25);
-  camera.up.set(0, 0, 1);
+  camera.up.set(0, 1, 0);
   camera.position.copy(center).add(offset);
   camera.lookAt(center);
   camera.updateProjectionMatrix();
@@ -302,7 +302,7 @@ export const WorldLabsColliderLayer = ({
       camera,
       controls,
       invalidate,
-      focusCenter: new THREE.Vector3(0, 0, 0.7),
+      focusCenter: new THREE.Vector3(0, 0.7, 0),
     });
     return undefined;
   }, [autoFit, camera, colliderScene, controls, invalidate]);

@@ -17,7 +17,10 @@ type UseRobotJointSyncParams = {
   storeJointValues: Record<string, number>;
   setStoreJointValues: (values: Record<string, number>) => void;
   setAvailableJointsStore: (jointNames: string[]) => void;
-  onRobotJointsLoaded?: (joints: string[], angles: Record<string, number>) => void;
+  onRobotJointsLoaded?: (
+    joints: string[],
+    angles: Record<string, number>
+  ) => Record<string, number> | void;
   onJointChange?: (jointName: string, value: number) => void;
   isDraggingJoint: boolean;
   isIkHandleDragging: boolean;
@@ -121,18 +124,22 @@ export const useRobotJointSync = ({
         angles[j] = typeof value === "number" ? value : 0;
       }
     });
-    initialPoseRef.current = { ...angles };
-    onRobotJointsLoaded?.(joints, angles);
+    const parentInitialAngles = onRobotJointsLoaded?.(joints, angles);
+    const initialAngles =
+      parentInitialAngles && typeof parentInitialAngles === "object"
+        ? parentInitialAngles
+        : angles;
+    initialPoseRef.current = { ...initialAngles };
     setAvailableJointsStore(joints);
-    useJointStore.getState().setInitialJointValues(angles);
-    useJointStore.getState().setDataZeroJointValues(angles);
+    useJointStore.getState().setInitialJointValues(initialAngles);
+    useJointStore.getState().setDataZeroJointValues(initialAngles);
     useJointStore.getState().setDataZeroJointSource("auto");
     useJointStore.getState().setJointTopology(
       buildJointTopologySnapshot(robot, joints),
     );
-    setStoreJointValues(angles);
-    targetJointValuesRef.current = { ...angles };
-    animatedJointValuesRef.current = { ...angles };
+    setStoreJointValues(initialAngles);
+    targetJointValuesRef.current = { ...initialAngles };
+    animatedJointValuesRef.current = { ...initialAngles };
   }, [
     robot,
     onRobotJointsLoaded,

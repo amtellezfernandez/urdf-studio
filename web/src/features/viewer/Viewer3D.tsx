@@ -52,6 +52,7 @@ import {
   WorldLabsSplatLayer,
   useWorldLabsPrimarySceneActive,
 } from "@/features/viewer/WorldLabsSceneLayers";
+import { resolveWorldLabsSo101DemoTransform } from "@/features/viewer/worldLabsSo101DemoTransform";
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
 import {
   resolveOpenArmDemoTableCalibrationPlanesFromPointCloudFrames,
@@ -312,6 +313,7 @@ import {
 } from "@/features/teleop/perception/openArmHfLiveParams";
 import { resolveOpenArmHfLiveCameraConfigPoseFromPointCloudPose } from "@/features/teleop/perception/openArmHfLiveCameraConfig";
 import { useOperatorPerceptionStore } from "@/features/teleop/perception/operatorPerceptionStore";
+import { useWorldSceneRuntimeStore } from "@/features/world-share/worldSceneRuntimeStore";
 export interface Viewer3DProps {
   workspaceMode?: WorkspaceMode;
   assemblyPrimaryModel?: { id: string; name: string };
@@ -335,7 +337,7 @@ export interface Viewer3DProps {
   onRobotJointsLoaded?: (
     joints: string[],
     angles: Record<string, number>
-  ) => void;
+  ) => Record<string, number> | void;
   onRobotLoaded?: (robot: URDFRobot | null) => void;
   onMotionDataNodesGenerated?: (nodes: Node[], edges: Edge[]) => void;
   onMotionFileChange?: (file: File | null) => void;
@@ -1170,6 +1172,7 @@ const URDFModel = ({
   controlsRef,
   cameraRef,
   rendererDomRef,
+  activeWorldScenePackageId = null,
   readOnlyMode = false,
   onReadOnlyInteractionAttempt,
 }: {
@@ -1215,6 +1218,7 @@ const URDFModel = ({
   controlsRef: { current: OrbitControlsImpl | null };
   cameraRef: { current: THREE.PerspectiveCamera | null };
   rendererDomRef: { current: HTMLCanvasElement | null };
+  activeWorldScenePackageId?: string | null;
   readOnlyMode?: boolean;
   onReadOnlyInteractionAttempt?: () => void;
 }) => {
@@ -1785,10 +1789,15 @@ const URDFModel = ({
           robotGroupRef.current.add(robot);
 
           // Runtime IK coordinates are meter-based, matching the viewer scene scale.
-          // Robot at world origin with no transforms
+          // Robot at world origin; SO101 gets a demo-only transform in World Labs scenes.
+          const demoTransform = resolveWorldLabsSo101DemoTransform({
+            activePackageId: activeWorldScenePackageId,
+            robotName: robot.name,
+          });
           robot.position.set(0, 0, 0);
-          robot.rotation.set(0, 0, 0);
-          // No scaling applied to robot
+          robot.rotation.set(...demoTransform.rotationRpy);
+          robot.scale.setScalar(demoTransform.scale);
+          robot.userData.worldLabsSo101DemoTransform = demoTransform;
 
           // Calculate bounding box for camera positioning only
           const box = new THREE.Box3().setFromObject(robot);
@@ -1966,6 +1975,7 @@ const URDFModel = ({
     onRobotLoaded,
     isUrdfValid,
     urdfValidationError,
+    activeWorldScenePackageId,
     urdfBasePath,
     packageRoots,
     secondaryModels,
@@ -3905,6 +3915,9 @@ export const Viewer3D = ({
     (state) => state.activeFollowerJointTelemetryByName,
   );
   const worldLabsPrimarySceneActive = useWorldLabsPrimarySceneActive();
+  const activeWorldScenePackageId = useWorldSceneRuntimeStore(
+    (state) => state.activePackage?.packageId ?? null
+  );
   const pointCloudAutocalibrationRequest = useOperatorPerceptionStore(
     (state) => state.pointCloudAutocalibrationRequest
   );
@@ -7068,6 +7081,7 @@ export const Viewer3D = ({
                 controlsRef={controlsRef}
                 cameraRef={cameraRef}
                 rendererDomRef={rendererDomRef}
+                activeWorldScenePackageId={activeWorldScenePackageId}
                 readOnlyMode={readOnlyMode}
                 onReadOnlyInteractionAttempt={handleReadOnlyInteractionAttempt}
                 onSelectPart={({ jointName, linkName }) => {
