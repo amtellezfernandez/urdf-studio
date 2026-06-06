@@ -54,6 +54,7 @@ import {
 } from "@/features/viewer/WorldLabsSceneLayers";
 import { useWorldLabsSplatGroundProbeStore } from "@/features/viewer/worldLabsSplatGroundProbe";
 import {
+  applyWorldLabsSo101DemoTransformToRobot,
   applyWorldLabsSplatGroundProbeToRobot,
   resolveWorldLabsSo101DemoTransform,
 } from "@/features/viewer/worldLabsSo101DemoTransform";
@@ -1824,14 +1825,11 @@ const URDFModel = ({
 
           // Runtime IK coordinates are meter-based, matching the viewer scene scale.
           // Robot at world origin; SO101 gets a demo-only transform in World Labs scenes.
-          const demoTransform = resolveWorldLabsSo101DemoTransform({
-            activePackageId: activeWorldScenePackageId,
-            robotName: robot.name,
-          });
           robot.position.set(0, 0, 0);
-          robot.rotation.set(...demoTransform.rotationRpy);
-          robot.scale.setScalar(demoTransform.scale);
-          robot.userData.worldLabsSo101DemoTransform = demoTransform;
+          applyWorldLabsSo101DemoTransformToRobot({
+            activePackageId: activeWorldScenePackageId,
+            robot,
+          });
 
           // Calculate bounding box for camera positioning only
           const box = new THREE.Box3().setFromObject(robot);
