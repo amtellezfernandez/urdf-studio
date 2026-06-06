@@ -83,6 +83,11 @@ type UseWorldSceneManagerParams = {
   worldImportParams: WorldImportParams;
 };
 
+type WorldLayoutImportOptions = {
+  clearActivePackageOnStaticImport?: boolean;
+  skipIfActiveWorldPackage?: boolean;
+};
+
 const downloadJsonDocument = (payload: unknown, filename: string) => {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -600,12 +605,32 @@ export const useWorldSceneManager = ({
   }, [refreshWorldRegistry, worldRegistryLoading]);
 
   const importWorldLayoutFromUrl = useCallback(
-    async (worldLayoutUrl: string, contextLabel: string) => {
+    async (
+      worldLayoutUrl: string,
+      contextLabel: string,
+      options: WorldLayoutImportOptions = {}
+    ) => {
+      if (
+        options.skipIfActiveWorldPackage &&
+        useWorldSceneRuntimeStore.getState().activePackage
+      ) {
+        return;
+      }
       const { worldLayout, embeddedCameras, manifest } = await readWorldSceneLayerFromUrl(
         worldLayoutUrl,
         contextLabel
       );
-      setActiveWorldScenePackage(manifest);
+      if (
+        options.skipIfActiveWorldPackage &&
+        useWorldSceneRuntimeStore.getState().activePackage
+      ) {
+        return;
+      }
+      if (manifest) {
+        setActiveWorldScenePackage(manifest);
+      } else if (options.clearActivePackageOnStaticImport !== false) {
+        setActiveWorldScenePackage(null);
+      }
       applyImportedWorldSceneLayer(worldLayout);
       if (embeddedCameras > 0) {
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
@@ -710,7 +735,10 @@ export const useWorldSceneManager = ({
     defaultWorldLayoutAppliedRef.current = true;
     void (async () => {
       try {
-        await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout import");
+        await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout import", {
+          clearActivePackageOnStaticImport: false,
+          skipIfActiveWorldPackage: true,
+        });
       } catch (error) {
         toast.warning(
           error instanceof Error

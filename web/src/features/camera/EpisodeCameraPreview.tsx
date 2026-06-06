@@ -23,6 +23,11 @@ import { URDF_VISUAL_MATERIAL_APPLY_RETRY_DELAY_MS } from "@/features/urdf/runti
 import { EPISODE_CAMERA_PREVIEW_PARAMS } from "@/features/camera/episodeCameraPreviewParams";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import {
+  WorldLabsEnvironmentLayer,
+  WorldLabsSplatLayer,
+  useWorldLabsPrimarySceneActive,
+} from "@/features/viewer/WorldLabsSceneLayers";
+import {
   useOperatorPerceptionStore,
   type OperatorCameraVideoFrame,
 } from "@/features/teleop/perception/operatorPerceptionStore";
@@ -163,7 +168,7 @@ const PreviewObjects = ({
 }) => {
   return (
     <group>
-      {objects.map((obj) => {
+      {objects.filter((obj) => obj.isHidden !== true).map((obj) => {
         const baseColor = obj.color || "#3b82f6";
         const fillColor = obj.isIkTarget ? "#facc15" : baseColor;
         const outlineColor = obj.isIkTarget ? "#facc15" : "#bfbfbf";
@@ -467,6 +472,7 @@ export const EpisodeCameraPreview = ({
   const activeCameraVideoFrames = useOperatorPerceptionStore((s) => s.activeCameraVideoFrames);
   const cameras = useCameraStore((s) => s.cameras);
   const objects = useObjectStore((s) => s.objects);
+  const worldLabsPrimarySceneActive = useWorldLabsPrimarySceneActive();
   const cameraConfig = useMemo(() => {
     if (!cameraId) return cameras[0] ?? null;
     return cameras.find((c) => c.id === cameraId) ?? null;
@@ -530,7 +536,6 @@ export const EpisodeCameraPreview = ({
           : [],
     [activeCameraVideoFrame, activeCameraVideoFrames]
   );
-
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -720,8 +725,11 @@ export const EpisodeCameraPreview = ({
     >
       <div className="flex h-full w-full min-h-0 min-w-0 items-center justify-center overflow-hidden">
         <div
-          className="relative max-h-full max-w-full shrink-0 overflow-hidden border border-black/80 bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]"
-          style={frameStyle}
+          className="relative max-h-full max-w-full shrink-0 overflow-hidden border border-black/80 shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]"
+          style={{
+            ...frameStyle,
+            backgroundColor: "black",
+          }}
         >
           <Canvas
             key={cameraConfig.id}
@@ -735,9 +743,11 @@ export const EpisodeCameraPreview = ({
               near: 0.05,
               far: sceneRadius ? Math.max(2, sceneRadius * 6) : 50,
             }}
+            gl={{ alpha: true, antialias: true }}
             onCreated={({ scene, camera, gl }) => {
               scene.up.set(0, 0, 1);
               camera.up.set(0, 0, 1);
+              gl.setClearColor(0x000000, 0);
               // Disable culling for consistency with main viewer
               const ctx = gl.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
               ctx.disable(ctx.CULL_FACE);
@@ -747,7 +757,14 @@ export const EpisodeCameraPreview = ({
             <ambientLight intensity={0.7} />
             <directionalLight position={[5, 5, 5]} intensity={0.8} />
             <directionalLight position={[-5, 5, -5]} intensity={0.4} />
-            <PreviewSceneChrome gpuMode={gpuMode} />
+            {worldLabsPrimarySceneActive ? (
+              <>
+                <WorldLabsEnvironmentLayer />
+                <WorldLabsSplatLayer />
+              </>
+            ) : (
+              <PreviewSceneChrome gpuMode={gpuMode} />
+            )}
             <group ref={groupRef} />
             <PreviewObjects objects={objects} gpuMode={gpuMode} />
             <JointValueSync robot={robot} />
