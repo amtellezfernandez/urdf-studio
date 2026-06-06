@@ -263,6 +263,14 @@ export const findCompatibleLeaderControlPart = (
     if (leftCoversTarget !== rightCoversTarget) {
       return leftCoversTarget ? -1 : 1;
     }
+    // Prefer the control part whose configured port matches this device
+    // (set via device_ports.json → backend resolves to matched/unmatched).
+    // This must rank above role affinity: on a follower port, follower_arm
+    // (configuredPortMatches=true) should beat leader_arm even though
+    // "leader" scores higher than "follower" in the affinity heuristic.
+    if (left.configuredPortMatches !== right.configuredPortMatches) {
+      return left.configuredPortMatches ? -1 : 1;
+    }
     const leftRoleAffinity = scoreLeaderControlPartRoleAffinity(left);
     const rightRoleAffinity = scoreLeaderControlPartRoleAffinity(right);
     if (leftRoleAffinity !== rightRoleAffinity) {

@@ -284,6 +284,16 @@ def _build_leader_control_parts(
         resolved_path=resolved_path,
     )
     if calibration_matches:
+        # Both arms share motor IDs 1-6, so multiple calibrations match by id.
+        # Put the calibration whose configured port matches THIS device first,
+        # so the UI defaults to the correct one (e.g. follower_arm on the
+        # follower port instead of the teleoperator-first leader_arm).
+        calibration_matches = sorted(
+            calibration_matches,
+            key=lambda match: 0
+            if match.configured_port_status == "matched"
+            else 1,
+        )
         return [
             OpenArmLeaderControlPart(
                 id=(
