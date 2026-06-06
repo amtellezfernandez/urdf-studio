@@ -7,6 +7,7 @@ import pytest
 import pyarrow.parquet as pq
 from fastapi import HTTPException
 
+import backend.services.teleop_replay as teleop_replay_service
 from backend.api.teleop_replay import (
     export_teleop_kinematic_recording_to_lerobot,
     export_teleop_replay_recording_to_lerobot,
@@ -18,6 +19,7 @@ from backend.models.teleop_replay import (
     TeleopReplayValidateRequest,
 )
 from backend.services.teleop_replay import (
+    TeleopReplayDependencyError,
     build_teleop_replay_mjlab_export_gate,
     export_teleop_kinematic_lerobot,
     export_teleop_replay_lerobot,
@@ -661,3 +663,23 @@ def test_teleop_replay_export_api_rejects_output_dir_outside_replay_root() -> No
 
     assert exc_info.value.status_code == 422
     assert str(TELEOP_REPLAY_OUTPUT_ROOT) in str(exc_info.value.detail)
+
+
+def test_teleop_replay_export_api_reports_missing_pyarrow(monkeypatch) -> None:
+    req = TeleopReplayExportRequest.model_validate(
+        {
+            "recording": _two_sample_kinematic_recording_payload(),
+            "robotModel": TEST_MJLAB_ROBOT_MODEL,
+        }
+    )
+
+    def _raise_missing_pyarrow():
+        raise TeleopReplayDependencyError("pyarrow missing for test")
+
+    monkeypatch.setattr(teleop_replay_service, "_load_pyarrow", _raise_missing_pyarrow)
+
+    with pytest.raises(HTTPException) as exc_info:
+        export_teleop_kinematic_recording_to_lerobot(req)
+
+    assert exc_info.value.status_code == 503
+    assert "pyarrow missing for test" in str(exc_info.value.detail)

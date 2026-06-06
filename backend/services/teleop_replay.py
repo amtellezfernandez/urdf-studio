@@ -8,9 +8,6 @@ from statistics import mean, pstdev
 from time import monotonic, sleep
 from typing import Protocol
 
-import pyarrow as pa
-import pyarrow.parquet as pq
-
 from backend.models.robot_gateway import (
     RobotGatewayJointJogRequest,
     RobotGatewayLeaseRequest,
@@ -88,6 +85,10 @@ from backend.services.teleop_replay_params import (
 
 
 class TeleopReplayInputError(ValueError):
+    pass
+
+
+class TeleopReplayDependencyError(RuntimeError):
     pass
 
 
@@ -1065,4 +1066,16 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 def _write_parquet(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    pa, pq = _load_pyarrow()
     pq.write_table(pa.Table.from_pylist(rows), path)
+
+
+def _load_pyarrow():
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ModuleNotFoundError as exc:
+        raise TeleopReplayDependencyError(
+            "pyarrow is required for teleop LeRobot export. Run `npm run setup` to install backend Python dependencies."
+        ) from exc
+    return pa, pq
