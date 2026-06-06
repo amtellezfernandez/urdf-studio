@@ -7032,7 +7032,7 @@ export const Viewer3D = ({
           )}
 
           <WorldLabsEnvironmentLayer />
-          <WorldLabsColliderLayer />
+          <WorldLabsColliderLayer visible={false} />
           <WorldLabsSplatLayer />
 
           {urdfFile && (
