@@ -68,9 +68,9 @@ export const WorldLayoutGlbElement = ({
             const material = new THREE.MeshStandardMaterial({
               color: config.materialColor,
               emissive: config.materialColor,
-              emissiveIntensity: 0.08,
+              emissiveIntensity: 0.24,
               metalness: 0.05,
-              roughness: 0.45,
+              roughness: 0.38,
             });
             child.material = material;
             instanceMaterials.push(material);
