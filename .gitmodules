@@ -19,12 +19,3 @@
 [submodule "third_party/mujoco-sysid"]
 	path = third_party/mujoco-sysid
 	url = https://github.com/based-robotics/mujoco-sysid.git
-[submodule "third_party/image-blaster"]
-	path = third_party/image-blaster
-	url = https://github.com/neilsonnn/image-blaster.git
-[submodule "third_party/splat-collider-builder"]
-	path = third_party/splat-collider-builder
-	url = https://github.com/icurtis1/splat-collider-builder.git
-[submodule "third_party/third-person-controller-splat"]
-	path = third_party/third-person-controller-splat
-	url = https://github.com/icurtis1/third-person-controller-splat.git

@@ -7385,9 +7385,6 @@ export const Viewer3D = ({
                 onFrameChange={setCurrentFrame}
                 onPlaybackEnd={handlePlaybackEnd}
               />
-              {worldLabsPrimarySceneActive && robot ? (
-                <WorldLabsRobotOverlay robot={robot} jointValues={storeJointValues} />
-              ) : null}
               {collisionsVisible ? (
                 <CollisionGeometries
                   urdfAnalysis={urdfAnalysis}
