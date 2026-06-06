@@ -70,9 +70,9 @@
     "urdf_xml": "<robot name=\"world_labs_third_person_controller_open\"/>",
     "joint_positions": {
       "shoulder_pan": 0,
-      "shoulder_lift": 1.05,
-      "elbow_flex": -1.25,
-      "wrist_flex": -0.45,
+      "shoulder_lift": -0.34,
+      "elbow_flex": -1.32,
+      "wrist_flex": -0.2,
       "wrist_roll": 0,
       "gripper": 0.35
     },

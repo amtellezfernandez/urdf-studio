@@ -5631,13 +5631,38 @@ export const Viewer3D = ({
     onRobotLoaded,
     isDragging: isDraggingJoint || isIkHandleDragging,
   });
+  const handleRobotJointsLoadedWithWorldLabsPose = useCallback(
+    (joints: string[], angles: Record<string, number>) => {
+      const parentAngles = onRobotJointsLoaded?.(joints, angles);
+      const nextAngles =
+        parentAngles && typeof parentAngles === "object"
+          ? { ...parentAngles }
+          : { ...angles };
+      const demoTransform = resolveWorldLabsSo101DemoTransform({
+        activePackageId: activeWorldScenePackageId,
+        robotName: robot?.name,
+      });
+      if (!demoTransform.jointPositions) {
+        return nextAngles;
+      }
+
+      joints.forEach((jointName) => {
+        const value = demoTransform.jointPositions?.[jointName];
+        if (typeof value === "number" && Number.isFinite(value)) {
+          nextAngles[jointName] = value;
+        }
+      });
+      return nextAngles;
+    },
+    [activeWorldScenePackageId, onRobotJointsLoaded, robot?.name]
+  );
   const { resetPose, setJointTargetsToInitialPose } = useRobotJointSync({
     robot,
     jointValues,
     storeJointValues,
     setStoreJointValues,
     setAvailableJointsStore,
-    onRobotJointsLoaded,
+    onRobotJointsLoaded: handleRobotJointsLoadedWithWorldLabsPose,
     onJointChange,
     isDraggingJoint,
     isIkHandleDragging,

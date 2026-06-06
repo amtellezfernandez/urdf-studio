@@ -4,6 +4,7 @@ import type { WorldLabsSplatGroundProbe } from "@/features/viewer/worldLabsSplat
 export type WorldLabsSo101DemoTransform = {
   scale: number;
   rotationRpy: [number, number, number];
+  jointPositions?: Record<string, number>;
   splatGroundProbe?: {
     enabled: boolean;
     clearance: number;
@@ -42,7 +43,15 @@ export const resolveWorldLabsSo101DemoTransform = ({
   ) {
     return {
       scale: 10,
-      rotationRpy: [-Math.PI / 2, 0, 0],
+      rotationRpy: [0, 0, 0],
+      jointPositions: {
+        shoulder_pan: 0,
+        shoulder_lift: -0.34,
+        elbow_flex: -1.32,
+        wrist_flex: -0.2,
+        wrist_roll: 0,
+        gripper: 0.35,
+      },
       splatGroundProbe: {
         enabled: true,
         clearance: 0.02,
