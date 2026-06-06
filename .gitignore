@@ -33,6 +33,14 @@ pyroki/
 vggt/
 cam-to-sim/runtime_sessions/
 
+# Local browser/smoke-test screenshots. Existing tracked reports stay tracked;
+# these patterns prevent new ad hoc debug captures from dirtying the worktree.
+reports/*debug*.png
+reports/*smoke*.png
+reports/so101-*.png
+reports/worldlabs-*.png
+reports/world-labs-*.png
+
 # Machine-specific xacro runtime (wrappers point to local venv paths)
 .i-love-urdf/
 .venv-lerobot/
