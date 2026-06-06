@@ -18,6 +18,16 @@ import {
 extend({ SparkRenderer, SplatMesh });
 
 const ignoreRaycast: THREE.Object3D["raycast"] = () => undefined;
+const WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION = [Math.PI / 2, 0, 0] as const;
+const WORLD_LABS_PANORAMA_YAW_RAD = Math.PI / 2;
+
+const createWorldLabsEnvironmentRotation = () =>
+  new THREE.Euler(
+    WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION[0],
+    WORLD_LABS_PANORAMA_YAW_RAD,
+    WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION[2],
+    "XYZ"
+  );
 
 const readFiniteMetadataNumber = (
   metadata: Record<string, unknown>,
@@ -177,8 +187,8 @@ export const WorldLabsSplatLayer = () => {
         createElement(
           "group",
           {
-            position: [0, groundPlaneOffset, 0],
-            rotation: [0, 0, 0],
+            position: [0, 0, groundPlaneOffset],
+            rotation: [...WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION],
             scale: splatScale,
           },
           createElement("splatMesh", {
@@ -229,8 +239,8 @@ export const WorldLabsEnvironmentLayer = () => {
         scene.environment = texture;
         scene.background = texture;
         scene.backgroundBlurriness = 0;
-        scene.environmentRotation = new THREE.Euler(0, Math.PI / 2, 0);
-        scene.backgroundRotation = new THREE.Euler(0, Math.PI / 2, 0);
+        scene.environmentRotation = createWorldLabsEnvironmentRotation();
+        scene.backgroundRotation = createWorldLabsEnvironmentRotation();
         scene.environmentIntensity = 1;
         scene.backgroundIntensity = 1;
       },
@@ -295,7 +305,8 @@ export const WorldLabsColliderLayer = ({
           return;
         }
         const clone = gltf.scene.clone(true);
-        clone.position.set(0, groundPlaneOffset, 0);
+        clone.position.set(0, 0, groundPlaneOffset);
+        clone.rotation.set(...WORLD_LABS_Y_UP_TO_STUDIO_Z_UP_ROTATION);
         clone.scale.setScalar(colliderScale);
         clone.visible = visible;
         clone.traverse((child) => {
