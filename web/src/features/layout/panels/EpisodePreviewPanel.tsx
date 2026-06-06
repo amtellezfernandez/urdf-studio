@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { EpisodeCameraPreview } from "@/features/camera/EpisodeCameraPreview";
-import { useWorldLabsPrimarySceneActive } from "@/features/viewer/WorldLabsSceneLayers";
 import { useOperatorPerceptionStore } from "@/features/teleop/perception/operatorPerceptionStore";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import {
@@ -178,8 +177,6 @@ export const EpisodePreviewPanel = ({
 }: EpisodePreviewPanelProps) => {
   const [previewMode, setPreviewMode] = useState<ExtendedEpisodePreviewMode>("all");
   const activeCameraVideoFrame = useOperatorPerceptionStore((state) => state.activeCameraVideoFrame);
-  const worldLabsPrimarySceneActive = useWorldLabsPrimarySceneActive();
-  const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const selectCamera = useCameraStore((state) => state.selectCamera);
   const urdfContent = vizUrdf || originalUrdf || null;
   const allPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -455,9 +452,6 @@ export const EpisodePreviewPanel = ({
     () => visibleCameras.find((camera) => camera.id === focusCameraId) ?? visibleCameras[0] ?? null,
     [focusCameraId, visibleCameras]
   );
-  const showWorldLabsCameraControls =
-    worldLabsPrimarySceneActive && !showOperatorLiveCamera && previewMode !== "recorded";
-  const worldLabsAutoSelectedCameraRef = useRef<string | null>(null);
   const handleCameraSelect = (cameraId: string, nextMode?: EpisodePreviewMode) => {
     setEpisodePreviewCameraId(cameraId);
     selectCamera(cameraId);
@@ -465,25 +459,6 @@ export const EpisodePreviewPanel = ({
       setPreviewMode(nextMode);
     }
   };
-
-  useEffect(() => {
-    if (!showWorldLabsCameraControls || !focusCameraId) {
-      worldLabsAutoSelectedCameraRef.current = null;
-      return;
-    }
-    if (worldLabsAutoSelectedCameraRef.current === focusCameraId) {
-      return;
-    }
-    worldLabsAutoSelectedCameraRef.current = focusCameraId;
-    if (selectedCameraId === null) {
-      selectCamera(focusCameraId);
-    }
-  }, [
-    focusCameraId,
-    selectedCameraId,
-    selectCamera,
-    showWorldLabsCameraControls,
-  ]);
 
   return (
     <div
@@ -736,96 +711,6 @@ export const EpisodePreviewPanel = ({
                 </div>
               )}
             </div>
-          ) : showWorldLabsCameraControls ? (
-            cameras.length === 0 ? (
-              <div className="h-full w-full rounded-md border border-border/50 bg-[#0b0b0b] flex items-center justify-center text-[11px] text-muted-foreground">
-                {cameraPreviewEmptyStateMessage}
-              </div>
-            ) : previewMode === "list" ? (
-              <div className="h-full min-h-0 min-w-0 overflow-y-auto rounded-md border border-border/60 bg-background/40">
-                <div className="divide-y divide-border/30">
-                  {visibleCameras.map((camera) => {
-                    const intrinsics = camera.intrinsics;
-                    const width = intrinsics?.width ?? 0;
-                    const height = intrinsics?.height ?? 0;
-                    const fov = intrinsics?.fov_deg ?? 0;
-                    const isSelected = camera.id === selectedCameraId;
-                    return (
-                      <button
-                        key={camera.id}
-                        type="button"
-                        className={`block w-full min-w-0 px-2 py-1.5 text-left transition-colors ${
-                          isSelected ? "bg-primary/10" : "hover:bg-muted/20"
-                        }`}
-                        onClick={() => handleCameraSelect(camera.id)}
-                      >
-                        <div className="truncate text-[9px] text-foreground/90">{camera.name}</div>
-                        <div className="truncate text-[8px] text-muted-foreground">
-                          {width}x{height} · {fov.toFixed(1)}deg · main viewport
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : previewMode === "focus" ? (
-              <button
-                type="button"
-                className="flex h-full w-full min-h-0 min-w-0 flex-col items-center justify-center gap-1 rounded-md border border-border/60 bg-black text-center transition-colors hover:border-primary/60"
-                onClick={() => {
-                  if (focusCamera) {
-                    handleCameraSelect(focusCamera.id);
-                  }
-                }}
-              >
-                <Film className="h-5 w-5 text-muted-foreground" />
-                <div className="max-w-full truncate px-3 text-[10px] font-medium text-foreground">
-                  {focusCamera?.name ?? "Camera"}
-                </div>
-                <div className="px-3 text-[8px] text-muted-foreground">
-                  Rendered in the main World Labs viewport
-                </div>
-              </button>
-            ) : (
-              <div
-                ref={allPreviewRef}
-                className="h-full min-h-0 min-w-0 overflow-hidden"
-              >
-                <div
-                  className="grid h-full min-h-0 min-w-0 gap-1.5"
-                  style={{
-                    gridTemplateColumns: `repeat(${allPreviewColumns}, minmax(0, 1fr))`,
-                    gridTemplateRows: `repeat(${allPreviewRows}, minmax(0, 1fr))`,
-                  }}
-                >
-                  {visibleCameras.map((camera) => {
-                    const isSelected = camera.id === selectedCameraId;
-                    return (
-                      <button
-                        key={camera.id}
-                        type="button"
-                        className={`flex h-full min-h-0 min-w-0 flex-col justify-between overflow-hidden rounded-md border bg-background/40 p-1.5 text-left transition-colors ${
-                          isSelected
-                            ? "border-primary/70 bg-primary/10"
-                            : "border-border/60 hover:border-border"
-                        }`}
-                        onClick={() => handleCameraSelect(camera.id)}
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-[9px] text-foreground/90">{camera.name}</div>
-                          <div className="truncate text-[8px] text-muted-foreground">
-                            {camera.parent_joint}
-                          </div>
-                        </div>
-                        <div className="text-[8px] text-muted-foreground">
-                          Main viewport
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )
           ) : cameras.length === 0 ? (
             <EpisodeCameraPreview
               urdfContent={urdfContent}
