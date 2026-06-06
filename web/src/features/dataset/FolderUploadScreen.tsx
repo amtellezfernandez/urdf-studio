@@ -2776,8 +2776,22 @@ export const FolderUploadScreen = memo(
             clearCameras();
           }
           await finalizeRobotLoad(fileList, { applyWorldLayout: false });
+          let loadedShortcutWorld = false;
+          if (shortcut.worldLayoutUrl && onImportWorldLayout) {
+            await onImportWorldLayout(shortcut.worldLayoutUrl);
+            addRecentWorldLayout(shortcut.worldLayoutUrl);
+            setWorldLayoutUrl(shortcut.worldLayoutUrl);
+            setLoadedWorldLayoutName(
+              `${shortcut.displayName} World Labs world`
+            );
+            loadedShortcutWorld = true;
+          }
           setLoadedRobotName(shortcut.displayName);
-          toast.success(`Loaded ${shortcut.displayName}`);
+          toast.success(
+            loadedShortcutWorld
+              ? `Loaded ${shortcut.displayName} with World Labs world`
+              : `Loaded ${shortcut.displayName}`
+          );
         })
       );
     } catch (error) {
@@ -2790,11 +2804,14 @@ export const FolderUploadScreen = memo(
     clearAssemblySelection,
     clearGitHubSource,
     clearCameras,
+    addRecentWorldLayout,
     applyCameraConfig,
     finalizeRobotLoad,
     leaveGalleryEditorMode,
+    onImportWorldLayout,
     onWorkspaceModeChange,
     setGitHubSelectionSource,
+    setWorldLayoutUrl,
     withRobotShortcutLoading,
     withStudioEntryLoad,
   ]);

@@ -121,6 +121,30 @@ def replay_label_samples(
     return [replay_label_sample(sample, targets=normalized_targets, smoke_load=smoke_load) for sample in samples]
 
 
+def replay_label_samples_with_stepping(
+    samples: Sequence[WorldModelTrainingSample],
+    *,
+    targets: Sequence[str] | str | None = None,
+    stepping_executable: str | None = None,
+) -> list[WorldModelTrainingSample]:
+    """Label samples using a real physics stepping loop (not export-oracle mode).
+
+    Blocked: requires an external simulator CLI that can actually step physics frames.
+    Pass stepping_executable=/path/to/sim-cli when a physics binary is available.
+    Until then, fall back to export-oracle via replay_label_samples().
+    """
+    if stepping_executable is None:
+        raise NotImplementedError(
+            "Simulator stepping requires a physics simulator binary. "
+            "Set stepping_executable='/path/to/sim-cli' or use "
+            "replay_label_samples() for export-oracle labels."
+        )
+    raise NotImplementedError(
+        f"Stepping via {stepping_executable!r} is not yet implemented. "
+        "This hook is reserved for when a real physics CLI is available."
+    )
+
+
 def summarize_replay_labeled_samples(samples: Sequence[WorldModelTrainingSample]) -> dict[str, Any]:
     pass_count = sum(1 for sample in samples if sample.metadata.get("sim_replay_label") == "pass")
     fail_count = sum(1 for sample in samples if sample.metadata.get("sim_replay_label") == "fail")

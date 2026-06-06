@@ -1139,13 +1139,14 @@ describe("FolderUploadScreen", () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     const onFolderSelected = vi.fn();
+    const onImportWorldLayout = vi.fn().mockResolvedValue(undefined);
     const onWorkspaceModeChange = vi.fn();
 
     await act(async () => {
       root.render(
         createElement(FolderUploadScreen, {
           onFolderSelected,
-          onImportWorldLayout: vi.fn(),
+          onImportWorldLayout,
           onWorkspaceModeChange,
           workspaceMode: "studio",
         })
@@ -1169,6 +1170,7 @@ describe("FolderUploadScreen", () => {
       expect(gitHubSourceStoreState.clearSource).toHaveBeenCalledOnce();
       expect(onWorkspaceModeChange).toHaveBeenCalledWith("studio");
       expect(onFolderSelected).toHaveBeenCalledWith(so101FileList, { preserveCameras: false });
+      expect(onImportWorldLayout).toHaveBeenCalledWith(shortcut.worldLayoutUrl);
       expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     });
 

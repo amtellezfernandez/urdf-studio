@@ -18,7 +18,9 @@ def test_lab_demo_builds_regression_artifacts(tmp_path: Path) -> None:
     )
 
     assert summary["success"] is True
-    assert summary["metrics"]["ci_status"] == "BLOCK"
+    assert summary["metrics"]["deterministic"]["ci_status"] == "BLOCK"
+    assert summary["metrics"]["stress"]["audit_precision"] < 1.0
+    assert summary["metrics"]["stress"]["mode"] == "synthetic_ambiguity_label_noise"
     assert summary["validation_mode"] == "phase_1_deterministic_verification"
     assert "production robustness claim" in summary["evidence_scope"]
     assert "deterministic verification" in summary["stage_script"]["safe_claim"]

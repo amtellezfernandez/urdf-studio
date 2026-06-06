@@ -454,7 +454,7 @@ export const readWorldSceneLayerFromUrl = async (
 ) => {
   const [
     { normalizeWorldLayoutImportUrl },
-    { parseStaticWorldSceneLayerSnapshot },
+    { parseStaticWorldSceneLayerSnapshot, readWorldSceneManifestFromUnknown },
   ] = await Promise.all([
     loadWorldSceneImportUrlModule(),
     loadWorldSceneManifestModule(),
@@ -472,6 +472,7 @@ export const readWorldSceneLayerFromUrl = async (
   }
 
   const payload = (await response.json()) as unknown;
+  const manifest = readWorldSceneManifestFromUnknown(payload);
   const { snapshot: worldLayout, errors } = parseStaticWorldSceneLayerSnapshot(payload);
   if (!worldLayout) {
     throw new Error(errors[0] ? `Invalid world layout: ${errors.join("; ")}` : "Invalid world layout");
@@ -491,5 +492,5 @@ export const readWorldSceneLayerFromUrl = async (
         ).world_snapshot?.cameras?.length ?? 0
       : 0;
 
-  return { worldLayout, embeddedCameras };
+  return { worldLayout, embeddedCameras, manifest };
 };

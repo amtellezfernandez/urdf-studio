@@ -4,8 +4,15 @@ import json
 import subprocess
 import sys
 
+import pytest
+
 from backend.services.world_model_dataset import validate_world_model_dataset_samples
-from backend.services.wsp_trace_adapters import build_trace_adapter_dataset, compile_trace_adapter_payload
+from backend.services.wsp_trace_adapters import (
+    build_trace_adapter_dataset,
+    compile_mcap_file,
+    compile_simulator_file,
+    compile_trace_adapter_payload,
+)
 
 
 def _sim_payload(source: str):
@@ -126,6 +133,22 @@ def test_lerobot_adapter_accepts_episode_frames() -> None:
     assert trace.metadata["source_kind"] == "lerobot"
     assert len(samples) == 1
     assert samples[0].action.action_type == "translate"
+
+
+def test_compile_mcap_file_raises_import_error_when_mcap_not_installed(tmp_path) -> None:
+    fake_mcap = tmp_path / "test.mcap"
+    fake_mcap.write_bytes(b"MCAP0\x00")
+    with pytest.raises(ImportError, match="mcap"):
+        compile_mcap_file(fake_mcap)
+
+
+def test_compile_simulator_file_reads_json(tmp_path) -> None:
+    trace_file = tmp_path / "mujoco_trace.json"
+    trace_file.write_text(json.dumps(_sim_payload("mujoco")), encoding="utf-8")
+    trace = compile_simulator_file(trace_file, source="mujoco")
+    assert trace.trace_id == "mujoco-push-001"
+    assert len(trace.frames) == 2
+    assert trace.metadata["source_kind"] == "mujoco"
 
 
 def test_trace_adapter_cli_writes_trace_and_dataset(tmp_path) -> None:

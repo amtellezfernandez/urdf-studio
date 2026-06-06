@@ -1,0 +1,217 @@
+{
+  "schema_version": "1.0.0",
+  "package_id": "world-labs-third-person-controller-open",
+  "version": "0.1.0",
+  "title": "World Labs Open Third-Person Controller Splat",
+  "description": "Open World Labs Marble showcase world packaged for URDF Studio. Includes the original Gaussian splat, collider mesh, panorama, license, and a visible proxy world snapshot for WSP validation.",
+  "created_at": "2026-06-06T14:30:00+02:00",
+  "runtime_targets": [
+    {
+      "name": "wsp",
+      "mode": "native"
+    },
+    {
+      "name": "mujoco",
+      "mode": "python"
+    },
+    {
+      "name": "genesis",
+      "mode": "python"
+    },
+    {
+      "name": "three-spark-rapier",
+      "mode": "native"
+    }
+  ],
+  "interface": {
+    "observation_modalities": ["splat", "mesh", "collider", "rgb", "state"],
+    "action_semantics": "world_scene_static_layout",
+    "timestep_ms": 33,
+    "frame_convention": "world-labs-marble-proxy-studio-y-up"
+  },
+  "artifacts": [
+    {
+      "kind": "world_labs_showcase",
+      "digest_sha256": "c65625ab0a14571c546fdacf3414264055e0e3b7d8e4c7aae2eb5623a1a6dbf0",
+      "uri": "https://www.worldlabs.ai/labs/showcase/third-person-controller"
+    },
+    {
+      "kind": "source_repo",
+      "digest_sha256": "c23d8ab0cece4f8e74547a4791a348fd97eed5a420420d03a9a8ed653a8cf1c7",
+      "uri": "https://github.com/icurtis1/third-person-controller-splat"
+    },
+    {
+      "kind": "live_demo",
+      "digest_sha256": "701c88de8b337202bd3dfddc33dea9a0d8afd0499b177c2abfd17fcbd37af959",
+      "uri": "https://third-person-character-controller.netlify.app/"
+    },
+    {
+      "kind": "world_labs_splat_spz",
+      "digest_sha256": "1be13f3270916dc447889cddb825633198de7af72edaf3a7c2f9d98a394cde70",
+      "uri": "/world-layouts/world-labs-third-person-controller/attic.spz"
+    },
+    {
+      "kind": "world_labs_collider_glb",
+      "digest_sha256": "c3d02b7e6991e55fa17b3beab5fc24ee97ca0725d5e49a2df5481c252804c530",
+      "uri": "/world-layouts/world-labs-third-person-controller/collider.glb"
+    },
+    {
+      "kind": "world_labs_panorama",
+      "digest_sha256": "f0cee900f8e0e6860e9996d882d4ae05923f5048578b095da0c8b72d27dbb27d",
+      "uri": "/world-layouts/world-labs-third-person-controller/pano.jpg"
+    },
+    {
+      "kind": "license_mit",
+      "digest_sha256": "9bbe609dee9a7c096d64dee1a97eebf3464ba3b615071c3fdff010ed5c8855cd",
+      "uri": "/world-layouts/world-labs-third-person-controller/LICENSE.third-person-controller-splat"
+    }
+  ],
+  "world_snapshot": {
+    "urdf_xml": "<robot name=\"world_labs_third_person_controller_open\"/>",
+    "joint_positions": {},
+    "cameras": [],
+    "objects": [
+      {
+        "id": "world_labs_floor_proxy",
+        "name": "World Labs floor proxy",
+        "type": "cube",
+        "position_xyz": [2.4692, -0.45, -18.1741],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [94.4038, 0.4, 94.4038],
+        "color": "#334155",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_platform_proxy",
+        "name": "World Labs platform proxy",
+        "type": "cube",
+        "position_xyz": [-5.7062, 1.6039, -1.3131],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [4.8159, 3.0616, 4.0427],
+        "color": "#0f766e",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_table_proxy",
+        "name": "World Labs table proxy",
+        "type": "cube",
+        "position_xyz": [-1.9455, 1.5378, 5.0316],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [9.9477, 2.4067, 12.5582],
+        "color": "#475569",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_lounge_proxy",
+        "name": "World Labs lounge proxy",
+        "type": "cube",
+        "position_xyz": [14.9745, 1.4929, -4.7676],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [9.9477, 2.4067, 12.5582],
+        "color": "#52525b",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_corner_proxy",
+        "name": "World Labs corner proxy",
+        "type": "cube",
+        "position_xyz": [17.9981, 2.4517, 10.9021],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [11.9096, 4.0636, 8.9930],
+        "color": "#64748b",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_pillar_proxy",
+        "name": "World Labs pillar proxy",
+        "type": "cube",
+        "position_xyz": [-7.8376, 4.2899, -3.9536],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [3.5046, 8.1165, 3.2139],
+        "color": "#1d4ed8",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_seat_proxy",
+        "name": "World Labs seat proxy",
+        "type": "cube",
+        "position_xyz": [1.7695, 0.8709, 11.7095],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [5.5341, 4.3210, 5.0751],
+        "color": "#7c3aed",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "world_labs_column_proxy",
+        "name": "World Labs column proxy",
+        "type": "cylinder",
+        "position_xyz": [-8.1531, 0.9128, -18.5814],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [4.5640, 2.2991, 4.5640],
+        "color": "#0891b2",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      },
+      {
+        "id": "robot_start_marker",
+        "name": "Robot start marker",
+        "type": "sphere",
+        "position_xyz": [0.0, 0.12, 0.0],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.24, 0.24, 0.24],
+        "color": "#22c55e",
+        "source": "world-scenario",
+        "is_ik_target": false,
+        "is_hidden": true
+      }
+    ],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "provenance": {
+    "source": "world_labs_open_showcase",
+    "provider": "World Labs",
+    "source_registry": "world-labs-marble",
+    "owner": "Ian Curtis",
+    "license": "MIT",
+    "license_ref": "/world-layouts/world-labs-third-person-controller/LICENSE.third-person-controller-splat",
+    "tags": ["world-labs", "marble", "gaussian-splat", "collider", "open-showcase", "wsp"],
+    "source_commit": "a47742aafb00067c05522e366e451137cec7802b",
+    "splat_uniform_scale": 5,
+    "collider_glb_uniform_scale": 5,
+    "ground_plane_offset": 0,
+    "world_labs_showcase_url": "https://www.worldlabs.ai/labs/showcase/third-person-controller",
+    "source_repo_url": "https://github.com/icurtis1/third-person-controller-splat",
+    "live_demo_url": "https://third-person-character-controller.netlify.app/",
+    "local_assets": {
+      "splat_spz": "/world-layouts/world-labs-third-person-controller/attic.spz",
+      "collider_glb": "/world-layouts/world-labs-third-person-controller/collider.glb",
+      "panorama": "/world-layouts/world-labs-third-person-controller/pano.jpg"
+    },
+    "notes": [
+      "This package reuses an open World Labs Marble showcase world; it does not call the World Labs generation API.",
+      "URDF Studio should render the attached splat and collider artifacts as the primary world view; proxy snapshot objects stay hidden for fallback/debug only.",
+      "Run metric scale, collider, and WSP audit checks before claiming robot-executable geometry."
+    ]
+  },
+  "security": {
+    "signature_ref": null,
+    "attestation_refs": [],
+    "sbom_ref": null
+  }
+}

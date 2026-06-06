@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import random
 from collections import Counter
+from dataclasses import dataclass
 from typing import Any, Sequence
 
 from backend.models.physical_state import (
     ActionToken,
     ConstraintToken,
     PhysicalEntity,
+    PhysicalRelation,
     PhysicalRolloutTrace,
     PhysicalStateFrame,
     WorldModelTrainingSample,
@@ -288,6 +290,98 @@ def _build_trace(index: int, *, mode: str, rng: random.Random) -> PhysicalRollou
     )
 
 
+@dataclass
+class CorpusNoiseConfig:
+    """Parameters for synthetic sensor-quality noise injection into corpus traces.
+
+    All rates/sigmas default to 0.0 (no noise).  Set non-zero to simulate
+    real-world data quality issues for robustness evaluation.
+    """
+    calibration_drift_sigma_m: float = 0.0
+    missing_entity_rate: float = 0.0
+    timestamp_jitter_ms: float = 0.0
+    frame_convention_flip_rate: float = 0.0
+    contact_ambiguity_rate: float = 0.0
+
+
+def _apply_corpus_noise(
+    trace: PhysicalRolloutTrace,
+    noise_config: CorpusNoiseConfig,
+    rng: random.Random,
+) -> PhysicalRolloutTrace:
+    """Return a deep-copied trace with synthetic noise applied to each frame."""
+    trace = trace.model_copy(deep=True)
+    for frame in trace.frames:
+        if noise_config.timestamp_jitter_ms > 0:
+            jitter_ms = rng.uniform(-noise_config.timestamp_jitter_ms, noise_config.timestamp_jitter_ms)
+            frame.t_ms = max(0, int(frame.t_ms + round(jitter_ms)))
+
+        entities = list(frame.entities)
+
+        if noise_config.missing_entity_rate > 0 and len(entities) > 1:
+            kept = [e for e in entities if rng.random() >= noise_config.missing_entity_rate]
+            if not kept:
+                kept = [entities[0]]
+            entities = kept
+
+        if noise_config.calibration_drift_sigma_m > 0:
+            for entity in entities:
+                entity.position_xyz = [
+                    round(entity.position_xyz[i] + rng.gauss(0.0, noise_config.calibration_drift_sigma_m), 6)
+                    for i in range(3)
+                ]
+
+        if noise_config.frame_convention_flip_rate > 0:
+            for entity in entities:
+                if rng.random() < noise_config.frame_convention_flip_rate:
+                    y, z = entity.position_xyz[1], entity.position_xyz[2]
+                    entity.position_xyz = [entity.position_xyz[0], z, y]
+                    entity.metadata["frame_convention_error"] = True
+
+        surviving_ids = {e.entity_id for e in entities}
+        relations = [
+            r for r in frame.relations
+            if r.source_id in surviving_ids and r.target_id in surviving_ids
+        ]
+        constraints = [
+            c for c in frame.constraints
+            if (c.subject_id is None or c.subject_id in surviving_ids)
+            and all(tid in surviving_ids for tid in c.target_entity_ids)
+        ]
+
+        if noise_config.contact_ambiguity_rate > 0 and rng.random() < noise_config.contact_ambiguity_rate:
+            ids_sorted = sorted(surviving_ids)
+            if len(ids_sorted) >= 2:
+                src, tgt = ids_sorted[0], ids_sorted[1]
+                already = any(
+                    r.relation_type == "contacts" and r.source_id == src and r.target_id == tgt
+                    for r in relations
+                )
+                if not already:
+                    relations.append(PhysicalRelation(
+                        source_id=src,
+                        target_id=tgt,
+                        relation_type="contacts",
+                        confidence=round(rng.uniform(0.3, 0.7), 3),
+                        metadata={"noise_injected": True, "noise_type": "contact_ambiguity"},
+                    ))
+
+        # Direct assignment — pydantic does not re-run model validators without validate_assignment=True
+        frame.entities = entities
+        frame.relations = relations
+        frame.constraints = constraints
+
+    trace.metadata["noise_injected"] = True
+    trace.metadata["noise_config"] = {
+        "calibration_drift_sigma_m": noise_config.calibration_drift_sigma_m,
+        "missing_entity_rate": noise_config.missing_entity_rate,
+        "timestamp_jitter_ms": noise_config.timestamp_jitter_ms,
+        "frame_convention_flip_rate": noise_config.frame_convention_flip_rate,
+        "contact_ambiguity_rate": noise_config.contact_ambiguity_rate,
+    }
+    return trace
+
+
 def _failed_check_evidence(trace: PhysicalRolloutTrace) -> dict[str, Any]:
     report = audit_physical_rollout_trace(trace)
     failed_checks = [
@@ -330,6 +424,7 @@ def generate_wsp_failure_corpus_samples(
     failure_modes: Sequence[str] | str | None = None,
     valid_ratio: float = DEFAULT_VALID_RATIO,
     seed: int = DEFAULT_FAILURE_CORPUS_SEED,
+    noise_config: CorpusNoiseConfig | None = None,
 ) -> list[WorldModelTrainingSample]:
     if count < 1:
         raise ValueError("count must be >= 1.")
@@ -337,11 +432,24 @@ def generate_wsp_failure_corpus_samples(
         raise ValueError("valid_ratio must be between 0 and 1.")
     normalized_modes = normalize_failure_modes(failure_modes)
     rng = random.Random(seed)
+    noise_meta: dict[str, Any] | None = (
+        {
+            "calibration_drift_sigma_m": noise_config.calibration_drift_sigma_m,
+            "missing_entity_rate": noise_config.missing_entity_rate,
+            "timestamp_jitter_ms": noise_config.timestamp_jitter_ms,
+            "frame_convention_flip_rate": noise_config.frame_convention_flip_rate,
+            "contact_ambiguity_rate": noise_config.contact_ambiguity_rate,
+        }
+        if noise_config is not None
+        else None
+    )
     samples: list[WorldModelTrainingSample] = []
     for index, mode in enumerate(
         _mode_schedule(count=count, failure_modes=normalized_modes, valid_ratio=valid_ratio, rng=rng)
     ):
         trace = _build_trace(index, mode=mode, rng=rng)
+        if noise_config is not None:
+            trace = _apply_corpus_noise(trace, noise_config, rng)
         evidence = _failed_check_evidence(trace)
         sample = build_world_model_training_samples(
             trace,
@@ -354,6 +462,7 @@ def generate_wsp_failure_corpus_samples(
                 "sim_replay_label": "not_replayed",
                 "failure_evidence": evidence,
                 "generator_seed": seed,
+                "corpus_noise_config": noise_meta,
             },
         )[0]
         samples.append(sample)

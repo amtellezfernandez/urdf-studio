@@ -312,3 +312,54 @@ def build_trace_adapter_dataset(trace: PhysicalRolloutTrace) -> list[Any]:
         trace,
         metadata={"split": f"{trace.metadata.get('source_kind', 'adapter')}_trace_adapter"},
     )
+
+
+def compile_simulator_file(path: Path, *, source: TraceAdapterSource = "auto") -> PhysicalRolloutTrace:
+    """Read a simulator trace file (JSON or NDJSON) and compile to a PhysicalRolloutTrace.
+
+    Supports MuJoCo, Genesis, ROS JSON-export, and LeRobot formats.
+    For native ROS 2 binary bag files (.mcap), use compile_mcap_file() instead.
+    """
+    return compile_trace_adapter_file(path, source=source)
+
+
+def _ros2_message_to_dict(msg: Any) -> dict[str, Any]:
+    """Best-effort conversion of a decoded ROS 2 message object to a plain dict."""
+    if hasattr(msg, "_fields_and_field_types"):
+        return {field: getattr(msg, field, None) for field in msg._fields_and_field_types}
+    if hasattr(msg, "__dict__"):
+        return {k: v for k, v in msg.__dict__.items() if not k.startswith("_")}
+    return {}
+
+
+def compile_mcap_file(path: Path) -> PhysicalRolloutTrace:
+    """Read a native ROS 2 MCAP bag and compile to a PhysicalRolloutTrace.
+
+    Requires: pip install mcap mcap-ros2-support
+
+    Expected topics (any subset is accepted):
+      /tf              — TF2 transforms keyed by child_frame_id
+      /wsp/entities    — WSP entity state list
+      /wsp/action      — WSP action command
+    """
+    try:
+        from mcap.reader import make_reader  # type: ignore[import-not-found]
+        from mcap_ros2.decoder import DecoderFactory  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ImportError(
+            "Native MCAP reading requires the mcap packages: "
+            "pip install mcap mcap-ros2-support"
+        ) from exc
+
+    messages: list[dict[str, Any]] = []
+    with open(path, "rb") as bag_file:
+        reader = make_reader(bag_file, decoder_factories=[DecoderFactory()])
+        for _schema, channel, message, ros_msg in reader.iter_decoded_messages():
+            messages.append({
+                "topic": channel.topic,
+                "t_ms": message.log_time // 1_000_000,
+                "payload": _ros2_message_to_dict(ros_msg),
+            })
+
+    payload: dict[str, Any] = {"mcap_id": path.stem, "messages": messages}
+    return compile_trace_adapter_payload(payload, source="ros")

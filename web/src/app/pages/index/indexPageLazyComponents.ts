@@ -35,9 +35,3 @@ export const WorldRolloutReviewPanel = lazy(() =>
     default: module.WorldRolloutReviewPanel,
   }))
 );
-
-export const WorldSceneImportDialog = lazy(() =>
-  import("@/features/world-share/WorldSceneImportDialog").then((module) => ({
-    default: module.WorldSceneImportDialog,
-  }))
-);

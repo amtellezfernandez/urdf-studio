@@ -97,8 +97,8 @@ import {
   WorldPublishDialog,
   WorldRegistryPanel,
   WorldRolloutReviewPanel,
-  WorldSceneImportDialog,
 } from "@/app/pages/index/indexPageLazyComponents";
+import { WorldSceneImportDialog } from "@/features/world-share/WorldSceneImportDialog";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,

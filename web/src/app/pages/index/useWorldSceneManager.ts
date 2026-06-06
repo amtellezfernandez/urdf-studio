@@ -22,6 +22,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
+import { useWorldSceneRuntimeStore } from "@/features/world-share/worldSceneRuntimeStore";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import { resolveWorldObjectGeometry, type CreatedObject } from "@/features/objects";
 import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjectGeometry";
@@ -158,6 +159,9 @@ export const useWorldSceneManager = ({
   const [worldRegistryVersionCache, setWorldRegistryVersionCache] = useState<
     Record<string, WorldScenePackageVersionRecord>
   >({});
+  const setActiveWorldScenePackage = useWorldSceneRuntimeStore(
+    (state) => state.setActiveWorldScenePackage
+  );
   const [worldRegistryLoading, setWorldRegistryLoading] = useState(false);
   const [worldPublishDialogOpen, setWorldPublishDialogOpen] = useState(false);
   const [worldPublishTarget, setWorldPublishTarget] = useState<WorldPublishTarget>("registry");
@@ -470,6 +474,7 @@ export const useWorldSceneManager = ({
   const applyImportedWorldScenePackage = useCallback(
     (manifest: WorldScenePackageManifest) => {
       const snapshot = manifest.world_snapshot;
+      setActiveWorldScenePackage(manifest);
       updateUrdfFile(snapshot.urdf_xml, `${manifest.package_id}-${manifest.version}.urdf`);
       clearCameras();
       snapshot.cameras.forEach((camera) => {
@@ -492,6 +497,7 @@ export const useWorldSceneManager = ({
       addCamera,
       applyWorldSceneObjects,
       clearCameras,
+      setActiveWorldScenePackage,
       setActiveWorldSnapshotRef,
       setJointValues,
       updateUrdfFile,
@@ -595,16 +601,17 @@ export const useWorldSceneManager = ({
 
   const importWorldLayoutFromUrl = useCallback(
     async (worldLayoutUrl: string, contextLabel: string) => {
-      const { worldLayout, embeddedCameras } = await readWorldSceneLayerFromUrl(
+      const { worldLayout, embeddedCameras, manifest } = await readWorldSceneLayerFromUrl(
         worldLayoutUrl,
         contextLabel
       );
+      setActiveWorldScenePackage(manifest);
       applyImportedWorldSceneLayer(worldLayout);
       if (embeddedCameras > 0) {
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
       }
     },
-    [applyImportedWorldSceneLayer]
+    [applyImportedWorldSceneLayer, setActiveWorldScenePackage]
   );
 
   const handleImportWorldLayoutFromLinkDialog = useCallback(async () => {

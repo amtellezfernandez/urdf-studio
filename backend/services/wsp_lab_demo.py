@@ -309,14 +309,17 @@ def run_wsp_lab_demo(
             "summary": str(summary_path),
         },
         "metrics": {
-            "audit": audit_benchmark,
-            "model_lift": model_lift["relative_improvement"],
-            "policy_regression": policy_eval["regression"],
-            "ci_status": ci_report["status"],
+            "deterministic": {
+                "audit": audit_benchmark,
+                "model_lift": model_lift["relative_improvement"],
+                "policy_regression": policy_eval["regression"],
+                "ci_status": ci_report["status"],
+            },
+            "stress": None,
         },
     }
     if stress_audit_benchmark is not None:
-        summary["stress_test"] = {
+        stress_summary = {
             "mode": "synthetic_ambiguity_label_noise",
             "purpose": (
                 "Optional presentation guardrail: shows that the perfect deterministic metrics are not "
@@ -327,6 +330,8 @@ def run_wsp_lab_demo(
             "audit_recall": stress_audit_benchmark["invalid_detection"]["recall"],
             "unsafe_false_negative_rate": stress_audit_benchmark["invalid_detection"]["false_negative_rate"],
         }
+        summary["stress_test"] = stress_summary
+        summary["metrics"]["stress"] = stress_summary
         summary["artifacts"]["stress_labeled_corpus"] = str(stress_labeled_path)
         summary["artifacts"]["stress_audit_benchmark"] = str(stress_audit_benchmark_path)
     _write_json(summary_path, summary)

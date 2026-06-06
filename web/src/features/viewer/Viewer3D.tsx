@@ -10,10 +10,12 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls, Line, Html } from "@react-three/drei";
 import { Camera, CircleHelp, Globe } from "lucide-react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
 import { toast } from "sonner";
 import { resolveRobotRootLinkName } from "@/shared/lib/urdfRootLink";
@@ -306,6 +308,11 @@ import {
 } from "@/features/teleop/perception/openArmHfLiveParams";
 import { resolveOpenArmHfLiveCameraConfigPoseFromPointCloudPose } from "@/features/teleop/perception/openArmHfLiveCameraConfig";
 import { useOperatorPerceptionStore } from "@/features/teleop/perception/operatorPerceptionStore";
+import {
+  findWorldColliderArtifact,
+  findWorldSplatArtifact,
+  useWorldSceneRuntimeStore,
+} from "@/features/world-share/worldSceneRuntimeStore";
 export interface Viewer3DProps {
   workspaceMode?: WorkspaceMode;
   assemblyPrimaryModel?: { id: string; name: string };
@@ -3753,6 +3760,280 @@ const AssemblyPlacementHelpers = ({
 
 const transformContract = getTransformContract();
 assertTransformContract(transformContract);
+const readFiniteMetadataNumber = (
+  metadata: Record<string, unknown>,
+  key: string,
+  fallback: number
+): number => {
+  const value = metadata[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+};
+
+const fitPerspectiveCameraToWorldBounds = ({
+  bounds,
+  camera,
+  controls,
+  invalidate,
+  focusCenter = null,
+}: {
+  bounds: THREE.Box3;
+  camera: THREE.Camera;
+  controls?: OrbitControlsImpl;
+  invalidate: () => void;
+  focusCenter?: THREE.Vector3 | null;
+}) => {
+  if (bounds.isEmpty() || !(camera instanceof THREE.PerspectiveCamera)) {
+    return;
+  }
+  const center = focusCenter ?? bounds.getCenter(new THREE.Vector3());
+  const sizeVector = bounds.getSize(new THREE.Vector3());
+  const size = Math.max(sizeVector.length(), 1);
+  const offset = new THREE.Vector3(
+    THREE.MathUtils.clamp(size * 0.008, 0.8, 1.6),
+    THREE.MathUtils.clamp(size * 0.006, 0.7, 1.2),
+    THREE.MathUtils.clamp(size * 0.012, 1.2, 2.1)
+  );
+  camera.near = Math.max(0.01, size / 5000);
+  camera.far = Math.max(1000, size * 25);
+  camera.up.set(0, 1, 0);
+  camera.position.copy(center).add(offset);
+  camera.lookAt(center);
+  camera.updateProjectionMatrix();
+  controls?.target.copy(center);
+  controls?.update();
+  invalidate();
+};
+
+const WorldLabsSplatLayer = () => {
+  const activeWorldPackage = useWorldSceneRuntimeStore((state) => state.activePackage);
+  const splatArtifact = useMemo(
+    () => (activeWorldPackage ? findWorldSplatArtifact(activeWorldPackage.artifacts) : null),
+    [activeWorldPackage]
+  );
+  const scene = useThree((state) => state.scene);
+  const camera = useThree((state) => state.camera);
+  const renderer = useThree((state) => state.gl);
+  const invalidate = useThree((state) => state.invalidate);
+  const controls = useThree((state) => state.controls as OrbitControlsImpl | undefined);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const splatScale = readFiniteMetadataNumber(
+    activeWorldPackage?.provenance ?? {},
+    "splat_uniform_scale",
+    5
+  );
+  const groundPlaneOffset = readFiniteMetadataNumber(
+    activeWorldPackage?.provenance ?? {},
+    "ground_plane_offset",
+    0
+  );
+
+  useEffect(() => {
+    setLoadError(null);
+    if (!activeWorldPackage || !splatArtifact) return;
+
+    let cancelled = false;
+    const spark = new SparkRenderer({
+      renderer,
+      enableLod: true,
+      lodRenderScale: 2,
+      onDirty: invalidate,
+      encodeLinear: false,
+    });
+    const splat = new SplatMesh({
+      url: splatArtifact.uri,
+      lod: true,
+    });
+    spark.raycast = () => undefined;
+    splat.raycast = () => undefined;
+    splat.quaternion.identity();
+    splat.position.set(0, groundPlaneOffset, 0);
+    splat.scale.setScalar(splatScale);
+    scene.add(spark);
+    scene.add(splat);
+
+    void splat.initialized
+      .then(() => {
+        if (cancelled) return;
+        splat.updateMatrixWorld(true);
+        const localBounds = splat.getBoundingBox(true);
+        const worldBounds = localBounds.clone().applyMatrix4(splat.matrixWorld);
+        invalidate();
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      cancelled = true;
+      scene.remove(splat);
+      scene.remove(spark);
+      splat.dispose();
+      spark.dispose();
+    };
+  }, [activeWorldPackage, camera, controls, groundPlaneOffset, invalidate, renderer, scene, splatArtifact, splatScale]);
+
+  if (!splatArtifact) return null;
+
+  return (
+    <>
+      {loadError ? (
+        <Html center position={[0, 0.8, 0]}>
+          <div className="rounded-md border border-destructive/50 bg-background/95 px-2 py-1 text-[10px] text-destructive shadow">
+            {`World Labs splat failed: ${loadError}`}
+          </div>
+        </Html>
+      ) : null}
+    </>
+  );
+};
+
+const WorldLabsEnvironmentLayer = () => {
+  const activeWorldPackage = useWorldSceneRuntimeStore((state) => state.activePackage);
+  const panoArtifact = useMemo(
+    () =>
+      activeWorldPackage?.artifacts.find(
+        (artifact) => artifact.kind.includes("panorama") && artifact.uri.endsWith(".jpg")
+      ) ?? null,
+    [activeWorldPackage]
+  );
+  const { scene } = useThree();
+
+  useEffect(() => {
+    if (!panoArtifact) {
+      return;
+    }
+    const loader = new THREE.TextureLoader();
+    let disposed = false;
+    let texture: THREE.Texture | null = null;
+    loader.load(
+      panoArtifact.uri,
+      (loadedTexture) => {
+        if (disposed) {
+          loadedTexture.dispose();
+          return;
+        }
+        texture = loadedTexture;
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        scene.environment = texture;
+        scene.background = texture;
+        scene.backgroundBlurriness = 0;
+        scene.environmentRotation = new THREE.Euler(0, Math.PI / 2, 0);
+        scene.backgroundRotation = new THREE.Euler(0, Math.PI / 2, 0);
+        scene.environmentIntensity = 1;
+        scene.backgroundIntensity = 1;
+      },
+      undefined,
+      () => {
+        // Keep the scene usable even if the panorama is absent.
+      }
+    );
+    return () => {
+      disposed = true;
+      if (scene.environment === texture) {
+        scene.environment = null;
+      }
+      if (scene.background === texture) {
+        scene.background = null;
+      }
+      texture?.dispose();
+    };
+  }, [panoArtifact, scene]);
+
+  return null;
+};
+
+const WorldLabsColliderLayer = () => {
+  const activeWorldPackage = useWorldSceneRuntimeStore((state) => state.activePackage);
+  const colliderArtifact = useMemo(
+    () => (activeWorldPackage ? findWorldColliderArtifact(activeWorldPackage.artifacts) : null),
+    [activeWorldPackage]
+  );
+  const camera = useThree((state) => state.camera);
+  const controls = useThree((state) => state.controls as OrbitControlsImpl | undefined);
+  const invalidate = useThree((state) => state.invalidate);
+  const [colliderScene, setColliderScene] = useState<THREE.Group | null>(null);
+  const colliderScale = readFiniteMetadataNumber(
+    activeWorldPackage?.provenance ?? {},
+    "collider_glb_uniform_scale",
+    5
+  );
+  const groundPlaneOffset = readFiniteMetadataNumber(
+    activeWorldPackage?.provenance ?? {},
+    "ground_plane_offset",
+    0
+  );
+
+  useEffect(() => {
+    if (!colliderArtifact) {
+      setColliderScene(null);
+      return;
+    }
+    const loader = new GLTFLoader();
+    let disposed = false;
+    loader.load(
+      colliderArtifact.uri,
+      (gltf) => {
+        if (disposed) {
+          return;
+        }
+        const clone = gltf.scene.clone(true);
+        clone.position.set(0, groundPlaneOffset, 0);
+        clone.scale.setScalar(colliderScale);
+        clone.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) {
+            return;
+          }
+          child.castShadow = false;
+          child.receiveShadow = false;
+          child.renderOrder = 20;
+          child.material = new THREE.MeshBasicMaterial({
+            color: "#67e8f9",
+            transparent: true,
+            opacity: 0.08,
+            wireframe: true,
+            depthWrite: false,
+          });
+        });
+        clone.updateMatrixWorld(true);
+        setColliderScene(clone);
+      },
+      undefined,
+      () => {
+        setColliderScene(null);
+      }
+    );
+
+    return () => {
+      disposed = true;
+      setColliderScene(null);
+    };
+  }, [colliderArtifact, colliderScale, groundPlaneOffset]);
+
+  useEffect(() => {
+    if (!colliderScene) {
+      return;
+    }
+    colliderScene.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(colliderScene);
+    fitPerspectiveCameraToWorldBounds({
+      bounds,
+      camera,
+      controls,
+      invalidate,
+      focusCenter: new THREE.Vector3(0, 0.7, 0),
+    });
+    return undefined;
+  }, [camera, colliderScene, controls, invalidate]);
+
+  if (!colliderArtifact || !colliderScene) {
+    return null;
+  }
+
+  return <primitive object={colliderScene} />;
+};
 
 export const Viewer3D = ({
   workspaceMode = "studio",
@@ -3898,6 +4179,15 @@ export const Viewer3D = ({
   );
   const liveFollowerJointTelemetryByName = useOperatorPerceptionStore(
     (state) => state.activeFollowerJointTelemetryByName,
+  );
+  const activeWorldScenePackage = useWorldSceneRuntimeStore((state) => state.activePackage);
+  const worldLabsPrimarySceneActive = useMemo(
+    () =>
+      Boolean(
+        activeWorldScenePackage &&
+          findWorldSplatArtifact(activeWorldScenePackage.artifacts)
+      ),
+    [activeWorldScenePackage]
   );
   const pointCloudAutocalibrationRequest = useOperatorPerceptionStore(
     (state) => state.pointCloudAutocalibrationRequest
@@ -6995,7 +7285,7 @@ export const Viewer3D = ({
             </>
           )}
 
-          {viewerUi.showSceneChrome && (
+          {viewerUi.showSceneChrome && !worldLabsPrimarySceneActive && (
             <>
               {/* Infinite grid - Blender-style grey infinite grid */}
               <ViewerWorldGrid gpuMode={effectiveGpuMode} />
@@ -7024,6 +7314,10 @@ export const Viewer3D = ({
               )}
             </>
           )}
+
+          <WorldLabsEnvironmentLayer />
+          <WorldLabsColliderLayer />
+          <WorldLabsSplatLayer />
 
           {urdfFile && (
             <>
@@ -7091,6 +7385,9 @@ export const Viewer3D = ({
                 onFrameChange={setCurrentFrame}
                 onPlaybackEnd={handlePlaybackEnd}
               />
+              {worldLabsPrimarySceneActive && robot ? (
+                <WorldLabsRobotOverlay robot={robot} jointValues={storeJointValues} />
+              ) : null}
               {collisionsVisible ? (
                 <CollisionGeometries
                   urdfAnalysis={urdfAnalysis}
