@@ -27,7 +27,7 @@ const WORLD_LAYOUT_SUPPORTED_OBJECT_SOURCES = [
 const WORLD_LAYOUT_SUPPORTED_ORBIT_TARGET_POINTS = ["center", "primary", "secondary"] as const;
 const WORLD_LAYOUT_SUPPORTED_IK_TARGET_TYPES = ["punctual", "orbit"] as const;
 
-type WorldSceneLayerEnvironment = Record<string, unknown> | null;
+export type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
 type ParsedWorldSceneLayerSnapshot = {
   name?: string;

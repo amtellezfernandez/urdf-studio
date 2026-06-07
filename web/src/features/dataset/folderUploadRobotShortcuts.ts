@@ -21,9 +21,9 @@ export const FOLDER_UPLOAD_ROBOT_SHORTCUTS = {
   so101: {
     id: "so101",
     manifestUrl: "/demo/so101/manifest.json",
-    cameraConfigUrl: undefined,
+    cameraConfigUrl: "/demo/so101/camera-config.json",
     displayName: "SO101",
-    sourceLabel: "bundled SO101 starter",
+    sourceLabel: "bundled SO101 starter with cameras",
     buttonLabel: "Try SO101",
   },
 } as const satisfies Record<string, FolderUploadRobotShortcut>;

@@ -732,6 +732,7 @@ export const EpisodePreviewPanel = ({
                   packageRoots={packageRoots}
                   gpuMode="low"
                   emptyStateMessage={cameraPreviewEmptyStateMessage}
+                  renderWorldLayoutSplat
                 />
               </div>
             </div>
@@ -817,6 +818,7 @@ export const EpisodePreviewPanel = ({
                         packageRoots={packageRoots}
                         gpuMode="low"
                         emptyStateMessage={cameraPreviewEmptyStateMessage}
+                        renderWorldLayoutSplat
                       />
                     </div>
                   </div>

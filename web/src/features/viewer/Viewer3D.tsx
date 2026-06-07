@@ -86,6 +86,7 @@ import { CollisionGeometries } from "@/features/viewer/CollisionGeometries";
 import { RoverApproachGuideLine } from "@/features/viewer/RoverApproachGuideLine";
 import { RoverApproachRoutePreview } from "@/features/viewer/RoverApproachRoutePreview";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
+import { WorldLayoutSplatLayer } from "@/features/viewer/WorldLayoutSplatLayer";
 import { resolveEndEffectorContactObjectId } from "@/features/viewer/eeObjectContact";
 import {
   createRoverApproachGuideLineState,
@@ -7024,6 +7025,8 @@ export const Viewer3D = ({
               )}
             </>
           )}
+
+          <WorldLayoutSplatLayer />
 
           {urdfFile && (
             <>

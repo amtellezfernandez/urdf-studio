@@ -132,7 +132,12 @@ def test_maps_lerobot_gripper_action_units_to_model_rad() -> None:
     )
 
     assert joints["shoulder_pan"].position_rad == math.radians(LEADER_JOINT1_DEG)
-    assert joints["gripper"].position_rad == math.radians(LEADER_GRIPPER_PERCENT)
+    gripper_closed_rad = -0.174533
+    gripper_open_rad = math.radians(100.0)
+    expected_gripper_rad = gripper_closed_rad + (LEADER_GRIPPER_PERCENT / 100.0) * (
+        gripper_open_rad - gripper_closed_rad
+    )
+    assert joints["gripper"].position_rad == expected_gripper_rad
 
 
 def test_maps_so_style_lerobot_shoulder_pan_to_urdf_direction() -> None:

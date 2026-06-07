@@ -14,6 +14,7 @@ import {
   WORLD_ROLLOUT_JOB_POLL_INTERVAL_MS,
 } from "@/features/world-share/worldRolloutParams";
 import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
+import { useWorldLayoutEnvironmentStore } from "@/features/world-share/worldLayoutEnvironmentStore";
 import type {
   WorldRolloutImportResponse,
 } from "@/features/world-share/worldRolloutTypes";
@@ -461,6 +462,7 @@ export const useWorldSceneManager = ({
 
   const applyImportedWorldSceneLayer = useCallback(
     (worldLayout: WorldSceneLayerSnapshot) => {
+      useWorldLayoutEnvironmentStore.getState().setWorldLayoutEnvironment(worldLayout.environment);
       applyWorldSceneObjects(worldLayout.objects);
       setActiveWorldSnapshotRef(null);
     },
@@ -469,6 +471,7 @@ export const useWorldSceneManager = ({
 
   const applyImportedWorldScenePackage = useCallback(
     (manifest: WorldScenePackageManifest) => {
+      useWorldLayoutEnvironmentStore.getState().setWorldLayoutEnvironment(null);
       const snapshot = manifest.world_snapshot;
       updateUrdfFile(snapshot.urdf_xml, `${manifest.package_id}-${manifest.version}.urdf`);
       clearCameras();

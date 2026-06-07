@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import URDFLoader, { type URDFRobot } from "urdf-loader";
 import { useCameraStore } from "@/shared/store/useCameraStore";
@@ -36,6 +36,14 @@ import {
   hasMeaningfulRobotBasePoseDelta,
 } from "@/shared/lib/robotBasePose";
 import type { RobotBasePose } from "@/shared/types/feature";
+import { useWorldLayoutEnvironmentStore } from "@/features/world-share/worldLayoutEnvironmentStore";
+import { WorldLayoutGlbElement } from "@/features/viewer/WorldLayoutGlbElement";
+import { WorldLayoutSplatLayer } from "@/features/viewer/WorldLayoutSplatLayer";
+import {
+  readWorldLayoutElementConfigs,
+  readWorldLayoutSplatConfig,
+} from "@/features/viewer/worldLayoutEnvironmentConfig";
+import type { WorldLayoutElementConfig } from "@/features/viewer/worldLayoutEnvironmentConfig";
 
 type PreviewRobot = URDFRobot;
 
@@ -43,14 +51,24 @@ const FLOAT_EPS = EPISODE_CAMERA_PREVIEW_PARAMS.floatComparisonEpsilon;
 const approxEqual = (a: number, b: number, eps = FLOAT_EPS) =>
   Math.abs(a - b) <= eps;
 
-const computeSceneMetrics = (robot: PreviewRobot | null, objects: CreatedObject[]) => {
+const unionBox = (target: THREE.Box3, source: THREE.Box3) => {
+  if (source.isEmpty()) return;
+  if (target.isEmpty()) {
+    target.copy(source);
+  } else {
+    target.union(source);
+  }
+};
+
+const computeSceneMetrics = (
+  robot: PreviewRobot | null,
+  objects: CreatedObject[]
+) => {
   const combinedBox = new THREE.Box3().makeEmpty();
 
   if (robot) {
     const robotBox = new THREE.Box3().setFromObject(robot);
-    if (!robotBox.isEmpty()) {
-      combinedBox.copy(robotBox);
-    }
+    unionBox(combinedBox, robotBox);
   }
 
   objects.forEach((obj) => {
@@ -60,11 +78,7 @@ const computeSceneMetrics = (robot: PreviewRobot | null, objects: CreatedObject[
       obj.position.clone().add(halfSize)
     );
 
-    if (combinedBox.isEmpty()) {
-      combinedBox.copy(objBox);
-    } else {
-      combinedBox.union(objBox);
-    }
+    unionBox(combinedBox, objBox);
   });
 
   if (combinedBox.isEmpty()) {
@@ -255,6 +269,31 @@ const PreviewSceneChrome = ({ gpuMode = "high" }: { gpuMode?: GPUMode }) => (
   </>
 );
 
+const PreviewWorldLayoutElements = ({
+  elements,
+}: {
+  elements: WorldLayoutElementConfig[];
+}) => {
+  const ignoreHover = useCallback(() => undefined, []);
+  const ignoreBounds = useCallback(() => undefined, []);
+  const ignoreSelect = useCallback(() => undefined, []);
+
+  return (
+    <>
+      {elements.map((element) => (
+        <WorldLayoutGlbElement
+          key={`${element.asset.id}:${element.asset.url}`}
+          config={element}
+          isSelected={false}
+          onBoundsChange={ignoreBounds}
+          onHoverChange={ignoreHover}
+          onSelect={ignoreSelect}
+        />
+      ))}
+    </>
+  );
+};
+
 const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
   const lastValuesRef = useRef<Record<string, number> | null>(null);
 
@@ -394,6 +433,7 @@ interface EpisodeCameraPreviewProps {
   gpuMode?: GPUMode;
   emptyStateMessage?: string;
   allowOperatorLiveCamera?: boolean;
+  renderWorldLayoutSplat?: boolean;
 }
 
 const OperatorLiveCameraVideo = ({ frame }: { frame: OperatorCameraVideoFrame }) => {
@@ -462,11 +502,21 @@ export const EpisodeCameraPreview = ({
   gpuMode = "high",
   emptyStateMessage = "No cameras available.",
   allowOperatorLiveCamera = false,
+  renderWorldLayoutSplat = false,
 }: EpisodeCameraPreviewProps) => {
   const activeCameraVideoFrame = useOperatorPerceptionStore((s) => s.activeCameraVideoFrame);
   const activeCameraVideoFrames = useOperatorPerceptionStore((s) => s.activeCameraVideoFrames);
   const cameras = useCameraStore((s) => s.cameras);
   const objects = useObjectStore((s) => s.objects);
+  const worldLayoutEnvironment = useWorldLayoutEnvironmentStore((s) => s.environment);
+  const worldLayoutSplatConfig = useMemo(
+    () => (renderWorldLayoutSplat ? readWorldLayoutSplatConfig(worldLayoutEnvironment) : null),
+    [renderWorldLayoutSplat, worldLayoutEnvironment]
+  );
+  const worldLayoutElements = useMemo(
+    () => readWorldLayoutElementConfigs(worldLayoutEnvironment),
+    [worldLayoutEnvironment]
+  );
   const cameraConfig = useMemo(() => {
     if (!cameraId) return cameras[0] ?? null;
     return cameras.find((c) => c.id === cameraId) ?? null;
@@ -748,8 +798,16 @@ export const EpisodeCameraPreview = ({
             <directionalLight position={[5, 5, 5]} intensity={0.8} />
             <directionalLight position={[-5, 5, -5]} intensity={0.4} />
             <PreviewSceneChrome gpuMode={gpuMode} />
+            {worldLayoutSplatConfig ? (
+              <WorldLayoutSplatLayer
+                autoFitElements={false}
+                interactiveElements={false}
+                renderElements={false}
+              />
+            ) : null}
             <group ref={groupRef} />
             <PreviewObjects objects={objects} gpuMode={gpuMode} />
+            <PreviewWorldLayoutElements elements={worldLayoutElements} />
             <JointValueSync robot={robot} />
             <BasePoseSync robot={robot} />
             <RobotMountKeeper robot={robot} groupRef={groupRef} />

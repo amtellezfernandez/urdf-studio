@@ -1,0 +1,144 @@
+{
+  "world_layout": {
+    "name": "hk-cargo-port",
+    "objects": [],
+    "scenario_time_ms": 0,
+    "scenario_duration_ms": 0
+  },
+  "environment": {
+    "preset": "hk-cargo-port",
+    "visual": {
+      "kind": "splat",
+      "uri": "/world-layouts/hk-cargo-port/0-world-500k.spz",
+      "position_xyz": [0.0, 0.0, 0.14725363980894962],
+      "rotation_rpy_rad": [-1.5707963267948966, 0.0, 0.0],
+      "scale": 0.25,
+      "metric_scale_factor": 0.25,
+      "ground_plane_offset": 6.6758757
+    },
+    "thumbnail": "/world-layouts/hk-cargo-port/0-world-thumbnail.webp",
+    "metadata": "/world-layouts/hk-cargo-port/0-world.json",
+    "elements_layout": {
+      "kind": "compact_preview_stage",
+      "frame_map": "simu-gen-y-up-to-studio-xy-floor",
+      "notes": "Generated object meshes use their normalized authoring scale so SO101 is visually comparable to the crane meshes instead of being tiny against real-world port dimensions.",
+      "physics_defaults": {
+        "body_type": "static",
+        "restitution": 0.0,
+        "friction": 1.0,
+        "linear_damping": 1.0,
+        "angular_damping": 1.0
+      }
+    },
+    "elements": [
+      {
+        "id": "shipping-container",
+        "name": "shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [-0.9, 0.85, 0.0],
+        "scale": 0.5
+      },
+      {
+        "id": "grabbable-container-a",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [-0.08, 0.24, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.08],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-b",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.02, 0.24, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.05],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-c",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.12, 0.24, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.03],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-d",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [-0.03, 0.34, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.12],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-e",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.07, 0.34, 0.0],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.1],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "grabbable-container-f",
+        "name": "small grabbable shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [0.02, 0.29, 0.041],
+        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.02],
+        "scale": 0.09,
+        "material_color": "#ef4444"
+      },
+      {
+        "id": "orange-rtg-crane",
+        "name": "orange rubber-tyred gantry crane",
+        "uri": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/0-orange-rtg-crane.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/object.json",
+        "position_xyz": [0.75, 1.15, 0.0],
+        "scale": 0.5
+      },
+      {
+        "id": "cargo-ship",
+        "name": "general cargo ship",
+        "uri": "/world-layouts/hk-cargo-port/elements/cargo-ship/0-cargo-ship.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/cargo-ship/object.json",
+        "position_xyz": [0.1, 2.0, 0.0],
+        "scale": 0.5
+      },
+      {
+        "id": "blue-gantry-crane",
+        "name": "blue rubber-tyred gantry crane",
+        "uri": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/0-blue-gantry-crane.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/object.json",
+        "position_xyz": [-0.75, 1.45, 0.0],
+        "scale": 0.5
+      },
+      {
+        "id": "evergreen-container-ship",
+        "name": "Evergreen container ship",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/0-evergreen-container-ship.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/object.json",
+        "position_xyz": [-0.65, 2.45, 0.0],
+        "scale": 0.5
+      }
+    ],
+    "notes": [
+      "Loaded from port-simple.zip.",
+      "Default splat uses the 500k World Labs LOD instead of the 31 MB full-res SPZ.",
+      "Splat uses a compact preview scale with the World Labs ground-plane offset scaled to keep the generated XZ floor on the studio XY floor. Robot transforms are not changed.",
+      "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale.",
+      "Small grabbable container instances reuse the shipping-container mesh as a red pile near SO101.",
+      "World-layout meshes are treated as static non-bouncy scene geometry unless an element overrides physics defaults."
+    ]
+  }
+}
