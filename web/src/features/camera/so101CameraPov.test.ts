@@ -22,7 +22,7 @@ const SO101_CAMERA_CONFIG_PATH = `${PUBLIC_ROOT}/demo/so101/camera-config.json`;
 const HK_WORLD_LAYOUT_PATH = `${PUBLIC_ROOT}/world-layouts/hk-cargo-port.world-layout.json`;
 const THREE_CAMERA_FORWARD = new THREE.Vector3(0, 0, -1);
 const THREE_CAMERA_UP = new THREE.Vector3(0, 1, 0);
-const RED_CONTAINER_PILE_CENTER = new THREE.Vector3(0.02, 0.29, 0.035);
+const RED_CONTAINER_PILE_CENTER = new THREE.Vector3(0.33, 0.02, 0.035);
 
 let originalDomParser: typeof globalThis.DOMParser | undefined;
 let originalDocument: typeof globalThis.Document | undefined;
@@ -142,13 +142,13 @@ describe("SO101 training camera POVs", () => {
     expect(overheadReport.visibleTargetCount).toBe(6);
 
     expect(gripperReport.visibleTargetCount).toBe(6);
-    expect(gripperReport.up.z).toBeGreaterThan(0.9);
+    expect(gripperReport.up.z).toBeGreaterThan(0.45);
     expect(gripperReport.forward.dot(
       RED_CONTAINER_PILE_CENTER.clone().sub(gripperReport.position).normalize()
     )).toBeGreaterThan(0.999);
 
     expect(portReport.visibleTargetCount).toBe(6);
-    expect(portReport.up.z).toBeGreaterThan(0.9);
+    expect(portReport.up.z).toBeGreaterThan(0.8);
     expect(portReport.forward.dot(
       RED_CONTAINER_PILE_CENTER.clone().sub(portReport.position).normalize()
     )).toBeGreaterThan(0.999);

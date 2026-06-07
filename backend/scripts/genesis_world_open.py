@@ -82,18 +82,23 @@ def _add_mesh_entity(
     decimate: bool,
     convexify: bool | None,
     color_override: str | None = None,
+    preserve_studio_glb_orientation: bool = False,
 ):
     surface = _surface_for_color(gs, color_override or spec.element.material_color)
-    morph = gs.morphs.Mesh(
-        file=str(spec.asset_path.resolve()),
-        pos=spec.mesh_position_xyz,
-        euler=_to_degrees(spec.element.rotation_rpy_rad),
-        scale=spec.effective_scale_xyz,
-        fixed=fixed,
-        collision=collision,
-        decimate=decimate,
-        convexify=convexify,
-    )
+    morph_kwargs = {
+        "file": str(spec.asset_path.resolve()),
+        "pos": spec.mesh_position_xyz,
+        "euler": _to_degrees(spec.element.rotation_rpy_rad),
+        "scale": spec.effective_scale_xyz,
+        "fixed": fixed,
+        "collision": collision,
+        "decimate": decimate,
+        "convexify": convexify,
+        "align": False,
+    }
+    if preserve_studio_glb_orientation:
+        morph_kwargs["file_meshes_are_zup"] = True
+    morph = gs.morphs.Mesh(**morph_kwargs)
     kwargs = {"name": name}
     if surface is not None:
         kwargs["surface"] = surface
@@ -197,6 +202,7 @@ def open_genesis_world_scene(
                 name=spec.element.id,
                 decimate=True,
                 convexify=True,
+                preserve_studio_glb_orientation=True,
             )
         elif spec.is_dynamic and dynamic_container_mode == "box":
             _add_mesh_entity(
