@@ -120,6 +120,7 @@ const EPISODE_STATS_FIELD_ORDER = [
   "task_index",
 ] as const satisfies readonly EpisodeStatFieldName[];
 const STATS_VALUE_FIELDS = ["min", "max", "mean", "std", "count"] as const;
+const VIRTUAL_JOINT_NAMES = new Set(["gripper_frame_joint"]);
 
 let writeParquetFilePromise: Promise<WriteParquetFile> | null = null;
 
@@ -345,6 +346,7 @@ const buildEpisodeDataForV3Internal = (
       left.localeCompare(right, undefined, { numeric: true })
     );
   }
+  globalJointOrder = globalJointOrder.filter((joint) => !VIRTUAL_JOINT_NAMES.has(joint));
 
   episodes.forEach((episode) => {
     if (episode.frames.length === 0) {
@@ -355,7 +357,9 @@ const buildEpisodeDataForV3Internal = (
     const jointOrder =
       Array.isArray(episode.metadata?.joint_names) &&
       episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
+        ? (episode.metadata.joint_names as string[]).filter(
+            (joint) => !VIRTUAL_JOINT_NAMES.has(joint)
+          )
         : globalJointOrder;
 
     const computedFps = (() => {
@@ -518,7 +522,9 @@ function* iterateV3FlattenedRows({
     const jointOrder =
       Array.isArray(episode.metadata?.joint_names) &&
       episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
+        ? (episode.metadata.joint_names as string[]).filter(
+            (joint) => !VIRTUAL_JOINT_NAMES.has(joint)
+          )
         : globalJointOrder;
     for (const [frameIndex, frame] of episode.frames.entries()) {
       const actionVector = jointOrder.map((joint) => frame.jointPositions[joint] ?? 0);
@@ -682,7 +688,7 @@ const writeV3EpisodeChunk = async ({
 };
 
 const buildJointFeatureNames = (jointNames: string[]) => ({
-  [V3_DATASET_JOINT_FEATURE_GROUP]: jointNames,
+  [V3_DATASET_JOINT_FEATURE_GROUP]: jointNames.map((name) => `${name}.pos`),
 });
 
 export const generateV3DatasetArchive = async (

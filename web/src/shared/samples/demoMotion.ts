@@ -6,9 +6,23 @@ const DEFAULT_DURATION_MS = 4000;
 const DEFAULT_DEMO_COUNT = 3;
 const SO101_PICKUP_DURATION_MS = 5600;
 const SO101_PICKUP_FPS = 60;
-export const SO101_RED_PICKUP_CUBE_TRACK_ID = "red pickup cube";
-export const SO101_RED_PICKUP_CUBE_OBJECT_ID = "hk-red-pickup-cube";
-export const SO101_RED_PICKUP_CUBE_INITIAL_POSITION = { x: 0.02, y: 0.29, z: 0.035 };
+export const SO101_GRABBABLE_CONTAINER_TRACK_ID = "grabbable-container-f";
+export const SO101_GRABBABLE_CONTAINER_OBJECT_ID = "grabbable-container-f";
+export const SO101_GRABBABLE_CONTAINER_INITIAL_POSITION = {
+  x: 0.02,
+  y: 0.29,
+  z: 0.041,
+};
+export const SO101_GRABBABLE_CONTAINER_FINAL_POSITION = {
+  x: -0.28,
+  y: 0.34,
+  z: 0.041,
+};
+const SO101_GRABBABLE_CONTAINER_ROTATION = {
+  x: Math.PI / 2,
+  y: 0,
+  z: 0.02,
+};
 
 const SO101_PICKUP_REQUIRED_JOINTS = [
   "shoulder_pan",
@@ -63,6 +77,11 @@ type DemoProfile = {
 type JointKeyframe = {
   t: number;
   joints: Record<(typeof SO101_PICKUP_REQUIRED_JOINTS)[number], number>;
+};
+
+type ObjectPoseKeyframe = {
+  t: number;
+  position: { x: number; y: number; z: number };
 };
 
 const easeInOut = (t: number) =>
@@ -222,7 +241,43 @@ const createSo101PickupJointPositions = ({
   return jointPositions;
 };
 
-const createSo101RedCubePickupFrames = ({
+const SO101_CONTAINER_POSE_KEYFRAMES: ObjectPoseKeyframe[] = [
+  { t: 0, position: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION },
+  { t: 0.42, position: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION },
+  {
+    t: 0.56,
+    position: {
+      x: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.x,
+      y: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.y,
+      z: 0.13,
+    },
+  },
+  {
+    t: 0.72,
+    position: {
+      x: SO101_GRABBABLE_CONTAINER_FINAL_POSITION.x,
+      y: SO101_GRABBABLE_CONTAINER_FINAL_POSITION.y,
+      z: 0.13,
+    },
+  },
+  { t: 0.84, position: SO101_GRABBABLE_CONTAINER_FINAL_POSITION },
+  { t: 1, position: SO101_GRABBABLE_CONTAINER_FINAL_POSITION },
+];
+
+const createSo101ContainerPose = (t: number) => {
+  const { from, to, alpha } = resolveKeyframePair(SO101_CONTAINER_POSE_KEYFRAMES, t);
+  return {
+    position: {
+      x: interpolateNumber(from.position.x, to.position.x, alpha),
+      y: interpolateNumber(from.position.y, to.position.y, alpha),
+      z: interpolateNumber(from.position.z, to.position.z, alpha),
+    },
+    rotation: SO101_GRABBABLE_CONTAINER_ROTATION,
+    isHidden: false,
+  };
+};
+
+const createSo101ContainerPickupFrames = ({
   jointNames,
   jointLimits,
 }: {
@@ -236,11 +291,14 @@ const createSo101RedCubePickupFrames = ({
     return {
       timestamp: Math.round(index * frameInterval),
       jointPositions: createSo101PickupJointPositions({ t, jointNames, jointLimits }),
+      objectPoses: {
+        [SO101_GRABBABLE_CONTAINER_TRACK_ID]: createSo101ContainerPose(t),
+      },
     };
   });
 };
 
-const createSo101RedCubePickupEpisode = ({
+const createSo101ContainerPickupEpisode = ({
   jointNames,
   jointLimits,
 }: {
@@ -250,26 +308,31 @@ const createSo101RedCubePickupEpisode = ({
   const activeJointNames = SO101_PICKUP_REQUIRED_JOINTS.filter((jointName) =>
     jointNames.includes(jointName)
   );
-  const frames = createSo101RedCubePickupFrames({ jointNames: activeJointNames, jointLimits });
-  return createEpisode(`demo-so101-red-cube-pickup-${Date.now()}`, 1, frames, {
+  const frames = createSo101ContainerPickupFrames({ jointNames: activeJointNames, jointLimits });
+  return createEpisode(`demo-so101-container-pickup-${Date.now()}`, 1, frames, {
     joint_names: activeJointNames,
     source: "demo",
-    label: "Pick Red Cube",
+    label: "Pick Container",
     createdAt: Date.now(),
     num_frames: frames.length,
     fps: SO101_PICKUP_FPS,
     robot_type: "so101",
-    tasks: ["pick up the red cube from the container pile and place it to the left"],
+    tasks: ["pick up the top grabbable shipping container and place it to the left"],
     additional: {
-      demoType: "so101_red_cube_pickup_command",
-      physics_backend: "mjlab",
-      physics_rollout_required: true,
-      object_track_id: SO101_RED_PICKUP_CUBE_TRACK_ID,
-      world_object_id: SO101_RED_PICKUP_CUBE_OBJECT_ID,
+      demoType: "so101_container_pickup_prerecorded",
+      physics_backend: "prebaked",
+      physics_rollout_required: false,
+      object_track_id: SO101_GRABBABLE_CONTAINER_TRACK_ID,
+      world_object_id: SO101_GRABBABLE_CONTAINER_OBJECT_ID,
       object_initial_position_xyz: [
-        SO101_RED_PICKUP_CUBE_INITIAL_POSITION.x,
-        SO101_RED_PICKUP_CUBE_INITIAL_POSITION.y,
-        SO101_RED_PICKUP_CUBE_INITIAL_POSITION.z,
+        SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.x,
+        SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.y,
+        SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.z,
+      ],
+      object_final_position_xyz: [
+        SO101_GRABBABLE_CONTAINER_FINAL_POSITION.x,
+        SO101_GRABBABLE_CONTAINER_FINAL_POSITION.y,
+        SO101_GRABBABLE_CONTAINER_FINAL_POSITION.z,
       ],
     },
   });
@@ -369,7 +432,7 @@ export const createDemoEpisodes = ({
   profiles?: DemoProfile[];
 }): Episode[] => {
   if (hasSo101PickupJointSet(jointNames)) {
-    return [createSo101RedCubePickupEpisode({ jointNames, jointLimits })];
+    return [createSo101ContainerPickupEpisode({ jointNames, jointLimits })];
   }
 
   const baseId = Date.now();

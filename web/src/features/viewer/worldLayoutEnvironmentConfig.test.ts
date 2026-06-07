@@ -83,4 +83,55 @@ describe("world layout environment config", () => {
     expect(configs[1]?.scale).toEqual([0.09, 0.09, 0.09]);
     expect(configs[1]?.materialColor).toBe("#ef4444");
   });
+
+  it("reads element physics defaults and dynamic mesh overrides", () => {
+    const uri = "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb";
+    const configs = readWorldLayoutElementConfigs({
+      preset: "hk-cargo-port",
+      elements_layout: {
+        physics_defaults: {
+          body_type: "static",
+          friction: 1.2,
+          restitution: 0,
+          linear_damping: 1,
+          angular_damping: 1,
+        },
+      },
+      elements: [
+        {
+          id: "shipping-container",
+          name: "shipping container",
+          uri,
+          position_xyz: [-0.9, 0.85, 0],
+          scale: 0.5,
+        },
+        {
+          id: "grabbable-container-a",
+          name: "small grabbable shipping container",
+          uri,
+          position_xyz: [-0.08, 0.24, 0],
+          scale: 0.09,
+          physics: {
+            body_type: "dynamic",
+            mass_kg: 0.12,
+            friction: 3,
+          },
+        },
+      ],
+    });
+
+    expect(configs[0]?.physics).toMatchObject({
+      bodyType: "static",
+      friction: 1.2,
+      restitution: 0,
+    });
+    expect(configs[1]?.physics).toMatchObject({
+      bodyType: "dynamic",
+      massKg: 0.12,
+      friction: 3,
+      restitution: 0,
+      linearDamping: 1,
+      angularDamping: 1,
+    });
+  });
 });

@@ -18,6 +18,16 @@ export type WorldLayoutElementConfig = {
   rotation: [number, number, number];
   scale: [number, number, number];
   materialColor?: string;
+  physics?: WorldLayoutElementPhysicsConfig;
+};
+
+export type WorldLayoutElementPhysicsConfig = {
+  bodyType: "static" | "dynamic";
+  massKg?: number;
+  friction?: number;
+  restitution?: number;
+  linearDamping?: number;
+  angularDamping?: number;
 };
 
 const SIMU_GEN_Y_UP_TO_STUDIO_XY_ROTATION: [number, number, number] = [Math.PI / 2, 0, 0];
@@ -41,6 +51,9 @@ const readFiniteNumber = (value: unknown, fallback: number): number =>
 const readPositiveNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 
+const readNonNegativeNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+
 const readNonEmptyString = (value: unknown, fallback = ""): string =>
   typeof value === "string" && value.trim() ? value.trim() : fallback;
 
@@ -51,6 +64,35 @@ const readScaleVector = (value: unknown, scalarValue: unknown): [number, number,
   }
   const scalar = readFiniteNumber(scalarValue, 1);
   return scalar > 0 ? [scalar, scalar, scalar] : [1, 1, 1];
+};
+
+const readPhysicsBodyType = (
+  value: unknown,
+  fallback: WorldLayoutElementPhysicsConfig["bodyType"] = "static"
+): WorldLayoutElementPhysicsConfig["bodyType"] =>
+  value === "dynamic" || value === "static" ? value : fallback;
+
+const readWorldLayoutElementPhysicsConfig = (
+  value: unknown,
+  defaults: WorldLayoutElementPhysicsConfig | undefined
+): WorldLayoutElementPhysicsConfig | undefined => {
+  if (!isRecord(value)) return defaults;
+  const bodyType = readPhysicsBodyType(value.body_type, defaults?.bodyType ?? "static");
+  const massKg = readPositiveNumber(value.mass_kg) ?? defaults?.massKg;
+  const friction = readNonNegativeNumber(value.friction) ?? defaults?.friction;
+  const restitution = readNonNegativeNumber(value.restitution) ?? defaults?.restitution;
+  const linearDamping =
+    readNonNegativeNumber(value.linear_damping) ?? defaults?.linearDamping;
+  const angularDamping =
+    readNonNegativeNumber(value.angular_damping) ?? defaults?.angularDamping;
+  return {
+    bodyType,
+    ...(massKg !== undefined ? { massKg } : {}),
+    ...(friction !== undefined ? { friction } : {}),
+    ...(restitution !== undefined ? { restitution } : {}),
+    ...(linearDamping !== undefined ? { linearDamping } : {}),
+    ...(angularDamping !== undefined ? { angularDamping } : {}),
+  };
 };
 
 export const readWorldLayoutSplatConfig = (
@@ -74,6 +116,11 @@ export const readWorldLayoutElementConfigs = (
 ): WorldLayoutElementConfig[] => {
   if (!environment || !Array.isArray(environment.elements)) return [];
   const sourceWorldSlug = readNonEmptyString(environment.preset, "world-layout");
+  const elementsLayout = isRecord(environment.elements_layout) ? environment.elements_layout : null;
+  const physicsDefaults = readWorldLayoutElementPhysicsConfig(
+    elementsLayout?.physics_defaults,
+    undefined
+  );
   const entries = environment.elements.filter(isRecord);
   const validEntries = entries.flatMap((entry, index) => {
     const uri = readNonEmptyString(entry.uri);
@@ -113,6 +160,7 @@ export const readWorldLayoutElementConfigs = (
     const explicitRotation = Array.isArray(entry.rotation_rpy_rad)
       ? readVector3(entry.rotation_rpy_rad, [0, 0, 0])
       : null;
+    const physics = readWorldLayoutElementPhysicsConfig(entry.physics, physicsDefaults);
     return [{
       asset,
       position: explicitPosition ?? mapSimuGenYUpPositionToStudioXyFloor(placement.position),
@@ -124,6 +172,7 @@ export const readWorldLayoutElementConfigs = (
       ...(readNonEmptyString(entry.material_color ?? entry.color)
         ? { materialColor: readNonEmptyString(entry.material_color ?? entry.color) }
         : {}),
+      ...(physics ? { physics } : {}),
     }];
   });
 };

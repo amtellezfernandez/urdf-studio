@@ -105,7 +105,6 @@ export type OperatorTeleopMjlabLiveStartOptions = {
   initialEndEffectorSample: OperatorTeleopMjlabEndEffectorSample;
   frameMap?: "identity" | "studio-y-up-to-z-up";
   includeMjcf?: boolean;
-  acceleratedDrive?: boolean;
   stepMs?: number;
 };
 
@@ -179,7 +178,6 @@ export type OperatorTeleopMjlabLiveStartResult = {
   frameMap: "identity" | "studio-y-up-to-z-up";
   dynamicObjectCount: number;
   stepMs: number;
-  acceleratedDrive: boolean;
   issues: OperatorTeleopMjlabMotionIssue[];
   frame?: OperatorTeleopMjlabRolloutFrame | null;
   worldWarnings: string[];
@@ -399,9 +397,6 @@ export const startTeleopMjlabLiveSession = (
       initialEndEffectorSample: options.initialEndEffectorSample,
       ...(options.frameMap ? { frameMap: options.frameMap } : {}),
       ...(options.includeMjcf !== undefined ? { includeMjcf: options.includeMjcf } : {}),
-      ...(options.acceleratedDrive !== undefined
-        ? { acceleratedDrive: options.acceleratedDrive }
-        : {}),
       ...(options.stepMs !== undefined ? { stepMs: options.stepMs } : {}),
     },
   );

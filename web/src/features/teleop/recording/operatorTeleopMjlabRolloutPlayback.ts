@@ -19,6 +19,9 @@ const SIM_TO_STUDIO_MATRIX = STUDIO_TO_SIM_MATRIX.clone().transpose();
 const toTrackId = (pose: OperatorTeleopMjlabRolloutObjectPose): string =>
   pose.name.trim() || pose.objectId;
 
+const toObjectIdTrackId = (pose: OperatorTeleopMjlabRolloutObjectPose): string =>
+  pose.objectId.trim() || toTrackId(pose);
+
 const toViewerPosition = (
   positionXyz: [number, number, number],
   frameMap: OperatorTeleopMjlabRolloutResult["frameMap"]
@@ -58,6 +61,21 @@ export const buildMjlabRolloutObjectPoseMap = (
   Object.fromEntries(
     frame.objectPoses.map((pose) => [
       toTrackId(pose),
+      {
+        position: toViewerPosition(pose.positionXyz, frameMap),
+        rotation: toViewerRotation(pose.quatWxyz, frameMap),
+        isHidden: false,
+      },
+    ])
+  );
+
+export const buildMjlabRolloutObjectPoseByObjectIdMap = (
+  frame: OperatorTeleopMjlabRolloutFrame,
+  frameMap: OperatorTeleopMjlabRolloutResult["frameMap"]
+): ViewerObjectFramePoseMap =>
+  Object.fromEntries(
+    frame.objectPoses.map((pose) => [
+      toObjectIdTrackId(pose),
       {
         position: toViewerPosition(pose.positionXyz, frameMap),
         rotation: toViewerRotation(pose.quatWxyz, frameMap),

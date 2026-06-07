@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  SO101_RED_PICKUP_CUBE_INITIAL_POSITION,
+  SO101_GRABBABLE_CONTAINER_FINAL_POSITION,
+  SO101_GRABBABLE_CONTAINER_INITIAL_POSITION,
+  SO101_GRABBABLE_CONTAINER_TRACK_ID,
   createDemoEpisodes,
 } from "@/shared/samples/demoMotion";
 
@@ -15,7 +17,7 @@ const SO101_JOINT_NAMES = [
 ];
 
 describe("createDemoEpisodes", () => {
-  it("creates a deterministic SO101 red-cube pickup command episode for MJLab rollout", () => {
+  it("creates a prerecorded SO101 container pickup episode", () => {
     const episodes = createDemoEpisodes({
       jointNames: SO101_JOINT_NAMES,
       jointLimits: {
@@ -29,22 +31,38 @@ describe("createDemoEpisodes", () => {
     });
 
     expect(episodes).toHaveLength(1);
-    expect(episodes[0]?.metadata?.label).toBe("Pick Red Cube");
+    expect(episodes[0]?.metadata?.label).toBe("Pick Container");
     expect(episodes[0]?.metadata?.additional?.demoType).toBe(
-      "so101_red_cube_pickup_command"
+      "so101_container_pickup_prerecorded"
     );
-    expect(episodes[0]?.metadata?.additional?.physics_backend).toBe("mjlab");
-    expect(episodes[0]?.metadata?.additional?.physics_rollout_required).toBe(true);
+    expect(episodes[0]?.metadata?.additional?.physics_backend).toBe("prebaked");
+    expect(episodes[0]?.metadata?.additional?.physics_rollout_required).toBe(false);
     expect(episodes[0]?.metadata?.additional?.object_initial_position_xyz).toEqual([
-      SO101_RED_PICKUP_CUBE_INITIAL_POSITION.x,
-      SO101_RED_PICKUP_CUBE_INITIAL_POSITION.y,
-      SO101_RED_PICKUP_CUBE_INITIAL_POSITION.z,
+      SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.x,
+      SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.y,
+      SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.z,
+    ]);
+    expect(episodes[0]?.metadata?.additional?.object_final_position_xyz).toEqual([
+      SO101_GRABBABLE_CONTAINER_FINAL_POSITION.x,
+      SO101_GRABBABLE_CONTAINER_FINAL_POSITION.y,
+      SO101_GRABBABLE_CONTAINER_FINAL_POSITION.z,
     ]);
 
     const frames = episodes[0]?.frames ?? [];
     expect(frames.length).toBeGreaterThan(1);
-    expect(frames.every((frame) => frame.objectPoses === undefined)).toBe(true);
+    expect(
+      frames.every((frame) => frame.objectPoses?.[SO101_GRABBABLE_CONTAINER_TRACK_ID])
+    ).toBe(true);
+    expect(
+      frames[0]?.objectPoses?.[SO101_GRABBABLE_CONTAINER_TRACK_ID]?.position
+    ).toEqual(SO101_GRABBABLE_CONTAINER_INITIAL_POSITION);
+    expect(
+      frames.at(-1)?.objectPoses?.[SO101_GRABBABLE_CONTAINER_TRACK_ID]?.position
+    ).toEqual(SO101_GRABBABLE_CONTAINER_FINAL_POSITION);
     expect(frames[0]?.jointPositions.gripper).toBeGreaterThan(
+      frames[Math.floor(frames.length * 0.5)]?.jointPositions.gripper ?? 1
+    );
+    expect(frames.at(-1)?.jointPositions.gripper).toBeGreaterThan(
       frames[Math.floor(frames.length * 0.5)]?.jointPositions.gripper ?? 1
     );
   });
@@ -57,7 +75,7 @@ describe("createDemoEpisodes", () => {
 
     expect(episodes.length).toBeGreaterThan(0);
     expect(episodes[0]?.metadata?.additional?.demoType).not.toBe(
-      "so101_red_cube_pickup_command"
+      "so101_container_pickup_prerecorded"
     );
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createEpisode } from "@/features/dataset/episodes";
 import {
   applyMjlabRolloutObjectPosesToEpisode,
+  buildMjlabRolloutObjectPoseByObjectIdMap,
   buildMjlabRolloutObjectPoseMap,
 } from "@/features/teleop/recording/operatorTeleopMjlabRolloutPlayback";
 import type { OperatorTeleopMjlabRolloutResult } from "@/features/teleop/recording/operatorTeleopReplayApi";
@@ -33,9 +34,9 @@ const createRollout = (
       jointPositionsRad: { shoulder_pan: 0.1 },
       objectPoses: [
         {
-          objectId: "hk-red-pickup-cube",
-          name: "red pickup cube",
-          simName: "wl_hk_red_pickup_cube",
+          objectId: "grabbable-container-a",
+          name: "small grabbable shipping container",
+          simName: "wl_grabbable_container_a",
           positionXyz: [1, 2, 3],
           quatWxyz: [1, 0, 0, 0],
         },
@@ -53,8 +54,41 @@ describe("MJLab rollout playback", () => {
       rollout.frameMap
     );
 
-    expect(objectPoses["red pickup cube"]?.position).toEqual({ x: 1, y: 2, z: 3 });
-    expect(objectPoses["red pickup cube"]?.rotation?.x).toBeCloseTo(0);
+    expect(objectPoses["small grabbable shipping container"]?.position).toEqual({
+      x: 1,
+      y: 2,
+      z: 3,
+    });
+    expect(
+      objectPoses["small grabbable shipping container"]?.rotation?.x
+    ).toBeCloseTo(0);
+  });
+
+  it("can map rollout poses by object id for duplicate world-layout element names", () => {
+    const rollout = createRollout("identity");
+    rollout.frames[0].objectPoses.push({
+      objectId: "grabbable-container-b",
+      name: "small grabbable shipping container",
+      simName: "wl_grabbable_container_b",
+      positionXyz: [4, 5, 6],
+      quatWxyz: [1, 0, 0, 0],
+    });
+
+    const objectPoses = buildMjlabRolloutObjectPoseByObjectIdMap(
+      rollout.frames[0],
+      rollout.frameMap
+    );
+
+    expect(objectPoses["grabbable-container-a"]?.position).toEqual({
+      x: 1,
+      y: 2,
+      z: 3,
+    });
+    expect(objectPoses["grabbable-container-b"]?.position).toEqual({
+      x: 4,
+      y: 5,
+      z: 6,
+    });
   });
 
   it("maps MuJoCo z-up object poses back into Studio y-up episode frames", () => {
@@ -73,11 +107,10 @@ describe("MJLab rollout playback", () => {
 
     const updated = applyMjlabRolloutObjectPosesToEpisode(episode, rollout);
 
-    expect(updated.frames[0]?.objectPoses?.["red pickup cube"]?.position).toEqual({
-      x: 1,
-      y: 3,
-      z: -2,
-    });
+    expect(
+      updated.frames[0]?.objectPoses?.["small grabbable shipping container"]
+        ?.position
+    ).toEqual({ x: 1, y: 3, z: -2 });
     expect(updated.metadata?.additional?.mjlab_rollout_frame_count).toBe(1);
     expect(updated.metadata?.additional?.mjlab_rollout_contact_count).toBe(2);
   });

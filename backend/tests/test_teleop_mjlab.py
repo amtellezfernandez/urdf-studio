@@ -284,7 +284,6 @@ def test_teleop_mjlab_live_session_steps_dynamic_cube_contact() -> None:
     assert start_result.session_id is not None
     assert start_result.frame is not None
     assert start_result.mjcf_xml is not None
-    assert start_result.accelerated_drive is True
 
     try:
         close_result = step_teleop_mjlab_live_session(

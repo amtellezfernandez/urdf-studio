@@ -63,6 +63,7 @@ interface IKDragControlsProps {
   mode?: "translate" | "rotate";
   onDragStateChange?: (dragging: boolean) => void;
   onTargetPose?: (pose: IkDragLivePhysicsTargetPose) => void;
+  gripperOpeningM?: number;
   handleIndex?: number;
   handleCount?: number;
 }
@@ -79,6 +80,7 @@ export const IKDragControls = ({
   mode = "translate",
   onDragStateChange,
   onTargetPose,
+  gripperOpeningM,
   handleIndex = 0,
   handleCount = 1,
 }: IKDragControlsProps) => {
@@ -1009,6 +1011,7 @@ export const IKDragControls = ({
             targetMeshRef.current.quaternion.z,
           ],
           timestampMs: now,
+          ...(gripperOpeningM !== undefined ? { gripperOpeningM } : {}),
         });
         pendingTargetLocalRef.current = localTarget;
         enqueueLatestDragTarget(

@@ -157,7 +157,6 @@ class _MjlabLiveSession:
     data: Any
     frame_map: WorldLayoutFrameMap
     step_ms: float
-    accelerated_drive: bool
     dynamic_primitives: tuple[SimPrimitive, ...]
     dynamic_body_ids: dict[str, int]
     proxy_joints: dict[str, tuple[int, int]]
@@ -336,7 +335,7 @@ def rollout_teleop_mjlab_physics(
                     code=TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_DYNAMIC_OBJECTS,
                     reason=(
                         "MJLab rollout requires at least one dynamic world "
-                        "layout object, for example the red pickup cube."
+                        "layout object, for example a grabbable container."
                     ),
                 )
             )
@@ -436,7 +435,6 @@ def start_teleop_mjlab_live_session(
     initial_end_effector_sample: TeleopMjlabEndEffectorSample,
     frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
     include_mjcf: bool = False,
-    accelerated_drive: bool = True,
     step_ms: float = TELEOP_MJLAB_DEFAULT_LIVE_STEP_MS,
 ) -> TeleopMjlabLiveStartResult:
     runtime = resolve_teleop_mjlab_runtime_status()
@@ -552,7 +550,6 @@ def start_teleop_mjlab_live_session(
                 data=data,
                 frame_map=frame_map,
                 step_ms=step_ms,
-                accelerated_drive=accelerated_drive,
                 dynamic_primitives=dynamic_primitives,
                 dynamic_body_ids=dynamic_body_ids,
                 proxy_joints=proxy_joints,
@@ -581,7 +578,6 @@ def start_teleop_mjlab_live_session(
         frame_map=frame_map,
         dynamic_object_count=len(dynamic_primitives),
         step_ms=step_ms,
-        accelerated_drive=accelerated_drive,
         issues=issues,
         frame=frame,
         world_warnings=world_warnings,
@@ -594,7 +590,6 @@ def start_teleop_mjlab_live_session(
             "frame_map": frame_map,
             "dynamic_object_count": len(dynamic_primitives),
             "step_ms": step_ms,
-            "accelerated_drive": accelerated_drive,
         },
     )
 
@@ -937,39 +932,20 @@ def _step_mjlab_live_session_locked(
     dt_seconds = session.step_ms / TELEOP_MJLAB_MILLISECONDS_PER_SECOND
     start_monotonic = time.perf_counter()
 
-    if session.accelerated_drive:
-        target_proxy_poses = _desired_mjlab_gripper_proxy_poses(target_sample)
-        _drive_mjlab_proxy_poses_with_velocity(
+    for step_index in range(1, step_count + 1):
+        interpolated_sample = _interpolate_rollout_sample(
+            session.previous_sample,
+            target_sample,
+            step_index / step_count,
+        )
+        session.previous_proxy_poses = _set_mjlab_gripper_proxy_pose(
             session.data,
             proxy_joints=session.proxy_joints,
-            start_proxy_poses=session.previous_proxy_poses,
-            target_proxy_poses=target_proxy_poses,
-            duration_seconds=duration_ms / TELEOP_MJLAB_MILLISECONDS_PER_SECOND,
+            sample=interpolated_sample,
+            dt_seconds=dt_seconds,
+            previous_proxy_poses=session.previous_proxy_poses,
         )
-        session.mujoco.mj_step(session.model, session.data, nstep=step_count)
-        session.previous_proxy_poses = _set_mjlab_gripper_proxy_poses(
-            session.data,
-            proxy_joints=session.proxy_joints,
-            poses=target_proxy_poses,
-            dt_seconds=None,
-            previous_proxy_poses=None,
-        )
-        session.mujoco.mj_forward(session.model, session.data)
-    else:
-        for step_index in range(1, step_count + 1):
-            interpolated_sample = _interpolate_rollout_sample(
-                session.previous_sample,
-                target_sample,
-                step_index / step_count,
-            )
-            session.previous_proxy_poses = _set_mjlab_gripper_proxy_pose(
-                session.data,
-                proxy_joints=session.proxy_joints,
-                sample=interpolated_sample,
-                dt_seconds=dt_seconds,
-                previous_proxy_poses=session.previous_proxy_poses,
-            )
-            session.mujoco.mj_step(session.model, session.data)
+        session.mujoco.mj_step(session.model, session.data)
 
     wall_ms = (time.perf_counter() - start_monotonic) * TELEOP_MJLAB_MILLISECONDS_PER_SECOND
 
@@ -1079,7 +1055,6 @@ def _append_mjlab_proxy_finger_body(
             "mass": "5",
         },
     )
-
 
 def _append_mjlab_proxy_lift_plate_body(worldbody: ET.Element) -> None:
     body = ET.SubElement(
@@ -1338,38 +1313,6 @@ def _set_mjlab_gripper_proxy_poses(
             0.0,
         ]
     return poses
-
-
-def _drive_mjlab_proxy_poses_with_velocity(
-    data: Any,
-    *,
-    proxy_joints: dict[str, tuple[int, int]],
-    start_proxy_poses: dict[str, tuple[np.ndarray, tuple[float, float, float, float]]],
-    target_proxy_poses: dict[str, tuple[np.ndarray, tuple[float, float, float, float]]],
-    duration_seconds: float,
-) -> None:
-    safe_duration_seconds = max(duration_seconds, 1e-6)
-    for body_name, (start_position, start_quat_wxyz) in start_proxy_poses.items():
-        target_position, _target_quat_wxyz = target_proxy_poses[body_name]
-        qpos_address, qvel_address = proxy_joints[body_name]
-        linear_velocity = (target_position - start_position) / safe_duration_seconds
-        data.qpos[qpos_address : qpos_address + 7] = [
-            float(start_position[0]),
-            float(start_position[1]),
-            float(start_position[2]),
-            start_quat_wxyz[0],
-            start_quat_wxyz[1],
-            start_quat_wxyz[2],
-            start_quat_wxyz[3],
-        ]
-        data.qvel[qvel_address : qvel_address + 6] = [
-            float(linear_velocity[0]),
-            float(linear_velocity[1]),
-            float(linear_velocity[2]),
-            0.0,
-            0.0,
-            0.0,
-        ]
 
 
 def _desired_mjlab_gripper_proxy_poses(

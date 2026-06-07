@@ -1,48 +1,7 @@
 {
   "world_layout": {
     "name": "hk-cargo-port",
-    "objects": [
-      {
-        "id": "hk-red-pickup-cube",
-        "name": "red pickup cube",
-        "type": "cube",
-        "position_xyz": [0.02, 0.29, 0.035],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [0.05, 0.05, 0.05],
-        "color": "#ff1f1f",
-        "source": "demo-world",
-        "tracked_joint_name": null,
-        "is_ik_target": true,
-        "ik_target_type": "punctual",
-        "physics": {
-          "body_type": "dynamic",
-          "mass_kg": 0.04,
-          "friction": 1.2,
-          "restitution": 0.0,
-          "linear_damping": 1.0,
-          "angular_damping": 1.0
-        }
-      },
-      {
-        "id": "hk-pickup-support-collider",
-        "name": "pickup support collider",
-        "type": "cube",
-        "position_xyz": [0.02, 0.255, 0.035],
-        "rotation_rpy_rad": [0.0, 0.0, 0.0],
-        "size_xyz": [0.32, 0.02, 0.22],
-        "color": "#64748b",
-        "source": "demo-world",
-        "tracked_joint_name": null,
-        "is_hidden": true,
-        "is_ik_target": false,
-        "ik_target_type": "punctual",
-        "physics": {
-          "body_type": "static",
-          "friction": 1.2,
-          "restitution": 0.0
-        }
-      }
-    ],
+    "objects": [],
     "scenario_time_ms": 0,
     "scenario_duration_ms": 0
   },
@@ -78,7 +37,15 @@
         "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
         "position_xyz": [-0.9, 0.85, 0.0],
-        "scale": 0.5
+        "scale": 0.5,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0.0,
+          "linear_damping": 1.0,
+          "angular_damping": 1.0
+        }
       },
       {
         "id": "grabbable-container-a",
@@ -88,7 +55,15 @@
         "position_xyz": [-0.08, 0.24, 0.0],
         "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.08],
         "scale": 0.09,
-        "material_color": "#ef4444"
+        "material_color": "#ef4444",
+        "physics": {
+          "body_type": "dynamic",
+          "mass_kg": 0.12,
+          "friction": 3.0,
+          "restitution": 0.0,
+          "linear_damping": 1.2,
+          "angular_damping": 1.2
+        }
       },
       {
         "id": "grabbable-container-b",
@@ -98,7 +73,15 @@
         "position_xyz": [0.02, 0.24, 0.0],
         "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.05],
         "scale": 0.09,
-        "material_color": "#ef4444"
+        "material_color": "#ef4444",
+        "physics": {
+          "body_type": "dynamic",
+          "mass_kg": 0.12,
+          "friction": 3.0,
+          "restitution": 0.0,
+          "linear_damping": 1.2,
+          "angular_damping": 1.2
+        }
       },
       {
         "id": "grabbable-container-c",
@@ -108,7 +91,15 @@
         "position_xyz": [0.12, 0.24, 0.0],
         "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.03],
         "scale": 0.09,
-        "material_color": "#ef4444"
+        "material_color": "#ef4444",
+        "physics": {
+          "body_type": "dynamic",
+          "mass_kg": 0.12,
+          "friction": 3.0,
+          "restitution": 0.0,
+          "linear_damping": 1.2,
+          "angular_damping": 1.2
+        }
       },
       {
         "id": "grabbable-container-d",
@@ -118,7 +109,15 @@
         "position_xyz": [-0.03, 0.34, 0.0],
         "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.12],
         "scale": 0.09,
-        "material_color": "#ef4444"
+        "material_color": "#ef4444",
+        "physics": {
+          "body_type": "dynamic",
+          "mass_kg": 0.12,
+          "friction": 3.0,
+          "restitution": 0.0,
+          "linear_damping": 1.2,
+          "angular_damping": 1.2
+        }
       },
       {
         "id": "grabbable-container-e",
@@ -128,7 +127,15 @@
         "position_xyz": [0.07, 0.34, 0.0],
         "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.1],
         "scale": 0.09,
-        "material_color": "#ef4444"
+        "material_color": "#ef4444",
+        "physics": {
+          "body_type": "dynamic",
+          "mass_kg": 0.12,
+          "friction": 3.0,
+          "restitution": 0.0,
+          "linear_damping": 1.2,
+          "angular_damping": 1.2
+        }
       },
       {
         "id": "grabbable-container-f",
@@ -138,7 +145,15 @@
         "position_xyz": [0.02, 0.29, 0.041],
         "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.02],
         "scale": 0.09,
-        "material_color": "#ef4444"
+        "material_color": "#ef4444",
+        "physics": {
+          "body_type": "dynamic",
+          "mass_kg": 0.12,
+          "friction": 3.0,
+          "restitution": 0.0,
+          "linear_damping": 1.2,
+          "angular_damping": 1.2
+        }
       },
       {
         "id": "orange-rtg-crane",
@@ -146,7 +161,15 @@
         "uri": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/0-orange-rtg-crane.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/object.json",
         "position_xyz": [0.75, 1.15, 0.0],
-        "scale": 0.5
+        "scale": 0.5,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 130000,
+          "friction": 1.5,
+          "restitution": 0.0,
+          "linear_damping": 1.0,
+          "angular_damping": 1.0
+        }
       },
       {
         "id": "cargo-ship",
@@ -154,7 +177,15 @@
         "uri": "/world-layouts/hk-cargo-port/elements/cargo-ship/0-cargo-ship.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/cargo-ship/object.json",
         "position_xyz": [0.1, 2.0, 0.0],
-        "scale": 0.5
+        "scale": 0.5,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 20000000,
+          "friction": 1.0,
+          "restitution": 0.0,
+          "linear_damping": 1.0,
+          "angular_damping": 1.0
+        }
       },
       {
         "id": "blue-gantry-crane",
@@ -162,7 +193,15 @@
         "uri": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/0-blue-gantry-crane.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/object.json",
         "position_xyz": [-0.75, 1.45, 0.0],
-        "scale": 0.5
+        "scale": 0.5,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 1400000,
+          "friction": 1.5,
+          "restitution": 0.0,
+          "linear_damping": 1.0,
+          "angular_damping": 1.0
+        }
       },
       {
         "id": "evergreen-container-ship",
@@ -170,7 +209,15 @@
         "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/0-evergreen-container-ship.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/object.json",
         "position_xyz": [-0.65, 2.45, 0.0],
-        "scale": 0.5
+        "scale": 0.5,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 150000000,
+          "friction": 1.0,
+          "restitution": 0.0,
+          "linear_damping": 1.0,
+          "angular_damping": 1.0
+        }
       }
     ],
     "notes": [
@@ -179,9 +226,8 @@
       "Splat uses a compact preview scale with the World Labs ground-plane offset scaled to keep the generated XZ floor on the studio XY floor. Robot transforms are not changed.",
       "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale.",
       "Small grabbable container instances reuse the shipping-container mesh as a red pile near SO101.",
-      "The primitive red pickup cube is the dynamic MuJoCo-backed training object for the SO101 pickup demo.",
-      "The hidden pickup support collider gives the dynamic cube a static MuJoCo contact surface at the visible pile height.",
-      "World-layout meshes are treated as static non-bouncy scene geometry unless an element overrides physics defaults."
+      "Small grabbable container meshes are dynamic MuJoCo-backed training objects for SO101 pickup and teleop interaction.",
+      "Large world-layout meshes are treated as static non-bouncy scene geometry unless an element overrides physics defaults."
     ]
   }
 }

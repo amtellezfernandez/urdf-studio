@@ -176,7 +176,6 @@ class TeleopMjlabLiveStartRequest(TeleopMjlabCamelModel):
         alias="frameMap",
     )
     include_mjcf: bool = Field(default=False, alias="includeMjcf")
-    accelerated_drive: bool = Field(default=True, alias="acceleratedDrive")
     step_ms: float = Field(
         default=TELEOP_MJLAB_DEFAULT_LIVE_STEP_MS,
         gt=0,
@@ -276,7 +275,6 @@ class TeleopMjlabLiveStartResult(TeleopMjlabCamelModel):
     frame_map: TeleopMjlabFrameMap = Field(..., alias="frameMap")
     dynamic_object_count: int = Field(..., ge=0, alias="dynamicObjectCount")
     step_ms: float = Field(..., gt=0, alias="stepMs")
-    accelerated_drive: bool = Field(..., alias="acceleratedDrive")
     issues: list[TeleopMjlabMotionIssue] = Field(default_factory=list)
     frame: TeleopMjlabRolloutFrame | None = None
     world_warnings: list[str] = Field(default_factory=list, alias="worldWarnings")

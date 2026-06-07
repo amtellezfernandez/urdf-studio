@@ -13,17 +13,54 @@ import {
   stepTeleopMjlabLiveSession,
   stopTeleopMjlabLiveSession,
 } from "@/features/teleop/recording/operatorTeleopReplayApi";
-import { buildMjlabRolloutObjectPoseMap } from "@/features/teleop/recording/operatorTeleopMjlabRolloutPlayback";
+import {
+  buildMjlabRolloutObjectPoseByObjectIdMap,
+  buildMjlabRolloutObjectPoseMap,
+} from "@/features/teleop/recording/operatorTeleopMjlabRolloutPlayback";
 import { applyPlaybackObjectPoses } from "@/features/viewer/playback/objectPoseTracks";
+import type { ViewerObjectFramePose } from "@/shared/types/feature";
 
 export type IkDragLivePhysicsTargetPose = {
   endEffectorLink: string;
   positionXyz: [number, number, number];
   quatWxyz: [number, number, number, number];
   timestampMs: number;
+  gripperOpeningM?: number;
 };
 
-export const IK_DRAG_LIVE_PHYSICS_FRAME_MAP = "studio-y-up-to-z-up";
+export type IkDragLivePhysicsBodyType = "static" | "dynamic";
+
+export type IkDragLivePhysicsBodyPhysics = {
+  bodyType?: IkDragLivePhysicsBodyType;
+  massKg?: number;
+  friction?: number;
+  restitution?: number;
+  linearDamping?: number;
+  angularDamping?: number;
+};
+
+export type IkDragLivePhysicsMeshProxy = {
+  id: string;
+  sourceElementId: string;
+  name: string;
+  positionXyz: [number, number, number];
+  rotationRpyRad: [number, number, number];
+  sizeXyz: [number, number, number];
+  visualOriginToPhysicsCenterLocalXyz?: [number, number, number];
+  color?: string;
+  physics?: IkDragLivePhysicsBodyPhysics;
+};
+
+export type IkDragLivePhysicsBridgeOptions = {
+  objects: readonly CreatedObject[];
+  meshProxies?: readonly IkDragLivePhysicsMeshProxy[];
+  onMeshProxyPose?: (
+    proxy: IkDragLivePhysicsMeshProxy,
+    pose: ViewerObjectFramePose
+  ) => void;
+};
+
+export const IK_DRAG_LIVE_PHYSICS_FRAME_MAP = "identity";
 export const IK_DRAG_LIVE_PHYSICS_STEP_MS = 5;
 export const IK_DRAG_LIVE_PHYSICS_THROTTLE_MS = 25;
 export const IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M = 0.09;
@@ -34,6 +71,11 @@ const LIVE_PHYSICS_OBJECT_TYPES = new Set<CreatedObject["type"]>([
   "sphere",
   "cylinder",
 ]);
+const EMPTY_MESH_PROXIES: readonly IkDragLivePhysicsMeshProxy[] = [];
+
+const isBridgeOptions = (
+  value: readonly CreatedObject[] | IkDragLivePhysicsBridgeOptions
+): value is IkDragLivePhysicsBridgeOptions => !Array.isArray(value);
 
 const toFinite = (value: number, fallback: number): number =>
   Number.isFinite(value) ? value : fallback;
@@ -42,6 +84,15 @@ const toVectorTuple = (value: THREE.Vector3): [number, number, number] => [
   toFinite(value.x, 0),
   toFinite(value.y, 0),
   toFinite(value.z, 0),
+];
+
+const toFiniteTuple = (
+  value: [number, number, number],
+  fallback: [number, number, number]
+): [number, number, number] => [
+  toFinite(value[0], fallback[0]),
+  toFinite(value[1], fallback[1]),
+  toFinite(value[2], fallback[2]),
 ];
 
 const toRotationTuple = (
@@ -63,11 +114,54 @@ const resolveDynamicMassKg = (object: CreatedObject): number => {
   return Math.max(0.04, Math.min(0.8, volumeM3 * 80));
 };
 
+const resolveMeshProxyMassKg = (proxy: IkDragLivePhysicsMeshProxy): number => {
+  if (proxy.physics?.massKg !== undefined) {
+    return Math.max(0.001, proxy.physics.massKg);
+  }
+  const volumeM3 = Math.max(
+    proxy.sizeXyz[0] * proxy.sizeXyz[1] * proxy.sizeXyz[2],
+    1e-5
+  );
+  return Math.max(0.04, Math.min(8, volumeM3 * 120));
+};
+
+const buildMeshProxyWorldLayoutObject = (
+  proxy: IkDragLivePhysicsMeshProxy
+): Record<string, unknown> | null => {
+  const sizeXyz = toFiniteTuple(proxy.sizeXyz, [0.01, 0.01, 0.01]);
+  if (sizeXyz.some((component) => component <= 0)) return null;
+  const bodyType = proxy.physics?.bodyType ?? "dynamic";
+  return {
+    id: proxy.id,
+    name: proxy.name.trim() || proxy.sourceElementId || proxy.id,
+    type: "cube",
+    position_xyz: toFiniteTuple(proxy.positionXyz, [0, 0, 0]),
+    rotation_rpy_rad: toFiniteTuple(proxy.rotationRpyRad, [0, 0, 0]),
+    size_xyz: sizeXyz,
+    color: proxy.color ?? "#ef4444",
+    physics: {
+      body_type: bodyType,
+      ...(bodyType === "dynamic"
+        ? { mass_kg: resolveMeshProxyMassKg(proxy) }
+        : {}),
+      friction: proxy.physics?.friction ?? 2.5,
+      restitution: proxy.physics?.restitution ?? 0,
+      linear_damping: proxy.physics?.linearDamping ?? 0.8,
+      angular_damping: proxy.physics?.angularDamping ?? 0.8,
+    },
+  };
+};
+
 export const buildIkDragLivePhysicsWorldLayout = (
   objects: readonly CreatedObject[],
+  meshProxiesOrName: readonly IkDragLivePhysicsMeshProxy[] | string = [],
   name = "ik-drag-live-physics"
 ): Record<string, unknown> | null => {
-  const liveObjects = objects
+  const meshProxies =
+    typeof meshProxiesOrName === "string" ? [] : meshProxiesOrName;
+  const layoutName =
+    typeof meshProxiesOrName === "string" ? meshProxiesOrName : name;
+  const primitiveObjects = objects
     .filter((object) => object.isHidden !== true)
     .filter((object) => LIVE_PHYSICS_OBJECT_TYPES.has(object.type))
     .map((object) => ({
@@ -87,14 +181,29 @@ export const buildIkDragLivePhysicsWorldLayout = (
         angular_damping: 0.08,
       },
     }));
+  const meshProxyObjects = meshProxies.flatMap((proxy) => {
+    const worldObject = buildMeshProxyWorldLayoutObject(proxy);
+    return worldObject ? [worldObject] : [];
+  });
+  const liveObjects = [...primitiveObjects, ...meshProxyObjects];
 
-  if (liveObjects.length === 0) {
+  if (
+    liveObjects.length === 0 ||
+    !liveObjects.some((object) => {
+      const physics = object.physics;
+      return (
+        typeof physics === "object" &&
+        physics !== null &&
+        (physics as { body_type?: unknown }).body_type === "dynamic"
+      );
+    })
+  ) {
     return null;
   }
 
   return {
     world_layout: {
-      name,
+      name: layoutName,
       scenario_time_ms: 0,
       scenario_duration_ms: 0,
       objects: liveObjects,
@@ -111,24 +220,64 @@ export const buildIkDragLivePhysicsSample = (
   timestampMs: Math.max(0, pose.timestampMs),
   positionXyz: pose.positionXyz,
   quatWxyz: pose.quatWxyz,
-  gripperOpeningM,
+  gripperOpeningM: Math.max(0, pose.gripperOpeningM ?? gripperOpeningM),
 });
 
 export const applyIkDragLivePhysicsFrame = (
   frame: OperatorTeleopMjlabRolloutFrame,
-  frameMap: OperatorTeleopMjlabRolloutResult["frameMap"]
+  frameMap: OperatorTeleopMjlabRolloutResult["frameMap"],
+  options: {
+    meshProxies?: readonly IkDragLivePhysicsMeshProxy[];
+    onMeshProxyPose?: (
+      proxy: IkDragLivePhysicsMeshProxy,
+      pose: ViewerObjectFramePose
+    ) => void;
+  } = {}
 ): void => {
-  applyPlaybackObjectPoses(buildMjlabRolloutObjectPoseMap(frame, frameMap));
+  const meshProxyById = new Map(
+    (options.meshProxies ?? []).map((proxy) => [proxy.id, proxy])
+  );
+  const objectStoreFrame =
+    meshProxyById.size === 0
+      ? frame
+      : {
+          ...frame,
+          objectPoses: frame.objectPoses.filter(
+            (pose) => !meshProxyById.has(pose.objectId)
+          ),
+        };
+  applyPlaybackObjectPoses(
+    buildMjlabRolloutObjectPoseMap(objectStoreFrame, frameMap)
+  );
+  if (!options.onMeshProxyPose || meshProxyById.size === 0) {
+    return;
+  }
+  const posesByObjectId = buildMjlabRolloutObjectPoseByObjectIdMap(frame, frameMap);
+  Object.entries(posesByObjectId).forEach(([proxyId, pose]) => {
+    const proxy = meshProxyById.get(proxyId);
+    if (!proxy) return;
+    options.onMeshProxyPose?.(proxy, pose);
+  });
 };
 
 export const useIkDragLivePhysicsBridge = (
-  objects: readonly CreatedObject[]
+  optionsOrObjects: readonly CreatedObject[] | IkDragLivePhysicsBridgeOptions
 ): {
   begin: () => void;
   stop: () => void;
   handleTargetPose: (pose: IkDragLivePhysicsTargetPose) => void;
 } => {
+  const hasOptions = isBridgeOptions(optionsOrObjects);
+  const objects = hasOptions ? optionsOrObjects.objects : optionsOrObjects;
+  const meshProxies = hasOptions
+    ? optionsOrObjects.meshProxies ?? EMPTY_MESH_PROXIES
+    : EMPTY_MESH_PROXIES;
+  const onMeshProxyPose = hasOptions
+    ? optionsOrObjects.onMeshProxyPose
+    : undefined;
   const objectsRef = useRef(objects);
+  const meshProxiesRef = useRef(meshProxies);
+  const onMeshProxyPoseRef = useRef(onMeshProxyPose);
   const sessionRef = useRef<{
     sessionId: string;
     frameMap: OperatorTeleopMjlabRolloutResult["frameMap"];
@@ -146,6 +295,14 @@ export const useIkDragLivePhysicsBridge = (
   useEffect(() => {
     objectsRef.current = objects;
   }, [objects]);
+
+  useEffect(() => {
+    meshProxiesRef.current = meshProxies;
+  }, [meshProxies]);
+
+  useEffect(() => {
+    onMeshProxyPoseRef.current = onMeshProxyPose;
+  }, [onMeshProxyPose]);
 
   const notifyError = useCallback((error: unknown) => {
     console.warn("[MJLab] Live IK drag physics unavailable:", error);
@@ -190,7 +347,10 @@ export const useIkDragLivePhysicsBridge = (
         return;
       }
       const generation = generationRef.current;
-      const worldLayout = buildIkDragLivePhysicsWorldLayout(objectsRef.current);
+      const worldLayout = buildIkDragLivePhysicsWorldLayout(
+        objectsRef.current,
+        meshProxiesRef.current
+      );
       if (!worldLayout) {
         return;
       }
@@ -203,7 +363,6 @@ export const useIkDragLivePhysicsBridge = (
         ),
         frameMap: IK_DRAG_LIVE_PHYSICS_FRAME_MAP,
         includeMjcf: false,
-        acceleratedDrive: true,
         stepMs: IK_DRAG_LIVE_PHYSICS_STEP_MS,
       })
         .then((result) => {
@@ -226,7 +385,10 @@ export const useIkDragLivePhysicsBridge = (
             pendingPose: null,
           };
           if (result.frame) {
-            applyIkDragLivePhysicsFrame(result.frame, result.frameMap);
+            applyIkDragLivePhysicsFrame(result.frame, result.frameMap, {
+              meshProxies: meshProxiesRef.current,
+              onMeshProxyPose: onMeshProxyPoseRef.current,
+            });
           }
         })
         .catch((error) => {
@@ -287,7 +449,10 @@ export const useIkDragLivePhysicsBridge = (
       session.sampleIndex = nextSampleIndex;
       session.lastStepAtMs = performance.now();
       if (result.frame) {
-        applyIkDragLivePhysicsFrame(result.frame, session.frameMap);
+        applyIkDragLivePhysicsFrame(result.frame, session.frameMap, {
+          meshProxies: meshProxiesRef.current,
+          onMeshProxyPose: onMeshProxyPoseRef.current,
+        });
       }
     } catch (error) {
       notifyError(error);

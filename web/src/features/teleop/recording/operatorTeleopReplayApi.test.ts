@@ -320,7 +320,6 @@ describe("operatorTeleopReplayApi", () => {
         frameMap: "identity",
         dynamicObjectCount: 1,
         stepMs: 5,
-        acceleratedDrive: true,
         issues: [],
         frame: null,
         worldWarnings: [],
@@ -359,7 +358,6 @@ describe("operatorTeleopReplayApi", () => {
         worldLayout: TEST_WORLD_LAYOUT,
         initialEndEffectorSample: TEST_END_EFFECTOR_SAMPLE,
         frameMap: "identity",
-        acceleratedDrive: true,
         stepMs: 5,
       }),
     ).resolves.toMatchObject({ sessionId: "mjlab-live-1" });
@@ -380,7 +378,6 @@ describe("operatorTeleopReplayApi", () => {
       worldLayout: TEST_WORLD_LAYOUT,
       initialEndEffectorSample: TEST_END_EFFECTOR_SAMPLE,
       frameMap: "identity",
-      acceleratedDrive: true,
       stepMs: 5,
     });
     expect(String(vi.mocked(fetchMock).mock.calls[1][0])).toContain(

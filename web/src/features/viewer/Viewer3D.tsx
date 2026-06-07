@@ -64,6 +64,9 @@ import {
 import { computeOwnedLinkLocalVisualCentroid } from "@/features/camera/cameraAutoBounds";
 import { IKDragControls } from "@/features/viewer/IKDragControls";
 import {
+  IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M,
+  type IkDragLivePhysicsTargetPose,
+  type IkDragLivePhysicsMeshProxy,
   useIkDragLivePhysicsBridge,
 } from "@/features/viewer/ikDragLivePhysics";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
@@ -90,6 +93,11 @@ import { RoverApproachGuideLine } from "@/features/viewer/RoverApproachGuideLine
 import { RoverApproachRoutePreview } from "@/features/viewer/RoverApproachRoutePreview";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
 import { WorldLayoutSplatLayer } from "@/features/viewer/WorldLayoutSplatLayer";
+import type {
+  WorldLayoutElementBoundsSnapshot,
+  WorldLayoutElementPoseOverride,
+} from "@/features/viewer/WorldLayoutGlbElement";
+import type { WorldLayoutElementConfig } from "@/features/viewer/worldLayoutEnvironmentConfig";
 import { resolveEndEffectorContactObjectId } from "@/features/viewer/eeObjectContact";
 import {
   createRoverApproachGuideLineState,
@@ -157,7 +165,11 @@ import { stripMeshSchemes } from "@/shared/lib/urdfBrowser";
 import type { RepeatedInertiaSymmetryChain } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RepeatedInertiaSymmetryCenterMode } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
-import type { InertialVisualizationSettings, RobotBasePose } from "@/shared/types/feature";
+import type {
+  InertialVisualizationSettings,
+  RobotBasePose,
+  ViewerObjectFramePose,
+} from "@/shared/types/feature";
 import {
   InertialVisualization,
   type InertiaReliabilityEntry,
@@ -3259,6 +3271,176 @@ const ROBOT_FRONT_LOCAL_FORWARD = new THREE.Vector3(1, 0, 0);
 const ROBOT_FRONT_CAMERA_DIRECTION_EPSILON = 1e-10;
 const CAMERA_LIKE_LINK_NAME_PATTERN = /(camera|cam)/i;
 const ROBOT_FRONT_BASE_CAMERA_MAX_LINK_DEPTH = 4;
+const WORLD_LAYOUT_ELEMENT_PHYSICS_PROXY_PREFIX = "world-layout-element-physics:";
+const WORLD_LAYOUT_ELEMENT_PROXY_EPSILON = 1e-6;
+const GRIPPER_JOINT_NAME_PATTERN = /gripper/i;
+
+const toWorldLayoutElementPhysicsProxyId = (elementId: string): string =>
+  `${WORLD_LAYOUT_ELEMENT_PHYSICS_PROXY_PREFIX}${elementId}`;
+
+const resolveLiveGripperJointName = (
+  jointValues: Record<string, number>
+): string | null => {
+  if (Number.isFinite(jointValues.gripper)) return "gripper";
+  return (
+    Object.keys(jointValues).find(
+      (jointName) =>
+        GRIPPER_JOINT_NAME_PATTERN.test(jointName) &&
+        Number.isFinite(jointValues[jointName])
+    ) ?? null
+  );
+};
+
+const resolveLiveGripperOpeningM = (
+  jointValues: Record<string, number>,
+  jointLimits: JointLimits
+): number | undefined => {
+  const jointName = resolveLiveGripperJointName(jointValues);
+  if (!jointName) return undefined;
+  const value = jointValues[jointName];
+  if (!Number.isFinite(value)) return undefined;
+  const limits = jointLimits[jointName];
+  const lower = limits?.lower;
+  const upper = limits?.upper;
+  if (
+    typeof lower === "number" &&
+    typeof upper === "number" &&
+    Number.isFinite(lower) &&
+    Number.isFinite(upper) &&
+    upper > lower
+  ) {
+    const normalized = THREE.MathUtils.clamp((value - lower) / (upper - lower), 0, 1);
+    return normalized * IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M;
+  }
+  return THREE.MathUtils.clamp(value, 0, IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M);
+};
+
+const tuple3Close = (
+  left: [number, number, number] | undefined,
+  right: [number, number, number] | undefined,
+  epsilon = WORLD_LAYOUT_ELEMENT_PROXY_EPSILON
+): boolean => {
+  if (!left || !right) return left === right;
+  return (
+    Math.abs(left[0] - right[0]) <= epsilon &&
+    Math.abs(left[1] - right[1]) <= epsilon &&
+    Math.abs(left[2] - right[2]) <= epsilon
+  );
+};
+
+const optionalNumberClose = (
+  left: number | undefined,
+  right: number | undefined,
+  epsilon = WORLD_LAYOUT_ELEMENT_PROXY_EPSILON
+): boolean => {
+  if (left === undefined || right === undefined) return left === right;
+  return Math.abs(left - right) <= epsilon;
+};
+
+const meshProxyPhysicsEqual = (
+  left: IkDragLivePhysicsMeshProxy["physics"],
+  right: IkDragLivePhysicsMeshProxy["physics"]
+): boolean =>
+  (left?.bodyType ?? "dynamic") === (right?.bodyType ?? "dynamic") &&
+  optionalNumberClose(left?.massKg, right?.massKg) &&
+  optionalNumberClose(left?.friction, right?.friction) &&
+  optionalNumberClose(left?.restitution, right?.restitution) &&
+  optionalNumberClose(left?.linearDamping, right?.linearDamping) &&
+  optionalNumberClose(left?.angularDamping, right?.angularDamping);
+
+const worldLayoutMeshProxyEqual = (
+  left: IkDragLivePhysicsMeshProxy,
+  right: IkDragLivePhysicsMeshProxy
+): boolean =>
+  left.id === right.id &&
+  left.sourceElementId === right.sourceElementId &&
+  left.name === right.name &&
+  left.color === right.color &&
+  tuple3Close(left.positionXyz, right.positionXyz) &&
+  tuple3Close(left.rotationRpyRad, right.rotationRpyRad) &&
+  tuple3Close(left.sizeXyz, right.sizeXyz) &&
+  tuple3Close(
+    left.visualOriginToPhysicsCenterLocalXyz,
+    right.visualOriginToPhysicsCenterLocalXyz
+  ) &&
+  meshProxyPhysicsEqual(left.physics, right.physics);
+
+const buildWorldLayoutElementMeshProxy = (
+  id: string,
+  snapshot: WorldLayoutElementBoundsSnapshot,
+  config: WorldLayoutElementConfig
+): IkDragLivePhysicsMeshProxy => {
+  const origin = new THREE.Vector3(...snapshot.visualOriginXyz);
+  const center = new THREE.Vector3(...snapshot.physicsCenterXyz);
+  const rotation = new THREE.Euler(...snapshot.physicsRotationRpyRad, "XYZ");
+  const inverseRotation = new THREE.Quaternion().setFromEuler(rotation).invert();
+  const localOffset = center.clone().sub(origin).applyQuaternion(inverseRotation);
+  const physics = config.physics;
+  return {
+    id: toWorldLayoutElementPhysicsProxyId(id),
+    sourceElementId: id,
+    name: config.asset.name || id,
+    positionXyz: [...snapshot.physicsCenterXyz],
+    rotationRpyRad: [...snapshot.physicsRotationRpyRad],
+    sizeXyz: [...snapshot.physicsSizeXyz],
+    visualOriginToPhysicsCenterLocalXyz: [
+      localOffset.x,
+      localOffset.y,
+      localOffset.z,
+    ],
+    color: config.materialColor ?? "#ef4444",
+    physics: {
+      bodyType: physics?.bodyType ?? "dynamic",
+      massKg: physics?.massKg ?? config.asset.realWorldMassKg,
+      friction: physics?.friction,
+      restitution: physics?.restitution,
+      linearDamping: physics?.linearDamping,
+      angularDamping: physics?.angularDamping,
+    },
+  };
+};
+
+const worldLayoutElementPoseOverrideEqual = (
+  left: WorldLayoutElementPoseOverride | undefined,
+  right: WorldLayoutElementPoseOverride
+): boolean =>
+  Boolean(left) &&
+  tuple3Close(left?.position, right.position) &&
+  tuple3Close(left?.rotation, right.rotation);
+
+type LeaderTeleopLivePhysicsFrameSyncProps = {
+  active: boolean;
+  endEffectorLink: string | null;
+  gripperOpeningM?: number;
+  onTargetPose: (pose: IkDragLivePhysicsTargetPose) => void;
+  robot: URDFRobot | null;
+};
+
+const LeaderTeleopLivePhysicsFrameSync = ({
+  active,
+  endEffectorLink,
+  gripperOpeningM,
+  onTargetPose,
+  robot,
+}: LeaderTeleopLivePhysicsFrameSyncProps) => {
+  useFrame(() => {
+    if (!active || !robot || !endEffectorLink) {
+      return;
+    }
+    const pose = extractLinkPose(robot, endEffectorLink);
+    if (!pose) return;
+    onTargetPose({
+      endEffectorLink,
+      positionXyz: pose.position,
+      quatWxyz: pose.quaternion,
+      timestampMs:
+        typeof performance !== "undefined" ? performance.now() : Date.now(),
+      ...(gripperOpeningM !== undefined ? { gripperOpeningM } : {}),
+    });
+  });
+
+  return null;
+};
 
 type StudioPlanarClampReason = "y" | "roll" | "pitch";
 
@@ -3889,15 +4071,172 @@ export const Viewer3D = ({
   );
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const objectEditMode = useObjectStore((state) => state.editMode);
+  const livePhysicsWorldObjects = useMemo(
+    () =>
+      worldObjects.filter(
+        (object) =>
+          object.id !== "hk-red-pickup-cube" &&
+          object.id !== "hk-pickup-support-collider"
+      ),
+    [worldObjects]
+  );
+  const [
+    worldLayoutElementPhysicsProxies,
+    setWorldLayoutElementPhysicsProxies,
+  ] = useState<IkDragLivePhysicsMeshProxy[]>([]);
+  const [
+    worldLayoutElementPoseOverrides,
+    setWorldLayoutElementPoseOverrides,
+  ] = useState<Record<string, WorldLayoutElementPoseOverride>>({});
+  const playbackWorldLayoutElementOverrideIdsRef = useRef<Set<string>>(new Set());
+  const handleWorldLayoutElementBoundsChange = useCallback(
+    (
+      id: string,
+      snapshot: WorldLayoutElementBoundsSnapshot | null,
+      config: WorldLayoutElementConfig
+    ) => {
+      const nextProxy = snapshot
+        ? buildWorldLayoutElementMeshProxy(id, snapshot, config)
+        : null;
+      setWorldLayoutElementPhysicsProxies((current) => {
+        const currentIndex = current.findIndex(
+          (proxy) => proxy.sourceElementId === id
+        );
+        if (!nextProxy) {
+          if (currentIndex < 0) return current;
+          return current.filter((proxy) => proxy.sourceElementId !== id);
+        }
+        if (
+          currentIndex >= 0 &&
+          worldLayoutMeshProxyEqual(current[currentIndex], nextProxy)
+        ) {
+          return current;
+        }
+        if (currentIndex < 0) {
+          return [...current, nextProxy];
+        }
+        const updated = [...current];
+        updated[currentIndex] = nextProxy;
+        return updated;
+      });
+      if (!snapshot) {
+        setWorldLayoutElementPoseOverrides((current) => {
+          if (!(id in current)) return current;
+          const updated = { ...current };
+          delete updated[id];
+          return updated;
+        });
+      }
+    },
+    []
+  );
+  const handleWorldLayoutMeshProxyPose = useCallback(
+    (proxy: IkDragLivePhysicsMeshProxy, pose: ViewerObjectFramePose) => {
+      const rotationTuple: [number, number, number] = pose.rotation
+        ? [pose.rotation.x, pose.rotation.y, pose.rotation.z]
+        : proxy.rotationRpyRad;
+      const rotation = new THREE.Euler(...rotationTuple, "XYZ");
+      const center = new THREE.Vector3(
+        pose.position.x,
+        pose.position.y,
+        pose.position.z
+      );
+      const centerOffset = new THREE.Vector3(
+        ...(proxy.visualOriginToPhysicsCenterLocalXyz ?? [0, 0, 0])
+      ).applyQuaternion(new THREE.Quaternion().setFromEuler(rotation));
+      const origin = center.sub(centerOffset);
+      const nextOverride: WorldLayoutElementPoseOverride = {
+        position: [origin.x, origin.y, origin.z],
+        rotation: rotationTuple,
+      };
+      setWorldLayoutElementPoseOverrides((current) => {
+        if (
+          worldLayoutElementPoseOverrideEqual(
+            current[proxy.sourceElementId],
+            nextOverride
+          )
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          [proxy.sourceElementId]: nextOverride,
+        };
+      });
+    },
+    []
+  );
   const {
     begin: beginIkDragLivePhysics,
     stop: stopIkDragLivePhysics,
     handleTargetPose: handleIkDragLivePhysicsTargetPose,
-  } = useIkDragLivePhysicsBridge(worldObjects);
+  } = useIkDragLivePhysicsBridge({
+    objects: livePhysicsWorldObjects,
+    meshProxies: worldLayoutElementPhysicsProxies,
+    onMeshProxyPose: handleWorldLayoutMeshProxyPose,
+  });
   useEffect(() => {
     const frame = animationFrames?.[currentFrame] ?? null;
     applyPlaybackObjectPoses(frame?.objectPoses);
-  }, [animationFrames, currentFrame]);
+    const objectPoses = frame?.objectPoses;
+    const proxyByPhysicsId = new Map(
+      worldLayoutElementPhysicsProxies.map((proxy) => [proxy.id, proxy])
+    );
+    const sourceElementIds = new Set(
+      worldLayoutElementPhysicsProxies.map((proxy) => proxy.sourceElementId)
+    );
+    const nextPlaybackOverrides = new Map<string, WorldLayoutElementPoseOverride>();
+    if (objectPoses) {
+      Object.entries(objectPoses).forEach(([trackId, pose]) => {
+        const proxy = proxyByPhysicsId.get(trackId);
+        const rotationTuple: [number, number, number] | undefined = pose.rotation
+          ? [pose.rotation.x, pose.rotation.y, pose.rotation.z]
+          : proxy?.rotationRpyRad;
+        if (proxy) {
+          const rotation = new THREE.Euler(...(rotationTuple ?? [0, 0, 0]), "XYZ");
+          const center = new THREE.Vector3(
+            pose.position.x,
+            pose.position.y,
+            pose.position.z
+          );
+          const centerOffset = new THREE.Vector3(
+            ...(proxy.visualOriginToPhysicsCenterLocalXyz ?? [0, 0, 0])
+          ).applyQuaternion(new THREE.Quaternion().setFromEuler(rotation));
+          const origin = center.sub(centerOffset);
+          nextPlaybackOverrides.set(proxy.sourceElementId, {
+            position: [origin.x, origin.y, origin.z],
+            ...(rotationTuple ? { rotation: rotationTuple } : {}),
+          });
+          return;
+        }
+        if (!sourceElementIds.has(trackId)) return;
+        nextPlaybackOverrides.set(trackId, {
+          position: [pose.position.x, pose.position.y, pose.position.z],
+          ...(rotationTuple ? { rotation: rotationTuple } : {}),
+        });
+      });
+    }
+    setWorldLayoutElementPoseOverrides((current) => {
+      let changed = false;
+      const updated = { ...current };
+      playbackWorldLayoutElementOverrideIdsRef.current.forEach((id) => {
+        if (id in updated && !nextPlaybackOverrides.has(id)) {
+          delete updated[id];
+          changed = true;
+        }
+      });
+      nextPlaybackOverrides.forEach((override, id) => {
+        if (!worldLayoutElementPoseOverrideEqual(updated[id], override)) {
+          updated[id] = override;
+          changed = true;
+        }
+      });
+      playbackWorldLayoutElementOverrideIdsRef.current = new Set(
+        nextPlaybackOverrides.keys()
+      );
+      return changed ? updated : current;
+    });
+  }, [animationFrames, currentFrame, worldLayoutElementPhysicsProxies]);
   const operatorPointCloudFrame = useOperatorPerceptionStore(
     (state) => state.activePointCloudFrame
   );
@@ -4841,6 +5180,10 @@ export const Viewer3D = ({
     wheelDriveEnabled,
     onBeforeObjectIkSolve: runRoverApproachBeforeIkSolve,
   });
+  const livePhysicsGripperOpeningM = useMemo(
+    () => resolveLiveGripperOpeningM(storeJointValues, jointLimits),
+    [jointLimits, storeJointValues]
+  );
   const hasActiveObjectTargetInteraction = isObjectTargetInteractionActive({
     isIkRunning,
     isIkTrajectoryApplying,
@@ -5581,6 +5924,19 @@ export const Viewer3D = ({
     jointLimits,
     initialPosePolicy: DEMO_MODE ? "limits-center" : "robot",
   });
+  const leaderTeleopLivePhysicsActive =
+    liveTeleopJointSyncActive && effectiveDragMode === "hardware-teleop";
+  useEffect(() => {
+    if (!leaderTeleopLivePhysicsActive) return;
+    beginIkDragLivePhysics();
+    return () => {
+      stopIkDragLivePhysics();
+    };
+  }, [
+    beginIkDragLivePhysics,
+    leaderTeleopLivePhysicsActive,
+    stopIkDragLivePhysics,
+  ]);
   useEffect(() => {
     resetApproachArmTargetsRef.current = () => {
       if (isAssemblyWorkspace) return;
@@ -7043,7 +7399,18 @@ export const Viewer3D = ({
             </>
           )}
 
-          <WorldLayoutSplatLayer />
+          <LeaderTeleopLivePhysicsFrameSync
+            active={leaderTeleopLivePhysicsActive}
+            endEffectorLink={primaryIkEndEffectorLink}
+            gripperOpeningM={livePhysicsGripperOpeningM}
+            onTargetPose={handleIkDragLivePhysicsTargetPose}
+            robot={robot}
+          />
+
+          <WorldLayoutSplatLayer
+            elementPoseOverrides={worldLayoutElementPoseOverrides}
+            onElementBoundsChange={handleWorldLayoutElementBoundsChange}
+          />
 
           {urdfFile && (
             <>
@@ -7172,6 +7539,7 @@ export const Viewer3D = ({
                       handlePerEeDragStateChange(ikEeLink, dragging)
                     }
                     onTargetPose={handleIkDragLivePhysicsTargetPose}
+                    gripperOpeningM={livePhysicsGripperOpeningM}
                     enabled={ikDragEnabled}
                     wheelDriveEnabled={wheelDriveEnabled}
                     handleIndex={handleIndex}

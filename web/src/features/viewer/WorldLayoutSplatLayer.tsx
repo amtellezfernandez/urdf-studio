@@ -3,7 +3,11 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import { extend, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
-import { WorldLayoutGlbElement } from "@/features/viewer/WorldLayoutGlbElement";
+import {
+  WorldLayoutGlbElement,
+  type WorldLayoutElementBoundsSnapshot,
+  type WorldLayoutElementPoseOverride,
+} from "@/features/viewer/WorldLayoutGlbElement";
 import {
   fitCameraToBounds,
   type CameraControlsLike,
@@ -11,6 +15,7 @@ import {
 import {
   readWorldLayoutElementConfigs,
   readWorldLayoutSplatConfig,
+  type WorldLayoutElementConfig,
 } from "@/features/viewer/worldLayoutEnvironmentConfig";
 import { useWorldLayoutEnvironmentStore } from "@/features/world-share/worldLayoutEnvironmentStore";
 
@@ -18,14 +23,22 @@ extend({ SparkRenderer, SplatMesh });
 
 type WorldLayoutSplatLayerProps = {
   autoFitElements?: boolean;
+  elementPoseOverrides?: Record<string, WorldLayoutElementPoseOverride>;
   interactiveElements?: boolean;
+  onElementBoundsChange?: (
+    id: string,
+    snapshot: WorldLayoutElementBoundsSnapshot | null,
+    config: WorldLayoutElementConfig
+  ) => void;
   renderElements?: boolean;
   renderSplat?: boolean;
 };
 
 export const WorldLayoutSplatLayer = ({
   autoFitElements = true,
+  elementPoseOverrides,
   interactiveElements = true,
+  onElementBoundsChange,
   renderElements = true,
   renderSplat = true,
 }: WorldLayoutSplatLayerProps = {}) => {
@@ -36,6 +49,10 @@ export const WorldLayoutSplatLayer = ({
   const elements = useMemo(
     () => (shouldReadElements ? readWorldLayoutElementConfigs(environment) : []),
     [environment, shouldReadElements]
+  );
+  const elementById = useMemo(
+    () => new Map(elements.map((element) => [element.asset.id, element])),
+    [elements]
   );
   const renderer = useThree((state) => state.gl);
   const camera = useThree((state) => state.camera);
@@ -54,15 +71,48 @@ export const WorldLayoutSplatLayer = ({
   }, []);
 
   const handleElementBoundsChange = useCallback(
-    (id: string, bounds: THREE.Box3 | null) => {
-      if (bounds?.isEmpty() === false) {
-        elementBoundsRef.current.set(id, bounds.clone());
+    (id: string, snapshot: WorldLayoutElementBoundsSnapshot | null) => {
+      if (snapshot?.bounds.isEmpty() === false) {
+        elementBoundsRef.current.set(id, snapshot.bounds.clone());
       } else {
         elementBoundsRef.current.delete(id);
       }
+      const element = elementById.get(id);
+      if (element) {
+        onElementBoundsChange?.(
+          id,
+          snapshot
+            ? {
+                ...snapshot,
+                bounds: snapshot.bounds.clone(),
+                physicsCenterXyz: [...snapshot.physicsCenterXyz] as [
+                  number,
+                  number,
+                  number,
+                ],
+                physicsRotationRpyRad: [...snapshot.physicsRotationRpyRad] as [
+                  number,
+                  number,
+                  number,
+                ],
+                physicsSizeXyz: [...snapshot.physicsSizeXyz] as [
+                  number,
+                  number,
+                  number,
+                ],
+                visualOriginXyz: [...snapshot.visualOriginXyz] as [
+                  number,
+                  number,
+                  number,
+                ],
+              }
+            : null,
+          element
+        );
+      }
       setBoundsVersion((version) => version + 1);
     },
-    []
+    [elementById, onElementBoundsChange]
   );
 
   const handleElementSelect = useCallback((id: string) => {
@@ -179,6 +229,7 @@ export const WorldLayoutSplatLayer = ({
           key={`${element.asset.id}:${element.asset.url}`}
           config={element}
           isSelected={interactiveElements && selectedElementId === element.asset.id}
+          poseOverride={elementPoseOverrides?.[element.asset.id]}
           onBoundsChange={handleElementBoundsChange}
           onHoverChange={handleElementHoverChange}
           onSelect={handleElementSelect}
