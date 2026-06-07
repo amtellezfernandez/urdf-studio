@@ -7,9 +7,10 @@ from pathlib import Path
 from backend.core.paths import BASE_DIR
 
 GENESIS_SO101_URDF_CACHE_DIR = BASE_DIR / ".cache" / "genesis-urdf"
-GENESIS_SO101_GRIPPER_COLLISION_VERSION = "so101-genesis-gripper-pads-v2"
+GENESIS_SO101_GRIPPER_COLLISION_VERSION = "so101-genesis-gripper-proxy-collisions-v3"
 
 SO101_FIXED_GRIPPER_PAD_NAME = "fixed_gripper_pad_collision"
+SO101_FIXED_GRIPPER_BODY_NAME = "fixed_gripper_body_collision"
 SO101_MOVING_GRIPPER_PAD_NAME = "moving_gripper_pad_collision"
 
 _SO101_GRIPPER_PAD_COLLISIONS = (
@@ -19,6 +20,13 @@ _SO101_GRIPPER_PAD_COLLISIONS = (
         "-0.0026 -0.0020 -0.0770",
         "0 0 0",
         "0.070 0.056 0.060",
+    ),
+    (
+        "gripper_link",
+        SO101_FIXED_GRIPPER_BODY_NAME,
+        "-0.0026 -0.0020 -0.0517",
+        "0 0 0",
+        "0.068 0.056 0.108",
     ),
     (
         "moving_jaw_so101_v1_link",
@@ -39,6 +47,11 @@ def _find_link(root: ET.Element, name: str) -> ET.Element | None:
 
 def _has_named_collision(link: ET.Element, name: str) -> bool:
     return any(collision.get("name") == name for collision in link.findall("collision"))
+
+
+def _remove_collision_elements(link: ET.Element) -> None:
+    for collision in list(link.findall("collision")):
+        link.remove(collision)
 
 
 def _append_box_collision(
@@ -94,6 +107,12 @@ def materialize_so101_genesis_urdf(
         return output_path
 
     _make_mesh_paths_absolute(root, urdf_path=source_path)
+    patched_link_names = {link_name for link_name, *_rest in _SO101_GRIPPER_PAD_COLLISIONS}
+    for link_name in patched_link_names:
+        link = _find_link(root, link_name)
+        if link is not None:
+            _remove_collision_elements(link)
+
     for link_name, collision_name, xyz, rpy, size in _SO101_GRIPPER_PAD_COLLISIONS:
         link = _find_link(root, link_name)
         if link is None or _has_named_collision(link, collision_name):
