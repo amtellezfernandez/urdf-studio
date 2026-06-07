@@ -28,6 +28,7 @@ from backend.scripts.genesis_world_open import (
     _configure_robot_position_controller,
     _enforce_dynamic_floor_contact,
     _enforce_robot_floor_contact,
+    _genesis_viewer_run_in_thread,
     _apply_rigid_entity_physics_overrides,
     _apply_live_joint_values,
     _joint_dof_indices_by_name,
@@ -74,6 +75,18 @@ class _FakeScene:
         return morph
 
 
+def test_genesis_viewer_runs_on_main_thread_on_macos(monkeypatch) -> None:
+    monkeypatch.setattr(genesis_world_open.sys, "platform", "darwin")
+
+    assert _genesis_viewer_run_in_thread() is False
+
+
+def test_genesis_viewer_runs_in_background_thread_on_linux(monkeypatch) -> None:
+    monkeypatch.setattr(genesis_world_open.sys, "platform", "linux")
+
+    assert _genesis_viewer_run_in_thread() is True
+
+
 def test_add_mesh_entity_disables_genesis_auto_alignment() -> None:
     morphs = _FakeMorphs()
     gs = SimpleNamespace(
@@ -111,7 +124,7 @@ def test_add_mesh_entity_disables_genesis_auto_alignment() -> None:
     assert scene.added[0][1]["name"] == "grabbable-container"
 
 
-def test_add_mesh_entity_can_preserve_studio_glb_orientation() -> None:
+def test_add_mesh_entity_ignores_extra_glb_up_axis_conversion() -> None:
     morphs = _FakeMorphs()
     gs = SimpleNamespace(
         morphs=morphs,
@@ -140,12 +153,49 @@ def test_add_mesh_entity_can_preserve_studio_glb_orientation() -> None:
         name="grabbable-container",
         decimate=True,
         convexify=True,
-        preserve_studio_glb_orientation=True,
     )
 
     assert morphs.mesh_kwargs is not None
     assert morphs.mesh_kwargs["align"] is False
-    assert morphs.mesh_kwargs["file_meshes_are_zup"] is True
+    assert "file_meshes_are_zup" not in morphs.mesh_kwargs
+
+
+def test_add_mesh_entity_allows_neutral_initial_pose_for_synced_visuals() -> None:
+    morphs = _FakeMorphs()
+    gs = SimpleNamespace(
+        morphs=morphs,
+        surfaces=SimpleNamespace(Default=lambda **_kwargs: object()),
+        materials=_FakeMaterials(),
+    )
+    scene = _FakeScene()
+    spec = SimpleNamespace(
+        asset_path=Path("container.glb"),
+        mesh_position_xyz=(0.3, 0.0, 0.0),
+        effective_scale_xyz=(0.045, 0.045, 0.045),
+        box_size_xyz=(0.08, 0.04, 0.03),
+        element=SimpleNamespace(
+            rotation_rpy_rad=(1.5707963267948966, 0.0, 0.0),
+            material_color="#ef4444",
+            physics=None,
+        ),
+    )
+
+    _add_mesh_entity(
+        gs,
+        scene,
+        spec=spec,
+        fixed=False,
+        collision=False,
+        name="grabbable-container-visual",
+        decimate=False,
+        convexify=False,
+        initial_position_xyz=(0.0, 0.0, 0.0),
+        initial_rotation_rpy_rad=(0.0, 0.0, 0.0),
+    )
+
+    assert morphs.mesh_kwargs is not None
+    assert morphs.mesh_kwargs["pos"] == (0.0, 0.0, 0.0)
+    assert morphs.mesh_kwargs["euler"] == (0.0, 0.0, 0.0)
 
 
 def test_rigid_material_uses_layout_friction_restitution_and_density() -> None:
@@ -230,7 +280,7 @@ def test_add_box_entity_passes_physics_material_to_genesis() -> None:
     }
 
 
-def test_add_box_entity_uses_horizontal_proxy_for_dynamic_y_up_container() -> None:
+def test_add_box_entity_uses_studio_transform_for_dynamic_container_proxy() -> None:
     morphs = _FakeMorphs()
     materials = _FakeMaterials()
     gs = SimpleNamespace(
@@ -265,9 +315,11 @@ def test_add_box_entity_uses_horizontal_proxy_for_dynamic_y_up_container() -> No
     )
 
     assert morphs.box_kwargs is not None
-    assert morphs.box_kwargs["size"] == pytest.approx((0.038847, 0.089494, 0.041463))
-    assert morphs.box_kwargs["pos"] == pytest.approx((0.28, -0.08, 0.0207315))
-    assert morphs.box_kwargs["euler"] == pytest.approx((0.0, 0.0, math.degrees(-0.08)))
+    assert morphs.box_kwargs["size"] == pytest.approx((0.038847, 0.041463, 0.089494))
+    assert morphs.box_kwargs["pos"] == pytest.approx((0.28, -0.08, 0.020732))
+    assert morphs.box_kwargs["euler"] == pytest.approx(
+        (90.0, 0.0, math.degrees(-0.08))
+    )
 
 
 def test_add_floor_entity_uses_thick_fixed_collider() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -41,7 +42,6 @@ GENESIS_FLOOR_TOP_Z = 0.0
 GENESIS_FLOOR_CLEARANCE_EPSILON_M = 0.0005
 GENESIS_ROBOT_BASE_Z_OFFSET_M = 0.004
 GENESIS_ROBOT_FLOOR_CLEARANCE_EPSILON_M = 0.0005
-GENESIS_DYNAMIC_PROXY_FRAME_EPSILON_RAD = 1e-6
 
 
 @dataclass(frozen=True)
@@ -129,15 +129,19 @@ def _default_urdf_path_for_robot_mode(robot_mode: str) -> Path:
     return DEFAULT_SO101_URDF_PATH
 
 
+def _genesis_viewer_run_in_thread() -> bool:
+    return sys.platform != "darwin"
+
+
 def _to_degrees(rpy_rad: tuple[float, float, float]) -> tuple[float, float, float]:
     return tuple(math.degrees(value) for value in rpy_rad)
 
 
-def _surface_for_color(gs, color_hex: str | None):
+def _surface_for_color(gs, color_hex: str | None, *, opacity: float = 1.0):
     rgb = color_hex_to_rgb(color_hex)
     if rgb is None:
         return None
-    return gs.surfaces.Default(color=rgb, opacity=1.0)
+    return gs.surfaces.Default(color=rgb, opacity=opacity)
 
 
 def _finite_float_or_none(value: Any) -> float | None:
@@ -215,16 +219,6 @@ def _apply_rigid_entity_physics_overrides(
         )
 
 
-def _yaw_quaternion_wxyz(yaw_rad: float) -> tuple[float, float, float, float]:
-    half_yaw = yaw_rad * 0.5
-    return (math.cos(half_yaw), 0.0, 0.0, math.sin(half_yaw))
-
-
-def _roll_quaternion_wxyz(roll_rad: float) -> tuple[float, float, float, float]:
-    half_roll = roll_rad * 0.5
-    return (math.cos(half_roll), math.sin(half_roll), 0.0, 0.0)
-
-
 def _quaternion_multiply_wxyz(
     left: tuple[float, float, float, float],
     right: tuple[float, float, float, float],
@@ -241,64 +235,30 @@ def _quaternion_multiply_wxyz(
     )
 
 
-def _uses_y_up_dynamic_visual_frame(spec) -> bool:
-    if getattr(spec, "is_dynamic", False) is not True:
-        return False
-    rotation = getattr(getattr(spec, "element", None), "rotation_rpy_rad", None)
-    if not isinstance(rotation, tuple | list) or len(rotation) != 3:
-        return False
-    roll, pitch, _yaw = rotation
-    return (
-        abs(float(roll) - math.pi / 2.0) <= GENESIS_DYNAMIC_PROXY_FRAME_EPSILON_RAD
-        and abs(float(pitch)) <= GENESIS_DYNAMIC_PROXY_FRAME_EPSILON_RAD
-    )
-
-
 def _dynamic_box_proxy_rotation_rpy_rad(spec) -> tuple[float, float, float]:
-    rotation = getattr(spec.element, "rotation_rpy_rad", (0.0, 0.0, 0.0))
-    if not _uses_y_up_dynamic_visual_frame(spec):
-        return rotation
-    return (0.0, 0.0, rotation[2])
+    return getattr(spec.element, "rotation_rpy_rad", (0.0, 0.0, 0.0))
 
 
 def _dynamic_box_proxy_size_xyz(spec) -> tuple[float, float, float]:
-    size = getattr(spec, "box_size_xyz", (1e-4, 1e-4, 1e-4))
-    if not _uses_y_up_dynamic_visual_frame(spec):
-        return size
-    return (size[0], size[2], size[1])
+    return getattr(spec, "box_size_xyz", (1e-4, 1e-4, 1e-4))
 
 
 def _dynamic_box_proxy_center_offset_xyz(spec) -> tuple[float, float, float]:
-    offset = tuple(
+    return tuple(
         spec.mesh_bounds.studio_visual_center_after_offset_xyz[index]
         * spec.effective_scale_xyz[index]
         for index in range(3)
     )
-    if not _uses_y_up_dynamic_visual_frame(spec):
-        return offset
-    return (offset[0], offset[2], offset[1])
 
 
 def _dynamic_box_proxy_center_xyz(spec) -> tuple[float, float, float]:
-    if not _uses_y_up_dynamic_visual_frame(spec):
-        return spec.box_center_xyz
-    rotation = _dynamic_box_proxy_rotation_rpy_rad(spec)
-    rotated_offset = _rotate_vector_by_quaternion_wxyz(
-        _yaw_quaternion_wxyz(rotation[2]),
-        _dynamic_box_proxy_center_offset_xyz(spec),
-    )
-    return tuple(
-        spec.element.position_xyz[index] + rotated_offset[index]
-        for index in range(3)
-    )
+    return spec.box_center_xyz
 
 
 def _dynamic_visual_orientation_post_transform_wxyz(
     spec,
 ) -> tuple[float, float, float, float] | None:
-    if not _uses_y_up_dynamic_visual_frame(spec):
-        return None
-    return _roll_quaternion_wxyz(math.pi / 2.0)
+    return None
 
 
 def _add_mesh_entity(
@@ -312,7 +272,8 @@ def _add_mesh_entity(
     decimate: bool,
     convexify: bool | None,
     color_override: str | None = None,
-    preserve_studio_glb_orientation: bool = False,
+    initial_position_xyz: tuple[float, float, float] | None = None,
+    initial_rotation_rpy_rad: tuple[float, float, float] | None = None,
 ):
     surface = _surface_for_color(gs, color_override or spec.element.material_color)
     material = None
@@ -324,8 +285,8 @@ def _add_mesh_entity(
         )
     morph_kwargs = {
         "file": str(spec.asset_path.resolve()),
-        "pos": spec.mesh_position_xyz,
-        "euler": _to_degrees(spec.element.rotation_rpy_rad),
+        "pos": initial_position_xyz or spec.mesh_position_xyz,
+        "euler": _to_degrees(initial_rotation_rpy_rad or spec.element.rotation_rpy_rad),
         "scale": spec.effective_scale_xyz,
         "fixed": fixed,
         "collision": collision,
@@ -333,8 +294,6 @@ def _add_mesh_entity(
         "convexify": convexify,
         "align": False,
     }
-    if preserve_studio_glb_orientation:
-        morph_kwargs["file_meshes_are_zup"] = True
     morph = gs.morphs.Mesh(**morph_kwargs)
     kwargs = {"name": name}
     if surface is not None:
@@ -344,10 +303,23 @@ def _add_mesh_entity(
     return scene.add_entity(morph, **kwargs)
 
 
-def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str):
-    surface = _surface_for_color(gs, spec.element.material_color) or gs.surfaces.Default(
+def _add_box_entity(
+    gs,
+    scene,
+    *,
+    spec,
+    fixed: bool,
+    collision: bool,
+    name: str,
+    surface_opacity: float = 1.0,
+):
+    surface = _surface_for_color(
+        gs,
+        spec.element.material_color,
+        opacity=surface_opacity,
+    ) or gs.surfaces.Default(
         color=(0.9, 0.12, 0.12),
-        opacity=1.0,
+        opacity=surface_opacity,
     )
     box_size_xyz = _dynamic_box_proxy_size_xyz(spec)
     material = _rigid_material_for_physics(
@@ -1058,7 +1030,7 @@ def open_genesis_world_scene(
             camera_lookat=center,
             camera_up=(0.0, 0.0, 1.0),
             camera_fov=45,
-            run_in_thread=True,
+            run_in_thread=_genesis_viewer_run_in_thread(),
             enable_gui=True,
         ),
     )
@@ -1103,7 +1075,6 @@ def open_genesis_world_scene(
                 name=spec.element.id,
                 decimate=True,
                 convexify=True,
-                preserve_studio_glb_orientation=True,
             )
             dynamic_entities.append(
                 _DynamicWorldEntity(
@@ -1130,7 +1101,8 @@ def open_genesis_world_scene(
                 name=f"{spec.element.id}_visual",
                 decimate=False,
                 convexify=False,
-                preserve_studio_glb_orientation=True,
+                initial_position_xyz=(0.0, 0.0, 0.0),
+                initial_rotation_rpy_rad=(0.0, 0.0, 0.0),
             )
             entity = _add_box_entity(
                 gs,
@@ -1139,6 +1111,7 @@ def open_genesis_world_scene(
                 fixed=False,
                 collision=True,
                 name=spec.element.id,
+                surface_opacity=0.0,
             )
             dynamic_entities.append(
                 _DynamicWorldEntity(
@@ -1171,7 +1144,6 @@ def open_genesis_world_scene(
                 name=spec.element.id,
                 decimate=False,
                 convexify=False,
-                preserve_studio_glb_orientation=True,
             )
 
     camera = None

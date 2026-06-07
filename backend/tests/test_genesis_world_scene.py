@@ -51,6 +51,15 @@ def test_genesis_element_specs_use_studio_effective_glb_scale() -> None:
     )
 
 
+def test_dynamic_evergreen_container_has_explicit_horizontal_layout_rotation() -> None:
+    _layout_name, specs = build_genesis_element_specs(DEFAULT_WORLD_LAYOUT_PATH)
+    evergreen = next(spec for spec in specs if spec.element.id == "evergreen-container")
+
+    assert evergreen.is_dynamic is True
+    assert evergreen.element.rotation_rpy_rad == (0.0, 1.5707963267948966, 0.0)
+    assert evergreen.box_center_xyz[1] > evergreen.element.position_xyz[1]
+
+
 def test_resolve_world_layout_element_metric_scale_matches_studio_policy() -> None:
     assert resolve_world_layout_element_metric_scale(None, 0.65) == 0.5
     assert resolve_world_layout_element_metric_scale(2.6, 0.65) == 4.0
