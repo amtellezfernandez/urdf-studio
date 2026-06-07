@@ -4,6 +4,7 @@ import { resolveApproachArmResetTargetValues } from "@/features/viewer/approachA
 import { getJointLimits, type JointLimits } from "@/shared/lib/urdfBrowser";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
 import { useJointStore } from "@/shared/store/useJointStore";
+import { isGenesisLiveSyncActive } from "@/features/world-share/useGenesisLiveSync";
 import type { JointTopology } from "@/shared/store/useJointStore";
 import {
   hasJointMapChanged,
@@ -230,15 +231,21 @@ export const useRobotJointSync = ({
 
       // IK drag and live teleop telemetry both own the visual pose directly.
       // Skipping the smoother avoids competing writes and hidden telemetry lag.
+      const genesisFeedbackDriven = isGenesisLiveSyncActive() && !isPlaying;
       const shouldDirectApplyLiveTeleop =
-        liveTeleopJointSyncActive && !isPlaying && !isDraggingJoint;
+        liveTeleopJointSyncActive &&
+        !genesisFeedbackDriven &&
+        !isPlaying &&
+        !isDraggingJoint;
       if (
         !isPlaying &&
-        (shouldDirectApplyLiveTeleop || (!isIkHandleDragging && !isIkTrajectoryApplying))
+        (genesisFeedbackDriven ||
+          shouldDirectApplyLiveTeleop ||
+          (!isIkHandleDragging && !isIkTrajectoryApplying))
       ) {
         const targets = targetJointValuesRef.current;
         if (Object.keys(targets).length > 0) {
-          if (shouldDirectApplyLiveTeleop) {
+          if (genesisFeedbackDriven || shouldDirectApplyLiveTeleop) {
             applyJointValues(robot, targets, { filter: false });
             robot.updateMatrixWorld?.(true);
             animatedJointValuesRef.current = { ...targets };

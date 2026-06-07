@@ -662,31 +662,29 @@ class _GenesisLiveHttpBridge:
         last_robot_generation = 0
         last_world_generation = 0
         while not self._stop.is_set():
-            robot_joint_values: dict[str, float] | None = None
-            world_payload: tuple[int, list[dict[str, Any]]] | None = None
+            live_payload: dict[str, Any] | None = None
             with self._lock:
-                if self._robot_generation > last_robot_generation:
+                robot_changed = self._robot_generation > last_robot_generation
+                world_changed = self._world_generation > last_world_generation
+                if robot_changed:
                     last_robot_generation = self._robot_generation
-                    robot_joint_values = dict(self._robot_joint_values)
-                if (
-                    self._world_payload is not None
-                    and self._world_generation > last_world_generation
-                ):
+                if world_changed:
                     last_world_generation = self._world_generation
-                    source_sequence, poses = self._world_payload
-                    world_payload = (source_sequence, list(poses))
+                if robot_changed or world_changed:
+                    source_sequence = 0
+                    poses: list[dict[str, Any]] = []
+                    if self._world_payload is not None:
+                        source_sequence, poses = self._world_payload
+                    live_payload = {
+                        "robot_joint_values": dict(self._robot_joint_values),
+                        "world_source_sequence": source_sequence,
+                        "poses": list(poses),
+                    }
 
-            if robot_joint_values:
+            if live_payload is not None:
                 _post_json_url(
-                    f"{self._base_url}/robot-state",
-                    {"joint_values": robot_joint_values},
-                    timeout_sec=self._timeout_sec,
-                )
-            if world_payload is not None:
-                source_sequence, poses = world_payload
-                _post_json_url(
-                    f"{self._base_url}/world-state",
-                    {"source_sequence": source_sequence, "poses": poses},
+                    f"{self._base_url}/live-state",
+                    live_payload,
                     timeout_sec=self._timeout_sec,
                 )
             self._stop.wait(self._state_publish_interval)

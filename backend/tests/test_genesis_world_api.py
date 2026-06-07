@@ -3,6 +3,7 @@ from __future__ import annotations
 import backend.api.genesis_world as genesis_world_api
 from backend.models.genesis_world import (
     GenesisJointStateRequest,
+    GenesisLiveStateRequest,
     GenesisWorldPose,
     GenesisWorldStateRequest,
     GenesisWorldOpenRequest,
@@ -125,6 +126,37 @@ def test_genesis_robot_state_roundtrips_latest_corrected_values() -> None:
     assert first.sequence == 1
     assert latest.sequence == 1
     assert latest.joint_values == {"shoulder_pan": 0.12, "gripper": 0.42}
+
+
+def test_genesis_live_state_roundtrips_atomic_robot_and_world_values() -> None:
+    reset_genesis_live_state_for_tests()
+
+    response = genesis_world_api.publish_genesis_live_state(
+        GenesisLiveStateRequest(
+            robot_joint_values={"shoulder_pan": 0.12, "gripper": 0.42},
+            world_source_sequence=8,
+            poses=[
+                GenesisWorldPose(
+                    element_id="grabbable-container-a",
+                    position_xyz=(0.3, -0.1, 0.02),
+                    orientation_wxyz=(1.0, 0.0, 0.0, 0.0),
+                )
+            ],
+        ),
+        _access=None,
+    )
+    latest = genesis_world_api.get_latest_genesis_live_state(_access=None)
+    latest_robot = genesis_world_api.get_latest_genesis_robot_state(_access=None)
+    latest_world = genesis_world_api.get_latest_genesis_world_state(_access=None)
+
+    assert response.sequence == 1
+    assert latest.sequence == 1
+    assert latest.robot_joint_values == {"shoulder_pan": 0.12, "gripper": 0.42}
+    assert latest.world_source_sequence == 8
+    assert latest.poses[0].element_id == "grabbable-container-a"
+    assert latest_robot.joint_values == latest.robot_joint_values
+    assert latest_world.source_sequence == latest.world_source_sequence
+    assert latest_world.poses == latest.poses
 
 
 def test_genesis_world_state_roundtrips_latest_dynamic_poses() -> None:

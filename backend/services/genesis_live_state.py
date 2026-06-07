@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from backend.models.genesis_world import (
     GenesisJointStateResponse,
+    GenesisLiveStateResponse,
     GenesisWorldPose,
     GenesisWorldStateResponse,
 )
@@ -20,6 +21,8 @@ class _GenesisLiveState:
     robot_sequence: int = 0
     robot_joint_values: dict[str, float] = field(default_factory=dict)
     robot_updated_at: float = 0.0
+    live_sequence: int = 0
+    live_updated_at: float = 0.0
     world_sequence: int = 0
     world_source_sequence: int = 0
     world_poses: list[GenesisWorldPose] = field(default_factory=list)
@@ -71,6 +74,43 @@ def read_genesis_robot_state() -> GenesisJointStateResponse:
         )
 
 
+def store_genesis_live_state(
+    *,
+    robot_joint_values: dict[str, float],
+    world_source_sequence: int,
+    poses: list[GenesisWorldPose],
+) -> GenesisLiveStateResponse:
+    with _STATE.lock:
+        now = time.monotonic()
+        _STATE.live_sequence += 1
+        _STATE.live_updated_at = now
+        _STATE.robot_sequence += 1
+        _STATE.robot_joint_values = dict(robot_joint_values)
+        _STATE.robot_updated_at = now
+        _STATE.world_sequence += 1
+        _STATE.world_source_sequence = world_source_sequence
+        _STATE.world_poses = list(poses)
+        _STATE.world_updated_at = now
+        return GenesisLiveStateResponse(
+            sequence=_STATE.live_sequence,
+            robot_joint_values=dict(_STATE.robot_joint_values),
+            world_source_sequence=_STATE.world_source_sequence,
+            poses=list(_STATE.world_poses),
+            updated_at_monotonic_sec=_STATE.live_updated_at,
+        )
+
+
+def read_genesis_live_state() -> GenesisLiveStateResponse:
+    with _STATE.lock:
+        return GenesisLiveStateResponse(
+            sequence=_STATE.live_sequence,
+            robot_joint_values=dict(_STATE.robot_joint_values),
+            world_source_sequence=_STATE.world_source_sequence,
+            poses=list(_STATE.world_poses),
+            updated_at_monotonic_sec=_STATE.live_updated_at,
+        )
+
+
 def store_genesis_world_state(
     *,
     source_sequence: int,
@@ -115,6 +155,8 @@ def clear_genesis_runtime_state() -> None:
         _STATE.robot_sequence = 0
         _STATE.robot_joint_values = {}
         _STATE.robot_updated_at = 0.0
+        _STATE.live_sequence = 0
+        _STATE.live_updated_at = 0.0
         _STATE.world_sequence = 0
         _STATE.world_source_sequence = 0
         _STATE.world_poses = []

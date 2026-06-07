@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useJointStore } from "@/shared/store/useJointStore";
 import {
+  fetchGenesisLiveState,
   fetchGenesisRobotState,
   fetchGenesisWorldState,
   publishGenesisJointState,
@@ -9,6 +10,7 @@ import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWor
 
 const GENESIS_LIVE_SYNC_INTERVAL_MS = 16;
 const JOINT_PUBLISH_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
+const LIVE_STATE_POLL_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
 const ROBOT_STATE_POLL_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
 const WORLD_STATE_POLL_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
 const GENESIS_FEEDBACK_JOINT_EPSILON = 1e-6;
@@ -153,6 +155,55 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+    };
+  }, [enabled]);
+};
+
+export const useGenesisLiveStatePoller = (enabled: boolean): void => {
+  const latestSequenceRef = useRef(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      latestSequenceRef.current = 0;
+      return;
+    }
+    let cancelled = false;
+    let inFlight = false;
+
+    const poll = () => {
+      if (inFlight) return;
+      inFlight = true;
+      void fetchGenesisLiveState()
+        .then((state) => {
+          if (cancelled) return;
+          if (state.sequence === 0) {
+            latestSequenceRef.current = 0;
+            return;
+          }
+          if (state.sequence <= latestSequenceRef.current) return;
+          latestSequenceRef.current = state.sequence;
+          useGenesisWorldLiveStateStore
+            .getState()
+            .setLivePoses(state.sequence, state.poses);
+          const nextJointValues = mergeChangedGenesisJointValues(
+            useJointStore.getState().jointValues,
+            state.robot_joint_values
+          );
+          if (nextJointValues !== null) {
+            applyGenesisFeedbackJointValues(nextJointValues);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+
+    poll();
+    const intervalId = window.setInterval(poll, LIVE_STATE_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [enabled]);
 };

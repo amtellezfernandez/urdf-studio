@@ -30,6 +30,14 @@ export type GenesisWorldStateResponse = {
   updated_at_monotonic_sec: number;
 };
 
+export type GenesisLiveStateResponse = {
+  sequence: number;
+  robot_joint_values: Record<string, number>;
+  world_source_sequence: number;
+  poses: GenesisWorldPoseResponse[];
+  updated_at_monotonic_sec: number;
+};
+
 export const openGenesisWorld = async (
   dynamicContainerMode: GenesisDynamicContainerMode = "box"
 ): Promise<GenesisWorldOpenResponse> => {
@@ -88,6 +96,20 @@ export const fetchGenesisWorldState = async (): Promise<GenesisWorldStateRespons
     throw new Error(`Genesis world state fetch failed (${response.status})`);
   }
   return (await response.json()) as GenesisWorldStateResponse;
+};
+
+export const fetchGenesisLiveState = async (): Promise<GenesisLiveStateResponse> => {
+  const { init } = withBackendRequestHeaders({
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const response = await fetch(`${API_BASE_URL}/worlds/genesis/live-state/latest`, init);
+  if (!response.ok) {
+    throw new Error(`Genesis live state fetch failed (${response.status})`);
+  }
+  return (await response.json()) as GenesisLiveStateResponse;
 };
 
 export const fetchGenesisRobotState = async (): Promise<GenesisJointStateResponse> => {

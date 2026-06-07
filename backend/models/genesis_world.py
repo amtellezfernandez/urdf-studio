@@ -97,3 +97,27 @@ class GenesisWorldStateResponse(BaseModel):
     source_sequence: int
     poses: list[GenesisWorldPose] = Field(default_factory=list)
     updated_at_monotonic_sec: float
+
+
+class GenesisLiveStateRequest(BaseModel):
+    robot_joint_values: dict[str, float] = Field(default_factory=dict)
+    world_source_sequence: int = 0
+    poses: list[GenesisWorldPose] = Field(default_factory=list)
+
+    @field_validator("robot_joint_values")
+    @classmethod
+    def validate_robot_joint_values(cls, values: dict[str, float]) -> dict[str, float]:
+        return GenesisJointStateRequest(joint_values=values).joint_values
+
+    @field_validator("poses")
+    @classmethod
+    def validate_live_poses(cls, values: list[GenesisWorldPose]) -> list[GenesisWorldPose]:
+        return GenesisWorldStateRequest(poses=values).poses
+
+
+class GenesisLiveStateResponse(BaseModel):
+    sequence: int
+    robot_joint_values: dict[str, float] = Field(default_factory=dict)
+    world_source_sequence: int = 0
+    poses: list[GenesisWorldPose] = Field(default_factory=list)
+    updated_at_monotonic_sec: float
