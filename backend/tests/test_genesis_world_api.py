@@ -39,6 +39,12 @@ def test_open_genesis_world_endpoint_launches_default_scene(monkeypatch) -> None
     assert launched_modes == ["mesh"]
 
 
+def test_open_genesis_world_request_defaults_to_solid_box_colliders() -> None:
+    request = GenesisWorldOpenRequest()
+
+    assert request.dynamic_container_mode == "box"
+
+
 def test_open_genesis_world_clears_stale_world_pose_state(monkeypatch) -> None:
     reset_genesis_live_state_for_tests()
 

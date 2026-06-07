@@ -3063,7 +3063,7 @@ const Index = () => {
   const handleOpenGenesisWorld = useCallback(async () => {
     try {
       useGenesisWorldLiveStateStore.getState().clearLivePoses();
-      const launched = await openGenesisWorld("mesh");
+      const launched = await openGenesisWorld("box");
       setGenesisLiveSyncEnabled(true);
       toast.success(
         `Genesis launch started (pid ${launched.pid}). Live robot/world sync is active.`

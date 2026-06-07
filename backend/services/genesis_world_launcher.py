@@ -13,7 +13,7 @@ from backend.models.genesis_world import (
 
 def launch_default_genesis_world(
     *,
-    dynamic_container_mode: GenesisDynamicContainerMode = "mesh",
+    dynamic_container_mode: GenesisDynamicContainerMode = "box",
 ) -> GenesisWorldOpenResponse:
     command = [
         sys.executable,

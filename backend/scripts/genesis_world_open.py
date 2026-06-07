@@ -20,6 +20,7 @@ from backend.services.genesis_world_scene import (
     color_hex_to_rgb,
     scene_center_and_radius,
 )
+from backend.services.so101_genesis_urdf import materialize_so101_genesis_urdf
 
 GENESIS_RIGID_FRICTION_MIN = 0.01
 GENESIS_RIGID_FRICTION_MAX = 5.0
@@ -418,6 +419,47 @@ def _dynamic_entity_pose_payload(
     }
 
 
+def _visual_mesh_qpos_from_collider_qpos(
+    *,
+    collider_qpos: list[float],
+    collider_scaled_offset_xyz: tuple[float, float, float],
+    visual_scaled_offset_xyz: tuple[float, float, float],
+) -> list[float] | None:
+    pose = _resolve_studio_pose_from_qpos(
+        qpos=collider_qpos,
+        scaled_visual_origin_offset_xyz=collider_scaled_offset_xyz,
+    )
+    if pose is None:
+        return None
+    studio_position_xyz, orientation_wxyz = pose
+    rotated_visual_offset = _rotate_vector_by_quaternion_wxyz(
+        orientation_wxyz,
+        visual_scaled_offset_xyz,
+    )
+    visual_position_xyz = tuple(
+        studio_position_xyz[index] + rotated_visual_offset[index]
+        for index in range(3)
+    )
+    return [*visual_position_xyz, *orientation_wxyz]
+
+
+def _sync_dynamic_visual_entities(
+    dynamic_visual_entities: list[
+        tuple[Any, Any, tuple[float, float, float], tuple[float, float, float]]
+    ],
+) -> None:
+    for visual_entity, collider_entity, collider_offset, visual_offset in (
+        dynamic_visual_entities
+    ):
+        visual_qpos = _visual_mesh_qpos_from_collider_qpos(
+            collider_qpos=_to_float_list(collider_entity.get_qpos()),
+            collider_scaled_offset_xyz=collider_offset,
+            visual_scaled_offset_xyz=visual_offset,
+        )
+        if visual_qpos is not None:
+            visual_entity.set_qpos(visual_qpos)
+
+
 def _publish_dynamic_world_poses(
     *,
     base_url: str,
@@ -514,9 +556,10 @@ def open_genesis_world_scene(
         surface=gs.surfaces.Default(color=(0.16, 0.16, 0.16), opacity=0.35),
         name="floor",
     )
+    genesis_urdf_path = materialize_so101_genesis_urdf(urdf_path)
     robot_entity = scene.add_entity(
         gs.morphs.URDF(
-            file=str(urdf_path.resolve()),
+            file=str(genesis_urdf_path.resolve()),
             fixed=True,
             merge_fixed_links=False,
             collision=True,
@@ -531,6 +574,9 @@ def open_genesis_world_scene(
     )
 
     dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]] = []
+    dynamic_visual_entities: list[
+        tuple[Any, Any, tuple[float, float, float], tuple[float, float, float]]
+    ] = []
     for spec in specs:
         if spec.is_dynamic and dynamic_container_mode == "mesh":
             entity = _add_mesh_entity(
@@ -555,11 +601,11 @@ def open_genesis_world_scene(
                 )
             )
         elif spec.is_dynamic and dynamic_container_mode == "box":
-            _add_mesh_entity(
+            visual_entity = _add_mesh_entity(
                 gs,
                 scene,
                 spec=spec,
-                fixed=True,
+                fixed=False,
                 collision=False,
                 name=f"{spec.element.id}_visual",
                 decimate=False,
@@ -579,6 +625,20 @@ def open_genesis_world_scene(
                     entity,
                     _scaled_offset(
                         spec.mesh_bounds.studio_visual_center_after_offset_xyz,
+                        spec.effective_scale_xyz,
+                    ),
+                )
+            )
+            dynamic_visual_entities.append(
+                (
+                    visual_entity,
+                    entity,
+                    _scaled_offset(
+                        spec.mesh_bounds.studio_visual_center_after_offset_xyz,
+                        spec.effective_scale_xyz,
+                    ),
+                    _scaled_offset(
+                        spec.mesh_bounds.studio_visual_offset_xyz,
                         spec.effective_scale_xyz,
                     ),
                 )
@@ -609,6 +669,7 @@ def open_genesis_world_scene(
     scene.build()
     for spec, entity, _scaled_offset_xyz in dynamic_entities:
         _apply_rigid_entity_physics_overrides(entity, spec.element.physics)
+    _sync_dynamic_visual_entities(dynamic_visual_entities)
     print("[genesis-world-open] scene built; stepping Genesis runtime.")
     live_base_url = live_state_base_url.strip().rstrip("/")
     live_enabled = bool(live_base_url)
@@ -637,6 +698,7 @@ def open_genesis_world_scene(
         from PIL import Image
 
         scene.step()
+        _sync_dynamic_visual_entities(dynamic_visual_entities)
         image = camera.render(rgb=True)[0]
         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(image).save(screenshot_path)
@@ -656,6 +718,7 @@ def open_genesis_world_scene(
                     last_joint_sequence, joint_values = latest
                     _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
             scene.step()
+            _sync_dynamic_visual_entities(dynamic_visual_entities)
         if live_enabled and dynamic_entities:
             _publish_dynamic_world_poses(
                 base_url=live_base_url,
@@ -684,6 +747,7 @@ def open_genesis_world_scene(
                     _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
 
         scene.step()
+        _sync_dynamic_visual_entities(dynamic_visual_entities)
 
         now = time.monotonic()
         if (

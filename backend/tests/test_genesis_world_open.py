@@ -16,6 +16,7 @@ from backend.scripts.genesis_world_open import (
     _joint_dof_indices_by_name,
     _rigid_material_for_physics,
     _resolve_studio_pose_from_qpos,
+    _visual_mesh_qpos_from_collider_qpos,
 )
 
 
@@ -240,6 +241,18 @@ def test_resolve_studio_pose_from_dynamic_entity_qpos_removes_visual_offset() ->
     position, orientation = pose
     assert position == pytest.approx((0.4, 0.13, 0.16))
     assert orientation == (1.0, 0.0, 0.0, 0.0)
+
+
+def test_visual_mesh_qpos_from_collider_qpos_keeps_visual_attached_to_proxy() -> None:
+    qpos = _visual_mesh_qpos_from_collider_qpos(
+        collider_qpos=[0.42, 0.1, 0.2, 1.0, 0.0, 0.0, 0.0],
+        collider_scaled_offset_xyz=(0.02, -0.03, 0.04),
+        visual_scaled_offset_xyz=(0.05, 0.01, -0.02),
+    )
+
+    assert qpos is not None
+    assert qpos[:3] == pytest.approx((0.45, 0.14, 0.14))
+    assert qpos[3:] == [1.0, 0.0, 0.0, 0.0]
 
 
 def test_apply_live_joint_values_targets_matching_genesis_dofs() -> None:

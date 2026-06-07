@@ -15,7 +15,7 @@ from backend.core.paths import BASE_DIR
 
 GenesisDynamicContainerMode = Literal["mesh", "box", "visual-only"]
 
-DEFAULT_DYNAMIC_CONTAINER_MODE: GenesisDynamicContainerMode = "mesh"
+DEFAULT_DYNAMIC_CONTAINER_MODE: GenesisDynamicContainerMode = "box"
 WORLD_LAYOUT_ELEMENT_SCALE = 0.5
 WORLD_LAYOUT_ELEMENT_MIN_METRIC_SCALE = 0.02
 WORLD_LAYOUT_ELEMENT_MAX_METRIC_SCALE = 200.0

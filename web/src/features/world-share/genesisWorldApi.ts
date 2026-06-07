@@ -25,7 +25,7 @@ export type GenesisWorldStateResponse = {
 };
 
 export const openGenesisWorld = async (
-  dynamicContainerMode: GenesisDynamicContainerMode = "mesh"
+  dynamicContainerMode: GenesisDynamicContainerMode = "box"
 ): Promise<GenesisWorldOpenResponse> => {
   const response = await guardedFetch(
     `${API_BASE_URL}/worlds/genesis/open`,

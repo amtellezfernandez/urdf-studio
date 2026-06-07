@@ -10,7 +10,7 @@ GenesisDynamicContainerMode = Literal["mesh", "box", "visual-only"]
 
 
 class GenesisWorldOpenRequest(BaseModel):
-    dynamic_container_mode: GenesisDynamicContainerMode = Field(default="mesh")
+    dynamic_container_mode: GenesisDynamicContainerMode = Field(default="box")
 
 
 class GenesisWorldOpenResponse(BaseModel):
