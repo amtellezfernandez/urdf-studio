@@ -5,6 +5,7 @@ import json
 import math
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
@@ -39,6 +40,25 @@ GENESIS_FLOOR_TOP_Z = 0.0
 GENESIS_FLOOR_CLEARANCE_EPSILON_M = 0.0005
 GENESIS_ROBOT_BASE_Z_OFFSET_M = 0.004
 GENESIS_ROBOT_FLOOR_CLEARANCE_EPSILON_M = 0.0005
+GENESIS_DYNAMIC_PROXY_FRAME_EPSILON_RAD = 1e-6
+
+
+@dataclass(frozen=True)
+class _DynamicWorldEntity:
+    spec: Any
+    entity: Any
+    collider_box_size_xyz: tuple[float, float, float]
+    collider_scaled_offset_xyz: tuple[float, float, float]
+    reported_orientation_post_transform_wxyz: tuple[float, float, float, float] | None = None
+
+
+@dataclass(frozen=True)
+class _DynamicVisualEntity:
+    visual_entity: Any
+    collider_entity: Any
+    collider_scaled_offset_xyz: tuple[float, float, float]
+    visual_scaled_offset_xyz: tuple[float, float, float]
+    reported_orientation_post_transform_wxyz: tuple[float, float, float, float] | None = None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -182,6 +202,92 @@ def _apply_rigid_entity_physics_overrides(
         )
 
 
+def _yaw_quaternion_wxyz(yaw_rad: float) -> tuple[float, float, float, float]:
+    half_yaw = yaw_rad * 0.5
+    return (math.cos(half_yaw), 0.0, 0.0, math.sin(half_yaw))
+
+
+def _roll_quaternion_wxyz(roll_rad: float) -> tuple[float, float, float, float]:
+    half_roll = roll_rad * 0.5
+    return (math.cos(half_roll), math.sin(half_roll), 0.0, 0.0)
+
+
+def _quaternion_multiply_wxyz(
+    left: tuple[float, float, float, float],
+    right: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    left_w, left_x, left_y, left_z = left
+    right_w, right_x, right_y, right_z = right
+    return _normalize_quaternion_wxyz(
+        (
+            left_w * right_w - left_x * right_x - left_y * right_y - left_z * right_z,
+            left_w * right_x + left_x * right_w + left_y * right_z - left_z * right_y,
+            left_w * right_y - left_x * right_z + left_y * right_w + left_z * right_x,
+            left_w * right_z + left_x * right_y - left_y * right_x + left_z * right_w,
+        )
+    )
+
+
+def _uses_y_up_dynamic_visual_frame(spec) -> bool:
+    if getattr(spec, "is_dynamic", False) is not True:
+        return False
+    rotation = getattr(getattr(spec, "element", None), "rotation_rpy_rad", None)
+    if not isinstance(rotation, tuple | list) or len(rotation) != 3:
+        return False
+    roll, pitch, _yaw = rotation
+    return (
+        abs(float(roll) - math.pi / 2.0) <= GENESIS_DYNAMIC_PROXY_FRAME_EPSILON_RAD
+        and abs(float(pitch)) <= GENESIS_DYNAMIC_PROXY_FRAME_EPSILON_RAD
+    )
+
+
+def _dynamic_box_proxy_rotation_rpy_rad(spec) -> tuple[float, float, float]:
+    rotation = getattr(spec.element, "rotation_rpy_rad", (0.0, 0.0, 0.0))
+    if not _uses_y_up_dynamic_visual_frame(spec):
+        return rotation
+    return (0.0, 0.0, rotation[2])
+
+
+def _dynamic_box_proxy_size_xyz(spec) -> tuple[float, float, float]:
+    size = getattr(spec, "box_size_xyz", (1e-4, 1e-4, 1e-4))
+    if not _uses_y_up_dynamic_visual_frame(spec):
+        return size
+    return (size[0], size[2], size[1])
+
+
+def _dynamic_box_proxy_center_offset_xyz(spec) -> tuple[float, float, float]:
+    offset = tuple(
+        spec.mesh_bounds.studio_visual_center_after_offset_xyz[index]
+        * spec.effective_scale_xyz[index]
+        for index in range(3)
+    )
+    if not _uses_y_up_dynamic_visual_frame(spec):
+        return offset
+    return (offset[0], offset[2], offset[1])
+
+
+def _dynamic_box_proxy_center_xyz(spec) -> tuple[float, float, float]:
+    if not _uses_y_up_dynamic_visual_frame(spec):
+        return spec.box_center_xyz
+    rotation = _dynamic_box_proxy_rotation_rpy_rad(spec)
+    rotated_offset = _rotate_vector_by_quaternion_wxyz(
+        _yaw_quaternion_wxyz(rotation[2]),
+        _dynamic_box_proxy_center_offset_xyz(spec),
+    )
+    return tuple(
+        spec.element.position_xyz[index] + rotated_offset[index]
+        for index in range(3)
+    )
+
+
+def _dynamic_visual_orientation_post_transform_wxyz(
+    spec,
+) -> tuple[float, float, float, float] | None:
+    if not _uses_y_up_dynamic_visual_frame(spec):
+        return None
+    return _roll_quaternion_wxyz(math.pi / 2.0)
+
+
 def _add_mesh_entity(
     gs,
     scene,
@@ -230,10 +336,11 @@ def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str)
         color=(0.9, 0.12, 0.12),
         opacity=1.0,
     )
+    box_size_xyz = _dynamic_box_proxy_size_xyz(spec)
     material = _rigid_material_for_physics(
         gs,
         getattr(spec.element, "physics", None),
-        box_size_xyz=spec.box_size_xyz if not fixed else None,
+        box_size_xyz=box_size_xyz if not fixed else None,
     )
     kwargs = {
         "surface": surface,
@@ -243,9 +350,9 @@ def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str)
         kwargs["material"] = material
     return scene.add_entity(
         gs.morphs.Box(
-            size=spec.box_size_xyz,
-            pos=spec.box_center_xyz,
-            euler=_to_degrees(spec.element.rotation_rpy_rad),
+            size=box_size_xyz,
+            pos=_dynamic_box_proxy_center_xyz(spec),
+            euler=_to_degrees(_dynamic_box_proxy_rotation_rpy_rad(spec)),
             fixed=fixed,
             collision=collision,
         ),
@@ -316,21 +423,21 @@ def _clear_downward_linear_z_velocity(entity) -> None:
 
 
 def _enforce_dynamic_floor_contact(
-    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
+    dynamic_entities: list[_DynamicWorldEntity],
 ) -> int:
     clamped_count = 0
-    for spec, entity, _scaled_offset_xyz in dynamic_entities:
-        box_size_xyz = _positive_float_tuple3(getattr(spec, "box_size_xyz", None))
-        if box_size_xyz is None or not hasattr(entity, "get_qpos"):
+    for dynamic_entity in dynamic_entities:
+        box_size_xyz = _positive_float_tuple3(dynamic_entity.collider_box_size_xyz)
+        if box_size_xyz is None or not hasattr(dynamic_entity.entity, "get_qpos"):
             continue
-        qpos = _to_float_list(entity.get_qpos())
+        qpos = _to_float_list(dynamic_entity.entity.get_qpos())
         min_z = _oriented_box_min_z(qpos=qpos, box_size_xyz=box_size_xyz)
         target_min_z = GENESIS_FLOOR_TOP_Z + GENESIS_FLOOR_CLEARANCE_EPSILON_M
         if min_z is None or min_z >= target_min_z:
             continue
         qpos[2] += target_min_z - min_z
-        entity.set_qpos(qpos)
-        _clear_downward_linear_z_velocity(entity)
+        dynamic_entity.entity.set_qpos(qpos)
+        _clear_downward_linear_z_velocity(dynamic_entity.entity)
         clamped_count += 1
     return clamped_count
 
@@ -395,6 +502,7 @@ def _resolve_studio_pose_from_qpos(
     *,
     qpos: list[float],
     scaled_visual_origin_offset_xyz: tuple[float, float, float],
+    reported_orientation_post_transform_wxyz: tuple[float, float, float, float] | None = None,
 ) -> tuple[tuple[float, float, float], tuple[float, float, float, float]] | None:
     if len(qpos) < 7:
         return None
@@ -410,7 +518,12 @@ def _resolve_studio_pose_from_qpos(
         position[index] - rotated_offset[index]
         for index in range(3)
     )
-    return studio_position, orientation
+    reported_orientation = (
+        _quaternion_multiply_wxyz(orientation, reported_orientation_post_transform_wxyz)
+        if reported_orientation_post_transform_wxyz is not None
+        else orientation
+    )
+    return studio_position, reported_orientation
 
 
 def _joint_dof_indices_by_name(robot_entity) -> dict[str, int]:
@@ -541,7 +654,12 @@ def _read_json_url(url: str, *, timeout_sec: float) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _post_json_url(url: str, payload: dict[str, Any], *, timeout_sec: float) -> None:
+def _post_json_url(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    timeout_sec: float,
+) -> int | None:
     data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     request = urllib_request.Request(
         url,
@@ -555,8 +673,52 @@ def _post_json_url(url: str, payload: dict[str, Any], *, timeout_sec: float) -> 
     try:
         with urllib_request.urlopen(request, timeout=timeout_sec) as response:
             response.read()
+            return response.getcode()
+    except urllib_error.HTTPError as error:
+        try:
+            error.read()
+        except OSError:
+            pass
+        return error.code
     except (OSError, urllib_error.URLError, TimeoutError):
+        return None
+
+
+def _is_successful_http_status(status: int | None) -> bool:
+    return status is not None and 200 <= status < 300
+
+
+def _publish_live_state_with_legacy_fallback(
+    *,
+    base_url: str,
+    live_payload: dict[str, Any],
+    timeout_sec: float,
+) -> None:
+    normalized_base_url = base_url.rstrip("/")
+    status = _post_json_url(
+        f"{normalized_base_url}/live-state",
+        live_payload,
+        timeout_sec=timeout_sec,
+    )
+    if _is_successful_http_status(status):
         return
+
+    robot_joint_values = live_payload.get("robot_joint_values")
+    if isinstance(robot_joint_values, dict) and robot_joint_values:
+        _post_json_url(
+            f"{normalized_base_url}/robot-state",
+            {"joint_values": robot_joint_values},
+            timeout_sec=timeout_sec,
+        )
+
+    source_sequence = live_payload.get("world_source_sequence")
+    poses = live_payload.get("poses")
+    if isinstance(source_sequence, int) and isinstance(poses, list):
+        _post_json_url(
+            f"{normalized_base_url}/world-state",
+            {"source_sequence": source_sequence, "poses": poses},
+            timeout_sec=timeout_sec,
+        )
 
 
 def _latest_joint_values_from_backend(
@@ -575,6 +737,12 @@ def _latest_joint_values_from_backend(
     if not isinstance(sequence, int) or not isinstance(joint_values, dict):
         return None
     return sequence, joint_values
+
+
+def _is_new_or_reset_sequence(sequence: int, last_sequence: int) -> bool:
+    if sequence <= 0:
+        return False
+    return sequence > last_sequence or (last_sequence > 0 and sequence < last_sequence)
 
 
 class _GenesisLiveHttpBridge:
@@ -654,7 +822,7 @@ class _GenesisLiveHttpBridge:
                         if self._latest_joint_state is not None
                         else 0
                     )
-                    if latest[0] >= current_sequence:
+                    if _is_new_or_reset_sequence(latest[0], current_sequence):
                         self._latest_joint_state = (latest[0], dict(latest[1]))
             self._stop.wait(self._joint_poll_interval)
 
@@ -682,9 +850,9 @@ class _GenesisLiveHttpBridge:
                     }
 
             if live_payload is not None:
-                _post_json_url(
-                    f"{self._base_url}/live-state",
-                    live_payload,
+                _publish_live_state_with_legacy_fallback(
+                    base_url=self._base_url,
+                    live_payload=live_payload,
                     timeout_sec=self._timeout_sec,
                 )
             self._stop.wait(self._state_publish_interval)
@@ -726,19 +894,20 @@ def _publish_robot_joint_state(
 
 def _dynamic_entity_pose_payload(
     *,
-    spec,
-    entity,
-    scaled_visual_origin_offset_xyz: tuple[float, float, float],
+    dynamic_entity: _DynamicWorldEntity,
 ) -> dict[str, Any] | None:
     pose = _resolve_studio_pose_from_qpos(
-        qpos=_to_float_list(entity.get_qpos()),
-        scaled_visual_origin_offset_xyz=scaled_visual_origin_offset_xyz,
+        qpos=_to_float_list(dynamic_entity.entity.get_qpos()),
+        scaled_visual_origin_offset_xyz=dynamic_entity.collider_scaled_offset_xyz,
+        reported_orientation_post_transform_wxyz=(
+            dynamic_entity.reported_orientation_post_transform_wxyz
+        ),
     )
     if pose is None:
         return None
     position_xyz, orientation_wxyz = pose
     return {
-        "element_id": spec.element.id,
+        "element_id": dynamic_entity.spec.element.id,
         "position_xyz": position_xyz,
         "orientation_wxyz": orientation_wxyz,
     }
@@ -749,10 +918,14 @@ def _visual_mesh_qpos_from_collider_qpos(
     collider_qpos: list[float],
     collider_scaled_offset_xyz: tuple[float, float, float],
     visual_scaled_offset_xyz: tuple[float, float, float],
+    reported_orientation_post_transform_wxyz: tuple[float, float, float, float] | None = None,
 ) -> list[float] | None:
     pose = _resolve_studio_pose_from_qpos(
         qpos=collider_qpos,
         scaled_visual_origin_offset_xyz=collider_scaled_offset_xyz,
+        reported_orientation_post_transform_wxyz=(
+            reported_orientation_post_transform_wxyz
+        ),
     )
     if pose is None:
         return None
@@ -769,27 +942,26 @@ def _visual_mesh_qpos_from_collider_qpos(
 
 
 def _sync_dynamic_visual_entities(
-    dynamic_visual_entities: list[
-        tuple[Any, Any, tuple[float, float, float], tuple[float, float, float]]
-    ],
+    dynamic_visual_entities: list[_DynamicVisualEntity],
 ) -> None:
-    for visual_entity, collider_entity, collider_offset, visual_offset in (
-        dynamic_visual_entities
-    ):
+    for dynamic_visual_entity in dynamic_visual_entities:
         visual_qpos = _visual_mesh_qpos_from_collider_qpos(
-            collider_qpos=_to_float_list(collider_entity.get_qpos()),
-            collider_scaled_offset_xyz=collider_offset,
-            visual_scaled_offset_xyz=visual_offset,
+            collider_qpos=_to_float_list(dynamic_visual_entity.collider_entity.get_qpos()),
+            collider_scaled_offset_xyz=dynamic_visual_entity.collider_scaled_offset_xyz,
+            visual_scaled_offset_xyz=dynamic_visual_entity.visual_scaled_offset_xyz,
+            reported_orientation_post_transform_wxyz=(
+                dynamic_visual_entity.reported_orientation_post_transform_wxyz
+            ),
         )
         if visual_qpos is not None:
-            visual_entity.set_qpos(visual_qpos)
+            dynamic_visual_entity.visual_entity.set_qpos(visual_qpos)
 
 
 def _publish_dynamic_world_poses(
     *,
     base_url: str,
     source_sequence: int,
-    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
+    dynamic_entities: list[_DynamicWorldEntity],
     timeout_sec: float,
 ) -> None:
     poses = _dynamic_world_poses_payload(dynamic_entities)
@@ -801,14 +973,12 @@ def _publish_dynamic_world_poses(
 
 
 def _dynamic_world_poses_payload(
-    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
+    dynamic_entities: list[_DynamicWorldEntity],
 ) -> list[dict[str, Any]]:
     poses: list[dict[str, Any]] = []
-    for spec, entity, scaled_offset in dynamic_entities:
+    for dynamic_entity in dynamic_entities:
         pose = _dynamic_entity_pose_payload(
-            spec=spec,
-            entity=entity,
-            scaled_visual_origin_offset_xyz=scaled_offset,
+            dynamic_entity=dynamic_entity,
         )
         if pose is not None:
             poses.append(pose)
@@ -892,10 +1062,8 @@ def open_genesis_world_scene(
         name="so101",
     )
 
-    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]] = []
-    dynamic_visual_entities: list[
-        tuple[Any, Any, tuple[float, float, float], tuple[float, float, float]]
-    ] = []
+    dynamic_entities: list[_DynamicWorldEntity] = []
+    dynamic_visual_entities: list[_DynamicVisualEntity] = []
     for spec in specs:
         if spec.is_dynamic and dynamic_container_mode == "mesh":
             entity = _add_mesh_entity(
@@ -907,12 +1075,12 @@ def open_genesis_world_scene(
                 name=spec.element.id,
                 decimate=True,
                 convexify=True,
-                preserve_studio_glb_orientation=True,
             )
             dynamic_entities.append(
-                (
+                _DynamicWorldEntity(
                     spec,
                     entity,
+                    spec.box_size_xyz,
                     _scaled_offset(
                         spec.mesh_bounds.studio_visual_offset_xyz,
                         spec.effective_scale_xyz,
@@ -920,6 +1088,10 @@ def open_genesis_world_scene(
                 )
             )
         elif spec.is_dynamic and dynamic_container_mode == "box":
+            collider_offset = _dynamic_box_proxy_center_offset_xyz(spec)
+            visual_orientation_post_transform = (
+                _dynamic_visual_orientation_post_transform_wxyz(spec)
+            )
             visual_entity = _add_mesh_entity(
                 gs,
                 scene,
@@ -929,7 +1101,6 @@ def open_genesis_world_scene(
                 name=f"{spec.element.id}_visual",
                 decimate=False,
                 convexify=False,
-                preserve_studio_glb_orientation=True,
             )
             entity = _add_box_entity(
                 gs,
@@ -940,27 +1111,24 @@ def open_genesis_world_scene(
                 name=spec.element.id,
             )
             dynamic_entities.append(
-                (
+                _DynamicWorldEntity(
                     spec,
                     entity,
-                    _scaled_offset(
-                        spec.mesh_bounds.studio_visual_center_after_offset_xyz,
-                        spec.effective_scale_xyz,
-                    ),
+                    _dynamic_box_proxy_size_xyz(spec),
+                    collider_offset,
+                    visual_orientation_post_transform,
                 )
             )
             dynamic_visual_entities.append(
-                (
+                _DynamicVisualEntity(
                     visual_entity,
                     entity,
-                    _scaled_offset(
-                        spec.mesh_bounds.studio_visual_center_after_offset_xyz,
-                        spec.effective_scale_xyz,
-                    ),
+                    collider_offset,
                     _scaled_offset(
                         spec.mesh_bounds.studio_visual_offset_xyz,
                         spec.effective_scale_xyz,
                     ),
+                    visual_orientation_post_transform,
                 )
             )
         else:
@@ -1044,7 +1212,7 @@ def open_genesis_world_scene(
         if latest is None:
             return
         sequence, joint_values = latest
-        if sequence <= last_joint_sequence:
+        if not _is_new_or_reset_sequence(sequence, last_joint_sequence):
             return
         last_joint_sequence = sequence
         _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)

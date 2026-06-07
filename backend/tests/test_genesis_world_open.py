@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import backend.scripts.genesis_world_open as genesis_world_open
 from backend.scripts.genesis_world_open import (
     DEFAULT_FLOOR_FRICTION,
     GENESIS_FLOOR_CLEARANCE_EPSILON_M,
@@ -19,6 +21,7 @@ from backend.scripts.genesis_world_open import (
     GENESIS_SO101_GRIPPER_FORCE_LIMIT,
     GENESIS_SO101_GRIPPER_KP,
     GENESIS_SO101_GRIPPER_KV,
+    _DynamicWorldEntity,
     _add_box_entity,
     _add_floor_entity,
     _add_mesh_entity,
@@ -28,7 +31,9 @@ from backend.scripts.genesis_world_open import (
     _apply_rigid_entity_physics_overrides,
     _apply_live_joint_values,
     _joint_dof_indices_by_name,
+    _is_new_or_reset_sequence,
     _oriented_box_min_z,
+    _publish_live_state_with_legacy_fallback,
     _rigid_material_for_physics,
     _robot_collision_min_z,
     _resolve_studio_pose_from_qpos,
@@ -225,6 +230,46 @@ def test_add_box_entity_passes_physics_material_to_genesis() -> None:
     }
 
 
+def test_add_box_entity_uses_horizontal_proxy_for_dynamic_y_up_container() -> None:
+    morphs = _FakeMorphs()
+    materials = _FakeMaterials()
+    gs = SimpleNamespace(
+        morphs=morphs,
+        surfaces=SimpleNamespace(Default=lambda **_kwargs: object()),
+        materials=materials,
+    )
+    scene = _FakeScene()
+    spec = SimpleNamespace(
+        is_dynamic=True,
+        box_size_xyz=(0.038847, 0.041463, 0.089494),
+        box_center_xyz=(0.28, -0.08, 0.020732),
+        mesh_bounds=SimpleNamespace(
+            studio_visual_center_after_offset_xyz=(0.0, 0.4607, 0.0),
+        ),
+        effective_scale_xyz=(0.045, 0.045, 0.045),
+        element=SimpleNamespace(
+            position_xyz=(0.28, -0.08, 0.0),
+            rotation_rpy_rad=(math.pi / 2.0, 0.0, -0.08),
+            material_color="#ef4444",
+            physics=SimpleNamespace(mass_kg=0.12, friction=3.0, restitution=0.0),
+        ),
+    )
+
+    _add_box_entity(
+        gs,
+        scene,
+        spec=spec,
+        fixed=False,
+        collision=True,
+        name="grabbable-container",
+    )
+
+    assert morphs.box_kwargs is not None
+    assert morphs.box_kwargs["size"] == pytest.approx((0.038847, 0.089494, 0.041463))
+    assert morphs.box_kwargs["pos"] == pytest.approx((0.28, -0.08, 0.0207315))
+    assert morphs.box_kwargs["euler"] == pytest.approx((0.0, 0.0, math.degrees(-0.08)))
+
+
 def test_add_floor_entity_uses_thick_fixed_collider() -> None:
     morphs = _FakeMorphs()
     materials = _FakeMaterials()
@@ -299,10 +344,18 @@ def test_enforce_dynamic_floor_contact_lifts_flipped_box_above_floor() -> None:
         def set_qvel(self, qvel):
             self.qvel = list(qvel)
 
-    spec = SimpleNamespace(box_size_xyz=(0.1, 0.2, 0.03))
     entity = _FakeEntity()
 
-    clamped = _enforce_dynamic_floor_contact([(spec, entity, (0.0, 0.0, 0.0))])
+    clamped = _enforce_dynamic_floor_contact(
+        [
+            _DynamicWorldEntity(
+                spec=SimpleNamespace(),
+                entity=entity,
+                collider_box_size_xyz=(0.1, 0.2, 0.03),
+                collider_scaled_offset_xyz=(0.0, 0.0, 0.0),
+            )
+        ]
+    )
 
     assert clamped == 1
     assert entity.qpos[2] == pytest.approx(
@@ -450,6 +503,75 @@ def test_robot_joint_values_payload_reads_corrected_genesis_qpos() -> None:
     )
 
     assert payload == {"shoulder_pan": 0.1, "wrist_flex": 0.3}
+
+
+def test_live_state_publish_falls_back_to_legacy_routes(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_post_json_url(url, payload, *, timeout_sec):
+        calls.append((url, payload))
+        if url.endswith("/live-state"):
+            return 404
+        return 200
+
+    monkeypatch.setattr(genesis_world_open, "_post_json_url", fake_post_json_url)
+
+    _publish_live_state_with_legacy_fallback(
+        base_url="http://127.0.0.1:8000/worlds/genesis",
+        live_payload={
+            "robot_joint_values": {"shoulder_pan": 0.1, "gripper": 0.2},
+            "world_source_sequence": 7,
+            "poses": [
+                {
+                    "element_id": "grabbable-container-a",
+                    "position_xyz": [0.3, 0.0, 0.02],
+                    "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+                }
+            ],
+        },
+        timeout_sec=0.01,
+    )
+
+    assert calls == [
+        (
+            "http://127.0.0.1:8000/worlds/genesis/live-state",
+            {
+                "robot_joint_values": {"shoulder_pan": 0.1, "gripper": 0.2},
+                "world_source_sequence": 7,
+                "poses": [
+                    {
+                        "element_id": "grabbable-container-a",
+                        "position_xyz": [0.3, 0.0, 0.02],
+                        "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    }
+                ],
+            },
+        ),
+        (
+            "http://127.0.0.1:8000/worlds/genesis/robot-state",
+            {"joint_values": {"shoulder_pan": 0.1, "gripper": 0.2}},
+        ),
+        (
+            "http://127.0.0.1:8000/worlds/genesis/world-state",
+            {
+                "source_sequence": 7,
+                "poses": [
+                    {
+                        "element_id": "grabbable-container-a",
+                        "position_xyz": [0.3, 0.0, 0.02],
+                        "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    }
+                ],
+            },
+        ),
+    ]
+
+
+def test_live_joint_sequence_accepts_backend_reset() -> None:
+    assert _is_new_or_reset_sequence(2383, 2382) is True
+    assert _is_new_or_reset_sequence(3, 2382) is True
+    assert _is_new_or_reset_sequence(2382, 2382) is False
+    assert _is_new_or_reset_sequence(0, 2382) is False
 
 
 def test_configure_robot_position_controller_sets_fast_arm_and_gripper_gains() -> None:
