@@ -8,6 +8,7 @@ import {
   IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M,
   buildIkDragLivePhysicsSample,
   buildIkDragLivePhysicsWorldLayout,
+  resolveIkDragLivePhysicsErrorMessage,
 } from "@/features/viewer/ikDragLivePhysics";
 
 const createObject = (overrides: Partial<CreatedObject> = {}): CreatedObject => ({
@@ -161,5 +162,19 @@ describe("ikDragLivePhysics", () => {
         IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M
       ).gripperOpeningM
     ).toBe(IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M);
+  });
+
+  it("preserves MJLab live physics failure reasons for user-facing diagnostics", () => {
+    expect(
+      resolveIkDragLivePhysicsErrorMessage(
+        new Error("MJLab live session limit reached.")
+      )
+    ).toBe("MJLab live session limit reached.");
+    expect(resolveIkDragLivePhysicsErrorMessage(" MuJoCo unavailable ")).toBe(
+      "MuJoCo unavailable"
+    );
+    expect(resolveIkDragLivePhysicsErrorMessage(null)).toBe(
+      "MJLab live physics did not start for this IK drag."
+    );
   });
 });

@@ -65,6 +65,10 @@ export const IK_DRAG_LIVE_PHYSICS_STEP_MS = 5;
 export const IK_DRAG_LIVE_PHYSICS_THROTTLE_MS = 25;
 export const IK_DRAG_LIVE_PHYSICS_START_GRIPPER_OPENING_M = 0.09;
 export const IK_DRAG_LIVE_PHYSICS_GRIPPER_OPENING_M = 0.035;
+export const IK_DRAG_LIVE_PHYSICS_SCENE_READY_RETRY_MS = 75;
+export const IK_DRAG_LIVE_PHYSICS_SCENE_READY_WAIT_MS = 1_500;
+export const IK_DRAG_LIVE_PHYSICS_START_FAILURE_COOLDOWN_MS = 2_500;
+export const IK_DRAG_LIVE_PHYSICS_ERROR_TOAST_COOLDOWN_MS = 5_000;
 
 const LIVE_PHYSICS_OBJECT_TYPES = new Set<CreatedObject["type"]>([
   "cube",
@@ -123,6 +127,25 @@ const resolveMeshProxyMassKg = (proxy: IkDragLivePhysicsMeshProxy): number => {
     1e-5
   );
   return Math.max(0.04, Math.min(8, volumeM3 * 120));
+};
+
+const resolveIssueReason = (
+  issues: readonly { reason?: unknown }[] | undefined
+): string | null => {
+  const reason = issues
+    ?.map((issue) => (typeof issue.reason === "string" ? issue.reason.trim() : ""))
+    .find((candidate) => candidate.length > 0);
+  return reason ?? null;
+};
+
+export const resolveIkDragLivePhysicsErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error.trim();
+  }
+  return "MJLab live physics did not start for this IK drag.";
 };
 
 const buildMeshProxyWorldLayoutObject = (
@@ -288,6 +311,10 @@ export const useIkDragLivePhysicsBridge = (
   } | null>(null);
   const startPromiseRef = useRef<Promise<void> | null>(null);
   const drainTimerRef = useRef<number | null>(null);
+  const startRetryTimerRef = useRef<number | null>(null);
+  const pendingStartPoseRef = useRef<IkDragLivePhysicsTargetPose | null>(null);
+  const sceneReadyWaitStartedAtMsRef = useRef<number | null>(null);
+  const startFailureCooldownUntilMsRef = useRef(0);
   const activeRef = useRef(false);
   const generationRef = useRef(0);
   const lastErrorToastRef = useRef(0);
@@ -305,18 +332,25 @@ export const useIkDragLivePhysicsBridge = (
   }, [onMeshProxyPose]);
 
   const notifyError = useCallback((error: unknown) => {
-    console.warn("[MJLab] Live IK drag physics unavailable:", error);
+    const message = resolveIkDragLivePhysicsErrorMessage(error);
+    console.warn("[MJLab] Live IK drag physics unavailable:", message, error);
     const now = performance.now();
-    if (now - lastErrorToastRef.current < 5_000) {
+    if (now - lastErrorToastRef.current < IK_DRAG_LIVE_PHYSICS_ERROR_TOAST_COOLDOWN_MS) {
       return;
     }
     lastErrorToastRef.current = now;
-    toast.error("MJLab live physics did not start for this IK drag.");
+    toast.error(`MJLab live physics unavailable: ${message}`);
   }, []);
 
   const begin = useCallback(() => {
     activeRef.current = true;
     generationRef.current += 1;
+    pendingStartPoseRef.current = null;
+    sceneReadyWaitStartedAtMsRef.current = null;
+    if (startRetryTimerRef.current !== null) {
+      window.clearTimeout(startRetryTimerRef.current);
+      startRetryTimerRef.current = null;
+    }
   }, []);
 
   const stop = useCallback(() => {
@@ -329,6 +363,12 @@ export const useIkDragLivePhysicsBridge = (
       window.clearTimeout(drainTimerRef.current);
       drainTimerRef.current = null;
     }
+    if (startRetryTimerRef.current !== null) {
+      window.clearTimeout(startRetryTimerRef.current);
+      startRetryTimerRef.current = null;
+    }
+    pendingStartPoseRef.current = null;
+    sceneReadyWaitStartedAtMsRef.current = null;
     if (!session) {
       return;
     }
@@ -347,13 +387,41 @@ export const useIkDragLivePhysicsBridge = (
         return;
       }
       const generation = generationRef.current;
+      const now = performance.now();
+      if (now < startFailureCooldownUntilMsRef.current) {
+        return;
+      }
       const worldLayout = buildIkDragLivePhysicsWorldLayout(
         objectsRef.current,
         meshProxiesRef.current
       );
       if (!worldLayout) {
+        if (sceneReadyWaitStartedAtMsRef.current === null) {
+          sceneReadyWaitStartedAtMsRef.current = now;
+        }
+        if (
+          now - sceneReadyWaitStartedAtMsRef.current <
+            IK_DRAG_LIVE_PHYSICS_SCENE_READY_WAIT_MS &&
+          startRetryTimerRef.current === null
+        ) {
+          startRetryTimerRef.current = window.setTimeout(() => {
+            startRetryTimerRef.current = null;
+            const latestPose = pendingStartPoseRef.current;
+            if (
+              !latestPose ||
+              !activeRef.current ||
+              generationRef.current !== generation ||
+              sessionRef.current ||
+              startPromiseRef.current
+            ) {
+              return;
+            }
+            void ensureSession(latestPose);
+          }, IK_DRAG_LIVE_PHYSICS_SCENE_READY_RETRY_MS);
+        }
         return;
       }
+      sceneReadyWaitStartedAtMsRef.current = null;
       const startPromise = startTeleopMjlabLiveSession({
         worldLayout,
         initialEndEffectorSample: buildIkDragLivePhysicsSample(
@@ -368,7 +436,7 @@ export const useIkDragLivePhysicsBridge = (
         .then((result) => {
           if (!result.success || !result.sessionId) {
             throw new Error(
-              result.issues[0]?.reason ||
+              resolveIssueReason(result.issues) ||
                 "MJLab live physics session failed to start."
             );
           }
@@ -382,8 +450,9 @@ export const useIkDragLivePhysicsBridge = (
             sampleIndex: 0,
             lastStepAtMs: performance.now(),
             inFlight: false,
-            pendingPose: null,
+            pendingPose: pendingStartPoseRef.current,
           };
+          pendingStartPoseRef.current = null;
           if (result.frame) {
             applyIkDragLivePhysicsFrame(result.frame, result.frameMap, {
               meshProxies: meshProxiesRef.current,
@@ -392,6 +461,8 @@ export const useIkDragLivePhysicsBridge = (
           }
         })
         .catch((error) => {
+          startFailureCooldownUntilMsRef.current =
+            performance.now() + IK_DRAG_LIVE_PHYSICS_START_FAILURE_COOLDOWN_MS;
           notifyError(error);
         })
         .finally(() => {
@@ -440,7 +511,7 @@ export const useIkDragLivePhysicsBridge = (
       });
       if (!result.success) {
         throw new Error(
-          result.issues[0]?.reason || "MJLab live physics step failed."
+          resolveIssueReason(result.issues) || "MJLab live physics step failed."
         );
       }
       if (generationRef.current !== generation || sessionRef.current !== session) {
@@ -475,6 +546,7 @@ export const useIkDragLivePhysicsBridge = (
       }
       const session = sessionRef.current;
       if (!session) {
+        pendingStartPoseRef.current = pose;
         void ensureSession(pose);
         return;
       }
