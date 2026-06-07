@@ -763,6 +763,7 @@ def open_genesis_world_scene(
                 name=f"{spec.element.id}_visual",
                 decimate=False,
                 convexify=False,
+                preserve_studio_glb_orientation=True,
             )
             entity = _add_box_entity(
                 gs,

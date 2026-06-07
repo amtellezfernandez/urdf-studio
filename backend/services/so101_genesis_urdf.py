@@ -7,7 +7,7 @@ from pathlib import Path
 from backend.core.paths import BASE_DIR
 
 GENESIS_SO101_URDF_CACHE_DIR = BASE_DIR / ".cache" / "genesis-urdf"
-GENESIS_SO101_GRIPPER_COLLISION_VERSION = "so101-genesis-gripper-pads-v1"
+GENESIS_SO101_GRIPPER_COLLISION_VERSION = "so101-genesis-gripper-pads-v2"
 
 SO101_FIXED_GRIPPER_PAD_NAME = "fixed_gripper_pad_collision"
 SO101_MOVING_GRIPPER_PAD_NAME = "moving_gripper_pad_collision"
@@ -16,16 +16,16 @@ _SO101_GRIPPER_PAD_COLLISIONS = (
     (
         "gripper_link",
         SO101_FIXED_GRIPPER_PAD_NAME,
-        "-0.008 -0.0002 -0.078",
+        "-0.0026 -0.0020 -0.0770",
         "0 0 0",
-        "0.028 0.018 0.055",
+        "0.070 0.056 0.060",
     ),
     (
         "moving_jaw_so101_v1_link",
         SO101_MOVING_GRIPPER_PAD_NAME,
-        "-0.001 -0.058 0.0",
+        "-0.0012 -0.0360 0.0189",
         "0 0 0",
-        "0.028 0.018 0.055",
+        "0.030 0.095 0.052",
     ),
 )
 

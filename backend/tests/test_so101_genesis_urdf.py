@@ -47,6 +47,14 @@ def test_materialize_so101_genesis_urdf_adds_gripper_collision_pads(
     }
     assert SO101_FIXED_GRIPPER_PAD_NAME in collisions
     assert SO101_MOVING_GRIPPER_PAD_NAME in collisions
+    fixed_pad = root.find(f".//collision[@name='{SO101_FIXED_GRIPPER_PAD_NAME}']")
+    moving_pad = root.find(f".//collision[@name='{SO101_MOVING_GRIPPER_PAD_NAME}']")
+    assert fixed_pad is not None
+    assert moving_pad is not None
+    assert fixed_pad.find("origin").attrib["xyz"] == "-0.0026 -0.0020 -0.0770"
+    assert fixed_pad.find("geometry/box").attrib["size"] == "0.070 0.056 0.060"
+    assert moving_pad.find("origin").attrib["xyz"] == "-0.0012 -0.0360 0.0189"
+    assert moving_pad.find("geometry/box").attrib["size"] == "0.030 0.095 0.052"
     mesh = root.find(".//mesh")
     assert mesh is not None
     assert Path(mesh.attrib["filename"]).is_absolute()
