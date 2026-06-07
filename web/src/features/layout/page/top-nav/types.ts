@@ -76,6 +76,7 @@ export type TopNavBarProps = {
   onRunLocalWorldRollout?: () => void;
   onImportWorldRolloutResults?: () => void;
   onOpenWorldRolloutReview?: () => void;
+  onOpenGenesisWorld?: () => void;
   onExportCurrentWorldSceneLayer: () => void;
   onImportSceneLayerFromUrl: () => void;
   onListWorldScenePackages: () => void;
