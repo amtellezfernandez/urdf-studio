@@ -8,6 +8,7 @@ import type {
   DatasetConfig,
   ModelConfig,
   TrackerConfig,
+  TrainingPreflightResponse,
   TrainingParams,
   TrainingStatusResponse,
 } from "./types";
@@ -35,6 +36,7 @@ interface TrainingState {
   trainingParams: TrainingParams;
   trackerConfig: TrackerConfig;
   computeConfig: ComputeConfig;
+  preflightResult: TrainingPreflightResponse | null;
 
   // Job state
   activeJobId: string | null;
@@ -59,6 +61,7 @@ interface TrainingState {
   setTrainingParams: (params: Partial<TrainingParams>) => void;
   setTrackerConfig: (config: Partial<TrackerConfig>) => void;
   setComputeConfig: (config: Partial<ComputeConfig>) => void;
+  setPreflightResult: (result: TrainingPreflightResponse | null) => void;
 
   // Job actions
   setActiveJobId: (jobId: string | null) => void;
@@ -134,6 +137,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   trainingParams: { ...defaultTrainingParams },
   trackerConfig: { ...defaultTrackerConfig },
   computeConfig: { ...defaultComputeConfig },
+  preflightResult: null,
 
   activeJobId: null,
   jobStatus: null,
@@ -177,27 +181,32 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   },
 
   // Config setters
-  setDatasetConfig: (config) => set({ datasetConfig: config, error: null }),
+  setDatasetConfig: (config) => set({ datasetConfig: config, preflightResult: null, error: null }),
 
-  setModelConfig: (config) => set({ modelConfig: config, error: null }),
+  setModelConfig: (config) => set({ modelConfig: config, preflightResult: null, error: null }),
 
   setTrainingParams: (params) =>
     set((state) => ({
       trainingParams: { ...state.trainingParams, ...params },
+      preflightResult: null,
       error: null,
     })),
 
   setTrackerConfig: (config) =>
     set((state) => ({
       trackerConfig: { ...state.trackerConfig, ...config },
+      preflightResult: null,
       error: null,
     })),
 
   setComputeConfig: (config) =>
     set((state) => ({
       computeConfig: { ...state.computeConfig, ...config },
+      preflightResult: null,
       error: null,
     })),
+
+  setPreflightResult: (result) => set({ preflightResult: result, error: null }),
 
   // Job actions
   setActiveJobId: (jobId) => set({ activeJobId: jobId }),
@@ -217,6 +226,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       trainingParams: { ...defaultTrainingParams },
       trackerConfig: { ...defaultTrackerConfig },
       computeConfig: { ...defaultComputeConfig },
+      preflightResult: null,
       currentStep: "dataset",
       error: null,
     }),
@@ -234,6 +244,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       trainingParams: { ...defaultTrainingParams },
       trackerConfig: { ...defaultTrackerConfig },
       computeConfig: { ...defaultComputeConfig },
+      preflightResult: null,
       activeJobId: null,
       jobStatus: null,
       isPolling: false,
@@ -255,6 +266,8 @@ export const selectIsConfigComplete = (state: TrainingState): boolean => {
 export const selectCanStartTraining = (state: TrainingState): boolean => {
   return (
     selectIsConfigComplete(state) &&
+    state.computeConfig.type === "local" &&
+    state.preflightResult?.ready === true &&
     !state.isSubmitting &&
     state.activeJobId === null
   );

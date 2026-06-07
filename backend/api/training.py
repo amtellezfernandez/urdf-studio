@@ -22,6 +22,7 @@ from backend.models.training import (
     ModelsListResponse,
     TrainingCancelRequest,
     TrainingJobsListResponse,
+    TrainingPreflightResponse,
     TrainingStartRequest,
     TrainingStartResponse,
     TrainingStatusResponse,
@@ -50,6 +51,12 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
     to monitor progress.
     """
     return await training_service.start_training(request)
+
+
+@router.post("/preflight", response_model=TrainingPreflightResponse)
+async def preflight_training(request: TrainingStartRequest) -> TrainingPreflightResponse:
+    """Validate a training launch before starting it."""
+    return await training_service.preflight_training(request)
 
 
 @router.get("/status/{job_id}", response_model=TrainingStatusResponse)

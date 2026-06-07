@@ -358,6 +358,31 @@ class TrainingStartResponse(BaseModel):
     )
 
 
+class TrainingPreflightCheck(BaseModel):
+    """Single training preflight check result."""
+
+    name: str = Field(description="Check identifier")
+    label: str = Field(description="Human-readable check label")
+    status: Literal["pass", "warn", "fail"] = Field(description="Check status")
+    message: str = Field(description="Check result message")
+    details: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured check details for UI display",
+    )
+
+
+class TrainingPreflightResponse(BaseModel):
+    """Response for validating a training launch before starting it."""
+
+    compute_backend: str = Field(description="Requested compute backend")
+    device: str = Field(description="Requested training device")
+    ready: bool = Field(description="Whether training can be launched")
+    can_train_locally: bool = Field(description="Whether local/backend compute is usable")
+    cloud_required: bool = Field(description="Whether the request needs cloud/remote compute")
+    recommendation: str = Field(description="Next action recommendation")
+    checks: List[TrainingPreflightCheck] = Field(default_factory=list)
+
+
 class TrainingStatusResponse(BaseModel):
     """Training job status."""
 

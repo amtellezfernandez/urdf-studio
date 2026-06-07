@@ -36,6 +36,7 @@ export function TrainingReview() {
     trainingParams,
     trackerConfig,
     computeConfig,
+    preflightResult,
   } = useTrainingStore();
 
   // Get model display name
@@ -63,12 +64,14 @@ export function TrainingReview() {
   // Get compute display name
   const getComputeDisplayName = (type: string) => {
     const names: Record<string, string> = {
-      local: "Local GPU",
+      local: "Backend machine",
       modal: "Modal (Cloud)",
       runpod: "RunPod (Cloud)",
     };
     return names[type] || type;
   };
+
+  const computeReady = computeConfig.type === "local" && preflightResult?.ready === true;
 
   return (
     <div className="space-y-3">
@@ -152,12 +155,17 @@ export function TrainingReview() {
       {/* Compute */}
       <ReviewSection
         title="Compute"
-        valid={computeConfig.type === "local" || !!computeConfig.apiKey}
+        valid={computeReady}
       >
         <div className="space-y-1">
           <div>{getComputeDisplayName(computeConfig.type)}</div>
           {computeConfig.type === "local" ? (
-            <div className="text-xs opacity-75">Device: {computeConfig.device}</div>
+            <>
+              <div className="text-xs opacity-75">Device: {computeConfig.device}</div>
+              <div className={`text-xs ${computeReady ? "text-green-600" : "text-amber-600"}`}>
+                {computeReady ? "Preflight passed" : "Preflight required"}
+              </div>
+            </>
           ) : (
             <>
               {computeConfig.gpu && (
@@ -175,14 +183,14 @@ export function TrainingReview() {
       </ReviewSection>
 
       {/* Warnings */}
-      {computeConfig.type !== "local" && !computeConfig.apiKey && (
+      {!computeReady && (
         <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5" />
             <div>
-              <div className="text-sm font-medium text-amber-600">Missing API Key</div>
+              <div className="text-sm font-medium text-amber-600">Preflight Required</div>
               <div className="text-xs text-muted-foreground">
-                Go back to the Compute step and add your {computeConfig.type} API key.
+                Go back to the Compute step and run preflight successfully before launch.
               </div>
             </div>
           </div>
@@ -190,7 +198,7 @@ export function TrainingReview() {
       )}
 
       {/* Ready to start */}
-      {datasetConfig && modelConfig && (computeConfig.type === "local" || computeConfig.apiKey) && (
+      {datasetConfig && modelConfig && computeReady && (
         <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5" />

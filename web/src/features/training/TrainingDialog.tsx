@@ -16,6 +16,7 @@ import { TrackerConfig } from "./TrackerConfig";
 import { ComputeSelector } from "./ComputeSelector";
 import { TrainingReview } from "./TrainingReview";
 import { TrainingProgress } from "./TrainingProgress";
+import { buildTrainingPayload } from "./buildTrainingPayload";
 import { API_BASE_URL } from "@/shared/config/api";
 import type { TrainingStartResponse, TrainingStatusResponse } from "./types";
 
@@ -148,6 +149,7 @@ export function TrainingDialog() {
     trainingParams,
     trackerConfig,
     computeConfig,
+    preflightResult,
     activeJobId,
     jobStatus,
     isSubmitting,
@@ -203,9 +205,14 @@ export function TrainingDialog() {
   }, [pollIntervalId, setJobStatus, setIsPolling, setPollIntervalId]);
 
   // Start training
-  const handleStartTraining = async () => {
+  const handleStartTraining = async (smokeRun = false) => {
     if (!datasetConfig || !modelConfig) {
       setError("Please complete dataset and model configuration");
+      return;
+    }
+
+    if (!preflightResult?.ready) {
+      setError("Run compute preflight successfully before starting training");
       return;
     }
 
@@ -213,52 +220,23 @@ export function TrainingDialog() {
     setError(null);
 
     try {
-      // Convert to API format (camelCase -> snake_case handled by backend)
-      const request = {
-        dataset: {
-          source: datasetConfig.source,
-          repo_id: datasetConfig.repoId,
-          local_path: datasetConfig.localPath,
-          version: datasetConfig.version,
-        },
-        model: {
-          architecture: modelConfig.architecture,
-          config: modelConfig.config,
-          pretrained_path: modelConfig.pretrainedPath,
-        },
-        training: {
-          batch_size: trainingParams.batchSize,
-          learning_rate: trainingParams.learningRate,
-          epochs: trainingParams.epochs,
-          max_steps: trainingParams.maxSteps,
-          seed: trainingParams.seed,
-          gradient_accumulation_steps: trainingParams.gradientAccumulationSteps,
-          max_grad_norm: trainingParams.maxGradNorm,
-          weight_decay: trainingParams.weightDecay,
-          lr_scheduler: trainingParams.lrScheduler,
-          warmup_steps: trainingParams.warmupSteps,
-          checkpoint_interval: trainingParams.checkpointInterval,
-          keep_last_n_checkpoints: trainingParams.keepLastNCheckpoints,
-          early_stopping_patience: trainingParams.earlyStoppingPatience,
-          output_dir: trainingParams.outputDir,
-          run_name: trainingParams.runName,
-        },
-        tracker: {
-          type: trackerConfig.type,
-          tracking_uri: trackerConfig.trackingUri,
-          experiment_name: trackerConfig.experimentName,
-          project: trackerConfig.project,
-          entity: trackerConfig.entity,
-        },
-        compute: {
-          type: computeConfig.type,
-          gpu: computeConfig.gpu,
-          device: computeConfig.device,
-          api_key: computeConfig.apiKey,
-          use_spot: computeConfig.useSpot,
-          timeout_hours: computeConfig.timeoutHours,
-        },
-      };
+      const request = buildTrainingPayload({
+        datasetConfig,
+        modelConfig,
+        trainingParams,
+        trackerConfig,
+        computeConfig,
+        overrides: smokeRun
+          ? {
+              training: {
+                maxSteps: 2,
+                runName: trainingParams.runName
+                  ? `${trainingParams.runName}-smoke`
+                  : "robotops-smoke",
+              },
+            }
+          : undefined,
+      });
 
       const response = await fetch(`${API_BASE_URL}/training/start`, {
         method: "POST",
@@ -278,7 +256,7 @@ export function TrainingDialog() {
       }
 
       setActiveJobId(result.jobId);
-      toast.success(`Training started: ${result.jobId}`);
+      toast.success(`${smokeRun ? "Smoke training" : "Training"} started: ${result.jobId}`);
 
       if (result.trackerUrl) {
         toast.info(`Track progress: ${result.trackerUrl}`);
@@ -450,22 +428,36 @@ export function TrainingDialog() {
           </Button>
 
           {currentStep === "review" ? (
-            <Button
-              onClick={handleStartTraining}
-              disabled={!canStartTraining || isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleStartTraining(true)}
+                disabled={!canStartTraining || isSubmitting}
+              >
+                {isSubmitting ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
+                ) : (
                   <Play className="w-4 h-4 mr-2" />
-                  Start Training
-                </>
-              )}
-            </Button>
+                )}
+                Smoke Test
+              </Button>
+              <Button
+                onClick={() => handleStartTraining(false)}
+                disabled={!canStartTraining || isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Training
+                  </>
+                )}
+              </Button>
+            </div>
           ) : (
             <Button
               onClick={nextStep}

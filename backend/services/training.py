@@ -12,6 +12,9 @@ import hashlib
 import json
 import logging
 import os
+import shutil
+import subprocess
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +37,8 @@ from backend.models.training import (
     TrainingLineage,
     TrainingMetrics,
     TrainingParams,
+    TrainingPreflightCheck,
+    TrainingPreflightResponse,
     TrainingProgress,
     TrainingStartRequest,
     TrainingStartResponse,
@@ -330,6 +335,366 @@ def _create_lineage(
     )
 
 
+def _preflight_check(
+    name: str,
+    label: str,
+    status: str,
+    message: str,
+    details: Optional[Dict[str, Any]] = None,
+) -> TrainingPreflightCheck:
+    return TrainingPreflightCheck(
+        name=name,
+        label=label,
+        status=status,
+        message=message,
+        details=details or {},
+    )
+
+
+def _bytes_to_gb(value: int) -> float:
+    return round(value / (1024**3), 2)
+
+
+def _resolve_output_parent(output_dir: str) -> Path:
+    output_path = Path(output_dir).expanduser()
+    parent = output_path if output_path.exists() and output_path.is_dir() else output_path.parent
+    if not str(parent):
+        parent = Path(".")
+    return parent.resolve()
+
+
+async def preflight_training(request: TrainingStartRequest) -> TrainingPreflightResponse:
+    """Validate whether the selected training configuration can be launched."""
+    compute_backend = _get_enum_value(request.compute.type)
+    device = request.compute.device
+    checks: List[TrainingPreflightCheck] = []
+
+    if compute_backend != "local":
+        checks.append(
+            _preflight_check(
+                "compute_backend",
+                "Compute backend",
+                "fail",
+                (
+                    f"{compute_backend} launch is not production-ready in this release. "
+                    "Run RobotOps on the target GPU machine and select local compute, "
+                    "or wait for the SSH/EC2 Docker adapter."
+                ),
+                {"requested_backend": compute_backend},
+            )
+        )
+        return TrainingPreflightResponse(
+            compute_backend=compute_backend,
+            device=device,
+            ready=False,
+            can_train_locally=False,
+            cloud_required=True,
+            recommendation="Use local compute on the machine running RobotOps, or configure the planned SSH/EC2 adapter in a later release.",
+            checks=checks,
+        )
+
+    checks.append(
+        _preflight_check(
+            "compute_backend",
+            "Compute backend",
+            "pass",
+            "Training will run on the machine that is running the RobotOps backend.",
+            {"backend": compute_backend},
+        )
+    )
+
+    checks.append(
+        _preflight_check(
+            "python",
+            "Python runtime",
+            "pass",
+            f"Using {sys.executable}",
+            {"python": sys.executable, "version": sys.version.split()[0]},
+        )
+    )
+
+    docker_path = shutil.which("docker")
+    if docker_path:
+        docker_status = "pass"
+        docker_message = f"Docker found at {docker_path}"
+        docker_details: Dict[str, Any] = {"path": docker_path}
+        try:
+            result = subprocess.run(
+                [docker_path, "info", "--format", "{{.DockerRootDir}}"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            if result.returncode == 0:
+                docker_details["root_dir"] = result.stdout.strip()
+            else:
+                docker_status = "warn"
+                docker_message = "Docker is installed but the daemon is not reachable."
+                docker_details["stderr"] = result.stderr.strip()
+        except Exception as exc:
+            docker_status = "warn"
+            docker_message = f"Docker is installed but could not be inspected: {exc}"
+        checks.append(
+            _preflight_check(
+                "docker",
+                "Docker runtime",
+                docker_status,
+                docker_message,
+                docker_details,
+            )
+        )
+    else:
+        checks.append(
+            _preflight_check(
+                "docker",
+                "Docker runtime",
+                "warn",
+                "Docker is not installed on this backend machine. Current local launch can still run as a subprocess, but production local/cloud training should use Docker.",
+            )
+        )
+
+    try:
+        import torch
+
+        torch_details: Dict[str, Any] = {"torch_version": torch.__version__}
+        if device == "cuda":
+            if torch.cuda.is_available():
+                gpu_names = []
+                total_memory_gb = []
+                for index in range(torch.cuda.device_count()):
+                    props = torch.cuda.get_device_properties(index)
+                    gpu_names.append(props.name)
+                    total_memory_gb.append(_bytes_to_gb(props.total_memory))
+                checks.append(
+                    _preflight_check(
+                        "device",
+                        "Training device",
+                        "pass",
+                        f"CUDA is available with {torch.cuda.device_count()} GPU(s).",
+                        {
+                            **torch_details,
+                            "device_count": torch.cuda.device_count(),
+                            "gpu_names": gpu_names,
+                            "memory_gb": total_memory_gb,
+                        },
+                    )
+                )
+            else:
+                checks.append(
+                    _preflight_check(
+                        "device",
+                        "Training device",
+                        "fail",
+                        "CUDA was selected but no CUDA GPU is visible to PyTorch.",
+                        torch_details,
+                    )
+                )
+        elif device == "mps":
+            mps_available = bool(
+                hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+            )
+            checks.append(
+                _preflight_check(
+                    "device",
+                    "Training device",
+                    "pass" if mps_available else "fail",
+                    "Apple MPS is available." if mps_available else "MPS was selected but is not available.",
+                    torch_details,
+                )
+            )
+        elif device == "cpu":
+            checks.append(
+                _preflight_check(
+                    "device",
+                    "Training device",
+                    "warn",
+                    "CPU training is available but may be slow for embodied policy training.",
+                    torch_details,
+                )
+            )
+        else:
+            checks.append(
+                _preflight_check(
+                    "device",
+                    "Training device",
+                    "fail",
+                    f"Unsupported device '{device}'.",
+                    torch_details,
+                )
+            )
+    except Exception as exc:
+        checks.append(
+            _preflight_check(
+                "torch",
+                "PyTorch runtime",
+                "fail",
+                f"PyTorch could not be imported: {exc}",
+            )
+        )
+
+    try:
+        import lerobot  # noqa: F401
+
+        checks.append(
+            _preflight_check(
+                "lerobot",
+                "LeRobot runtime",
+                "pass",
+                "LeRobot is importable in the backend runtime.",
+            )
+        )
+    except Exception as exc:
+        checks.append(
+            _preflight_check(
+                "lerobot",
+                "LeRobot runtime",
+                "fail",
+                f"LeRobot could not be imported: {exc}",
+            )
+        )
+
+    dataset_source = _get_enum_value(request.dataset.source)
+    if dataset_source == "huggingface":
+        if request.dataset.repo_id:
+            checks.append(
+                _preflight_check(
+                    "dataset",
+                    "Dataset",
+                    "pass",
+                    f"HuggingFace dataset selected: {request.dataset.repo_id}",
+                    {"repo_id": request.dataset.repo_id, "version": request.dataset.version},
+                )
+            )
+        else:
+            checks.append(
+                _preflight_check(
+                    "dataset",
+                    "Dataset",
+                    "fail",
+                    "HuggingFace dataset source requires a repo ID.",
+                )
+            )
+    elif dataset_source == "local":
+        if request.dataset.local_path and Path(request.dataset.local_path).expanduser().exists():
+            checks.append(
+                _preflight_check(
+                    "dataset",
+                    "Dataset",
+                    "pass",
+                    f"Local dataset path exists: {request.dataset.local_path}",
+                    {"local_path": request.dataset.local_path},
+                )
+            )
+        else:
+            checks.append(
+                _preflight_check(
+                    "dataset",
+                    "Dataset",
+                    "fail",
+                    "Local dataset path does not exist on the backend machine.",
+                    {"local_path": request.dataset.local_path},
+                )
+            )
+
+    try:
+        output_parent = _resolve_output_parent(request.training.output_dir)
+        if output_parent.exists():
+            usage = shutil.disk_usage(output_parent)
+            free_gb = _bytes_to_gb(usage.free)
+            status = "pass"
+            message = f"{free_gb} GB free at {output_parent}"
+            if free_gb < 5:
+                status = "fail"
+                message = f"Only {free_gb} GB free at {output_parent}."
+            elif free_gb < 20:
+                status = "warn"
+                message = f"{free_gb} GB free at {output_parent}; checkpoints can fill this quickly."
+            checks.append(
+                _preflight_check(
+                    "storage",
+                    "Artifact storage",
+                    status,
+                    message,
+                    {
+                        "path": str(output_parent),
+                        "free_gb": free_gb,
+                        "total_gb": _bytes_to_gb(usage.total),
+                    },
+                )
+            )
+        else:
+            checks.append(
+                _preflight_check(
+                    "storage",
+                    "Artifact storage",
+                    "fail",
+                    f"Output parent directory does not exist: {output_parent}",
+                    {"path": str(output_parent)},
+                )
+            )
+    except Exception as exc:
+        checks.append(
+            _preflight_check(
+                "storage",
+                "Artifact storage",
+                "fail",
+                f"Could not inspect output storage: {exc}",
+            )
+        )
+
+    tracker_type = _get_enum_value(request.tracker.type)
+    if tracker_type == "none":
+        checks.append(
+            _preflight_check(
+                "tracker",
+                "Experiment tracker",
+                "pass",
+                "Tracker disabled; metrics and artifacts will remain RobotOps-native.",
+            )
+        )
+    elif tracker_type == "mlflow":
+        status = "pass" if request.tracker.tracking_uri else "warn"
+        checks.append(
+            _preflight_check(
+                "tracker",
+                "Experiment tracker",
+                status,
+                "MLflow tracking URI configured." if request.tracker.tracking_uri else "MLflow selected without a tracking URI; environment defaults will be used if available.",
+                {"tracking_uri": request.tracker.tracking_uri},
+            )
+        )
+    elif tracker_type == "wandb":
+        has_key = bool(os.environ.get("WANDB_API_KEY"))
+        checks.append(
+            _preflight_check(
+                "tracker",
+                "Experiment tracker",
+                "pass" if has_key else "warn",
+                "W&B API key is available." if has_key else "W&B selected but WANDB_API_KEY is not set in the backend environment.",
+                {"project": request.tracker.project, "entity": request.tracker.entity},
+            )
+        )
+
+    has_failures = any(check.status == "fail" for check in checks)
+    can_train_locally = not has_failures
+    recommendation = (
+        "Ready to launch on this backend machine."
+        if can_train_locally
+        else "Fix failed checks or run RobotOps on a machine with suitable compute."
+    )
+
+    return TrainingPreflightResponse(
+        compute_backend=compute_backend,
+        device=device,
+        ready=can_train_locally,
+        can_train_locally=can_train_locally,
+        cloud_required=False,
+        recommendation=recommendation,
+        checks=checks,
+    )
+
+
 async def start_training(request: TrainingStartRequest) -> TrainingStartResponse:
     """Start a new training job.
 
@@ -349,11 +714,15 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
 
     try:
         compute_backend = _get_enum_value(request.compute.type)
-        if compute_backend != "local":
-            raise ValueError(
-                f"Compute backend '{compute_backend}' is not production-ready in this release. "
-                "Use local training for now."
-            )
+        preflight = await preflight_training(request)
+        if not preflight.ready:
+            failed_checks = [
+                f"{check.label}: {check.message}"
+                for check in preflight.checks
+                if check.status == "fail"
+            ]
+            detail = "; ".join(failed_checks) or preflight.recommendation
+            raise ValueError(f"Training preflight failed. {detail}")
 
         # Create lineage
         lineage = _create_lineage(request, started_at)

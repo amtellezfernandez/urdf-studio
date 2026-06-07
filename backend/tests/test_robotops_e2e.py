@@ -258,6 +258,72 @@ class TestModelExport:
         assert service is not None
 
 
+class TestTrainingPreflight:
+    """Test training preflight validation."""
+
+    @pytest.mark.asyncio
+    async def test_local_cpu_preflight_returns_checks(self, tmp_path: Path) -> None:
+        """Test local preflight returns structured readiness checks."""
+        from backend.models.training import (
+            ComputeConfig,
+            DatasetConfig,
+            DatasetSource,
+            ModelConfig,
+            TrainingParams,
+            TrainingStartRequest,
+        )
+        from backend.services.training import preflight_training
+
+        request = TrainingStartRequest(
+            dataset=DatasetConfig(
+                source=DatasetSource.HUGGINGFACE,
+                repo_id="lerobot/pusht",
+            ),
+            model=ModelConfig(),
+            training=TrainingParams(output_dir=str(tmp_path)),
+            compute=ComputeConfig(device="cpu"),
+        )
+
+        result = await preflight_training(request)
+
+        assert result.compute_backend == "local"
+        assert result.device == "cpu"
+        check_names = {check.name for check in result.checks}
+        assert {"compute_backend", "python", "device", "dataset", "storage"}.issubset(
+            check_names
+        )
+
+    @pytest.mark.asyncio
+    async def test_cloud_preflight_is_blocked_until_adapter_exists(self, tmp_path: Path) -> None:
+        """Test unsupported cloud backends are rejected before launch."""
+        from backend.models.training import (
+            ComputeConfig,
+            ComputeType,
+            DatasetConfig,
+            DatasetSource,
+            ModelConfig,
+            TrainingParams,
+            TrainingStartRequest,
+        )
+        from backend.services.training import preflight_training
+
+        request = TrainingStartRequest(
+            dataset=DatasetConfig(
+                source=DatasetSource.HUGGINGFACE,
+                repo_id="lerobot/pusht",
+            ),
+            model=ModelConfig(),
+            training=TrainingParams(output_dir=str(tmp_path)),
+            compute=ComputeConfig(type=ComputeType.MODAL, device="cuda"),
+        )
+
+        result = await preflight_training(request)
+
+        assert not result.ready
+        assert result.cloud_required
+        assert any(check.status == "fail" for check in result.checks)
+
+
 class TestMigrations:
     """Test migration system."""
 

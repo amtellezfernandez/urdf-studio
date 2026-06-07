@@ -134,6 +134,26 @@ export interface TrainingStartResponse {
   lineage?: TrainingLineage;
 }
 
+export type PreflightStatus = "pass" | "warn" | "fail";
+
+export interface TrainingPreflightCheck {
+  name: string;
+  label: string;
+  status: PreflightStatus;
+  message: string;
+  details: Record<string, unknown>;
+}
+
+export interface TrainingPreflightResponse {
+  computeBackend: string;
+  device: string;
+  ready: boolean;
+  canTrainLocally: boolean;
+  cloudRequired: boolean;
+  recommendation: string;
+  checks: TrainingPreflightCheck[];
+}
+
 export interface TrainingStatusResponse {
   jobId: string;
   status: JobStatus;
