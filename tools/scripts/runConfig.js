@@ -1,4 +1,4 @@
-import { buildRuntimeUrls, formatHostForUrl } from '../../config/runtime.js';
+import { buildRuntimeUrls, formatHostForUrl, resolveLocalNetworkHost } from '../../config/runtime.js';
 import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
@@ -322,19 +322,8 @@ export function resolveLocalNetworkUrl(runtimeConfig, { networkInterfaces = os.n
   if (!isRemoteBindHost(runtimeConfig.web.bindHost)) {
     return null;
   }
-  const interfaces = networkInterfaces();
-  for (const details of Object.values(interfaces).flat()) {
-    if (!details || details.internal || !details.address) {
-      continue;
-    }
-    if (
-      details.family === RUN_TEAM_MODE_NETWORK_FAMILY ||
-      details.family === RUN_TEAM_MODE_NETWORK_FAMILY_NUMBER
-    ) {
-      return `http://${details.address}:${runtimeConfig.web.port}`;
-    }
-  }
-  return null;
+  const host = resolveLocalNetworkHost({ networkInterfaces });
+  return `http://${formatHostForUrl(host)}:${runtimeConfig.web.port}`;
 }
 
 export function buildStartupOverviewLines({
@@ -360,18 +349,28 @@ export function buildStartupOverviewLines({
       lines.push('Live teleop relay: starting for this team session.');
     }
   } else {
+    const hasRemoteExposure = remoteExposureIssues.length > 0;
+    const hasSeparateLocalNetworkUrl = Boolean(
+      localNetworkUrl && localNetworkUrl !== runtimeUrls.webBaseUrl
+    );
+    const accessLine = hasRemoteExposure
+      ? 'Access: network access is enabled; use only on a trusted network.'
+      : teamSharingGateway
+        ? 'Access: local by default; remote browsers are blocked until Team sharing is on.'
+        : 'Access: only this laptop.';
+    const sharingLine = hasRemoteExposure
+      ? hasSeparateLocalNetworkUrl
+        ? 'Sharing: use the Direct access link from devices on this trusted network.'
+        : 'Sharing: use the Open URDF Studio link from devices on this trusted network.'
+      : teamSharingGateway
+        ? 'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.'
+        : 'Sharing: localhost links work only on this computer.';
     lines.push(
       `Open URDF Studio: ${runtimeUrls.webBaseUrl}`,
-      remoteExposureIssues.length > 0
-        ? 'Access: network access is enabled; use only on a trusted network.'
-        : teamSharingGateway
-          ? 'Access: local by default; remote browsers are blocked until Team sharing is on.'
-          : 'Access: only this laptop.',
-      teamSharingGateway
-        ? 'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.'
-        : 'Sharing: localhost links work only on this computer.'
+      accessLine,
+      sharingLine
     );
-    if (localNetworkUrl) {
+    if (hasSeparateLocalNetworkUrl) {
       lines.push(`Direct access: ${localNetworkUrl}`);
     }
   }

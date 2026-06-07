@@ -177,6 +177,45 @@ test('startup overview gives loopback-only local instructions by default', () =>
   ]);
 });
 
+test('startup overview gives one stable LAN link when frontend is exposed', () => {
+  const runtimeConfig = {
+    ...BASE_RUNTIME_CONFIG,
+    web: { host: '172.22.210.70', port: 5173, bindHost: '0.0.0.0' },
+  };
+  const lines = buildStartupOverviewLines({
+    localNetworkUrl: 'http://172.22.210.70:5173',
+    remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
+    runtimeConfig,
+    runtimeUrls: buildRuntimeUrls(runtimeConfig),
+  });
+
+  assert.deepEqual(lines, [
+    'Open URDF Studio: http://172.22.210.70:5173',
+    'Access: network access is enabled; use only on a trusted network.',
+    'Sharing: use the Open URDF Studio link from devices on this trusted network.',
+  ]);
+});
+
+test('startup overview labels the detected LAN URL as direct access when host differs', () => {
+  const runtimeConfig = {
+    ...BASE_RUNTIME_CONFIG,
+    web: { host: 'localhost', port: 5173, bindHost: '0.0.0.0' },
+  };
+  const lines = buildStartupOverviewLines({
+    localNetworkUrl: 'http://192.168.1.44:5173',
+    remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
+    runtimeConfig,
+    runtimeUrls: buildRuntimeUrls(runtimeConfig),
+  });
+
+  assert.deepEqual(lines, [
+    'Open URDF Studio: http://localhost:5173',
+    'Access: network access is enabled; use only on a trusted network.',
+    'Sharing: use the Direct access link from devices on this trusted network.',
+    'Direct access: http://192.168.1.44:5173',
+  ]);
+});
+
 test('startup overview gives non-networking team instructions', () => {
   const teamRuntimeConfig = applyTeamModeRuntimeProfile(BASE_RUNTIME_CONFIG, {
     publicHost: '192.168.1.40',
