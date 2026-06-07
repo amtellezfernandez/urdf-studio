@@ -3,12 +3,15 @@ import { guardedFetch } from "@/shared/lib/backendGuard";
 import { withBackendRequestHeaders } from "@/shared/lib/backendRequest";
 
 export type GenesisDynamicContainerMode = "mesh" | "box" | "visual-only";
+export type GenesisWorldRobotMode = "so101" | "crane";
 
 export type GenesisWorldOpenResponse = {
   started: boolean;
   pid: number;
   command: string[];
   dynamic_container_mode: GenesisDynamicContainerMode;
+  robot_mode: GenesisWorldRobotMode;
+  log_path?: string | null;
 };
 
 export type GenesisWorldPoseResponse = {
@@ -39,7 +42,8 @@ export type GenesisLiveStateResponse = {
 };
 
 export const openGenesisWorld = async (
-  dynamicContainerMode: GenesisDynamicContainerMode = "box"
+  dynamicContainerMode: GenesisDynamicContainerMode = "box",
+  robotMode: GenesisWorldRobotMode = "so101",
 ): Promise<GenesisWorldOpenResponse> => {
   const response = await guardedFetch(
     `${API_BASE_URL}/worlds/genesis/open`,
@@ -51,6 +55,7 @@ export const openGenesisWorld = async (
       },
       body: JSON.stringify({
         dynamic_container_mode: dynamicContainerMode,
+        robot_mode: robotMode,
       }),
     },
     {
@@ -59,7 +64,13 @@ export const openGenesisWorld = async (
     }
   );
   if (!response.ok) {
-    const detail = await response.text();
+    let detail = "";
+    try {
+      const payload = (await response.clone().json()) as { detail?: unknown };
+      detail = typeof payload.detail === "string" ? payload.detail : "";
+    } catch {
+      detail = await response.text();
+    }
     throw new Error(detail || `Genesis launch failed (${response.status})`);
   }
   return (await response.json()) as GenesisWorldOpenResponse;

@@ -176,7 +176,7 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     const urdfText = readFileSync(resolveManifestFilePath(shortcut, urdfEntry?.url ?? ""), "utf8");
     expect(urdfText).toContain('<robot name="ship_crane">');
     expect(urdfText).toContain('<origin xyz="0 0 0.51" rpy="1.5707963 0 0"/>');
-    expect(urdfText).toContain('<joint name="base_yaw"');
+    expect(urdfText).toContain('<joint name="base_yaw" type="fixed">');
     expect(urdfText).toContain('<joint name="boom_luff"');
     expect(urdfText).toContain('<joint name="finger_slide"');
 

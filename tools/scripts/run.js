@@ -26,6 +26,7 @@ import {
   formatStartupSecurityViolationsMessage,
   formatUnknownRunArgsMessage,
   getMissingSecurityAcknowledgements,
+  getRemoteBindingIssues,
   getStartupSecurityViolations,
   mergeRuntimeConfig,
   parseRunArgs,
@@ -573,9 +574,13 @@ async function main() {
     teleopNativeQuicPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.teleop || {}, 'nativeQuicPort'),
   });
   const runtimeConfig = recoveredPorts.runtimeConfig;
-  const remoteExposureIssues = assertRemoteBindingsAllowed(runtimeConfig, {
-    allowGatedFrontend: useTeamSharingGateway,
+  // The demo frontend is intentionally reachable on the LAN; backend/teleop binds still require explicit opt-in.
+  assertRemoteBindingsAllowed(runtimeConfig, {
+    allowGatedFrontend: true,
     allowRemote: allowRemoteBinds,
+  });
+  const remoteExposureIssues = getRemoteBindingIssues(runtimeConfig, {
+    allowGatedFrontend: useTeamSharingGateway,
   });
   const runtimeUrls = buildRuntimeUrls(runtimeConfig);
   const loopbackApiBaseUrl = buildLoopbackApiBaseUrl(runtimeConfig);

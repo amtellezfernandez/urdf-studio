@@ -3063,10 +3063,10 @@ const Index = () => {
   const handleOpenGenesisWorld = useCallback(async () => {
     try {
       useGenesisWorldLiveStateStore.getState().clearLivePoses();
-      const launched = await openGenesisWorld("box");
+      const launched = await openGenesisWorld("box", "so101");
       setGenesisLiveSyncEnabled(true);
       toast.success(
-        `Genesis launch started (pid ${launched.pid}). Live robot/world sync is active.`
+        `Genesis ${launched.robot_mode} launch is ready (pid ${launched.pid}). Live robot/world sync is active.`
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to open Genesis");

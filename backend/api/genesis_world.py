@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.core.simulator_security import require_simulator_operator_access
 from backend.models.genesis_world import (
@@ -24,7 +24,10 @@ from backend.services.genesis_live_state import (
     store_genesis_robot_state,
     store_genesis_world_state,
 )
-from backend.services.genesis_world_launcher import launch_default_genesis_world
+from backend.services.genesis_world_launcher import (
+    GenesisWorldLaunchError,
+    launch_default_genesis_world,
+)
 
 router = APIRouter(prefix="/worlds/genesis", tags=["genesis-world"])
 
@@ -35,9 +38,13 @@ def open_genesis_world(
     _access: None = Depends(require_simulator_operator_access),
 ) -> GenesisWorldOpenResponse:
     clear_genesis_runtime_state()
-    return launch_default_genesis_world(
-        dynamic_container_mode=request.dynamic_container_mode,
-    )
+    try:
+        return launch_default_genesis_world(
+            dynamic_container_mode=request.dynamic_container_mode,
+            robot_mode=request.robot_mode,
+        )
+    except GenesisWorldLaunchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/joint-state", response_model=GenesisJointStateResponse)

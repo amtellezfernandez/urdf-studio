@@ -31,7 +31,7 @@ def test_build_genesis_element_specs_maps_public_uris_and_mesh_bounds() -> None:
 
     assert grabbable.asset_path.exists()
     assert grabbable.asset_path.as_posix().endswith(
-        "web/public/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb"
+        "web/public/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb"
     )
     assert grabbable.is_dynamic is True
     assert all(component > 0 for component in grabbable.box_size_xyz)

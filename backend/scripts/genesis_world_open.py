@@ -13,6 +13,7 @@ from urllib import request as urllib_request
 
 from backend.core.settings import settings
 from backend.services.genesis_world_scene import (
+    DEFAULT_CRANE_URDF_PATH,
     DEFAULT_DYNAMIC_CONTAINER_MODE,
     DEFAULT_SO101_URDF_PATH,
     DEFAULT_WORLD_LAYOUT_PATH,
@@ -63,7 +64,7 @@ class _DynamicVisualEntity:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Open the bundled SO101 + world-layout elements in Genesis."
+        description="Open the bundled robot + world-layout elements in Genesis."
     )
     parser.add_argument(
         "--layout",
@@ -72,8 +73,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--urdf",
-        default=str(DEFAULT_SO101_URDF_PATH),
-        help="Path to the SO101 URDF to load into Genesis.",
+        default="",
+        help="Path to the robot URDF to load into Genesis. Defaults from --robot-mode.",
+    )
+    parser.add_argument(
+        "--robot-mode",
+        choices=["so101", "crane"],
+        default="so101",
+        help="Robot to load into Genesis when --urdf is omitted.",
     )
     parser.add_argument(
         "--dynamic-container-mode",
@@ -114,6 +121,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--live-world-publish-hz", type=float, default=30.0)
     parser.add_argument("--live-http-timeout-sec", type=float, default=0.05)
     return parser.parse_args()
+
+
+def _default_urdf_path_for_robot_mode(robot_mode: str) -> Path:
+    if robot_mode == "crane":
+        return DEFAULT_CRANE_URDF_PATH
+    return DEFAULT_SO101_URDF_PATH
 
 
 def _to_degrees(rpy_rad: tuple[float, float, float]) -> tuple[float, float, float]:
@@ -571,7 +584,12 @@ def _configure_robot_position_controller(
     force_upper: list[float] = []
     for joint_name, dof_index in joint_dof_indices.items():
         dof_indices.append(dof_index)
-        is_gripper = "gripper" in joint_name.lower()
+        normalized_joint_name = joint_name.lower()
+        is_gripper = (
+            "gripper" in normalized_joint_name
+            or "finger" in normalized_joint_name
+            or "slide" in normalized_joint_name
+        )
         kp = GENESIS_SO101_GRIPPER_KP if is_gripper else GENESIS_SO101_ARM_KP
         kv = GENESIS_SO101_GRIPPER_KV if is_gripper else GENESIS_SO101_ARM_KV
         force_limit = (
@@ -996,6 +1014,7 @@ def open_genesis_world_scene(
     *,
     layout_path: Path,
     urdf_path: Path,
+    robot_mode: str,
     dynamic_container_mode: GenesisDynamicContainerMode,
     duration_sec: float,
     no_viewer: bool,
@@ -1044,11 +1063,20 @@ def open_genesis_world_scene(
         ),
     )
     _add_floor_entity(gs, scene)
-    genesis_urdf_path = materialize_so101_genesis_urdf(urdf_path)
+    genesis_urdf_path = (
+        materialize_so101_genesis_urdf(urdf_path)
+        if robot_mode == "so101"
+        else urdf_path
+    )
+    robot_position = (
+        (-0.45, 0.0, 0.0)
+        if robot_mode == "crane"
+        else (0.0, 0.0, GENESIS_ROBOT_BASE_Z_OFFSET_M)
+    )
     robot_entity = scene.add_entity(
         gs.morphs.URDF(
             file=str(genesis_urdf_path.resolve()),
-            pos=(0.0, 0.0, GENESIS_ROBOT_BASE_Z_OFFSET_M),
+            pos=robot_position,
             fixed=True,
             merge_fixed_links=False,
             collision=True,
@@ -1059,7 +1087,7 @@ def open_genesis_world_scene(
             None,
             friction_fallback=DEFAULT_ROBOT_FRICTION,
         ),
-        name="so101",
+        name=robot_mode,
     )
 
     dynamic_entities: list[_DynamicWorldEntity] = []
@@ -1075,6 +1103,7 @@ def open_genesis_world_scene(
                 name=spec.element.id,
                 decimate=True,
                 convexify=True,
+                preserve_studio_glb_orientation=True,
             )
             dynamic_entities.append(
                 _DynamicWorldEntity(
@@ -1101,6 +1130,7 @@ def open_genesis_world_scene(
                 name=f"{spec.element.id}_visual",
                 decimate=False,
                 convexify=False,
+                preserve_studio_glb_orientation=True,
             )
             entity = _add_box_entity(
                 gs,
@@ -1141,6 +1171,7 @@ def open_genesis_world_scene(
                 name=spec.element.id,
                 decimate=False,
                 convexify=False,
+                preserve_studio_glb_orientation=True,
             )
 
     camera = None
@@ -1155,8 +1186,11 @@ def open_genesis_world_scene(
         )
 
     scene.build()
-    for spec, entity, _scaled_offset_xyz in dynamic_entities:
-        _apply_rigid_entity_physics_overrides(entity, spec.element.physics)
+    for dynamic_entity in dynamic_entities:
+        _apply_rigid_entity_physics_overrides(
+            dynamic_entity.entity,
+            dynamic_entity.spec.element.physics,
+        )
     last_safe_robot_qpos = _to_float_list(robot_entity.get_qpos())
     _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
         robot_entity,
@@ -1164,7 +1198,7 @@ def open_genesis_world_scene(
     )
     _enforce_dynamic_floor_contact(dynamic_entities)
     _sync_dynamic_visual_entities(dynamic_visual_entities)
-    print("[genesis-world-open] scene built; stepping Genesis runtime.")
+    print("[genesis-world-open] scene built; stepping Genesis runtime.", flush=True)
     live_base_url = live_state_base_url.strip().rstrip("/")
     live_enabled = bool(live_base_url)
     joint_dof_indices = _joint_dof_indices_by_name(robot_entity)
@@ -1307,9 +1341,11 @@ def open_genesis_world_scene(
 
 def main() -> int:
     args = _parse_args()
+    robot_mode = str(args.robot_mode)
     open_genesis_world_scene(
         layout_path=Path(args.layout),
-        urdf_path=Path(args.urdf),
+        urdf_path=Path(args.urdf) if args.urdf else _default_urdf_path_for_robot_mode(robot_mode),
+        robot_mode=robot_mode,
         dynamic_container_mode=args.dynamic_container_mode,
         duration_sec=args.duration_sec,
         no_viewer=args.no_viewer,

@@ -7,10 +7,12 @@ from pydantic import BaseModel, Field, field_validator
 
 
 GenesisDynamicContainerMode = Literal["mesh", "box", "visual-only"]
+GenesisWorldRobotMode = Literal["so101", "crane"]
 
 
 class GenesisWorldOpenRequest(BaseModel):
     dynamic_container_mode: GenesisDynamicContainerMode = Field(default="box")
+    robot_mode: GenesisWorldRobotMode = Field(default="so101")
 
 
 class GenesisWorldOpenResponse(BaseModel):
@@ -18,6 +20,8 @@ class GenesisWorldOpenResponse(BaseModel):
     pid: int
     command: list[str]
     dynamic_container_mode: GenesisDynamicContainerMode
+    robot_mode: GenesisWorldRobotMode
+    log_path: str | None = None
 
 
 class GenesisJointStateRequest(BaseModel):

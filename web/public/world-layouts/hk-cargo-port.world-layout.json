@@ -1555,12 +1555,12 @@
         ],
         "scale": 0.64,
         "physics": {
-          "body_type": "static",
-          "mass_kg": 150000000,
-          "friction": 1,
+          "body_type": "dynamic",
+          "mass_kg": 0.8,
+          "friction": 2.5,
           "restitution": 0,
-          "linear_damping": 1,
-          "angular_damping": 1
+          "linear_damping": 1.4,
+          "angular_damping": 1.4
         }
       }
     ],

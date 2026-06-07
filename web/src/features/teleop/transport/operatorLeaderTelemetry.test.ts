@@ -269,7 +269,7 @@ describe("operatorLeaderTelemetry", () => {
         "gripper",
       ],
       sourceMotorIds: [1, 2, 3, 4, 5, 6],
-      targetJointNames: ["base_yaw", "boom_luff", "finger_slide"],
+      targetJointNames: ["boom_luff", "finger_slide"],
     });
 
     expect(mapped.base_yaw).toBeUndefined();

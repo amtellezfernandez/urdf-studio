@@ -24,6 +24,7 @@ DEFAULT_SO101_URDF_PATH = (
     BASE_DIR
     / "third_party/so-arm100/Simulation/SO101/so101_new_calib.urdf"
 )
+DEFAULT_CRANE_URDF_PATH = BASE_DIR / "web/public/demo/crane/ship_crane.urdf"
 
 
 @dataclass(frozen=True)

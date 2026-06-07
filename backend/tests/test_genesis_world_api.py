@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+from fastapi import HTTPException
+
 import backend.api.genesis_world as genesis_world_api
 from backend.models.genesis_world import (
     GenesisJointStateRequest,
@@ -10,19 +13,21 @@ from backend.models.genesis_world import (
     GenesisWorldOpenResponse,
 )
 from backend.services.genesis_live_state import reset_genesis_live_state_for_tests
+from backend.services.genesis_world_launcher import GenesisWorldLaunchError
 
 
 def test_open_genesis_world_endpoint_launches_default_scene(monkeypatch) -> None:
     reset_genesis_live_state_for_tests()
-    launched_modes: list[str] = []
+    launched_modes: list[tuple[str, str]] = []
 
-    def fake_launch_default_genesis_world(*, dynamic_container_mode):
-        launched_modes.append(dynamic_container_mode)
+    def fake_launch_default_genesis_world(*, dynamic_container_mode, robot_mode):
+        launched_modes.append((dynamic_container_mode, robot_mode))
         return GenesisWorldOpenResponse(
             started=True,
             pid=1234,
-            command=["python", "-m", "backend.scripts.genesis_world_open"],
+            command=["python", "-u", "-m", "backend.scripts.genesis_world_open"],
             dynamic_container_mode=dynamic_container_mode,
+            robot_mode=robot_mode,
         )
 
     monkeypatch.setattr(
@@ -37,13 +42,64 @@ def test_open_genesis_world_endpoint_launches_default_scene(monkeypatch) -> None
 
     assert response.pid == 1234
     assert response.dynamic_container_mode == "mesh"
-    assert launched_modes == ["mesh"]
+    assert response.robot_mode == "so101"
+    assert launched_modes == [("mesh", "so101")]
 
 
 def test_open_genesis_world_request_defaults_to_solid_box_colliders() -> None:
     request = GenesisWorldOpenRequest()
 
     assert request.dynamic_container_mode == "box"
+    assert request.robot_mode == "so101"
+
+
+def test_open_genesis_world_endpoint_launches_crane_scene(monkeypatch) -> None:
+    launched_modes: list[tuple[str, str]] = []
+
+    def fake_launch_default_genesis_world(*, dynamic_container_mode, robot_mode):
+        launched_modes.append((dynamic_container_mode, robot_mode))
+        return GenesisWorldOpenResponse(
+            started=True,
+            pid=4321,
+            command=["python", "-u", "-m", "backend.scripts.genesis_world_open"],
+            dynamic_container_mode=dynamic_container_mode,
+            robot_mode=robot_mode,
+        )
+
+    monkeypatch.setattr(
+        genesis_world_api,
+        "launch_default_genesis_world",
+        fake_launch_default_genesis_world,
+    )
+
+    response = genesis_world_api.open_genesis_world(
+        GenesisWorldOpenRequest(dynamic_container_mode="box", robot_mode="crane"),
+        _access=None,
+    )
+
+    assert response.pid == 4321
+    assert response.robot_mode == "crane"
+    assert launched_modes == [("box", "crane")]
+
+
+def test_open_genesis_world_endpoint_reports_failed_launch(monkeypatch) -> None:
+    def fake_launch_default_genesis_world(*, dynamic_container_mode, robot_mode):
+        raise GenesisWorldLaunchError("Genesis launch exited immediately")
+
+    monkeypatch.setattr(
+        genesis_world_api,
+        "launch_default_genesis_world",
+        fake_launch_default_genesis_world,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        genesis_world_api.open_genesis_world(
+            GenesisWorldOpenRequest(dynamic_container_mode="box"),
+            _access=None,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "Genesis launch exited immediately"
 
 
 def test_open_genesis_world_clears_stale_world_pose_state(monkeypatch) -> None:
@@ -71,12 +127,13 @@ def test_open_genesis_world_clears_stale_world_pose_state(monkeypatch) -> None:
         _access=None,
     )
 
-    def fake_launch_default_genesis_world(*, dynamic_container_mode):
+    def fake_launch_default_genesis_world(*, dynamic_container_mode, robot_mode):
         return GenesisWorldOpenResponse(
             started=True,
             pid=1234,
-            command=["python", "-m", "backend.scripts.genesis_world_open"],
+            command=["python", "-u", "-m", "backend.scripts.genesis_world_open"],
             dynamic_container_mode=dynamic_container_mode,
+            robot_mode=robot_mode,
         )
 
     monkeypatch.setattr(
