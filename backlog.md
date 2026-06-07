@@ -23,17 +23,22 @@ Status values: `to do`, `on going`, `done`
 | Experiments and runs | [ ] | Store full run lineage | Record dataset version, robot/URDF hash, model provider, Docker image digest, git SHA, compute, tracker, seed, timestamps, and artifacts. | to do | Core reproducibility requirement. |
 | Training runtime | [ ] | Dockerize local training jobs | Replace product-path raw Python subprocess training with Docker-based training. | to do | Raw subprocess can remain dev-only. |
 | Training runtime | [ ] | Standardize trainer image contract | Use one trainer image across local, SSH, EC2, and managed cloud. | to do | Inputs are config JSON and dataset refs; outputs are artifacts. |
+| Training runtime | [ ] | Add trainer image validation | Verify the selected trainer image can import torch/LeRobot, see CUDA when requested, read the dataset source, and write artifacts before launch. | to do | L40S validation showed Docker/NVIDIA runtime checks must be explicit in the UI. |
+| Training runtime | [ ] | Add tiny paid-compute smoke launch | Let users run a bounded `max_steps` smoke job from the UI before starting a long training run. | to do | Use the same artifact, metric, and log paths as full training. |
 | Training runtime | [ ] | Fix policy ID mismatch | Normalize IDs such as `diffusion_policy` and `vq_bet` across backend, UI, and LeRobot adapter. | to do | Current training script expects different names. |
 | Training runtime | [ ] | Fix logs and metrics paths | Make writer and reader paths consistent for progress, metrics, and logs. | to do | Current service reads paths that training does not always write. |
 | Training runtime | [ ] | Add cancellation handling | Ensure Docker jobs can be cancelled cleanly and status persisted. | to do | Applies to local, SSH, and cloud. |
 | Compute: local | [ ] | Add local preflight checks | Detect Docker, NVIDIA runtime, CUDA GPUs, CPU fallback, disk, and memory. | to do | UI should show pass/fail and remediation. |
+| Compute: local | [ ] | Add Docker storage preflight | Detect Docker root directory free space and recommend/allow a data directory override when the default disk is full. | to do | AWS L40S test needed Docker moved from `/var/lib/docker` to `/scratch/docker`. |
 | Compute: local | [ ] | Add local Docker compute adapter | Run trainer container locally with proper mounts and environment. | to do | First production compute backend. |
+| Compute: local | [ ] | Support direct Docker fallback | Provide commands/API behavior that do not require Docker Compose when the compose plugin is missing. | to do | EC2 instance had Docker installed but no Compose plugin. |
 | Compute: SSH | [ ] | Add generic SSH Docker adapter | Let users train on any remote machine with SSH and Docker. | to do | Works for EC2, lab machines, rented GPU pods, and workstations. |
-| Compute: SSH | [ ] | Add SSH preflight | Check SSH login, Docker, GPU, disk, S3 write, and trainer image access. | to do | Must happen before launch. |
+| Compute: SSH | [ ] | Add SSH preflight | Check SSH login, Docker, NVIDIA runtime, visible GPUs, disk, S3 write, and trainer image access. | to do | Must happen before launch; show exact failed command and remediation. |
+| Compute: SSH | [ ] | Add existing-machine setup wizard | Let users register any reachable GPU/CPU machine with host, user, auth method, work directory, artifact directory, and optional Docker data-root hint. | to do | This is the flexible product path; EC2 is one provider-specific discovery layer on top. |
 | Compute: SSH | [ ] | Add SSH log streaming | Stream container logs back to RobotOps UI. | to do | Required for monitoring. |
 | Compute: AWS EC2 | [ ] | Add AWS credentials/profile setup UI | Let users configure AWS profile, region, S3 bucket, and IAM assumptions from UI. | to do | Product must not depend on local private guides. |
 | Compute: AWS EC2 | [ ] | List existing EC2 instances | Show user-owned instances and GPU metadata where possible. | to do | Start with existing instance flow. |
-| Compute: AWS EC2 | [ ] | Run training on existing EC2 | Use EC2 as a specialization of SSH Docker for first AWS product path. | to do | Good for testing and flexible for users. |
+| Compute: AWS EC2 | [ ] | Run training on existing EC2 | Use EC2 as a specialization of SSH Docker for first AWS product path. | to do | UI should discover instance IP/AZ/profile, then reuse the generic SSH Docker adapter. |
 | Compute: AWS EC2 | [ ] | Add auto-stop/max runtime guardrails | Require runtime limit and optional auto-stop for costly GPU instances. | to do | Important cost-safety feature. |
 | Compute: AWS EC2 | [ ] | Add managed EC2 launch flow | Launch temporary GPU instances from UI. | to do | Later than existing-instance support. |
 | Compute: managed cloud | [ ] | Evaluate AWS Batch adapter | Add queue-based GPU jobs after Docker/S3 contract is proven. | to do | Good for production multi-job usage. |
@@ -62,8 +67,9 @@ Status values: `to do`, `on going`, `done`
 | Deployment and export | [ ] | Add robot deployment target | Track model deployed to real robot runtime. | to do | Later product phase. |
 | UI | [ ] | Redesign RobotOps navigation | Include Experiments, Datasets, Training, Runs, Metrics, Evaluation, Artifacts, and Settings. | to do | Current page has partial navigation. |
 | UI | [ ] | Build experiment-first training wizard | Steps: experiment, dataset, validation, model, hyperparameters, tracker, compute, preflight, review, launch. | to do | Core product workflow. |
-| UI | [ ] | Add compute preflight panel | Show checks, failures, remediation, and launch readiness. | to do | Required for user-owned compute. |
-| UI | [ ] | Add artifact browser | Browse and download run artifacts from S3/local fallback. | to do | Depends on artifact indexing. |
+| UI | [ ] | Add compute preflight panel | Show checks, failures, remediation, and launch readiness. | to do | Required for user-owned compute; include Docker, CUDA, disk, S3, dataset, and image checks. |
+| UI | [ ] | Add cloud training review screen | Before launch, show dataset, model, hyperparameters, selected machine, GPU, disk target, Docker image, S3 artifact target, tracker, max runtime, and estimated cost. | to do | This should make paid cloud launches deliberate and auditable. |
+| UI | [ ] | Add artifact browser | Browse and download run artifacts from S3/local fallback. | on going | Current PR exposes per-run local artifacts in the job details UI. |
 | UI | [ ] | Fix frontend DTO mapping | Convert backend snake_case responses to frontend camelCase models. | to do | Current JobList stores raw backend jobs. |
 | Quality and tests | [ ] | Fix lint ignore config | Ignore `.uv-cache`, vendored generated code, and irrelevant external sources. | to do | Current lint fails because cache code is scanned. |
 | Quality and tests | [ ] | Add API contract tests | Test training job list/status DTOs and frontend mappers. | to do | Prevent snake_case/camelCase regressions. |
@@ -71,4 +77,3 @@ Status values: `to do`, `on going`, `done`
 | Quality and tests | [ ] | Add Docker local smoke test | Launch a tiny training/smoke job through local Docker. | to do | Should be a PR gate when Docker is available. |
 | Quality and tests | [ ] | Add S3/MinIO artifact round-trip test | Upload, list, download, and verify artifact checksum. | to do | Can run against local MinIO. |
 | Quality and tests | [ ] | Add AWS EC2 manual test checklist | Document manual test using user-owned AWS resources. | to do | Product docs, not private local guide. |
-
