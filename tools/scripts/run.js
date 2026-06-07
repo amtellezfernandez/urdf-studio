@@ -118,15 +118,41 @@ function main() {
   log('  Press Ctrl+C to stop', colors.gray);
   log('');
 
-  // Start Python FastAPI backend
-  const venvPython = join(rootDir, '.venv', 'bin', 'python3');
+  // Start Python FastAPI backend using uv run
   let pythonBackendProcess = null;
 
-  if (existsSync(venvPython)) {
-    pythonBackendProcess = spawn(venvPython, [
-      '-m',
+  // Find uv executable
+  const uvLocations = [
+    join(process.env.HOME || '', '.local', 'bin', 'uv'),
+    join(process.env.HOME || '', '.cargo', 'bin', 'uv'),
+    '/usr/local/bin/uv',
+    '/usr/bin/uv',
+  ];
+  let uvPath = null;
+  for (const loc of uvLocations) {
+    if (existsSync(loc)) {
+      uvPath = loc;
+      break;
+    }
+  }
+  // Also check PATH
+  if (!uvPath) {
+    const pathEnv = process.env.PATH || '';
+    for (const dir of pathEnv.split(':')) {
+      if (!dir) continue;
+      const candidate = join(dir, 'uv');
+      if (existsSync(candidate)) {
+        uvPath = candidate;
+        break;
+      }
+    }
+  }
+
+  if (uvPath) {
+    pythonBackendProcess = spawn(uvPath, [
+      'run',
       'uvicorn',
-      'backend.server:app',
+      'backend.app:app',
       '--reload',
       '--host',
       runtimeConfig.api.host,
@@ -135,7 +161,7 @@ function main() {
     ], {
       cwd: rootDir,
       env,
-      shell: true,
+      shell: false,
       stdio: 'pipe',
     });
 
@@ -151,7 +177,7 @@ function main() {
       process.stderr.write(`[Backend] ${data}`);
     });
   } else {
-    log('  ⚠ Python backend not started (run npm run setup first)', colors.yellow);
+    log('  ⚠ Python backend not started (uv not found - install uv first)', colors.yellow);
   }
 
   // Start the dev server with filtered output

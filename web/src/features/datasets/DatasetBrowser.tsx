@@ -293,7 +293,7 @@ export function DatasetBrowser({
   const hasActiveFilters = useDatasetStore(selectHasActiveFilters);
 
   // Fetch datasets from HuggingFace
-  const { refetch, isFetching } = useQuery<HuggingFaceSearchResponse>({
+  const { data: queryData, refetch, isFetching } = useQuery<HuggingFaceSearchResponse>({
     queryKey: ["datasets", filters.searchQuery, page],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -339,10 +339,16 @@ export function DatasetBrowser({
     staleTime: 60000,
   });
 
-  // Update store when data changes
+  // Sync query results to Zustand store
   useEffect(() => {
-    // Initial load is handled by the query
-  }, []);
+    if (queryData) {
+      if (page === 1) {
+        setDatasets(queryData.datasets, queryData.total, queryData.hasMore);
+      } else {
+        appendDatasets(queryData.datasets);
+      }
+    }
+  }, [queryData, page, setDatasets, appendDatasets]);
 
   // Handle dataset selection for use
   const handleUseDataset = useCallback(

@@ -39,7 +39,7 @@ from backend.models.training import (
     TrainingStartResponse,
     TrainingStatusResponse,
 )
-from backend.robotops import get_compute, get_tracker
+from backend.robotops import get_compute
 from backend.robotops.compute_protocol import JobState
 from backend.services.job_store import get_job_store, JobRecord
 from backend.services.hf_resolver import resolve_dataset_revision
@@ -208,6 +208,10 @@ async def _persist_job(job_id: str, job_info: Dict[str, Any]) -> None:
                 dataset_id=lineage.dataset_id if lineage else None,
             )
 
+            status = job_info.get("status")
+            if status:
+                await store.update_job(job_id, status=status, error=job_info.get("error"))
+
             # Update with tracker URL if available
             if job_info.get("tracker_url"):
                 await store.update_job(job_id, tracker_url=job_info.get("tracker_url"))
@@ -298,10 +302,19 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
     logger.info(f"Starting training job {job_id}")
 
     try:
+        compute_backend = _get_enum_value(request.compute.type)
+        if compute_backend != "local":
+            raise ValueError(
+                f"Compute backend '{compute_backend}' is not production-ready in this release. "
+                "Use local training for now."
+            )
+
         # Create lineage
         lineage = _create_lineage(request, started_at)
 
-        # Initialize experiment tracker
+        # Prepare experiment tracker config for the training process. The
+        # subprocess owns tracker initialization so metrics and artifacts land in
+        # one run instead of splitting orchestration and training into duplicates.
         tracker_config = {
             "type": _get_enum_value(request.tracker.type),
             "tracking_uri": request.tracker.tracking_uri,
@@ -310,35 +323,6 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "entity": request.tracker.entity,
             "output_dir": request.training.output_dir,
         }
-        tracker = get_tracker(tracker_config)
-
-        # Start tracking run
-        run_name = request.training.run_name or f"{_get_enum_value(request.model.architecture)}_{job_id}"
-        tracker.init_run(
-            run_name=run_name,
-            config={
-                "dataset": request.dataset.model_dump(),
-                "model": request.model.model_dump(),
-                "training": request.training.model_dump(),
-                "compute": request.compute.model_dump(),
-            },
-            tags={
-                "job_id": job_id,
-                "architecture": _get_enum_value(request.model.architecture),
-            },
-        )
-
-        # Log lineage
-        tracker.log_dataset_lineage(
-            dataset_id=lineage.dataset_id,
-            version=lineage.dataset_version or "latest",
-            source=lineage.dataset_source,
-        )
-        tracker.log_model_config(
-            architecture=lineage.model_architecture,
-            config=request.model.config,
-        )
-
         # Initialize compute backend
         compute_config = {
             "type": _get_enum_value(request.compute.type),
@@ -355,6 +339,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "model": request.model.model_dump(),
             "training": request.training.model_dump(),
             "tracker": tracker_config,
+            "compute": request.compute.model_dump(),
             "device": request.compute.device,
         }
 
@@ -377,16 +362,16 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
         )
 
         # Store job info in memory
-        compute_backend = _get_enum_value(request.compute.type)
         _jobs[job_id] = {
             "compute_job_id": compute_job_id,
             "compute_backend": compute_backend,
-            "tracker": tracker,
-            "tracker_url": tracker.get_run_url(),
+            "tracker": None,
+            "tracker_url": None,
             "lineage": lineage,
             "request": request,
             "status": JobStatus.RUNNING,
             "started_at": started_at,
+            "experiment_id": request.experiment_id,
         }
 
         # Persist to database
@@ -396,7 +381,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             success=True,
             job_id=job_id,
             message=f"Training started on {compute_backend}",
-            tracker_url=tracker.get_run_url(),
+            tracker_url=None,
             lineage=lineage,
         )
 
@@ -408,6 +393,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "error": str(e),
             "started_at": started_at,
             "finished_at": datetime.now().isoformat(),
+            "experiment_id": request.experiment_id,
         }
 
         # Persist failed job
@@ -823,9 +809,11 @@ async def get_job_metrics(job_id: str) -> dict:
     """
     metrics: Dict[str, List[Dict[str, Any]]] = {}
 
+    job_dir = await _resolve_job_dir(job_id)
+
     # Try metrics.jsonl first (preferred format)
-    metrics_jsonl_path = Path("outputs") / job_id / "metrics.jsonl"
-    progress_json_path = Path("outputs") / job_id / "progress.json"
+    metrics_jsonl_path = job_dir / "metrics.jsonl"
+    progress_json_path = job_dir / "progress.json"
 
     try:
         if metrics_jsonl_path.exists():
@@ -904,7 +892,14 @@ async def get_job_logs(job_id: str, tail: int = 100) -> dict:
     Returns:
         Dictionary with logs string and total line count.
     """
-    log_path = Path("outputs") / job_id / "train.log"
+    job_dir = await _resolve_job_dir(job_id)
+    candidate_logs = [
+        job_dir / "train.log",
+        job_dir / "stdout.log",
+        job_dir / "stderr.log",
+    ]
+
+    log_path = next((path for path in candidate_logs if path.exists()), candidate_logs[0])
 
     try:
         if not log_path.exists():
@@ -927,3 +922,31 @@ async def get_job_logs(job_id: str, tail: int = 100) -> dict:
     except Exception as e:
         logger.error(f"Error reading logs for job {job_id}: {e}")
         return {"logs": f"Error reading logs: {e}", "total_lines": 0}
+
+
+async def _resolve_job_dir(job_id: str) -> Path:
+    """Resolve the filesystem output directory for a RobotOps job."""
+    await _ensure_jobs_loaded()
+
+    job_info = _jobs.get(job_id)
+    compute_job_id = job_info.get("compute_job_id") if job_info else None
+    output_dir = "./outputs"
+
+    request = job_info.get("request") if job_info else None
+    if request and hasattr(request, "training"):
+        output_dir = request.training.output_dir
+    elif job_info and job_info.get("config"):
+        training_config = job_info["config"].get("training", {})
+        output_dir = training_config.get("output_dir", output_dir)
+
+    if not compute_job_id:
+        try:
+            store = get_job_store()
+            record = await store.get_job(job_id)
+            if record:
+                compute_job_id = record.compute_job_id
+                output_dir = record.config.get("training", {}).get("output_dir", output_dir)
+        except Exception as e:
+            logger.debug(f"Failed to resolve persisted job dir for {job_id}: {e}")
+
+    return Path(output_dir) / (compute_job_id or job_id)

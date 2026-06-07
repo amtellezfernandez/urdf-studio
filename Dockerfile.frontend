@@ -20,12 +20,14 @@ COPY package.json package-lock.json* ./
 # Install dependencies
 RUN npm ci --prefer-offline
 
-# Copy source files
-COPY index.html ./
-COPY vite.config.ts ./
-COPY tsconfig*.json ./
-COPY src ./src/
-COPY public ./public/
+# Copy config files (needed for vite build)
+COPY config ./config/
+
+# Copy web source files (includes web/public/ assets)
+COPY web ./web/
+
+# Copy components.json for shadcn/ui
+COPY components.json ./
 
 # Build arguments for API URL
 ARG VITE_API_URL=http://localhost:8000
@@ -64,7 +66,7 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
-    # API proxy (optional, for same-origin requests)
+    # API proxy (for same-origin requests)
     location /api/ {
         proxy_pass http://backend:8000/;
         proxy_http_version 1.1;
@@ -77,8 +79,21 @@ server {
         proxy_cache_bypass \$http_upgrade;
     }
 
+    # Direct backend endpoints (training, experiments, etc.)
+    location ~ ^/(training|experiments|evaluations|datasets|health|ik|lerobot|pyroki|rerun|samples)(/|$) {
+        proxy_pass http://backend:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+
     # Health check endpoint
-    location /health {
+    location /nginx-health {
         access_log off;
         return 200 "OK";
         add_header Content-Type text/plain;
@@ -86,15 +101,15 @@ server {
 }
 EOF
 
-# Copy built files from build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy built files from build stage (vite outputs to web/dist)
+COPY --from=build /app/web/dist /usr/share/nginx/html
 
 # Expose port
 EXPOSE 80
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:80/nginx-health || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

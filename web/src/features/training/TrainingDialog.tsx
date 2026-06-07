@@ -19,6 +19,113 @@ import { TrainingProgress } from "./TrainingProgress";
 import { API_BASE_URL } from "@/shared/config/api";
 import type { TrainingStartResponse, TrainingStatusResponse } from "./types";
 
+interface BackendTrainingStartResponse {
+  success: boolean;
+  job_id: string;
+  message: string;
+  tracker_url?: string | null;
+  lineage?: BackendTrainingLineage | null;
+}
+
+interface BackendTrainingStatusResponse {
+  job_id: string;
+  status: TrainingStatusResponse["status"];
+  progress?: BackendTrainingProgress | null;
+  metrics?: BackendTrainingMetrics | null;
+  tracker_url?: string | null;
+  lineage?: BackendTrainingLineage | null;
+  error?: string | null;
+  logs_tail?: string | null;
+  compute_backend: string;
+  cost_estimate_usd?: number | null;
+}
+
+interface BackendTrainingProgress {
+  current_epoch: number;
+  total_epochs: number;
+  current_step: number;
+  total_steps: number;
+  epoch_progress: number;
+  overall_progress: number;
+}
+
+interface BackendTrainingMetrics {
+  loss?: number | null;
+  learning_rate?: number | null;
+  grad_norm?: number | null;
+  additional?: Record<string, number>;
+}
+
+interface BackendTrainingLineage {
+  dataset_source: string;
+  dataset_id: string;
+  dataset_version?: string | null;
+  model_architecture: string;
+  model_config_hash: string;
+  training_config_hash: string;
+  robot_name?: string | null;
+  urdf_hash?: string | null;
+  started_at: string;
+  completed_at?: string | null;
+}
+
+function mapLineage(lineage?: BackendTrainingLineage | null): TrainingStatusResponse["lineage"] {
+  if (!lineage) return undefined;
+  return {
+    datasetSource: lineage.dataset_source,
+    datasetId: lineage.dataset_id,
+    datasetVersion: lineage.dataset_version || undefined,
+    modelArchitecture: lineage.model_architecture,
+    modelConfigHash: lineage.model_config_hash,
+    trainingConfigHash: lineage.training_config_hash,
+    robotName: lineage.robot_name || undefined,
+    urdfHash: lineage.urdf_hash || undefined,
+    startedAt: lineage.started_at,
+    completedAt: lineage.completed_at || undefined,
+  };
+}
+
+function mapStatusResponse(status: BackendTrainingStatusResponse): TrainingStatusResponse {
+  return {
+    jobId: status.job_id,
+    status: status.status,
+    progress: status.progress
+      ? {
+          currentEpoch: status.progress.current_epoch,
+          totalEpochs: status.progress.total_epochs,
+          currentStep: status.progress.current_step,
+          totalSteps: status.progress.total_steps,
+          epochProgress: status.progress.epoch_progress,
+          overallProgress: status.progress.overall_progress,
+        }
+      : undefined,
+    metrics: status.metrics
+      ? {
+          loss: status.metrics.loss ?? undefined,
+          learningRate: status.metrics.learning_rate ?? undefined,
+          gradNorm: status.metrics.grad_norm ?? undefined,
+          additional: status.metrics.additional || {},
+        }
+      : undefined,
+    trackerUrl: status.tracker_url || undefined,
+    lineage: mapLineage(status.lineage),
+    error: status.error || undefined,
+    logsTail: status.logs_tail || undefined,
+    computeBackend: status.compute_backend,
+    costEstimateUsd: status.cost_estimate_usd ?? undefined,
+  };
+}
+
+function mapStartResponse(result: BackendTrainingStartResponse): TrainingStartResponse {
+  return {
+    success: result.success,
+    jobId: result.job_id,
+    message: result.message,
+    trackerUrl: result.tracker_url || undefined,
+    lineage: mapLineage(result.lineage),
+  };
+}
+
 const STEP_TITLES = {
   dataset: "Select Dataset",
   model: "Choose Model",
@@ -73,7 +180,7 @@ export function TrainingDialog() {
       const response = await fetch(`${API_BASE_URL}/training/status/${jobId}`);
       if (!response.ok) throw new Error("Failed to fetch status");
 
-      const status: TrainingStatusResponse = await response.json();
+      const status = mapStatusResponse(await response.json());
       setJobStatus(status);
 
       // Stop polling if job is done
@@ -163,7 +270,7 @@ export function TrainingDialog() {
         throw new Error(errorData.detail || "Failed to start training");
       }
 
-      const result: TrainingStartResponse = await response.json();
+      const result = mapStartResponse(await response.json());
 
       if (!result.success) {
         throw new Error(result.message);

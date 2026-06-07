@@ -1,4 +1,5 @@
 import { useRef, useCallback, memo, useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/shared/ui/button";
 import { Switch } from "@/shared/ui/switch";
 import { Input } from "@/shared/ui/input";
@@ -11,7 +12,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
-import { FolderOpen, Github, AlertTriangle, Loader2, X, Clock, Folder } from "lucide-react";
+import { FolderOpen, Github, AlertTriangle, Loader2, X, Clock, Folder, FlaskConical, Database, Play, ArrowRight } from "lucide-react";
 import { useGPUMode } from "@/shared/hooks/use-gpu-mode";
 import { useRecentGitHubRepos } from "@/shared/hooks/use-recent-github-repos";
 import { toast } from "sonner";
@@ -475,6 +476,45 @@ export const FolderUploadScreen = memo(
             </p>
           </div>
         )}
+
+        {/* RobotOps Section */}
+        <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <FlaskConical className="w-4 h-4 text-primary" />
+              RobotOps
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+              NEW
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Train imitation learning policies, track experiments, and evaluate models.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <Link to="/robotops" className="block">
+              <div className="flex flex-col items-center gap-1 p-3 rounded-md bg-background hover:bg-muted transition-colors border border-border">
+                <FlaskConical className="w-5 h-5 text-muted-foreground" />
+                <span className="text-xs font-medium">Experiments</span>
+              </div>
+            </Link>
+            <Link to="/robotops" className="block">
+              <div className="flex flex-col items-center gap-1 p-3 rounded-md bg-background hover:bg-muted transition-colors border border-border">
+                <Database className="w-5 h-5 text-muted-foreground" />
+                <span className="text-xs font-medium">Datasets</span>
+              </div>
+            </Link>
+            <Link to="/robotops" className="block">
+              <div className="flex flex-col items-center gap-1 p-3 rounded-md bg-background hover:bg-muted transition-colors border border-border">
+                <Play className="w-5 h-5 text-muted-foreground" />
+                <span className="text-xs font-medium">Evaluation</span>
+              </div>
+            </Link>
+          </div>
+          <Link to="/robotops" className="flex items-center justify-center gap-1 text-xs text-primary hover:underline">
+            Open RobotOps Dashboard <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
 
         {/* What You Need Section */}
         <div className="space-y-2">

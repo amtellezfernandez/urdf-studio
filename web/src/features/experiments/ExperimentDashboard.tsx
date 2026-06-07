@@ -12,6 +12,7 @@ import { cn } from "@/shared/lib/utils";
 import { JobList } from "./JobList";
 import { JobDetails } from "./JobDetails";
 import { useExperimentStore, selectHasActiveJobs, selectRunningJobs } from "./useExperimentStore";
+import { useTrainingStore } from "@/features/training";
 
 // ============================================================================
 // Stats Card
@@ -181,6 +182,7 @@ interface ExperimentDashboardProps {
 
 export function ExperimentDashboard({ onSelectJob }: ExperimentDashboardProps) {
   const { reset } = useExperimentStore();
+  const openTrainingDialog = useTrainingStore((state) => state.openDialog);
   const hasActiveJobs = useExperimentStore(selectHasActiveJobs);
 
   // Cleanup on unmount
@@ -203,7 +205,7 @@ export function ExperimentDashboard({ onSelectJob }: ExperimentDashboardProps) {
             Monitor and manage your training jobs
           </p>
         </div>
-        <Button>
+        <Button onClick={openTrainingDialog}>
           <Play className="h-4 w-4 mr-2" />
           New Training
         </Button>

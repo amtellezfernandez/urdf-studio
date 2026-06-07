@@ -49,8 +49,11 @@ dependencies = [
     "alembic>=1.13.0",
 
     # Vendored dependencies
-    "pyroki @ file:///home/charbel/urdf-studio/vendor/pyroki",
+    "pyroki",
 ]
+
+[tool.uv.sources]
+pyroki = { path = "vendor/pyroki", editable = true }
 
 [project.optional-dependencies]
 dev = [

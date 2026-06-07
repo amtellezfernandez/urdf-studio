@@ -19,6 +19,7 @@ import {
   BarChart2,
   Info,
   Upload,
+  Database,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -33,6 +34,83 @@ import { cn } from "@/shared/lib/utils";
 import { useExperimentStore } from "./useExperimentStore";
 import { ExportToHFDialog } from "./ExportToHFDialog";
 import type { TrainingJob, JobStatus } from "./types";
+
+interface BackendTrainingStatusResponse {
+  job_id: string;
+  status: JobStatus;
+  progress?: {
+    current_epoch: number;
+    total_epochs: number;
+    current_step: number;
+    total_steps: number;
+    epoch_progress: number;
+    overall_progress: number;
+  } | null;
+  metrics?: {
+    loss?: number | null;
+    learning_rate?: number | null;
+    grad_norm?: number | null;
+    additional?: Record<string, number>;
+  } | null;
+  tracker_url?: string | null;
+  error?: string | null;
+  logs_tail?: string | null;
+  compute_backend?: string | null;
+  cost_estimate_usd?: number | null;
+  lineage?: {
+    dataset_source?: "huggingface" | "local" | null;
+    dataset_id?: string | null;
+    model_architecture?: string | null;
+    started_at?: string | null;
+  } | null;
+  config?: TrainingJob["config"];
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+function mapBackendStatusToJob(data: BackendTrainingStatusResponse): TrainingJob {
+  return {
+    id: data.job_id,
+    name: data.config?.training?.run_name as string || data.job_id,
+    status: data.status,
+    modelArchitecture:
+      data.lineage?.model_architecture ||
+      data.config?.model?.architecture ||
+      "unknown",
+    datasetId:
+      data.lineage?.dataset_id ||
+      data.config?.dataset?.repo_id ||
+      data.config?.dataset?.local_path ||
+      "unknown",
+    datasetSource: data.lineage?.dataset_source || "huggingface",
+    computeBackend: data.compute_backend || "local",
+    startedAt: data.started_at || data.lineage?.started_at || new Date(0).toISOString(),
+    finishedAt: data.finished_at || undefined,
+    progress: data.progress
+      ? {
+          currentEpoch: data.progress.current_epoch,
+          totalEpochs: data.progress.total_epochs,
+          currentStep: data.progress.current_step,
+          totalSteps: data.progress.total_steps,
+          epochProgress: data.progress.epoch_progress,
+          overallProgress: data.progress.overall_progress,
+        }
+      : undefined,
+    metrics: data.metrics
+      ? {
+          loss: data.metrics.loss ?? undefined,
+          learningRate: data.metrics.learning_rate ?? undefined,
+          gradNorm: data.metrics.grad_norm ?? undefined,
+          additional: data.metrics.additional || {},
+        }
+      : undefined,
+    error: data.error || undefined,
+    logsTail: data.logs_tail || undefined,
+    trackerUrl: data.tracker_url || undefined,
+    costEstimateUsd: data.cost_estimate_usd ?? undefined,
+    config: data.config,
+  };
+}
 
 // ============================================================================
 // Status Configuration
@@ -125,13 +203,13 @@ function ProgressSection({ job }: { job: TrainingJob }) {
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">Overall Progress</span>
           <span className="text-sm text-muted-foreground">
-            {Math.round(overallProgress)}%
+            {Math.round(overallProgress * 100)}%
           </span>
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${overallProgress}%` }}
+            style={{ width: `${overallProgress * 100}%` }}
           />
         </div>
       </div>
@@ -143,13 +221,13 @@ function ProgressSection({ job }: { job: TrainingJob }) {
             Epoch {currentEpoch} of {totalEpochs}
           </span>
           <span className="text-sm text-muted-foreground">
-            {Math.round(epochProgress)}%
+            {Math.round(epochProgress * 100)}%
           </span>
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-500 transition-all duration-300"
-            style={{ width: `${epochProgress}%` }}
+            style={{ width: `${epochProgress * 100}%` }}
           />
         </div>
       </div>
@@ -281,8 +359,22 @@ function LogsSection({ job }: { job: TrainingJob }) {
 // ============================================================================
 
 export function JobDetails() {
-  const { selectedJob, selectJob, updateJob } = useExperimentStore();
+  const { selectedJobId, selectedJob, selectJob, updateJob, setSelectedJob } = useExperimentStore();
   const [showExportDialog, setShowExportDialog] = useState(false);
+
+  // Fetch live job details for the selected job.
+  const { data: fetchedJob, isLoading: isLoadingJob } = useQuery({
+    queryKey: ["job-details", selectedJobId],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/training/status/${selectedJobId}`);
+      if (!response.ok) throw new Error("Failed to fetch job");
+      return mapBackendStatusToJob(await response.json());
+    },
+    enabled: !!selectedJobId,
+    staleTime: 5000,
+  });
+
+  const job = fetchedJob || selectedJob;
 
   // Cancel job mutation
   const cancelMutation = useMutation({
@@ -295,8 +387,8 @@ export function JobDetails() {
     },
     onSuccess: () => {
       toast.success("Job cancelled");
-      if (selectedJob) {
-        updateJob(selectedJob.id, { status: "cancelled" });
+      if (job) {
+        updateJob(job.id, { status: "cancelled" });
       }
     },
     onError: () => {
@@ -304,7 +396,8 @@ export function JobDetails() {
     },
   });
 
-  if (!selectedJob) {
+  // No job ID selected at all
+  if (!selectedJobId) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
         <Info className="h-12 w-12 text-muted-foreground mb-4" />
@@ -316,9 +409,38 @@ export function JobDetails() {
     );
   }
 
-  const statusConfig = STATUS_CONFIG[selectedJob.status];
+  // Loading state
+  if (isLoadingJob && !job) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8">
+        <Loader2 className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
+        <h3 className="text-lg font-medium mb-2">Loading job details...</h3>
+      </div>
+    );
+  }
+
+  // Job not found
+  if (!job) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8">
+        <XCircle className="h-12 w-12 text-destructive mb-4" />
+        <h3 className="text-lg font-medium mb-2">Job not found</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          The selected job could not be found. It may have been deleted.
+        </p>
+        <Button variant="outline" className="mt-4" onClick={() => selectJob(null)}>
+          Clear selection
+        </Button>
+      </div>
+    );
+  }
+
+  // Alias for easier refactoring - use 'job' which could be from store or fetched
+  const selectedJobData = job;
+
+  const statusConfig = STATUS_CONFIG[selectedJobData.status];
   const StatusIcon = statusConfig.icon;
-  const isRunning = selectedJob.status === "running" || selectedJob.status === "pending" || selectedJob.status === "queued";
+  const isRunning = selectedJobData.status === "running" || selectedJobData.status === "pending" || selectedJobData.status === "queued";
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString();
@@ -335,13 +457,13 @@ export function JobDetails() {
                 className={cn(
                   "h-5 w-5",
                   statusConfig.color,
-                  selectedJob.status === "running" && "animate-spin"
+                  selectedJobData.status === "running" && "animate-spin"
                 )}
               />
             </div>
             <div>
-              <h2 className="text-lg font-semibold truncate">{selectedJob.name}</h2>
-              <p className="text-sm text-muted-foreground font-mono">{selectedJob.id}</p>
+              <h2 className="text-lg font-semibold truncate">{selectedJobData.name}</h2>
+              <p className="text-sm text-muted-foreground font-mono">{selectedJobData.id}</p>
             </div>
           </div>
         </div>
@@ -350,7 +472,7 @@ export function JobDetails() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => cancelMutation.mutate(selectedJob.id)}
+              onClick={() => cancelMutation.mutate(selectedJobData.id)}
               disabled={cancelMutation.isPending}
             >
               {cancelMutation.isPending ? (
@@ -361,7 +483,7 @@ export function JobDetails() {
               <span className="ml-2">Cancel</span>
             </Button>
           )}
-          {selectedJob.status === "completed" && (
+          {selectedJobData.status === "completed" && (
             <Button
               variant="outline"
               size="sm"
@@ -371,11 +493,11 @@ export function JobDetails() {
               Export to HuggingFace
             </Button>
           )}
-          {selectedJob.trackerUrl && (
+          {selectedJobData.trackerUrl && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(selectedJob.trackerUrl, "_blank")}
+              onClick={() => window.open(selectedJobData.trackerUrl, "_blank")}
             >
               <ExternalLink className="h-4 w-4 mr-2" />
               View in Tracker
@@ -391,6 +513,7 @@ export function JobDetails() {
       <Tabs defaultValue="overview" className="flex-1 flex flex-col">
         <TabsList className="mx-4 mt-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="dataset">Dataset</TabsTrigger>
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
@@ -406,42 +529,86 @@ export function JobDetails() {
           <div>
             <h3 className="text-sm font-medium mb-3">Details</h3>
             <div className="bg-muted/30 rounded-lg p-3">
-              <InfoRow label="Job ID" value={selectedJob.id} copyable />
-              <InfoRow label="Model" value={selectedJob.modelArchitecture.toUpperCase()} />
-              <InfoRow label="Dataset" value={selectedJob.datasetId} copyable />
-              <InfoRow label="Compute" value={selectedJob.computeBackend} />
-              <InfoRow label="Started" value={formatDate(selectedJob.startedAt)} />
-              {selectedJob.finishedAt && (
-                <InfoRow label="Finished" value={formatDate(selectedJob.finishedAt)} />
+              <InfoRow label="Job ID" value={selectedJobData.id} copyable />
+              <InfoRow label="Model" value={selectedJobData.modelArchitecture.toUpperCase()} />
+              <InfoRow label="Dataset" value={selectedJobData.datasetId} copyable />
+              <InfoRow label="Compute" value={selectedJobData.computeBackend} />
+              <InfoRow label="Started" value={formatDate(selectedJobData.startedAt)} />
+              {selectedJobData.finishedAt && (
+                <InfoRow label="Finished" value={formatDate(selectedJobData.finishedAt)} />
               )}
-              {selectedJob.costEstimateUsd !== undefined && (
+              {selectedJobData.costEstimateUsd !== undefined && (
                 <InfoRow
                   label="Estimated Cost"
-                  value={`$${selectedJob.costEstimateUsd.toFixed(2)}`}
+                  value={`$${selectedJobData.costEstimateUsd.toFixed(2)}`}
                 />
               )}
             </div>
           </div>
 
           {/* Error */}
-          {selectedJob.error && (
+          {selectedJobData.error && (
             <div>
               <h3 className="text-sm font-medium mb-3 text-destructive">Error</h3>
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
                 <pre className="text-sm text-destructive whitespace-pre-wrap">
-                  {selectedJob.error}
+                  {selectedJobData.error}
                 </pre>
               </div>
             </div>
           )}
         </TabsContent>
 
+        <TabsContent value="dataset" className="flex-1 overflow-auto p-4">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Database className="h-5 w-5 text-muted-foreground" />
+              <h3 className="text-sm font-medium">Dataset Information</h3>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <InfoRow label="Dataset ID" value={selectedJobData.datasetId} copyable />
+              <InfoRow
+                label="Source"
+                value={selectedJobData.config?.dataset?.source || "huggingface"}
+              />
+              <InfoRow
+                label="Version"
+                value={selectedJobData.config?.dataset?.version || "latest"}
+              />
+              {selectedJobData.config?.dataset?.resolved_revision && (
+                <InfoRow
+                  label="Commit SHA"
+                  value={selectedJobData.config.dataset.resolved_revision}
+                  copyable
+                />
+              )}
+              {selectedJobData.config?.dataset?.local_path && (
+                <InfoRow
+                  label="Local Path"
+                  value={selectedJobData.config.dataset.local_path}
+                  copyable
+                />
+              )}
+            </div>
+            {selectedJobData.config?.dataset?.repo_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`https://huggingface.co/datasets/${selectedJobData.config?.dataset?.repo_id}`, "_blank")}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View on HuggingFace
+              </Button>
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="metrics" className="flex-1 overflow-auto p-4">
-          <MetricsSection job={selectedJob} />
+          <MetricsSection job={selectedJobData} />
         </TabsContent>
 
         <TabsContent value="logs" className="flex-1 overflow-hidden p-4">
-          <LogsSection job={selectedJob} />
+          <LogsSection job={selectedJobData} />
         </TabsContent>
       </Tabs>
 
@@ -449,7 +616,7 @@ export function JobDetails() {
       <ExportToHFDialog
         open={showExportDialog}
         onClose={() => setShowExportDialog(false)}
-        runId={selectedJob.id}
+        runId={selectedJobData.id}
         checkpoints={["final_model"]}
       />
     </div>

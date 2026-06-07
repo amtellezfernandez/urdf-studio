@@ -21,6 +21,7 @@ import { ExperimentDashboard } from "@/features/experiments";
 import { LossCurve } from "@/features/metrics";
 import { DatasetBrowser } from "@/features/datasets";
 import { EvaluationPanel } from "@/features/evaluation";
+import { TrainingDialog } from "@/features/training";
 
 // ============================================================================
 // Types
@@ -243,6 +244,7 @@ export default function RobotOps() {
         )}
         {activeTab === "evaluation" && <EvaluationPanel className="h-full" />}
       </main>
+      <TrainingDialog />
     </div>
   );
 }

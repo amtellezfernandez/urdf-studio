@@ -3,11 +3,9 @@
  */
 
 import { useState, useEffect } from "react";
-import { Cpu, Cloud, Zap, Info, ExternalLink } from "lucide-react";
+import { Cpu, Info } from "lucide-react";
 
 import { Label } from "@/shared/ui/label";
-import { Input } from "@/shared/ui/input";
-import { Switch } from "@/shared/ui/switch";
 import {
   Select,
   SelectContent,
@@ -26,24 +24,6 @@ const COMPUTE_BACKENDS = [
     description: "Train on your local machine's GPU",
     icon: Cpu,
     requiresApiKey: false,
-  },
-  {
-    type: "modal" as ComputeType,
-    name: "Modal",
-    description: "Serverless GPU cloud. Pay-per-use with fast cold starts.",
-    icon: Cloud,
-    requiresApiKey: true,
-    docsUrl: "https://modal.com/docs",
-    signupUrl: "https://modal.com/signup",
-  },
-  {
-    type: "runpod" as ComputeType,
-    name: "RunPod",
-    description: "GPU cloud with spot instances. Good for long training runs.",
-    icon: Zap,
-    requiresApiKey: true,
-    docsUrl: "https://docs.runpod.io/",
-    signupUrl: "https://runpod.io/console/signup",
   },
 ];
 
@@ -84,21 +64,6 @@ export function ComputeSelector() {
   };
 
   const selectedBackend = COMPUTE_BACKENDS.find((b) => b.type === computeConfig.type);
-  const availableGpus = instances[computeConfig.type] || [];
-
-  // Estimate cost
-  const estimatedCost = (() => {
-    if (computeConfig.type === "local") return null;
-
-    const selectedGpu = availableGpus.find((g) => g.name === computeConfig.gpu);
-    if (!selectedGpu) return null;
-
-    const hourlyRate = computeConfig.useSpot
-      ? (selectedGpu.costPerHourSpot || selectedGpu.costPerHour)
-      : selectedGpu.costPerHour;
-
-    return hourlyRate * computeConfig.timeoutHours;
-  })();
 
   return (
     <div className="space-y-4">
@@ -123,17 +88,6 @@ export function ComputeSelector() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{backend.name}</span>
-                      {backend.docsUrl && (
-                        <a
-                          href={backend.docsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-muted-foreground hover:text-primary"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {backend.description}
@@ -176,122 +130,6 @@ export function ComputeSelector() {
           <p className="text-xs text-muted-foreground">
             Training will run on this machine. Ensure sufficient GPU memory.
           </p>
-        </div>
-      )}
-
-      {(computeConfig.type === "modal" || computeConfig.type === "runpod") && (
-        <div className="space-y-3 p-4 bg-muted/30 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-muted-foreground" />
-            <Label>{selectedBackend?.name} Configuration</Label>
-          </div>
-
-          {/* API Key */}
-          <div className="space-y-1">
-            <Label className="text-xs">API Key</Label>
-            <Input
-              type="password"
-              placeholder={`${selectedBackend?.name} API key`}
-              value={computeConfig.apiKey || ""}
-              onChange={(e) => setComputeConfig({ apiKey: e.target.value })}
-              className="h-8 text-sm"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              Get your API key from{" "}
-              <a
-                href={selectedBackend?.signupUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {selectedBackend?.name}
-              </a>
-            </p>
-          </div>
-
-          {/* GPU Selection */}
-          <div className="space-y-1">
-            <Label className="text-xs">GPU Type</Label>
-            <Select
-              value={computeConfig.gpu || ""}
-              onValueChange={(v) => setComputeConfig({ gpu: v })}
-            >
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Select GPU" />
-              </SelectTrigger>
-              <SelectContent>
-                {loadingInstances ? (
-                  <SelectItem value="" disabled>Loading...</SelectItem>
-                ) : availableGpus.length > 0 ? (
-                  availableGpus.map((gpu) => (
-                    <SelectItem key={gpu.name} value={gpu.name}>
-                      <div className="flex items-center justify-between w-full gap-4">
-                        <span>{gpu.name}</span>
-                        <span className="text-muted-foreground text-xs">
-                          {gpu.memoryGb}GB • ${gpu.costPerHour}/hr
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))
-                ) : (
-                  <>
-                    <SelectItem value="A10G">A10G (24GB)</SelectItem>
-                    <SelectItem value="A100-40GB">A100 40GB</SelectItem>
-                    <SelectItem value="A100-80GB">A100 80GB</SelectItem>
-                    <SelectItem value="H100">H100 (80GB)</SelectItem>
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Spot instances */}
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-xs">Use Spot Instances</Label>
-              <p className="text-[10px] text-muted-foreground">
-                Cheaper but may be interrupted
-              </p>
-            </div>
-            <Switch
-              checked={computeConfig.useSpot}
-              onCheckedChange={(checked) => setComputeConfig({ useSpot: checked })}
-            />
-          </div>
-
-          {/* Timeout */}
-          <div className="space-y-1">
-            <Label className="text-xs">Timeout (hours)</Label>
-            <Input
-              type="number"
-              min={0.5}
-              max={24}
-              step={0.5}
-              value={computeConfig.timeoutHours}
-              onChange={(e) => setComputeConfig({ timeoutHours: parseFloat(e.target.value) || 4 })}
-              className="h-8 text-sm"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              Maximum runtime before auto-termination
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Cost estimate */}
-      {estimatedCost !== null && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-600">💰</span>
-            <div>
-              <div className="text-sm font-medium">
-                Estimated Cost: ${estimatedCost.toFixed(2)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Based on {computeConfig.timeoutHours}h {computeConfig.useSpot ? "spot" : "on-demand"} pricing
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

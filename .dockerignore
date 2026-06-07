@@ -1,0 +1,67 @@
+# =============================================================================
+# Docker Build Ignore File
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Dependencies (will be installed fresh)
+node_modules
+.venv
+__pycache__
+*.pyc
+*.pyo
+
+# Build outputs
+dist
+build
+*.egg-info
+.eggs
+
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Caches
+.cache
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.uv-cache
+.vite
+
+# Logs
+*.log
+logs/
+
+# Test outputs
+test_outputs/
+outputs/
+htmlcov/
+.coverage
+
+# Environment files (use docker-compose environment instead)
+.env
+.env.local
+.env.*.local
+
+# Documentation (not needed in runtime image)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Local development files
+.urdf-studio-config.json
+test_config.json
+
+# OS files
+.DS_Store
+Thumbs.db

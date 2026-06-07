@@ -26,6 +26,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     build-essential \
+    ffmpeg \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python 3.10 as default
@@ -40,7 +45,7 @@ ENV PATH="/root/.local/bin:$PATH"
 WORKDIR /app
 
 # Copy project files
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock README.md ./
 COPY backend ./backend/
 COPY vendor ./vendor/
 
@@ -50,13 +55,9 @@ COPY vendor ./vendor/
 # -----------------------------------------------------------------------------
 FROM base AS trainer
 
-# Create virtual environment and install dependencies
-RUN uv venv .venv && \
-    . .venv/bin/activate && \
-    uv pip install --extra-index-url https://download.pytorch.org/whl/cu121 \
-        torch torchvision && \
-    uv pip install -e . && \
-    uv pip install -e ./vendor/pyroki 2>/dev/null || true
+# Install dependencies using uv sync (same as local development)
+# This ensures the exact same dependencies from pyproject.toml are installed
+RUN uv sync --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
@@ -85,13 +86,8 @@ CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
 # -----------------------------------------------------------------------------
 FROM base AS cpu
 
-# Create virtual environment and install CPU-only dependencies
-RUN uv venv .venv && \
-    . .venv/bin/activate && \
-    uv pip install --extra-index-url https://download.pytorch.org/whl/cpu \
-        torch torchvision && \
-    uv pip install -e . && \
-    uv pip install -e ./vendor/pyroki 2>/dev/null || true
+# Install dependencies using uv sync with CPU-only PyTorch
+RUN uv sync --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"

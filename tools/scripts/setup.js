@@ -340,13 +340,10 @@ function findUv() {
   return null;
 }
 
-async function checkRerun() {
+async function checkUv() {
   log('');
-  logArrow('🔍 Setting up Python environment, Rerun, and Placo');
+  logArrow('🔍 Checking Python environment');
   log('');
-
-  const venvPath = join(rootDir, '.venv');
-  const venvPython = join(venvPath, 'bin', 'python3');
 
   // Check if uv is available
   const uvPath = findUv();
@@ -356,99 +353,11 @@ async function checkRerun() {
     logInfo('Install uv with:');
     logInfo('  curl -LsSf https://astral.sh/uv/install.sh | sh');
     log('');
-    logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
     return false;
   }
 
   logSuccess(`Found uv at: ${uvPath}`);
-
-  // Create virtual environment if it doesn't exist
-  if (!existsSync(venvPath)) {
-    logInfo('Creating Python virtual environment...');
-    try {
-      // Try to find system Python (non-conda)
-      let pythonPath = '/usr/bin/python3';
-      if (!existsSync(pythonPath)) {
-        // Fallback to any available python3
-        pythonPath = 'python3';
-      }
-      execSync(`"${uvPath}" venv --python ${pythonPath}`, {
-        cwd: rootDir,
-        stdio: 'inherit',
-        shell: true,
-        env: getUvEnv()
-      });
-      logSuccess('Virtual environment created');
-    } catch (e) {
-      log('✗ Failed to create virtual environment', colors.yellow);
-      return false;
-    }
-  } else {
-    logInfo('Virtual environment already exists');
-  }
-
-  // Check if rerun-sdk is already installed
-  try {
-    execFileSync(venvPython, ['-c', 'import rerun; print(rerun.__version__)'], { stdio: 'inherit' });
-    logSuccess('Rerun SDK already installed');
-  } catch (e) {
-    // Not installed, proceed with installation
-    logInfo('Installing rerun-sdk in virtual environment...');
-    try {
-      execFileSync(uvPath, ['pip', 'install', '--python', venvPython, 'rerun-sdk'], {
-        cwd: rootDir,
-        stdio: 'inherit',
-        env: getUvEnv()
-      });
-
-      // Verify installation
-      execFileSync(venvPython, ['-c', 'import rerun; print(rerun.__version__)'], { stdio: 'inherit' });
-      logSuccess('Rerun SDK installed successfully');
-      logInfo('   Virtual environment: .venv/');
-    } catch (installError) {
-      log('✗ Failed to install rerun-sdk', colors.yellow);
-      logInfo('   You can try installing manually:');
-      logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 rerun-sdk`);
-      log('');
-      logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Rerun, but the Rerun Viewer feature will not work.${colors.reset}`);
-      return false;
-    }
-  }
-  // Check if placo is already installed
-  try {
-    execFileSync(venvPython, ['-c', "import placo; print(getattr(placo, '__version__', 'unknown'))"], {
-      stdio: 'inherit'
-    });
-    logSuccess('Placo already installed');
-    return true;
-  } catch (e) {
-    // Not installed, proceed with installation
-  }
-
-  // Install placo in the virtual environment
-  logInfo('Installing placo in virtual environment...');
-  try {
-    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, 'placo'], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: getUvEnv()
-    });
-
-    // Verify installation
-    execFileSync(venvPython, ['-c', "import placo; print(getattr(placo, '__version__', 'unknown'))"], {
-      stdio: 'inherit'
-    });
-    logSuccess('Placo installed successfully');
-    logInfo('   Virtual environment: .venv/');
-    return true;
-  } catch (installError) {
-    log('✗ Failed to install placo', colors.yellow);
-    logInfo('   You can try installing manually:');
-    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 placo`);
-    log('');
-    logInfo(`${colors.yellow}⚠ You can still use URDF Studio without Placo, but the LeRobot IK solver will not be available.${colors.reset}`);
-    return false;
-  }
+  return true;
 }
 
 function hasNvidiaGPU() {
@@ -465,127 +374,63 @@ async function installBackendDeps() {
   logArrow('🔧 Installing backend Python dependencies');
   log('');
 
-  const venvPath = join(rootDir, '.venv');
-  const venvPython = join(venvPath, 'bin', 'python3');
   const uvPath = findUv();
 
-  if (!existsSync(venvPython)) {
-    logInfo('Python virtual environment not found. Run setup first.');
-    return false;
-  }
   if (!uvPath) {
     log('✗ uv not found. Please install uv first:', colors.yellow);
+    logInfo('Install uv with:');
+    logInfo('  curl -LsSf https://astral.sh/uv/install.sh | sh');
     return false;
   }
-
-  // Core dependencies
-  const coreDeps = [
-    'fastapi',
-    'uvicorn',
-    'pydantic',
-    'numpy',
-    'yourdfpy',
-    'jax',
-    'jaxlib',
-    'jax_dataclasses',
-    'jaxlie',
-    'jaxls',
-  ];
-
-  // LeRobot and ML dependencies
-  const mlDeps = [
-    'lerobot',
-    'transformers',
-    'datasets',
-    'huggingface_hub',
-    'safetensors',
-  ];
-
-  // Experiment tracking
-  const trackingDeps = [
-    'wandb',
-    'mlflow',
-  ];
-
-  const allDeps = [...coreDeps, ...mlDeps, ...trackingDeps];
 
   // Detect GPU for PyTorch installation
   const hasGPU = hasNvidiaGPU();
-  const torchIndex = hasGPU
-    ? 'https://download.pytorch.org/whl/cu121'
-    : 'https://download.pytorch.org/whl/cpu';
-
-  logInfo(`GPU detected: ${hasGPU ? 'Yes (using CUDA 12.1)' : 'No (using CPU-only)'}`);
-  logInfo(`Installing: ${allDeps.join(', ')}`);
+  logInfo(`GPU detected: ${hasGPU ? 'Yes (using CUDA)' : 'No (using CPU-only)'}`);
 
   try {
-    // Install PyTorch first with appropriate index
-    logInfo('Installing PyTorch...');
-    execFileSync(uvPath, [
-      'pip', 'install', '--python', venvPython,
-      '--extra-index-url', torchIndex,
-      'torch', 'torchvision'
-    ], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: getUvEnv()
-    });
+    // Use uv sync to install all dependencies from pyproject.toml
+    // This creates the .venv if needed and installs all deps in one command
+    logInfo('Running uv sync to install all dependencies from pyproject.toml...');
 
-    // Install other dependencies
-    logInfo('Installing LeRobot and dependencies...');
-    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...allDeps], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: getUvEnv()
-    });
-
-    const pyrokiPath = join(rootDir, 'vendor', 'pyroki');
-    if (existsSync(pyrokiPath)) {
-      let pythonInclude = '';
-      try {
-        pythonInclude = execFileSync(
-          venvPython,
-          ['-c', "import sysconfig; print(sysconfig.get_path('include'))"],
-          { encoding: 'utf-8' }
-        ).trim();
-      } catch (e) {
-        pythonInclude = '';
-      }
-      if (!pythonInclude || !existsSync(join(pythonInclude, 'Python.h'))) {
-        log('✗ Python headers not found (Python.h). Install python3-dev and try again.', colors.yellow);
-        logInfo('   Example (Debian/Ubuntu): sudo apt-get install python3-dev build-essential');
-        return false;
-      }
-      logInfo('Installing: pyroki (editable)');
-      execFileSync(uvPath, ['pip', 'install', '--python', venvPython, '-e', pyrokiPath], {
-        cwd: rootDir,
-        stdio: 'inherit',
-        env: getUvEnv()
-      });
+    const syncArgs = ['sync'];
+    // Add extra index URL for PyTorch if GPU detected
+    if (hasGPU) {
+      syncArgs.push('--extra-index-url', 'https://download.pytorch.org/whl/cu121');
     }
-    logSuccess('Backend dependencies installed');
+
+    execFileSync(uvPath, syncArgs, {
+      cwd: rootDir,
+      stdio: 'inherit',
+      env: getUvEnv()
+    });
+
+    logSuccess('Backend dependencies installed via uv sync');
     return true;
   } catch (e) {
     log('✗ Failed to install backend dependencies', colors.yellow);
-    logInfo(`   You can try installing manually:`);
-    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 --extra-index-url ${torchIndex} torch torchvision`);
-    logInfo(`     "${uvPath}" pip install --python .venv/bin/python3 ${allDeps.join(' ')}`);
+    logInfo(`   You can try running manually:`);
+    logInfo(`     cd ${rootDir} && uv sync`);
     return false;
   }
 }
 
 async function main() {
   console.log(banner);
-  
+
   try {
     await installDependencies();
-    await checkRerun();
-    await installBackendDeps();
+    const uvOk = await checkUv();
+    if (uvOk) {
+      await installBackendDeps();
+    }
     await setupHuggingFace();
     await setupGitHub();
-    
+
     log('');
-    logSuccess('Setup complete');
+    logSuccess('Setup complete!');
+    log('');
+    logInfo('To start URDF Studio, run:');
+    log(`  ${colors.pinkBright}npm start${colors.reset}`);
     log('');
   } catch (error) {
     log('');

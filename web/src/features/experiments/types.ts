@@ -48,6 +48,21 @@ export interface TrainingJob {
   error?: string;
   logsTail?: string;
   costEstimateUsd?: number;
+  config?: {
+    dataset?: {
+      source?: string;
+      repo_id?: string;
+      local_path?: string;
+      version?: string;
+      resolved_revision?: string;
+    };
+    model?: {
+      architecture?: string;
+      config?: Record<string, unknown>;
+    };
+    training?: Record<string, unknown>;
+    tracker?: Record<string, unknown>;
+  };
 }
 
 // ============================================================================

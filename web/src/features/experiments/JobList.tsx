@@ -33,6 +33,37 @@ import { cn } from "@/shared/lib/utils";
 import { useExperimentStore, selectFilteredJobs } from "./useExperimentStore";
 import type { TrainingJob, JobStatus, JobFilterStatus, JobsListResponse } from "./types";
 
+interface BackendTrainingJobSummary {
+  job_id: string;
+  status: JobStatus;
+  run_name?: string | null;
+  model_architecture?: string | null;
+  dataset_id?: string | null;
+  dataset_source?: "huggingface" | "local" | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  compute_backend?: string | null;
+}
+
+interface BackendJobsListResponse {
+  jobs: BackendTrainingJobSummary[];
+  total: number;
+}
+
+function mapBackendJob(job: BackendTrainingJobSummary): TrainingJob {
+  return {
+    id: job.job_id,
+    name: job.run_name || job.job_id,
+    status: job.status,
+    modelArchitecture: job.model_architecture || "unknown",
+    datasetId: job.dataset_id || "unknown",
+    datasetSource: job.dataset_source || "huggingface",
+    computeBackend: job.compute_backend || "local",
+    startedAt: job.started_at || new Date(0).toISOString(),
+    finishedAt: job.finished_at || undefined,
+  };
+}
+
 // ============================================================================
 // Status Helpers
 // ============================================================================
@@ -196,12 +227,12 @@ function JobRow({ job, isSelected, onSelect }: JobRowProps) {
         {job.progress && (
           <div className="w-full max-w-[100px]">
             <div className="flex justify-between text-xs mb-1">
-              <span>{Math.round(job.progress.overallProgress)}%</span>
+              <span>{Math.round(job.progress.overallProgress * 100)}%</span>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${job.progress.overallProgress}%` }}
+                style={{ width: `${job.progress.overallProgress * 100}%` }}
               />
             </div>
           </div>
@@ -320,7 +351,13 @@ export function JobList() {
         `${API_BASE_URL}/training/jobs?page=${page}&page_size=${pageSize}`
       );
       if (!response.ok) throw new Error("Failed to fetch jobs");
-      return response.json();
+      const data: BackendJobsListResponse = await response.json();
+      return {
+        jobs: data.jobs.map(mapBackendJob),
+        total: data.total,
+        page,
+        pageSize,
+      };
     },
     staleTime: 10000,
   });

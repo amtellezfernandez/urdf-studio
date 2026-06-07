@@ -49,6 +49,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+POLICY_ID_ALIASES = {
+    "act": "act",
+    "diffusion": "diffusion",
+    "diffusion_policy": "diffusion",
+    "tdmpc": "tdmpc",
+    "vqbet": "vqbet",
+    "vq_bet": "vqbet",
+}
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Train robot policy")
@@ -135,8 +145,36 @@ def write_progress(
         json.dump(progress, f, indent=2)
 
 
+def append_metrics(
+    job_dir: Path,
+    step: int,
+    epoch: int,
+    metrics: Dict[str, float],
+) -> None:
+    """Append a metrics snapshot for charting and log replay."""
+    entry = {
+        "step": step,
+        "epoch": epoch,
+        "timestamp": datetime.now().isoformat(),
+        **metrics,
+    }
+
+    metrics_file = job_dir / "metrics.jsonl"
+    with open(metrics_file, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def normalize_policy_id(architecture: str) -> str:
+    """Normalize public policy IDs to LeRobot implementation IDs."""
+    normalized = POLICY_ID_ALIASES.get(architecture)
+    if not normalized:
+        raise ValueError(f"Unknown architecture: {architecture}")
+    return normalized
+
+
 def get_policy_config_class(architecture: str):
     """Get the config class for a given policy architecture."""
+    architecture = normalize_policy_id(architecture)
     if architecture == "act":
         from lerobot.policies import ACTConfig
         return ACTConfig
@@ -155,6 +193,7 @@ def get_policy_config_class(architecture: str):
 
 def get_policy_class(architecture: str):
     """Get the policy class for a given architecture."""
+    architecture = normalize_policy_id(architecture)
     if architecture == "act":
         from lerobot.policies.act.modeling_act import ACTPolicy
         return ACTPolicy
@@ -207,29 +246,31 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
     job_id = os.environ.get("URDF_STUDIO_JOB_ID", "unknown")
 
     if tracker:
-        run_name = training_config.get("run_name") or f"{model_config.get('architecture', 'policy')}_{job_id}"
-        tracker.init_run(
-            run_name=run_name,
-            config={
-                "dataset": dataset_config,
-                "model": model_config,
-                "training": training_config,
-                "seed": seed,
-            },
-            tags={"job_id": job_id},
-        )
-        # Log dataset lineage
-        dataset_id = dataset_config.get("repo_id") or dataset_config.get("local_path") or "unknown"
-        tracker.log_dataset_lineage(
-            dataset_id=dataset_id,
-            version=dataset_config.get("version", "latest"),
-            source=dataset_config.get("source", "huggingface"),
-        )
-        # Log model config
-        tracker.log_model_config(
-            architecture=model_config.get("architecture", "act"),
-            config=model_config.get("config", {}),
-        )
+        try:
+            run_name = training_config.get("run_name") or f"{model_config.get('architecture', 'policy')}_{job_id}"
+            tracker.init_run(
+                run_name=run_name,
+                config={
+                    "dataset": dataset_config,
+                    "model": model_config,
+                    "training": training_config,
+                    "seed": seed,
+                },
+                tags={"job_id": job_id},
+            )
+            dataset_id = dataset_config.get("repo_id") or dataset_config.get("local_path") or "unknown"
+            tracker.log_dataset_lineage(
+                dataset_id=dataset_id,
+                version=dataset_config.get("version", "latest"),
+                source=dataset_config.get("source", "huggingface"),
+            )
+            tracker.log_model_config(
+                architecture=model_config.get("architecture", "act"),
+                config=model_config.get("config", {}),
+            )
+        except Exception as e:
+            logger.warning(f"Tracker initialization failed; continuing without tracker: {e}")
+            tracker = None
 
     # =========================================================================
     # 1. Setup configs
@@ -244,7 +285,7 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
         raise ValueError(f"Invalid dataset config: {dataset_config}")
 
     # Determine architecture and device
-    architecture = model_config.get("architecture", "act")
+    architecture = normalize_policy_id(model_config.get("architecture", "act"))
     policy_overrides = model_config.get("config", {})
     device_str = config.get("device", "cuda" if torch.cuda.is_available() else "cpu")
 
@@ -376,18 +417,27 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
                 total_steps=total_steps,
                 metrics=metrics_dict,
             )
+            append_metrics(
+                job_dir=job_dir,
+                step=global_step,
+                epoch=epoch,
+                metrics=metrics_dict,
+            )
 
             # Log metrics to experiment tracker (real-time)
             if tracker:
-                tracker.log_metrics(
-                    metrics={
-                        "train/loss": loss_val,
-                        "train/learning_rate": learning_rate,
-                        "train/epoch_avg_loss": epoch_loss / epoch_steps,
-                        "train/epoch": epoch,
-                    },
-                    step=global_step,
-                )
+                try:
+                    tracker.log_metrics(
+                        metrics={
+                            "train/loss": loss_val,
+                            "train/learning_rate": learning_rate,
+                            "train/epoch_avg_loss": epoch_loss / epoch_steps,
+                            "train/epoch": epoch,
+                        },
+                        step=global_step,
+                    )
+                except Exception as e:
+                    logger.warning(f"Tracker metric logging failed: {e}")
 
             # Log periodically
             if (step + 1) % log_interval == 0:
@@ -448,18 +498,20 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
 
     # Log final metrics and finish tracker
     if tracker:
-        tracker.log_metrics(
-            metrics={
-                "train/final_loss": avg_loss,
-                "train/total_steps": total_steps,
-                "train/total_epochs": total_epochs,
-            },
-            step=total_steps,
-        )
-        # Log final model as artifact
-        tracker.log_artifact(str(final_model_dir), "model")
-        tracker.finish_run("completed")
-        logger.info(f"Logged training results to tracker: {tracker.get_run_url()}")
+        try:
+            tracker.log_metrics(
+                metrics={
+                    "train/final_loss": avg_loss,
+                    "train/total_steps": total_steps,
+                    "train/total_epochs": total_epochs,
+                },
+                step=total_steps,
+            )
+            tracker.log_artifact(final_model_dir, "model")
+            tracker.finish_run("completed")
+            logger.info(f"Logged training results to tracker: {tracker.get_run_url()}")
+        except Exception as e:
+            logger.warning(f"Tracker finalization failed: {e}")
 
     logger.info("Training completed successfully!")
 
@@ -482,6 +534,11 @@ def main() -> int:
 
     # Ensure job directory exists
     job_dir.mkdir(parents=True, exist_ok=True)
+
+    train_log = job_dir / "train.log"
+    file_handler = logging.FileHandler(train_log)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logging.getLogger().addHandler(file_handler)
 
     logger.info(f"Job ID: {job_id}")
     logger.info(f"Job directory: {job_dir}")
