@@ -313,10 +313,13 @@ export const useDatasetExportController = ({
 
     setIsExportingDataset(true);
     try {
-      const exportSelection = resolveEpisodesForExport();
-      if (!exportSelection) return;
-
-      const { episodesToExport, skippedIndexedCount } = exportSelection;
+      // For local export, skip alignment validation — just export whatever frames are loaded.
+      const episodesToExport = episodes.filter((ep) => ep.frames.length > 0);
+      if (episodesToExport.length === 0) {
+        toast.error("No loaded episodes to export. Record or load at least one episode.");
+        return;
+      }
+      const skippedIndexedCount = episodes.length - episodesToExport.length;
       const { blob, datasetName, totalFrames, packDurationMs } =
         await buildDatasetArchiveArtifact({
           episodes: episodesToExport,

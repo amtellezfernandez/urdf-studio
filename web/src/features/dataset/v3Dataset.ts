@@ -346,6 +346,11 @@ const buildEpisodeDataForV3Internal = (
     );
   }
 
+  // Strip virtual/fixed URDF joints that don't map to real motors.
+  // e.g. gripper_frame_joint is a type="fixed" dummy joint in the SO-101 URDF.
+  const VIRTUAL_JOINT_NAMES = new Set(["gripper_frame_joint"]);
+  globalJointOrder = globalJointOrder.filter((j) => !VIRTUAL_JOINT_NAMES.has(j));
+
   episodes.forEach((episode) => {
     if (episode.frames.length === 0) {
       return;
@@ -355,7 +360,7 @@ const buildEpisodeDataForV3Internal = (
     const jointOrder =
       Array.isArray(episode.metadata?.joint_names) &&
       episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
+        ? (episode.metadata.joint_names as string[]).filter((j) => !VIRTUAL_JOINT_NAMES.has(j))
         : globalJointOrder;
 
     const computedFps = (() => {
@@ -518,7 +523,7 @@ function* iterateV3FlattenedRows({
     const jointOrder =
       Array.isArray(episode.metadata?.joint_names) &&
       episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
+        ? (episode.metadata.joint_names as string[]).filter((j) => !VIRTUAL_JOINT_NAMES.has(j))
         : globalJointOrder;
     for (const [frameIndex, frame] of episode.frames.entries()) {
       const actionVector = jointOrder.map((joint) => frame.jointPositions[joint] ?? 0);
@@ -682,7 +687,7 @@ const writeV3EpisodeChunk = async ({
 };
 
 const buildJointFeatureNames = (jointNames: string[]) => ({
-  [V3_DATASET_JOINT_FEATURE_GROUP]: jointNames,
+  [V3_DATASET_JOINT_FEATURE_GROUP]: jointNames.map((name) => `${name}.pos`),
 });
 
 export const generateV3DatasetArchive = async (

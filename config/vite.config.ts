@@ -210,6 +210,9 @@ export default defineConfig(({ mode }) => {
       // i-love-urdf ships CJS; force pre-bundling so `export * from "i-love-urdf"`
       // in urdfCore.ts resolves all named exports correctly in dev mode.
       include: ["i-love-urdf"],
+      // parquet-wasm uses import.meta.url to locate its .wasm file — pre-bundling
+      // moves the JS to a different path and breaks that relative URL lookup.
+      exclude: ["parquet-wasm"],
     },
     build: {
       chunkSizeWarningLimit: 900,
