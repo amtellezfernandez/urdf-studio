@@ -27,6 +27,12 @@ GENESIS_RIGID_FRICTION_MIN = 0.01
 GENESIS_RIGID_FRICTION_MAX = 5.0
 DEFAULT_FLOOR_FRICTION = 1.0
 DEFAULT_ROBOT_FRICTION = 3.0
+GENESIS_SO101_ARM_KP = 280.0
+GENESIS_SO101_ARM_KV = 18.0
+GENESIS_SO101_ARM_FORCE_LIMIT = 90.0
+GENESIS_SO101_GRIPPER_KP = 420.0
+GENESIS_SO101_GRIPPER_KV = 24.0
+GENESIS_SO101_GRIPPER_FORCE_LIMIT = 140.0
 GENESIS_FLOOR_SIZE_XY = (4.0, 4.0)
 GENESIS_FLOOR_THICKNESS_M = 0.08
 GENESIS_FLOOR_TOP_Z = 0.0
@@ -436,6 +442,45 @@ def _apply_live_joint_values(
     if not dof_indices:
         return 0
     robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
+    return len(dof_indices)
+
+
+def _configure_robot_position_controller(
+    robot_entity,
+    joint_dof_indices: dict[str, int],
+) -> int:
+    if not joint_dof_indices:
+        return 0
+    dof_indices: list[int] = []
+    kp_values: list[float] = []
+    kv_values: list[float] = []
+    force_lower: list[float] = []
+    force_upper: list[float] = []
+    for joint_name, dof_index in joint_dof_indices.items():
+        dof_indices.append(dof_index)
+        is_gripper = "gripper" in joint_name.lower()
+        kp = GENESIS_SO101_GRIPPER_KP if is_gripper else GENESIS_SO101_ARM_KP
+        kv = GENESIS_SO101_GRIPPER_KV if is_gripper else GENESIS_SO101_ARM_KV
+        force_limit = (
+            GENESIS_SO101_GRIPPER_FORCE_LIMIT
+            if is_gripper
+            else GENESIS_SO101_ARM_FORCE_LIMIT
+        )
+        kp_values.append(kp)
+        kv_values.append(kv)
+        force_lower.append(-force_limit)
+        force_upper.append(force_limit)
+
+    if hasattr(robot_entity, "set_dofs_kp"):
+        robot_entity.set_dofs_kp(kp_values, dofs_idx_local=dof_indices)
+    if hasattr(robot_entity, "set_dofs_kv"):
+        robot_entity.set_dofs_kv(kv_values, dofs_idx_local=dof_indices)
+    if hasattr(robot_entity, "set_dofs_force_range"):
+        robot_entity.set_dofs_force_range(
+            force_lower,
+            force_upper,
+            dofs_idx_local=dof_indices,
+        )
     return len(dof_indices)
 
 
@@ -957,6 +1002,10 @@ def open_genesis_world_scene(
     live_base_url = live_state_base_url.strip().rstrip("/")
     live_enabled = bool(live_base_url)
     joint_dof_indices = _joint_dof_indices_by_name(robot_entity)
+    configured_dofs = _configure_robot_position_controller(
+        robot_entity,
+        joint_dof_indices,
+    )
     last_joint_sequence = 0
     last_state_publish_at = 0.0
     world_source_sequence = 0
@@ -973,7 +1022,8 @@ def open_genesis_world_scene(
     if live_enabled:
         print(
             "[genesis-world-open] live sync enabled "
-            f"joints={len(joint_dof_indices)} dynamic_entities={len(dynamic_entities)}"
+            f"joints={len(joint_dof_indices)} controller_dofs={configured_dofs} "
+            f"dynamic_entities={len(dynamic_entities)}"
         )
     live_bridge = (
         _GenesisLiveHttpBridge(

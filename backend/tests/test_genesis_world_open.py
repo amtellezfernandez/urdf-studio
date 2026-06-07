@@ -13,9 +13,16 @@ from backend.scripts.genesis_world_open import (
     GENESIS_FLOOR_TOP_Z,
     GENESIS_RIGID_FRICTION_MAX,
     GENESIS_RIGID_FRICTION_MIN,
+    GENESIS_SO101_ARM_FORCE_LIMIT,
+    GENESIS_SO101_ARM_KP,
+    GENESIS_SO101_ARM_KV,
+    GENESIS_SO101_GRIPPER_FORCE_LIMIT,
+    GENESIS_SO101_GRIPPER_KP,
+    GENESIS_SO101_GRIPPER_KV,
     _add_box_entity,
     _add_floor_entity,
     _add_mesh_entity,
+    _configure_robot_position_controller,
     _enforce_dynamic_floor_contact,
     _enforce_robot_floor_contact,
     _apply_rigid_entity_physics_overrides,
@@ -443,3 +450,36 @@ def test_robot_joint_values_payload_reads_corrected_genesis_qpos() -> None:
     )
 
     assert payload == {"shoulder_pan": 0.1, "wrist_flex": 0.3}
+
+
+def test_configure_robot_position_controller_sets_fast_arm_and_gripper_gains() -> None:
+    class _FakeRobot:
+        def __init__(self) -> None:
+            self.kp_call = None
+            self.kv_call = None
+            self.force_call = None
+
+        def set_dofs_kp(self, values, *, dofs_idx_local):
+            self.kp_call = (list(values), list(dofs_idx_local))
+
+        def set_dofs_kv(self, values, *, dofs_idx_local):
+            self.kv_call = (list(values), list(dofs_idx_local))
+
+        def set_dofs_force_range(self, lower, upper, *, dofs_idx_local):
+            self.force_call = (list(lower), list(upper), list(dofs_idx_local))
+
+    robot = _FakeRobot()
+
+    configured = _configure_robot_position_controller(
+        robot,
+        {"shoulder_pan": 0, "gripper": 5},
+    )
+
+    assert configured == 2
+    assert robot.kp_call == ([GENESIS_SO101_ARM_KP, GENESIS_SO101_GRIPPER_KP], [0, 5])
+    assert robot.kv_call == ([GENESIS_SO101_ARM_KV, GENESIS_SO101_GRIPPER_KV], [0, 5])
+    assert robot.force_call == (
+        [-GENESIS_SO101_ARM_FORCE_LIMIT, -GENESIS_SO101_GRIPPER_FORCE_LIMIT],
+        [GENESIS_SO101_ARM_FORCE_LIMIT, GENESIS_SO101_GRIPPER_FORCE_LIMIT],
+        [0, 5],
+    )
