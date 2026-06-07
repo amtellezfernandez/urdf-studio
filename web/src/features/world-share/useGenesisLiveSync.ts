@@ -5,6 +5,7 @@ import {
   fetchGenesisRobotState,
   fetchGenesisWorldState,
   publishGenesisJointState,
+  type GenesisWorldPoseResponse,
 } from "@/features/world-share/genesisWorldApi";
 import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWorldLiveStateStore";
 
@@ -83,6 +84,7 @@ const subscribeGenesisJointCommands = (listener: () => void): (() => void) => {
 export const useGenesisJointStatePublisher = (enabled: boolean): void => {
   const lastPublishAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const heartbeatRef = useRef<number | null>(null);
   const latestJointValuesRef = useRef<Record<string, number>>({});
   const publishingRef = useRef(false);
   const needsFlushRef = useRef(false);
@@ -93,6 +95,10 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
+      }
+      if (heartbeatRef.current !== null) {
+        window.clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
       }
       latestGenesisCommandValues = {};
       genesisCommandSequence = 0;
@@ -134,6 +140,9 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
     };
 
     schedule(useJointStore.getState().jointValues);
+    heartbeatRef.current = window.setInterval(() => {
+      schedule(latestJointValuesRef.current);
+    }, JOINT_PUBLISH_INTERVAL_MS);
     let lastQueuedCommandSequence = genesisCommandSequence;
     const scheduleQueuedCommand = () => {
       if (genesisCommandSequence <= lastQueuedCommandSequence) return;
@@ -155,8 +164,31 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      if (heartbeatRef.current !== null) {
+        window.clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
     };
   }, [enabled]);
+};
+
+const applyGenesisLiveSnapshot = ({
+  sequence,
+  poses,
+  robotJointValues,
+}: {
+  sequence: number;
+  poses: GenesisWorldPoseResponse[];
+  robotJointValues: Readonly<Record<string, number>>;
+}): void => {
+  useGenesisWorldLiveStateStore.getState().setLivePoses(sequence, poses);
+  const nextJointValues = mergeChangedGenesisJointValues(
+    useJointStore.getState().jointValues,
+    robotJointValues
+  );
+  if (nextJointValues !== null) {
+    applyGenesisFeedbackJointValues(nextJointValues);
+  }
 };
 
 export const useGenesisLiveStatePoller = (enabled: boolean): void => {
@@ -170,6 +202,26 @@ export const useGenesisLiveStatePoller = (enabled: boolean): void => {
     let cancelled = false;
     let inFlight = false;
 
+    const pollLegacyState = async () => {
+      const [robotState, worldState] = await Promise.all([
+        fetchGenesisRobotState(),
+        fetchGenesisWorldState(),
+      ]);
+      if (cancelled) return;
+      const sequence = Math.max(robotState.sequence, worldState.sequence);
+      if (sequence === 0) {
+        latestSequenceRef.current = 0;
+        return;
+      }
+      if (sequence <= latestSequenceRef.current) return;
+      latestSequenceRef.current = sequence;
+      applyGenesisLiveSnapshot({
+        sequence,
+        poses: worldState.poses,
+        robotJointValues: robotState.joint_values,
+      });
+    };
+
     const poll = () => {
       if (inFlight) return;
       inFlight = true;
@@ -177,23 +229,17 @@ export const useGenesisLiveStatePoller = (enabled: boolean): void => {
         .then((state) => {
           if (cancelled) return;
           if (state.sequence === 0) {
-            latestSequenceRef.current = 0;
-            return;
+            return pollLegacyState();
           }
           if (state.sequence <= latestSequenceRef.current) return;
           latestSequenceRef.current = state.sequence;
-          useGenesisWorldLiveStateStore
-            .getState()
-            .setLivePoses(state.sequence, state.poses);
-          const nextJointValues = mergeChangedGenesisJointValues(
-            useJointStore.getState().jointValues,
-            state.robot_joint_values
-          );
-          if (nextJointValues !== null) {
-            applyGenesisFeedbackJointValues(nextJointValues);
-          }
+          applyGenesisLiveSnapshot({
+            sequence: state.sequence,
+            poses: state.poses,
+            robotJointValues: state.robot_joint_values,
+          });
         })
-        .catch(() => undefined)
+        .catch(() => pollLegacyState().catch(() => undefined))
         .finally(() => {
           inFlight = false;
         });
