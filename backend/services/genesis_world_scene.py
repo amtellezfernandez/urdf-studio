@@ -16,6 +16,9 @@ from backend.core.paths import BASE_DIR
 GenesisDynamicContainerMode = Literal["mesh", "box", "visual-only"]
 
 DEFAULT_DYNAMIC_CONTAINER_MODE: GenesisDynamicContainerMode = "mesh"
+WORLD_LAYOUT_ELEMENT_SCALE = 0.5
+WORLD_LAYOUT_ELEMENT_MIN_METRIC_SCALE = 0.02
+WORLD_LAYOUT_ELEMENT_MAX_METRIC_SCALE = 200.0
 DEFAULT_WORLD_LAYOUT_PATH = BASE_DIR / "web/public/world-layouts/hk-cargo-port.world-layout.json"
 DEFAULT_SO101_URDF_PATH = (
     BASE_DIR
@@ -41,6 +44,7 @@ class GenesisWorldElement:
     position_xyz: tuple[float, float, float]
     rotation_rpy_rad: tuple[float, float, float]
     scale_xyz: tuple[float, float, float]
+    real_world_height_m: float | None
     material_color: str | None
     physics: GenesisElementPhysics
 
@@ -59,6 +63,8 @@ class GenesisElementSpec:
     element: GenesisWorldElement
     asset_path: Path
     mesh_bounds: GenesisMeshBounds
+    metric_scale: float
+    effective_scale_xyz: tuple[float, float, float]
     mesh_position_xyz: tuple[float, float, float]
     box_center_xyz: tuple[float, float, float]
     box_size_xyz: tuple[float, float, float]
@@ -206,6 +212,9 @@ def parse_world_layout_environment_elements(
                     raw_element.get("rotation_rpy_rad"), (0.0, 0.0, 0.0)
                 ),
                 scale_xyz=_read_scale_xyz(raw_element),
+                real_world_height_m=_read_positive_number(
+                    raw_element.get("real_world_height_m")
+                ),
                 material_color=material_color or None,
                 physics=_read_element_physics(raw_element.get("physics"), defaults),
             )
@@ -271,6 +280,18 @@ def _apply_layout_transform(
     return tuple(float(value) for value in base + rotated)
 
 
+def resolve_world_layout_element_metric_scale(
+    real_world_height_m: float | None,
+    bounds_height: float,
+) -> float:
+    if real_world_height_m is None or bounds_height <= 0:
+        return WORLD_LAYOUT_ELEMENT_SCALE
+    return min(
+        WORLD_LAYOUT_ELEMENT_MAX_METRIC_SCALE,
+        max(WORLD_LAYOUT_ELEMENT_MIN_METRIC_SCALE, real_world_height_m / bounds_height),
+    )
+
+
 def build_genesis_element_specs(
     layout_path: Path,
     *,
@@ -285,20 +306,27 @@ def build_genesis_element_specs(
             repo_root=repo_root,
         )
         bounds = read_mesh_bounds(str(asset_path.resolve()))
+        metric_scale = resolve_world_layout_element_metric_scale(
+            element.real_world_height_m,
+            bounds.size_xyz[1],
+        )
+        effective_scale_xyz = tuple(
+            metric_scale * element.scale_xyz[index] for index in range(3)
+        )
         mesh_position = _apply_layout_transform(
             position_xyz=element.position_xyz,
             rotation_rpy_rad=element.rotation_rpy_rad,
-            scale_xyz=element.scale_xyz,
+            scale_xyz=effective_scale_xyz,
             local_xyz=bounds.studio_visual_offset_xyz,
         )
         box_center = _apply_layout_transform(
             position_xyz=element.position_xyz,
             rotation_rpy_rad=element.rotation_rpy_rad,
-            scale_xyz=element.scale_xyz,
+            scale_xyz=effective_scale_xyz,
             local_xyz=bounds.studio_visual_center_after_offset_xyz,
         )
         box_size = tuple(
-            max(1e-4, bounds.size_xyz[index] * element.scale_xyz[index])
+            max(1e-4, bounds.size_xyz[index] * effective_scale_xyz[index])
             for index in range(3)
         )
         specs.append(
@@ -306,6 +334,8 @@ def build_genesis_element_specs(
                 element=element,
                 asset_path=asset_path,
                 mesh_bounds=bounds,
+                metric_scale=metric_scale,
+                effective_scale_xyz=effective_scale_xyz,
                 mesh_position_xyz=mesh_position,
                 box_center_xyz=box_center,
                 box_size_xyz=box_size,

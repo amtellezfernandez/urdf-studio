@@ -88,7 +88,7 @@ def _add_mesh_entity(
         file=str(spec.asset_path.resolve()),
         pos=spec.mesh_position_xyz,
         euler=_to_degrees(spec.element.rotation_rpy_rad),
-        scale=spec.element.scale_xyz,
+        scale=spec.effective_scale_xyz,
         fixed=fixed,
         collision=collision,
         decimate=decimate,
