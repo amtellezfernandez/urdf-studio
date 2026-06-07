@@ -106,6 +106,31 @@ describe("operatorTeleopControlGroups", () => {
     ]);
   });
 
+  it("keeps crane yaw, boom, and finger slide as an enabled arm target", () => {
+    const groups = buildOperatorTeleopControlGroups({
+      jointNames: ["anchor", "base_yaw", "boom_luff", "finger_slide"],
+      jointLimits: {
+        anchor: { type: "fixed", lower: 0, upper: 0 },
+        base_yaw: { type: "continuous", lower: -Math.PI, upper: Math.PI },
+        boom_luff: { type: "revolute", lower: -0.6, upper: 1.2 },
+        finger_slide: { type: "prismatic", lower: 0, upper: 0.02 },
+      },
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      id: "arm.primary",
+      kind: "arm",
+      teleopEnabled: true,
+      endEffectorJointNames: ["finger_slide"],
+    });
+    expect(groups[0]?.jointNames).toEqual([
+      "base_yaw",
+      "boom_luff",
+      "finger_slide",
+    ]);
+  });
+
   it("keeps LeKiwi wheels visible but disabled while the arm remains enabled", () => {
     const groups = buildOperatorTeleopControlGroups({
       jointNames: [

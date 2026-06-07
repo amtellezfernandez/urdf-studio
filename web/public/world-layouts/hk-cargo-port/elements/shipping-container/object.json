@@ -1,26 +1,30 @@
 {
   "schema_version": 1,
-  "world": "port-simple",
+  "world": "port-hk2",
   "object": {
     "id": "shipping-container",
     "name": "shipping container",
-    "description": "Standard ISO intermodal shipping container, rectangular steel box with corrugated side panels and end doors. Branded variants visible: Maersk (blue), Evergreen (green), OOCL (orange/red), and generic.",
-    "estimated_size_m": { "height": 2.6, "width": 2.4, "length": 6.1 },
+    "description": "Standard ISO intermodal shipping container, rectangular steel box with corrugated side panels and end doors. Multicolored variants visible: red, green, white, beige.",
+    "estimated_size_m": {
+      "height": 2.6,
+      "width": 2.4,
+      "length": 6.1
+    },
     "estimated_mass_kg": 2300,
     "materials": [
       "painted corrugated steel"
     ],
     "source_images": [
-      "worlds/hk-port/source/1-gemini-generated-image-y8pnefy8pnefy8pn-plate.png"
+      "worlds/port-hk2/source/0-port-hk2.png"
     ],
     "evidence": [
       {
-        "image": "worlds/hk-port/source/1-gemini-generated-image-y8pnefy8pnefy8pn-plate.png",
-        "location_in_image": "foreground dock yard in rows, Maersk blue, Evergreen green, OOCL orange"
+        "image": "worlds/port-hk2/source/0-port-hk2.png",
+        "location_in_image": "foreground and mid-ground, stacked in dense rows across the quay"
       }
     ],
     "generate_as_3d_object": true,
-    "working_dir": "worlds/port-simple/output/shipping-container"
+    "working_dir": "worlds/port-hk2/output/shipping-container"
   },
-  "updated_at": "2026-06-06T14:54:24.760Z"
+  "updated_at": "2026-06-06T23:11:32.767Z"
 }

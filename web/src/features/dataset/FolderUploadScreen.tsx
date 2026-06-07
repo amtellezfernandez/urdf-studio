@@ -78,6 +78,7 @@ import { parseCameraConfig } from "@/features/camera";
 import { normalizeWorldLayoutImportUrl } from "@/features/world-share/sceneImportUrl";
 import { API_BASE_URL } from "@/shared/config/runtime";
 import { useCameraStore } from "@/shared/store/useCameraStore";
+import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import {
   VISIBLE_FOLDER_UPLOAD_ENTRY_MODE_CONFIGS,
@@ -439,6 +440,7 @@ export const FolderUploadScreen = memo(
   const cameraConfigFileInputRef = useRef<HTMLInputElement>(null);
   const galleryEditorDeepLinkHandledRef = useRef(false);
   const { gpuMode, setGPUMode } = useGPUMode();
+  const requestInitialRobotPose = useRobotPoseStore((state) => state.requestInitialPose);
   const { recentRepos, addRecentRepo, removeRecentRepo } = useRecentGitHubRepos();
   const buildGitHubRepoUrl = useCallback(
     (params: { owner: string; repo: string; path?: string; branch?: string }): string => {
@@ -2775,6 +2777,7 @@ export const FolderUploadScreen = memo(
           } else {
             clearCameras();
           }
+          requestInitialRobotPose(shortcut.initialRobotPose);
           await finalizeRobotLoad(fileList, { applyWorldLayout: false });
           setLoadedRobotName(shortcut.displayName);
           toast.success(`Loaded ${shortcut.displayName}`);
@@ -2794,6 +2797,7 @@ export const FolderUploadScreen = memo(
     finalizeRobotLoad,
     leaveGalleryEditorMode,
     onWorkspaceModeChange,
+    requestInitialRobotPose,
     setGitHubSelectionSource,
     withRobotShortcutLoading,
     withStudioEntryLoad,

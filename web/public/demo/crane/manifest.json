@@ -1,0 +1,20 @@
+{
+  "label": "Crane",
+  "files": [
+    {
+      "path": "ship_crane.urdf",
+      "url": "ship_crane.urdf",
+      "mime": "application/xml"
+    },
+    {
+      "path": "meshes/tower.glb",
+      "url": "meshes/tower.glb",
+      "mime": "model/gltf-binary"
+    },
+    {
+      "path": "meshes/boom.glb",
+      "url": "meshes/boom.glb",
+      "mime": "model/gltf-binary"
+    }
+  ]
+}

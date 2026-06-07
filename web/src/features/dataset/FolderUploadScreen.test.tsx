@@ -10,6 +10,7 @@ import {
   GALLERY_EDITOR_SOURCE_QUERY_PARAM,
 } from "@/features/dataset/iluGalleryParams";
 import { FOLDER_UPLOAD_ROBOT_SHORTCUTS } from "@/features/dataset/folderUploadRobotShortcuts";
+import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import {
   OPENARM_HF_LIVE_CAMERA_RPY_RAD,
   OPENARM_HF_LIVE_REAL_SENSE_POSITION_M,
@@ -37,6 +38,20 @@ const TEST_OPENARM_CAMERA_CONFIG_BODY = JSON.stringify({
         width: 1280,
         height: 720,
         fov_deg: 70,
+      },
+    },
+  ],
+});
+const TEST_SO101_CAMERA_CONFIG_BODY = JSON.stringify({
+  cameras: [
+    {
+      name: "so101_overhead_scene",
+      parent_joint: "base_link",
+      pose: [0.2, 0.02, 0.75, 0, 1.3909428270024187, 0],
+      intrinsics: {
+        width: 1280,
+        height: 720,
+        fov_deg: 78,
       },
     },
   ],
@@ -494,6 +509,7 @@ describe("FolderUploadScreen", () => {
     approveRuntimeProviderSessionMock.mockReset();
     startRuntimeProviderRecordingMock.mockReset();
     stopRuntimeProviderRecordingMock.mockReset();
+    useRobotPoseStore.getState().consumeInitialPose();
   });
 
   it("shows gallery loading placeholders immediately while the repo scan is pending", async () => {
@@ -1128,10 +1144,16 @@ describe("FolderUploadScreen", () => {
     container.remove();
   });
 
-  it("loads the SO101 shortcut from the bundled manifest without GitHub or camera fetches", async () => {
+  it("loads the SO101 shortcut from the bundled manifest with its demo pose", async () => {
     const shortcut = FOLDER_UPLOAD_ROBOT_SHORTCUTS.so101;
     const so101FileList = { length: 1 } as FileList;
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(shortcut.cameraConfigUrl);
+      return new Response(TEST_SO101_CAMERA_CONFIG_BODY, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
     loadRobotAssetFileListFromManifestUrlMock.mockResolvedValue(so101FileList);
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1161,14 +1183,21 @@ describe("FolderUploadScreen", () => {
       expect(loadRobotAssetFileListFromManifestUrlMock).toHaveBeenCalledWith(
         shortcut.manifestUrl
       );
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(cameraStoreState.loadCameras).not.toHaveBeenCalled();
-      expect(cameraStoreState.clearCameras).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledWith(shortcut.cameraConfigUrl);
+      expect(cameraStoreState.loadCameras).toHaveBeenCalledWith({
+        cameras: [
+          expect.objectContaining({
+            name: "so101_overhead_scene",
+            parent_joint: "base_link",
+          }),
+        ],
+      });
       expect(fetchIluGitHubRepoFilesMock).not.toHaveBeenCalled();
       expect(buildIluGitHubCandidateFileListMock).not.toHaveBeenCalled();
       expect(gitHubSourceStoreState.clearSource).toHaveBeenCalledOnce();
       expect(onWorkspaceModeChange).toHaveBeenCalledWith("studio");
       expect(onFolderSelected).toHaveBeenCalledWith(so101FileList, { preserveCameras: false });
+      expect(useRobotPoseStore.getState().pendingInitialPose).toEqual(shortcut.initialRobotPose);
       expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     });
 

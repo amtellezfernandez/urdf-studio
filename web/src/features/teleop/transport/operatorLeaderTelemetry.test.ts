@@ -215,6 +215,72 @@ describe("operatorLeaderTelemetry", () => {
     });
   });
 
+  it("maps an SO101 leader onto crane boom and finger slide while keeping the base fixed", () => {
+    const state: OperatorLeaderState = {
+      connected: true,
+      port: "/dev/ttyACM0",
+      side: "both",
+      sourceTsMs: 123,
+      joints: {
+        shoulder_pan: {
+          positionRad: 0.4,
+          velocityRadPerSec: 0.2,
+          torqueNm: 0.1,
+        },
+        shoulder_lift: {
+          positionRad: -0.25,
+          velocityRadPerSec: 0.1,
+          torqueNm: 0.2,
+        },
+        elbow_flex: {
+          positionRad: 0,
+          velocityRadPerSec: null,
+          torqueNm: null,
+        },
+        wrist_flex: {
+          positionRad: 0,
+          velocityRadPerSec: null,
+          torqueNm: null,
+        },
+        wrist_roll: {
+          positionRad: 0,
+          velocityRadPerSec: null,
+          torqueNm: null,
+        },
+        gripper: {
+          positionRad: 1.25,
+          velocityRadPerSec: 0.05,
+          torqueNm: 0.3,
+        },
+      },
+      error: null,
+    };
+
+    const mapped = buildMappedOperatorLeaderTelemetry({
+      state,
+      sourceId: "leader:serial:test",
+      sourceLabel: "SO101 Leader",
+      sourceJointNames: [
+        "shoulder_pan",
+        "shoulder_lift",
+        "elbow_flex",
+        "wrist_flex",
+        "wrist_roll",
+        "gripper",
+      ],
+      sourceMotorIds: [1, 2, 3, 4, 5, 6],
+      targetJointNames: ["base_yaw", "boom_luff", "finger_slide"],
+    });
+
+    expect(mapped.base_yaw).toBeUndefined();
+    expect(mapped.boom_luff?.positionRad).toBeCloseTo(-0.25);
+    expect(mapped.finger_slide?.positionRad).toBeCloseTo(0.02);
+    expect(Object.keys(mapped).sort()).toEqual([
+      "boom_luff",
+      "finger_slide",
+    ]);
+  });
+
   it("keeps SO-style LeRobot leader deltas in LeRobot joint direction", () => {
     const directions = resolveOperatorLeaderTargetJointDirections({
       calibrationProfile: "so100_leader",

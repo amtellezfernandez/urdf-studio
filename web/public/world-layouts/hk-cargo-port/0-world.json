@@ -1,28 +1,28 @@
 {
-  "world_id": "d1a16854-0f49-4490-b1aa-3aba83b4d75c",
+  "world_id": "fed347fa-37be-4829-b6b8-bc6222130834",
   "display_name": "",
   "tags": null,
   "assets": {
     "mesh": {
-      "collider_mesh_url": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/5d9e31e6.glb"
+      "collider_mesh_url": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/bb94aeda.glb"
     },
     "imagery": {
-      "pano_url": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/04610bfc-02a3-4383-9b74-cc8110d5bdd1_panos/rgb_0.png"
+      "pano_url": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/35e532f9-d234-444c-b593-652884f07a14_panos/rgb_0.png"
     },
     "splats": {
       "spz_urls": {
-        "500k": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/9d73187c-0da1-4f62-acbb-cd97372aad46_ceramic_500k.spz",
-        "100k": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/1789379b-838d-4904-9656-49a7cb161d5b_dust_100k.spz",
-        "150k": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/5d7fd737-44ef-4a67-899f-3a16282ac797_ceramic_150k.spz",
-        "full_res": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/38d65d4a-b810-4836-9f9b-44e25d9bd7ee_ceramic.spz"
+        "500k": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/4ffbbd3b-6294-48b4-8c33-df4ce25e6d2b_ceramic_500k.spz",
+        "100k": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/968d5f96-bfdf-42c0-b40e-e35487df1698_dust_100k.spz",
+        "150k": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/a909e772-7e05-4d3b-a139-e366d2a86e20_ceramic_150k.spz",
+        "full_res": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/5a1eab11-4eef-416a-ab41-4dcd511e50cd_ceramic.spz"
       },
       "semantics_metadata": {
-        "metric_scale_factor": 11.333974,
-        "ground_plane_offset": 6.6758757
+        "metric_scale_factor": 13.917268,
+        "ground_plane_offset": 8.058675
       }
     },
-    "thumbnail_url": "https://cdn.marble.worldlabs.ai/d1a16854-0f49-4490-b1aa-3aba83b4d75c/5781e458-f85e-4520-be5b-5e685d4ee32a_sand_mpi/thumbnail.webp",
-    "caption": "The scene is a realistic depiction of a tranquil industrial port, bathed in the soft, diffuse light of an overcast day, evoking a quiet, expansive mood. The vast concrete quayside stretches smoothly to the calm harbor water, leading into an equally expansive grey tarmac yard, marked with painted lane indicators. The harbor water, a placid turquoise, mirrors the hazy, cloudy sky above, creating a seamless horizon where the sea meets the distant, indistinct city skyline. Beyond the visible areas, the empty container port berth continues its expanse, characterized by wide, flat concrete surfaces extending to the water's edge, all devoid of machinery, vessels, or cranes. The smooth grey tarmac yard, with its painted lane markings, stretches out, suggesting an immense, organized space ready for activity. The calm harbor water, reflecting the soft light from the hazy overcast sky, presents an undisturbed surface that extends further into the scene. An industrial horizon, marked by the faint outline of a distant city skyline, completes the panoramic view, suggesting a larger urban presence beyond the immediate port area. The overall effect is one of quiet anticipation within a meticulously organized industrial landscape. The 360 scene is faultless."
+    "thumbnail_url": "https://cdn.marble.worldlabs.ai/fed347fa-37be-4829-b6b8-bc6222130834/571b216b-dda9-4a09-ac7a-0c5e0347c900_sand_mpi/thumbnail.webp",
+    "caption": "The scene is a panoramic coastal landscape, rendered with a realistic style, evoking a sense of industrial functionality juxtaposed with natural beauty under a bright, clear sky. The overall tone is expansive and industrious, highlighting human engineering in harmony with the vast ocean. A large, flat concrete pier, marked with wide, light gray and darker gray sections, stretches across the foreground, indicating an expansive dock area designed for heavy-duty operations. Tall, utilitarian light poles are strategically placed across the pier, ready to illuminate the area. The pier meets the vibrant turquoise ocean water with a robust concrete edge reinforced with black fenders, hinting at frequent vessel activity. Across the water, a massive cable-stayed bridge gracefully spans the strait, connecting distant landmasses. Beyond the bridge, industrial buildings with prominent chimneys and smoke stacks are visible along the distant coastline, nestled against a backdrop of verdant, rocky hills. To the right of these industrial structures, the coastline continues with a rugged, undeveloped mountain range covered in green foliage, descending towards the water's edge. To the far left, a construction site is evident, with cranes and scaffolding suggesting ongoing development near the water. The pier extends considerably in all directions, offering ample space for cargo handling or ship berthing. The cable-stayed bridge is positioned horizontally across the mid-ground, while the industrial buildings are clustered on the distant shore to its right, adjacent to the green mountains. The 360 scene is faultless."
   },
   "created_at": null,
   "updated_at": null,
@@ -33,6 +33,6 @@
     "allow_id_access": false
   },
   "world_prompt": null,
-  "world_marble_url": "https://marble.worldlabs.ai/world/d1a16854-0f49-4490-b1aa-3aba83b4d75c",
+  "world_marble_url": "https://marble.worldlabs.ai/world/fed347fa-37be-4829-b6b8-bc6222130834",
   "model": null
 }

@@ -15,6 +15,7 @@ import type {
   OperatorLeaderAssignment,
   OperatorLeaderAssignments,
 } from "@/features/teleop/transport/operatorLeaderAssignments";
+import { applySo101ToCraneMapping } from "@/features/teleop/transport/so101ToCrane";
 
 export type OperatorLeaderTelemetryTarget = {
   id: string;
@@ -483,6 +484,17 @@ export const buildMappedOperatorLeaderTelemetry = ({
           (jointName) => [jointName, state.joints[jointName]] as const,
         )
       : sortLeaderStateEntries(state);
+  const craneMapping = applySo101ToCraneMapping(
+    state,
+    leaderEntries,
+    targetJointNames,
+    sourceId,
+    sourceLabel,
+    sourceMotorIds,
+    buildTelemetrySample,
+  );
+  if (craneMapping) return craneMapping;
+
   return Object.fromEntries(
     targetJointNames.flatMap((targetJointName, index) => {
       const telemetry = leaderEntries[index]?.[1];

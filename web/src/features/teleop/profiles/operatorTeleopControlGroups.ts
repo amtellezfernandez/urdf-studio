@@ -68,8 +68,12 @@ const OPERATOR_ACTUATOR_NAME_TOKENS = new Set([
   "motor",
   "revolute",
   "continuous",
+  "luff",
   "pitch",
+  "prismatic",
   "rotation",
+  "slide",
+  "yaw",
 ]);
 
 const tokenizeTopology = (
@@ -149,6 +153,7 @@ const isActuatorLikeJoint = (
   return (
     jointType === "continuous" ||
     jointType === "revolute" ||
+    jointType === "prismatic" ||
     tokens.some((token) => OPERATOR_ACTUATOR_NAME_TOKENS.has(token))
   );
 };
@@ -170,6 +175,7 @@ const classifyJoint = (
   }
   const tokens = tokenizeTopology(jointName, topology);
   const isEndEffector = isGripperJoint(jointTokens, topology);
+  const isActuator = isActuatorLikeJoint(jointName, tokens, jointLimits);
   if (isWheelJoint(jointName, tokens)) {
     return {
       name: jointName,
@@ -180,7 +186,7 @@ const classifyJoint = (
       topologyBacked: Boolean(topology),
     };
   }
-  if (isStructuralJoint(jointTokens) && !isEndEffector) {
+  if (isStructuralJoint(jointTokens) && !isEndEffector && !isActuator) {
     return null;
   }
   if (isLegJoint(tokens)) {
@@ -205,7 +211,7 @@ const classifyJoint = (
   }
   return {
     name: jointName,
-    kind: isActuatorLikeJoint(jointName, tokens, jointLimits) ? "arm" : "unknown",
+    kind: isActuator ? "arm" : "unknown",
     side: resolveOperatorTeleopSideFromTokens(tokens),
     isEndEffector,
     sourceIndex,

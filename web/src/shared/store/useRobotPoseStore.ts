@@ -12,12 +12,16 @@ import {
 
 type RobotPoseStore = {
   pose: RobotBasePose | null;
+  pendingInitialPose: RobotBasePose | null;
   setPose: (pose: RobotBasePose | null | undefined) => void;
   clearPose: () => void;
+  requestInitialPose: (pose: RobotBasePose | null | undefined) => void;
+  consumeInitialPose: () => RobotBasePose | null;
 };
 
 export const useRobotPoseStore = create<RobotPoseStore>((set, get) => ({
   pose: null,
+  pendingInitialPose: null,
   setPose: (pose) => {
     if (!isFiniteRobotBasePose(pose)) {
       if (get().pose !== null) {
@@ -44,5 +48,15 @@ export const useRobotPoseStore = create<RobotPoseStore>((set, get) => ({
     if (get().pose !== null) {
       set({ pose: null });
     }
+  },
+  requestInitialPose: (pose) => {
+    set({ pendingInitialPose: cloneRobotBasePose(pose) ?? null });
+  },
+  consumeInitialPose: () => {
+    const pose = cloneRobotBasePose(get().pendingInitialPose) ?? null;
+    if (get().pendingInitialPose !== null) {
+      set({ pendingInitialPose: null });
+    }
+    return pose;
   },
 }));

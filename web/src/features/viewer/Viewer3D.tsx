@@ -5357,6 +5357,7 @@ export const Viewer3D = ({
   const selectedCameraIdForCentering = useCameraStore((state) => state.selectedCameraId);
   const setLiveRobotBasePose = useRobotPoseStore((state) => state.setPose);
   const clearLiveRobotBasePose = useRobotPoseStore((state) => state.clearPose);
+  const consumeInitialRobotBasePose = useRobotPoseStore((state) => state.consumeInitialPose);
   const viewerPolicy = useMemo(
     () => {
       const showSceneChrome = !thumbnailMode;
@@ -5503,6 +5504,13 @@ export const Viewer3D = ({
       inertialVisualization.showReferenceGeometry ||
       simulationPrepSymmetryVisualization !== null
     );
+
+  useEffect(() => {
+    if (!robot || readOnlyMode) {
+      return;
+    }
+    applyRobotBasePose(robot, consumeInitialRobotBasePose());
+  }, [consumeInitialRobotBasePose, readOnlyMode, robot]);
 
   useEffect(() => {
     if (!viewerUi.canPublishLiveRobotBasePose || !robot) {

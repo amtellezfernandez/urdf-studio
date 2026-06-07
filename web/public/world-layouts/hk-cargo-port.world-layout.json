@@ -10,8 +10,16 @@
     "visual": {
       "kind": "splat",
       "uri": "/world-layouts/hk-cargo-port/0-world-500k.spz",
-      "position_xyz": [0.0, 0.0, 0.14725363980894962],
-      "rotation_rpy_rad": [-1.5707963267948966, 0.0, 0.0],
+      "position_xyz": [
+        0,
+        0,
+        0.14
+      ],
+      "rotation_rpy_rad": [
+        -1.5707963267948966,
+        0,
+        0
+      ],
       "scale": 0.25,
       "metric_scale_factor": 0.25,
       "ground_plane_offset": 6.6758757
@@ -24,135 +32,1495 @@
       "notes": "Generated object meshes use their normalized authoring scale so SO101 is visually comparable to the crane meshes instead of being tiny against real-world port dimensions.",
       "physics_defaults": {
         "body_type": "static",
-        "restitution": 0.0,
-        "friction": 1.0,
-        "linear_damping": 1.0,
-        "angular_damping": 1.0
+        "restitution": 0,
+        "friction": 1,
+        "linear_damping": 1,
+        "angular_damping": 1
       }
     },
     "elements": [
       {
-        "id": "shipping-container",
-        "name": "shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
-        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [-0.9, 0.85, 0.0],
-        "scale": 0.5,
-        "physics": {
-          "body_type": "static",
-          "mass_kg": 2300,
-          "friction": 1.2,
-          "restitution": 0.0,
-          "linear_damping": 1.0,
-          "angular_damping": 1.0
-        }
-      },
-      {
         "id": "grabbable-container-a",
         "name": "small grabbable shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [0.28, -0.08, 0.0],
-        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.08],
+        "position_xyz": [
+          -0.08,
+          0.24,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.5707963267948966,
+          0,
+          -0.08
+        ],
         "scale": 0.09,
         "material_color": "#ef4444",
         "physics": {
           "body_type": "dynamic",
           "mass_kg": 0.12,
-          "friction": 3.0,
-          "restitution": 0.0,
+          "friction": 3,
+          "restitution": 0,
           "linear_damping": 1.2,
           "angular_damping": 1.2
+        },
+        "collision_proxy": {
+          "type": "box",
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
         }
       },
       {
         "id": "grabbable-container-b",
         "name": "small grabbable shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [0.28, 0.02, 0.0],
-        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.05],
+        "position_xyz": [
+          0.02,
+          0.24,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.5707963267948966,
+          0,
+          0.05
+        ],
         "scale": 0.09,
         "material_color": "#ef4444",
         "physics": {
           "body_type": "dynamic",
           "mass_kg": 0.12,
-          "friction": 3.0,
-          "restitution": 0.0,
+          "friction": 3,
+          "restitution": 0,
           "linear_damping": 1.2,
           "angular_damping": 1.2
+        },
+        "collision_proxy": {
+          "type": "box",
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
         }
       },
       {
         "id": "grabbable-container-c",
         "name": "small grabbable shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [0.28, 0.12, 0.0],
-        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.03],
+        "position_xyz": [
+          0.12,
+          0.24,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.5707963267948966,
+          0,
+          -0.03
+        ],
         "scale": 0.09,
         "material_color": "#ef4444",
         "physics": {
           "body_type": "dynamic",
           "mass_kg": 0.12,
-          "friction": 3.0,
-          "restitution": 0.0,
+          "friction": 3,
+          "restitution": 0,
           "linear_damping": 1.2,
           "angular_damping": 1.2
+        },
+        "collision_proxy": {
+          "type": "box",
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
         }
       },
       {
         "id": "grabbable-container-d",
         "name": "small grabbable shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [0.38, -0.03, 0.0],
-        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.12],
+        "position_xyz": [
+          -0.03,
+          0.34,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.5707963267948966,
+          0,
+          0.12
+        ],
         "scale": 0.09,
         "material_color": "#ef4444",
         "physics": {
           "body_type": "dynamic",
           "mass_kg": 0.12,
-          "friction": 3.0,
-          "restitution": 0.0,
+          "friction": 3,
+          "restitution": 0,
           "linear_damping": 1.2,
           "angular_damping": 1.2
+        },
+        "collision_proxy": {
+          "type": "box",
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
         }
       },
       {
         "id": "grabbable-container-e",
         "name": "small grabbable shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [0.38, 0.07, 0.0],
-        "rotation_rpy_rad": [1.5707963267948966, 0.0, -0.1],
+        "position_xyz": [
+          0.07,
+          0.34,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.5707963267948966,
+          0,
+          -0.1
+        ],
         "scale": 0.09,
         "material_color": "#ef4444",
         "physics": {
           "body_type": "dynamic",
           "mass_kg": 0.12,
-          "friction": 3.0,
-          "restitution": 0.0,
+          "friction": 3,
+          "restitution": 0,
           "linear_damping": 1.2,
           "angular_damping": 1.2
+        },
+        "collision_proxy": {
+          "type": "box",
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
         }
       },
       {
         "id": "grabbable-container-f",
         "name": "small grabbable shipping container",
-        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container.glb",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
-        "position_xyz": [0.33, 0.02, 0.041],
-        "rotation_rpy_rad": [1.5707963267948966, 0.0, 0.02],
+        "position_xyz": [
+          0.02,
+          0.29,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.5707963267948966,
+          0,
+          0.02
+        ],
         "scale": 0.09,
         "material_color": "#ef4444",
         "physics": {
           "body_type": "dynamic",
           "mass_kg": 0.12,
-          "friction": 3.0,
-          "restitution": 0.0,
+          "friction": 3,
+          "restitution": 0,
           "linear_damping": 1.2,
           "angular_damping": 1.2
+        },
+        "collision_proxy": {
+          "type": "box",
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-0",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -1.027094,
+          0.375548,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-1",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.885308,
+          0.494519,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-2",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.746018,
+          0.611397,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-3",
+        "name": "port-yard shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [
+          -0.546717,
+          0.77863,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-4",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.467439,
+          0.845153,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-5",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -1.078448,
+          0.436749,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-6",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.936664,
+          0.55572,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-7",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.797374,
+          0.6726,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-8",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -0.657852,
+          0.789673,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-9",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -0.52129,
+          0.90426,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-10",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -1.127309,
+          0.500046,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-11",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.988019,
+          0.616924,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-12",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -0.851224,
+          0.731708,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-13",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.70944,
+          0.85068,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-14",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -0.569916,
+          0.967753,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-15",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -1.178663,
+          0.561249,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-16",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -1.03914,
+          0.678322,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-17",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -0.899851,
+          0.7952,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-18",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.760794,
+          0.911882,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-19",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.621504,
+          1.02876,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-20",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -1.230019,
+          0.622453,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-21",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -1.090497,
+          0.739526,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-22",
+        "name": "port-yard shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [
+          -0.891428,
+          0.906565,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-23",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -0.811917,
+          0.973282,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-24",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.672861,
+          1.089964,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-25",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -1.283869,
+          0.681561,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-26",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -1.141853,
+          0.800727,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-27",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -1.00529,
+          0.915317,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-28",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -0.863274,
+          1.034483,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-29",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -0.726711,
+          1.149072,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-30",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -1.332496,
+          0.745053,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-31",
+        "name": "port-yard shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [
+          -1.133427,
+          0.912091,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-32",
+        "name": "port-yard shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [
+          -0.994137,
+          1.028969,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-33",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -0.914627,
+          1.095686,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-34",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -0.778067,
+          1.210276,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
+        }
+      },
+      {
+        "id": "yard-container-35",
+        "name": "port-yard maersk container",
+        "uri": "/world-layouts/hk-cargo-port/elements/maersk-container/0-maersk-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/maersk-container/object.json",
+        "position_xyz": [
+          -1.383852,
+          0.806257,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.436,
+            1.03,
+            0.455
+          ]
+        }
+      },
+      {
+        "id": "yard-container-36",
+        "name": "port-yard shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [
+          -1.184783,
+          0.973294,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-37",
+        "name": "port-yard evergreen container",
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -1.105506,
+          1.039817,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.437,
+            1.034,
+            0.44
+          ]
+        }
+      },
+      {
+        "id": "yard-container-38",
+        "name": "port-yard shipping container",
+        "uri": "/world-layouts/hk-cargo-port/elements/shipping-container/0-shipping-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/shipping-container/object.json",
+        "position_xyz": [
+          -0.906204,
+          1.20705,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            1.035,
+            0.438,
+            0.439
+          ]
+        }
+      },
+      {
+        "id": "yard-container-39",
+        "name": "port-yard oocl container",
+        "uri": "/world-layouts/hk-cargo-port/elements/oocl-container/0-oocl-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/oocl-container/object.json",
+        "position_xyz": [
+          -0.82942,
+          1.271479,
+          0.012888
+        ],
+        "rotation_rpy_rad": [
+          1.570796,
+          0.785398,
+          -0.087266
+        ],
+        "scale": 0.25,
+        "physics": {
+          "body_type": "static",
+          "mass_kg": 2300,
+          "friction": 1.2,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
+        },
+        "collision_proxy": {
+          "size_xyz": [
+            0.371,
+            1.078,
+            0.404
+          ]
         }
       },
       {
@@ -160,63 +1528,39 @@
         "name": "orange rubber-tyred gantry crane",
         "uri": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/0-orange-rtg-crane.glb",
         "metadata": "/world-layouts/hk-cargo-port/elements/orange-rtg-crane/object.json",
-        "position_xyz": [0.75, 1.15, 0.0],
-        "scale": 0.5,
+        "position_xyz": [
+          -0.681607,
+          1.020639,
+          0.012888
+        ],
+        "scale": 0.85,
         "physics": {
           "body_type": "static",
           "mass_kg": 130000,
           "friction": 1.5,
-          "restitution": 0.0,
-          "linear_damping": 1.0,
-          "angular_damping": 1.0
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
         }
       },
       {
-        "id": "cargo-ship",
-        "name": "general cargo ship",
-        "uri": "/world-layouts/hk-cargo-port/elements/cargo-ship/0-cargo-ship.glb",
-        "metadata": "/world-layouts/hk-cargo-port/elements/cargo-ship/object.json",
-        "position_xyz": [0.1, 2.0, 0.0],
-        "scale": 0.5,
-        "physics": {
-          "body_type": "static",
-          "mass_kg": 20000000,
-          "friction": 1.0,
-          "restitution": 0.0,
-          "linear_damping": 1.0,
-          "angular_damping": 1.0
-        }
-      },
-      {
-        "id": "blue-gantry-crane",
-        "name": "blue rubber-tyred gantry crane",
-        "uri": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/0-blue-gantry-crane.glb",
-        "metadata": "/world-layouts/hk-cargo-port/elements/blue-gantry-crane/object.json",
-        "position_xyz": [-0.75, 1.45, 0.0],
-        "scale": 0.5,
-        "physics": {
-          "body_type": "static",
-          "mass_kg": 1400000,
-          "friction": 1.5,
-          "restitution": 0.0,
-          "linear_damping": 1.0,
-          "angular_damping": 1.0
-        }
-      },
-      {
-        "id": "evergreen-container-ship",
+        "id": "evergreen-container",
         "name": "Evergreen container ship",
-        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/0-evergreen-container-ship.glb",
-        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container-ship/object.json",
-        "position_xyz": [-0.65, 2.45, 0.0],
-        "scale": 0.5,
+        "uri": "/world-layouts/hk-cargo-port/elements/evergreen-container/0-evergreen-container-lowres.glb",
+        "metadata": "/world-layouts/hk-cargo-port/elements/evergreen-container/object.json",
+        "position_xyz": [
+          -0.214762,
+          0.167114,
+          0.012888
+        ],
+        "scale": 0.64,
         "physics": {
           "body_type": "static",
           "mass_kg": 150000000,
-          "friction": 1.0,
-          "restitution": 0.0,
-          "linear_damping": 1.0,
-          "angular_damping": 1.0
+          "friction": 1,
+          "restitution": 0,
+          "linear_damping": 1,
+          "angular_damping": 1
         }
       }
     ],
@@ -227,7 +1571,13 @@
       "Generated GLB elements are bundled from port-simple.zip and rendered at compact normalized scale.",
       "Small grabbable container instances reuse the shipping-container mesh as a red pile near SO101.",
       "Small grabbable container meshes are dynamic MuJoCo-backed training objects for SO101 pickup and teleop interaction.",
-      "Large world-layout meshes are treated as static non-bouncy scene geometry unless an element overrides physics defaults."
+      "Large world-layout meshes are treated as static non-bouncy scene geometry unless an element overrides physics defaults.",
+      "Static container yard: 40 small static containers, scale 0.11, 5x8 grid rotated 45 deg, centered at [-0.9, 0.85], resting on the floor. Move the yard as a group and drag other scene meshes with tools/container-yard-editor.html, or regenerate with tools/scripts/build-container-yard.mjs.",
+      "Manual asset sizing/orientation update: cranes scaled to 0.85, large Evergreen object scaled to 0.32, yard containers scaled to 0.18, yard XY spacing expanded by 1.45x around its center, and non-shipping yard containers rotated +90 degrees around Z.",
+      "Scene adjusted: cranes scale 0.25 and lifted to z=0.06; yard containers scale 0.25, lifted to z=0.035, spread 1.90x around the current yard center, and all yard container orientations set to [1.570796, 0.785398, 0].",
+      "Scene adjusted: yard grid rotated 5 degrees clockwise around center [-0.917258, 0.832742].",
+      "Scene manually edited in tools/container-yard-editor.html. Only environment.elements position_xyz X/Y values were changed.",
+      "Performance update: container visuals use low-res GLBs while collision_proxy physics keeps the same box sizes for stacking and pickup."
     ]
   }
 }

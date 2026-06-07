@@ -1,27 +1,31 @@
 {
   "schema_version": 1,
-  "world": "port-simple",
+  "world": "port-hk2",
   "object": {
-    "id": "orange-rtg-crane",
-    "name": "orange rubber-tyred gantry crane",
-    "description": "Rubber-tyred gantry crane with orange and rust-colored steel frame, tall vertical legs straddling container stacks, horizontal beam across the top, and large rubber wheels for mobility.",
-    "estimated_size_m": { "height": 22, "width": 24, "length": 12 },
-    "estimated_mass_kg": 130000,
+    "id": "gantry-crane",
+    "name": "red overhead gantry crane",
+    "description": "Large red rubber-tyred gantry crane (RTG), open rectangular steel portal frame straddling container rows, with a horizontal trolley beam, hoist mechanism, and four wheeled legs.",
+    "estimated_size_m": {
+      "height": 18,
+      "width": 23,
+      "length": 12
+    },
+    "estimated_mass_kg": 180000,
     "materials": [
-      "painted steel",
-      "rubber tyres"
+      "red painted steel",
+      "structural steel frame"
     ],
     "source_images": [
-      "worlds/hk-port/source/complete port.png"
+      "worlds/port-hk2/source/0-port-hk2.png"
     ],
     "evidence": [
       {
-        "image": "worlds/hk-port/source/complete port.png",
-        "location_in_image": "left side of the dock yard, multiple orange RTG cranes stacked in rows"
+        "image": "worlds/port-hk2/source/0-port-hk2.png",
+        "location_in_image": "multiple units straddling container rows across the foreground and mid-ground"
       }
     ],
     "generate_as_3d_object": true,
-    "working_dir": "worlds/port-simple/output/orange-rtg-crane"
+    "working_dir": "worlds/port-hk2/output/gantry-crane"
   },
-  "updated_at": "2026-06-06T14:56:25.807Z"
+  "updated_at": "2026-06-06T23:13:00.634Z"
 }

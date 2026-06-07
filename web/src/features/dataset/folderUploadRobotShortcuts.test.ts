@@ -98,6 +98,10 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
 
     expect(shortcut.manifestUrl).toBe("/demo/so101/manifest.json");
     expect(shortcut.cameraConfigUrl).toBe("/demo/so101/camera-config.json");
+    expect(shortcut.initialRobotPose).toEqual({
+      position: { x: -0.1, y: 0.22, z: 0 },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 },
+    });
     expect(manifest.label).toBe("SO101");
     expect(existsSync(path.join(PUBLIC_DEMO_ROOT, "so101/camera-config.json"))).toBe(true);
     expect(urdfEntry?.path).toBe("robot.urdf");
@@ -129,6 +133,64 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     );
 
     expect(referencedMeshPaths.length).toBeGreaterThan(0);
+    referencedMeshPaths.forEach((meshPath) => {
+      expect(manifestPaths.has(meshPath)).toBe(true);
+    });
+  });
+
+  it("points Crane to a bundled manifest without changing the SO101 starter", () => {
+    const shortcut = FOLDER_UPLOAD_ROBOT_SHORTCUTS.crane;
+    const manifest = loadManifest(shortcut);
+    const manifestPaths = new Set(manifest.files.map((file) => file.path));
+    const urdfEntry = manifest.files[0];
+
+    expect(shortcut.manifestUrl).toBe("/demo/crane/manifest.json");
+    const cameraConfig = loadCameraConfig(shortcut);
+
+    expect(shortcut.cameraConfigUrl).toBe("/demo/crane/camera-config.json");
+    expect(shortcut.initialRobotPose).toEqual({
+      position: { x: -0.45, y: 0, z: 0 },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 },
+    });
+    expect(shortcut.buttonLabel).toBe("Try Crane");
+    expect(manifest.label).toBe("Crane");
+    expect(urdfEntry?.path).toBe("ship_crane.urdf");
+    expect(cameraConfig.cameras.map((camera) => camera.name)).toEqual([
+      "crane_overhead_scene",
+      "crane_boom_gripper",
+      "crane_port_oblique",
+    ]);
+    expect(cameraConfig.cameras.every((camera) => camera.pose.length === 6)).toBe(true);
+    expect(cameraConfig.cameras.map((camera) => camera.parent_joint)).toEqual([
+      "base_yaw",
+      "finger_slide",
+      "base_yaw",
+    ]);
+
+    manifest.files.forEach((file) => {
+      expect(file.path).not.toContain(".xacro");
+      expect(file.path).not.toContain(".dae");
+      expect(existsSync(resolveManifestFilePath(shortcut, file.url))).toBe(true);
+    });
+
+    const urdfText = readFileSync(resolveManifestFilePath(shortcut, urdfEntry?.url ?? ""), "utf8");
+    expect(urdfText).toContain('<robot name="ship_crane">');
+    expect(urdfText).toContain('<origin xyz="0 0 0.51" rpy="1.5707963 0 0"/>');
+    expect(urdfText).toContain('<joint name="base_yaw"');
+    expect(urdfText).toContain('<joint name="boom_luff"');
+    expect(urdfText).toContain('<joint name="finger_slide"');
+
+    const referencedMeshPaths = Array.from(
+      urdfText.matchAll(/filename="([^"]+\.glb)"/g),
+      (match) => match[1] ?? ""
+    );
+
+    expect(referencedMeshPaths).toEqual([
+      "meshes/tower.glb",
+      "meshes/tower.glb",
+      "meshes/boom.glb",
+      "meshes/boom.glb",
+    ]);
     referencedMeshPaths.forEach((meshPath) => {
       expect(manifestPaths.has(meshPath)).toBe(true);
     });
