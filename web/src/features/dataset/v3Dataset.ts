@@ -30,6 +30,10 @@ import {
 type JSZipInstance = import("jszip");
 type WriteParquetFile = typeof import("./v3Parquet").writeParquetFile;
 
+// Strip virtual/fixed URDF joints that don't map to real motors.
+// e.g. gripper_frame_joint is a type="fixed" dummy joint in the SO-101 URDF.
+const VIRTUAL_JOINT_NAMES = new Set(["gripper_frame_joint"]);
+
 type V3FlattenedRow = {
   index: number;
   episode_index: number;
@@ -346,9 +350,6 @@ const buildEpisodeDataForV3Internal = (
     );
   }
 
-  // Strip virtual/fixed URDF joints that don't map to real motors.
-  // e.g. gripper_frame_joint is a type="fixed" dummy joint in the SO-101 URDF.
-  const VIRTUAL_JOINT_NAMES = new Set(["gripper_frame_joint"]);
   globalJointOrder = globalJointOrder.filter((j) => !VIRTUAL_JOINT_NAMES.has(j));
 
   episodes.forEach((episode) => {
