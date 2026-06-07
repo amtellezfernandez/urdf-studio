@@ -13,6 +13,7 @@ from backend.api.cam_to_sim import router as cam_to_sim_router
 from backend.api.collaboration import http_router as collaboration_http_router
 from backend.api.collaboration import ws_router as collaboration_ws_router
 from backend.api.datasets import router as datasets_router
+from backend.api.genesis_world import router as genesis_world_router
 from backend.api.health import router as health_router
 from backend.api.ilu_assembly import router as ilu_assembly_router
 from backend.api.ik import router as ik_router
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(runtime_sessions_router)
     app.include_router(samples_router)
     app.include_router(datasets_router)
+    app.include_router(genesis_world_router)
     app.include_router(world_bridge_router)
     app.include_router(world_registry_router)
     app.include_router(world_rollouts_router)

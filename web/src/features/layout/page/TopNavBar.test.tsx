@@ -307,6 +307,41 @@ describe("TopNavBar", () => {
     });
   });
 
+  it("surfaces Genesis launch from the Worlds menu", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = {
+      ...createProps(),
+      showMenus: true,
+      onOpenGenesisWorld: vi.fn(),
+    };
+
+    await renderTopNavBar(root, props);
+
+    const worldsButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Worlds"
+    );
+    expect(worldsButton).toBeTruthy();
+
+    await act(async () => {
+      worldsButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    });
+
+    const genesisMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
+      (item) => item.textContent === "Open on Genesis"
+    );
+    expect(genesisMenuItem).toBeTruthy();
+
+    await act(async () => {
+      genesisMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onOpenGenesisWorld).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("surfaces separate teleop panel toggles in studio mode", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);

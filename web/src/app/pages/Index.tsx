@@ -73,6 +73,7 @@ import {
 import { normalizeMeshPathForMatch, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
 import { validateInertiaTensor } from "@/features/viewer/inertialMath";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
+import { openGenesisWorld } from "@/features/world-share/genesisWorldApi";
 import {
   DEFAULT_RECORDING_VIEW_HEIGHT,
   MIN_CAMERAS_PANEL_HEIGHT,
@@ -3051,6 +3052,15 @@ const Index = () => {
     window.open(reviewHref, "_blank", "noopener,noreferrer");
   }, [datasetReviewSessionId]);
 
+  const handleOpenGenesisWorld = useCallback(async () => {
+    try {
+      const launched = await openGenesisWorld("mesh");
+      toast.success(`Genesis launch started (pid ${launched.pid}). Mesh prep may take a while.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open Genesis");
+    }
+  }, []);
+
   const topNavBarProps: PageLayoutProps["topNavBarProps"] = {
     workspaceMode,
     onWorkspaceModeChange: workspaceController.setMode,
@@ -3113,6 +3123,7 @@ const Index = () => {
     onOpenWorldRolloutReview: worldRolloutReview
       ? () => setWorldRolloutReviewOpen(true)
       : undefined,
+    onOpenGenesisWorld: handleOpenGenesisWorld,
     onExportCurrentWorldSceneLayer: handleExportCurrentWorldSceneLayer,
     onImportSceneLayerFromUrl: handleImportWorldLayoutFromUrl,
     onListWorldScenePackages: handleListWorldScenePackages,

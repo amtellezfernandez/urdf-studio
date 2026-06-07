@@ -79,6 +79,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
               onRunLocalWorldRollout={props.onRunLocalWorldRollout}
               onImportWorldRolloutResults={props.onImportWorldRolloutResults}
               onOpenWorldRolloutReview={props.onOpenWorldRolloutReview}
+              onOpenGenesisWorld={props.onOpenGenesisWorld}
               exportCamerasAsJSON={props.exportCamerasAsJSON}
               hasCamerasToExport={props.hasCamerasToExport}
               setShowCameraUpload={props.setShowCameraUpload}

@@ -16,6 +16,7 @@ type WorldsMenuProps = Pick<
   | "onRunLocalWorldRollout"
   | "onImportWorldRolloutResults"
   | "onOpenWorldRolloutReview"
+  | "onOpenGenesisWorld"
   | "exportCamerasAsJSON"
   | "hasCamerasToExport"
   | "setShowCameraUpload"
@@ -33,6 +34,7 @@ export function WorldsMenu({
   onRunLocalWorldRollout,
   onImportWorldRolloutResults,
   onOpenWorldRolloutReview,
+  onOpenGenesisWorld,
   exportCamerasAsJSON,
   hasCamerasToExport,
   setShowCameraUpload,
@@ -58,6 +60,11 @@ export function WorldsMenu({
         <DropdownMenuItem onClick={onListWorldScenePackages} className={menuItemClass}>
           List World Packages
         </DropdownMenuItem>
+        {onOpenGenesisWorld ? (
+          <DropdownMenuItem onClick={onOpenGenesisWorld} className={menuItemClass}>
+            Open on Genesis
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onClick={onExportCurrentWorldSceneLayer} className={menuItemClass}>
           Export World Layout (JSON)
         </DropdownMenuItem>
