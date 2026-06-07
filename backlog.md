@@ -2,6 +2,30 @@
 
 Status values: `to do`, `on going`, `done`
 
+## Priority Training User Story
+
+As a RobotOps user, I select a dataset and model from the UI, configure everything necessary for training, and train locally when my compute is sufficient or in cloud/remote compute when it is not, so that the full training workflow stays inside the product.
+
+Acceptance criteria:
+
+- [ ] User can select a dataset source from the UI: HuggingFace LeRobot, local LeRobot folder, and later S3-compatible dataset storage.
+- [ ] User can select a model/provider from the UI: built-in LeRobot policies first, custom provider manifests later.
+- [ ] User can configure required training settings from the UI: run name, output location, batch size, epochs or `max_steps`, learning rate, seed, checkpoint interval, tracker, and artifact destination.
+- [ ] User can run compute preflight before launch: Docker, Python/trainer image, CUDA/NVIDIA runtime, visible GPUs, CPU fallback, memory, disk, dataset access, S3 write access, and tracker connectivity.
+- [ ] If local compute is enough, user can launch a local Docker training job from the UI.
+- [ ] If local compute is not enough, user can select or configure cloud/remote compute from the UI: existing SSH machine first, AWS EC2 discovery as a provider-specific layer, managed cloud adapters later.
+- [ ] User can run a tiny bounded smoke training job before starting a long paid cloud run.
+- [ ] User can review the full launch plan before paid compute starts: dataset, model, hyperparameters, compute target, GPU, Docker image, artifact store, tracker, max runtime, and estimated cost.
+- [ ] User can monitor the run from the UI: status, progress, loss/metrics, logs, runtime, errors, and tracker link.
+- [ ] User can inspect training artifacts from the UI: configs, checkpoints, final model, metrics, logs, and lineage.
+
+Current PR scope:
+
+- Make real training reliable enough for production review.
+- Keep local/S3-compatible architecture lightweight.
+- Expose artifacts and monitoring in the UI.
+- Capture cloud training requirements, but do not pretend unsupported cloud adapters are ready.
+
 | Epic | Checkbox | Task | Description | Status | Comments |
 |---|---|---|---|---|---|
 | Product foundation | [ ] | Define RobotOps product contract | Make RobotOps a UI-first lifecycle for embodied AI: dataset, versioning, training, evaluation, deployment/export, and monitoring. | to do | Keep architecture lightweight and avoid heavy workflow frameworks. |
