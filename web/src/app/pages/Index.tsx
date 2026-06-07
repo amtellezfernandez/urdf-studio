@@ -76,6 +76,7 @@ import { isWorldHubConfigured } from "@/shared/config/worldHub";
 import { openGenesisWorld } from "@/features/world-share/genesisWorldApi";
 import {
   useGenesisJointStatePublisher,
+  useGenesisRobotStatePoller,
   useGenesisWorldStatePoller,
 } from "@/features/world-share/useGenesisLiveSync";
 import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWorldLiveStateStore";
@@ -248,6 +249,7 @@ const Index = () => {
   const setSelectedIkSolverId = useIkSolverStore((state) => state.setSelectedSolverId);
   const [genesisLiveSyncEnabled, setGenesisLiveSyncEnabled] = useState(false);
   useGenesisJointStatePublisher(genesisLiveSyncEnabled);
+  useGenesisRobotStatePoller(genesisLiveSyncEnabled);
   useGenesisWorldStatePoller(genesisLiveSyncEnabled);
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
   const workspaceController = useWorkspaceController();

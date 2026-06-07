@@ -25,6 +25,7 @@ from backend.scripts.genesis_world_open import (
     _rigid_material_for_physics,
     _robot_collision_min_z,
     _resolve_studio_pose_from_qpos,
+    _robot_joint_values_payload,
     _visual_mesh_qpos_from_collider_qpos,
 )
 
@@ -426,3 +427,19 @@ def test_apply_live_joint_values_targets_matching_genesis_dofs() -> None:
     assert indices == {"shoulder_pan": 0, "gripper": 5}
     assert applied == 2
     assert robot.calls == [([0.1, 0.8], [0, 5])]
+
+
+def test_robot_joint_values_payload_reads_corrected_genesis_qpos() -> None:
+    robot = SimpleNamespace(qpos=[0.1, -0.2, 0.3])
+    robot.get_qpos = lambda: robot.qpos
+
+    payload = _robot_joint_values_payload(
+        robot,
+        {
+            "shoulder_pan": 0,
+            "wrist_flex": 2,
+            "missing": 7,
+        },
+    )
+
+    assert payload == {"shoulder_pan": 0.1, "wrist_flex": 0.3}

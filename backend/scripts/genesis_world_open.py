@@ -531,6 +531,40 @@ def _latest_joint_values_from_backend(
     return sequence, joint_values
 
 
+def _robot_joint_values_payload(
+    robot_entity,
+    joint_dof_indices: dict[str, int],
+) -> dict[str, float]:
+    if not joint_dof_indices or not hasattr(robot_entity, "get_qpos"):
+        return {}
+    qpos = _to_float_list(robot_entity.get_qpos())
+    joint_values: dict[str, float] = {}
+    for joint_name, dof_index in joint_dof_indices.items():
+        if dof_index < 0 or dof_index >= len(qpos):
+            continue
+        value = qpos[dof_index]
+        if _is_finite_number(value):
+            joint_values[joint_name] = float(value)
+    return joint_values
+
+
+def _publish_robot_joint_state(
+    *,
+    base_url: str,
+    robot_entity,
+    joint_dof_indices: dict[str, int],
+    timeout_sec: float,
+) -> None:
+    joint_values = _robot_joint_values_payload(robot_entity, joint_dof_indices)
+    if not joint_values:
+        return
+    _post_json_url(
+        f"{base_url.rstrip('/')}/robot-state",
+        {"joint_values": joint_values},
+        timeout_sec=timeout_sec,
+    )
+
+
 def _dynamic_entity_pose_payload(
     *,
     spec,
@@ -801,7 +835,7 @@ def open_genesis_world_scene(
     joint_dof_indices = _joint_dof_indices_by_name(robot_entity)
     last_joint_sequence = 0
     last_joint_poll_at = 0.0
-    last_world_publish_at = 0.0
+    last_state_publish_at = 0.0
     world_source_sequence = 0
     joint_poll_interval = (
         1.0 / live_joint_poll_hz
@@ -854,6 +888,13 @@ def open_genesis_world_scene(
             )
             _enforce_dynamic_floor_contact(dynamic_entities)
             _sync_dynamic_visual_entities(dynamic_visual_entities)
+        if live_enabled:
+            _publish_robot_joint_state(
+                base_url=live_base_url,
+                robot_entity=robot_entity,
+                joint_dof_indices=joint_dof_indices,
+                timeout_sec=live_http_timeout_sec,
+            )
         if live_enabled and dynamic_entities:
             _publish_dynamic_world_poses(
                 base_url=live_base_url,
@@ -866,7 +907,7 @@ def open_genesis_world_scene(
     def step_live_runtime() -> None:
         nonlocal last_joint_sequence
         nonlocal last_joint_poll_at
-        nonlocal last_world_publish_at
+        nonlocal last_state_publish_at
         nonlocal world_source_sequence
         nonlocal last_safe_robot_qpos
         now = time.monotonic()
@@ -893,17 +934,23 @@ def open_genesis_world_scene(
         now = time.monotonic()
         if (
             live_enabled
-            and dynamic_entities
-            and now - last_world_publish_at >= world_publish_interval
+            and now - last_state_publish_at >= world_publish_interval
         ):
-            last_world_publish_at = now
+            last_state_publish_at = now
             world_source_sequence += 1
-            _publish_dynamic_world_poses(
+            _publish_robot_joint_state(
                 base_url=live_base_url,
-                source_sequence=world_source_sequence,
-                dynamic_entities=dynamic_entities,
+                robot_entity=robot_entity,
+                joint_dof_indices=joint_dof_indices,
                 timeout_sec=live_http_timeout_sec,
             )
+            if dynamic_entities:
+                _publish_dynamic_world_poses(
+                    base_url=live_base_url,
+                    source_sequence=world_source_sequence,
+                    dynamic_entities=dynamic_entities,
+                    timeout_sec=live_http_timeout_sec,
+                )
 
     if duration_sec <= 0:
         print("[genesis-world-open] Genesis viewer opened. Press Ctrl-C to return.")

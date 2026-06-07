@@ -129,13 +129,8 @@ import {
   resolveLiveTeleopJointTargets,
 } from "@/features/viewer/operatorLiveTeleopJointSync";
 import {
-  buildWorldObjectObstacleBounds,
   evaluateRobotJointPoseFloorContact,
 } from "@/features/viewer/robotFloorContact";
-import {
-  solidBoundsFromRecord,
-  useWorldCollisionBoundsStore,
-} from "@/features/viewer/worldCollisionBoundsStore";
 import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
 import { resolveViewerPartSelection } from "@/features/viewer/viewerPartSelectionPolicy";
 import { shouldApplySimulationPrepResetPoseRequest } from "@/features/viewer/simulationPrepResetPosePolicy";
@@ -3888,7 +3883,6 @@ export const Viewer3D = ({
   const setAvailableJointsStore = useJointStore((s) => s.setAvailableJoints);
   const setStoreJointValue = useJointStore((s) => s.setJointValue);
   const worldObjects = useObjectStore((state) => state.objects);
-  const worldLayoutBoundsById = useWorldCollisionBoundsStore((state) => state.boundsById);
   const replaceWorldObjectsBySource = useObjectStore(
     (state) => state.replaceObjectsBySource,
   );
@@ -4372,13 +4366,6 @@ export const Viewer3D = ({
     () => worldObjects.map(serializeWorldObjectObstacleSource),
     [worldObjects]
   );
-  const solidObstacleBounds = useMemo(
-    () => [
-      ...buildWorldObjectObstacleBounds(worldObjects),
-      ...solidBoundsFromRecord(worldLayoutBoundsById),
-    ],
-    [worldLayoutBoundsById, worldObjects]
-  );
   const hasStudioRobot = !isAssemblyWorkspace && Boolean(robot);
   const canUseRoverGuide = hasStudioRobot;
   const robotFrontLocalDirectionRef = useRef(ROBOT_FRONT_LOCAL_FORWARD.clone());
@@ -4725,17 +4712,12 @@ export const Viewer3D = ({
       robot,
       candidateJointValues,
       restoreJointValues: currentJointValues,
-      obstacleBounds: solidObstacleBounds,
     });
     if (!floorCheck.safe) {
       const now = performance.now();
       if (now - liveTeleopFloorBlockToastRef.current > 1200) {
         liveTeleopFloorBlockToastRef.current = now;
-        toast.warning(
-          floorCheck.objectCollision
-            ? "Leader pose rejected: robot would pass through an object."
-            : "Leader pose rejected: robot would pass through the floor."
-        );
+        toast.warning("Leader pose rejected: robot would pass through the floor.");
       }
       return;
     }
@@ -4746,7 +4728,6 @@ export const Viewer3D = ({
     liveTeleopJointTelemetryByName,
     robot,
     setStoreJointValues,
-    solidObstacleBounds,
   ]);
 
   const motionKernel = useMemo(() => {

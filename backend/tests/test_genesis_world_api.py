@@ -48,6 +48,14 @@ def test_open_genesis_world_request_defaults_to_solid_box_colliders() -> None:
 def test_open_genesis_world_clears_stale_world_pose_state(monkeypatch) -> None:
     reset_genesis_live_state_for_tests()
 
+    genesis_world_api.publish_genesis_joint_state(
+        GenesisJointStateRequest(joint_values={"shoulder_pan": 0.25}),
+        _access=None,
+    )
+    genesis_world_api.publish_genesis_robot_state(
+        GenesisJointStateRequest(joint_values={"shoulder_pan": -0.5}),
+        _access=None,
+    )
     genesis_world_api.publish_genesis_world_state(
         GenesisWorldStateRequest(
             source_sequence=1,
@@ -83,6 +91,12 @@ def test_open_genesis_world_clears_stale_world_pose_state(monkeypatch) -> None:
     latest = genesis_world_api.get_latest_genesis_world_state(_access=None)
     assert latest.sequence == 0
     assert latest.poses == []
+    latest_command = genesis_world_api.get_latest_genesis_joint_state(_access=None)
+    assert latest_command.sequence == 0
+    assert latest_command.joint_values == {}
+    latest_robot = genesis_world_api.get_latest_genesis_robot_state(_access=None)
+    assert latest_robot.sequence == 0
+    assert latest_robot.joint_values == {}
 
 
 def test_genesis_joint_state_roundtrips_latest_values() -> None:
@@ -97,6 +111,20 @@ def test_genesis_joint_state_roundtrips_latest_values() -> None:
     assert first.sequence == 1
     assert latest.sequence == 1
     assert latest.joint_values == {"shoulder_pan": 0.25, "gripper": 0.7}
+
+
+def test_genesis_robot_state_roundtrips_latest_corrected_values() -> None:
+    reset_genesis_live_state_for_tests()
+
+    first = genesis_world_api.publish_genesis_robot_state(
+        GenesisJointStateRequest(joint_values={"shoulder_pan": 0.12, "gripper": 0.42}),
+        _access=None,
+    )
+    latest = genesis_world_api.get_latest_genesis_robot_state(_access=None)
+
+    assert first.sequence == 1
+    assert latest.sequence == 1
+    assert latest.joint_values == {"shoulder_pan": 0.12, "gripper": 0.42}
 
 
 def test_genesis_world_state_roundtrips_latest_dynamic_poses() -> None:

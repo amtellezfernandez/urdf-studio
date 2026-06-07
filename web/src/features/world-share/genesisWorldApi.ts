@@ -17,6 +17,12 @@ export type GenesisWorldPoseResponse = {
   orientation_wxyz: [number, number, number, number];
 };
 
+export type GenesisJointStateResponse = {
+  sequence: number;
+  joint_values: Record<string, number>;
+  updated_at_monotonic_sec: number;
+};
+
 export type GenesisWorldStateResponse = {
   sequence: number;
   source_sequence: number;
@@ -82,4 +88,18 @@ export const fetchGenesisWorldState = async (): Promise<GenesisWorldStateRespons
     throw new Error(`Genesis world state fetch failed (${response.status})`);
   }
   return (await response.json()) as GenesisWorldStateResponse;
+};
+
+export const fetchGenesisRobotState = async (): Promise<GenesisJointStateResponse> => {
+  const { init } = withBackendRequestHeaders({
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const response = await fetch(`${API_BASE_URL}/worlds/genesis/robot-state/latest`, init);
+  if (!response.ok) {
+    throw new Error(`Genesis robot state fetch failed (${response.status})`);
+  }
+  return (await response.json()) as GenesisJointStateResponse;
 };

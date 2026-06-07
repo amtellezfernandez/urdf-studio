@@ -12,10 +12,12 @@ from backend.models.genesis_world import (
     GenesisWorldOpenResponse,
 )
 from backend.services.genesis_live_state import (
-    clear_genesis_world_state,
     read_genesis_joint_state,
+    read_genesis_robot_state,
     read_genesis_world_state,
+    clear_genesis_runtime_state,
     store_genesis_joint_state,
+    store_genesis_robot_state,
     store_genesis_world_state,
 )
 from backend.services.genesis_world_launcher import launch_default_genesis_world
@@ -28,7 +30,7 @@ def open_genesis_world(
     request: GenesisWorldOpenRequest,
     _access: None = Depends(require_simulator_operator_access),
 ) -> GenesisWorldOpenResponse:
-    clear_genesis_world_state()
+    clear_genesis_runtime_state()
     return launch_default_genesis_world(
         dynamic_container_mode=request.dynamic_container_mode,
     )
@@ -47,6 +49,21 @@ def get_latest_genesis_joint_state(
     _access: None = Depends(require_simulator_operator_access),
 ) -> GenesisJointStateResponse:
     return read_genesis_joint_state()
+
+
+@router.post("/robot-state", response_model=GenesisJointStateResponse)
+def publish_genesis_robot_state(
+    request: GenesisJointStateRequest,
+    _access: None = Depends(require_simulator_operator_access),
+) -> GenesisJointStateResponse:
+    return store_genesis_robot_state(request.joint_values)
+
+
+@router.get("/robot-state/latest", response_model=GenesisJointStateResponse)
+def get_latest_genesis_robot_state(
+    _access: None = Depends(require_simulator_operator_access),
+) -> GenesisJointStateResponse:
+    return read_genesis_robot_state()
 
 
 @router.post("/world-state", response_model=GenesisWorldStateResponse)

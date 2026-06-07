@@ -1,13 +1,16 @@
 import { useEffect, useRef } from "react";
 import { useJointStore } from "@/shared/store/useJointStore";
 import {
+  fetchGenesisRobotState,
   fetchGenesisWorldState,
   publishGenesisJointState,
 } from "@/features/world-share/genesisWorldApi";
 import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWorldLiveStateStore";
 
 const JOINT_PUBLISH_INTERVAL_MS = 33;
+const ROBOT_STATE_POLL_INTERVAL_MS = 50;
 const WORLD_STATE_POLL_INTERVAL_MS = 50;
+const GENESIS_FEEDBACK_JOINT_EPSILON = 1e-6;
 
 const hasFiniteJointValues = (jointValues: Readonly<Record<string, number>>): boolean =>
   Object.values(jointValues).some((value) => Number.isFinite(value));
@@ -18,6 +21,26 @@ const toFiniteJointValues = (
   Object.fromEntries(
     Object.entries(jointValues).filter(([, value]) => Number.isFinite(value))
   );
+
+const mergeChangedGenesisJointValues = (
+  currentJointValues: Readonly<Record<string, number>>,
+  genesisJointValues: Readonly<Record<string, number>>
+): Record<string, number> | null => {
+  let changed = false;
+  const nextJointValues = { ...currentJointValues };
+  for (const [jointName, value] of Object.entries(genesisJointValues)) {
+    if (!Number.isFinite(value)) continue;
+    const currentValue = currentJointValues[jointName];
+    if (
+      currentValue === undefined ||
+      Math.abs(currentValue - value) > GENESIS_FEEDBACK_JOINT_EPSILON
+    ) {
+      changed = true;
+      nextJointValues[jointName] = value;
+    }
+  }
+  return changed ? nextJointValues : null;
+};
 
 export const useGenesisJointStatePublisher = (enabled: boolean): void => {
   const lastPublishAtRef = useRef(0);
@@ -81,6 +104,51 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+    };
+  }, [enabled]);
+};
+
+export const useGenesisRobotStatePoller = (enabled: boolean): void => {
+  const latestSequenceRef = useRef(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      latestSequenceRef.current = 0;
+      return;
+    }
+    let cancelled = false;
+    let inFlight = false;
+
+    const poll = () => {
+      if (inFlight) return;
+      inFlight = true;
+      void fetchGenesisRobotState()
+        .then((state) => {
+          if (cancelled) return;
+          if (state.sequence === 0) {
+            latestSequenceRef.current = 0;
+            return;
+          }
+          if (state.sequence <= latestSequenceRef.current) return;
+          latestSequenceRef.current = state.sequence;
+          const nextJointValues = mergeChangedGenesisJointValues(
+            useJointStore.getState().jointValues,
+            state.joint_values
+          );
+          if (nextJointValues === null) return;
+          useJointStore.getState().setJointValues(nextJointValues);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+
+    poll();
+    const intervalId = window.setInterval(poll, ROBOT_STATE_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [enabled]);
 };

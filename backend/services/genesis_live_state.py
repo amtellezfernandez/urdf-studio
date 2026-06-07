@@ -17,6 +17,9 @@ class _GenesisLiveState:
     joint_sequence: int = 0
     joint_values: dict[str, float] = field(default_factory=dict)
     joint_updated_at: float = 0.0
+    robot_sequence: int = 0
+    robot_joint_values: dict[str, float] = field(default_factory=dict)
+    robot_updated_at: float = 0.0
     world_sequence: int = 0
     world_source_sequence: int = 0
     world_poses: list[GenesisWorldPose] = field(default_factory=list)
@@ -44,6 +47,27 @@ def read_genesis_joint_state() -> GenesisJointStateResponse:
             sequence=_STATE.joint_sequence,
             joint_values=dict(_STATE.joint_values),
             updated_at_monotonic_sec=_STATE.joint_updated_at,
+        )
+
+
+def store_genesis_robot_state(joint_values: dict[str, float]) -> GenesisJointStateResponse:
+    with _STATE.lock:
+        _STATE.robot_sequence += 1
+        _STATE.robot_joint_values = dict(joint_values)
+        _STATE.robot_updated_at = time.monotonic()
+        return GenesisJointStateResponse(
+            sequence=_STATE.robot_sequence,
+            joint_values=_STATE.robot_joint_values,
+            updated_at_monotonic_sec=_STATE.robot_updated_at,
+        )
+
+
+def read_genesis_robot_state() -> GenesisJointStateResponse:
+    with _STATE.lock:
+        return GenesisJointStateResponse(
+            sequence=_STATE.robot_sequence,
+            joint_values=dict(_STATE.robot_joint_values),
+            updated_at_monotonic_sec=_STATE.robot_updated_at,
         )
 
 
@@ -83,12 +107,19 @@ def clear_genesis_world_state() -> None:
         _STATE.world_updated_at = 0.0
 
 
-def reset_genesis_live_state_for_tests() -> None:
+def clear_genesis_runtime_state() -> None:
     with _STATE.lock:
         _STATE.joint_sequence = 0
         _STATE.joint_values = {}
         _STATE.joint_updated_at = 0.0
+        _STATE.robot_sequence = 0
+        _STATE.robot_joint_values = {}
+        _STATE.robot_updated_at = 0.0
         _STATE.world_sequence = 0
         _STATE.world_source_sequence = 0
         _STATE.world_poses = []
         _STATE.world_updated_at = 0.0
+
+
+def reset_genesis_live_state_for_tests() -> None:
+    clear_genesis_runtime_state()

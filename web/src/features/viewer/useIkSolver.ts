@@ -63,14 +63,7 @@ import {
   shouldRememberBlockedTargetAfterPreSolve,
 } from "@/features/viewer/ikObjectSolvePreSolvePolicy";
 import { doesViewerDragModeUseIkHandles } from "@/features/viewer/viewerDragModePolicy";
-import {
-  buildWorldObjectObstacleBounds,
-  evaluateRobotJointPoseFloorContact,
-} from "@/features/viewer/robotFloorContact";
-import {
-  solidBoundsFromRecord,
-  useWorldCollisionBoundsStore,
-} from "@/features/viewer/worldCollisionBoundsStore";
+import { evaluateRobotJointPoseFloorContact } from "@/features/viewer/robotFloorContact";
 
 export type IkAppliedMetadata = {
   inputSource:
@@ -191,7 +184,6 @@ export const useIkSolver = ({
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
   const storeJointValues = useJointStore((s) => s.jointValues);
   const worldObjects = useObjectStore((s) => s.objects);
-  const worldLayoutBoundsById = useWorldCollisionBoundsStore((s) => s.boundsById);
   const [ikResult, setIkResult] = useState<IkResponsePayload | null>(null);
   const [ikError, setIkError] = useState<string | null>(null);
   const [ikDialogOpen, setIkDialogOpen] = useState(false);
@@ -516,13 +508,6 @@ export const useIkSolver = ({
   const liveIkSeedValues = useMemo(
     () => getLiveRobotJoints(robot, storeJointValues),
     [robot, storeJointValues]
-  );
-  const solidObstacleBounds = useMemo(
-    () => [
-      ...buildWorldObjectObstacleBounds(worldObjects),
-      ...solidBoundsFromRecord(worldLayoutBoundsById),
-    ],
-    [worldLayoutBoundsById, worldObjects]
   );
 
   // Reset IK smoothing state when the robot or drag mode changes
@@ -1365,18 +1350,13 @@ export const useIkSolver = ({
         robot,
         candidateJointValues: rawNextSafe,
         restoreJointValues: useJointStore.getState().jointValues,
-        obstacleBounds: solidObstacleBounds,
       });
       if (!floorCheck.safe) {
         dragSmoothedJointsRef.current.delete(targetEndEffectorLink ?? "");
         const now = performance.now();
         if (now - lastFloorBlockToastRef.current > 1200) {
           lastFloorBlockToastRef.current = now;
-          toast.warning(
-            floorCheck.objectCollision
-              ? "IK pose rejected: robot would pass through an object."
-              : "IK pose rejected: robot would pass through the floor."
-          );
+          toast.warning("IK pose rejected: robot would pass through the floor.");
         }
         return;
       }
@@ -1423,7 +1403,6 @@ export const useIkSolver = ({
       onManualJointChange,
       robot,
       setStoreJointValues,
-      solidObstacleBounds,
     ]
   );
 
