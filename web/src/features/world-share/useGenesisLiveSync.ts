@@ -14,6 +14,10 @@ const WORLD_STATE_POLL_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
 const GENESIS_FEEDBACK_JOINT_EPSILON = 1e-6;
 
 let genesisFeedbackStoreUpdateDepth = 0;
+let genesisLiveSyncActive = false;
+let genesisCommandSequence = 0;
+let latestGenesisCommandValues: Record<string, number> = {};
+const genesisCommandListeners = new Set<() => void>();
 
 const hasFiniteJointValues = (jointValues: Readonly<Record<string, number>>): boolean =>
   Object.values(jointValues).some((value) => Number.isFinite(value));
@@ -54,6 +58,26 @@ const applyGenesisFeedbackJointValues = (jointValues: Record<string, number>): v
   }
 };
 
+export const isGenesisLiveSyncActive = (): boolean => genesisLiveSyncActive;
+
+export const queueGenesisJointCommand = (
+  jointValues: Readonly<Record<string, number>>
+): boolean => {
+  if (!genesisLiveSyncActive) return false;
+  latestGenesisCommandValues = toFiniteJointValues(jointValues);
+  if (!hasFiniteJointValues(latestGenesisCommandValues)) return false;
+  genesisCommandSequence += 1;
+  genesisCommandListeners.forEach((listener) => listener());
+  return true;
+};
+
+const subscribeGenesisJointCommands = (listener: () => void): (() => void) => {
+  genesisCommandListeners.add(listener);
+  return () => {
+    genesisCommandListeners.delete(listener);
+  };
+};
+
 export const useGenesisJointStatePublisher = (enabled: boolean): void => {
   const lastPublishAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
@@ -62,11 +86,14 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
   const needsFlushRef = useRef(false);
 
   useEffect(() => {
+    genesisLiveSyncActive = enabled;
     if (!enabled) {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      latestGenesisCommandValues = {};
+      genesisCommandSequence = 0;
       return;
     }
 
@@ -105,6 +132,13 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
     };
 
     schedule(useJointStore.getState().jointValues);
+    let lastQueuedCommandSequence = genesisCommandSequence;
+    const scheduleQueuedCommand = () => {
+      if (genesisCommandSequence <= lastQueuedCommandSequence) return;
+      lastQueuedCommandSequence = genesisCommandSequence;
+      schedule(latestGenesisCommandValues);
+    };
+    const unsubscribeCommands = subscribeGenesisJointCommands(scheduleQueuedCommand);
     const unsubscribe = useJointStore.subscribe((state, previousState) => {
       if (state.jointValues === previousState.jointValues) return;
       if (genesisFeedbackStoreUpdateDepth > 0) return;
@@ -112,6 +146,8 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
     });
 
     return () => {
+      genesisLiveSyncActive = false;
+      unsubscribeCommands();
       unsubscribe();
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);

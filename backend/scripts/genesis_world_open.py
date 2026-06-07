@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -531,6 +532,121 @@ def _latest_joint_values_from_backend(
     return sequence, joint_values
 
 
+class _GenesisLiveHttpBridge:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        joint_poll_interval: float,
+        state_publish_interval: float,
+        timeout_sec: float,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._joint_poll_interval = max(0.001, joint_poll_interval)
+        self._state_publish_interval = max(0.001, state_publish_interval)
+        self._timeout_sec = timeout_sec
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._latest_joint_state: tuple[int, dict[str, Any]] | None = None
+        self._robot_joint_values: dict[str, float] = {}
+        self._robot_generation = 0
+        self._world_payload: tuple[int, list[dict[str, Any]]] | None = None
+        self._world_generation = 0
+        self._joint_thread = threading.Thread(
+            target=self._poll_joint_values,
+            name="genesis-live-joint-poll",
+            daemon=True,
+        )
+        self._publish_thread = threading.Thread(
+            target=self._publish_state,
+            name="genesis-live-state-publish",
+            daemon=True,
+        )
+
+    def start(self) -> None:
+        self._joint_thread.start()
+        self._publish_thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        self._joint_thread.join(timeout=0.5)
+        self._publish_thread.join(timeout=0.5)
+
+    def read_latest_joint_values(self) -> tuple[int, dict[str, Any]] | None:
+        with self._lock:
+            if self._latest_joint_state is None:
+                return None
+            sequence, joint_values = self._latest_joint_state
+            return sequence, dict(joint_values)
+
+    def queue_robot_joint_values(self, joint_values: dict[str, float]) -> None:
+        if not joint_values:
+            return
+        with self._lock:
+            self._robot_joint_values = dict(joint_values)
+            self._robot_generation += 1
+
+    def queue_world_state(
+        self,
+        *,
+        source_sequence: int,
+        poses: list[dict[str, Any]],
+    ) -> None:
+        with self._lock:
+            self._world_payload = (source_sequence, list(poses))
+            self._world_generation += 1
+
+    def _poll_joint_values(self) -> None:
+        while not self._stop.is_set():
+            latest = _latest_joint_values_from_backend(
+                self._base_url,
+                timeout_sec=self._timeout_sec,
+            )
+            if latest is not None:
+                with self._lock:
+                    current_sequence = (
+                        self._latest_joint_state[0]
+                        if self._latest_joint_state is not None
+                        else 0
+                    )
+                    if latest[0] >= current_sequence:
+                        self._latest_joint_state = (latest[0], dict(latest[1]))
+            self._stop.wait(self._joint_poll_interval)
+
+    def _publish_state(self) -> None:
+        last_robot_generation = 0
+        last_world_generation = 0
+        while not self._stop.is_set():
+            robot_joint_values: dict[str, float] | None = None
+            world_payload: tuple[int, list[dict[str, Any]]] | None = None
+            with self._lock:
+                if self._robot_generation > last_robot_generation:
+                    last_robot_generation = self._robot_generation
+                    robot_joint_values = dict(self._robot_joint_values)
+                if (
+                    self._world_payload is not None
+                    and self._world_generation > last_world_generation
+                ):
+                    last_world_generation = self._world_generation
+                    source_sequence, poses = self._world_payload
+                    world_payload = (source_sequence, list(poses))
+
+            if robot_joint_values:
+                _post_json_url(
+                    f"{self._base_url}/robot-state",
+                    {"joint_values": robot_joint_values},
+                    timeout_sec=self._timeout_sec,
+                )
+            if world_payload is not None:
+                source_sequence, poses = world_payload
+                _post_json_url(
+                    f"{self._base_url}/world-state",
+                    {"source_sequence": source_sequence, "poses": poses},
+                    timeout_sec=self._timeout_sec,
+                )
+            self._stop.wait(self._state_publish_interval)
+
+
 def _robot_joint_values_payload(
     robot_entity,
     joint_dof_indices: dict[str, int],
@@ -633,6 +749,17 @@ def _publish_dynamic_world_poses(
     dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
     timeout_sec: float,
 ) -> None:
+    poses = _dynamic_world_poses_payload(dynamic_entities)
+    _post_json_url(
+        f"{base_url.rstrip('/')}/world-state",
+        {"source_sequence": source_sequence, "poses": poses},
+        timeout_sec=timeout_sec,
+    )
+
+
+def _dynamic_world_poses_payload(
+    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
+) -> list[dict[str, Any]]:
     poses: list[dict[str, Any]] = []
     for spec, entity, scaled_offset in dynamic_entities:
         pose = _dynamic_entity_pose_payload(
@@ -642,11 +769,7 @@ def _publish_dynamic_world_poses(
         )
         if pose is not None:
             poses.append(pose)
-    _post_json_url(
-        f"{base_url.rstrip('/')}/world-state",
-        {"source_sequence": source_sequence, "poses": poses},
-        timeout_sec=timeout_sec,
-    )
+    return poses
 
 
 def _scaled_offset(
@@ -835,7 +958,6 @@ def open_genesis_world_scene(
     live_enabled = bool(live_base_url)
     joint_dof_indices = _joint_dof_indices_by_name(robot_entity)
     last_joint_sequence = 0
-    last_joint_poll_at = 0.0
     last_state_publish_at = 0.0
     world_source_sequence = 0
     joint_poll_interval = (
@@ -853,6 +975,43 @@ def open_genesis_world_scene(
             "[genesis-world-open] live sync enabled "
             f"joints={len(joint_dof_indices)} dynamic_entities={len(dynamic_entities)}"
         )
+    live_bridge = (
+        _GenesisLiveHttpBridge(
+            base_url=live_base_url,
+            joint_poll_interval=joint_poll_interval,
+            state_publish_interval=world_publish_interval,
+            timeout_sec=live_http_timeout_sec,
+        )
+        if live_enabled
+        else None
+    )
+    if live_bridge is not None:
+        live_bridge.start()
+
+    def apply_latest_live_joint_command() -> None:
+        nonlocal last_joint_sequence
+        if live_bridge is None:
+            return
+        latest = live_bridge.read_latest_joint_values()
+        if latest is None:
+            return
+        sequence, joint_values = latest
+        if sequence <= last_joint_sequence:
+            return
+        last_joint_sequence = sequence
+        _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
+
+    def queue_latest_live_feedback(source_sequence: int) -> None:
+        if live_bridge is None:
+            return
+        live_bridge.queue_robot_joint_values(
+            _robot_joint_values_payload(robot_entity, joint_dof_indices)
+        )
+        if dynamic_entities:
+            live_bridge.queue_world_state(
+                source_sequence=source_sequence,
+                poses=_dynamic_world_poses_payload(dynamic_entities),
+            )
 
     if screenshot_path is not None and camera is not None:
         from PIL import Image
@@ -874,14 +1033,7 @@ def open_genesis_world_scene(
         if duration_sec > 0 and math.isfinite(duration_sec):
             headless_steps = max(headless_steps, int(math.ceil(duration_sec / 0.01)))
         for _ in range(headless_steps):
-            if live_enabled:
-                latest = _latest_joint_values_from_backend(
-                    live_base_url,
-                    timeout_sec=live_http_timeout_sec,
-                )
-                if latest is not None:
-                    last_joint_sequence, joint_values = latest
-                    _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
+            apply_latest_live_joint_command()
             scene.step()
             _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
                 robot_entity,
@@ -889,40 +1041,17 @@ def open_genesis_world_scene(
             )
             _enforce_dynamic_floor_contact(dynamic_entities)
             _sync_dynamic_visual_entities(dynamic_visual_entities)
-        if live_enabled:
-            _publish_robot_joint_state(
-                base_url=live_base_url,
-                robot_entity=robot_entity,
-                joint_dof_indices=joint_dof_indices,
-                timeout_sec=live_http_timeout_sec,
-            )
-        if live_enabled and dynamic_entities:
-            _publish_dynamic_world_poses(
-                base_url=live_base_url,
-                source_sequence=max(1, headless_steps),
-                dynamic_entities=dynamic_entities,
-                timeout_sec=live_http_timeout_sec,
-            )
+        queue_latest_live_feedback(max(1, headless_steps))
+        if live_bridge is not None:
+            live_bridge.close()
         return
 
     def step_live_runtime() -> None:
         nonlocal last_joint_sequence
-        nonlocal last_joint_poll_at
         nonlocal last_state_publish_at
         nonlocal world_source_sequence
         nonlocal last_safe_robot_qpos
-        now = time.monotonic()
-        if live_enabled and now - last_joint_poll_at >= joint_poll_interval:
-            last_joint_poll_at = now
-            latest = _latest_joint_values_from_backend(
-                live_base_url,
-                timeout_sec=live_http_timeout_sec,
-            )
-            if latest is not None:
-                sequence, joint_values = latest
-                if sequence > last_joint_sequence:
-                    last_joint_sequence = sequence
-                    _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
+        apply_latest_live_joint_command()
 
         scene.step()
         _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
@@ -939,19 +1068,7 @@ def open_genesis_world_scene(
         ):
             last_state_publish_at = now
             world_source_sequence += 1
-            _publish_robot_joint_state(
-                base_url=live_base_url,
-                robot_entity=robot_entity,
-                joint_dof_indices=joint_dof_indices,
-                timeout_sec=live_http_timeout_sec,
-            )
-            if dynamic_entities:
-                _publish_dynamic_world_poses(
-                    base_url=live_base_url,
-                    source_sequence=world_source_sequence,
-                    dynamic_entities=dynamic_entities,
-                    timeout_sec=live_http_timeout_sec,
-                )
+            queue_latest_live_feedback(world_source_sequence)
 
     if duration_sec <= 0:
         print("[genesis-world-open] Genesis viewer opened. Press Ctrl-C to return.")
@@ -960,12 +1077,16 @@ def open_genesis_world_scene(
                 step_live_runtime()
                 time.sleep(1.0 / 60.0)
         except KeyboardInterrupt:
+            if live_bridge is not None:
+                live_bridge.close()
             return
 
     deadline = time.monotonic() + duration_sec
     while time.monotonic() < deadline:
         step_live_runtime()
         time.sleep(1.0 / 60.0)
+    if live_bridge is not None:
+        live_bridge.close()
 
 
 def main() -> int:

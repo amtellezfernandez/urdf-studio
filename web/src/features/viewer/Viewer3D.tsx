@@ -128,6 +128,7 @@ import {
   resolveLiveTeleopJointSyncActive,
   resolveLiveTeleopJointTargets,
 } from "@/features/viewer/operatorLiveTeleopJointSync";
+import { queueGenesisJointCommand } from "@/features/world-share/useGenesisLiveSync";
 import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
 import { resolveViewerPartSelection } from "@/features/viewer/viewerPartSelectionPolicy";
 import { shouldApplySimulationPrepResetPoseRequest } from "@/features/viewer/simulationPrepResetPosePolicy";
@@ -4704,6 +4705,7 @@ export const Viewer3D = ({
       ...currentJointValues,
       ...liveJointValues,
     };
+    if (queueGenesisJointCommand(candidateJointValues)) return;
     setStoreJointValues(candidateJointValues);
   }, [
     availableJointNames,

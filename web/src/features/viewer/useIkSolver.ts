@@ -51,6 +51,7 @@ import {
   OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY,
   OPERATOR_TELEOP_INPUT_SOURCE_IK_DRAG,
 } from "@/features/teleop/params/operatorTeleopParams";
+import { queueGenesisJointCommand } from "@/features/world-share/useGenesisLiveSync";
 import {
   createIkMotionSafetyState,
   limitIkJointTargetsToMotionSafety,
@@ -1344,6 +1345,13 @@ export const useIkSolver = ({
         endEffectorLink: targetEndEffectorLink,
       });
       const rawNextSafe = applyIkMotionSafety(rawNextJointValues);
+      if (queueGenesisJointCommand(rawNextSafe)) {
+        onManualJointChange?.();
+        onIkApplied?.(rawNextSafe, {
+          inputSource: OPERATOR_TELEOP_INPUT_SOURCE_IK_DRAG,
+        });
+        return;
+      }
 
       // Visual drag smoothing — purely cosmetic, keeps the 3D robot from
       // snapping between IK throttle intervals.
