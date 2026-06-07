@@ -15,6 +15,7 @@ import {
   applyTeamModeRuntimeProfile,
   assertRemoteBindingsAllowed,
   buildSecurityPostureLines,
+  buildFrontendReadyUrl,
   buildStartupOverviewLines,
   resolveLocalNetworkUrl,
   buildTeamModeGuideLines,
@@ -578,6 +579,7 @@ async function main() {
     allowRemote: allowRemoteBinds,
   });
   const runtimeUrls = buildRuntimeUrls(runtimeConfig);
+  const frontendReadyUrl = buildFrontendReadyUrl(runtimeConfig);
   const loopbackApiBaseUrl = buildLoopbackApiBaseUrl(runtimeConfig);
   const teamSharingWebBaseUrl = buildTeamSharingWebBaseUrl(runtimeConfig, {
     publicHost: teamModeHost,
@@ -688,7 +690,7 @@ async function main() {
   }
   env.URDF_IKD_ENABLED = canStartIkd ? 'true' : 'false';
   env.URDF_TEAM_SHARING_INITIAL_ENABLED = parsedRunArgs.teamMode ? 'true' : 'false';
-  env.URDF_TEAM_SHARING_LOCAL_URL = runtimeUrls.webBaseUrl;
+  env.URDF_TEAM_SHARING_LOCAL_URL = frontendReadyUrl;
   env.URDF_TEAM_SHARING_TEAM_URL = teamSharingWebBaseUrl;
   let camToSimIngressProxyToken = null;
   if (backendGitHubAuth.token) {
@@ -985,7 +987,7 @@ async function main() {
 
   try {
     await waitForHttpReady({
-      url: runtimeUrls.webBaseUrl,
+      url: frontendReadyUrl,
       label: 'Vite frontend',
       processHandle: viteProcess,
       timeoutMs: RUN_FRONTEND_READY_TIMEOUT_MS,

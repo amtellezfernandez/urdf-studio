@@ -42,10 +42,33 @@ const parseIpv4Octets = (host) => {
     : null;
 };
 
+const isPrivateIpv4Address = (host) => {
+  const ipv4 = parseIpv4Octets(normalizeHost(host));
+  if (!ipv4) return false;
+  const [a, b] = ipv4;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+};
+
+const isLoopbackBindHost = (host) => LOOPBACK_HOSTS.has(normalizeHost(host));
+
 export const isLoopbackRemoteAddress = (remoteAddress) => {
   const normalized = normalizeHost(remoteAddress);
   const ipv4 = parseIpv4Octets(normalized);
   return LOOPBACK_HOSTS.has(normalized) || Boolean(ipv4 && ipv4[0] === IPV4_LOOPBACK_FIRST_OCTET);
+};
+
+export const resolveTeamSharingRequestRemoteAddress = ({
+  remoteAddress = "",
+  webBindHost = "",
+} = {}) => {
+  const normalizedRemoteAddress = normalizeHost(remoteAddress);
+  if (isLoopbackRemoteAddress(normalizedRemoteAddress)) {
+    return "127.0.0.1";
+  }
+  if (isLoopbackBindHost(webBindHost) && isPrivateIpv4Address(normalizedRemoteAddress)) {
+    return "127.0.0.1";
+  }
+  return normalizedRemoteAddress;
 };
 
 export const isTeamSharingControlPath = (requestUrl) => {

@@ -1,4 +1,4 @@
-import { buildRuntimeUrls, formatHostForUrl } from '../../config/runtime.js';
+import { buildRuntimeUrls, formatHostForUrl, resolveLocalNetworkHost } from '../../config/runtime.js';
 import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
@@ -12,8 +12,6 @@ import {
   RUN_TEAM_MODE_BIND_HOST,
   RUN_TEAM_MODE_HOST_ENV,
   RUN_TEAM_MODE_HOST_FALLBACK,
-  RUN_TEAM_MODE_NETWORK_FAMILY,
-  RUN_TEAM_MODE_NETWORK_FAMILY_NUMBER,
 } from './runParams.js';
 
 const RUN_VALUE_FLAGS = {
@@ -253,19 +251,8 @@ export function resolveTeamModeHost({
   if (normalizedEnvHost) {
     return normalizedEnvHost;
   }
-  const interfaces = networkInterfaces();
-  for (const details of Object.values(interfaces).flat()) {
-    if (!details || details.internal || !details.address) {
-      continue;
-    }
-    if (
-      details.family === RUN_TEAM_MODE_NETWORK_FAMILY ||
-      details.family === RUN_TEAM_MODE_NETWORK_FAMILY_NUMBER
-    ) {
-      return details.address;
-    }
-  }
-  return RUN_TEAM_MODE_HOST_FALLBACK;
+  const host = resolveLocalNetworkHost({ networkInterfaces });
+  return isLoopbackHost(host) ? RUN_TEAM_MODE_HOST_FALLBACK : host;
 }
 
 function parseOptionalTeamHost(value) {
@@ -282,16 +269,6 @@ export function applyTeamModeRuntimeProfile(runtimeConfig, { publicHost }) {
       host,
       bindHost: RUN_TEAM_MODE_BIND_HOST,
     },
-    api: {
-      ...runtimeConfig.api,
-      host,
-      bindHost: RUN_TEAM_MODE_BIND_HOST,
-    },
-    teleop: {
-      ...runtimeConfig.teleop,
-      enabled: true,
-      host,
-    },
   };
 }
 
@@ -305,8 +282,24 @@ export function applyTeamSharingGatewayRuntimeProfile(runtimeConfig) {
   };
 }
 
-export function buildTeamSharingWebBaseUrl(runtimeConfig, { publicHost }) {
-  const host = parseOptionalTeamHost(publicHost) || RUN_TEAM_MODE_HOST_FALLBACK;
+export function buildTeamSharingWebBaseUrl(
+  runtimeConfig,
+  { publicHost = null, networkInterfaces = os.networkInterfaces } = {},
+) {
+  const explicitHost = parseOptionalTeamHost(publicHost);
+  if (explicitHost && !isLoopbackHost(explicitHost)) {
+    return `http://${formatHostForUrl(explicitHost)}:${runtimeConfig.web.port}`;
+  }
+  if (!isRemoteBindHost(runtimeConfig.web.bindHost)) {
+    return '';
+  }
+  const configuredHost = parseOptionalTeamHost(runtimeConfig.web.host);
+  const host = configuredHost && !isLoopbackHost(configuredHost)
+    ? configuredHost
+    : resolveLocalNetworkHost({ networkInterfaces });
+  if (isLoopbackHost(host)) {
+    return '';
+  }
   return `http://${formatHostForUrl(host)}:${runtimeConfig.web.port}`;
 }
 
@@ -322,19 +315,11 @@ export function resolveLocalNetworkUrl(runtimeConfig, { networkInterfaces = os.n
   if (!isRemoteBindHost(runtimeConfig.web.bindHost)) {
     return null;
   }
-  const interfaces = networkInterfaces();
-  for (const details of Object.values(interfaces).flat()) {
-    if (!details || details.internal || !details.address) {
-      continue;
-    }
-    if (
-      details.family === RUN_TEAM_MODE_NETWORK_FAMILY ||
-      details.family === RUN_TEAM_MODE_NETWORK_FAMILY_NUMBER
-    ) {
-      return `http://${details.address}:${runtimeConfig.web.port}`;
-    }
+  const host = resolveLocalNetworkHost({ networkInterfaces });
+  if (isLoopbackHost(host)) {
+    return null;
   }
-  return null;
+  return `http://${formatHostForUrl(host)}:${runtimeConfig.web.port}`;
 }
 
 export function buildStartupOverviewLines({
@@ -360,18 +345,46 @@ export function buildStartupOverviewLines({
       lines.push('Live teleop relay: starting for this team session.');
     }
   } else {
-    lines.push(
-      `Open URDF Studio: ${runtimeUrls.webBaseUrl}`,
-      remoteExposureIssues.length > 0
-        ? 'Access: network access is enabled; use only on a trusted network.'
-        : teamSharingGateway
-          ? 'Access: local by default; remote browsers are blocked until Team sharing is on.'
-          : 'Access: only this laptop.',
-      teamSharingGateway
-        ? 'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.'
-        : 'Sharing: localhost links work only on this computer.'
+    const hasRemoteExposure = remoteExposureIssues.length > 0;
+    const hasRemoteFrontendExposure = remoteExposureIssues.some(
+      ({ service }) => service === 'frontend'
     );
-    if (localNetworkUrl) {
+    const ownerAccessUrl = hasRemoteFrontendExposure
+      ? buildFrontendReadyUrl(runtimeConfig)
+      : runtimeUrls.webBaseUrl;
+    const networkAccessUrl = localNetworkUrl || runtimeUrls.webBaseUrl;
+    const hasSeparateLocalNetworkUrl = Boolean(
+      localNetworkUrl && localNetworkUrl !== runtimeUrls.webBaseUrl
+    );
+    const hasSeparateNetworkAccessUrl = Boolean(
+      hasRemoteFrontendExposure &&
+        networkAccessUrl &&
+        networkAccessUrl !== ownerAccessUrl
+    );
+    const accessLine = hasRemoteExposure
+      ? hasRemoteFrontendExposure
+        ? 'Access: frontend is bound to the network; remote browsers are blocked until Team sharing is on.'
+        : 'Access: network access is enabled; use only on a trusted network.'
+      : teamSharingGateway
+        ? 'Access: local by default; remote browsers are blocked until Team sharing is on.'
+        : 'Access: only this laptop.';
+    const sharingLine = hasRemoteExposure
+      ? hasRemoteFrontendExposure
+        ? 'Sharing: turn on Share locally before sending the network link.'
+        : hasSeparateLocalNetworkUrl
+          ? 'Sharing: use the Direct access link from devices on this trusted network.'
+          : 'Sharing: use the Open URDF Studio link from devices on this trusted network.'
+      : teamSharingGateway
+        ? 'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.'
+        : 'Sharing: localhost links work only on this computer.';
+    lines.push(
+      `Open URDF Studio: ${ownerAccessUrl}`,
+      accessLine,
+      sharingLine
+    );
+    if (hasSeparateNetworkAccessUrl) {
+      lines.push(`Network link: ${networkAccessUrl}`);
+    } else if (hasSeparateLocalNetworkUrl) {
       lines.push(`Direct access: ${localNetworkUrl}`);
     }
   }
@@ -540,6 +553,13 @@ export function buildSecurityPostureLines({
 
 export function buildLoopbackApiBaseUrl(runtimeConfig) {
   return `http://${formatHostForUrl(runtimeConfig.api.bindHost)}:${runtimeConfig.api.port}`;
+}
+
+export function buildFrontendReadyUrl(runtimeConfig) {
+  const readyHost = isRemoteBindHost(runtimeConfig.web.bindHost)
+    ? '127.0.0.1'
+    : runtimeConfig.web.bindHost;
+  return `http://${formatHostForUrl(readyHost)}:${runtimeConfig.web.port}`;
 }
 
 export function getStartupSecurityViolations(

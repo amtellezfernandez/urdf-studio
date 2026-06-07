@@ -13,8 +13,8 @@ import {
 import {
   createTeamSharingState,
   handleTeamSharingControlRequest,
-  isLoopbackRemoteAddress,
   isTeamSharingControlPath,
+  resolveTeamSharingRequestRemoteAddress,
   shouldBlockTeamSharingRequest,
   writeTeamSharingBlockedResponse,
 } from "./teamSharingGate.js";
@@ -87,25 +87,16 @@ const createTeamSharingGate = (): Plugin => {
   // When the server is bound to a loopback address only, the OS-level bind
   // already restricts access to the local machine. WSL2's localhost proxy
   // forwards Windows browser connections but makes them appear as non-loopback
-  // IPs. Trust the bind address instead of the remote address in this case.
-  // Allow loopback (127.x.x.x, ::1) AND RFC 1918 private addresses.
-  // RFC 1918 covers WSL2: the Windows browser appears as 172.16-31.x.x to the
-  // WSL2 server. On plain Ubuntu the browser uses 127.0.0.1 (loopback).
-  // In both cases the connection is from the same physical machine.
-  const isLocalAddress = (addr: string | undefined): boolean => {
-    if (!addr) return false;
-    if (isLoopbackRemoteAddress(addr)) return true;
-    const normalized = addr.startsWith("::ffff:") ? addr.slice(7) : addr;
-    const parts = normalized.split(".").map(Number);
-    if (parts.length !== 4 || parts.some(isNaN)) return false;
-    const [a, b] = parts;
-    return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-  };
+  // IPs. Only trust those private-source addresses while the server itself is
+  // bound to loopback; in remote-bind mode they remain remote clients.
 
   const shouldBlock = (remoteAddress: string | undefined, requestUrl: string | undefined) =>
     shouldBlockTeamSharingRequest({
       enabled: state.enabled,
-      remoteAddress: isLocalAddress(remoteAddress) ? "127.0.0.1" : (remoteAddress ?? ""),
+      remoteAddress: resolveTeamSharingRequestRemoteAddress({
+        remoteAddress: remoteAddress ?? "",
+        webBindHost: runtimeConfig.web.bindHost,
+      }),
       requestUrl: requestUrl ?? "",
     });
 

@@ -8,6 +8,7 @@ import {
   applyTeamSharingGatewayRuntimeProfile,
   assertRemoteBindingsAllowed,
   buildSecurityPostureLines,
+  buildFrontendReadyUrl,
   buildStartupOverviewLines,
   buildTeamModeGuideLines,
   buildLoopbackApiBaseUrl,
@@ -24,6 +25,7 @@ import {
   mergeRuntimeConfig,
   parseRunArgs,
   recoverLoopbackPorts,
+  resolveLocalNetworkUrl,
   resolveTeamModeHost,
   shouldExposeIkdRuntime,
 } from './runConfig.js';
@@ -113,17 +115,73 @@ test('resolveTeamModeHost prefers explicit, env, then LAN interface', () => {
     }),
     '192.168.1.40'
   );
+  assert.equal(
+    resolveTeamModeHost({
+      env: {},
+      networkInterfaces: () => ({
+        docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+        eth0: [{ family: 'IPv4', internal: false, address: '172.22.210.70' }],
+      }),
+    }),
+    '172.22.210.70'
+  );
+  assert.equal(
+    resolveTeamModeHost({
+      env: {},
+      networkInterfaces: () => ({
+        docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+      }),
+    }),
+    'localhost'
+  );
 });
 
-test('applyTeamModeRuntimeProfile exposes only the team profile services', () => {
+test('resolveLocalNetworkUrl uses filtered LAN address only when frontend is exposed', () => {
+  assert.equal(
+    resolveLocalNetworkUrl(
+      { ...BASE_RUNTIME_CONFIG, web: { host: 'localhost', port: 5173, bindHost: '0.0.0.0' } },
+      {
+        networkInterfaces: () => ({
+          docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+          eth0: [{ family: 'IPv4', internal: false, address: '172.22.210.70' }],
+        }),
+      }
+    ),
+    'http://172.22.210.70:5173'
+  );
+  assert.equal(
+    resolveLocalNetworkUrl(
+      { ...BASE_RUNTIME_CONFIG, web: { host: 'localhost', port: 5173, bindHost: '127.0.0.1' } },
+      {
+        networkInterfaces: () => ({
+          eth0: [{ family: 'IPv4', internal: false, address: '172.22.210.70' }],
+        }),
+      }
+    ),
+    null
+  );
+  assert.equal(
+    resolveLocalNetworkUrl(
+      { ...BASE_RUNTIME_CONFIG, web: { host: 'localhost', port: 5173, bindHost: '0.0.0.0' } },
+      {
+        networkInterfaces: () => ({
+          docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+        }),
+      }
+    ),
+    null
+  );
+});
+
+test('applyTeamModeRuntimeProfile exposes only the frontend team profile service', () => {
   const profiled = applyTeamModeRuntimeProfile(BASE_RUNTIME_CONFIG, { publicHost: '192.168.1.40' });
 
   assert.equal(profiled.web.host, '192.168.1.40');
   assert.equal(profiled.web.bindHost, '0.0.0.0');
-  assert.equal(profiled.api.host, '192.168.1.40');
-  assert.equal(profiled.api.bindHost, '0.0.0.0');
-  assert.equal(profiled.teleop.enabled, true);
-  assert.equal(profiled.teleop.host, '192.168.1.40');
+  assert.equal(profiled.api.host, '127.0.0.1');
+  assert.equal(profiled.api.bindHost, '127.0.0.1');
+  assert.equal(profiled.teleop.enabled, false);
+  assert.equal(profiled.teleop.host, '127.0.0.1');
 });
 
 test('applyTeamSharingGatewayRuntimeProfile exposes only a gated frontend', () => {
@@ -140,6 +198,46 @@ test('buildTeamSharingWebBaseUrl formats the detected team host', () => {
   assert.equal(
     buildTeamSharingWebBaseUrl(BASE_RUNTIME_CONFIG, { publicHost: '192.168.1.40' }),
     'http://192.168.1.40:5173'
+  );
+});
+
+test('buildTeamSharingWebBaseUrl only returns real network share links', () => {
+  assert.equal(buildTeamSharingWebBaseUrl(BASE_RUNTIME_CONFIG), '');
+  assert.equal(
+    buildTeamSharingWebBaseUrl({
+      ...BASE_RUNTIME_CONFIG,
+      web: { host: '172.22.210.70', port: 5173, bindHost: '0.0.0.0' },
+    }),
+    'http://172.22.210.70:5173'
+  );
+  assert.equal(
+    buildTeamSharingWebBaseUrl(
+      {
+        ...BASE_RUNTIME_CONFIG,
+        web: { host: 'localhost', port: 5173, bindHost: '0.0.0.0' },
+      },
+      {
+        networkInterfaces: () => ({
+          docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+          eth0: [{ family: 'IPv4', internal: false, address: '172.22.210.70' }],
+        }),
+      }
+    ),
+    'http://172.22.210.70:5173'
+  );
+  assert.equal(
+    buildTeamSharingWebBaseUrl(
+      {
+        ...BASE_RUNTIME_CONFIG,
+        web: { host: 'localhost', port: 5173, bindHost: '0.0.0.0' },
+      },
+      {
+        networkInterfaces: () => ({
+          docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+        }),
+      }
+    ),
+    ''
   );
 });
 
@@ -177,6 +275,46 @@ test('startup overview gives loopback-only local instructions by default', () =>
   ]);
 });
 
+test('startup overview gives one stable LAN link when frontend is exposed', () => {
+  const runtimeConfig = {
+    ...BASE_RUNTIME_CONFIG,
+    web: { host: '172.22.210.70', port: 5173, bindHost: '0.0.0.0' },
+  };
+  const lines = buildStartupOverviewLines({
+    localNetworkUrl: 'http://172.22.210.70:5173',
+    remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
+    runtimeConfig,
+    runtimeUrls: buildRuntimeUrls(runtimeConfig),
+  });
+
+  assert.deepEqual(lines, [
+    'Open URDF Studio: http://127.0.0.1:5173',
+    'Access: frontend is bound to the network; remote browsers are blocked until Team sharing is on.',
+    'Sharing: turn on Share locally before sending the network link.',
+    'Network link: http://172.22.210.70:5173',
+  ]);
+});
+
+test('startup overview labels the detected LAN URL as direct access when host differs', () => {
+  const runtimeConfig = {
+    ...BASE_RUNTIME_CONFIG,
+    web: { host: 'localhost', port: 5173, bindHost: '0.0.0.0' },
+  };
+  const lines = buildStartupOverviewLines({
+    localNetworkUrl: 'http://192.168.1.44:5173',
+    remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
+    runtimeConfig,
+    runtimeUrls: buildRuntimeUrls(runtimeConfig),
+  });
+
+  assert.deepEqual(lines, [
+    'Open URDF Studio: http://127.0.0.1:5173',
+    'Access: frontend is bound to the network; remote browsers are blocked until Team sharing is on.',
+    'Sharing: turn on Share locally before sending the network link.',
+    'Network link: http://192.168.1.44:5173',
+  ]);
+});
+
 test('startup overview gives non-networking team instructions', () => {
   const teamRuntimeConfig = applyTeamModeRuntimeProfile(BASE_RUNTIME_CONFIG, {
     publicHost: '192.168.1.40',
@@ -192,7 +330,6 @@ test('startup overview gives non-networking team instructions', () => {
     'Access: same Wi-Fi or Tailnet; editing is controlled by share links.',
     'Owner: open the Team URL, open Share, then send viewer/editor links.',
     'Controls: Share can lock editing or reset the editor link.',
-    'Live teleop relay: starting for this team session.',
   ]);
 });
 
@@ -425,6 +562,17 @@ test('runtime URL builder formats IPv6 hosts safely', () => {
   });
 
   assert.equal(urls.apiBaseUrl, 'http://[::1]:9000');
+});
+
+test('frontend readiness URL uses loopback for remote frontend binds', () => {
+  assert.equal(buildFrontendReadyUrl(BASE_RUNTIME_CONFIG), 'http://127.0.0.1:5173');
+  assert.equal(
+    buildFrontendReadyUrl({
+      ...BASE_RUNTIME_CONFIG,
+      web: { host: '172.22.210.70', port: 5173, bindHost: '0.0.0.0' },
+    }),
+    'http://127.0.0.1:5173'
+  );
 });
 
 test('missing acknowledgement detection requires public tunnel and remote exposure opt-ins', () => {

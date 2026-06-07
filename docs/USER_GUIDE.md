@@ -1,19 +1,12 @@
 # URDF Studio User Guide
 
-This guide is the human-facing map for URDF Studio. It explains what to run, what each surface does, and how to tell whether the app is healthy.
+This guide explains how to launch URDF Studio, use the main workspace, and troubleshoot common user-facing problems.
 
 ## Mental Model
 
-URDF Studio has four local pieces in a normal run:
+URDF Studio is a local robotics workspace. Start it with one command, then use the browser UI to load robots, inspect scenes, replay episodes, and share a session when needed.
 
-| Piece | URL | Purpose |
-| --- | --- | --- |
-| Studio frontend | `http://127.0.0.1:5173` | Main robotics workspace |
-| Studio backend | `http://127.0.0.1:8000` | IK, robot mastering, datasets, health, runtime services |
-| URDF Ops frontend | `http://127.0.0.1:5174` | Training and operations workspace |
-| URDF Ops backend | `http://127.0.0.1:8001` | URDF Ops API |
-
-`npm run start` launches all of them. `npm run dev` launches only the Studio frontend.
+The launcher manages the supporting local services for you. In normal use, you only need the Studio URL printed in the terminal.
 
 ## Visual Walkthrough
 
@@ -35,12 +28,6 @@ Episode replay keeps the robot pose, frame counter, graph cursor, and joint curv
   <img src="assets/episode-replay.gif" alt="URDF Studio episode replay with synchronized graph cursor" width="900">
 </p>
 
-When you are ready to move from inspection into training operations, use `URDF Ops` in the top bar.
-
-<p align="center">
-  <img src="assets/ops-handoff.gif" alt="URDF Ops training workspace opened from URDF Studio" width="900">
-</p>
-
 ## First Launch
 
 ```bash
@@ -54,28 +41,17 @@ When startup is healthy, the terminal prints:
 ```text
 Ready:
 Open URDF Studio: http://127.0.0.1:5173
-Open URDF Ops: http://127.0.0.1:5174
+Access: only this laptop.
+Sharing: localhost links work only on this computer.
 ```
 
-Health checks:
-
-```bash
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8001/health
-```
-
-Expected responses:
-
-```text
-{"status":"ok","yourdfpy":true}
-{"status":"ok"}
-```
+Open the Studio URL in your browser.
 
 ## First Smoke Test
 
 1. Open `http://127.0.0.1:5173`.
 2. Click `Play Sample Motion`.
-3. Wait for `lekiwi.urdf loaded`.
+3. Wait for the sample robot to load.
 4. In the `Episodes` panel, click the play button on episode `1`.
 5. Confirm:
    - the play button changes to pause
@@ -83,15 +59,14 @@ Expected responses:
    - the robot moves
    - the episode graph cursor moves smoothly
 
-If this works, the viewer, dataset replay, graph overlay, and full-stack launch are usable.
+If this works, the viewer, dataset replay, graph overlay, and local launch are usable.
 
 ## Workspace Map
 
 ### Top Bar
 
 - `File`, `Utils`, `Worlds`, `View`, `Dataset`, `Create`, `IK`: main action menus.
-- `URDF Ops`: opens the synchronized training workspace.
-- `Sim Prep Review`: shows physics/readiness review state.
+- `Sim Prep Review`: physics/readiness review state.
 - `Cams`, `Leader`, `Follower`: camera and teleoperation setup.
 - Share/action icons: session and collaboration controls.
 
@@ -128,7 +103,7 @@ If this works, the viewer, dataset replay, graph overlay, and full-stack launch 
 
 ### Load A Robot
 
-1. Start the full app with `npm run start`.
+1. Start the app with `npm run start`.
 2. In the first screen, use `Robot`.
 3. Drop or browse for a URDF/Xacro folder, zip, or individual files.
 4. Include meshes (`.stl`, `.glb`, `.gltf`, `.obj`, `.dae`) when the URDF references them.
@@ -154,165 +129,72 @@ If this works, the viewer, dataset replay, graph overlay, and full-stack launch 
    - velocity/limit markers
    - joint values in the right sidebar
 
-### Open URDF Ops
+### Share A Session
 
-1. Launch with `npm run start`.
-2. Click `URDF Ops` in the top bar.
-3. Studio opens or reuses `http://127.0.0.1:5174`.
-
-URDF Ops is a sibling checkout at `../urdf-ops` by default. Override it with:
+For same-network collaboration:
 
 ```bash
-URDF_OPS_ROOT=/path/to/urdf-ops npm run start
+npm run team
 ```
 
-### Work Frontend-Only
+Open the printed Team URL on the server laptop first. Use `Share` in the top bar, then send the generated collaboration link to the people who should join.
 
-Use this only for UI work:
-
-```bash
-npm run dev
-```
-
-Expected limitation: backend routes can fail because `npm run dev` does not start the Python backend. If you see `/api/version`, `/api/ik/config`, or `/robot-mastering/*` failures while using `npm run dev`, switch to:
-
-```bash
-npm run start
-```
+Use Share again to pause sharing, reset links, or change access.
 
 ## Command Reference
 
 | Command | Meaning |
 | --- | --- |
-| `npm run setup` | Install Studio deps, Python runtime, and URDF Ops deps |
-| `npm run start` | Start full local app |
-| `npm run data` | Start data/phone workflow with public tunnel acknowledgement |
-| `npm run dev` | Start frontend only |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | TypeScript project check |
-| `npm run test` | Vitest suite |
-| `npm run build` | Production build |
-| `npm run test:backend` | Backend pytest suite |
+| `npm run setup` | Install dependencies and local runtime |
+| `npm run start` | Start the local app |
+| `npm run team` | Start a trusted-network team session |
+| `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run start -- --help` | Runtime options |
-
-## Setup Details
-
-`npm run setup` installs the local runtime in this repo:
-
-- `node_modules`
-- `.venv-lerobot`
-- local `i-love-urdf` CLI through `npx ilu`
-- optional global `ilu` when requested
-- sibling `../urdf-ops` checkout and dependencies
-
-URDF Ops setup is controlled by:
-
-```bash
-URDF_OPS_ROOT=/path/to/urdf-ops
-URDF_STUDIO_SKIP_URDF_OPS_SETUP=1
-```
-
-If URDF Ops dependencies are already installed, setup should say:
-
-```text
-URDF Ops dependencies already installed
-```
-
-If they are missing, setup prints the npm command and streams install output.
 
 ## Troubleshooting
 
-### Setup Looks Stuck At URDF Ops
+### The App Does Not Open
 
-Check whether `../urdf-ops` exists:
-
-```bash
-ls -la ../urdf-ops
-test -d ../urdf-ops/node_modules && echo deps-present
-```
-
-If dependencies are present, rerun setup. It should skip the install.
-
-If you need to continue without URDF Ops setup:
-
-```bash
-URDF_STUDIO_SKIP_URDF_OPS_SETUP=1 npm run setup
-```
-
-### Backend Setup Or Collision Imports Fail
-
-Run setup again before launching:
-
-```bash
-npm run setup
-```
-
-Setup repairs the pinned native collision runtime used by OpenArm self-collision checks. For details, see [Setup](SETUP.md).
-
-### Frontend Opens But API Calls Fail
-
-You likely ran `npm run dev`. Start the full stack:
+Run:
 
 ```bash
 npm run start
 ```
 
-Then verify:
+Then open the URL printed in the `Ready:` block.
+
+### The UI Opens But Actions Fail
+
+Start the app again from the launcher:
 
 ```bash
-curl http://127.0.0.1:8000/health
-```
-
-### URDF Ops Does Not Open
-
-Check:
-
-```bash
-curl http://127.0.0.1:8001/health
-curl -I http://127.0.0.1:5174
-```
-
-If another process owns the ports, override them:
-
-```bash
-URDF_OPS_WEB_PORT=5176 URDF_OPS_API_PORT=8003 npm run start
+npm run start
 ```
 
 ### Port 5173 Is Busy
 
-Use another frontend port:
+Use another app port:
 
 ```bash
 npm run start -- --web-port 3001
 ```
 
+### Teammates Cannot Connect
+
+- Confirm everyone is on the same Wi-Fi/LAN/Tailnet.
+- Confirm the Team URL uses the server laptop network address, not `localhost`.
+- Retry with `npm run team -- --team-host <server-laptop-ip>`.
+- Check local firewall prompts for Node.
+
 ### Sample Loads But Replay Does Not Move
 
-Check the basics:
-
-- Use `npm run start`, not `npm run dev`.
+- Use `npm run start`.
 - Confirm the first episode button changes to pause.
 - Confirm frame counters advance.
-- Open browser devtools and look for page errors.
-- Re-run the smoke test after refreshing the page.
-
-## Local Files To Know
-
-| Path | Meaning |
-| --- | --- |
-| `.venv-lerobot/` | Studio Python runtime |
-| `../urdf-ops/` | Sibling URDF Ops checkout |
-| `.urdf-studio-config.json` | Local auth/config, gitignored |
-| `config/app.config.json` | App runtime config |
-| `web/src/` | Studio frontend source |
-| `backend/` | Studio backend source |
-| `tools/scripts/run.js` | Full-stack launcher |
-| `tools/scripts/setup.js` | Setup installer |
+- Refresh the page and repeat the smoke test.
 
 ## Good Defaults
 
 - Use `npm run start` for demos, verification, and real work.
-- Use `npm run dev` only for frontend-only development.
-- Keep URDF Ops as the sibling checkout unless you have a reason to override it.
-- Keep remote binding disabled unless you are intentionally sharing on a trusted network.
+- Keep remote sharing off unless you are intentionally sharing on a trusted network.
 - Use the sample motion as the first regression check after playback changes.

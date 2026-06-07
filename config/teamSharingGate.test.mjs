@@ -5,6 +5,7 @@ import {
   createTeamSharingState,
   isLoopbackRemoteAddress,
   isTeamSharingControlPath,
+  resolveTeamSharingRequestRemoteAddress,
   serializeTeamSharingState,
   shouldBlockTeamSharingRequest,
 } from "./teamSharingGate.js";
@@ -14,6 +15,36 @@ test("loopback remote address detection handles IPv4, IPv6, and mapped IPv4", ()
   assert.equal(isLoopbackRemoteAddress("::1"), true);
   assert.equal(isLoopbackRemoteAddress("::ffff:127.0.0.1"), true);
   assert.equal(isLoopbackRemoteAddress("192.168.1.40"), false);
+});
+
+test("localhost proxy trust is scoped to loopback binds only", () => {
+  const proxiedLoopbackAddress = resolveTeamSharingRequestRemoteAddress({
+    remoteAddress: "172.22.210.1",
+    webBindHost: "127.0.0.1",
+  });
+  const remotePrivateAddress = resolveTeamSharingRequestRemoteAddress({
+    remoteAddress: "172.22.210.1",
+    webBindHost: "0.0.0.0",
+  });
+
+  assert.equal(proxiedLoopbackAddress, "127.0.0.1");
+  assert.equal(remotePrivateAddress, "172.22.210.1");
+  assert.equal(
+    shouldBlockTeamSharingRequest({
+      enabled: false,
+      remoteAddress: proxiedLoopbackAddress,
+      requestUrl: "/",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldBlockTeamSharingRequest({
+      enabled: false,
+      remoteAddress: remotePrivateAddress,
+      requestUrl: "/",
+    }),
+    true,
+  );
 });
 
 test("team sharing control path is exact", () => {
