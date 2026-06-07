@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const BOOT_FALLBACK_HTML_TEST_FIXTURE = {
   cacheRecoveryText: "will keep retrying",
+  clearStateParam: "urdfStudioClearState",
   entryMarker: "data-urdf-studio-entry",
   entryRetryParam: "urdfStudioEntryRetry",
   fallbackTitle: "Loading URDF Studio",
@@ -24,6 +25,8 @@ describe("index boot fallback", () => {
     expect(html).toContain(BOOT_FALLBACK_HTML_TEST_FIXTURE.entryMarker);
     expect(html).toContain(BOOT_FALLBACK_HTML_TEST_FIXTURE.entryRetryParam);
     expect(html).toContain(BOOT_FALLBACK_HTML_TEST_FIXTURE.pageRetryParam);
+    expect(html).toContain(BOOT_FALLBACK_HTML_TEST_FIXTURE.clearStateParam);
+    expect(html).toContain("clearMatchingStorageKeys(window.localStorage)");
     expect(html).toContain("window.location.replace");
     expect(html).toContain(BOOT_FALLBACK_HTML_TEST_FIXTURE.retryScriptMarker);
     expect(html).not.toContain("clear this site cache");
