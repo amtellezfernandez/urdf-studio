@@ -6,6 +6,9 @@ import {
 } from "@/shared/lib/urdfBrowser";
 import {
   OPERATOR_TELEOP_KINEMATIC_LEROBOT_EXPORT_PATH,
+  OPERATOR_TELEOP_MJLAB_LIVE_START_PATH,
+  OPERATOR_TELEOP_MJLAB_LIVE_STEP_PATH,
+  OPERATOR_TELEOP_MJLAB_LIVE_STOP_PATH,
   OPERATOR_TELEOP_MJLAB_ROLLOUT_PATH,
   OPERATOR_TELEOP_MJLAB_VALIDATE_PATH,
   OPERATOR_TELEOP_REPLAY_LEROBOT_EXPORT_PATH,
@@ -96,6 +99,14 @@ export type OperatorTeleopMjlabRolloutOptions = {
   rolloutStepMs?: number;
 };
 
+export type OperatorTeleopMjlabLiveStartOptions = {
+  worldLayout: Record<string, unknown>;
+  initialEndEffectorSample: OperatorTeleopMjlabEndEffectorSample;
+  frameMap?: "identity" | "studio-y-up-to-z-up";
+  includeMjcf?: boolean;
+  stepMs?: number;
+};
+
 export type OperatorTeleopReplayExportOptions = {
   robotModel?: OperatorTeleopMjlabRobotModel | null;
 };
@@ -156,6 +167,37 @@ export type OperatorTeleopMjlabRolloutResult = {
   frames: OperatorTeleopMjlabRolloutFrame[];
   worldWarnings: string[];
   mjcfXml?: string | null;
+};
+
+export type OperatorTeleopMjlabLiveStartResult = {
+  success: boolean;
+  schemaVersion: string;
+  sessionId?: string | null;
+  runtime: OperatorTeleopMjlabRuntimeStatus;
+  frameMap: "identity" | "studio-y-up-to-z-up";
+  dynamicObjectCount: number;
+  stepMs: number;
+  issues: OperatorTeleopMjlabMotionIssue[];
+  frame?: OperatorTeleopMjlabRolloutFrame | null;
+  worldWarnings: string[];
+  mjcfXml?: string | null;
+};
+
+export type OperatorTeleopMjlabLiveStepResult = {
+  success: boolean;
+  schemaVersion: string;
+  sessionId: string;
+  frameIndex: number;
+  contactCount: number;
+  issues: OperatorTeleopMjlabMotionIssue[];
+  frame?: OperatorTeleopMjlabRolloutFrame | null;
+};
+
+export type OperatorTeleopMjlabLiveStopResult = {
+  success: boolean;
+  schemaVersion: string;
+  sessionId: string;
+  released: boolean;
 };
 
 type ReplayApiEnvelope = {
@@ -244,15 +286,14 @@ export const buildTeleopMjlabRobotModel = async ({
   };
 };
 
-const postReplayJson = async <T>(
+const postJson = async <T>(
   path: string,
-  recording: OperatorTeleopRecordingEpisode,
-  extraBody: Record<string, unknown> = {},
+  body: Record<string, unknown>,
 ): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recording, ...extraBody } satisfies ReplayApiEnvelope),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     let detail = "";
@@ -266,6 +307,13 @@ const postReplayJson = async <T>(
   }
   return (await response.json()) as T;
 };
+
+const postReplayJson = async <T>(
+  path: string,
+  recording: OperatorTeleopRecordingEpisode,
+  extraBody: Record<string, unknown> = {},
+): Promise<T> =>
+  postJson<T>(path, { recording, ...extraBody } satisfies ReplayApiEnvelope);
 
 export const validateTeleopReplay = (
   recording: OperatorTeleopRecordingEpisode,
@@ -334,3 +382,52 @@ export const rolloutTeleopMjlabPhysics = (
         : {}),
     } satisfies Omit<MjlabRolloutApiEnvelope, "recording">,
   );
+
+export const startTeleopMjlabLiveSession = (
+  options: OperatorTeleopMjlabLiveStartOptions,
+): Promise<OperatorTeleopMjlabLiveStartResult> =>
+  postJson<OperatorTeleopMjlabLiveStartResult>(
+    OPERATOR_TELEOP_MJLAB_LIVE_START_PATH,
+    {
+      worldLayout: options.worldLayout,
+      initialEndEffectorSample: options.initialEndEffectorSample,
+      ...(options.frameMap ? { frameMap: options.frameMap } : {}),
+      ...(options.includeMjcf !== undefined ? { includeMjcf: options.includeMjcf } : {}),
+      ...(options.stepMs !== undefined ? { stepMs: options.stepMs } : {}),
+    },
+  );
+
+export const stepTeleopMjlabLiveSession = ({
+  endEffectorSample,
+  sessionId,
+}: {
+  sessionId: string;
+  endEffectorSample: OperatorTeleopMjlabEndEffectorSample;
+}): Promise<OperatorTeleopMjlabLiveStepResult> =>
+  postJson<OperatorTeleopMjlabLiveStepResult>(
+    OPERATOR_TELEOP_MJLAB_LIVE_STEP_PATH,
+    {
+      sessionId,
+      endEffectorSample,
+    },
+  );
+
+export const stopTeleopMjlabLiveSession = async (
+  sessionId: string,
+): Promise<OperatorTeleopMjlabLiveStopResult> => {
+  const response = await fetch(
+    `${API_BASE_URL}${OPERATOR_TELEOP_MJLAB_LIVE_STOP_PATH}/${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      detail = typeof payload.detail === "string" ? payload.detail : "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || `Teleop replay request failed: ${response.status}`);
+  }
+  return (await response.json()) as OperatorTeleopMjlabLiveStopResult;
+};

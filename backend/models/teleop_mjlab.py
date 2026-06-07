@@ -12,8 +12,10 @@ from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_DEFAULT_MAX_SELF_COLLISION_DISTANCE_M,
     TELEOP_MJLAB_DEFAULT_MAX_TIMESTAMP_GAP_MS,
     TELEOP_MJLAB_DEFAULT_REQUIRE_SELF_COLLISION_CHECK,
+    TELEOP_MJLAB_DEFAULT_LIVE_STEP_MS,
     TELEOP_MJLAB_ISSUE_SEVERITY_ERROR,
     TELEOP_MJLAB_ISSUE_SEVERITY_WARNING,
+    TELEOP_MJLAB_LIVE_SCHEMA_VERSION,
     TELEOP_MJLAB_ROLLOUT_SCHEMA_VERSION,
     TELEOP_MJLAB_SCHEMA_VERSION,
     TELEOP_MJLAB_DEFAULT_ROLLOUT_STEP_MS,
@@ -163,6 +165,40 @@ class TeleopMjlabRolloutRequest(TeleopMjlabCamelModel):
         return value
 
 
+class TeleopMjlabLiveStartRequest(TeleopMjlabCamelModel):
+    world_layout: dict[str, Any] = Field(..., alias="worldLayout")
+    initial_end_effector_sample: TeleopMjlabEndEffectorSample = Field(
+        ...,
+        alias="initialEndEffectorSample",
+    )
+    frame_map: TeleopMjlabFrameMap = Field(
+        default="studio-y-up-to-z-up",
+        alias="frameMap",
+    )
+    include_mjcf: bool = Field(default=False, alias="includeMjcf")
+    step_ms: float = Field(
+        default=TELEOP_MJLAB_DEFAULT_LIVE_STEP_MS,
+        gt=0,
+        le=50,
+        alias="stepMs",
+    )
+
+    @field_validator("step_ms")
+    @classmethod
+    def _validate_step_ms(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("MJLab live step must be finite.")
+        return value
+
+
+class TeleopMjlabLiveStepRequest(TeleopMjlabCamelModel):
+    session_id: str = Field(..., min_length=1, alias="sessionId")
+    end_effector_sample: TeleopMjlabEndEffectorSample = Field(
+        ...,
+        alias="endEffectorSample",
+    )
+
+
 class TeleopMjlabRuntimeDependency(TeleopMjlabCamelModel):
     name: str
     available: bool
@@ -222,6 +258,47 @@ class TeleopMjlabRolloutFrame(TeleopMjlabCamelModel):
         alias="objectPoses",
     )
     contacts: list[TeleopMjlabRolloutContact] = Field(default_factory=list)
+
+
+class TeleopMjlabLiveStartResult(TeleopMjlabCamelModel):
+    success: bool
+    schema_version: str = Field(
+        default=TELEOP_MJLAB_LIVE_SCHEMA_VERSION,
+        alias="schemaVersion",
+    )
+    session_id: str | None = Field(default=None, alias="sessionId")
+    runtime: TeleopMjlabRuntimeStatus
+    frame_map: TeleopMjlabFrameMap = Field(..., alias="frameMap")
+    dynamic_object_count: int = Field(..., ge=0, alias="dynamicObjectCount")
+    step_ms: float = Field(..., gt=0, alias="stepMs")
+    issues: list[TeleopMjlabMotionIssue] = Field(default_factory=list)
+    frame: TeleopMjlabRolloutFrame | None = None
+    world_warnings: list[str] = Field(default_factory=list, alias="worldWarnings")
+    mjcf_xml: str | None = Field(default=None, alias="mjcfXml")
+    manifest: dict[str, object] = Field(default_factory=dict)
+
+
+class TeleopMjlabLiveStepResult(TeleopMjlabCamelModel):
+    success: bool
+    schema_version: str = Field(
+        default=TELEOP_MJLAB_LIVE_SCHEMA_VERSION,
+        alias="schemaVersion",
+    )
+    session_id: str = Field(..., alias="sessionId")
+    frame_index: int = Field(..., ge=0, alias="frameIndex")
+    contact_count: int = Field(..., ge=0, alias="contactCount")
+    issues: list[TeleopMjlabMotionIssue] = Field(default_factory=list)
+    frame: TeleopMjlabRolloutFrame | None = None
+
+
+class TeleopMjlabLiveStopResult(TeleopMjlabCamelModel):
+    success: bool
+    schema_version: str = Field(
+        default=TELEOP_MJLAB_LIVE_SCHEMA_VERSION,
+        alias="schemaVersion",
+    )
+    session_id: str = Field(..., alias="sessionId")
+    released: bool
 
 
 class TeleopMjlabRolloutResult(TeleopMjlabCamelModel):

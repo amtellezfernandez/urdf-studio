@@ -7,8 +7,11 @@ from importlib.util import find_spec
 import math
 import re
 import tempfile
+from threading import Lock
+import time
 from pathlib import Path
 from typing import Any, Sequence
+from uuid import uuid4
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -16,6 +19,9 @@ from scipy.spatial.transform import Rotation
 
 from backend.models.teleop_mjlab import (
     TeleopMjlabEndEffectorSample,
+    TeleopMjlabLiveStartResult,
+    TeleopMjlabLiveStopResult,
+    TeleopMjlabLiveStepResult,
     TeleopMjlabMotionIssue,
     TeleopMjlabMotionThresholds,
     TeleopMjlabRobotModel,
@@ -35,11 +41,18 @@ from backend.models.teleop_replay import (
 )
 from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_BUNDLE_KIND,
+    TELEOP_MJLAB_DEFAULT_LIVE_STEP_MS,
     TELEOP_MJLAB_ISSUE_CODE_EMPTY_RECORDING,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_ACCELERATION_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_VELOCITY_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_MISSING_JOINT_STATE,
     TELEOP_MJLAB_ISSUE_CODE_NON_MONOTONIC_TIMESTAMP,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_NO_DYNAMIC_OBJECTS,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_RUNTIME_UNAVAILABLE,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_LIMIT,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_NOT_FOUND,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_SIMULATION_FAILED,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_WORLD_LAYOUT_INVALID,
     TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_DYNAMIC_OBJECTS,
     TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_END_EFFECTOR_SAMPLES,
     TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_RUNTIME_UNAVAILABLE,
@@ -53,6 +66,11 @@ from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_ISSUE_CODE_TIMESTAMP_GAP,
     TELEOP_MJLAB_ISSUE_SEVERITY_ERROR,
     TELEOP_MJLAB_ISSUE_SEVERITY_WARNING,
+    TELEOP_MJLAB_LIVE_BUNDLE_KIND,
+    TELEOP_MJLAB_LIVE_SCHEMA_VERSION,
+    TELEOP_MJLAB_LIVE_SESSION_TTL_SEC,
+    TELEOP_MJLAB_MAX_LIVE_SESSIONS,
+    TELEOP_MJLAB_MAX_LIVE_STEP_MS,
     TELEOP_MJLAB_MAX_SELF_COLLISION_ISSUES,
     TELEOP_MJLAB_MILLISECONDS_PER_SECOND,
     TELEOP_MJLAB_MIN_TRAJECTORY_SAMPLE_COUNT,
@@ -126,6 +144,28 @@ class _RolloutEndEffectorSample:
     position_xyz: tuple[float, float, float]
     quat_wxyz: tuple[float, float, float, float]
     gripper_opening_m: float
+
+
+@dataclass
+class _MjlabLiveSession:
+    session_id: str
+    created_at_monotonic: float
+    last_used_at_monotonic: float
+    mujoco: Any
+    model: Any
+    data: Any
+    frame_map: WorldLayoutFrameMap
+    step_ms: float
+    dynamic_primitives: tuple[SimPrimitive, ...]
+    dynamic_body_ids: dict[str, int]
+    proxy_joints: dict[str, tuple[int, int]]
+    previous_sample: _RolloutEndEffectorSample
+    previous_proxy_poses: dict[str, tuple[np.ndarray, tuple[float, float, float, float]]]
+    frame_index: int = 0
+
+
+_MJLAB_LIVE_SESSIONS: dict[str, _MjlabLiveSession] = {}
+_MJLAB_LIVE_SESSION_LOCK = Lock()
 
 
 def resolve_teleop_mjlab_runtime_status() -> TeleopMjlabRuntimeStatus:
@@ -373,6 +413,239 @@ def rollout_teleop_mjlab_physics(
     )
 
 
+def start_teleop_mjlab_live_session(
+    *,
+    world_layout: dict[str, Any],
+    initial_end_effector_sample: TeleopMjlabEndEffectorSample,
+    frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
+    include_mjcf: bool = False,
+    step_ms: float = TELEOP_MJLAB_DEFAULT_LIVE_STEP_MS,
+) -> TeleopMjlabLiveStartResult:
+    runtime = resolve_teleop_mjlab_runtime_status()
+    issues: list[TeleopMjlabMotionIssue] = []
+    world_warnings: list[str] = []
+    primitives: tuple[SimPrimitive, ...] = ()
+    dynamic_primitives: tuple[SimPrimitive, ...] = ()
+    mjcf_xml: str | None = None
+    frame: TeleopMjlabRolloutFrame | None = None
+    session_id: str | None = None
+
+    _prune_mjlab_live_sessions()
+    with _MJLAB_LIVE_SESSION_LOCK:
+        active_session_count = len(_MJLAB_LIVE_SESSIONS)
+    if active_session_count >= TELEOP_MJLAB_MAX_LIVE_SESSIONS:
+        issues.append(
+            _build_issue(
+                code=TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_LIMIT,
+                reason=(
+                    "MJLab live session limit reached. Stop an existing "
+                    "session before starting another one."
+                ),
+            )
+        )
+
+    try:
+        layout = parse_static_world_layout_payload(world_layout)
+        primitives, parsed_warnings = build_sim_primitives(
+            layout,
+            frame_map=frame_map,
+            include_hidden=True,
+        )
+        world_warnings.extend(parsed_warnings)
+        dynamic_primitives = tuple(
+            primitive for primitive in primitives if primitive.body_type == "dynamic"
+        )
+        if not dynamic_primitives:
+            issues.append(
+                _build_issue(
+                    code=TELEOP_MJLAB_ISSUE_CODE_LIVE_NO_DYNAMIC_OBJECTS,
+                    reason=(
+                        "MJLab live interaction requires at least one dynamic "
+                        "world layout object."
+                    ),
+                )
+            )
+    except WorldLayoutTransferError as exc:
+        layout = None
+        issues.append(
+            _build_issue(
+                code=TELEOP_MJLAB_ISSUE_CODE_LIVE_WORLD_LAYOUT_INVALID,
+                reason=f"MJLab could not parse the live world layout: {exc}",
+            )
+        )
+
+    if find_spec(TELEOP_MJLAB_RUNTIME_DEPENDENCY_MUJOCO) is None:
+        issues.append(
+            _build_issue(
+                code=TELEOP_MJLAB_ISSUE_CODE_LIVE_RUNTIME_UNAVAILABLE,
+                reason="MJLab live interaction requires the MuJoCo runtime.",
+            )
+        )
+
+    if not any(issue.severity == TELEOP_MJLAB_ISSUE_SEVERITY_ERROR for issue in issues):
+        try:
+            import mujoco
+
+            mjcf_xml = _build_mjlab_proxy_rollout_mjcf(
+                primitives,
+                model_name=layout.name if layout is not None else "mjlab_live_session",
+                rollout_step_ms=step_ms,
+            )
+            model = mujoco.MjModel.from_xml_string(mjcf_xml)
+            data = mujoco.MjData(model)
+            proxy_joints = _resolve_mjlab_gripper_proxy_joints(
+                mujoco=mujoco,
+                model=model,
+            )
+            dynamic_body_ids = _resolve_mjlab_dynamic_body_ids(
+                mujoco=mujoco,
+                model=model,
+                dynamic_primitives=dynamic_primitives,
+            )
+            initial_sample = _transform_rollout_end_effector_sample(
+                initial_end_effector_sample,
+                frame_map=frame_map,
+            )
+            previous_proxy_poses = _set_mjlab_gripper_proxy_pose(
+                data,
+                proxy_joints=proxy_joints,
+                sample=initial_sample,
+                dt_seconds=None,
+                previous_proxy_poses=None,
+            )
+            mujoco.mj_forward(model, data)
+            frame = _build_mjlab_rollout_frame(
+                mujoco=mujoco,
+                model=model,
+                data=data,
+                sample=initial_sample,
+                trajectory_by_sample_index={},
+                dynamic_primitives=dynamic_primitives,
+                dynamic_body_ids=dynamic_body_ids,
+            )
+            session_id = f"mjlab-live-{uuid4().hex}"
+            now = time.monotonic()
+            session = _MjlabLiveSession(
+                session_id=session_id,
+                created_at_monotonic=now,
+                last_used_at_monotonic=now,
+                mujoco=mujoco,
+                model=model,
+                data=data,
+                frame_map=frame_map,
+                step_ms=step_ms,
+                dynamic_primitives=dynamic_primitives,
+                dynamic_body_ids=dynamic_body_ids,
+                proxy_joints=proxy_joints,
+                previous_sample=initial_sample,
+                previous_proxy_poses=previous_proxy_poses,
+            )
+            with _MJLAB_LIVE_SESSION_LOCK:
+                _MJLAB_LIVE_SESSIONS[session_id] = session
+        except Exception as exc:
+            issues.append(
+                _build_issue(
+                    code=TELEOP_MJLAB_ISSUE_CODE_LIVE_SIMULATION_FAILED,
+                    reason=f"MJLab live session failed to start: {exc}",
+                )
+            )
+            frame = None
+            session_id = None
+
+    success = not any(
+        issue.severity == TELEOP_MJLAB_ISSUE_SEVERITY_ERROR for issue in issues
+    )
+    return TeleopMjlabLiveStartResult(
+        success=success,
+        session_id=session_id,
+        runtime=runtime,
+        frame_map=frame_map,
+        dynamic_object_count=len(dynamic_primitives),
+        step_ms=step_ms,
+        issues=issues,
+        frame=frame,
+        world_warnings=world_warnings,
+        mjcf_xml=mjcf_xml if include_mjcf else None,
+        manifest={
+            "schema_version": TELEOP_MJLAB_LIVE_SCHEMA_VERSION,
+            "bundle_kind": TELEOP_MJLAB_LIVE_BUNDLE_KIND,
+            "session_id": session_id,
+            "runtime": runtime.model_dump(by_alias=True),
+            "frame_map": frame_map,
+            "dynamic_object_count": len(dynamic_primitives),
+            "step_ms": step_ms,
+        },
+    )
+
+
+def step_teleop_mjlab_live_session(
+    *,
+    session_id: str,
+    end_effector_sample: TeleopMjlabEndEffectorSample,
+) -> TeleopMjlabLiveStepResult:
+    _prune_mjlab_live_sessions()
+    issues: list[TeleopMjlabMotionIssue] = []
+    with _MJLAB_LIVE_SESSION_LOCK:
+        session = _MJLAB_LIVE_SESSIONS.get(session_id)
+        if session is None:
+            issues.append(
+                _build_issue(
+                    code=TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_NOT_FOUND,
+                    reason="MJLab live session was not found or has expired.",
+                )
+            )
+            return TeleopMjlabLiveStepResult(
+                success=False,
+                session_id=session_id,
+                frame_index=0,
+                contact_count=0,
+                issues=issues,
+                frame=None,
+            )
+
+        try:
+            target_sample = _transform_rollout_end_effector_sample(
+                end_effector_sample,
+                frame_map=session.frame_map,
+            )
+            frame = _step_mjlab_live_session_locked(session, target_sample)
+            session.last_used_at_monotonic = time.monotonic()
+            session.frame_index += 1
+            return TeleopMjlabLiveStepResult(
+                success=True,
+                session_id=session_id,
+                frame_index=session.frame_index,
+                contact_count=len(frame.contacts),
+                issues=[],
+                frame=frame,
+            )
+        except Exception as exc:
+            issues.append(
+                _build_issue(
+                    code=TELEOP_MJLAB_ISSUE_CODE_LIVE_SIMULATION_FAILED,
+                    reason=f"MJLab live step failed: {exc}",
+                )
+            )
+            return TeleopMjlabLiveStepResult(
+                success=False,
+                session_id=session_id,
+                frame_index=session.frame_index,
+                contact_count=0,
+                issues=issues,
+                frame=None,
+            )
+
+
+def stop_teleop_mjlab_live_session(*, session_id: str) -> TeleopMjlabLiveStopResult:
+    with _MJLAB_LIVE_SESSION_LOCK:
+        released = _MJLAB_LIVE_SESSIONS.pop(session_id, None) is not None
+    return TeleopMjlabLiveStopResult(
+        success=True,
+        session_id=session_id,
+        released=released,
+    )
+
+
 def _build_trajectory(
     recording: TeleopReplayRecording,
     issues: list[TeleopMjlabMotionIssue],
@@ -606,6 +879,56 @@ def _compute_self_collision_metrics(
         "sample_count": len(trajectory),
         "collision_count": collision_count,
     }
+
+
+def _prune_mjlab_live_sessions() -> None:
+    now = time.monotonic()
+    with _MJLAB_LIVE_SESSION_LOCK:
+        expired_session_ids = [
+            session_id
+            for session_id, session in _MJLAB_LIVE_SESSIONS.items()
+            if now - session.last_used_at_monotonic > TELEOP_MJLAB_LIVE_SESSION_TTL_SEC
+        ]
+        for session_id in expired_session_ids:
+            _MJLAB_LIVE_SESSIONS.pop(session_id, None)
+
+
+def _step_mjlab_live_session_locked(
+    session: _MjlabLiveSession,
+    target_sample: _RolloutEndEffectorSample,
+) -> TeleopMjlabRolloutFrame:
+    duration_ms = target_sample.timestamp_ms - session.previous_sample.timestamp_ms
+    if duration_ms <= 0:
+        duration_ms = session.step_ms
+    duration_ms = min(TELEOP_MJLAB_MAX_LIVE_STEP_MS, max(session.step_ms, duration_ms))
+    step_count = max(1, math.ceil(duration_ms / session.step_ms))
+    dt_seconds = session.step_ms / TELEOP_MJLAB_MILLISECONDS_PER_SECOND
+
+    for step_index in range(1, step_count + 1):
+        interpolated_sample = _interpolate_rollout_sample(
+            session.previous_sample,
+            target_sample,
+            step_index / step_count,
+        )
+        session.previous_proxy_poses = _set_mjlab_gripper_proxy_pose(
+            session.data,
+            proxy_joints=session.proxy_joints,
+            sample=interpolated_sample,
+            dt_seconds=dt_seconds,
+            previous_proxy_poses=session.previous_proxy_poses,
+        )
+        session.mujoco.mj_step(session.model, session.data)
+
+    session.previous_sample = target_sample
+    return _build_mjlab_rollout_frame(
+        mujoco=session.mujoco,
+        model=session.model,
+        data=session.data,
+        sample=target_sample,
+        trajectory_by_sample_index={},
+        dynamic_primitives=session.dynamic_primitives,
+        dynamic_body_ids=session.dynamic_body_ids,
+    )
 
 
 def _as_rollout_trajectory_warning(

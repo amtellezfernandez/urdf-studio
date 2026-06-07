@@ -16,10 +16,14 @@ from backend.models.teleop_mjlab import (
 from backend.models.teleop_replay import TeleopReplayRecording
 from backend.services.teleop_mjlab import (
     rollout_teleop_mjlab_physics,
+    start_teleop_mjlab_live_session,
+    step_teleop_mjlab_live_session,
+    stop_teleop_mjlab_live_session,
     validate_teleop_mjlab_motion,
 )
 from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_BUNDLE_KIND,
+    TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_NOT_FOUND,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_ACCELERATION_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_VELOCITY_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_SELF_COLLISION_MODEL_MISSING,
@@ -259,6 +263,56 @@ def test_teleop_mjlab_rollout_simulates_dynamic_cube_contact() -> None:
         for frame in result.frames
         for contact in frame.contacts
     )
+
+
+def test_teleop_mjlab_live_session_steps_dynamic_cube_contact() -> None:
+    pytest.importorskip("mujoco")
+    samples = _pickup_end_effector_samples()
+    start_result = start_teleop_mjlab_live_session(
+        world_layout=_dynamic_cube_world_layout_payload(),
+        initial_end_effector_sample=samples[0],
+        frame_map="identity",
+        include_mjcf=True,
+        step_ms=5.0,
+    )
+    assert start_result.success is True
+    assert start_result.session_id is not None
+    assert start_result.frame is not None
+    assert start_result.mjcf_xml is not None
+
+    try:
+        close_result = step_teleop_mjlab_live_session(
+            session_id=start_result.session_id,
+            end_effector_sample=samples[1],
+        )
+        lift_result = step_teleop_mjlab_live_session(
+            session_id=start_result.session_id,
+            end_effector_sample=samples[2],
+        )
+    finally:
+        stop_result = stop_teleop_mjlab_live_session(
+            session_id=start_result.session_id
+        )
+
+    assert close_result.success is True
+    assert lift_result.success is True
+    assert stop_result.released is True
+    assert close_result.frame is not None
+    assert lift_result.frame is not None
+    first_pose = start_result.frame.object_poses[0]
+    lifted_pose = lift_result.frame.object_poses[0]
+    assert lifted_pose.position_xyz[2] > first_pose.position_xyz[2]
+    assert any(contact.with_gripper for contact in close_result.frame.contacts)
+
+
+def test_teleop_mjlab_live_step_reports_missing_session() -> None:
+    result = step_teleop_mjlab_live_session(
+        session_id="missing-session",
+        end_effector_sample=_pickup_end_effector_samples()[0],
+    )
+
+    assert result.success is False
+    assert result.issues[0].code == TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_NOT_FOUND
 
 
 def test_teleop_mjlab_validation_warns_when_self_collision_model_is_missing() -> None:

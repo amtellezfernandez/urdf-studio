@@ -21,6 +21,9 @@ export const OPERATOR_TELEOP_KINEMATIC_LEROBOT_EXPORT_PATH =
   "/teleop/replay/export/kinematic/lerobot";
 export const OPERATOR_TELEOP_MJLAB_VALIDATE_PATH = "/teleop/mjlab/validate";
 export const OPERATOR_TELEOP_MJLAB_ROLLOUT_PATH = "/teleop/mjlab/rollout";
+export const OPERATOR_TELEOP_MJLAB_LIVE_START_PATH = "/teleop/mjlab/live/start";
+export const OPERATOR_TELEOP_MJLAB_LIVE_STEP_PATH = "/teleop/mjlab/live/step";
+export const OPERATOR_TELEOP_MJLAB_LIVE_STOP_PATH = "/teleop/mjlab/live";
 
 export type OperatorTeleopGatewayReplayCommandKind =
   (typeof OPERATOR_TELEOP_GATEWAY_REPLAY_COMMAND_KINDS)[number];

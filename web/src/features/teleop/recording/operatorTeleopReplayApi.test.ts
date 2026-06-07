@@ -5,6 +5,9 @@ import {
   exportTeleopKinematicToLeRobot,
   exportTeleopReplayToLeRobot,
   rolloutTeleopMjlabPhysics,
+  startTeleopMjlabLiveSession,
+  stepTeleopMjlabLiveSession,
+  stopTeleopMjlabLiveSession,
   validateTeleopMjlabMotion,
   validateTeleopReplay,
 } from "@/features/teleop/recording/operatorTeleopReplayApi";
@@ -296,6 +299,91 @@ describe("operatorTeleopReplayApi", () => {
       includeMjcf: true,
       rolloutStepMs: 5,
     });
+  });
+
+  it("starts, steps, and stops MJLab live physics sessions", async () => {
+    const responses = [
+      {
+        success: true,
+        schemaVersion: "urdf-studio.teleop-mjlab-live.v1",
+        sessionId: "mjlab-live-1",
+        runtime: {
+          runtimeName: "mjlab",
+          available: true,
+          status: "available",
+          dependencies: [],
+        },
+        frameMap: "identity",
+        dynamicObjectCount: 1,
+        stepMs: 5,
+        issues: [],
+        frame: null,
+        worldWarnings: [],
+        mjcfXml: null,
+      },
+      {
+        success: true,
+        schemaVersion: "urdf-studio.teleop-mjlab-live.v1",
+        sessionId: "mjlab-live-1",
+        frameIndex: 1,
+        contactCount: 1,
+        issues: [],
+        frame: null,
+      },
+      {
+        success: true,
+        schemaVersion: "urdf-studio.teleop-mjlab-live.v1",
+        sessionId: "mjlab-live-1",
+        released: true,
+      },
+    ];
+    const fetchMock: typeof fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify(responses.shift()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ) as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      startTeleopMjlabLiveSession({
+        worldLayout: TEST_WORLD_LAYOUT,
+        initialEndEffectorSample: TEST_END_EFFECTOR_SAMPLE,
+        frameMap: "identity",
+        stepMs: 5,
+      }),
+    ).resolves.toMatchObject({ sessionId: "mjlab-live-1" });
+    await expect(
+      stepTeleopMjlabLiveSession({
+        sessionId: "mjlab-live-1",
+        endEffectorSample: TEST_END_EFFECTOR_SAMPLE,
+      }),
+    ).resolves.toMatchObject({ frameIndex: 1, contactCount: 1 });
+    await expect(stopTeleopMjlabLiveSession("mjlab-live-1")).resolves.toMatchObject({
+      released: true,
+    });
+
+    expect(String(vi.mocked(fetchMock).mock.calls[0][0])).toContain(
+      "/teleop/mjlab/live/start",
+    );
+    expect(JSON.parse(String(vi.mocked(fetchMock).mock.calls[0][1]?.body))).toEqual({
+      worldLayout: TEST_WORLD_LAYOUT,
+      initialEndEffectorSample: TEST_END_EFFECTOR_SAMPLE,
+      frameMap: "identity",
+      stepMs: 5,
+    });
+    expect(String(vi.mocked(fetchMock).mock.calls[1][0])).toContain(
+      "/teleop/mjlab/live/step",
+    );
+    expect(JSON.parse(String(vi.mocked(fetchMock).mock.calls[1][1]?.body))).toEqual({
+      sessionId: "mjlab-live-1",
+      endEffectorSample: TEST_END_EFFECTOR_SAMPLE,
+    });
+    expect(String(vi.mocked(fetchMock).mock.calls[2][0])).toContain(
+      "/teleop/mjlab/live/mjlab-live-1",
+    );
+    expect(vi.mocked(fetchMock).mock.calls[2][1]?.method).toBe("DELETE");
   });
 
   it("builds MJLab robot model payloads with resolved mesh assets", async () => {
