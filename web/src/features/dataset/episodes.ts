@@ -9,6 +9,7 @@ import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import { cloneRobotBasePose } from "@/shared/lib/robotBasePose";
 import { collectDerivedBasePoseSignalNames } from "@/features/dataset/episode-viewer/basePoseSignals";
 import { EPISODE_PARAMS } from "@/features/dataset/episodeParams";
+import type { ViewerObjectFramePoseMap } from "@/shared/types/feature";
 
 export type Episode = ViewerEpisode & { metadata?: EpisodeMetadata };
 export type RecordedFrame = Episode["frames"][number];
@@ -24,6 +25,22 @@ const animationFrameCache = new WeakMap<
   Episode,
   { framesRef: Episode["frames"]; frames: AnimationFrame[] }
 >();
+
+const cloneObjectPoses = (
+  objectPoses: ViewerObjectFramePoseMap | undefined
+): ViewerObjectFramePoseMap | undefined => {
+  if (!objectPoses) return undefined;
+  return Object.fromEntries(
+    Object.entries(objectPoses).map(([trackId, pose]) => [
+      trackId,
+      {
+        position: { ...pose.position },
+        ...(pose.rotation ? { rotation: { ...pose.rotation } } : {}),
+        ...(pose.isHidden !== undefined ? { isHidden: pose.isHidden } : {}),
+      },
+    ])
+  );
+};
 
 const resolveMetadataJointNames = (metadata: EpisodeMetadata | undefined) =>
   Array.isArray(metadata?.joint_names)
@@ -217,6 +234,7 @@ export const toAnimationFrames = (episode: Episode) => {
     timestamp: frame.timestamp,
     joints: frame.jointPositions,
     basePose: cloneRobotBasePose(frame.basePose),
+    objectPoses: cloneObjectPoses(frame.objectPoses),
   }));
   animationFrameCache.set(episode, { framesRef: episode.frames, frames });
   return frames;

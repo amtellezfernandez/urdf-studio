@@ -3,21 +3,27 @@ from __future__ import annotations
 import base64
 from copy import deepcopy
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.models.teleop_mjlab import (
+    TeleopMjlabEndEffectorSample,
     TeleopMjlabMotionThresholds,
     TeleopMjlabRobotMeshFile,
     TeleopMjlabRobotModel,
 )
 from backend.models.teleop_replay import TeleopReplayRecording
-from backend.services.teleop_mjlab import validate_teleop_mjlab_motion
+from backend.services.teleop_mjlab import (
+    rollout_teleop_mjlab_physics,
+    validate_teleop_mjlab_motion,
+)
 from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_BUNDLE_KIND,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_ACCELERATION_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_VELOCITY_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_SELF_COLLISION_MODEL_MISSING,
+    TELEOP_MJLAB_ROLLOUT_SCHEMA_VERSION,
     TELEOP_MJLAB_RUNTIME_DEPENDENCY_MJLAB,
     TELEOP_MJLAB_RUNTIME_DEPENDENCY_MUJOCO,
     TELEOP_MJLAB_SCHEMA_VERSION,
@@ -49,6 +55,7 @@ TEST_STRICT_MAX_JOINT_ACCELERATION_RAD_PER_SEC2 = 120.0
 TEST_MAX_JOINT_ACCELERATION_RAD_PER_SEC2 = 1_000.0
 TEST_MAX_TIMESTAMP_GAP_MS = 250.0
 TEST_LOOPBACK_CLIENT = ("127.0.0.1", 50_000)
+TEST_DYNAMIC_CUBE_ID = "red-pickup-cube"
 TEST_PRIMITIVE_COLLISION_URDF = """
 <robot name="primitive_check">
   <link name="base">
@@ -130,6 +137,59 @@ def _kinematic_recording() -> TeleopReplayRecording:
     return TeleopReplayRecording.model_validate(_kinematic_recording_payload())
 
 
+def _dynamic_cube_world_layout_payload() -> dict[str, object]:
+    return {
+        "world_layout": {
+            "name": "mjlab-pickup-smoke",
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+            "objects": [
+                {
+                    "id": TEST_DYNAMIC_CUBE_ID,
+                    "name": "red pickup cube",
+                    "type": "cube",
+                    "position_xyz": [0.0, 0.0, 0.025],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.05, 0.05, 0.05],
+                    "color": "#ff1f1f",
+                    "physics": {
+                        "body_type": "dynamic",
+                        "mass_kg": 0.04,
+                        "friction": 1.5,
+                        "restitution": 0.0,
+                    },
+                }
+            ],
+        }
+    }
+
+
+def _pickup_end_effector_samples() -> list[TeleopMjlabEndEffectorSample]:
+    return [
+        TeleopMjlabEndEffectorSample(
+            sample_index=0,
+            timestamp_ms=0.0,
+            position_xyz=(0.0, 0.0, 0.05),
+            quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+            gripper_opening_m=0.09,
+        ),
+        TeleopMjlabEndEffectorSample(
+            sample_index=1,
+            timestamp_ms=120.0,
+            position_xyz=(0.0, 0.0, 0.05),
+            quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+            gripper_opening_m=0.035,
+        ),
+        TeleopMjlabEndEffectorSample(
+            sample_index=2,
+            timestamp_ms=360.0,
+            position_xyz=(0.0, 0.0, 0.14),
+            quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+            gripper_opening_m=0.035,
+        ),
+    ]
+
+
 def test_teleop_mjlab_runtime_endpoint_reports_dependency_status() -> None:
     client = TestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
 
@@ -170,6 +230,35 @@ def test_teleop_mjlab_validation_builds_motion_bundle_for_smooth_episode() -> No
         "sample_count": 0,
         "collision_count": 0,
     }
+
+
+def test_teleop_mjlab_rollout_simulates_dynamic_cube_contact() -> None:
+    pytest.importorskip("mujoco")
+
+    result = rollout_teleop_mjlab_physics(
+        _kinematic_recording(),
+        world_layout=_dynamic_cube_world_layout_payload(),
+        end_effector_samples=_pickup_end_effector_samples(),
+        frame_map="identity",
+        include_mjcf=True,
+        rollout_step_ms=5.0,
+    )
+
+    assert result.success is True
+    assert result.schema_version == TELEOP_MJLAB_ROLLOUT_SCHEMA_VERSION
+    assert result.dynamic_object_count == 1
+    assert result.frame_count == len(_pickup_end_effector_samples())
+    assert result.mjcf_xml is not None
+    assert "mjlab_left_finger" in result.mjcf_xml
+    first_pose = result.frames[0].object_poses[0]
+    last_pose = result.frames[-1].object_poses[0]
+    assert first_pose.object_id == TEST_DYNAMIC_CUBE_ID
+    assert last_pose.position_xyz[2] > first_pose.position_xyz[2]
+    assert any(
+        contact.with_gripper
+        for frame in result.frames
+        for contact in frame.contacts
+    )
 
 
 def test_teleop_mjlab_validation_warns_when_self_collision_model_is_missing() -> None:

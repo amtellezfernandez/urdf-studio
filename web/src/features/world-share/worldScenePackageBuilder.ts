@@ -90,7 +90,7 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
   const geometry = resolveWorldObjectGeometry(object);
   const serializable: SerializableWorldObject = {
     id: object.id,
-    name: object.id,
+    name: object.label?.trim() || object.id,
     type: object.type,
     position_xyz: [geometry.position.x, geometry.position.y, geometry.position.z],
     size_xyz: [geometry.size.x, geometry.size.y, geometry.size.z],

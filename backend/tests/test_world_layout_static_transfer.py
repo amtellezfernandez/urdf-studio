@@ -97,6 +97,31 @@ def test_exported_mjcf_loads_in_mujoco() -> None:
     assert report["collision_mismatch_source_ids"] == []
 
 
+def test_dynamic_layout_object_exports_as_free_mujoco_body() -> None:
+    payload = _layout_payload()
+    payload["world_layout"]["objects"][0]["physics"] = {
+        "body_type": "dynamic",
+        "mass_kg": 0.04,
+        "friction": 1.2,
+        "restitution": 0.0,
+    }
+    layout = parse_static_world_layout_payload(payload)
+    primitives, _warnings = build_sim_primitives(layout)
+    mjcf = export_primitives_to_mujoco_mjcf(primitives)
+    root = ET.fromstring(mjcf)
+
+    assert primitives[0].body_type == "dynamic"
+    assert primitives[0].mass_kg == 0.04
+    body = root.find(".//body[@name='wl_table_cube_body']")
+    assert body is not None
+    assert body.find("joint[@type='free']") is not None
+    geom = body.find("geom[@name='wl_table_cube']")
+    assert geom is not None
+    assert geom.get("mass") == "0.04"
+    assert geom.get("friction") == "1.2 0.005 0.0001"
+    assert geom.get("solref") == "0.02 1"
+
+
 def test_mujoco_gate_fails_on_substantial_size_mismatch() -> None:
     pytest.importorskip("mujoco")
     layout = parse_static_world_layout_payload(_layout_payload())
@@ -131,6 +156,7 @@ def test_layout_builds_in_genesis_when_enabled() -> None:
 
 
 def test_end_to_end_report_can_skip_genesis_for_fast_checks() -> None:
+    pytest.importorskip("mujoco")
     layout = parse_static_world_layout_payload(_layout_payload())
     report = build_static_transfer_report(layout, backends=("mujoco",))
 

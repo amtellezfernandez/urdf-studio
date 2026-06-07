@@ -416,6 +416,7 @@ export const useWorldSceneManager = ({
         size: { x: object.size_xyz[0], y: object.size_xyz[1], z: object.size_xyz[2] },
       });
       const importedObject: Omit<CreatedObject, "id"> = {
+        label: object.name,
         type: object.type,
         position: geometry.position,
         rotation: normalizeWorldObjectRotationEuler(

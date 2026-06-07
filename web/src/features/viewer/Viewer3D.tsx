@@ -270,6 +270,7 @@ import {
   hasObservedWheelTravel,
   resolveWheelPlaybackBodyMotion,
 } from "@/features/viewer/playback/wheelPlaybackMotion";
+import { applyPlaybackObjectPoses } from "@/features/viewer/playback/objectPoseTracks";
 import { WHEEL_PLAYBACK_MOTION_PARAMS } from "@/features/viewer/playback/wheelPlaybackMotionParams";
 import { resolveShortestWheelAngleDeltaRad } from "@/features/viewer/playback/wheelAngleDelta";
 import { PREVIEW_READ_ONLY_NOTICE_PARAMS } from "@/features/viewer/previewReadOnlyNoticeParams";
@@ -3885,6 +3886,10 @@ export const Viewer3D = ({
   );
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const objectEditMode = useObjectStore((state) => state.editMode);
+  useEffect(() => {
+    const frame = animationFrames?.[currentFrame] ?? null;
+    applyPlaybackObjectPoses(frame?.objectPoses);
+  }, [animationFrames, currentFrame]);
   const operatorPointCloudFrame = useOperatorPerceptionStore(
     (state) => state.activePointCloudFrame
   );

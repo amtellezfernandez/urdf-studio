@@ -4,6 +4,20 @@ import { createEpisode, type Episode } from "@/features/dataset/episodes";
 const DEFAULT_FPS = 60;
 const DEFAULT_DURATION_MS = 4000;
 const DEFAULT_DEMO_COUNT = 3;
+const SO101_PICKUP_DURATION_MS = 5600;
+const SO101_PICKUP_FPS = 60;
+export const SO101_RED_PICKUP_CUBE_TRACK_ID = "red pickup cube";
+export const SO101_RED_PICKUP_CUBE_OBJECT_ID = "hk-red-pickup-cube";
+export const SO101_RED_PICKUP_CUBE_INITIAL_POSITION = { x: 0.02, y: 0.29, z: 0.035 };
+
+const SO101_PICKUP_REQUIRED_JOINTS = [
+  "shoulder_pan",
+  "shoulder_lift",
+  "elbow_flex",
+  "wrist_flex",
+  "wrist_roll",
+  "gripper",
+] as const;
 
 const clamp = (value: number, lower?: number | null, upper?: number | null) => {
   if (lower !== null && lower !== undefined) {
@@ -46,8 +60,220 @@ type DemoProfile = {
   wave: (t: number, jointIndex: number, phase: number) => number;
 };
 
+type JointKeyframe = {
+  t: number;
+  joints: Record<(typeof SO101_PICKUP_REQUIRED_JOINTS)[number], number>;
+};
+
 const easeInOut = (t: number) =>
   t <= 0 ? 0 : t >= 1 ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * t);
+
+const hasSo101PickupJointSet = (jointNames: readonly string[]) => {
+  const available = new Set(jointNames);
+  return SO101_PICKUP_REQUIRED_JOINTS.every((jointName) => available.has(jointName));
+};
+
+const interpolateNumber = (from: number, to: number, t: number) =>
+  from + (to - from) * easeInOut(t);
+
+const resolveKeyframePair = <TKeyframe extends { t: number }>(
+  keyframes: readonly TKeyframe[],
+  t: number
+): { from: TKeyframe; to: TKeyframe; alpha: number } => {
+  const first = keyframes[0];
+  const last = keyframes[keyframes.length - 1];
+  if (!first || !last) {
+    throw new Error("SO101 pickup demo requires keyframes.");
+  }
+  if (t <= first.t) return { from: first, to: first, alpha: 0 };
+  if (t >= last.t) return { from: last, to: last, alpha: 0 };
+  for (let index = 0; index < keyframes.length - 1; index += 1) {
+    const from = keyframes[index];
+    const to = keyframes[index + 1];
+    if (!from || !to) continue;
+    if (t >= from.t && t <= to.t) {
+      const duration = Math.max(to.t - from.t, 1e-6);
+      return { from, to, alpha: (t - from.t) / duration };
+    }
+  }
+  return { from: last, to: last, alpha: 0 };
+};
+
+const SO101_PICKUP_JOINT_KEYFRAMES: JointKeyframe[] = [
+  {
+    t: 0,
+    joints: {
+      shoulder_pan: 0,
+      shoulder_lift: 0.32,
+      elbow_flex: -0.62,
+      wrist_flex: 0.52,
+      wrist_roll: 0,
+      gripper: 1.25,
+    },
+  },
+  {
+    t: 0.18,
+    joints: {
+      shoulder_pan: 0.08,
+      shoulder_lift: 0.76,
+      elbow_flex: -1.08,
+      wrist_flex: 0.76,
+      wrist_roll: 0.04,
+      gripper: 1.25,
+    },
+  },
+  {
+    t: 0.32,
+    joints: {
+      shoulder_pan: 0.08,
+      shoulder_lift: 0.98,
+      elbow_flex: -1.34,
+      wrist_flex: 1.02,
+      wrist_roll: 0.04,
+      gripper: 1.25,
+    },
+  },
+  {
+    t: 0.42,
+    joints: {
+      shoulder_pan: 0.08,
+      shoulder_lift: 0.98,
+      elbow_flex: -1.34,
+      wrist_flex: 1.02,
+      wrist_roll: 0.04,
+      gripper: 0.08,
+    },
+  },
+  {
+    t: 0.56,
+    joints: {
+      shoulder_pan: 0.02,
+      shoulder_lift: 0.58,
+      elbow_flex: -0.98,
+      wrist_flex: 0.68,
+      wrist_roll: 0,
+      gripper: 0.08,
+    },
+  },
+  {
+    t: 0.72,
+    joints: {
+      shoulder_pan: -0.48,
+      shoulder_lift: 0.48,
+      elbow_flex: -0.86,
+      wrist_flex: 0.52,
+      wrist_roll: -0.05,
+      gripper: 0.08,
+    },
+  },
+  {
+    t: 0.84,
+    joints: {
+      shoulder_pan: -0.48,
+      shoulder_lift: 0.78,
+      elbow_flex: -1.1,
+      wrist_flex: 0.78,
+      wrist_roll: -0.05,
+      gripper: 0.08,
+    },
+  },
+  {
+    t: 0.92,
+    joints: {
+      shoulder_pan: -0.48,
+      shoulder_lift: 0.78,
+      elbow_flex: -1.1,
+      wrist_flex: 0.78,
+      wrist_roll: -0.05,
+      gripper: 1.25,
+    },
+  },
+  {
+    t: 1,
+    joints: {
+      shoulder_pan: -0.1,
+      shoulder_lift: 0.28,
+      elbow_flex: -0.58,
+      wrist_flex: 0.46,
+      wrist_roll: 0,
+      gripper: 1.25,
+    },
+  },
+];
+
+const createSo101PickupJointPositions = ({
+  t,
+  jointNames,
+  jointLimits,
+}: {
+  t: number;
+  jointNames: readonly string[];
+  jointLimits?: JointLimits;
+}): Record<string, number> => {
+  const { from, to, alpha } = resolveKeyframePair(SO101_PICKUP_JOINT_KEYFRAMES, t);
+  const jointSet = new Set(jointNames);
+  const jointPositions: Record<string, number> = {};
+  SO101_PICKUP_REQUIRED_JOINTS.forEach((jointName) => {
+    if (!jointSet.has(jointName)) return;
+    const rawValue = interpolateNumber(from.joints[jointName], to.joints[jointName], alpha);
+    const limit = jointLimits?.[jointName];
+    jointPositions[jointName] = clamp(rawValue, limit?.lower, limit?.upper);
+  });
+  return jointPositions;
+};
+
+const createSo101RedCubePickupFrames = ({
+  jointNames,
+  jointLimits,
+}: {
+  jointNames: readonly string[];
+  jointLimits?: JointLimits;
+}) => {
+  const frameInterval = 1000 / SO101_PICKUP_FPS;
+  const totalFrames = Math.max(2, Math.floor(SO101_PICKUP_DURATION_MS / frameInterval));
+  return Array.from({ length: totalFrames }, (_, index) => {
+    const t = index / (totalFrames - 1);
+    return {
+      timestamp: Math.round(index * frameInterval),
+      jointPositions: createSo101PickupJointPositions({ t, jointNames, jointLimits }),
+    };
+  });
+};
+
+const createSo101RedCubePickupEpisode = ({
+  jointNames,
+  jointLimits,
+}: {
+  jointNames: readonly string[];
+  jointLimits?: JointLimits;
+}): Episode => {
+  const activeJointNames = SO101_PICKUP_REQUIRED_JOINTS.filter((jointName) =>
+    jointNames.includes(jointName)
+  );
+  const frames = createSo101RedCubePickupFrames({ jointNames: activeJointNames, jointLimits });
+  return createEpisode(`demo-so101-red-cube-pickup-${Date.now()}`, 1, frames, {
+    joint_names: activeJointNames,
+    source: "demo",
+    label: "Pick Red Cube",
+    createdAt: Date.now(),
+    num_frames: frames.length,
+    fps: SO101_PICKUP_FPS,
+    robot_type: "so101",
+    tasks: ["pick up the red cube from the container pile and place it to the left"],
+    additional: {
+      demoType: "so101_red_cube_pickup_command",
+      physics_backend: "mjlab",
+      physics_rollout_required: true,
+      object_track_id: SO101_RED_PICKUP_CUBE_TRACK_ID,
+      world_object_id: SO101_RED_PICKUP_CUBE_OBJECT_ID,
+      object_initial_position_xyz: [
+        SO101_RED_PICKUP_CUBE_INITIAL_POSITION.x,
+        SO101_RED_PICKUP_CUBE_INITIAL_POSITION.y,
+        SO101_RED_PICKUP_CUBE_INITIAL_POSITION.z,
+      ],
+    },
+  });
+};
 
 const createWaveFrames = ({
   jointNames,
@@ -142,6 +368,10 @@ export const createDemoEpisodes = ({
   jointLimits?: JointLimits;
   profiles?: DemoProfile[];
 }): Episode[] => {
+  if (hasSo101PickupJointSet(jointNames)) {
+    return [createSo101RedCubePickupEpisode({ jointNames, jointLimits })];
+  }
+
   const baseId = Date.now();
   const safeProfiles = profiles.slice(0, DEFAULT_DEMO_COUNT);
   const activeProfiles = safeProfiles.length > 1 ? safeProfiles.slice(1) : safeProfiles;

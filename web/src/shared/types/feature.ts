@@ -21,6 +21,14 @@ export type RobotBasePose = {
   quaternion: { x: number; y: number; z: number; w: number };
 };
 
+export type ViewerObjectFramePose = {
+  position: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
+  isHidden?: boolean;
+};
+
+export type ViewerObjectFramePoseMap = Record<string, ViewerObjectFramePose>;
+
 type DirectoryPickerOptions = FileSystemGetDirectoryOptions & {
   mode?: "read" | "readwrite";
 };
@@ -36,6 +44,7 @@ export interface WindowWithViewerHandlers extends Window {
       timestamp: number;
       joints: Record<string, number>;
       basePose?: RobotBasePose;
+      objectPoses?: ViewerObjectFramePoseMap;
     }>,
     options?: { autoplay?: boolean; applyInitialFrame?: boolean; startFrame?: number }
   ) => void;
@@ -59,6 +68,7 @@ export type ViewerEpisode = {
     timestamp: number;
     jointPositions: Record<string, number>;
     basePose?: RobotBasePose;
+    objectPoses?: ViewerObjectFramePoseMap;
   }>;
   createdAt: number;
   metadata?: Record<string, unknown>;

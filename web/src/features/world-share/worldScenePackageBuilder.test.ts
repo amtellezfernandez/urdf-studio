@@ -149,6 +149,21 @@ describe("buildWorldScenePackageManifest", () => {
     expect(exportedObject).not.toHaveProperty("orbit_target_point");
   });
 
+  it("uses object labels as exported world object names", async () => {
+    const manifest = await buildWorldScenePackageManifest({
+      packageId: "Demo World",
+      version: "1.0.0",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [TEST_CAMERA],
+      objects: [{ ...TEST_PUNCTUAL_OBJECT, label: "Red pickup cube" }],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+    });
+
+    expect(manifest.world_snapshot.objects[0].name).toBe("Red pickup cube");
+  });
+
   it("preserves hidden-state only when object is hidden", async () => {
     const manifest = await buildWorldScenePackageManifest({
       packageId: "Demo World",

@@ -2,17 +2,28 @@ from __future__ import annotations
 
 import base64
 import binascii
+from dataclasses import dataclass
 from importlib.util import find_spec
+import math
 import re
 import tempfile
 from pathlib import Path
+from typing import Any, Sequence
 import xml.etree.ElementTree as ET
 
+import numpy as np
+from scipy.spatial.transform import Rotation
+
 from backend.models.teleop_mjlab import (
+    TeleopMjlabEndEffectorSample,
     TeleopMjlabMotionIssue,
     TeleopMjlabMotionThresholds,
     TeleopMjlabRobotModel,
     TeleopMjlabRobotMeshFile,
+    TeleopMjlabRolloutContact,
+    TeleopMjlabRolloutFrame,
+    TeleopMjlabRolloutObjectPose,
+    TeleopMjlabRolloutResult,
     TeleopMjlabRuntimeDependency,
     TeleopMjlabRuntimeStatus,
     TeleopMjlabTrajectorySample,
@@ -29,6 +40,11 @@ from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_ISSUE_CODE_JOINT_VELOCITY_LIMIT,
     TELEOP_MJLAB_ISSUE_CODE_MISSING_JOINT_STATE,
     TELEOP_MJLAB_ISSUE_CODE_NON_MONOTONIC_TIMESTAMP,
+    TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_DYNAMIC_OBJECTS,
+    TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_END_EFFECTOR_SAMPLES,
+    TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_RUNTIME_UNAVAILABLE,
+    TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_SIMULATION_FAILED,
+    TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_WORLD_LAYOUT_INVALID,
     TELEOP_MJLAB_ISSUE_CODE_SELF_COLLISION,
     TELEOP_MJLAB_ISSUE_CODE_SELF_COLLISION_MODEL_INVALID,
     TELEOP_MJLAB_ISSUE_CODE_SELF_COLLISION_MODEL_MISSING,
@@ -40,6 +56,12 @@ from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_MAX_SELF_COLLISION_ISSUES,
     TELEOP_MJLAB_MILLISECONDS_PER_SECOND,
     TELEOP_MJLAB_MIN_TRAJECTORY_SAMPLE_COUNT,
+    TELEOP_MJLAB_ROLLOUT_BUNDLE_KIND,
+    TELEOP_MJLAB_ROLLOUT_GRIPPER_FINGER_HALF_EXTENTS_M,
+    TELEOP_MJLAB_ROLLOUT_GRIPPER_LIFT_PLATE_HALF_EXTENTS_M,
+    TELEOP_MJLAB_ROLLOUT_GRIPPER_LIFT_PLATE_OFFSET_M,
+    TELEOP_MJLAB_ROLLOUT_GRIPPER_MAX_OPENING_M,
+    TELEOP_MJLAB_ROLLOUT_SCHEMA_VERSION,
     TELEOP_MJLAB_RUNTIME_DEPENDENCIES,
     TELEOP_MJLAB_RUNTIME_DEPENDENCY_MUJOCO,
     TELEOP_MJLAB_RUNTIME_NAME,
@@ -56,6 +78,15 @@ from backend.services.teleop_mjlab_params import (
     TELEOP_MJLAB_ZERO_METRIC,
     TELEOP_MJLAB_ZERO_TIMESTAMP_MS,
 )
+from backend.services.world_layout_static_transfer import (
+    STUDIO_Y_UP_TO_Z_UP,
+    SimPrimitive,
+    WorldLayoutFrameMap,
+    WorldLayoutTransferError,
+    build_sim_primitives,
+    export_primitives_to_mujoco_mjcf,
+    parse_static_world_layout_payload,
+)
 from backend.services.teleop_replay import (
     resolve_teleop_replay_sample_command_time_ms,
 )
@@ -67,9 +98,34 @@ MESH_REFERENCE_SCHEME_SEPARATOR = "://"
 PACKAGE_REFERENCE_SCHEME = "package"
 FILE_REFERENCE_SCHEME = "file"
 INVALID_STAGED_MESH_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]")
+MJLAB_LEFT_FINGER_BODY_NAME = "mjlab_left_finger_proxy"
+MJLAB_RIGHT_FINGER_BODY_NAME = "mjlab_right_finger_proxy"
+MJLAB_LEFT_FINGER_GEOM_NAME = "mjlab_left_finger"
+MJLAB_RIGHT_FINGER_GEOM_NAME = "mjlab_right_finger"
+MJLAB_GRIPPER_LIFT_PLATE_BODY_NAME = "mjlab_gripper_lift_plate_proxy"
+MJLAB_GRIPPER_LIFT_PLATE_GEOM_NAME = "mjlab_gripper_lift_plate"
+MJLAB_GRIPPER_GEOM_NAMES = {
+    MJLAB_LEFT_FINGER_GEOM_NAME,
+    MJLAB_RIGHT_FINGER_GEOM_NAME,
+    MJLAB_GRIPPER_LIFT_PLATE_GEOM_NAME,
+}
+MJLAB_GRIPPER_BODY_NAMES = (
+    MJLAB_LEFT_FINGER_BODY_NAME,
+    MJLAB_RIGHT_FINGER_BODY_NAME,
+    MJLAB_GRIPPER_LIFT_PLATE_BODY_NAME,
+)
 
 
 StagedMeshReferenceMap = dict[str, str]
+
+
+@dataclass(frozen=True)
+class _RolloutEndEffectorSample:
+    sample_index: int
+    timestamp_ms: float
+    position_xyz: tuple[float, float, float]
+    quat_wxyz: tuple[float, float, float, float]
+    gripper_opening_m: float
 
 
 def resolve_teleop_mjlab_runtime_status() -> TeleopMjlabRuntimeStatus:
@@ -170,6 +226,150 @@ def validate_teleop_mjlab_motion(
         issues=issues,
         trajectory=trajectory,
         manifest=manifest,
+    )
+
+
+def rollout_teleop_mjlab_physics(
+    recording: TeleopReplayRecording,
+    *,
+    world_layout: dict[str, Any],
+    end_effector_samples: list[TeleopMjlabEndEffectorSample],
+    frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
+    include_mjcf: bool = False,
+    rollout_step_ms: float = 5.0,
+) -> TeleopMjlabRolloutResult:
+    runtime = resolve_teleop_mjlab_runtime_status()
+    trajectory_issues: list[TeleopMjlabMotionIssue] = []
+    trajectory = _build_trajectory(recording, trajectory_issues)
+    issues = [
+        _as_rollout_trajectory_warning(issue)
+        for issue in trajectory_issues
+    ]
+    world_warnings: list[str] = []
+    primitives: tuple[SimPrimitive, ...] = ()
+    dynamic_primitives: tuple[SimPrimitive, ...] = ()
+    mjcf_xml: str | None = None
+    frames: list[TeleopMjlabRolloutFrame] = []
+
+    if not end_effector_samples:
+        issues.append(
+            _build_issue(
+                code=TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_END_EFFECTOR_SAMPLES,
+                reason=(
+                    "MJLab rollout requires end-effector pose samples from "
+                    "the leader arm or robot FK."
+                ),
+            )
+        )
+
+    try:
+        layout = parse_static_world_layout_payload(world_layout)
+        primitives, parsed_warnings = build_sim_primitives(
+            layout,
+            frame_map=frame_map,
+            include_hidden=True,
+        )
+        world_warnings.extend(parsed_warnings)
+        dynamic_primitives = tuple(
+            primitive for primitive in primitives if primitive.body_type == "dynamic"
+        )
+        if not dynamic_primitives:
+            issues.append(
+                _build_issue(
+                    code=TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_NO_DYNAMIC_OBJECTS,
+                    reason=(
+                        "MJLab rollout requires at least one dynamic world "
+                        "layout object, for example the red pickup cube."
+                    ),
+                )
+            )
+    except WorldLayoutTransferError as exc:
+        layout = None
+        issues.append(
+            _build_issue(
+                code=TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_WORLD_LAYOUT_INVALID,
+                reason=f"MJLab could not parse the rollout world layout: {exc}",
+            )
+        )
+
+    if find_spec(TELEOP_MJLAB_RUNTIME_DEPENDENCY_MUJOCO) is None:
+        issues.append(
+            _build_issue(
+                code=TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_RUNTIME_UNAVAILABLE,
+                reason="MJLab rollout requires the MuJoCo runtime.",
+            )
+        )
+
+    if not any(issue.severity == TELEOP_MJLAB_ISSUE_SEVERITY_ERROR for issue in issues):
+        try:
+            import mujoco
+
+            mjcf_xml = _build_mjlab_proxy_rollout_mjcf(
+                primitives,
+                model_name=layout.name if layout is not None else recording.recording_id,
+                rollout_step_ms=rollout_step_ms,
+            )
+            model = mujoco.MjModel.from_xml_string(mjcf_xml)
+            data = mujoco.MjData(model)
+            frames = _run_mjlab_proxy_rollout(
+                mujoco=mujoco,
+                model=model,
+                data=data,
+                trajectory=trajectory,
+                dynamic_primitives=dynamic_primitives,
+                end_effector_samples=end_effector_samples,
+                frame_map=frame_map,
+                rollout_step_ms=rollout_step_ms,
+            )
+        except Exception as exc:
+            issues.append(
+                _build_issue(
+                    code=TELEOP_MJLAB_ISSUE_CODE_ROLLOUT_SIMULATION_FAILED,
+                    reason=f"MJLab rollout simulation failed: {exc}",
+                )
+            )
+            frames = []
+
+    success = not any(
+        issue.severity == TELEOP_MJLAB_ISSUE_SEVERITY_ERROR for issue in issues
+    )
+    contact_count = sum(len(frame.contacts) for frame in frames)
+    return TeleopMjlabRolloutResult(
+        success=success,
+        recording_id=recording.recording_id,
+        runtime=runtime,
+        frame_count=len(frames),
+        dynamic_object_count=len(dynamic_primitives),
+        contact_count=contact_count,
+        frame_map=frame_map,
+        issues=issues,
+        trajectory=trajectory,
+        frames=frames,
+        world_warnings=world_warnings,
+        mjcf_xml=mjcf_xml if include_mjcf else None,
+        manifest={
+            "schema_version": TELEOP_MJLAB_ROLLOUT_SCHEMA_VERSION,
+            "bundle_kind": TELEOP_MJLAB_ROLLOUT_BUNDLE_KIND,
+            "recording_id": recording.recording_id,
+            "task_language": recording.task_language,
+            "runtime": runtime.model_dump(by_alias=True),
+            "frame_map": frame_map,
+            "dynamic_object_count": len(dynamic_primitives),
+            "contact_count": contact_count,
+            "rollout_step_ms": rollout_step_ms,
+            "gripper_proxy": {
+                "body_names": [
+                    MJLAB_LEFT_FINGER_BODY_NAME,
+                    MJLAB_RIGHT_FINGER_BODY_NAME,
+                    MJLAB_GRIPPER_LIFT_PLATE_BODY_NAME,
+                ],
+                "geom_names": [
+                    MJLAB_LEFT_FINGER_GEOM_NAME,
+                    MJLAB_RIGHT_FINGER_GEOM_NAME,
+                    MJLAB_GRIPPER_LIFT_PLATE_GEOM_NAME,
+                ],
+            },
+        },
     )
 
 
@@ -406,6 +606,534 @@ def _compute_self_collision_metrics(
         "sample_count": len(trajectory),
         "collision_count": collision_count,
     }
+
+
+def _as_rollout_trajectory_warning(
+    issue: TeleopMjlabMotionIssue,
+) -> TeleopMjlabMotionIssue:
+    return TeleopMjlabMotionIssue(
+        severity=TELEOP_MJLAB_ISSUE_SEVERITY_WARNING,
+        code=issue.code,
+        reason=issue.reason,
+        sample_index=issue.sample_index,
+        joint_name=issue.joint_name,
+        link_names=issue.link_names,
+        value=issue.value,
+        limit=issue.limit,
+    )
+
+
+def _build_mjlab_proxy_rollout_mjcf(
+    primitives: Sequence[SimPrimitive],
+    *,
+    model_name: str,
+    rollout_step_ms: float,
+) -> str:
+    mjcf_text = export_primitives_to_mujoco_mjcf(
+        primitives,
+        model_name=model_name,
+        include_floor=True,
+    )
+    root = ET.fromstring(mjcf_text)
+    option = root.find("option")
+    if option is None:
+        option = ET.SubElement(root, "option")
+    option.set(
+        "timestep",
+        _format_mjcf_float(rollout_step_ms / TELEOP_MJLAB_MILLISECONDS_PER_SECOND),
+    )
+    option.set("iterations", "80")
+
+    worldbody = root.find("worldbody")
+    if worldbody is None:
+        worldbody = ET.SubElement(root, "worldbody")
+    _append_mjlab_proxy_finger_body(
+        worldbody,
+        body_name=MJLAB_LEFT_FINGER_BODY_NAME,
+        geom_name=MJLAB_LEFT_FINGER_GEOM_NAME,
+        rgba=(0.95, 0.95, 0.95, 0.8),
+    )
+    _append_mjlab_proxy_finger_body(
+        worldbody,
+        body_name=MJLAB_RIGHT_FINGER_BODY_NAME,
+        geom_name=MJLAB_RIGHT_FINGER_GEOM_NAME,
+        rgba=(0.85, 0.85, 0.85, 0.8),
+    )
+    _append_mjlab_proxy_lift_plate_body(worldbody)
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
+
+
+def _append_mjlab_proxy_finger_body(
+    worldbody: ET.Element,
+    *,
+    body_name: str,
+    geom_name: str,
+    rgba: tuple[float, float, float, float],
+) -> None:
+    body = ET.SubElement(
+        worldbody,
+        "body",
+        {
+            "name": body_name,
+            "pos": "0 0 0.2",
+            "quat": "1 0 0 0",
+        },
+    )
+    ET.SubElement(body, "joint", {"name": f"{body_name}_free", "type": "free"})
+    ET.SubElement(
+        body,
+        "geom",
+        {
+            "name": geom_name,
+            "type": "box",
+            "size": _format_mjcf_vec(
+                TELEOP_MJLAB_ROLLOUT_GRIPPER_FINGER_HALF_EXTENTS_M
+            ),
+            "rgba": _format_mjcf_vec(rgba),
+            "friction": "8 0.1 0.1",
+            "condim": "6",
+            "mass": "5",
+        },
+    )
+
+
+def _append_mjlab_proxy_lift_plate_body(worldbody: ET.Element) -> None:
+    body = ET.SubElement(
+        worldbody,
+        "body",
+        {
+            "name": MJLAB_GRIPPER_LIFT_PLATE_BODY_NAME,
+            "pos": "0 0 0.1",
+            "quat": "1 0 0 0",
+        },
+    )
+    ET.SubElement(
+        body,
+        "joint",
+        {"name": f"{MJLAB_GRIPPER_LIFT_PLATE_BODY_NAME}_free", "type": "free"},
+    )
+    ET.SubElement(
+        body,
+        "geom",
+        {
+            "name": MJLAB_GRIPPER_LIFT_PLATE_GEOM_NAME,
+            "type": "box",
+            "size": _format_mjcf_vec(
+                TELEOP_MJLAB_ROLLOUT_GRIPPER_LIFT_PLATE_HALF_EXTENTS_M
+            ),
+            "rgba": "0.3 0.65 1 0.35",
+            "friction": "8 0.1 0.1",
+            "condim": "6",
+            "mass": "5",
+        },
+    )
+
+
+def _run_mjlab_proxy_rollout(
+    *,
+    mujoco: Any,
+    model: Any,
+    data: Any,
+    trajectory: list[TeleopMjlabTrajectorySample],
+    dynamic_primitives: tuple[SimPrimitive, ...],
+    end_effector_samples: list[TeleopMjlabEndEffectorSample],
+    frame_map: WorldLayoutFrameMap,
+    rollout_step_ms: float,
+) -> list[TeleopMjlabRolloutFrame]:
+    rollout_samples = _prepare_rollout_end_effector_samples(
+        end_effector_samples,
+        frame_map=frame_map,
+    )
+    if not rollout_samples:
+        return []
+
+    proxy_joints = _resolve_mjlab_gripper_proxy_joints(mujoco=mujoco, model=model)
+    dynamic_body_ids = _resolve_mjlab_dynamic_body_ids(
+        mujoco=mujoco,
+        model=model,
+        dynamic_primitives=dynamic_primitives,
+    )
+    trajectory_by_sample_index = {
+        sample.sample_index: sample
+        for sample in trajectory
+    }
+
+    previous_sample = rollout_samples[0]
+    previous_proxy_poses = _set_mjlab_gripper_proxy_pose(
+        data,
+        proxy_joints=proxy_joints,
+        sample=previous_sample,
+        dt_seconds=None,
+        previous_proxy_poses=None,
+    )
+    mujoco.mj_forward(model, data)
+    frames = [
+        _build_mjlab_rollout_frame(
+            mujoco=mujoco,
+            model=model,
+            data=data,
+            sample=previous_sample,
+            trajectory_by_sample_index=trajectory_by_sample_index,
+            dynamic_primitives=dynamic_primitives,
+            dynamic_body_ids=dynamic_body_ids,
+        )
+    ]
+
+    for target_sample in rollout_samples[1:]:
+        duration_ms = max(
+            rollout_step_ms,
+            target_sample.timestamp_ms - previous_sample.timestamp_ms,
+        )
+        step_count = max(1, math.ceil(duration_ms / rollout_step_ms))
+        for step_index in range(1, step_count + 1):
+            interpolated_sample = _interpolate_rollout_sample(
+                previous_sample,
+                target_sample,
+                step_index / step_count,
+            )
+            previous_proxy_poses = _set_mjlab_gripper_proxy_pose(
+                data,
+                proxy_joints=proxy_joints,
+                sample=interpolated_sample,
+                dt_seconds=rollout_step_ms / TELEOP_MJLAB_MILLISECONDS_PER_SECOND,
+                previous_proxy_poses=previous_proxy_poses,
+            )
+            mujoco.mj_step(model, data)
+        frames.append(
+            _build_mjlab_rollout_frame(
+                mujoco=mujoco,
+                model=model,
+                data=data,
+                sample=target_sample,
+                trajectory_by_sample_index=trajectory_by_sample_index,
+                dynamic_primitives=dynamic_primitives,
+                dynamic_body_ids=dynamic_body_ids,
+            )
+        )
+        previous_sample = target_sample
+
+    return frames
+
+
+def _prepare_rollout_end_effector_samples(
+    samples: list[TeleopMjlabEndEffectorSample],
+    *,
+    frame_map: WorldLayoutFrameMap,
+) -> list[_RolloutEndEffectorSample]:
+    return sorted(
+        (
+            _transform_rollout_end_effector_sample(sample, frame_map=frame_map)
+            for sample in samples
+        ),
+        key=lambda sample: (sample.timestamp_ms, sample.sample_index),
+    )
+
+
+def _transform_rollout_end_effector_sample(
+    sample: TeleopMjlabEndEffectorSample,
+    *,
+    frame_map: WorldLayoutFrameMap,
+) -> _RolloutEndEffectorSample:
+    return _RolloutEndEffectorSample(
+        sample_index=sample.sample_index,
+        timestamp_ms=sample.timestamp_ms,
+        position_xyz=_transform_rollout_position(sample.position_xyz, frame_map),
+        quat_wxyz=_transform_rollout_quat(sample.quat_wxyz, frame_map),
+        gripper_opening_m=min(
+            TELEOP_MJLAB_ROLLOUT_GRIPPER_MAX_OPENING_M,
+            max(0.0, sample.gripper_opening_m),
+        ),
+    )
+
+
+def _transform_rollout_position(
+    position_xyz: Sequence[float],
+    frame_map: WorldLayoutFrameMap,
+) -> tuple[float, float, float]:
+    transformed = _rollout_frame_matrix(frame_map) @ np.array(position_xyz, dtype=float)
+    return tuple(float(component) for component in transformed)
+
+
+def _transform_rollout_quat(
+    quat_wxyz: Sequence[float],
+    frame_map: WorldLayoutFrameMap,
+) -> tuple[float, float, float, float]:
+    normalized = _normalize_quat_wxyz(quat_wxyz)
+    if frame_map == "identity":
+        return normalized
+    frame = _rollout_frame_matrix(frame_map)
+    rotation = Rotation.from_quat(
+        [normalized[1], normalized[2], normalized[3], normalized[0]]
+    ).as_matrix()
+    transformed_rotation = frame @ rotation @ frame.T
+    quat_xyzw = Rotation.from_matrix(transformed_rotation).as_quat()
+    return _normalize_quat_wxyz((quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]))
+
+
+def _rollout_frame_matrix(frame_map: WorldLayoutFrameMap) -> np.ndarray:
+    if frame_map == "identity":
+        return np.eye(3)
+    if frame_map == "studio-y-up-to-z-up":
+        return STUDIO_Y_UP_TO_Z_UP
+    raise ValueError(f"Unsupported MJLab rollout frame map: {frame_map}")
+
+
+def _interpolate_rollout_sample(
+    start: _RolloutEndEffectorSample,
+    end: _RolloutEndEffectorSample,
+    alpha: float,
+) -> _RolloutEndEffectorSample:
+    clamped_alpha = min(1.0, max(0.0, alpha))
+    return _RolloutEndEffectorSample(
+        sample_index=end.sample_index,
+        timestamp_ms=start.timestamp_ms
+        + (end.timestamp_ms - start.timestamp_ms) * clamped_alpha,
+        position_xyz=tuple(
+            start.position_xyz[index]
+            + (end.position_xyz[index] - start.position_xyz[index]) * clamped_alpha
+            for index in range(3)
+        ),
+        quat_wxyz=_nlerp_quat_wxyz(start.quat_wxyz, end.quat_wxyz, clamped_alpha),
+        gripper_opening_m=start.gripper_opening_m
+        + (end.gripper_opening_m - start.gripper_opening_m) * clamped_alpha,
+    )
+
+
+def _set_mjlab_gripper_proxy_pose(
+    data: Any,
+    *,
+    proxy_joints: dict[str, tuple[int, int]],
+    sample: _RolloutEndEffectorSample,
+    dt_seconds: float | None,
+    previous_proxy_poses: dict[str, tuple[np.ndarray, tuple[float, float, float, float]]] | None,
+) -> dict[str, tuple[np.ndarray, tuple[float, float, float, float]]]:
+    poses = _desired_mjlab_gripper_proxy_poses(sample)
+    for body_name, (position, quat_wxyz) in poses.items():
+        qpos_address, qvel_address = proxy_joints[body_name]
+        data.qpos[qpos_address : qpos_address + 7] = [
+            float(position[0]),
+            float(position[1]),
+            float(position[2]),
+            quat_wxyz[0],
+            quat_wxyz[1],
+            quat_wxyz[2],
+            quat_wxyz[3],
+        ]
+        previous_pose = (
+            previous_proxy_poses.get(body_name)
+            if previous_proxy_poses is not None
+            else None
+        )
+        if previous_pose is not None and dt_seconds is not None and dt_seconds > 0:
+            linear_velocity = (position - previous_pose[0]) / dt_seconds
+        else:
+            linear_velocity = np.zeros(3)
+        data.qvel[qvel_address : qvel_address + 6] = [
+            float(linear_velocity[0]),
+            float(linear_velocity[1]),
+            float(linear_velocity[2]),
+            0.0,
+            0.0,
+            0.0,
+        ]
+    return poses
+
+
+def _desired_mjlab_gripper_proxy_poses(
+    sample: _RolloutEndEffectorSample,
+) -> dict[str, tuple[np.ndarray, tuple[float, float, float, float]]]:
+    rotation = Rotation.from_quat(
+        [
+            sample.quat_wxyz[1],
+            sample.quat_wxyz[2],
+            sample.quat_wxyz[3],
+            sample.quat_wxyz[0],
+        ]
+    )
+    finger_half_y = TELEOP_MJLAB_ROLLOUT_GRIPPER_FINGER_HALF_EXTENTS_M[1]
+    center_offset_m = (sample.gripper_opening_m * 0.5) + finger_half_y
+    offset = rotation.apply([0.0, center_offset_m, 0.0])
+    center = np.array(sample.position_xyz, dtype=float)
+    lift_plate_offset = rotation.apply(
+        TELEOP_MJLAB_ROLLOUT_GRIPPER_LIFT_PLATE_OFFSET_M
+    )
+    return {
+        MJLAB_LEFT_FINGER_BODY_NAME: (center + offset, sample.quat_wxyz),
+        MJLAB_RIGHT_FINGER_BODY_NAME: (center - offset, sample.quat_wxyz),
+        MJLAB_GRIPPER_LIFT_PLATE_BODY_NAME: (
+            center + lift_plate_offset,
+            sample.quat_wxyz,
+        ),
+    }
+
+
+def _resolve_mjlab_gripper_proxy_joints(
+    *,
+    mujoco: Any,
+    model: Any,
+) -> dict[str, tuple[int, int]]:
+    proxy_joints: dict[str, tuple[int, int]] = {}
+    for body_name in MJLAB_GRIPPER_BODY_NAMES:
+        joint_name = f"{body_name}_free"
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+        if joint_id < 0:
+            raise ValueError(f"Missing MJLab proxy gripper joint: {joint_name}")
+        proxy_joints[body_name] = (
+            int(model.jnt_qposadr[joint_id]),
+            int(model.jnt_dofadr[joint_id]),
+        )
+    return proxy_joints
+
+
+def _resolve_mjlab_dynamic_body_ids(
+    *,
+    mujoco: Any,
+    model: Any,
+    dynamic_primitives: tuple[SimPrimitive, ...],
+) -> dict[str, int]:
+    body_ids: dict[str, int] = {}
+    for primitive in dynamic_primitives:
+        body_name = f"{primitive.sim_name}_body"
+        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+        if body_id < 0:
+            raise ValueError(
+                f"Missing MuJoCo dynamic body for world object: {primitive.source_id}"
+            )
+        body_ids[primitive.source_id] = int(body_id)
+    return body_ids
+
+
+def _build_mjlab_rollout_frame(
+    *,
+    mujoco: Any,
+    model: Any,
+    data: Any,
+    sample: _RolloutEndEffectorSample,
+    trajectory_by_sample_index: dict[int, TeleopMjlabTrajectorySample],
+    dynamic_primitives: tuple[SimPrimitive, ...],
+    dynamic_body_ids: dict[str, int],
+) -> TeleopMjlabRolloutFrame:
+    trajectory_sample = trajectory_by_sample_index.get(sample.sample_index)
+    return TeleopMjlabRolloutFrame(
+        sample_index=sample.sample_index,
+        timestamp_ms=sample.timestamp_ms,
+        joint_positions_rad=(
+            dict(trajectory_sample.joint_positions_rad)
+            if trajectory_sample is not None
+            else {}
+        ),
+        object_poses=[
+            _build_mjlab_rollout_object_pose(
+                data=data,
+                primitive=primitive,
+                body_id=dynamic_body_ids[primitive.source_id],
+            )
+            for primitive in dynamic_primitives
+        ],
+        contacts=_scan_mjlab_rollout_contacts(
+            mujoco=mujoco,
+            model=model,
+            data=data,
+            dynamic_body_ids=dynamic_body_ids,
+            sample_index=sample.sample_index,
+        ),
+    )
+
+
+def _build_mjlab_rollout_object_pose(
+    *,
+    data: Any,
+    primitive: SimPrimitive,
+    body_id: int,
+) -> TeleopMjlabRolloutObjectPose:
+    return TeleopMjlabRolloutObjectPose(
+        object_id=primitive.source_id,
+        name=primitive.source_name,
+        sim_name=primitive.sim_name,
+        position_xyz=tuple(float(value) for value in data.xpos[body_id]),
+        quat_wxyz=tuple(float(value) for value in data.xquat[body_id]),
+    )
+
+
+def _scan_mjlab_rollout_contacts(
+    *,
+    mujoco: Any,
+    model: Any,
+    data: Any,
+    dynamic_body_ids: dict[str, int],
+    sample_index: int,
+) -> list[TeleopMjlabRolloutContact]:
+    source_id_by_body_id = {
+        body_id: source_id
+        for source_id, body_id in dynamic_body_ids.items()
+    }
+    contacts: list[TeleopMjlabRolloutContact] = []
+    for contact_index in range(data.ncon):
+        contact = data.contact[contact_index]
+        geom_ids = (int(contact.geom1), int(contact.geom2))
+        body_ids = tuple(int(model.geom_bodyid[geom_id]) for geom_id in geom_ids)
+        object_id = (
+            source_id_by_body_id.get(body_ids[0])
+            or source_id_by_body_id.get(body_ids[1])
+        )
+        if object_id is None:
+            continue
+        geom_names = [
+            _mujoco_object_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
+            for geom_id in geom_ids
+        ]
+        contacts.append(
+            TeleopMjlabRolloutContact(
+                sample_index=sample_index,
+                object_id=object_id,
+                geom_names=geom_names,
+                body_names=[
+                    _mujoco_object_name(
+                        mujoco,
+                        model,
+                        mujoco.mjtObj.mjOBJ_BODY,
+                        body_id,
+                    )
+                    for body_id in body_ids
+                ],
+                distance_m=float(contact.dist),
+                with_gripper=any(name in MJLAB_GRIPPER_GEOM_NAMES for name in geom_names),
+            )
+        )
+    return contacts
+
+
+def _mujoco_object_name(mujoco: Any, model: Any, obj_type: Any, obj_id: int) -> str:
+    return mujoco.mj_id2name(model, obj_type, obj_id) or f"object_{obj_id}"
+
+
+def _normalize_quat_wxyz(values: Sequence[float]) -> tuple[float, float, float, float]:
+    norm = math.sqrt(sum(float(value) * float(value) for value in values))
+    if norm <= TELEOP_MJLAB_ZERO_METRIC:
+        return (1.0, 0.0, 0.0, 0.0)
+    return tuple(float(value) / norm for value in values)  # type: ignore[return-value]
+
+
+def _nlerp_quat_wxyz(
+    start: Sequence[float],
+    end: Sequence[float],
+    alpha: float,
+) -> tuple[float, float, float, float]:
+    start_array = np.array(_normalize_quat_wxyz(start), dtype=float)
+    end_array = np.array(_normalize_quat_wxyz(end), dtype=float)
+    if float(np.dot(start_array, end_array)) < 0:
+        end_array = -end_array
+    blended = start_array + (end_array - start_array) * alpha
+    return _normalize_quat_wxyz(tuple(float(value) for value in blended))
+
+
+def _format_mjcf_float(value: float) -> str:
+    return f"{float(value):.12g}"
+
+
+def _format_mjcf_vec(values: Sequence[float]) -> str:
+    return " ".join(_format_mjcf_float(float(value)) for value in values)
 
 
 def _stage_robot_model_for_mujoco(

@@ -20,6 +20,7 @@ export const OPERATOR_TELEOP_REPLAY_LEROBOT_EXPORT_PATH =
 export const OPERATOR_TELEOP_KINEMATIC_LEROBOT_EXPORT_PATH =
   "/teleop/replay/export/kinematic/lerobot";
 export const OPERATOR_TELEOP_MJLAB_VALIDATE_PATH = "/teleop/mjlab/validate";
+export const OPERATOR_TELEOP_MJLAB_ROLLOUT_PATH = "/teleop/mjlab/rollout";
 
 export type OperatorTeleopGatewayReplayCommandKind =
   (typeof OPERATOR_TELEOP_GATEWAY_REPLAY_COMMAND_KINDS)[number];

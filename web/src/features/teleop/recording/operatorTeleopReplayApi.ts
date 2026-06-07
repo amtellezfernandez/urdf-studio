@@ -6,6 +6,7 @@ import {
 } from "@/shared/lib/urdfBrowser";
 import {
   OPERATOR_TELEOP_KINEMATIC_LEROBOT_EXPORT_PATH,
+  OPERATOR_TELEOP_MJLAB_ROLLOUT_PATH,
   OPERATOR_TELEOP_MJLAB_VALIDATE_PATH,
   OPERATOR_TELEOP_REPLAY_LEROBOT_EXPORT_PATH,
   OPERATOR_TELEOP_REPLAY_VALIDATE_PATH,
@@ -79,6 +80,22 @@ export type OperatorTeleopMjlabValidationOptions = {
   robotModel?: OperatorTeleopMjlabRobotModel | null;
 };
 
+export type OperatorTeleopMjlabEndEffectorSample = {
+  sampleIndex: number;
+  timestampMs: number;
+  positionXyz: [number, number, number];
+  quatWxyz: [number, number, number, number];
+  gripperOpeningM: number;
+};
+
+export type OperatorTeleopMjlabRolloutOptions = {
+  worldLayout: Record<string, unknown>;
+  endEffectorSamples: OperatorTeleopMjlabEndEffectorSample[];
+  frameMap?: "identity" | "studio-y-up-to-z-up";
+  includeMjcf?: boolean;
+  rolloutStepMs?: number;
+};
+
 export type OperatorTeleopReplayExportOptions = {
   robotModel?: OperatorTeleopMjlabRobotModel | null;
 };
@@ -101,6 +118,46 @@ export type OperatorTeleopMjlabValidationResult = {
   issues: OperatorTeleopMjlabMotionIssue[];
 };
 
+export type OperatorTeleopMjlabRolloutObjectPose = {
+  objectId: string;
+  name: string;
+  simName: string;
+  positionXyz: [number, number, number];
+  quatWxyz: [number, number, number, number];
+};
+
+export type OperatorTeleopMjlabRolloutContact = {
+  sampleIndex: number;
+  objectId: string;
+  geomNames: string[];
+  bodyNames: string[];
+  distanceM: number;
+  withGripper: boolean;
+};
+
+export type OperatorTeleopMjlabRolloutFrame = {
+  sampleIndex: number;
+  timestampMs: number;
+  jointPositionsRad: Record<string, number>;
+  objectPoses: OperatorTeleopMjlabRolloutObjectPose[];
+  contacts: OperatorTeleopMjlabRolloutContact[];
+};
+
+export type OperatorTeleopMjlabRolloutResult = {
+  success: boolean;
+  schemaVersion: string;
+  recordingId: string;
+  runtime: OperatorTeleopMjlabRuntimeStatus;
+  frameCount: number;
+  dynamicObjectCount: number;
+  contactCount: number;
+  frameMap: "identity" | "studio-y-up-to-z-up";
+  issues: OperatorTeleopMjlabMotionIssue[];
+  frames: OperatorTeleopMjlabRolloutFrame[];
+  worldWarnings: string[];
+  mjcfXml?: string | null;
+};
+
 type ReplayApiEnvelope = {
   recording: OperatorTeleopRecordingEpisode;
 };
@@ -108,6 +165,8 @@ type ReplayApiEnvelope = {
 type MjlabValidationApiEnvelope = ReplayApiEnvelope & {
   robotModel?: OperatorTeleopMjlabRobotModel;
 };
+
+type MjlabRolloutApiEnvelope = ReplayApiEnvelope & OperatorTeleopMjlabRolloutOptions;
 
 const URDF_MESH_FILENAME_PATTERN =
   /<mesh\b[^>]*\bfilename\s*=\s*(["'])(.*?)\1/gi;
@@ -256,4 +315,22 @@ export const validateTeleopMjlabMotion = (
           robotModel: options.robotModel,
         } satisfies Omit<MjlabValidationApiEnvelope, "recording">)
       : {},
+  );
+
+export const rolloutTeleopMjlabPhysics = (
+  recording: OperatorTeleopRecordingEpisode,
+  options: OperatorTeleopMjlabRolloutOptions,
+): Promise<OperatorTeleopMjlabRolloutResult> =>
+  postReplayJson<OperatorTeleopMjlabRolloutResult>(
+    OPERATOR_TELEOP_MJLAB_ROLLOUT_PATH,
+    recording,
+    {
+      worldLayout: options.worldLayout,
+      endEffectorSamples: options.endEffectorSamples,
+      ...(options.frameMap ? { frameMap: options.frameMap } : {}),
+      ...(options.includeMjcf !== undefined ? { includeMjcf: options.includeMjcf } : {}),
+      ...(options.rolloutStepMs !== undefined
+        ? { rolloutStepMs: options.rolloutStepMs }
+        : {}),
+    } satisfies Omit<MjlabRolloutApiEnvelope, "recording">,
   );

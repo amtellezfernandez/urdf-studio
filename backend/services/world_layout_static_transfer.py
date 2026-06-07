@@ -4,7 +4,7 @@ import json
 import math
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Sequence
 from xml.etree import ElementTree as ET
@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation
 
 WorldLayoutBackend = Literal["mujoco", "genesis"]
 WorldLayoutFrameMap = Literal["identity", "studio-y-up-to-z-up"]
+WorldLayoutPhysicsBodyType = Literal["static", "dynamic"]
 
 SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point"}
 STATIC_SCENARIO_TIME_MS = 0
@@ -37,6 +38,16 @@ class WorldLayoutTransferError(ValueError):
 
 
 @dataclass(frozen=True)
+class WorldLayoutPhysicsSpec:
+    body_type: WorldLayoutPhysicsBodyType = "static"
+    mass_kg: float | None = None
+    friction: float | None = None
+    restitution: float | None = None
+    linear_damping: float | None = None
+    angular_damping: float | None = None
+
+
+@dataclass(frozen=True)
 class WorldLayoutObject:
     id: str
     name: str
@@ -46,6 +57,7 @@ class WorldLayoutObject:
     size_xyz: tuple[float, float, float]
     color: str
     is_hidden: bool = False
+    physics: WorldLayoutPhysicsSpec = field(default_factory=WorldLayoutPhysicsSpec)
 
 
 @dataclass(frozen=True)
@@ -69,6 +81,12 @@ class SimPrimitive:
     size_xyz: tuple[float, float, float]
     rgba: tuple[float, float, float, float]
     collision: bool
+    body_type: WorldLayoutPhysicsBodyType = "static"
+    mass_kg: float | None = None
+    friction: float | None = None
+    restitution: float | None = None
+    linear_damping: float | None = None
+    angular_damping: float | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +123,48 @@ def _read_vector3(value: Any, field: str, *, positive: bool = False) -> tuple[fl
     if positive and any(component <= 0 for component in parsed):
         raise WorldLayoutTransferError(f"{field} components must be > 0")
     return parsed
+
+
+def _read_optional_positive_number(value: Any, field: str) -> float | None:
+    if value is None:
+        return None
+    parsed = _read_finite_number(value, field)
+    if parsed <= 0:
+        raise WorldLayoutTransferError(f"{field} must be > 0")
+    return parsed
+
+
+def _read_optional_non_negative_number(value: Any, field: str) -> float | None:
+    if value is None:
+        return None
+    parsed = _read_finite_number(value, field)
+    if parsed < 0:
+        raise WorldLayoutTransferError(f"{field} must be >= 0")
+    return parsed
+
+
+def _read_world_object_physics(value: Any, index: int) -> WorldLayoutPhysicsSpec:
+    if value is None:
+        return WorldLayoutPhysicsSpec()
+    if not _is_record(value):
+        raise WorldLayoutTransferError(f"objects[{index}].physics must be an object")
+    raw_body_type = value.get("body_type", "static")
+    if raw_body_type not in {"static", "dynamic"}:
+        raise WorldLayoutTransferError(f"objects[{index}].physics.body_type must be static or dynamic")
+    return WorldLayoutPhysicsSpec(
+        body_type=raw_body_type,
+        mass_kg=_read_optional_positive_number(value.get("mass_kg"), f"objects[{index}].physics.mass_kg"),
+        friction=_read_optional_non_negative_number(value.get("friction"), f"objects[{index}].physics.friction"),
+        restitution=_read_optional_non_negative_number(
+            value.get("restitution"), f"objects[{index}].physics.restitution"
+        ),
+        linear_damping=_read_optional_non_negative_number(
+            value.get("linear_damping"), f"objects[{index}].physics.linear_damping"
+        ),
+        angular_damping=_read_optional_non_negative_number(
+            value.get("angular_damping"), f"objects[{index}].physics.angular_damping"
+        ),
+    )
 
 
 def _read_static_timing(snapshot: dict[str, Any]) -> tuple[int, int]:
@@ -150,6 +210,7 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
         size_xyz=size,
         color=raw_color.strip() if isinstance(raw_color, str) and raw_color.strip() else "#3b82f6",
         is_hidden=value.get("is_hidden") is True,
+        physics=_read_world_object_physics(value.get("physics"), index),
     )
 
 
@@ -257,6 +318,17 @@ def _safe_sim_name(value: str, used_names: set[str], fallback: str) -> str:
     return candidate
 
 
+def _sim_physics_kwargs(obj: WorldLayoutObject) -> dict[str, Any]:
+    return {
+        "body_type": obj.physics.body_type,
+        "mass_kg": obj.physics.mass_kg,
+        "friction": obj.physics.friction,
+        "restitution": obj.physics.restitution,
+        "linear_damping": obj.physics.linear_damping,
+        "angular_damping": obj.physics.angular_damping,
+    }
+
+
 def build_sim_primitives(
     layout: StaticWorldLayout,
     *,
@@ -288,6 +360,7 @@ def build_sim_primitives(
                     size_xyz=sim_size,
                     rgba=rgba,
                     collision=True,
+                    **_sim_physics_kwargs(obj),
                 )
             )
             continue
@@ -307,6 +380,7 @@ def build_sim_primitives(
                     size_xyz=(diameter, diameter, diameter),
                     rgba=rgba,
                     collision=True,
+                    **_sim_physics_kwargs(obj),
                 )
             )
             continue
@@ -326,6 +400,7 @@ def build_sim_primitives(
                     size_xyz=(diameter, diameter, obj.size_xyz[2]),
                     rgba=rgba,
                     collision=True,
+                    **_sim_physics_kwargs(obj),
                 )
             )
             continue
@@ -344,6 +419,7 @@ def build_sim_primitives(
                     size_xyz=(diameter, diameter, diameter),
                     rgba=rgba,
                     collision=False,
+                    **_sim_physics_kwargs(obj),
                 )
             )
             continue
@@ -357,6 +433,49 @@ def _format_float(value: float) -> str:
 
 def _format_vec(values: Sequence[float]) -> str:
     return " ".join(_format_float(value) for value in values)
+
+
+def _mujoco_friction(value: float | None) -> str | None:
+    if value is None:
+        return None
+    return _format_vec((value, 0.005, 0.0001))
+
+
+def _mujoco_geom_attrs(primitive: SimPrimitive, *, include_pose: bool) -> dict[str, str]:
+    attrs = {
+        "name": primitive.sim_name,
+        "type": primitive.sim_type,
+        "rgba": _format_vec(primitive.rgba),
+    }
+    if include_pose:
+        attrs.update(
+            {
+                "pos": _format_vec(primitive.position_xyz),
+                "quat": _format_vec(primitive.quat_wxyz),
+            }
+        )
+    if primitive.sim_type == "box":
+        attrs["size"] = _format_vec(component * 0.5 for component in primitive.size_xyz)
+    elif primitive.sim_type == "sphere":
+        attrs["size"] = _format_float(max(primitive.size_xyz) * 0.5)
+    elif primitive.sim_type == "cylinder":
+        attrs["size"] = _format_vec((primitive.size_xyz[0] * 0.5, primitive.size_xyz[2] * 0.5))
+    else:
+        raise WorldLayoutTransferError(f"Unsupported MuJoCo primitive type: {primitive.sim_type}")
+    if primitive.mass_kg is not None and primitive.body_type == "dynamic":
+        attrs["mass"] = _format_float(primitive.mass_kg)
+    friction = _mujoco_friction(primitive.friction)
+    if friction is not None:
+        attrs["friction"] = friction
+    if primitive.restitution is not None:
+        # MuJoCo does not expose a direct URDF-style restitution scalar. These
+        # contact settings keep the scripted pickup cube visually non-bouncy.
+        attrs["solref"] = "0.02 1"
+        attrs["solimp"] = "0.95 0.99 0.001"
+    if not primitive.collision:
+        attrs["contype"] = "0"
+        attrs["conaffinity"] = "0"
+    return attrs
 
 
 def export_primitives_to_mujoco_mjcf(
@@ -393,25 +512,20 @@ def export_primitives_to_mujoco_mjcf(
             },
         )
     for primitive in primitives:
-        attrs = {
-            "name": primitive.sim_name,
-            "type": primitive.sim_type,
-            "pos": _format_vec(primitive.position_xyz),
-            "quat": _format_vec(primitive.quat_wxyz),
-            "rgba": _format_vec(primitive.rgba),
-        }
-        if primitive.sim_type == "box":
-            attrs["size"] = _format_vec(component * 0.5 for component in primitive.size_xyz)
-        elif primitive.sim_type == "sphere":
-            attrs["size"] = _format_float(max(primitive.size_xyz) * 0.5)
-        elif primitive.sim_type == "cylinder":
-            attrs["size"] = _format_vec((primitive.size_xyz[0] * 0.5, primitive.size_xyz[2] * 0.5))
-        else:
-            raise WorldLayoutTransferError(f"Unsupported MuJoCo primitive type: {primitive.sim_type}")
-        if not primitive.collision:
-            attrs["contype"] = "0"
-            attrs["conaffinity"] = "0"
-        ET.SubElement(worldbody, "geom", attrs)
+        if primitive.body_type == "dynamic":
+            body = ET.SubElement(
+                worldbody,
+                "body",
+                {
+                    "name": f"{primitive.sim_name}_body",
+                    "pos": _format_vec(primitive.position_xyz),
+                    "quat": _format_vec(primitive.quat_wxyz),
+                },
+            )
+            ET.SubElement(body, "joint", {"name": f"{primitive.sim_name}_free", "type": "free"})
+            ET.SubElement(body, "geom", _mujoco_geom_attrs(primitive, include_pose=False))
+            continue
+        ET.SubElement(worldbody, "geom", _mujoco_geom_attrs(primitive, include_pose=True))
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode")
 
@@ -483,6 +597,7 @@ def _primitive_check_report(
                 "source_id": primitive.source_id,
                 "sim_name": primitive.sim_name,
                 "source_type": primitive.source_type,
+                "body_type": primitive.body_type,
                 "sim_type": primitive.sim_type,
                 "loaded_sim_type": loaded_primitive.sim_type,
                 "expected_position_xyz": list(primitive.position_xyz),
@@ -646,7 +761,7 @@ def check_genesis_transfer(
                 size=primitive.size_xyz,
                 pos=primitive.position_xyz,
                 quat=primitive.quat_wxyz,
-                fixed=True,
+                fixed=primitive.body_type != "dynamic",
                 collision=primitive.collision,
             )
         elif primitive.sim_type == "sphere":
@@ -654,7 +769,7 @@ def check_genesis_transfer(
                 radius=max(primitive.size_xyz) * 0.5,
                 pos=primitive.position_xyz,
                 quat=primitive.quat_wxyz,
-                fixed=True,
+                fixed=primitive.body_type != "dynamic",
                 collision=primitive.collision,
             )
         elif primitive.sim_type == "cylinder":
@@ -663,7 +778,7 @@ def check_genesis_transfer(
                 height=primitive.size_xyz[2],
                 pos=primitive.position_xyz,
                 quat=primitive.quat_wxyz,
-                fixed=True,
+                fixed=primitive.body_type != "dynamic",
                 collision=primitive.collision,
             )
         else:
