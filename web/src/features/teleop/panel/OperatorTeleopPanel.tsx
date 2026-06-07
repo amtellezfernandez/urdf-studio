@@ -130,6 +130,7 @@ import {
   OPERATOR_LEADER_TELEOP_UNAVAILABLE_STATUS,
   useOperatorLeaderTeleopStore,
 } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
+import { syncOperatorLeaderJointTargetsToJointStore } from "@/features/teleop/operator-control/operatorLeaderJointStoreSync";
 import { isOperatorTeleopEditableKeyboardTarget } from "@/features/teleop/operator-control/operatorTeleopKeyboard";
 import {
   addPageVisibilityListener,
@@ -2046,6 +2047,10 @@ export const OperatorTeleopPanel = ({
           telemetry.positionRad,
         ]),
       );
+      syncOperatorLeaderJointTargetsToJointStore({
+        jointTargets,
+        availableJointNames: availableStudioJointNames,
+      });
       const previousJointTargets = lastLeaderJointTargetsRef.current;
       lastLeaderJointTargetsRef.current = jointTargets;
       if (!followerHardwareMotionReady || previousJointTargets === null) return;
@@ -2083,6 +2088,7 @@ export const OperatorTeleopPanel = ({
       useOperatorPerceptionStore.getState().clearActiveLeaderJointTelemetry();
     };
   }, [
+    availableStudioJointNames,
     dispatchFollowerHardwareJointTargets,
     followerHardwareMotionReady,
     leaderInputTelemetryActive,

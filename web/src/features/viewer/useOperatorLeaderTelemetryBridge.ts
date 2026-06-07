@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { useOperatorPerceptionStore } from "@/features/teleop/perception/operatorPerceptionStore";
 import type { OperatorLiveJointTelemetry } from "@/features/teleop/perception/operatorPerceptionStore";
+import { syncOperatorLeaderTelemetryToJointStore } from "@/features/teleop/operator-control/operatorLeaderJointStoreSync";
 import {
   OPERATOR_LEADER_DETECTION_REFRESH_MS,
   OPERATOR_LEADER_STATE_POLL_INTERVAL_MS,
@@ -148,6 +149,10 @@ export const useOperatorLeaderTelemetryBridge = ({
         }
         perceptionStore.upsertActiveLeaderJointTelemetry(telemetryByName);
         perceptionStore.upsertActiveJointTelemetry(telemetryByName);
+        syncOperatorLeaderTelemetryToJointStore({
+          telemetryByName,
+          availableJointNames,
+        });
       } catch {
         nextDetectionRefreshAtMs = 0;
       } finally {
