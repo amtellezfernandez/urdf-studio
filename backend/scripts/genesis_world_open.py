@@ -26,6 +26,12 @@ GENESIS_RIGID_FRICTION_MIN = 0.01
 GENESIS_RIGID_FRICTION_MAX = 5.0
 DEFAULT_FLOOR_FRICTION = 1.0
 DEFAULT_ROBOT_FRICTION = 3.0
+GENESIS_FLOOR_SIZE_XY = (4.0, 4.0)
+GENESIS_FLOOR_THICKNESS_M = 0.08
+GENESIS_FLOOR_TOP_Z = 0.0
+GENESIS_FLOOR_CLEARANCE_EPSILON_M = 0.0005
+GENESIS_ROBOT_BASE_Z_OFFSET_M = 0.004
+GENESIS_ROBOT_FLOOR_CLEARANCE_EPSILON_M = 0.0005
 
 
 def _parse_args() -> argparse.Namespace:
@@ -240,6 +246,88 @@ def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str)
     )
 
 
+def _add_floor_entity(gs, scene):
+    return scene.add_entity(
+        gs.morphs.Box(
+            size=(
+                GENESIS_FLOOR_SIZE_XY[0],
+                GENESIS_FLOOR_SIZE_XY[1],
+                GENESIS_FLOOR_THICKNESS_M,
+            ),
+            pos=(0.0, 0.0, -GENESIS_FLOOR_THICKNESS_M / 2.0),
+            fixed=True,
+            collision=True,
+        ),
+        material=_rigid_material_for_physics(
+            gs,
+            None,
+            friction_fallback=DEFAULT_FLOOR_FRICTION,
+        ),
+        surface=gs.surfaces.Default(color=(0.16, 0.16, 0.16), opacity=0.35),
+        name="floor",
+    )
+
+
+def _positive_float_tuple3(value: Any) -> tuple[float, float, float] | None:
+    if not isinstance(value, tuple | list) or len(value) != 3:
+        return None
+    parsed = tuple(_finite_float_or_none(component) for component in value)
+    if any(component is None or component <= 0 for component in parsed):
+        return None
+    return parsed
+
+
+def _oriented_box_min_z(
+    *,
+    qpos: list[float],
+    box_size_xyz: tuple[float, float, float],
+) -> float | None:
+    if len(qpos) < 3 or not _is_finite_number(qpos[2]):
+        return None
+    half_size = tuple(component * 0.5 for component in box_size_xyz)
+    if len(qpos) >= 7 and all(_is_finite_number(value) for value in qpos[3:7]):
+        orientation = _normalize_quaternion_wxyz(tuple(float(value) for value in qpos[3:7]))
+        vertical_extent = sum(
+            abs(_rotate_vector_by_quaternion_wxyz(orientation, axis)[2]) * half_size[index]
+            for index, axis in enumerate(
+                ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+            )
+        )
+    else:
+        vertical_extent = half_size[2]
+    return float(qpos[2]) - vertical_extent
+
+
+def _clear_downward_linear_z_velocity(entity) -> None:
+    if not hasattr(entity, "get_qvel") or not hasattr(entity, "set_qvel"):
+        return
+    qvel = _to_float_list(entity.get_qvel())
+    if len(qvel) < 3 or not _is_finite_number(qvel[2]) or qvel[2] >= 0:
+        return
+    qvel[2] = 0.0
+    entity.set_qvel(qvel)
+
+
+def _enforce_dynamic_floor_contact(
+    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
+) -> int:
+    clamped_count = 0
+    for spec, entity, _scaled_offset_xyz in dynamic_entities:
+        box_size_xyz = _positive_float_tuple3(getattr(spec, "box_size_xyz", None))
+        if box_size_xyz is None or not hasattr(entity, "get_qpos"):
+            continue
+        qpos = _to_float_list(entity.get_qpos())
+        min_z = _oriented_box_min_z(qpos=qpos, box_size_xyz=box_size_xyz)
+        target_min_z = GENESIS_FLOOR_TOP_Z + GENESIS_FLOOR_CLEARANCE_EPSILON_M
+        if min_z is None or min_z >= target_min_z:
+            continue
+        qpos[2] += target_min_z - min_z
+        entity.set_qpos(qpos)
+        _clear_downward_linear_z_velocity(entity)
+        clamped_count += 1
+    return clamped_count
+
+
 def _is_finite_number(value: Any) -> bool:
     return (
         isinstance(value, int | float)
@@ -348,6 +436,48 @@ def _apply_live_joint_values(
         return 0
     robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
     return len(dof_indices)
+
+
+def _robot_collision_min_z(robot_entity) -> float | None:
+    min_z_values: list[float] = []
+    for link in getattr(robot_entity, "links", []):
+        if not hasattr(link, "get_AABB"):
+            continue
+        try:
+            aabb = _to_float_list(link.get_AABB())
+        except Exception:
+            continue
+        if len(aabb) < 3 or not _is_finite_number(aabb[2]):
+            continue
+        min_z_values.append(float(aabb[2]))
+    return min(min_z_values) if min_z_values else None
+
+
+def _restore_robot_joint_positions(robot_entity, qpos: list[float]) -> None:
+    if hasattr(robot_entity, "set_qpos"):
+        robot_entity.set_qpos(qpos)
+    if hasattr(robot_entity, "zero_all_dofs_velocity"):
+        robot_entity.zero_all_dofs_velocity()
+    if hasattr(robot_entity, "control_dofs_position"):
+        robot_entity.control_dofs_position(qpos)
+
+
+def _enforce_robot_floor_contact(
+    robot_entity,
+    last_safe_qpos: list[float],
+) -> tuple[bool, list[float]]:
+    current_qpos = (
+        _to_float_list(robot_entity.get_qpos())
+        if hasattr(robot_entity, "get_qpos")
+        else []
+    )
+    min_z = _robot_collision_min_z(robot_entity)
+    target_min_z = GENESIS_FLOOR_TOP_Z + GENESIS_ROBOT_FLOOR_CLEARANCE_EPSILON_M
+    if min_z is not None and min_z < target_min_z:
+        if last_safe_qpos:
+            _restore_robot_joint_positions(robot_entity, last_safe_qpos)
+        return False, list(last_safe_qpos)
+    return True, current_qpos or list(last_safe_qpos)
 
 
 def _read_json_url(url: str, *, timeout_sec: float) -> dict[str, Any] | None:
@@ -541,25 +671,12 @@ def open_genesis_world_scene(
             enable_gui=True,
         ),
     )
-    scene.add_entity(
-        gs.morphs.Plane(
-            fixed=True,
-            pos=(0.0, 0.0, 0.0),
-            plane_size=(4.0, 4.0),
-            collision=True,
-        ),
-        material=_rigid_material_for_physics(
-            gs,
-            None,
-            friction_fallback=DEFAULT_FLOOR_FRICTION,
-        ),
-        surface=gs.surfaces.Default(color=(0.16, 0.16, 0.16), opacity=0.35),
-        name="floor",
-    )
+    _add_floor_entity(gs, scene)
     genesis_urdf_path = materialize_so101_genesis_urdf(urdf_path)
     robot_entity = scene.add_entity(
         gs.morphs.URDF(
             file=str(genesis_urdf_path.resolve()),
+            pos=(0.0, 0.0, GENESIS_ROBOT_BASE_Z_OFFSET_M),
             fixed=True,
             merge_fixed_links=False,
             collision=True,
@@ -669,6 +786,12 @@ def open_genesis_world_scene(
     scene.build()
     for spec, entity, _scaled_offset_xyz in dynamic_entities:
         _apply_rigid_entity_physics_overrides(entity, spec.element.physics)
+    last_safe_robot_qpos = _to_float_list(robot_entity.get_qpos())
+    _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
+        robot_entity,
+        last_safe_robot_qpos,
+    )
+    _enforce_dynamic_floor_contact(dynamic_entities)
     _sync_dynamic_visual_entities(dynamic_visual_entities)
     print("[genesis-world-open] scene built; stepping Genesis runtime.")
     live_base_url = live_state_base_url.strip().rstrip("/")
@@ -698,6 +821,11 @@ def open_genesis_world_scene(
         from PIL import Image
 
         scene.step()
+        _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
+            robot_entity,
+            last_safe_robot_qpos,
+        )
+        _enforce_dynamic_floor_contact(dynamic_entities)
         _sync_dynamic_visual_entities(dynamic_visual_entities)
         image = camera.render(rgb=True)[0]
         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
@@ -718,6 +846,11 @@ def open_genesis_world_scene(
                     last_joint_sequence, joint_values = latest
                     _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
             scene.step()
+            _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
+                robot_entity,
+                last_safe_robot_qpos,
+            )
+            _enforce_dynamic_floor_contact(dynamic_entities)
             _sync_dynamic_visual_entities(dynamic_visual_entities)
         if live_enabled and dynamic_entities:
             _publish_dynamic_world_poses(
@@ -733,6 +866,7 @@ def open_genesis_world_scene(
         nonlocal last_joint_poll_at
         nonlocal last_world_publish_at
         nonlocal world_source_sequence
+        nonlocal last_safe_robot_qpos
         now = time.monotonic()
         if live_enabled and now - last_joint_poll_at >= joint_poll_interval:
             last_joint_poll_at = now
@@ -747,6 +881,11 @@ def open_genesis_world_scene(
                     _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
 
         scene.step()
+        _robot_floor_ok, last_safe_robot_qpos = _enforce_robot_floor_contact(
+            robot_entity,
+            last_safe_robot_qpos,
+        )
+        _enforce_dynamic_floor_contact(dynamic_entities)
         _sync_dynamic_visual_entities(dynamic_visual_entities)
 
         now = time.monotonic()

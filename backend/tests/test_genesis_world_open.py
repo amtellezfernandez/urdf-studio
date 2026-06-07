@@ -7,14 +7,23 @@ import pytest
 
 from backend.scripts.genesis_world_open import (
     DEFAULT_FLOOR_FRICTION,
+    GENESIS_FLOOR_CLEARANCE_EPSILON_M,
+    GENESIS_FLOOR_SIZE_XY,
+    GENESIS_FLOOR_THICKNESS_M,
+    GENESIS_FLOOR_TOP_Z,
     GENESIS_RIGID_FRICTION_MAX,
     GENESIS_RIGID_FRICTION_MIN,
     _add_box_entity,
+    _add_floor_entity,
     _add_mesh_entity,
+    _enforce_dynamic_floor_contact,
+    _enforce_robot_floor_contact,
     _apply_rigid_entity_physics_overrides,
     _apply_live_joint_values,
     _joint_dof_indices_by_name,
+    _oriented_box_min_z,
     _rigid_material_for_physics,
+    _robot_collision_min_z,
     _resolve_studio_pose_from_qpos,
     _visual_mesh_qpos_from_collider_qpos,
 )
@@ -206,6 +215,142 @@ def test_add_box_entity_passes_physics_material_to_genesis() -> None:
         "kind": "rigid",
         "kwargs": materials.rigid_kwargs[0],
     }
+
+
+def test_add_floor_entity_uses_thick_fixed_collider() -> None:
+    morphs = _FakeMorphs()
+    materials = _FakeMaterials()
+    gs = SimpleNamespace(
+        morphs=morphs,
+        surfaces=SimpleNamespace(Default=lambda **kwargs: {"surface": kwargs}),
+        materials=materials,
+    )
+    scene = _FakeScene()
+
+    _add_floor_entity(gs, scene)
+
+    assert morphs.box_kwargs is not None
+    assert morphs.box_kwargs["size"] == (
+        GENESIS_FLOOR_SIZE_XY[0],
+        GENESIS_FLOOR_SIZE_XY[1],
+        GENESIS_FLOOR_THICKNESS_M,
+    )
+    assert morphs.box_kwargs["pos"] == pytest.approx(
+        (0.0, 0.0, -GENESIS_FLOOR_THICKNESS_M / 2.0)
+    )
+    assert morphs.box_kwargs["fixed"] is True
+    assert morphs.box_kwargs["collision"] is True
+    assert scene.added[0][1]["name"] == "floor"
+    assert scene.added[0][1]["material"] == {
+        "kind": "rigid",
+        "kwargs": materials.rigid_kwargs[0],
+    }
+    assert materials.rigid_kwargs == [{"friction": DEFAULT_FLOOR_FRICTION}]
+
+
+def test_oriented_box_min_z_uses_rotated_extents() -> None:
+    min_z = _oriented_box_min_z(
+        qpos=[
+            0.0,
+            0.0,
+            0.05,
+            0.7071067811865476,
+            0.7071067811865476,
+            0.0,
+            0.0,
+        ],
+        box_size_xyz=(0.1, 0.2, 0.03),
+    )
+
+    assert min_z == pytest.approx(-0.05)
+
+
+def test_enforce_dynamic_floor_contact_lifts_flipped_box_above_floor() -> None:
+    class _FakeEntity:
+        def __init__(self) -> None:
+            self.qpos = [
+                0.28,
+                0.02,
+                0.02,
+                0.7071067811865476,
+                0.7071067811865476,
+                0.0,
+                0.0,
+            ]
+            self.qvel = [0.0, 0.0, -1.0, 0.0, 0.0, 0.0]
+
+        def get_qpos(self):
+            return self.qpos
+
+        def set_qpos(self, qpos):
+            self.qpos = list(qpos)
+
+        def get_qvel(self):
+            return self.qvel
+
+        def set_qvel(self, qvel):
+            self.qvel = list(qvel)
+
+    spec = SimpleNamespace(box_size_xyz=(0.1, 0.2, 0.03))
+    entity = _FakeEntity()
+
+    clamped = _enforce_dynamic_floor_contact([(spec, entity, (0.0, 0.0, 0.0))])
+
+    assert clamped == 1
+    assert entity.qpos[2] == pytest.approx(
+        GENESIS_FLOOR_TOP_Z + GENESIS_FLOOR_CLEARANCE_EPSILON_M + 0.1
+    )
+    assert entity.qvel[2] == 0.0
+
+
+def test_robot_collision_min_z_ignores_links_without_collision_geometry() -> None:
+    class _LinkWithAabb:
+        def get_AABB(self):  # noqa: N802 - mirrors Genesis API
+            return [[0.0, 0.0, 0.02], [0.1, 0.1, 0.2]]
+
+    class _LinkWithoutCollision:
+        def get_AABB(self):  # noqa: N802 - mirrors Genesis API
+            raise RuntimeError("Link has no collision geometries.")
+
+    robot = SimpleNamespace(links=[_LinkWithoutCollision(), _LinkWithAabb()])
+
+    assert _robot_collision_min_z(robot) == pytest.approx(0.02)
+
+
+def test_enforce_robot_floor_contact_restores_last_safe_joints() -> None:
+    class _UnsafeLink:
+        def get_AABB(self):  # noqa: N802 - mirrors Genesis API
+            return [[0.0, 0.0, -0.01], [0.1, 0.1, 0.2]]
+
+    class _FakeRobot:
+        def __init__(self) -> None:
+            self.links = [_UnsafeLink()]
+            self.qpos = [0.2, -0.1, 0.3]
+            self.zeroed_velocity = False
+            self.control_target: list[float] | None = None
+
+        def get_qpos(self):
+            return self.qpos
+
+        def set_qpos(self, qpos):
+            self.qpos = list(qpos)
+
+        def zero_all_dofs_velocity(self):
+            self.zeroed_velocity = True
+
+        def control_dofs_position(self, qpos):
+            self.control_target = list(qpos)
+
+    robot = _FakeRobot()
+    last_safe = [0.0, 0.0, 0.0]
+
+    ok, next_safe = _enforce_robot_floor_contact(robot, last_safe)
+
+    assert ok is False
+    assert next_safe == last_safe
+    assert robot.qpos == last_safe
+    assert robot.zeroed_velocity is True
+    assert robot.control_target == last_safe
 
 
 def test_apply_rigid_entity_physics_overrides_sets_mass_and_friction() -> None:
