@@ -18,6 +18,7 @@ const createRollout = (
     available: true,
     status: "available",
     dependencies: [],
+    acceleratorDependencies: [],
   },
   frameCount: 1,
   dynamicObjectCount: 1,

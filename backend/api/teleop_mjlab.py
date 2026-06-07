@@ -65,6 +65,7 @@ def start_teleop_mjlab_live(
         initial_end_effector_sample=req.initial_end_effector_sample,
         frame_map=req.frame_map,
         include_mjcf=req.include_mjcf,
+        accelerated_drive=req.accelerated_drive,
         step_ms=req.step_ms,
     )
 

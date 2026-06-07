@@ -22,6 +22,7 @@ from backend.services.teleop_mjlab import (
     validate_teleop_mjlab_motion,
 )
 from backend.services.teleop_mjlab_params import (
+    TELEOP_MJLAB_ACCELERATOR_DEPENDENCIES,
     TELEOP_MJLAB_BUNDLE_KIND,
     TELEOP_MJLAB_ISSUE_CODE_LIVE_SESSION_NOT_FOUND,
     TELEOP_MJLAB_ISSUE_CODE_JOINT_ACCELERATION_LIMIT,
@@ -205,6 +206,10 @@ def test_teleop_mjlab_runtime_endpoint_reports_dependency_status() -> None:
         TELEOP_MJLAB_RUNTIME_DEPENDENCY_MJLAB,
         TELEOP_MJLAB_RUNTIME_DEPENDENCY_MUJOCO,
     }
+    assert {
+        dependency["name"]
+        for dependency in payload["acceleratorDependencies"]
+    } == set(TELEOP_MJLAB_ACCELERATOR_DEPENDENCIES)
 
 
 def test_teleop_mjlab_validation_builds_motion_bundle_for_smooth_episode() -> None:
@@ -279,6 +284,7 @@ def test_teleop_mjlab_live_session_steps_dynamic_cube_contact() -> None:
     assert start_result.session_id is not None
     assert start_result.frame is not None
     assert start_result.mjcf_xml is not None
+    assert start_result.accelerated_drive is True
 
     try:
         close_result = step_teleop_mjlab_live_session(
@@ -296,6 +302,9 @@ def test_teleop_mjlab_live_session_steps_dynamic_cube_contact() -> None:
 
     assert close_result.success is True
     assert lift_result.success is True
+    assert lift_result.sim_step_count > 1
+    assert lift_result.physics_step_wall_ms > 0
+    assert lift_result.realtime_factor > 1
     assert stop_result.released is True
     assert close_result.frame is not None
     assert lift_result.frame is not None
