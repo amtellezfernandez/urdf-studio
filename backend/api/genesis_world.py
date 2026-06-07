@@ -4,8 +4,19 @@ from fastapi import APIRouter, Depends
 
 from backend.core.simulator_security import require_simulator_operator_access
 from backend.models.genesis_world import (
+    GenesisJointStateRequest,
+    GenesisJointStateResponse,
+    GenesisWorldStateRequest,
+    GenesisWorldStateResponse,
     GenesisWorldOpenRequest,
     GenesisWorldOpenResponse,
+)
+from backend.services.genesis_live_state import (
+    clear_genesis_world_state,
+    read_genesis_joint_state,
+    read_genesis_world_state,
+    store_genesis_joint_state,
+    store_genesis_world_state,
 )
 from backend.services.genesis_world_launcher import launch_default_genesis_world
 
@@ -17,6 +28,40 @@ def open_genesis_world(
     request: GenesisWorldOpenRequest,
     _access: None = Depends(require_simulator_operator_access),
 ) -> GenesisWorldOpenResponse:
+    clear_genesis_world_state()
     return launch_default_genesis_world(
         dynamic_container_mode=request.dynamic_container_mode,
     )
+
+
+@router.post("/joint-state", response_model=GenesisJointStateResponse)
+def publish_genesis_joint_state(
+    request: GenesisJointStateRequest,
+    _access: None = Depends(require_simulator_operator_access),
+) -> GenesisJointStateResponse:
+    return store_genesis_joint_state(request.joint_values)
+
+
+@router.get("/joint-state/latest", response_model=GenesisJointStateResponse)
+def get_latest_genesis_joint_state(
+    _access: None = Depends(require_simulator_operator_access),
+) -> GenesisJointStateResponse:
+    return read_genesis_joint_state()
+
+
+@router.post("/world-state", response_model=GenesisWorldStateResponse)
+def publish_genesis_world_state(
+    request: GenesisWorldStateRequest,
+    _access: None = Depends(require_simulator_operator_access),
+) -> GenesisWorldStateResponse:
+    return store_genesis_world_state(
+        source_sequence=request.source_sequence,
+        poses=request.poses,
+    )
+
+
+@router.get("/world-state/latest", response_model=GenesisWorldStateResponse)
+def get_latest_genesis_world_state(
+    _access: None = Depends(require_simulator_operator_access),
+) -> GenesisWorldStateResponse:
+    return read_genesis_world_state()

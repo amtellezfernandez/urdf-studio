@@ -75,6 +75,11 @@ import { validateInertiaTensor } from "@/features/viewer/inertialMath";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
 import { openGenesisWorld } from "@/features/world-share/genesisWorldApi";
 import {
+  useGenesisJointStatePublisher,
+  useGenesisWorldStatePoller,
+} from "@/features/world-share/useGenesisLiveSync";
+import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWorldLiveStateStore";
+import {
   DEFAULT_RECORDING_VIEW_HEIGHT,
   MIN_CAMERAS_PANEL_HEIGHT,
   MIN_EPISODES_PANEL_HEIGHT,
@@ -241,6 +246,9 @@ const Index = () => {
   useIkdRuntimeAuto({ selectedSolverId: selectedIkSolverId });
   const availableIkSolvers = useIkSolverStore((state) => state.availableSolvers);
   const setSelectedIkSolverId = useIkSolverStore((state) => state.setSelectedSolverId);
+  const [genesisLiveSyncEnabled, setGenesisLiveSyncEnabled] = useState(false);
+  useGenesisJointStatePublisher(genesisLiveSyncEnabled);
+  useGenesisWorldStatePoller(genesisLiveSyncEnabled);
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
   const workspaceController = useWorkspaceController();
   const workspaceMode = workspaceController.mode;
@@ -3054,8 +3062,12 @@ const Index = () => {
 
   const handleOpenGenesisWorld = useCallback(async () => {
     try {
+      useGenesisWorldLiveStateStore.getState().clearLivePoses();
       const launched = await openGenesisWorld("mesh");
-      toast.success(`Genesis launch started (pid ${launched.pid}). Mesh prep may take a while.`);
+      setGenesisLiveSyncEnabled(true);
+      toast.success(
+        `Genesis launch started (pid ${launched.pid}). Live robot/world sync is active.`
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to open Genesis");
     }

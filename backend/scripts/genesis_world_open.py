@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import time
 from pathlib import Path
+from typing import Any
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
+from backend.core.settings import settings
 from backend.services.genesis_world_scene import (
     DEFAULT_DYNAMIC_CONTAINER_MODE,
     DEFAULT_SO101_URDF_PATH,
@@ -57,6 +62,17 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--screenshot-width", type=int, default=1280)
     parser.add_argument("--screenshot-height", type=int, default=720)
+    parser.add_argument(
+        "--live-state-base-url",
+        default=f"http://127.0.0.1:{settings.api_port}/worlds/genesis",
+        help=(
+            "Backend Genesis live-state base URL. Empty disables Studio/Genesis "
+            "joint mirroring and world pose publishing."
+        ),
+    )
+    parser.add_argument("--live-joint-poll-hz", type=float, default=30.0)
+    parser.add_argument("--live-world-publish-hz", type=float, default=30.0)
+    parser.add_argument("--live-http-timeout-sec", type=float, default=0.05)
     return parser.parse_args()
 
 
@@ -123,6 +139,215 @@ def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str)
     )
 
 
+def _is_finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
+def _to_float_list(value: Any) -> list[float]:
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "numpy"):
+        value = value.numpy()
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    if isinstance(value, int | float):
+        return [float(value)]
+    if not isinstance(value, list | tuple):
+        return []
+    flattened: list[float] = []
+    for item in value:
+        if isinstance(item, list | tuple):
+            flattened.extend(_to_float_list(item))
+        elif _is_finite_number(item):
+            flattened.append(float(item))
+    return flattened
+
+
+def _normalize_quaternion_wxyz(
+    quaternion: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    norm = math.sqrt(sum(component * component for component in quaternion))
+    if norm <= 0 or not math.isfinite(norm):
+        return (1.0, 0.0, 0.0, 0.0)
+    return tuple(component / norm for component in quaternion)
+
+
+def _rotate_vector_by_quaternion_wxyz(
+    quaternion: tuple[float, float, float, float],
+    vector: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    w, x, y, z = _normalize_quaternion_wxyz(quaternion)
+    vx, vy, vz = vector
+    # Optimized q * v * q^-1 rotation for a unit quaternion in wxyz order.
+    tx = 2.0 * (y * vz - z * vy)
+    ty = 2.0 * (z * vx - x * vz)
+    tz = 2.0 * (x * vy - y * vx)
+    return (
+        vx + w * tx + (y * tz - z * ty),
+        vy + w * ty + (z * tx - x * tz),
+        vz + w * tz + (x * ty - y * tx),
+    )
+
+
+def _resolve_studio_pose_from_qpos(
+    *,
+    qpos: list[float],
+    scaled_visual_origin_offset_xyz: tuple[float, float, float],
+) -> tuple[tuple[float, float, float], tuple[float, float, float, float]] | None:
+    if len(qpos) < 7:
+        return None
+    position = tuple(float(value) for value in qpos[:3])
+    orientation = _normalize_quaternion_wxyz(tuple(float(value) for value in qpos[3:7]))
+    if not all(math.isfinite(value) for value in (*position, *orientation)):
+        return None
+    rotated_offset = _rotate_vector_by_quaternion_wxyz(
+        orientation,
+        scaled_visual_origin_offset_xyz,
+    )
+    studio_position = tuple(
+        position[index] - rotated_offset[index]
+        for index in range(3)
+    )
+    return studio_position, orientation
+
+
+def _joint_dof_indices_by_name(robot_entity) -> dict[str, int]:
+    indices: dict[str, int] = {}
+    for joint in getattr(robot_entity, "joints", []):
+        name = getattr(joint, "name", "")
+        dof_indices = getattr(joint, "dofs_idx_local", None)
+        if not isinstance(name, str) or not name:
+            continue
+        local_indices = _to_float_list(dof_indices)
+        if len(local_indices) != 1:
+            continue
+        indices[name] = int(local_indices[0])
+    return indices
+
+
+def _apply_live_joint_values(
+    robot_entity,
+    joint_dof_indices: dict[str, int],
+    joint_values: dict[str, Any],
+) -> int:
+    dof_indices: list[int] = []
+    positions: list[float] = []
+    for joint_name, value in joint_values.items():
+        if joint_name not in joint_dof_indices or not _is_finite_number(value):
+            continue
+        dof_indices.append(joint_dof_indices[joint_name])
+        positions.append(float(value))
+    if not dof_indices:
+        return 0
+    robot_entity.control_dofs_position(positions, dofs_idx_local=dof_indices)
+    return len(dof_indices)
+
+
+def _read_json_url(url: str, *, timeout_sec: float) -> dict[str, Any] | None:
+    try:
+        with urllib_request.urlopen(url, timeout=timeout_sec) as response:
+            payload = response.read()
+    except (OSError, urllib_error.URLError, TimeoutError):
+        return None
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _post_json_url(url: str, payload: dict[str, Any], *, timeout_sec: float) -> None:
+    data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    request = urllib_request.Request(
+        url,
+        data=data,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(request, timeout=timeout_sec) as response:
+            response.read()
+    except (OSError, urllib_error.URLError, TimeoutError):
+        return
+
+
+def _latest_joint_values_from_backend(
+    base_url: str,
+    *,
+    timeout_sec: float,
+) -> tuple[int, dict[str, Any]] | None:
+    payload = _read_json_url(
+        f"{base_url.rstrip('/')}/joint-state/latest",
+        timeout_sec=timeout_sec,
+    )
+    if payload is None:
+        return None
+    sequence = payload.get("sequence")
+    joint_values = payload.get("joint_values")
+    if not isinstance(sequence, int) or not isinstance(joint_values, dict):
+        return None
+    return sequence, joint_values
+
+
+def _dynamic_entity_pose_payload(
+    *,
+    spec,
+    entity,
+    scaled_visual_origin_offset_xyz: tuple[float, float, float],
+) -> dict[str, Any] | None:
+    pose = _resolve_studio_pose_from_qpos(
+        qpos=_to_float_list(entity.get_qpos()),
+        scaled_visual_origin_offset_xyz=scaled_visual_origin_offset_xyz,
+    )
+    if pose is None:
+        return None
+    position_xyz, orientation_wxyz = pose
+    return {
+        "element_id": spec.element.id,
+        "position_xyz": position_xyz,
+        "orientation_wxyz": orientation_wxyz,
+    }
+
+
+def _publish_dynamic_world_poses(
+    *,
+    base_url: str,
+    source_sequence: int,
+    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]],
+    timeout_sec: float,
+) -> None:
+    poses: list[dict[str, Any]] = []
+    for spec, entity, scaled_offset in dynamic_entities:
+        pose = _dynamic_entity_pose_payload(
+            spec=spec,
+            entity=entity,
+            scaled_visual_origin_offset_xyz=scaled_offset,
+        )
+        if pose is not None:
+            poses.append(pose)
+    _post_json_url(
+        f"{base_url.rstrip('/')}/world-state",
+        {"source_sequence": source_sequence, "poses": poses},
+        timeout_sec=timeout_sec,
+    )
+
+
+def _scaled_offset(
+    offset_xyz: tuple[float, float, float],
+    scale_xyz: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return tuple(offset_xyz[index] * scale_xyz[index] for index in range(3))
+
+
 def open_genesis_world_scene(
     *,
     layout_path: Path,
@@ -132,6 +357,10 @@ def open_genesis_world_scene(
     no_viewer: bool,
     screenshot_path: Path | None,
     screenshot_size: tuple[int, int],
+    live_state_base_url: str,
+    live_joint_poll_hz: float,
+    live_world_publish_hz: float,
+    live_http_timeout_sec: float,
 ) -> None:
     import genesis as gs
 
@@ -180,7 +409,7 @@ def open_genesis_world_scene(
         surface=gs.surfaces.Default(color=(0.16, 0.16, 0.16), opacity=0.35),
         name="floor",
     )
-    scene.add_entity(
+    robot_entity = scene.add_entity(
         gs.morphs.URDF(
             file=str(urdf_path.resolve()),
             fixed=True,
@@ -191,9 +420,10 @@ def open_genesis_world_scene(
         name="so101",
     )
 
+    dynamic_entities: list[tuple[Any, Any, tuple[float, float, float]]] = []
     for spec in specs:
         if spec.is_dynamic and dynamic_container_mode == "mesh":
-            _add_mesh_entity(
+            entity = _add_mesh_entity(
                 gs,
                 scene,
                 spec=spec,
@@ -203,6 +433,16 @@ def open_genesis_world_scene(
                 decimate=True,
                 convexify=True,
                 preserve_studio_glb_orientation=True,
+            )
+            dynamic_entities.append(
+                (
+                    spec,
+                    entity,
+                    _scaled_offset(
+                        spec.mesh_bounds.studio_visual_offset_xyz,
+                        spec.effective_scale_xyz,
+                    ),
+                )
             )
         elif spec.is_dynamic and dynamic_container_mode == "box":
             _add_mesh_entity(
@@ -215,13 +455,23 @@ def open_genesis_world_scene(
                 decimate=False,
                 convexify=False,
             )
-            _add_box_entity(
+            entity = _add_box_entity(
                 gs,
                 scene,
                 spec=spec,
                 fixed=False,
                 collision=True,
                 name=spec.element.id,
+            )
+            dynamic_entities.append(
+                (
+                    spec,
+                    entity,
+                    _scaled_offset(
+                        spec.mesh_bounds.studio_visual_center_after_offset_xyz,
+                        spec.effective_scale_xyz,
+                    ),
+                )
             )
         else:
             _add_mesh_entity(
@@ -248,6 +498,28 @@ def open_genesis_world_scene(
 
     scene.build()
     print("[genesis-world-open] scene built; stepping Genesis runtime.")
+    live_base_url = live_state_base_url.strip().rstrip("/")
+    live_enabled = bool(live_base_url)
+    joint_dof_indices = _joint_dof_indices_by_name(robot_entity)
+    last_joint_sequence = 0
+    last_joint_poll_at = 0.0
+    last_world_publish_at = 0.0
+    world_source_sequence = 0
+    joint_poll_interval = (
+        1.0 / live_joint_poll_hz
+        if live_joint_poll_hz > 0 and math.isfinite(live_joint_poll_hz)
+        else 0.0
+    )
+    world_publish_interval = (
+        1.0 / live_world_publish_hz
+        if live_world_publish_hz > 0 and math.isfinite(live_world_publish_hz)
+        else 0.0
+    )
+    if live_enabled:
+        print(
+            "[genesis-world-open] live sync enabled "
+            f"joints={len(joint_dof_indices)} dynamic_entities={len(dynamic_entities)}"
+        )
 
     if screenshot_path is not None and camera is not None:
         from PIL import Image
@@ -260,21 +532,71 @@ def open_genesis_world_scene(
 
     if no_viewer:
         for _ in range(5):
+            if live_enabled:
+                latest = _latest_joint_values_from_backend(
+                    live_base_url,
+                    timeout_sec=live_http_timeout_sec,
+                )
+                if latest is not None:
+                    last_joint_sequence, joint_values = latest
+                    _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
             scene.step()
+        if live_enabled and dynamic_entities:
+            _publish_dynamic_world_poses(
+                base_url=live_base_url,
+                source_sequence=1,
+                dynamic_entities=dynamic_entities,
+                timeout_sec=live_http_timeout_sec,
+            )
         return
+
+    def step_live_runtime() -> None:
+        nonlocal last_joint_sequence
+        nonlocal last_joint_poll_at
+        nonlocal last_world_publish_at
+        nonlocal world_source_sequence
+        now = time.monotonic()
+        if live_enabled and now - last_joint_poll_at >= joint_poll_interval:
+            last_joint_poll_at = now
+            latest = _latest_joint_values_from_backend(
+                live_base_url,
+                timeout_sec=live_http_timeout_sec,
+            )
+            if latest is not None:
+                sequence, joint_values = latest
+                if sequence > last_joint_sequence:
+                    last_joint_sequence = sequence
+                    _apply_live_joint_values(robot_entity, joint_dof_indices, joint_values)
+
+        scene.step()
+
+        now = time.monotonic()
+        if (
+            live_enabled
+            and dynamic_entities
+            and now - last_world_publish_at >= world_publish_interval
+        ):
+            last_world_publish_at = now
+            world_source_sequence += 1
+            _publish_dynamic_world_poses(
+                base_url=live_base_url,
+                source_sequence=world_source_sequence,
+                dynamic_entities=dynamic_entities,
+                timeout_sec=live_http_timeout_sec,
+            )
 
     if duration_sec <= 0:
         print("[genesis-world-open] Genesis viewer opened. Press Ctrl-C to return.")
         try:
             while True:
-                scene.step()
+                step_live_runtime()
                 time.sleep(1.0 / 60.0)
         except KeyboardInterrupt:
             return
 
     deadline = time.monotonic() + duration_sec
     while time.monotonic() < deadline:
-        scene.step()
+        step_live_runtime()
         time.sleep(1.0 / 60.0)
 
 
@@ -288,6 +610,10 @@ def main() -> int:
         no_viewer=args.no_viewer,
         screenshot_path=Path(args.screenshot) if args.screenshot else None,
         screenshot_size=(args.screenshot_width, args.screenshot_height),
+        live_state_base_url=args.live_state_base_url,
+        live_joint_poll_hz=args.live_joint_poll_hz,
+        live_world_publish_hz=args.live_world_publish_hz,
+        live_http_timeout_sec=args.live_http_timeout_sec,
     )
     return 0
 

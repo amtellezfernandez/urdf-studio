@@ -9,6 +9,7 @@ import {
   setWorldLayoutElementHighlighted,
 } from "@/features/viewer/worldLayoutElementRuntime";
 import type { WorldLayoutElementConfig } from "@/features/viewer/worldLayoutEnvironmentConfig";
+import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWorldLiveStateStore";
 
 type WorldLayoutGlbElementProps = {
   config: WorldLayoutElementConfig;
@@ -27,6 +28,9 @@ export const WorldLayoutGlbElement = ({
 }: WorldLayoutGlbElementProps) => {
   const [scene, setScene] = useState<THREE.Group | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const livePose = useGenesisWorldLiveStateStore(
+    (state) => state.posesByElementId[config.asset.id] ?? null
+  );
   const selectedMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
@@ -82,8 +86,6 @@ export const WorldLayoutGlbElement = ({
         );
         const wrapper = new THREE.Group();
         wrapper.name = config.asset.name;
-        wrapper.position.set(...config.position);
-        wrapper.rotation.set(...config.rotation);
         wrapper.scale.set(
           metricScale * config.scale[0],
           metricScale * config.scale[1],
@@ -92,8 +94,7 @@ export const WorldLayoutGlbElement = ({
         wrapper.add(visual.scene);
         wrapper.userData.worldLayoutElementId = config.asset.id;
         wrapper.userData.worldLayoutElementMetadata = config.asset.metadataUrl ?? null;
-        wrapper.updateMatrixWorld(true);
-        onBoundsChange(config.asset.id, new THREE.Box3().setFromObject(wrapper));
+        wrapper.userData.worldLayoutElementMetricScale = metricScale;
         setScene(wrapper);
       },
       undefined,
@@ -110,7 +111,50 @@ export const WorldLayoutGlbElement = ({
       setScene(null);
       instanceMaterials.forEach((material) => material.dispose());
     };
-  }, [config, onBoundsChange]);
+  }, [
+    config.asset.id,
+    config.asset.metadataUrl,
+    config.asset.name,
+    config.asset.realWorldHeightM,
+    config.asset.url,
+    config.materialColor,
+    onBoundsChange,
+  ]);
+
+  useEffect(() => {
+    if (!scene) return;
+    const metricScale =
+      typeof scene.userData.worldLayoutElementMetricScale === "number"
+        ? scene.userData.worldLayoutElementMetricScale
+        : 1;
+    scene.scale.set(
+      metricScale * config.scale[0],
+      metricScale * config.scale[1],
+      metricScale * config.scale[2]
+    );
+    if (livePose) {
+      scene.position.set(...livePose.position);
+      scene.quaternion.set(
+        livePose.orientationWxyz[1],
+        livePose.orientationWxyz[2],
+        livePose.orientationWxyz[3],
+        livePose.orientationWxyz[0]
+      );
+    } else {
+      scene.position.set(...config.position);
+      scene.rotation.set(...config.rotation);
+    }
+    scene.updateMatrixWorld(true);
+    onBoundsChange(config.asset.id, new THREE.Box3().setFromObject(scene));
+  }, [
+    config.asset.id,
+    config.position,
+    config.rotation,
+    config.scale,
+    livePose,
+    onBoundsChange,
+    scene,
+  ]);
 
   if (scene) {
     return (
