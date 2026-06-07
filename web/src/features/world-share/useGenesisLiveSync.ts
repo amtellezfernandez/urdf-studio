@@ -12,6 +12,8 @@ const ROBOT_STATE_POLL_INTERVAL_MS = 50;
 const WORLD_STATE_POLL_INTERVAL_MS = 50;
 const GENESIS_FEEDBACK_JOINT_EPSILON = 1e-6;
 
+let genesisFeedbackStoreUpdateDepth = 0;
+
 const hasFiniteJointValues = (jointValues: Readonly<Record<string, number>>): boolean =>
   Object.values(jointValues).some((value) => Number.isFinite(value));
 
@@ -40,6 +42,15 @@ const mergeChangedGenesisJointValues = (
     }
   }
   return changed ? nextJointValues : null;
+};
+
+const applyGenesisFeedbackJointValues = (jointValues: Record<string, number>): void => {
+  genesisFeedbackStoreUpdateDepth += 1;
+  try {
+    useJointStore.getState().setJointValues(jointValues);
+  } finally {
+    genesisFeedbackStoreUpdateDepth -= 1;
+  }
 };
 
 export const useGenesisJointStatePublisher = (enabled: boolean): void => {
@@ -95,6 +106,7 @@ export const useGenesisJointStatePublisher = (enabled: boolean): void => {
     schedule(useJointStore.getState().jointValues);
     const unsubscribe = useJointStore.subscribe((state, previousState) => {
       if (state.jointValues === previousState.jointValues) return;
+      if (genesisFeedbackStoreUpdateDepth > 0) return;
       schedule(state.jointValues);
     });
 
@@ -136,7 +148,7 @@ export const useGenesisRobotStatePoller = (enabled: boolean): void => {
             state.joint_values
           );
           if (nextJointValues === null) return;
-          useJointStore.getState().setJointValues(nextJointValues);
+          applyGenesisFeedbackJointValues(nextJointValues);
         })
         .catch(() => undefined)
         .finally(() => {
