@@ -7,9 +7,10 @@ import {
 } from "@/features/world-share/genesisWorldApi";
 import { useGenesisWorldLiveStateStore } from "@/features/world-share/genesisWorldLiveStateStore";
 
-const JOINT_PUBLISH_INTERVAL_MS = 33;
-const ROBOT_STATE_POLL_INTERVAL_MS = 50;
-const WORLD_STATE_POLL_INTERVAL_MS = 50;
+const GENESIS_LIVE_SYNC_INTERVAL_MS = 16;
+const JOINT_PUBLISH_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
+const ROBOT_STATE_POLL_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
+const WORLD_STATE_POLL_INTERVAL_MS = GENESIS_LIVE_SYNC_INTERVAL_MS;
 const GENESIS_FEEDBACK_JOINT_EPSILON = 1e-6;
 
 let genesisFeedbackStoreUpdateDepth = 0;
