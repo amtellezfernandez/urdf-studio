@@ -47,6 +47,7 @@ import {
 import { cloneIkDragReferenceCamera } from "@/features/viewer/ikDragCamera";
 import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
 import type { IkDragLivePhysicsTargetPose } from "@/features/viewer/ikDragLivePhysics";
+import { buildLivePhysicsGripperTargetPose } from "@/features/viewer/gripperPhysicsTarget";
 
 const NON_ARM_JOINT_PATTERN = /(wheel|caster|drive|tire)/i;
 
@@ -64,6 +65,7 @@ interface IKDragControlsProps {
   onDragStateChange?: (dragging: boolean) => void;
   onTargetPose?: (pose: IkDragLivePhysicsTargetPose) => void;
   gripperOpeningM?: number;
+  physicsTargetLink?: string | null;
   handleIndex?: number;
   handleCount?: number;
 }
@@ -81,6 +83,7 @@ export const IKDragControls = ({
   onDragStateChange,
   onTargetPose,
   gripperOpeningM,
+  physicsTargetLink,
   handleIndex = 0,
   handleCount = 1,
 }: IKDragControlsProps) => {
@@ -997,19 +1000,28 @@ export const IKDragControls = ({
           position: localPosition.clone(),
           quaternion: localQuaternion,
         };
-        onTargetPose?.({
+        const targetPositionXyz: [number, number, number] = [
+          tmpSolveTargetWorldRef.current.x,
+          tmpSolveTargetWorldRef.current.y,
+          tmpSolveTargetWorldRef.current.z,
+        ];
+        const targetQuatWxyz: [number, number, number, number] = [
+          targetMeshRef.current.quaternion.w,
+          targetMeshRef.current.quaternion.x,
+          targetMeshRef.current.quaternion.y,
+          targetMeshRef.current.quaternion.z,
+        ];
+        const physicsTargetPose = buildLivePhysicsGripperTargetPose({
+          robot,
           endEffectorLink,
-          positionXyz: [
-            tmpSolveTargetWorldRef.current.x,
-            tmpSolveTargetWorldRef.current.y,
-            tmpSolveTargetWorldRef.current.z,
-          ],
-          quatWxyz: [
-            targetMeshRef.current.quaternion.w,
-            targetMeshRef.current.quaternion.x,
-            targetMeshRef.current.quaternion.y,
-            targetMeshRef.current.quaternion.z,
-          ],
+          physicsTargetLink,
+          targetPositionXyz,
+          targetQuatWxyz,
+        });
+        onTargetPose?.({
+          endEffectorLink: physicsTargetPose.endEffectorLink,
+          positionXyz: physicsTargetPose.positionXyz,
+          quatWxyz: physicsTargetPose.quatWxyz,
           timestampMs: now,
           ...(gripperOpeningM !== undefined ? { gripperOpeningM } : {}),
         });

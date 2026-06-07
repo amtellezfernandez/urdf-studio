@@ -125,6 +125,35 @@ afterEach(() => {
 });
 
 describe("EpisodesPanel MJLab status", () => {
+  it("renders demo episode labels and train/replay badges in the lateral list", async () => {
+    const episode = buildEpisode();
+    episode.metadata = {
+      label: "Pick Container",
+      tasks: ["pick up the top grabbable shipping container and place it to the left"],
+      source: "demo",
+      additional: {
+        sourceType: "demo",
+        sourceName: "SO101 Pick Container",
+        demoType: "so101_container_pickup_recorded_episode",
+        hf_training_candidate: true,
+        replay_ready: true,
+      },
+    };
+
+    const { container, cleanup } = await renderEpisodesPanel([episode]);
+
+    expect(container.textContent).toContain("Pick Container");
+    expect(container.textContent).toContain(
+      "pick up the top grabbable shipping container and place it to the left",
+    );
+    expect(container.textContent).toContain("Demo");
+    expect(container.textContent).toContain("HF train");
+    expect(container.textContent).toContain("Replay");
+    expect(container.textContent).toContain("SO101 Pick Container");
+
+    await cleanup();
+  });
+
   it("renders pending MJLab status inside the episode row", async () => {
     const { container, cleanup } = await renderEpisodesPanel([
       withDatasetEpisodeMjlabValidation(

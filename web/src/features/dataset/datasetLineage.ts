@@ -26,6 +26,7 @@ export type DatasetTreatmentSourceLineageRecord = {
 };
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
+  demo: "Demo",
   hf: "HF",
   local: "Local",
   recorded: "REC",

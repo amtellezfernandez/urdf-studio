@@ -33,10 +33,21 @@ describe("createDemoEpisodes", () => {
     expect(episodes).toHaveLength(1);
     expect(episodes[0]?.metadata?.label).toBe("Pick Container");
     expect(episodes[0]?.metadata?.additional?.demoType).toBe(
-      "so101_container_pickup_prerecorded"
+      "so101_container_pickup_recorded_episode"
     );
-    expect(episodes[0]?.metadata?.additional?.physics_backend).toBe("prebaked");
+    expect(episodes[0]?.metadata?.additional?.sourceType).toBe("demo");
+    expect(episodes[0]?.metadata?.additional?.sourceName).toBe(
+      "SO101 Pick Container"
+    );
+    expect(episodes[0]?.metadata?.additional?.playback_kind).toBe(
+      "joint_and_object_pose_episode"
+    );
+    expect(episodes[0]?.metadata?.additional?.physics_backend).toBe(
+      "episode_playback"
+    );
     expect(episodes[0]?.metadata?.additional?.physics_rollout_required).toBe(false);
+    expect(episodes[0]?.metadata?.additional?.hf_training_candidate).toBe(true);
+    expect(episodes[0]?.metadata?.additional?.replay_ready).toBe(true);
     expect(episodes[0]?.metadata?.additional?.object_initial_position_xyz).toEqual([
       SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.x,
       SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.y,
@@ -59,6 +70,16 @@ describe("createDemoEpisodes", () => {
     expect(
       frames.at(-1)?.objectPoses?.[SO101_GRABBABLE_CONTAINER_TRACK_ID]?.position
     ).toEqual(SO101_GRABBABLE_CONTAINER_FINAL_POSITION);
+    expect(
+      frames[Math.floor(frames.length * 0.44)]?.objectPoses?.[
+        SO101_GRABBABLE_CONTAINER_TRACK_ID
+      ]?.position
+    ).toEqual(SO101_GRABBABLE_CONTAINER_INITIAL_POSITION);
+    expect(
+      frames[Math.floor(frames.length * 0.64)]?.objectPoses?.[
+        SO101_GRABBABLE_CONTAINER_TRACK_ID
+      ]?.position.z
+    ).toBeGreaterThan(SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.z);
     expect(frames[0]?.jointPositions.gripper).toBeGreaterThan(
       frames[Math.floor(frames.length * 0.5)]?.jointPositions.gripper ?? 1
     );
@@ -75,7 +96,7 @@ describe("createDemoEpisodes", () => {
 
     expect(episodes.length).toBeGreaterThan(0);
     expect(episodes[0]?.metadata?.additional?.demoType).not.toBe(
-      "so101_container_pickup_prerecorded"
+      "so101_container_pickup_recorded_episode"
     );
   });
 });

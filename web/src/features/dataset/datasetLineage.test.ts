@@ -62,6 +62,7 @@ describe("datasetLineage", () => {
   });
 
   it("maps known source types to stable display labels", () => {
+    expect(resolveSourceTypeDisplayLabel("demo")).toBe("Demo");
     expect(resolveSourceTypeDisplayLabel("hf")).toBe("HF");
     expect(resolveSourceTypeDisplayLabel("local")).toBe("Local");
     expect(resolveSourceTypeDisplayLabel("recorded")).toBe("REC");

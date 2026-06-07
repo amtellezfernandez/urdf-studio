@@ -213,6 +213,43 @@ const buildDatasetMjlabValidationTitle = (
 ): string =>
   [validation.message, ...(validation.issueSummaries ?? [])].join("\n");
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const readNonEmptyString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+
+const readEpisodeAdditional = (episode: Episode): Record<string, unknown> =>
+  isRecord(episode.metadata?.additional) ? episode.metadata.additional : {};
+
+const resolveEpisodeDisplayTitle = (episode: Episode): string => {
+  const label = readNonEmptyString(episode.metadata?.label);
+  if (label) return label;
+  const firstTask = episode.metadata?.tasks?.find(
+    (task) => typeof task === "string" && task.trim().length > 0
+  );
+  if (firstTask) return firstTask.trim();
+  return `Episode ${episode.number}`;
+};
+
+const resolveEpisodeTaskLabel = (episode: Episode, title: string): string | null => {
+  const firstTask = episode.metadata?.tasks?.find(
+    (task) => typeof task === "string" && task.trim().length > 0
+  );
+  const task = firstTask?.trim();
+  if (!task || task === title) return null;
+  return task;
+};
+
+const isDemoEpisode = (episode: Episode, sourceType: string | undefined): boolean => {
+  const additional = readEpisodeAdditional(episode);
+  return (
+    sourceType === "demo" ||
+    episode.metadata?.source === "demo" ||
+    readNonEmptyString(additional.demoType) !== null
+  );
+};
+
 export const EpisodesPanel = ({
   episodes,
   episodePipelineStates = {},
@@ -910,13 +947,11 @@ export const EpisodesPanel = ({
                 const timingIssueCount = stats?.timingIssueCount ?? 0;
                 const isPlaying =
                   currentPlayingEpisodeIndex === index && isPlayingAll;
-                const additional = episode.metadata?.additional;
+                const additional = readEpisodeAdditional(episode);
                 const mjlabValidation =
                   resolveDatasetEpisodeMjlabValidation(episode);
                 const isLazyPlaceholder =
                   episode.frames.length === 0 &&
-                  !!additional &&
-                  typeof additional === "object" &&
                   "hfLazy" in additional;
                 const pipelineState = episodePipelineStates[episode.id];
                 const isPipelineLoading = pipelineState?.status === "loading";
@@ -941,6 +976,13 @@ export const EpisodesPanel = ({
                 const sourceTypeLabel = resolveSourceTypeDisplayLabel(sourceType);
                 const signalMode = resolveEpisodeSignalMode(episode);
                 const signalModeLabel = resolveEpisodeSignalModeLabel(episode);
+                const episodeTitle = resolveEpisodeDisplayTitle(episode);
+                const episodeTask = resolveEpisodeTaskLabel(episode, episodeTitle);
+                const demoEpisode = isDemoEpisode(episode, sourceType);
+                const hfTrainingCandidate = additional.hf_training_candidate === true;
+                const replayReady =
+                  additional.replay_ready === true ||
+                  readNonEmptyString(additional.playback_kind) !== null;
                 const showPendingHfActions =
                   pendingHfRemainderEpisodeId !== null &&
                   episode.id === pendingHfRemainderEpisodeId;
@@ -1011,6 +1053,48 @@ export const EpisodesPanel = ({
 
                       {/* Episode Info */}
                       <div className="flex-1 min-w-0">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <span
+                            className="truncate text-[11px] font-semibold text-foreground"
+                            title={episodeTitle}
+                          >
+                            {episodeTitle}
+                          </span>
+                          {demoEpisode && (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1 py-0 text-[9px] border-sky-500/40 text-sky-300 bg-sky-500/10"
+                            >
+                              Demo
+                            </Badge>
+                          )}
+                          {hfTrainingCandidate && (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1 py-0 text-[9px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10"
+                            >
+                              HF train
+                            </Badge>
+                          )}
+                          {replayReady && (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1 py-0 text-[9px] border-border/60 text-muted-foreground"
+                            >
+                              Replay
+                            </Badge>
+                          )}
+                        </div>
+                        {episodeTask && (
+                          <div className="mt-0.5 min-w-0">
+                            <span
+                              className="block truncate text-[9px] text-muted-foreground"
+                              title={episodeTask}
+                            >
+                              {episodeTask}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex min-w-0 items-center gap-1 text-[10px]">
                           <span className="font-medium text-foreground">
                             {frameCountDisplay} frames

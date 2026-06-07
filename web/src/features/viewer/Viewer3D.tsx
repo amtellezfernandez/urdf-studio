@@ -69,6 +69,7 @@ import {
   type IkDragLivePhysicsMeshProxy,
   useIkDragLivePhysicsBridge,
 } from "@/features/viewer/ikDragLivePhysics";
+import { resolveLivePhysicsGripperTargetLink } from "@/features/viewer/gripperPhysicsTarget";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { cn } from "@/shared/lib/utils";
 import { useGPUMode, type GPUMode } from "@/shared/hooks/use-gpu-mode";
@@ -3413,6 +3414,7 @@ type LeaderTeleopLivePhysicsFrameSyncProps = {
   endEffectorLink: string | null;
   gripperOpeningM?: number;
   onTargetPose: (pose: IkDragLivePhysicsTargetPose) => void;
+  physicsTargetLink?: string | null;
   robot: URDFRobot | null;
 };
 
@@ -3421,16 +3423,18 @@ const LeaderTeleopLivePhysicsFrameSync = ({
   endEffectorLink,
   gripperOpeningM,
   onTargetPose,
+  physicsTargetLink,
   robot,
 }: LeaderTeleopLivePhysicsFrameSyncProps) => {
   useFrame(() => {
     if (!active || !robot || !endEffectorLink) {
       return;
     }
-    const pose = extractLinkPose(robot, endEffectorLink);
+    const targetLink = physicsTargetLink?.trim() || endEffectorLink;
+    const pose = extractLinkPose(robot, targetLink);
     if (!pose) return;
     onTargetPose({
-      endEffectorLink,
+      endEffectorLink: targetLink,
       positionXyz: pose.position,
       quatWxyz: pose.quaternion,
       timestampMs:
@@ -4735,6 +4739,23 @@ export const Viewer3D = ({
       .filter(Boolean);
   }, [endEffectorLink, isAssemblyWorkspace, urdfAnalysis]);
   const primaryIkEndEffectorLink = ikEndEffectorLinks[0] ?? null;
+  const livePhysicsGripperTargetLinkByEe = useMemo(() => {
+    return new Map(
+      ikEndEffectorLinks.map((ikEeLink) => [
+        ikEeLink,
+        resolveLivePhysicsGripperTargetLink({
+          requestedLink: ikEeLink,
+          robot,
+          urdfAnalysis,
+        }) ?? ikEeLink,
+      ])
+    );
+  }, [ikEndEffectorLinks, robot, urdfAnalysis]);
+  const primaryLivePhysicsGripperTargetLink =
+    primaryIkEndEffectorLink
+      ? livePhysicsGripperTargetLinkByEe.get(primaryIkEndEffectorLink) ??
+        primaryIkEndEffectorLink
+      : null;
   const resolveRobotFrontLocalDirection = useCallback(() => {
     return robotFrontLocalDirectionRef.current.clone();
   }, []);
@@ -7404,6 +7425,7 @@ export const Viewer3D = ({
             endEffectorLink={primaryIkEndEffectorLink}
             gripperOpeningM={livePhysicsGripperOpeningM}
             onTargetPose={handleIkDragLivePhysicsTargetPose}
+            physicsTargetLink={primaryLivePhysicsGripperTargetLink}
             robot={robot}
           />
 
@@ -7540,6 +7562,9 @@ export const Viewer3D = ({
                     }
                     onTargetPose={handleIkDragLivePhysicsTargetPose}
                     gripperOpeningM={livePhysicsGripperOpeningM}
+                    physicsTargetLink={
+                      livePhysicsGripperTargetLinkByEe.get(ikEeLink) ?? ikEeLink
+                    }
                     enabled={ikDragEnabled}
                     wheelDriveEnabled={wheelDriveEnabled}
                     handleIndex={handleIndex}

@@ -6,6 +6,9 @@ const DEFAULT_DURATION_MS = 4000;
 const DEFAULT_DEMO_COUNT = 3;
 const SO101_PICKUP_DURATION_MS = 5600;
 const SO101_PICKUP_FPS = 60;
+const SO101_GRIPPER_OPEN_RAD = 1.25;
+const SO101_GRIPPER_HALF_CLOSED_RAD = 0.55;
+const SO101_GRIPPER_CLOSED_RAD = 0.08;
 export const SO101_GRABBABLE_CONTAINER_TRACK_ID = "grabbable-container-f";
 export const SO101_GRABBABLE_CONTAINER_OBJECT_ID = "grabbable-container-f";
 export const SO101_GRABBABLE_CONTAINER_INITIAL_POSITION = {
@@ -127,7 +130,7 @@ const SO101_PICKUP_JOINT_KEYFRAMES: JointKeyframe[] = [
       elbow_flex: -0.62,
       wrist_flex: 0.52,
       wrist_roll: 0,
-      gripper: 1.25,
+      gripper: SO101_GRIPPER_OPEN_RAD,
     },
   },
   {
@@ -138,51 +141,73 @@ const SO101_PICKUP_JOINT_KEYFRAMES: JointKeyframe[] = [
       elbow_flex: -1.08,
       wrist_flex: 0.76,
       wrist_roll: 0.04,
-      gripper: 1.25,
+      gripper: SO101_GRIPPER_OPEN_RAD,
     },
   },
   {
-    t: 0.32,
+    t: 0.3,
     joints: {
       shoulder_pan: 0.08,
       shoulder_lift: 0.98,
       elbow_flex: -1.34,
       wrist_flex: 1.02,
       wrist_roll: 0.04,
-      gripper: 1.25,
+      gripper: SO101_GRIPPER_OPEN_RAD,
     },
   },
   {
-    t: 0.42,
+    t: 0.36,
     joints: {
       shoulder_pan: 0.08,
       shoulder_lift: 0.98,
       elbow_flex: -1.34,
       wrist_flex: 1.02,
       wrist_roll: 0.04,
-      gripper: 0.08,
+      gripper: SO101_GRIPPER_HALF_CLOSED_RAD,
     },
   },
   {
-    t: 0.56,
+    t: 0.44,
+    joints: {
+      shoulder_pan: 0.08,
+      shoulder_lift: 0.98,
+      elbow_flex: -1.34,
+      wrist_flex: 1.02,
+      wrist_roll: 0.04,
+      gripper: SO101_GRIPPER_CLOSED_RAD,
+    },
+  },
+  {
+    t: 0.5,
+    joints: {
+      shoulder_pan: 0.08,
+      shoulder_lift: 0.98,
+      elbow_flex: -1.34,
+      wrist_flex: 1.02,
+      wrist_roll: 0.04,
+      gripper: SO101_GRIPPER_CLOSED_RAD,
+    },
+  },
+  {
+    t: 0.62,
     joints: {
       shoulder_pan: 0.02,
       shoulder_lift: 0.58,
       elbow_flex: -0.98,
       wrist_flex: 0.68,
       wrist_roll: 0,
-      gripper: 0.08,
+      gripper: SO101_GRIPPER_CLOSED_RAD,
     },
   },
   {
-    t: 0.72,
+    t: 0.76,
     joints: {
       shoulder_pan: -0.48,
       shoulder_lift: 0.48,
       elbow_flex: -0.86,
       wrist_flex: 0.52,
       wrist_roll: -0.05,
-      gripper: 0.08,
+      gripper: SO101_GRIPPER_CLOSED_RAD,
     },
   },
   {
@@ -193,18 +218,29 @@ const SO101_PICKUP_JOINT_KEYFRAMES: JointKeyframe[] = [
       elbow_flex: -1.1,
       wrist_flex: 0.78,
       wrist_roll: -0.05,
-      gripper: 0.08,
+      gripper: SO101_GRIPPER_CLOSED_RAD,
     },
   },
   {
-    t: 0.92,
+    t: 0.9,
     joints: {
       shoulder_pan: -0.48,
       shoulder_lift: 0.78,
       elbow_flex: -1.1,
       wrist_flex: 0.78,
       wrist_roll: -0.05,
-      gripper: 1.25,
+      gripper: SO101_GRIPPER_HALF_CLOSED_RAD,
+    },
+  },
+  {
+    t: 0.94,
+    joints: {
+      shoulder_pan: -0.48,
+      shoulder_lift: 0.78,
+      elbow_flex: -1.1,
+      wrist_flex: 0.78,
+      wrist_roll: -0.05,
+      gripper: SO101_GRIPPER_OPEN_RAD,
     },
   },
   {
@@ -215,7 +251,7 @@ const SO101_PICKUP_JOINT_KEYFRAMES: JointKeyframe[] = [
       elbow_flex: -0.58,
       wrist_flex: 0.46,
       wrist_roll: 0,
-      gripper: 1.25,
+      gripper: SO101_GRIPPER_OPEN_RAD,
     },
   },
 ];
@@ -243,9 +279,17 @@ const createSo101PickupJointPositions = ({
 
 const SO101_CONTAINER_POSE_KEYFRAMES: ObjectPoseKeyframe[] = [
   { t: 0, position: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION },
-  { t: 0.42, position: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION },
+  { t: 0.46, position: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION },
   {
-    t: 0.56,
+    t: 0.54,
+    position: {
+      x: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.x,
+      y: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.y,
+      z: 0.074,
+    },
+  },
+  {
+    t: 0.64,
     position: {
       x: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.x,
       y: SO101_GRABBABLE_CONTAINER_INITIAL_POSITION.y,
@@ -253,14 +297,22 @@ const SO101_CONTAINER_POSE_KEYFRAMES: ObjectPoseKeyframe[] = [
     },
   },
   {
-    t: 0.72,
+    t: 0.76,
     position: {
       x: SO101_GRABBABLE_CONTAINER_FINAL_POSITION.x,
       y: SO101_GRABBABLE_CONTAINER_FINAL_POSITION.y,
       z: 0.13,
     },
   },
-  { t: 0.84, position: SO101_GRABBABLE_CONTAINER_FINAL_POSITION },
+  {
+    t: 0.86,
+    position: {
+      x: SO101_GRABBABLE_CONTAINER_FINAL_POSITION.x,
+      y: SO101_GRABBABLE_CONTAINER_FINAL_POSITION.y,
+      z: 0.074,
+    },
+  },
+  { t: 0.9, position: SO101_GRABBABLE_CONTAINER_FINAL_POSITION },
   { t: 1, position: SO101_GRABBABLE_CONTAINER_FINAL_POSITION },
 ];
 
@@ -319,9 +371,20 @@ const createSo101ContainerPickupEpisode = ({
     robot_type: "so101",
     tasks: ["pick up the top grabbable shipping container and place it to the left"],
     additional: {
-      demoType: "so101_container_pickup_prerecorded",
-      physics_backend: "prebaked",
+      demoType: "so101_container_pickup_recorded_episode",
+      sourceType: "demo",
+      sourceName: "SO101 Pick Container",
+      sourceId: "demo:so101-container-pickup",
+      canonicalSource: "demo:so101-port-edge-case",
+      playback_kind: "joint_and_object_pose_episode",
+      physics_backend: "episode_playback",
       physics_rollout_required: false,
+      hf_training_candidate: true,
+      replay_ready: true,
+      dataset_split_role: "train_and_replay",
+      grasp_start_t: 0.44,
+      object_motion_start_t: 0.46,
+      release_t: 0.9,
       object_track_id: SO101_GRABBABLE_CONTAINER_TRACK_ID,
       world_object_id: SO101_GRABBABLE_CONTAINER_OBJECT_ID,
       object_initial_position_xyz: [
