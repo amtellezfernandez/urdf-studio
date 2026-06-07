@@ -10,6 +10,7 @@ node_modules
 .venv
 .uv-cache
 amd-hackathon/
+reports/
 **/dist/
 bun.lockb
 **/__pycache__/
@@ -26,6 +27,9 @@ third_party/ros2_bridge_project/
 third_party/rviz/
 third_party/refiner-main/
 third_party/weightslab/
+third_party/image-blaster/
+third_party/splat-collider-builder/
+third_party/third-person-controller-splat/
 pyroki/
 vggt/
 cam-to-sim/runtime_sessions/
