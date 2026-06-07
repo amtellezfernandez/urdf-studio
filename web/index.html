@@ -78,14 +78,53 @@
       (() => {
         const bootRecovery = {
           bodySelector: ".urdf-studio-boot-fallback__body",
+          clearStateParam: "urdfStudioClearState",
           entryRetryParam: "urdfStudioEntryRetry",
           entryScriptSelector: "script[data-urdf-studio-entry]",
           fallbackSelector: ".urdf-studio-boot-fallback",
           pageRetryParam: "urdfStudioBootRetry",
           retryDelayMs: 2500,
           retryIncrement: 1,
+          storageKeyPrefixes: ["urdfstudio:", "urdf-studio-"],
           retryText: "Still waiting for the JavaScript bundle. Retrying fresh asset load",
         };
+
+        const clearMatchingStorageKeys = (storage) => {
+          const keys = Array.from({ length: storage.length }, (_, index) =>
+            storage.key(index),
+          ).filter((key) =>
+            Boolean(key) &&
+            bootRecovery.storageKeyPrefixes.some((prefix) =>
+              key.startsWith(prefix),
+            ),
+          );
+          keys.forEach((key) => storage.removeItem(key));
+        };
+
+        const clearStudioStateFromUrl = () => {
+          const url = new URL(window.location.href);
+          if (url.searchParams.get(bootRecovery.clearStateParam) !== "1") {
+            return false;
+          }
+          try {
+            clearMatchingStorageKeys(window.localStorage);
+          } catch {
+            // Storage may be blocked by browser privacy settings.
+          }
+          try {
+            clearMatchingStorageKeys(window.sessionStorage);
+          } catch {
+            // Storage may be blocked by browser privacy settings.
+          }
+          url.searchParams.delete(bootRecovery.clearStateParam);
+          url.searchParams.set(bootRecovery.pageRetryParam, String(Date.now()));
+          window.location.replace(url.toString());
+          return true;
+        };
+
+        if (clearStudioStateFromUrl()) {
+          return;
+        }
 
         const getFallbackBody = (root) =>
           root.querySelector(bootRecovery.bodySelector);

@@ -7,6 +7,8 @@ root.classList.remove("light");
 root.classList.add("dark");
 
 const appRoot = document.getElementById("root");
+const STUDIO_STORAGE_KEY_PREFIXES = ["urdfstudio:", "urdf-studio-"] as const;
+const CLEAR_STUDIO_STATE_PARAM = "urdfStudioClearState";
 
 const appendTextElement = (
   parent: HTMLElement,
@@ -27,11 +29,11 @@ const retryWithFreshAssets = () => {
   window.location.replace(nextUrl.toString());
 };
 
-const clearStudioBrowserState = () => {
+const clearStudioStorageKeys = () => {
   const clearMatchingKeys = (storage: Storage) => {
     const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
       (key): key is string =>
-        Boolean(key) && (key.startsWith("urdfstudio:") || key.startsWith("urdf-studio-"))
+        Boolean(key) && STUDIO_STORAGE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
     );
     keys.forEach((key) => storage.removeItem(key));
   };
@@ -46,8 +48,23 @@ const clearStudioBrowserState = () => {
   } catch {
     // Storage may be blocked by browser privacy settings.
   }
+};
 
+const clearStudioBrowserState = () => {
+  clearStudioStorageKeys();
   retryWithFreshAssets();
+};
+
+const recoverFromClearStateParam = () => {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(CLEAR_STUDIO_STATE_PARAM) !== "1") {
+    return false;
+  }
+  clearStudioStorageKeys();
+  url.searchParams.delete(CLEAR_STUDIO_STATE_PARAM);
+  url.searchParams.set("urdfStudioBootRetry", String(Date.now()));
+  window.location.replace(url.toString());
+  return true;
 };
 
 const renderBootFailure = (error: unknown) => {
@@ -98,6 +115,9 @@ const renderBootFailure = (error: unknown) => {
 };
 
 const startApp = async () => {
+  if (recoverFromClearStateParam()) {
+    return;
+  }
   if (!appRoot) {
     throw new Error("Missing root element.");
   }
