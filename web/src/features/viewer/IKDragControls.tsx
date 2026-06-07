@@ -46,6 +46,7 @@ import {
 } from "@/features/viewer/drag-runtime";
 import { cloneIkDragReferenceCamera } from "@/features/viewer/ikDragCamera";
 import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
+import type { IkDragLivePhysicsTargetPose } from "@/features/viewer/ikDragLivePhysics";
 
 const NON_ARM_JOINT_PATTERN = /(wheel|caster|drive|tire)/i;
 
@@ -61,6 +62,7 @@ interface IKDragControlsProps {
   allowedJointNames?: string[];
   mode?: "translate" | "rotate";
   onDragStateChange?: (dragging: boolean) => void;
+  onTargetPose?: (pose: IkDragLivePhysicsTargetPose) => void;
   handleIndex?: number;
   handleCount?: number;
 }
@@ -76,6 +78,7 @@ export const IKDragControls = ({
   allowedJointNames,
   mode = "translate",
   onDragStateChange,
+  onTargetPose,
   handleIndex = 0,
   handleCount = 1,
 }: IKDragControlsProps) => {
@@ -970,6 +973,7 @@ export const IKDragControls = ({
       const distanceSinceLast =
         lastSubmitted ? lastSubmitted.distanceTo(currentPosition) : Number.POSITIVE_INFINITY;
       if (distanceSinceLast >= minSolveDistance) {
+        const now = performance.now();
         tmpSolveTargetWorldRef.current.copy(currentPosition);
         if (hasHandleAnchorOffsetRef.current) {
           tmpAnchorOffsetWorldRef.current
@@ -991,18 +995,32 @@ export const IKDragControls = ({
           position: localPosition.clone(),
           quaternion: localQuaternion,
         };
+        onTargetPose?.({
+          endEffectorLink,
+          positionXyz: [
+            tmpSolveTargetWorldRef.current.x,
+            tmpSolveTargetWorldRef.current.y,
+            tmpSolveTargetWorldRef.current.z,
+          ],
+          quatWxyz: [
+            targetMeshRef.current.quaternion.w,
+            targetMeshRef.current.quaternion.x,
+            targetMeshRef.current.quaternion.y,
+            targetMeshRef.current.quaternion.z,
+          ],
+          timestampMs: now,
+        });
         pendingTargetLocalRef.current = localTarget;
         enqueueLatestDragTarget(
           schedulerRef.current,
           localTarget,
-          typeof performance !== "undefined" ? performance.now() : Date.now()
+          now
         );
         if (!lastSubmittedTargetRef.current) {
           lastSubmittedTargetRef.current = new THREE.Vector3();
         }
         lastSubmittedTargetRef.current.copy(currentPosition);
 
-        const now = performance.now();
         if (now - lastDebugUpdateRef.current > 50) {
           lastDebugUpdateRef.current = now;
           setIkDebugState({

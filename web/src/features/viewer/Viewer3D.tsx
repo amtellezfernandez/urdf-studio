@@ -63,6 +63,9 @@ import {
 } from "@/features/camera/cameraWorldPose";
 import { computeOwnedLinkLocalVisualCentroid } from "@/features/camera/cameraAutoBounds";
 import { IKDragControls } from "@/features/viewer/IKDragControls";
+import {
+  useIkDragLivePhysicsBridge,
+} from "@/features/viewer/ikDragLivePhysics";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import { cn } from "@/shared/lib/utils";
 import { useGPUMode, type GPUMode } from "@/shared/hooks/use-gpu-mode";
@@ -3886,6 +3889,11 @@ export const Viewer3D = ({
   );
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const objectEditMode = useObjectStore((state) => state.editMode);
+  const {
+    begin: beginIkDragLivePhysics,
+    stop: stopIkDragLivePhysics,
+    handleTargetPose: handleIkDragLivePhysicsTargetPose,
+  } = useIkDragLivePhysicsBridge(worldObjects);
   useEffect(() => {
     const frame = animationFrames?.[currentFrame] ?? null;
     applyPlaybackObjectPoses(frame?.objectPoses);
@@ -4906,6 +4914,7 @@ export const Viewer3D = ({
         const wasEmpty = activeHandles.size === 0;
         activeHandles.add(eeLink);
         if (wasEmpty) {
+          beginIkDragLivePhysics();
           handleIkDragStateChange(true);
         }
         return;
@@ -4918,9 +4927,10 @@ export const Viewer3D = ({
         // Pass the specific eeLink so only its smooth state is cleared; other
         // simultaneous handles (collaborative session) are unaffected.
         handleIkDragStateChange(false, eeLink);
+        stopIkDragLivePhysics();
       }
     },
-    [handleIkDragStateChange]
+    [beginIkDragLivePhysics, handleIkDragStateChange, stopIkDragLivePhysics]
   );
   useEffect(() => {
     if (activeIkDragHandlesRef.current.size === 0) {
@@ -4936,15 +4946,17 @@ export const Viewer3D = ({
     });
     if (hasRemoved && activeIkDragHandlesRef.current.size === 0) {
       handleIkDragStateChange(false);
+      stopIkDragLivePhysics();
     }
-  }, [handleIkDragStateChange, ikEndEffectorLinks]);
+  }, [handleIkDragStateChange, ikEndEffectorLinks, stopIkDragLivePhysics]);
   useEffect(() => {
     if (ikDragEnabled || activeIkDragHandlesRef.current.size === 0) {
       return;
     }
     activeIkDragHandlesRef.current.clear();
     handleIkDragStateChange(false);
-  }, [handleIkDragStateChange, ikDragEnabled]);
+    stopIkDragLivePhysics();
+  }, [handleIkDragStateChange, ikDragEnabled, stopIkDragLivePhysics]);
 
   const enforceStudioPlanarPose = useCallback(
     (targetRobot: URDFRobot) => clampStudioPlanarPose(targetRobot, getStudioUpAxis()),
@@ -7159,6 +7171,7 @@ export const Viewer3D = ({
                     onDragStateChange={(dragging) =>
                       handlePerEeDragStateChange(ikEeLink, dragging)
                     }
+                    onTargetPose={handleIkDragLivePhysicsTargetPose}
                     enabled={ikDragEnabled}
                     wheelDriveEnabled={wheelDriveEnabled}
                     handleIndex={handleIndex}
