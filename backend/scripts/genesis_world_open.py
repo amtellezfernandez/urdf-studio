@@ -14,11 +14,17 @@ from backend.services.genesis_world_scene import (
     DEFAULT_DYNAMIC_CONTAINER_MODE,
     DEFAULT_SO101_URDF_PATH,
     DEFAULT_WORLD_LAYOUT_PATH,
+    GenesisElementPhysics,
     GenesisDynamicContainerMode,
     build_genesis_element_specs,
     color_hex_to_rgb,
     scene_center_and_radius,
 )
+
+GENESIS_RIGID_FRICTION_MIN = 0.01
+GENESIS_RIGID_FRICTION_MAX = 5.0
+DEFAULT_FLOOR_FRICTION = 1.0
+DEFAULT_ROBOT_FRICTION = 3.0
 
 
 def _parse_args() -> argparse.Namespace:
@@ -87,6 +93,81 @@ def _surface_for_color(gs, color_hex: str | None):
     return gs.surfaces.Default(color=rgb, opacity=1.0)
 
 
+def _finite_float_or_none(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _clamp_float(value: float, minimum: float, maximum: float) -> float:
+    return min(maximum, max(minimum, value))
+
+
+def _positive_box_volume(size_xyz: tuple[float, float, float] | None) -> float | None:
+    if size_xyz is None:
+        return None
+    components = tuple(_finite_float_or_none(component) for component in size_xyz)
+    if any(component is None or component <= 0 for component in components):
+        return None
+    volume = components[0] * components[1] * components[2]
+    return volume if math.isfinite(volume) and volume > 0 else None
+
+
+def _rigid_material_for_physics(
+    gs,
+    physics: GenesisElementPhysics | None,
+    *,
+    box_size_xyz: tuple[float, float, float] | None = None,
+    friction_fallback: float | None = None,
+):
+    kwargs: dict[str, float] = {}
+    friction = _finite_float_or_none(getattr(physics, "friction", None))
+    if friction is None:
+        friction = _finite_float_or_none(friction_fallback)
+    if friction is not None:
+        kwargs["friction"] = _clamp_float(
+            friction,
+            GENESIS_RIGID_FRICTION_MIN,
+            GENESIS_RIGID_FRICTION_MAX,
+        )
+
+    restitution = _finite_float_or_none(getattr(physics, "restitution", None))
+    if restitution is not None:
+        kwargs["coup_restitution"] = _clamp_float(restitution, 0.0, 1.0)
+
+    mass_kg = _finite_float_or_none(getattr(physics, "mass_kg", None))
+    volume = _positive_box_volume(box_size_xyz)
+    if mass_kg is not None and mass_kg > 0 and volume is not None:
+        kwargs["rho"] = mass_kg / volume
+
+    if not kwargs:
+        return None
+    return gs.materials.Rigid(**kwargs)
+
+
+def _apply_rigid_entity_physics_overrides(
+    entity,
+    physics: GenesisElementPhysics | None,
+) -> None:
+    mass_kg = _finite_float_or_none(getattr(physics, "mass_kg", None))
+    if mass_kg is not None and mass_kg > 0 and hasattr(entity, "set_mass"):
+        entity.set_mass(mass_kg)
+
+    friction = _finite_float_or_none(getattr(physics, "friction", None))
+    if friction is not None and hasattr(entity, "set_friction"):
+        entity.set_friction(
+            _clamp_float(
+                friction,
+                GENESIS_RIGID_FRICTION_MIN,
+                GENESIS_RIGID_FRICTION_MAX,
+            )
+        )
+
+
 def _add_mesh_entity(
     gs,
     scene,
@@ -101,6 +182,13 @@ def _add_mesh_entity(
     preserve_studio_glb_orientation: bool = False,
 ):
     surface = _surface_for_color(gs, color_override or spec.element.material_color)
+    material = None
+    if collision:
+        material = _rigid_material_for_physics(
+            gs,
+            getattr(spec.element, "physics", None),
+            box_size_xyz=getattr(spec, "box_size_xyz", None) if not fixed else None,
+        )
     morph_kwargs = {
         "file": str(spec.asset_path.resolve()),
         "pos": spec.mesh_position_xyz,
@@ -118,6 +206,8 @@ def _add_mesh_entity(
     kwargs = {"name": name}
     if surface is not None:
         kwargs["surface"] = surface
+    if material is not None:
+        kwargs["material"] = material
     return scene.add_entity(morph, **kwargs)
 
 
@@ -126,6 +216,17 @@ def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str)
         color=(0.9, 0.12, 0.12),
         opacity=1.0,
     )
+    material = _rigid_material_for_physics(
+        gs,
+        getattr(spec.element, "physics", None),
+        box_size_xyz=spec.box_size_xyz if not fixed else None,
+    )
+    kwargs = {
+        "surface": surface,
+        "name": name,
+    }
+    if material is not None:
+        kwargs["material"] = material
     return scene.add_entity(
         gs.morphs.Box(
             size=spec.box_size_xyz,
@@ -134,8 +235,7 @@ def _add_box_entity(gs, scene, *, spec, fixed: bool, collision: bool, name: str)
             fixed=fixed,
             collision=collision,
         ),
-        surface=surface,
-        name=name,
+        **kwargs,
     )
 
 
@@ -406,6 +506,11 @@ def open_genesis_world_scene(
             plane_size=(4.0, 4.0),
             collision=True,
         ),
+        material=_rigid_material_for_physics(
+            gs,
+            None,
+            friction_fallback=DEFAULT_FLOOR_FRICTION,
+        ),
         surface=gs.surfaces.Default(color=(0.16, 0.16, 0.16), opacity=0.35),
         name="floor",
     )
@@ -416,6 +521,11 @@ def open_genesis_world_scene(
             merge_fixed_links=False,
             collision=True,
             visualization=True,
+        ),
+        material=_rigid_material_for_physics(
+            gs,
+            None,
+            friction_fallback=DEFAULT_ROBOT_FRICTION,
         ),
         name="so101",
     )
@@ -497,6 +607,8 @@ def open_genesis_world_scene(
         )
 
     scene.build()
+    for spec, entity, _scaled_offset_xyz in dynamic_entities:
+        _apply_rigid_entity_physics_overrides(entity, spec.element.physics)
     print("[genesis-world-open] scene built; stepping Genesis runtime.")
     live_base_url = live_state_base_url.strip().rstrip("/")
     live_enabled = bool(live_base_url)
@@ -531,7 +643,10 @@ def open_genesis_world_scene(
         print(f"[genesis-world-open] screenshot written: {screenshot_path}")
 
     if no_viewer:
-        for _ in range(5):
+        headless_steps = 5
+        if duration_sec > 0 and math.isfinite(duration_sec):
+            headless_steps = max(headless_steps, int(math.ceil(duration_sec / 0.01)))
+        for _ in range(headless_steps):
             if live_enabled:
                 latest = _latest_joint_values_from_backend(
                     live_base_url,
@@ -544,7 +659,7 @@ def open_genesis_world_scene(
         if live_enabled and dynamic_entities:
             _publish_dynamic_world_poses(
                 base_url=live_base_url,
-                source_sequence=1,
+                source_sequence=max(1, headless_steps),
                 dynamic_entities=dynamic_entities,
                 timeout_sec=live_http_timeout_sec,
             )

@@ -6,9 +6,15 @@ from types import SimpleNamespace
 import pytest
 
 from backend.scripts.genesis_world_open import (
+    DEFAULT_FLOOR_FRICTION,
+    GENESIS_RIGID_FRICTION_MAX,
+    GENESIS_RIGID_FRICTION_MIN,
+    _add_box_entity,
     _add_mesh_entity,
+    _apply_rigid_entity_physics_overrides,
     _apply_live_joint_values,
     _joint_dof_indices_by_name,
+    _rigid_material_for_physics,
     _resolve_studio_pose_from_qpos,
 )
 
@@ -16,10 +22,24 @@ from backend.scripts.genesis_world_open import (
 class _FakeMorphs:
     def __init__(self) -> None:
         self.mesh_kwargs: dict | None = None
+        self.box_kwargs: dict | None = None
 
     def Mesh(self, **kwargs):  # noqa: N802 - mirrors Genesis API
         self.mesh_kwargs = kwargs
         return {"kind": "mesh", "kwargs": kwargs}
+
+    def Box(self, **kwargs):  # noqa: N802 - mirrors Genesis API
+        self.box_kwargs = kwargs
+        return {"kind": "box", "kwargs": kwargs}
+
+
+class _FakeMaterials:
+    def __init__(self) -> None:
+        self.rigid_kwargs: list[dict] = []
+
+    def Rigid(self, **kwargs):  # noqa: N802 - mirrors Genesis API
+        self.rigid_kwargs.append(kwargs)
+        return {"kind": "rigid", "kwargs": kwargs}
 
 
 class _FakeScene:
@@ -36,15 +56,18 @@ def test_add_mesh_entity_disables_genesis_auto_alignment() -> None:
     gs = SimpleNamespace(
         morphs=morphs,
         surfaces=SimpleNamespace(Default=lambda **_kwargs: object()),
+        materials=_FakeMaterials(),
     )
     scene = _FakeScene()
     spec = SimpleNamespace(
         asset_path=Path("container.glb"),
         mesh_position_xyz=(0.3, 0.0, 0.0),
         effective_scale_xyz=(0.045, 0.045, 0.045),
+        box_size_xyz=(0.08, 0.04, 0.03),
         element=SimpleNamespace(
             rotation_rpy_rad=(1.5707963267948966, 0.0, 0.0),
             material_color="#ef4444",
+            physics=None,
         ),
     )
 
@@ -70,15 +93,18 @@ def test_add_mesh_entity_can_preserve_studio_glb_orientation() -> None:
     gs = SimpleNamespace(
         morphs=morphs,
         surfaces=SimpleNamespace(Default=lambda **_kwargs: object()),
+        materials=_FakeMaterials(),
     )
     scene = _FakeScene()
     spec = SimpleNamespace(
         asset_path=Path("container.glb"),
         mesh_position_xyz=(0.3, 0.0, 0.0),
         effective_scale_xyz=(0.045, 0.045, 0.045),
+        box_size_xyz=(0.08, 0.04, 0.03),
         element=SimpleNamespace(
             rotation_rpy_rad=(1.5707963267948966, 0.0, 0.0),
             material_color="#ef4444",
+            physics=None,
         ),
     )
 
@@ -97,6 +123,111 @@ def test_add_mesh_entity_can_preserve_studio_glb_orientation() -> None:
     assert morphs.mesh_kwargs is not None
     assert morphs.mesh_kwargs["align"] is False
     assert morphs.mesh_kwargs["file_meshes_are_zup"] is True
+
+
+def test_rigid_material_uses_layout_friction_restitution_and_density() -> None:
+    materials = _FakeMaterials()
+    gs = SimpleNamespace(materials=materials)
+
+    material = _rigid_material_for_physics(
+        gs,
+        SimpleNamespace(mass_kg=0.12, friction=3.0, restitution=0.0),
+        box_size_xyz=(0.1, 0.2, 0.3),
+    )
+
+    assert material == {"kind": "rigid", "kwargs": materials.rigid_kwargs[0]}
+    assert materials.rigid_kwargs == [
+        {
+            "friction": 3.0,
+            "coup_restitution": 0.0,
+            "rho": pytest.approx(20.0),
+        }
+    ]
+
+
+def test_rigid_material_clamps_genesis_friction_bounds() -> None:
+    materials = _FakeMaterials()
+    gs = SimpleNamespace(materials=materials)
+
+    _rigid_material_for_physics(
+        gs,
+        SimpleNamespace(mass_kg=None, friction=0.0, restitution=None),
+    )
+    _rigid_material_for_physics(
+        gs,
+        SimpleNamespace(mass_kg=None, friction=10.0, restitution=None),
+    )
+    _rigid_material_for_physics(
+        gs,
+        None,
+        friction_fallback=DEFAULT_FLOOR_FRICTION,
+    )
+
+    assert materials.rigid_kwargs == [
+        {"friction": GENESIS_RIGID_FRICTION_MIN},
+        {"friction": GENESIS_RIGID_FRICTION_MAX},
+        {"friction": DEFAULT_FLOOR_FRICTION},
+    ]
+
+
+def test_add_box_entity_passes_physics_material_to_genesis() -> None:
+    morphs = _FakeMorphs()
+    materials = _FakeMaterials()
+    gs = SimpleNamespace(
+        morphs=morphs,
+        surfaces=SimpleNamespace(Default=lambda **_kwargs: object()),
+        materials=materials,
+    )
+    scene = _FakeScene()
+    spec = SimpleNamespace(
+        box_size_xyz=(0.1, 0.2, 0.3),
+        box_center_xyz=(0.3, 0.0, 0.04),
+        element=SimpleNamespace(
+            rotation_rpy_rad=(1.5707963267948966, 0.0, 0.0),
+            material_color="#ef4444",
+            physics=SimpleNamespace(mass_kg=0.12, friction=3.0, restitution=0.0),
+        ),
+    )
+
+    _add_box_entity(
+        gs,
+        scene,
+        spec=spec,
+        fixed=False,
+        collision=True,
+        name="grabbable-container",
+    )
+
+    assert morphs.box_kwargs is not None
+    assert morphs.box_kwargs["collision"] is True
+    assert scene.added[0][1]["name"] == "grabbable-container"
+    assert scene.added[0][1]["material"] == {
+        "kind": "rigid",
+        "kwargs": materials.rigid_kwargs[0],
+    }
+
+
+def test_apply_rigid_entity_physics_overrides_sets_mass_and_friction() -> None:
+    class _FakeEntity:
+        def __init__(self) -> None:
+            self.mass: float | None = None
+            self.friction: float | None = None
+
+        def set_mass(self, value: float) -> None:
+            self.mass = value
+
+        def set_friction(self, value: float) -> None:
+            self.friction = value
+
+    entity = _FakeEntity()
+
+    _apply_rigid_entity_physics_overrides(
+        entity,
+        SimpleNamespace(mass_kg=0.12, friction=10.0),
+    )
+
+    assert entity.mass == 0.12
+    assert entity.friction == GENESIS_RIGID_FRICTION_MAX
 
 
 def test_resolve_studio_pose_from_dynamic_entity_qpos_removes_visual_offset() -> None:
