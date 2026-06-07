@@ -63,7 +63,6 @@ import {
   shouldRememberBlockedTargetAfterPreSolve,
 } from "@/features/viewer/ikObjectSolvePreSolvePolicy";
 import { doesViewerDragModeUseIkHandles } from "@/features/viewer/viewerDragModePolicy";
-import { evaluateRobotJointPoseFloorContact } from "@/features/viewer/robotFloorContact";
 
 export type IkAppliedMetadata = {
   inputSource:
@@ -207,7 +206,6 @@ export const useIkSolver = ({
   const rememberedBlockedTargetRef = useRef<CreatedObject | null>(null);
   const lastLimitToastRef = useRef(0);
   const lastKernelWarningRef = useRef<string | null>(null);
-  const lastFloorBlockToastRef = useRef(0);
   const setIkDebugState = useIkDebugStore((s) => s.setState);
   const selectedSolverId = useIkSolverStore((s) => s.selectedSolverId);
   const clickOrientation = useIkParamsStore((s) => s.clickOrientation);
@@ -1346,20 +1344,6 @@ export const useIkSolver = ({
         endEffectorLink: targetEndEffectorLink,
       });
       const rawNextSafe = applyIkMotionSafety(rawNextJointValues);
-      const floorCheck = evaluateRobotJointPoseFloorContact({
-        robot,
-        candidateJointValues: rawNextSafe,
-        restoreJointValues: useJointStore.getState().jointValues,
-      });
-      if (!floorCheck.safe) {
-        dragSmoothedJointsRef.current.delete(targetEndEffectorLink ?? "");
-        const now = performance.now();
-        if (now - lastFloorBlockToastRef.current > 1200) {
-          lastFloorBlockToastRef.current = now;
-          toast.warning("IK pose rejected: robot would pass through the floor.");
-        }
-        return;
-      }
 
       // Visual drag smoothing — purely cosmetic, keeps the 3D robot from
       // snapping between IK throttle intervals.
