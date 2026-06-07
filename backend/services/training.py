@@ -264,6 +264,52 @@ def _get_enum_value(value) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
+def _coerce_job_status(status: Any, default: JobStatus = JobStatus.RUNNING) -> JobStatus:
+    """Convert stored enum/string status values into the API enum."""
+    if isinstance(status, JobStatus):
+        return status
+    try:
+        return JobStatus(status)
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_training_output_dir(job_info: Dict[str, Any], default: str = "./outputs") -> str:
+    """Resolve the configured output directory from live request or persisted config."""
+    request = job_info.get("request")
+    if request and hasattr(request, "training"):
+        return request.training.output_dir
+
+    config = job_info.get("config") or {}
+    training_config = config.get("training") or {}
+    return training_config.get("output_dir", default)
+
+
+def _metrics_response(raw_metrics: Dict[str, Any]) -> Optional[TrainingMetrics]:
+    """Convert raw metric values to the API shape, ignoring non-numeric metadata."""
+    if not raw_metrics:
+        return None
+
+    numeric_metrics = {
+        k: v
+        for k, v in raw_metrics.items()
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
+    if not numeric_metrics:
+        return None
+
+    return TrainingMetrics(
+        loss=numeric_metrics.get("loss"),
+        learning_rate=numeric_metrics.get("learning_rate"),
+        grad_norm=numeric_metrics.get("grad_norm"),
+        additional={
+            k: v
+            for k, v in numeric_metrics.items()
+            if k not in ["loss", "learning_rate", "grad_norm"]
+        },
+    )
+
+
 def _create_lineage(
     request: TrainingStartRequest,
     started_at: str,
@@ -406,6 +452,75 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
         )
 
 
+async def _status_from_artifacts(
+    job_id: str,
+    job_info: Dict[str, Any],
+    default_status: JobStatus,
+    error: Optional[str] = None,
+) -> TrainingStatusResponse:
+    """Build status from persisted training artifacts when process state is unavailable."""
+    job_dir = await _resolve_job_dir(job_id)
+    progress_path = job_dir / "progress.json"
+    final_model_dir = job_dir / "final_model"
+
+    progress = None
+    metrics = None
+    raw_metrics: Dict[str, Any] = {}
+    status = default_status
+
+    if progress_path.exists():
+        try:
+            with open(progress_path) as f:
+                progress_data = json.load(f)
+
+            current_step = int(progress_data.get("current_step", 0) or 0)
+            total_steps = int(progress_data.get("total_steps", 0) or 0)
+            current_epoch = int(progress_data.get("current_epoch", 0) or 0)
+            total_epochs = int(progress_data.get("total_epochs", 0) or 0)
+
+            progress = TrainingProgress(
+                current_epoch=current_epoch,
+                total_epochs=total_epochs,
+                current_step=current_step,
+                total_steps=total_steps,
+                epoch_progress=(current_step / total_steps) if total_steps else 0.0,
+                overall_progress=(current_step / total_steps) if total_steps else 0.0,
+            )
+            raw_metrics = progress_data.get("metrics", {}) or {}
+            metrics = _metrics_response(raw_metrics)
+
+            if total_steps and current_step >= total_steps and final_model_dir.exists():
+                status = JobStatus.COMPLETED
+                error = None
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            logger.debug(f"Failed to read artifact progress for {job_id}: {exc}")
+
+    logs_info = await get_job_logs(job_id, tail=20)
+    logs_tail = logs_info.get("logs", "")
+    if "Training completed successfully" in logs_tail and final_model_dir.exists():
+        status = JobStatus.COMPLETED
+        error = None
+
+    old_status = _coerce_job_status(job_info.get("status"), default_status)
+    if status != old_status:
+        job_info["status"] = status
+        if status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+            job_info["finished_at"] = job_info.get("finished_at") or datetime.now().isoformat()
+        await _persist_job(job_id, job_info)
+
+    return TrainingStatusResponse(
+        job_id=job_id,
+        status=status,
+        progress=progress,
+        metrics=metrics,
+        tracker_url=job_info.get("tracker_url"),
+        lineage=job_info.get("lineage"),
+        error=error,
+        logs_tail=logs_tail or None,
+        compute_backend=job_info.get("compute_backend", "local"),
+    )
+
+
 async def get_training_status(job_id: str) -> TrainingStatusResponse:
     """Get status of a training job.
 
@@ -450,8 +565,18 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
 
     job_info = _jobs[job_id]
 
-    # If job failed during startup
-    if job_info.get("status") == JobStatus.FAILED:
+    # If job failed during startup, still inspect artifacts first. A restarted
+    # backend can lose local process memory while the job artifacts show success.
+    if _coerce_job_status(job_info.get("status"), JobStatus.RUNNING) == JobStatus.FAILED:
+        artifact_status = await _status_from_artifacts(
+            job_id,
+            job_info,
+            default_status=JobStatus.FAILED,
+            error=job_info.get("error"),
+        )
+        if artifact_status.status != JobStatus.FAILED or artifact_status.progress:
+            return artifact_status
+
         return TrainingStatusResponse(
             job_id=job_id,
             status=JobStatus.FAILED,
@@ -461,18 +586,24 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
 
     # Get status from compute backend
     try:
-        request = job_info.get("request")
-        output_dir = "./outputs"
-        if request and hasattr(request, "training"):
-            output_dir = request.training.output_dir
-
         compute_config = {
             "type": job_info.get("compute_backend", "local"),
-            "output_dir": output_dir,
+            "output_dir": _get_training_output_dir(job_info),
         }
         compute = get_compute(compute_config)
 
         compute_status = await compute.status(job_info["compute_job_id"])
+
+        if (
+            compute_status.state == JobState.FAILED
+            and compute_status.error_message == "Job not found"
+        ):
+            return await _status_from_artifacts(
+                job_id,
+                job_info,
+                default_status=_coerce_job_status(job_info.get("status"), JobStatus.RUNNING),
+                error=compute_status.error_message,
+            )
 
         # Map compute status to job status
         status_map = {
@@ -512,18 +643,7 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
             )
 
         # Build metrics
-        metrics = None
-        if compute_status.metrics:
-            metrics = TrainingMetrics(
-                loss=compute_status.metrics.get("loss"),
-                learning_rate=compute_status.metrics.get("learning_rate"),
-                grad_norm=compute_status.metrics.get("grad_norm"),
-                additional={
-                    k: v
-                    for k, v in compute_status.metrics.items()
-                    if k not in ["loss", "learning_rate", "grad_norm"]
-                },
-            )
+        metrics = _metrics_response(compute_status.metrics)
 
         return TrainingStatusResponse(
             job_id=job_id,

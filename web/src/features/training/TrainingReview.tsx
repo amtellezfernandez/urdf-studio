@@ -120,6 +120,7 @@ export function TrainingReview() {
           <div>Batch size: {trainingParams.batchSize}</div>
           <div>Learning rate: {trainingParams.learningRate}</div>
           <div>Epochs: {trainingParams.epochs}</div>
+          <div>Max steps: {trainingParams.maxSteps || "Full epochs"}</div>
           <div>Scheduler: {trainingParams.lrScheduler}</div>
           <div>Warmup: {trainingParams.warmupSteps} steps</div>
           <div>Checkpoints: every {trainingParams.checkpointInterval} epochs</div>

@@ -17,6 +17,7 @@ import logging
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import uuid
 from datetime import datetime
@@ -61,7 +62,7 @@ class LocalCompute:
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
-        self._python_path = python_path or "python3"
+        self._python_path = python_path or sys.executable
         self._default_env = default_env or {}
 
         # Track running jobs: job_id -> process info

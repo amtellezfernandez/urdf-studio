@@ -126,6 +126,11 @@ class TrainingParams(BaseModel):
     batch_size: int = Field(default=32, ge=1, description="Batch size")
     learning_rate: float = Field(default=1e-4, gt=0, description="Learning rate")
     epochs: int = Field(default=100, ge=1, description="Number of epochs")
+    max_steps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optional hard limit on optimizer steps for short runs and smoke tests",
+    )
     seed: int = Field(default=42, description="Random seed")
 
     # Optimization

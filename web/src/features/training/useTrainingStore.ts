@@ -83,6 +83,7 @@ const defaultTrainingParams: TrainingParams = {
   batchSize: 32,
   learningRate: 1e-4,
   epochs: 100,
+  maxSteps: undefined,
   seed: 42,
   gradientAccumulationSteps: 1,
   maxGradNorm: 1.0,

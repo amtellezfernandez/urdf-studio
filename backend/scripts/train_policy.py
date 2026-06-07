@@ -308,13 +308,14 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
     ds_cfg = DatasetConfig(repo_id=repo_id)
 
     # Create training pipeline config with policy
+    configured_steps = training_config.get("max_steps") or training_config.get("steps")
     train_cfg = TrainPipelineConfig(
         dataset=ds_cfg,
         policy=policy_cfg,
         output_dir=job_dir,
         batch_size=training_config.get("batch_size", 8),
         num_workers=training_config.get("num_workers", 4),
-        steps=training_config.get("steps", training_config.get("epochs", 100) * 1000),
+        steps=configured_steps or training_config.get("epochs", 100) * 1000,
     )
 
     # =========================================================================
@@ -339,7 +340,7 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
     # Optimizer
     learning_rate = training_config.get("learning_rate", 1e-5)
     weight_decay = training_config.get("weight_decay", 1e-4)
-    grad_clip_norm = training_config.get("grad_clip_norm", 10.0)
+    grad_clip_norm = training_config.get("max_grad_norm", training_config.get("grad_clip_norm", 10.0))
 
     optimizer = torch.optim.AdamW(
         policy.parameters(),
@@ -362,10 +363,14 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
     # Calculate total steps
     total_epochs = training_config.get("epochs", 1)
     steps_per_epoch = len(dataloader)
-    total_steps = total_epochs * steps_per_epoch
+    requested_max_steps = training_config.get("max_steps") or training_config.get("steps")
+    full_total_steps = total_epochs * steps_per_epoch
+    total_steps = min(full_total_steps, requested_max_steps) if requested_max_steps else full_total_steps
 
     logger.info(f"Training config: {total_epochs} epochs, {steps_per_epoch} steps/epoch, batch_size={batch_size}")
-    logger.info(f"Total steps: {total_steps}")
+    if requested_max_steps:
+        logger.info(f"Max steps enabled: {requested_max_steps} (full epoch plan would be {full_total_steps})")
+    logger.info(f"Total optimizer steps: {total_steps}")
 
     # =========================================================================
     # 4. Training loop
@@ -381,6 +386,9 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
         epoch_steps = 0
 
         for step, batch in enumerate(dataloader):
+            if global_step >= total_steps:
+                break
+
             # Move batch to device
             batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
 
@@ -447,6 +455,9 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
                 )
 
         # Epoch summary
+        if epoch_steps == 0:
+            break
+
         avg_loss = epoch_loss / epoch_steps
         logger.info(f"Epoch {epoch + 1}/{total_epochs} completed - Avg Loss: {avg_loss:.4f}")
 
@@ -471,6 +482,10 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
             )
             logger.info(f"Saved checkpoint: {checkpoint_dir}")
 
+        if global_step >= total_steps:
+            logger.info(f"Reached configured training step limit: {total_steps}")
+            break
+
     # =========================================================================
     # 5. Save final model
     # =========================================================================
@@ -493,7 +508,7 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
         total_epochs=total_epochs,
         current_step=total_steps,
         total_steps=total_steps,
-        metrics={"loss": avg_loss, "learning_rate": 0, "status": "completed"},
+        metrics={"loss": avg_loss, "learning_rate": 0},
     )
 
     # Log final metrics and finish tracker

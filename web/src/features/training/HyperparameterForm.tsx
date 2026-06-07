@@ -85,6 +85,24 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
+            <Label className="text-xs">Max Steps</Label>
+            <Input
+              type="number"
+              min={1}
+              placeholder="Full epochs"
+              value={trainingParams.maxSteps || ""}
+              onChange={(e) => {
+                const value = e.target.value ? parseInt(e.target.value) : undefined;
+                handleChange("maxSteps", value as number);
+              }}
+              className="h-8 text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Optional optimizer step limit
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label className="text-xs">Random Seed</Label>
             <Input
               type="number"

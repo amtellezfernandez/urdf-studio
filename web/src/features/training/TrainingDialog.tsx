@@ -230,6 +230,7 @@ export function TrainingDialog() {
           batch_size: trainingParams.batchSize,
           learning_rate: trainingParams.learningRate,
           epochs: trainingParams.epochs,
+          max_steps: trainingParams.maxSteps,
           seed: trainingParams.seed,
           gradient_accumulation_steps: trainingParams.gradientAccumulationSteps,
           max_grad_norm: trainingParams.maxGradNorm,
