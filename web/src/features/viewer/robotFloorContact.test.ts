@@ -65,6 +65,28 @@ describe("robotFloorContact", () => {
     expect(computeRobotMeshMinWorldZ(robot)).toBeCloseTo(0.02);
   });
 
+  it("accepts candidate poses when an existing floor artifact is not worsened", () => {
+    const robot = createRobotWithToolMesh();
+    const floorArtifact = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.08, 0.02),
+      new THREE.MeshBasicMaterial()
+    );
+    floorArtifact.position.z = -0.005;
+    robot.add(floorArtifact);
+    robot.updateMatrixWorld(true);
+
+    const result = evaluateRobotJointPoseFloorContact({
+      robot,
+      candidateJointValues: { head_z: 0.08 },
+      restoreJointValues: { head_z: 0.04 },
+    });
+
+    expect(result.safe).toBe(true);
+    expect(result.penetrationM).toBeGreaterThan(0);
+    expect(result.baselinePenetrationM).toBeGreaterThan(0);
+    expect(computeRobotMeshMinWorldZ(robot)).toBeCloseTo(-0.015);
+  });
+
   it("rejects candidate poses that deeply intersect solid obstacle bounds", () => {
     const robot = createRobotWithToolMesh();
 

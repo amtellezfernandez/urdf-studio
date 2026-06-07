@@ -10,12 +10,14 @@ import type { SolidWorldBounds } from "@/features/viewer/worldCollisionBoundsSto
 
 export const STUDIO_FLOOR_Z_M = 0;
 export const STUDIO_ROBOT_FLOOR_CLEARANCE_M = 0.0005;
+export const STUDIO_ROBOT_FLOOR_WORSENING_TOLERANCE_M = 0.001;
 export const STUDIO_ROBOT_OBJECT_PENETRATION_TOLERANCE_M = 0.004;
 
 export type RobotFloorContactResult = {
   safe: boolean;
   minWorldZ: number | null;
   penetrationM: number;
+  baselinePenetrationM: number;
   objectCollision:
     | {
         obstacleId: string;
@@ -90,6 +92,32 @@ const resolveDeepestRobotObstacleCollision = (
   return deepest;
 };
 
+const resolveRobotMeshFloorPenetration = (
+  robot: THREE.Object3D,
+  floorZ: number,
+  clearanceM: number
+): {
+  bounds: THREE.Box3[];
+  minWorldZ: number | null;
+  penetrationM: number;
+} => {
+  robot.updateMatrixWorld(true);
+  const bounds = getRobotMeshWorldBounds(robot);
+  const minWorldZ = bounds.reduce(
+    (currentMin, box) => Math.min(currentMin, box.min.z),
+    Number.POSITIVE_INFINITY
+  );
+  const resolvedMinWorldZ = Number.isFinite(minWorldZ) ? minWorldZ : null;
+  const requiredMinZ = floorZ + clearanceM;
+  const penetrationM =
+    resolvedMinWorldZ === null ? 0 : Math.max(0, requiredMinZ - resolvedMinWorldZ);
+  return {
+    bounds,
+    minWorldZ: resolvedMinWorldZ,
+    penetrationM,
+  };
+};
+
 export const buildWorldObjectObstacleBounds = (
   objects: readonly CreatedObject[]
 ): SolidWorldBounds[] =>
@@ -134,30 +162,33 @@ export const evaluateRobotJointPoseFloorContact = ({
   objectPenetrationToleranceM?: number;
 }): RobotFloorContactResult => {
   if (!robot) {
-    return { safe: true, minWorldZ: null, penetrationM: 0, objectCollision: null };
+    return {
+      safe: true,
+      minWorldZ: null,
+      penetrationM: 0,
+      baselinePenetrationM: 0,
+      objectCollision: null,
+    };
   }
 
   try {
+    applyJointValues(robot, restoreJointValues, { filter: false });
+    const baseline = resolveRobotMeshFloorPenetration(robot, floorZ, clearanceM);
     applyJointValues(robot, candidateJointValues, { filter: false });
-    robot.updateMatrixWorld?.(true);
-    const robotMeshBounds = getRobotMeshWorldBounds(robot);
-    const minWorldZ = robotMeshBounds.reduce(
-      (currentMin, bounds) => Math.min(currentMin, bounds.min.z),
-      Number.POSITIVE_INFINITY
-    );
-    const resolvedMinWorldZ = Number.isFinite(minWorldZ) ? minWorldZ : null;
-    const requiredMinZ = floorZ + clearanceM;
-    const penetrationM =
-      resolvedMinWorldZ === null ? 0 : Math.max(0, requiredMinZ - resolvedMinWorldZ);
+    const candidate = resolveRobotMeshFloorPenetration(robot, floorZ, clearanceM);
     const objectCollision = resolveDeepestRobotObstacleCollision(
-      robotMeshBounds,
+      candidate.bounds,
       obstacleBounds,
       objectPenetrationToleranceM
     );
+    const floorPenetrationWorsened =
+      candidate.penetrationM >
+      baseline.penetrationM + STUDIO_ROBOT_FLOOR_WORSENING_TOLERANCE_M;
     return {
-      safe: penetrationM <= 0 && objectCollision === null,
-      minWorldZ: resolvedMinWorldZ,
-      penetrationM,
+      safe: !floorPenetrationWorsened && objectCollision === null,
+      minWorldZ: candidate.minWorldZ,
+      penetrationM: candidate.penetrationM,
+      baselinePenetrationM: baseline.penetrationM,
       objectCollision,
     };
   } finally {
