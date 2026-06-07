@@ -1044,6 +1044,46 @@ async def get_job_logs(job_id: str, tail: int = 100) -> dict:
         return {"logs": f"Error reading logs: {e}", "total_lines": 0}
 
 
+async def get_job_artifacts(job_id: str) -> dict:
+    """List filesystem artifacts produced by a training job.
+
+    This reads the resolved compute job directory directly so artifacts remain
+    visible after backend restarts and when outputs are Docker-mounted.
+    """
+    job_dir = await _resolve_job_dir(job_id)
+    artifacts: List[Dict[str, Any]] = []
+
+    if not job_dir.exists():
+        return {"job_id": job_id, "artifacts": [], "total": 0}
+
+    artifact_types = {
+        ".safetensors": "model",
+        ".pt": "checkpoint",
+        ".pth": "checkpoint",
+        ".ckpt": "checkpoint",
+        ".json": "config",
+        ".jsonl": "metrics",
+        ".log": "log",
+        ".mp4": "video",
+    }
+
+    for path in sorted(job_dir.rglob("*")):
+        if not path.is_file():
+            continue
+
+        rel_path = path.relative_to(job_dir).as_posix()
+        stat = path.stat()
+        artifacts.append({
+            "path": rel_path,
+            "name": path.name,
+            "type": artifact_types.get(path.suffix.lower(), "file"),
+            "size_bytes": stat.st_size,
+            "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        })
+
+    return {"job_id": job_id, "artifacts": artifacts, "total": len(artifacts)}
+
+
 async def _resolve_job_dir(job_id: str) -> Path:
     """Resolve the filesystem output directory for a RobotOps job."""
     await _ensure_jobs_loaded()

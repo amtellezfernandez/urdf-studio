@@ -184,6 +184,12 @@ async def get_job_logs(job_id: str, tail: int = Query(default=100, ge=1, le=1000
     return await training_service.get_job_logs(job_id, tail)
 
 
+@router.get("/artifacts/{job_id}")
+async def get_job_artifacts(job_id: str) -> dict:
+    """List filesystem artifacts produced by a training job."""
+    return await training_service.get_job_artifacts(job_id)
+
+
 @router.get("/compute/instances")
 async def list_compute_instances() -> dict:
     """List available compute instances across all backends.

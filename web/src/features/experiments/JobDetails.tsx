@@ -20,6 +20,7 @@ import {
   Info,
   Upload,
   Database,
+  FileArchive,
 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -66,6 +67,20 @@ interface BackendTrainingStatusResponse {
   config?: TrainingJob["config"];
   started_at?: string | null;
   finished_at?: string | null;
+}
+
+interface BackendTrainingArtifact {
+  path: string;
+  name: string;
+  type: string;
+  size_bytes: number;
+  modified_at: string;
+}
+
+interface BackendTrainingArtifactsResponse {
+  job_id: string;
+  artifacts: BackendTrainingArtifact[];
+  total: number;
 }
 
 function mapBackendStatusToJob(data: BackendTrainingStatusResponse): TrainingJob {
@@ -355,6 +370,79 @@ function LogsSection({ job }: { job: TrainingJob }) {
 }
 
 // ============================================================================
+// Artifacts Section
+// ============================================================================
+
+function formatBytes(size: number) {
+  if (size < 1024) return `${size} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+}
+
+function ArtifactsSection({ job }: { job: TrainingJob }) {
+  const { data, isFetching, refetch } = useQuery<BackendTrainingArtifactsResponse>({
+    queryKey: ["job-artifacts", job.id],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/training/artifacts/${job.id}`);
+      if (!response.ok) throw new Error("Failed to fetch artifacts");
+      return response.json();
+    },
+    enabled: job.status === "completed" || job.status === "running",
+    refetchInterval: job.status === "running" ? 5000 : false,
+  });
+
+  const artifacts = data?.artifacts || [];
+
+  if (!artifacts.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <FileArchive className="h-8 w-8 text-muted-foreground mb-2" />
+        <p className="text-sm text-muted-foreground">
+          Artifacts will appear here after checkpoints or final models are saved.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{data?.total || artifacts.length} files</p>
+        <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {artifacts.map((artifact) => (
+          <div key={artifact.path} className="flex items-start justify-between gap-3 rounded-lg bg-muted/30 p-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px] uppercase">
+                  {artifact.type}
+                </Badge>
+                <span className="truncate text-sm font-medium">{artifact.name}</span>
+              </div>
+              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                {artifact.path}
+              </p>
+            </div>
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">
+              {formatBytes(artifact.size_bytes)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -515,6 +603,7 @@ export function JobDetails() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="dataset">Dataset</TabsTrigger>
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
 
@@ -605,6 +694,10 @@ export function JobDetails() {
 
         <TabsContent value="metrics" className="flex-1 overflow-auto p-4">
           <MetricsSection job={selectedJobData} />
+        </TabsContent>
+
+        <TabsContent value="artifacts" className="flex-1 overflow-auto p-4">
+          <ArtifactsSection job={selectedJobData} />
         </TabsContent>
 
         <TabsContent value="logs" className="flex-1 overflow-hidden p-4">
