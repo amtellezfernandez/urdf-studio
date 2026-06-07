@@ -441,15 +441,17 @@ def _apply_live_joint_values(
 def _robot_collision_min_z(robot_entity) -> float | None:
     min_z_values: list[float] = []
     for link in getattr(robot_entity, "links", []):
-        if not hasattr(link, "get_AABB"):
-            continue
-        try:
-            aabb = _to_float_list(link.get_AABB())
-        except Exception:
-            continue
-        if len(aabb) < 3 or not _is_finite_number(aabb[2]):
-            continue
-        min_z_values.append(float(aabb[2]))
+        for method_name in ("get_AABB", "get_vAABB"):
+            method = getattr(link, method_name, None)
+            if method is None:
+                continue
+            try:
+                aabb = _to_float_list(method())
+            except Exception:
+                continue
+            if len(aabb) < 3 or not _is_finite_number(aabb[2]):
+                continue
+            min_z_values.append(float(aabb[2]))
     return min(min_z_values) if min_z_values else None
 
 

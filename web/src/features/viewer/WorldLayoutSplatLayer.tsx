@@ -13,6 +13,7 @@ import {
   readWorldLayoutSplatConfig,
 } from "@/features/viewer/worldLayoutEnvironmentConfig";
 import { useWorldLayoutEnvironmentStore } from "@/features/world-share/worldLayoutEnvironmentStore";
+import { useWorldCollisionBoundsStore } from "@/features/viewer/worldCollisionBoundsStore";
 
 extend({ SparkRenderer, SplatMesh });
 
@@ -48,6 +49,7 @@ export const WorldLayoutSplatLayer = ({
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   const elementBoundsRef = useRef(new Map<string, THREE.Box3>());
   const autoFitKeyRef = useRef<string | null>(null);
+  const setWorldCollisionBounds = useWorldCollisionBoundsStore((state) => state.setBounds);
 
   const handleSplatRef = useCallback((instance: SplatMesh | null) => {
     setSplatInstance(instance);
@@ -60,9 +62,10 @@ export const WorldLayoutSplatLayer = ({
       } else {
         elementBoundsRef.current.delete(id);
       }
+      setWorldCollisionBounds(id, bounds);
       setBoundsVersion((version) => version + 1);
     },
-    []
+    [setWorldCollisionBounds]
   );
 
   const handleElementSelect = useCallback((id: string) => {

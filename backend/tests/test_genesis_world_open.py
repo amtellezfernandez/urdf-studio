@@ -303,18 +303,21 @@ def test_enforce_dynamic_floor_contact_lifts_flipped_box_above_floor() -> None:
     assert entity.qvel[2] == 0.0
 
 
-def test_robot_collision_min_z_ignores_links_without_collision_geometry() -> None:
+def test_robot_collision_min_z_includes_visual_geometry() -> None:
     class _LinkWithAabb:
         def get_AABB(self):  # noqa: N802 - mirrors Genesis API
             return [[0.0, 0.0, 0.02], [0.1, 0.1, 0.2]]
 
-    class _LinkWithoutCollision:
+    class _VisualOnlyLink:
         def get_AABB(self):  # noqa: N802 - mirrors Genesis API
             raise RuntimeError("Link has no collision geometries.")
 
-    robot = SimpleNamespace(links=[_LinkWithoutCollision(), _LinkWithAabb()])
+        def get_vAABB(self):  # noqa: N802 - mirrors Genesis API
+            return [[0.0, 0.0, -0.01], [0.1, 0.1, 0.2]]
 
-    assert _robot_collision_min_z(robot) == pytest.approx(0.02)
+    robot = SimpleNamespace(links=[_VisualOnlyLink(), _LinkWithAabb()])
+
+    assert _robot_collision_min_z(robot) == pytest.approx(-0.01)
 
 
 def test_enforce_robot_floor_contact_restores_last_safe_joints() -> None:
