@@ -1,3 +1,5 @@
+import fs from "node:fs";
+
 import {
   TEAM_SHARING_MAX_CONTROL_BODY_BYTES,
   TEAM_SHARING_REMOTE_DISABLED_MESSAGE,
@@ -13,6 +15,15 @@ const IPV4_OCTET_MAX = 255;
 const HTTP_METHOD_GET = "GET";
 const HTTP_METHOD_POST = "POST";
 const HTTP_METHOD_OPTIONS = "OPTIONS";
+const TEAM_SHARING_GATE_PARAMS = {
+  wslOsReleasePath: "/proc/sys/kernel/osrelease",
+  wslRoutePath: "/proc/net/route",
+  wslKernelMarkers: ["microsoft", "wsl"],
+  defaultRouteDestinationHex: "00000000",
+  ipv4GatewayHexLength: 8,
+  ipv4HexByteWidth: 2,
+  hexRadix: 16,
+};
 
 const stripIpv6Brackets = (host) =>
   host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
@@ -51,6 +62,67 @@ const isPrivateIpv4Address = (host) => {
 
 const isLoopbackBindHost = (host) => LOOPBACK_HOSTS.has(normalizeHost(host));
 
+const readTextFile = (path, { readFileSync = fs.readFileSync } = {}) => {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
+};
+
+export const isWslEnvironment = ({ readFileSync = fs.readFileSync } = {}) => {
+  const osRelease = readTextFile(TEAM_SHARING_GATE_PARAMS.wslOsReleasePath, {
+    readFileSync,
+  }).toLowerCase();
+  return TEAM_SHARING_GATE_PARAMS.wslKernelMarkers.some((marker) =>
+    osRelease.includes(marker),
+  );
+};
+
+export const parseWslDefaultGatewayAddress = (routeTableText) => {
+  for (const line of String(routeTableText || "").split(/\r?\n/).slice(1)) {
+    const fields = line.trim().split(/\s+/);
+    const destinationHex = fields[1];
+    const gatewayHex = fields[2];
+    if (
+      destinationHex !== TEAM_SHARING_GATE_PARAMS.defaultRouteDestinationHex ||
+      !/^[0-9a-fA-F]+$/.test(gatewayHex || "") ||
+      gatewayHex.length !== TEAM_SHARING_GATE_PARAMS.ipv4GatewayHexLength
+    ) {
+      continue;
+    }
+    return Array.from(
+      { length: IPV4_OCTET_COUNT },
+      (_, index) =>
+        parseInt(
+          gatewayHex.slice(
+            index * TEAM_SHARING_GATE_PARAMS.ipv4HexByteWidth,
+            (index + 1) * TEAM_SHARING_GATE_PARAMS.ipv4HexByteWidth,
+          ),
+          TEAM_SHARING_GATE_PARAMS.hexRadix,
+        ),
+    )
+      .reverse()
+      .join(".");
+  }
+  return null;
+};
+
+export const resolveWslHostRemoteAddresses = ({
+  readFileSync = fs.readFileSync,
+} = {}) => {
+  if (!isWslEnvironment({ readFileSync })) {
+    return new Set();
+  }
+  const gatewayAddress = parseWslDefaultGatewayAddress(
+    readTextFile(TEAM_SHARING_GATE_PARAMS.wslRoutePath, { readFileSync }),
+  );
+  return gatewayAddress ? new Set([gatewayAddress]) : new Set();
+};
+
+const normalizeAddressSet = (addresses) =>
+  new Set([...addresses].map(normalizeHost).filter(Boolean));
+
 export const isLoopbackRemoteAddress = (remoteAddress) => {
   const normalized = normalizeHost(remoteAddress);
   const ipv4 = parseIpv4Octets(normalized);
@@ -59,10 +131,14 @@ export const isLoopbackRemoteAddress = (remoteAddress) => {
 
 export const resolveTeamSharingRequestRemoteAddress = ({
   remoteAddress = "",
+  trustedOwnerRemoteAddresses = resolveWslHostRemoteAddresses(),
   webBindHost = "",
 } = {}) => {
   const normalizedRemoteAddress = normalizeHost(remoteAddress);
   if (isLoopbackRemoteAddress(normalizedRemoteAddress)) {
+    return "127.0.0.1";
+  }
+  if (normalizeAddressSet(trustedOwnerRemoteAddresses).has(normalizedRemoteAddress)) {
     return "127.0.0.1";
   }
   if (isLoopbackBindHost(webBindHost) && isPrivateIpv4Address(normalizedRemoteAddress)) {
@@ -133,6 +209,7 @@ export const serializeTeamSharingState = (state) => ({
 export const handleTeamSharingControlRequest = async ({
   request,
   response,
+  remoteAddress = request.socket?.remoteAddress,
   state,
 }) => {
   const method = String(request.method || HTTP_METHOD_GET).toUpperCase();
@@ -143,7 +220,7 @@ export const handleTeamSharingControlRequest = async ({
     return;
   }
 
-  if (!isLoopbackRemoteAddress(request.socket?.remoteAddress)) {
+  if (!isLoopbackRemoteAddress(remoteAddress)) {
     writeText(response, 403, "Team sharing can only be changed from this computer.");
     return;
   }
