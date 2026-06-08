@@ -18,6 +18,7 @@ import {
   shouldBlockTeamSharingRequest,
   writeTeamSharingBlockedResponse,
 } from "./teamSharingGate.js";
+import { resolveWslHostRemoteAddresses } from "./wslOwnerProxy.js";
 import {
   TEAM_SHARING_DEFAULT_ENABLED,
   TEAM_SHARING_UPGRADE_BLOCK_RESPONSE,
@@ -87,16 +88,21 @@ const createTeamSharingGate = (): Plugin => {
   // When the server is bound to a loopback address only, the OS-level bind
   // already restricts access to the local machine. WSL2's localhost proxy
   // forwards Windows browser connections but makes them appear as non-loopback
-  // IPs. Only trust those private-source addresses while the server itself is
-  // bound to loopback; in remote-bind mode they remain remote clients.
+  // IPs. Private-source addresses are broadly trusted only while the server is
+  // bound to loopback. In remote-bind mode, only the detected WSL host gateway
+  // is treated as the owner; other private addresses remain remote clients.
 
+  const trustedOwnerRemoteAddresses = resolveWslHostRemoteAddresses();
+  const resolveRequestRemoteAddress = (remoteAddress: string | undefined) =>
+    resolveTeamSharingRequestRemoteAddress({
+      remoteAddress: remoteAddress ?? "",
+      trustedOwnerRemoteAddresses,
+      webBindHost: runtimeConfig.web.bindHost,
+    });
   const shouldBlock = (remoteAddress: string | undefined, requestUrl: string | undefined) =>
     shouldBlockTeamSharingRequest({
       enabled: state.enabled,
-      remoteAddress: resolveTeamSharingRequestRemoteAddress({
-        remoteAddress: remoteAddress ?? "",
-        webBindHost: runtimeConfig.web.bindHost,
-      }),
+      remoteAddress: resolveRequestRemoteAddress(remoteAddress),
       requestUrl: requestUrl ?? "",
     });
 
@@ -113,7 +119,12 @@ const createTeamSharingGate = (): Plugin => {
 
       server.middlewares.use((request, response, next) => {
         if (isTeamSharingControlPath(request.url)) {
-          void handleTeamSharingControlRequest({ request, response, state }).catch((error) => {
+          void handleTeamSharingControlRequest({
+            request,
+            response,
+            remoteAddress: resolveRequestRemoteAddress(request.socket.remoteAddress),
+            state,
+          }).catch((error) => {
             response.statusCode = 500;
             response.setHeader("Content-Type", "text/plain; charset=utf-8");
             response.end(error instanceof Error ? error.message : "Team sharing control failed.");

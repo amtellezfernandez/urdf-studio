@@ -4,6 +4,7 @@ import {
   TEAM_SHARING_REMOTE_DISABLED_STATUS_CODE,
   TEAM_SHARING_STATUS_PATH,
 } from "./teamSharingParams.js";
+import { resolveWslHostRemoteAddresses } from "./wslOwnerProxy.js";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const IPV4_LOOPBACK_FIRST_OCTET = 127;
@@ -51,6 +52,9 @@ const isPrivateIpv4Address = (host) => {
 
 const isLoopbackBindHost = (host) => LOOPBACK_HOSTS.has(normalizeHost(host));
 
+const normalizeAddressSet = (addresses) =>
+  new Set([...addresses].map(normalizeHost).filter(Boolean));
+
 export const isLoopbackRemoteAddress = (remoteAddress) => {
   const normalized = normalizeHost(remoteAddress);
   const ipv4 = parseIpv4Octets(normalized);
@@ -59,10 +63,14 @@ export const isLoopbackRemoteAddress = (remoteAddress) => {
 
 export const resolveTeamSharingRequestRemoteAddress = ({
   remoteAddress = "",
+  trustedOwnerRemoteAddresses = resolveWslHostRemoteAddresses(),
   webBindHost = "",
 } = {}) => {
   const normalizedRemoteAddress = normalizeHost(remoteAddress);
   if (isLoopbackRemoteAddress(normalizedRemoteAddress)) {
+    return "127.0.0.1";
+  }
+  if (normalizeAddressSet(trustedOwnerRemoteAddresses).has(normalizedRemoteAddress)) {
     return "127.0.0.1";
   }
   if (isLoopbackBindHost(webBindHost) && isPrivateIpv4Address(normalizedRemoteAddress)) {
@@ -133,6 +141,7 @@ export const serializeTeamSharingState = (state) => ({
 export const handleTeamSharingControlRequest = async ({
   request,
   response,
+  remoteAddress = request.socket?.remoteAddress,
   state,
 }) => {
   const method = String(request.method || HTTP_METHOD_GET).toUpperCase();
@@ -143,7 +152,7 @@ export const handleTeamSharingControlRequest = async ({
     return;
   }
 
-  if (!isLoopbackRemoteAddress(request.socket?.remoteAddress)) {
+  if (!isLoopbackRemoteAddress(remoteAddress)) {
     writeText(response, 403, "Team sharing can only be changed from this computer.");
     return;
   }
