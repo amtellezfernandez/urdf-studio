@@ -204,6 +204,30 @@ describe("operatorLeaderConnectionPolicy", () => {
     ]);
   });
 
+  it("prefers the control part whose configured port matches the active device", () => {
+    const followerPart = buildControlPart({
+      id: "follower-arm",
+      label: "Follower arm",
+      calibrationProfile: "so100_follower",
+      calibrationId: "my_awesome_follower_arm",
+      configuredPortMatches: true,
+      configuredPortStatus: "matched",
+    });
+    const leaderPart = buildControlPart({
+      id: "leader-arm",
+      label: "Leader arm",
+      calibrationProfile: "so100_leader",
+      calibrationId: "my_awesome_leader_arm",
+      configuredPortMatches: false,
+      configuredPortStatus: "unmatched",
+    });
+    const leader = buildLeader([leaderPart, followerPart]);
+
+    expect(findCompatibleLeaderControlPart(buildArmGroup(), leader)).toBe(
+      followerPart,
+    );
+  });
+
   it("builds leader role keys from stable identity, active port, and configured ports", () => {
     const leader = buildLeader([
       buildControlPart({

@@ -15,6 +15,10 @@ from backend.robot_gateway.openarm_leader_state import (
     map_lerobot_action_positions_to_joints,
     map_openarm_mini_positions_to_joints,
 )
+from backend.robot_gateway.params import (
+    ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD,
+    ROBOT_GATEWAY_LEROBOT_GRIPPER_OPEN_RAD,
+)
 
 LEADER_JOINT1_DEG = 10.0
 LEADER_JOINT2_DEG = 15.0
@@ -132,7 +136,18 @@ def test_maps_lerobot_gripper_action_units_to_model_rad() -> None:
     )
 
     assert joints["shoulder_pan"].position_rad == math.radians(LEADER_JOINT1_DEG)
-    assert joints["gripper"].position_rad == math.radians(LEADER_GRIPPER_PERCENT)
+    expected_gripper_rad = ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD + (
+        LEADER_GRIPPER_PERCENT / 100.0
+    ) * (ROBOT_GATEWAY_LEROBOT_GRIPPER_OPEN_RAD - ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD)
+    assert joints["gripper"].position_rad == expected_gripper_rad
+
+
+def test_maps_lerobot_gripper_endpoints_across_full_model_range() -> None:
+    closed = map_lerobot_action_positions_to_joints({"gripper": 0.0})
+    open_ = map_lerobot_action_positions_to_joints({"gripper": 100.0})
+
+    assert closed["gripper"].position_rad == ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD
+    assert open_["gripper"].position_rad == ROBOT_GATEWAY_LEROBOT_GRIPPER_OPEN_RAD
 
 
 def test_maps_so_style_lerobot_shoulder_pan_to_urdf_direction() -> None:

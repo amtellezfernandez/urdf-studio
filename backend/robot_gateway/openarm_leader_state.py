@@ -29,7 +29,9 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_SECONDS_TO_MS,
     ROBOT_GATEWAY_LEROBOT_ACTION_POSITION_SUFFIX,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_ROOT_DEFAULT,
+    ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD,
     ROBOT_GATEWAY_LEROBOT_GRIPPER_JOINT_NAMES,
+    ROBOT_GATEWAY_LEROBOT_GRIPPER_OPEN_RAD,
     ROBOT_GATEWAY_LEROBOT_GRIPPER_UNITS_PER_RAD,
     ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_ZERO_PORT_PREFIX,
@@ -901,7 +903,10 @@ def _lerobot_action_position_to_model_rad(
     calibration_profile: str | None = None,
 ) -> float:
     if joint_name in ROBOT_GATEWAY_LEROBOT_GRIPPER_JOINT_NAMES:
-        return value / ROBOT_GATEWAY_LEROBOT_GRIPPER_UNITS_PER_RAD
+        return ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD + (value / 100.0) * (
+            ROBOT_GATEWAY_LEROBOT_GRIPPER_OPEN_RAD
+            - ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD
+        )
     return (
         _resolve_lerobot_model_joint_direction(calibration_profile, joint_name)
         * math.radians(value)

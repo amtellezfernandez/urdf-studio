@@ -3867,7 +3867,7 @@
       },
       {
         "name": "OPERATOR_LEADER_STATE_POLL_INTERVAL_MS",
-        "initializer": "50"
+        "initializer": "20"
       },
       {
         "name": "OPERATOR_LEADER_TELEMETRY_SOURCE_PREFIX",
