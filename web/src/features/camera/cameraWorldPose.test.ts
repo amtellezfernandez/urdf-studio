@@ -26,7 +26,9 @@ describe("cameraWorldPose", () => {
     const joint = new THREE.Group();
     joint.name = "shoulder pan";
     root.add(joint);
-    (root as unknown as URDFRobot).joints = { "shoulder pan": joint } as URDFRobot["joints"];
+    (root as unknown as URDFRobot).joints = {
+      "shoulder pan": joint,
+    } as unknown as URDFRobot["joints"];
     root.updateMatrixWorld(true);
 
     const resolved = resolveCameraParentJointObject(
@@ -43,7 +45,9 @@ describe("cameraWorldPose", () => {
     joint.position.set(1, -0.5, 0.25);
     joint.rotation.set(0.1, -0.2, 0.3, "XYZ");
     root.add(joint);
-    (root as unknown as URDFRobot).joints = { base_joint: joint } as URDFRobot["joints"];
+    (root as unknown as URDFRobot).joints = {
+      base_joint: joint,
+    } as unknown as URDFRobot["joints"];
     root.updateMatrixWorld(true);
 
     const pose = {
@@ -75,7 +79,7 @@ describe("cameraWorldPose", () => {
     root.add(joint);
     (root as unknown as URDFRobot).joints = {
       [REPLAY_CAMERA_FIXTURE.parentJoint]: joint,
-    } as URDFRobot["joints"];
+    } as unknown as URDFRobot["joints"];
 
     const cameraConfig = {
       parent_joint: REPLAY_CAMERA_FIXTURE.parentJoint,
@@ -156,11 +160,11 @@ describe("cameraWorldPose", () => {
 
     (root as unknown as URDFRobot).joints = {
       camera_mount_joint: cameraJoint,
-    } as URDFRobot["joints"];
+    } as unknown as URDFRobot["joints"];
     (root as unknown as URDFRobot).links = {
       camera_source_link: sourceLink,
       camera_mount_link: jointChildLink,
-    } as URDFRobot["links"];
+    } as unknown as URDFRobot["links"];
     root.updateMatrixWorld(true);
 
     const sourcePose = {
@@ -212,7 +216,7 @@ describe("cameraWorldPose", () => {
     (root as unknown as URDFRobot).joints = {
       joint_a: jointA,
       joint_b: jointB,
-    } as URDFRobot["joints"];
+    } as unknown as URDFRobot["joints"];
     root.updateMatrixWorld(true);
 
     const poseInA = {
@@ -258,10 +262,10 @@ describe("cameraWorldPose", () => {
 
     (root as unknown as URDFRobot).joints = {
       camera_joint: cameraJoint,
-    } as URDFRobot["joints"];
+    } as unknown as URDFRobot["joints"];
     (root as unknown as URDFRobot).links = {
       camera_source_link: sourceLink,
-    } as URDFRobot["links"];
+    } as unknown as URDFRobot["links"];
     root.updateMatrixWorld(true);
 
     const sensorPose = {

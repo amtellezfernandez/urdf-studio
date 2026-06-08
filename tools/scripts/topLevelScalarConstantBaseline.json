@@ -1136,6 +1136,12 @@
         "initializer": "1e-4"
       }
     ],
+    "web/src/features/camera/cameraWorldPose.test.ts": [
+      {
+        "name": "REPLAY_CAMERA_POSITION_PRECISION_DECIMALS",
+        "initializer": "8"
+      }
+    ],
     "web/src/features/camera/useCameraAutoGeneration.test.ts": [
       {
         "name": "CAMERA_JOINT_NAME",
@@ -4896,6 +4902,12 @@
         "initializer": "\"Invalid mesh path. Avoid parent directory segments.\""
       }
     ],
+    "web/src/features/urdf/editor/urdfEditorActions.jointLimits.test.ts": [
+      {
+        "name": "baseUrdf",
+        "initializer": "`\n<robot name=\"test_bot\">\n  <link name=\"base\" />\n  <link name=\"link1\" />\n  <joint name=\"joint1\" type=\"revolute\">\n    <parent link=\"base\" />\n    <child link=\"link1\" />\n    <limit lower=\"-1.0\" upper=\"1.0\" velocity=\"1.0\" />\n  </joint>\n</robot>\n`"
+      }
+    ],
     "web/src/features/urdf/editor/urdfEditorActions.test.ts": [
       {
         "name": "BASE_URDF",
@@ -5262,6 +5274,12 @@
       {
         "name": "EXPECTED_STL_BLOB_READ_LIMIT_WITH_WORKER_FALLBACK",
         "initializer": "2"
+      }
+    ],
+    "web/src/features/urdf/runtime/materialApply.test.ts": [
+      {
+        "name": "DECIMAL_PRECISION",
+        "initializer": "3"
       }
     ],
     "web/src/features/urdf/runtime/materialApplySchedulerParams.ts": [
@@ -6982,24 +7000,6 @@
       {
         "name": "RUNTIME_OBJECT_REFRESH_EVENT",
         "initializer": "\"urdfstudio:runtime-object-refresh\""
-      }
-    ],
-    "web/tests/cameraWorldPose.test.ts": [
-      {
-        "name": "REPLAY_CAMERA_POSITION_PRECISION_DECIMALS",
-        "initializer": "8"
-      }
-    ],
-    "web/tests/materialApply.test.ts": [
-      {
-        "name": "DECIMAL_PRECISION",
-        "initializer": "3"
-      }
-    ],
-    "web/tests/urdf-joint-limits.test.ts": [
-      {
-        "name": "baseUrdf",
-        "initializer": "`\n<robot name=\"test_bot\">\n  <link name=\"base\" />\n  <link name=\"link1\" />\n  <joint name=\"joint1\" type=\"revolute\">\n    <parent link=\"base\" />\n    <child link=\"link1\" />\n    <limit lower=\"-1.0\" upper=\"1.0\" velocity=\"1.0\" />\n  </joint>\n</robot>\n`"
       }
     ]
   }
