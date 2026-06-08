@@ -15,10 +15,10 @@ import {
   handleTeamSharingControlRequest,
   isTeamSharingControlPath,
   resolveTeamSharingRequestRemoteAddress,
-  resolveWslHostRemoteAddresses,
   shouldBlockTeamSharingRequest,
   writeTeamSharingBlockedResponse,
 } from "./teamSharingGate.js";
+import { resolveWslHostRemoteAddresses } from "./wslOwnerProxy.js";
 import {
   TEAM_SHARING_DEFAULT_ENABLED,
   TEAM_SHARING_UPGRADE_BLOCK_RESPONSE,

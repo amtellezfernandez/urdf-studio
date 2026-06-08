@@ -7,7 +7,6 @@ import {
   isLoopbackRemoteAddress,
   isTeamSharingControlPath,
   resolveTeamSharingRequestRemoteAddress,
-  resolveWslHostRemoteAddresses,
   serializeTeamSharingState,
   shouldBlockTeamSharingRequest,
 } from "./teamSharingGate.js";
@@ -91,34 +90,6 @@ test("WSL host gateway is trusted as the local owner for remote frontend binds",
       requestUrl: "/",
     }),
     true,
-  );
-});
-
-test("WSL host gateway is read from the default route only inside WSL", () => {
-  const readFileSync = (path) => {
-    if (String(path).endsWith("osrelease")) {
-      return "5.15.167.4-microsoft-standard-WSL2\n";
-    }
-    if (String(path).endsWith("route")) {
-      return [
-        "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT",
-        "eth0\t00000000\t01D216AC\t0003\t0\t0\t0\t00000000\t0\t0\t0",
-      ].join("\n");
-    }
-    throw new Error(`Unexpected read ${path}`);
-  };
-
-  assert.deepEqual(
-    [...resolveWslHostRemoteAddresses({ readFileSync })],
-    ["172.22.210.1"],
-  );
-  assert.deepEqual(
-    [
-      ...resolveWslHostRemoteAddresses({
-        readFileSync: () => "6.8.0-generic\n",
-      }),
-    ],
-    [],
   );
 });
 
