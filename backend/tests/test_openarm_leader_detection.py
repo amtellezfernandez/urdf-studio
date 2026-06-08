@@ -4,6 +4,8 @@ from pathlib import Path
 
 from backend.robot_gateway.openarm_leader_detection import (
     OpenArmLeaderMotorProbe,
+    _build_leader_control_parts,
+    _resolve_configured_port_status,
     detect_openarm_leaders,
 )
 from backend.robot_gateway.params import (
@@ -304,6 +306,77 @@ def test_detect_openarm_leaders_ranks_matching_device_port_calibration(
     assert control_parts[0].configured_port_matches is True
     assert control_parts[0].configured_port_status == "matched"
     assert control_parts[1].configured_port == "/dev/ttyOTHER"
+    assert control_parts[1].configured_port_matches is False
+    assert control_parts[1].configured_port_status == "stale"
+
+
+def test_lerobot_configured_port_status_matches_serial_port_aliases() -> None:
+    tty_path = Path("/dev/tty.usbmodem58760433331")
+    cu_path = Path("/dev/cu.usbmodem58760433331")
+
+    assert (
+        _resolve_configured_port_status(
+            "/dev/cu.usbmodem58760433331",
+            path=tty_path,
+            resolved_path=tty_path,
+        )
+        == "matched"
+    )
+    assert (
+        _resolve_configured_port_status(
+            "/dev/tty.usbmodem58760433331",
+            path=cu_path,
+            resolved_path=cu_path,
+        )
+        == "matched"
+    )
+
+
+def test_lerobot_control_parts_rank_matching_configured_serial_port(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    calibration_root = (
+        tmp_path / "home" / ".cache" / "huggingface" / "lerobot" / "calibration"
+    )
+    calibration_dir = calibration_root / "teleoperators" / "so100_leader"
+    calibration_dir.mkdir(parents=True)
+    for calibration_id in ("arm_a", "arm_b"):
+        (calibration_dir / f"{calibration_id}.json").write_text(
+            """
+            {
+              "shoulder_pan": {"id": 1},
+              "shoulder_lift": {"id": 2}
+            }
+            """,
+            encoding="utf-8",
+        )
+    (calibration_root / "device_ports.json").write_text(
+        """
+        {
+          "teleop": {
+            "so100_leader": {
+              "arm_a": "/dev/cu.usbmodem58760433331",
+              "arm_b": "/dev/cu.usbmodemOTHER"
+            }
+          }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    control_parts = _build_leader_control_parts(
+        OpenArmLeaderMotorProbe(bus="feetech", motor_ids=[1, 2]),
+        path=Path("/dev/tty.usbmodem58760433331"),
+        resolved_path=Path("/dev/tty.usbmodem58760433331"),
+    )
+
+    assert [part.calibration_id for part in control_parts] == ["arm_a", "arm_b"]
+    assert control_parts[0].configured_port == "/dev/cu.usbmodem58760433331"
+    assert control_parts[0].configured_port_matches is True
+    assert control_parts[0].configured_port_status == "matched"
+    assert control_parts[1].configured_port == "/dev/cu.usbmodemOTHER"
     assert control_parts[1].configured_port_matches is False
     assert control_parts[1].configured_port_status == "stale"
 

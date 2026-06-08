@@ -34,6 +34,7 @@ from backend.robot_gateway.params import (
 from backend.robot_gateway.lerobot_calibration_files import (
     read_lerobot_calibration_groups,
 )
+from backend.robot_gateway.serial_port_matching import serial_port_match_values
 from backend.robot_gateway.providers.dora_provider import get_dora_runtime_provider_info
 from backend.robot_gateway.providers.lerobot_provider import (
     get_lerobot_runtime_provider_info,
@@ -284,6 +285,10 @@ def _build_leader_control_parts(
         resolved_path=resolved_path,
     )
     if calibration_matches:
+        calibration_matches = sorted(
+            calibration_matches,
+            key=lambda match: 0 if match.configured_port_status == "matched" else 1,
+        )
         return [
             OpenArmLeaderControlPart(
                 id=(
@@ -491,12 +496,16 @@ def _resolve_configured_port_status(
         return "none"
     configured_path = Path(configured_port).expanduser()
     configured_resolved = configured_path.resolve(strict=False)
-    candidates = {
+    candidates = serial_port_match_values(
         str(path),
         str(path.resolve(strict=False)),
         str(resolved_path),
-    }
-    if str(configured_path) in candidates or str(configured_resolved) in candidates:
+    )
+    configured_candidates = serial_port_match_values(
+        str(configured_path),
+        str(configured_resolved),
+    )
+    if configured_candidates & candidates:
         return "matched"
     if not configured_path.exists():
         return "stale"
