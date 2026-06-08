@@ -4380,7 +4380,7 @@ const getOperatorTeleopPanelTitle = (panelView: OperatorTeleopPanelView): string
     case "studio":
       return "Leader Input";
     case "hardware":
-      return "Robot Teleop";
+      return "Follower Hardware";
     default:
       return "Teleop";
   }
@@ -4393,7 +4393,7 @@ const getOperatorTeleopPanelSubtitle = (panelView: OperatorTeleopPanelView): str
     case "studio":
       return "Configure leader arm or joystick input";
     case "hardware":
-      return "Connect robot hardware and live cameras.";
+      return "Connect follower hardware and live cameras.";
     default:
       return "Watch robot motion / drive from this browser";
   }

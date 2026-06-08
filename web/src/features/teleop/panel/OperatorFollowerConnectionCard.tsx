@@ -223,7 +223,7 @@ export const OperatorFollowerConnectionCard = ({
   return (
     <div className="rounded-md border border-border/40 bg-background/40 p-2 text-[10px] text-muted-foreground">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="font-medium text-foreground">Robot</div>
+        <div className="font-medium text-foreground">Follower</div>
         <div className="font-mono text-muted-foreground">
           {targetSelection.options.length} targets
         </div>
@@ -245,7 +245,7 @@ export const OperatorFollowerConnectionCard = ({
         <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-center gap-1.5">
           <select
             className="h-7 min-w-0 rounded-md border border-border/60 bg-background px-2 font-mono text-[10px] text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Robot target"
+            aria-label="Follower target"
             disabled={targetSelection.disabled || targetSelection.options.length === 0}
             value={selectedTarget?.profileId ?? ""}
             onChange={(event) => targetSelection.onSelectProfile(event.target.value)}

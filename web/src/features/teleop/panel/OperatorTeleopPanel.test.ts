@@ -458,7 +458,7 @@ describe("OperatorTeleopPanelShell", () => {
     const shell = container.firstElementChild as HTMLElement | null;
     expect(shell?.className).toContain("hidden");
     expect(shell?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.textContent).toContain("Robot Teleop");
+    expect(container.textContent).toContain("Follower Hardware");
 
     await act(async () => {
       root.unmount();
@@ -713,7 +713,7 @@ describe("OperatorTeleopPanel input routing", () => {
       );
       await flushMicrotasks();
     });
-    expect(container.textContent).toContain("Robot");
+    expect(container.textContent).toContain("Follower");
 
     await act(async () => {
       root.render(
@@ -2711,7 +2711,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       await flushMicrotasks();
     });
 
-    expect(container.textContent).toContain("Robot");
+    expect(container.textContent).toContain("Follower");
     expect(container.textContent).toContain("Detected targets");
     expect(container.textContent).toContain("Gateway env");
     expect(container.textContent).toContain(".env.robot.local");
@@ -2729,7 +2729,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     expect(container.textContent).not.toContain("This computer");
     expect(container.textContent).not.toContain("SSH tunnel");
     const targetSelect = container.querySelector(
-      'select[aria-label="Robot target"]',
+      'select[aria-label="Follower target"]',
     ) as HTMLSelectElement | null;
     expect(
       Array.from(targetSelect?.options ?? []).map((option) => option.textContent),
