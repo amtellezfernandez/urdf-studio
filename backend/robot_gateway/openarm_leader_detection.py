@@ -284,6 +284,10 @@ def _build_leader_control_parts(
         resolved_path=resolved_path,
     )
     if calibration_matches:
+        calibration_matches = sorted(
+            calibration_matches,
+            key=lambda match: 0 if match.configured_port_status == "matched" else 1,
+        )
         return [
             OpenArmLeaderControlPart(
                 id=(
@@ -481,6 +485,26 @@ def _normalize_device_ports_category(raw_category: Any) -> str | None:
     return None
 
 
+def _macos_serial_port_aliases(port: str) -> set[str]:
+    normalized_port = port.strip()
+    if not normalized_port:
+        return set()
+
+    aliases = {normalized_port}
+    for prefix, alias_prefix in (("/dev/cu.", "/dev/tty."), ("/dev/tty.", "/dev/cu.")):
+        if normalized_port.startswith(prefix):
+            aliases.add(f"{alias_prefix}{normalized_port[len(prefix):]}")
+            break
+    return aliases
+
+
+def _serial_port_match_values(*ports: str) -> set[str]:
+    values: set[str] = set()
+    for port in ports:
+        values.update(_macos_serial_port_aliases(port))
+    return values
+
+
 def _resolve_configured_port_status(
     configured_port: str | None,
     *,
@@ -491,12 +515,16 @@ def _resolve_configured_port_status(
         return "none"
     configured_path = Path(configured_port).expanduser()
     configured_resolved = configured_path.resolve(strict=False)
-    candidates = {
+    candidates = _serial_port_match_values(
         str(path),
         str(path.resolve(strict=False)),
         str(resolved_path),
-    }
-    if str(configured_path) in candidates or str(configured_resolved) in candidates:
+    )
+    configured_candidates = _serial_port_match_values(
+        str(configured_path),
+        str(configured_resolved),
+    )
+    if configured_candidates & candidates:
         return "matched"
     if not configured_path.exists():
         return "stale"
