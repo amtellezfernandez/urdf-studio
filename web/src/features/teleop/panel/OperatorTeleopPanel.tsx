@@ -948,6 +948,20 @@ export const OperatorTeleopPanel = ({
   );
   const active =
     session?.state === "active" && Boolean(session.current_session_id);
+  const gatewayCompatibleModelRobotIds = useMemo(
+    () =>
+      [
+        session?.model_robot_id ?? session?.robot_id ?? null,
+        ...(session?.model_robot_aliases ?? []),
+      ].filter((value): value is string => Boolean(value?.trim())),
+    [session?.model_robot_aliases, session?.model_robot_id, session?.robot_id],
+  );
+  const gatewayRobotModelKnown = Boolean(
+    studioRobotName && gatewayCompatibleModelRobotIds.length,
+  );
+  const robotModelMismatch =
+    gatewayRobotModelKnown &&
+    !operatorRobotModelIdsMatch(studioRobotName, gatewayCompatibleModelRobotIds);
   const providerProfiles = useMemo(
     () => providerManifest?.profiles ?? [],
     [providerManifest?.profiles],
@@ -955,29 +969,13 @@ export const OperatorTeleopPanel = ({
   const followerConnectionConfigRef =
     providerManifest?.connectionModes.find((mode) => mode.configRef)?.configRef ??
     null;
-  const openArmDemoLiveObserveActive = useMemo(
-    () =>
-      isOpenArmDemoRobot(studioRobotName) ||
-      isOpenArmDemoRobot(session?.robot_id ?? null) ||
-      isOpenArmDemoRobot(providerManifest?.providerDisplayName ?? null) ||
-      providerProfiles.some(
-        (profile) =>
-          isOpenArmDemoRobot(profile.robotId) ||
-          isOpenArmDemoRobot(profile.label) ||
-          isOpenArmDemoRobot(profile.controlTargetLabel) ||
-          isOpenArmDemoRobot(profile.adapterId),
-      ),
-    [
-      providerManifest?.providerDisplayName,
-      providerProfiles,
-      session?.robot_id,
-      studioRobotName,
-    ],
-  );
+  const loadedRobotIsOpenArmDemo = isOpenArmDemoRobot(studioRobotName);
+  const openArmLiveObserveAvailable =
+    loadedRobotIsOpenArmDemo && !robotModelMismatch;
   const openArmLeaderAutodetectActive =
     showStudioTeleopTools && openArmLeaderDetectionRequested;
   const openArmCameraObserveEligible =
-    showCameraTools && openArmDemoLiveObserveActive;
+    showCameraTools && openArmLiveObserveAvailable;
   const openArmGatewayObserveActive =
     openArmCameraObserveEligible &&
     !openArmDemoLiveObserveManuallyDisconnected;
@@ -1182,25 +1180,15 @@ export const OperatorTeleopPanel = ({
   const estopAvailable = Boolean(
     session && providerManifest?.capabilities.estop && selectedProfile,
   );
-  const gatewayCompatibleModelRobotIds = useMemo(
-    () =>
-      [
-        session?.model_robot_id ?? session?.robot_id ?? null,
-        ...(session?.model_robot_aliases ?? []),
-      ].filter((value): value is string => Boolean(value?.trim())),
-    [session?.model_robot_aliases, session?.model_robot_id, session?.robot_id],
-  );
-  const targetMismatch =
-    Boolean(active && studioRobotName && gatewayCompatibleModelRobotIds.length) &&
-    !operatorRobotModelIdsMatch(studioRobotName, gatewayCompatibleModelRobotIds);
   const selectedConcreteFollowerHardwareTarget = Boolean(
     showFollowerHardwareTools &&
       followerHardwareProfile &&
       isFollowerArmPartProfile(followerHardwareProfile),
   );
-  const targetMismatchBlocksControl =
-    targetMismatch && !selectedConcreteFollowerHardwareTarget;
-  const targetMismatchMessage =
+  const showGatewayLiveCameraTools = showCameraTools && !robotModelMismatch;
+  const robotModelMismatchBlocksControl =
+    active && robotModelMismatch && !selectedConcreteFollowerHardwareTarget;
+  const robotModelMismatchMessage =
     studioRobotName && gatewayCompatibleModelRobotIds.length
       ? `Model mismatch. Loaded ${studioRobotName}; gateway expects ${gatewayCompatibleModelRobotIds.join(" or ")}. Load the matching robot before moving.`
       : "Model mismatch. Load the matching robot before moving.";
@@ -1220,7 +1208,7 @@ export const OperatorTeleopPanel = ({
   const gatewayControlActive =
     providerControlAvailable &&
     active &&
-    !targetMismatchBlocksControl &&
+    !robotModelMismatchBlocksControl &&
     requestedTeleoperationMode === connectedTeleoperationMode &&
     collaborationTeleopPermitted &&
     (!selectedProfileRequiresLease || leaseHeldByThisOperator);
@@ -1739,7 +1727,7 @@ export const OperatorTeleopPanel = ({
     followerHardwareConnected,
     followerTelemetryFreshForMotion,
     followerHardwareMotionSafety,
-    targetMismatch: targetMismatchBlocksControl,
+    targetMismatch: robotModelMismatchBlocksControl,
   }), [
     collaborationTeleopPermitted,
     connectedTeleoperationMode,
@@ -1752,9 +1740,9 @@ export const OperatorTeleopPanel = ({
     providerManifest,
     requestedTeleoperationMode,
     requestedTeleoperationModeLabel,
+    robotModelMismatchBlocksControl,
     selectedProfile,
     selectedProfileRequiresLease,
-    targetMismatchBlocksControl,
   ]);
 
   const releaseBrowserHardwareResourcesKeepalive = useCallback(() => {
@@ -3803,45 +3791,39 @@ export const OperatorTeleopPanel = ({
 
   return (
     <div className="space-y-2 text-[11px]">
-      {showCameraTools ? (
-      <div className="rounded-md border border-border/40 bg-background/40 p-2">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-[10px] font-medium text-foreground">
-              OpenArm live
-            </div>
-            <div className="truncate text-[9px] text-muted-foreground">
-              {openArmDemoLiveObserveActive
-                ? openArmHfLiveObserveStatus
-                : "Load OpenArm to use live observe."}
+      {showCameraTools && openArmLiveObserveAvailable ? (
+        <div className="rounded-md border border-border/40 bg-background/40 p-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] font-medium text-foreground">
+                OpenArm live
+              </div>
+              <div className="truncate text-[9px] text-muted-foreground">
+                {openArmHfLiveObserveStatus}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            className={controlButtonClass}
-            disabled={
-              !openArmDemoLiveObserveActive ||
-              (openArmHfLiveObserveRequested &&
-                !openArmDemoLiveObserveManuallyDisconnected)
-            }
-            onClick={handleConnectOpenArmLiveObserve}
-          >
-            Connect live
-          </button>
-          <button
-            type="button"
-            className={controlButtonClass}
-            disabled={
-              !openArmDemoLiveObserveActive || !openArmHfLiveObserveRequested
-            }
-            onClick={handleDisconnectOpenArmLiveObserve}
-          >
-            Disconnect live
-          </button>
-        </div>
-        {openArmDemoLiveObserveActive ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              className={controlButtonClass}
+              disabled={
+                openArmHfLiveObserveRequested &&
+                !openArmDemoLiveObserveManuallyDisconnected
+              }
+              onClick={handleConnectOpenArmLiveObserve}
+            >
+              Connect live
+            </button>
+            <button
+              type="button"
+              className={controlButtonClass}
+              disabled={!openArmHfLiveObserveRequested}
+              onClick={handleDisconnectOpenArmLiveObserve}
+            >
+              Disconnect live
+            </button>
+          </div>
           <div className="mt-2 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] font-medium text-foreground">
@@ -3896,8 +3878,7 @@ export const OperatorTeleopPanel = ({
               )}
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
       ) : null}
       {showStudioTeleopTools ? (
         <>
@@ -4021,119 +4002,119 @@ export const OperatorTeleopPanel = ({
         />
       ) : null}
 
-      {showCameraTools ? (
-      <div className="rounded-md border border-border/40 bg-background/40 p-2 text-[10px] text-muted-foreground">
-        <div className="mb-2 font-medium text-foreground">
-          Camera MoQ live tracks
-        </div>
-        {providerCameraStreams.length > 0 ? (
-          <>
-            <label className="block">
-              camera
-              <select
-                className="mt-1 h-7 w-full rounded-md border border-border/60 bg-background px-2 font-mono text-[10px] text-foreground"
-                value={selectedCameraStreamId}
-                onChange={(event) =>
-                  setSelectedCameraStreamId(event.target.value)
-                }
-              >
-                {providerCameraStreams.map((stream) => (
-                  <option key={stream.id} value={stream.id}>
-                    {stream.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="mt-1 truncate font-mono text-foreground">
-              {cameraLiveStatusMessage}
-            </div>
-            <div className="mt-0.5 truncate font-mono">
-              {providerManifest?.liveTransport
-                ? `${selectedCameraLiveTracks.length} camera tracks, ${gatewayTelemetryTrackCount} telemetry tracks`
-                : "Live camera/depth/cloud streams require a MoQ transport descriptor."}
-            </div>
-            <div className="mt-0.5 truncate font-mono">
-              {selectedCameraVideoTrack
-                ? "Video track ready."
-                : "No MoQ video track for this camera."}
-            </div>
-            <div className="mt-0.5 truncate font-mono">
-              {providerManifest?.controlTransport
-                ? "Control datagram transport ready."
-                : "Control datagrams require a teleop sidecar descriptor."}
-            </div>
-            <div className="mt-0.5">
-              {selectedCameraStream
-                ? `${selectedCameraStream.coordinateFrame}, ${selectedCameraStream.intrinsics.width}x${selectedCameraStream.intrinsics.height}`
-                : "No camera stream."}
-            </div>
-          </>
-        ) : (
-          <div>No camera stream advertised by this gateway.</div>
-        )}
-        <div className="mt-2 flex flex-col gap-1">
-          <button
-            type="button"
-            className={controlButtonClass}
-            disabled={
-              !pointCloudAutocalibrationAvailable ||
-              pointCloudAutocalibrationActive ||
-              pointCloudAutocalibrationReviewReady
-            }
-            onClick={requestPointCloudAutocalibration}
-          >
-            {pointCloudAutocalibrationActive
-              ? "Autocalibrating camera(s)"
-              : "Autocalibrate camera(s)"}
-          </button>
-          {pointCloudAutocalibrationReview ? (
-            <div className="grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                className={controlButtonClass}
-                onClick={acceptPointCloudAutocalibration}
-              >
-                Accept calibration
-              </button>
-              <button
-                type="button"
-                className={controlButtonClass}
-                onClick={discardPointCloudAutocalibration}
-              >
-                Discard
-              </button>
-            </div>
-          ) : null}
-          <div className="truncate font-mono">
-            {pointCloudAutocalibrationReview
-              ? `${pointCloudAutocalibrationReview.cameraCount} camera preview ready.`
-              : pointCloudAutocalibrationAvailable
-              ? `${activePointCloudFrameCount} point-cloud source${activePointCloudFrameCount === 1 ? "" : "s"} ready.`
-              : "Autocalibration waits for live point cloud."}
+      {showGatewayLiveCameraTools ? (
+        <div className="rounded-md border border-border/40 bg-background/40 p-2 text-[10px] text-muted-foreground">
+          <div className="mb-2 font-medium text-foreground">
+            Camera MoQ live tracks
           </div>
-          <button
-            type="button"
-            className={controlButtonClass}
-            disabled={
-              !pointCloudAutocalibrationAvailable || pointCloudSceneMeshActive
-            }
-            onClick={requestPointCloudSceneMeshes}
-          >
-            {pointCloudSceneMeshActive
-              ? "Creating scene meshes"
-              : "Auto-create scene meshes from cloud"}
-          </button>
-          <div className="truncate font-mono">
-            {pointCloudSceneMeshStatus ||
-              "Scene meshes use the current point-cloud surfaces."}
+          {providerCameraStreams.length > 0 ? (
+            <>
+              <label className="block">
+                camera
+                <select
+                  className="mt-1 h-7 w-full rounded-md border border-border/60 bg-background px-2 font-mono text-[10px] text-foreground"
+                  value={selectedCameraStreamId}
+                  onChange={(event) =>
+                    setSelectedCameraStreamId(event.target.value)
+                  }
+                >
+                  {providerCameraStreams.map((stream) => (
+                    <option key={stream.id} value={stream.id}>
+                      {stream.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="mt-1 truncate font-mono text-foreground">
+                {cameraLiveStatusMessage}
+              </div>
+              <div className="mt-0.5 truncate font-mono">
+                {providerManifest?.liveTransport
+                  ? `${selectedCameraLiveTracks.length} camera tracks, ${gatewayTelemetryTrackCount} telemetry tracks`
+                  : "Live camera/depth/cloud streams require a MoQ transport descriptor."}
+              </div>
+              <div className="mt-0.5 truncate font-mono">
+                {selectedCameraVideoTrack
+                  ? "Video track ready."
+                  : "No MoQ video track for this camera."}
+              </div>
+              <div className="mt-0.5 truncate font-mono">
+                {providerManifest?.controlTransport
+                  ? "Control datagram transport ready."
+                  : "Control datagrams require a teleop sidecar descriptor."}
+              </div>
+              <div className="mt-0.5">
+                {selectedCameraStream
+                  ? `${selectedCameraStream.coordinateFrame}, ${selectedCameraStream.intrinsics.width}x${selectedCameraStream.intrinsics.height}`
+                  : "No camera stream."}
+              </div>
+            </>
+          ) : (
+            <div>No camera stream advertised by this gateway.</div>
+          )}
+          <div className="mt-2 flex flex-col gap-1">
+            <button
+              type="button"
+              className={controlButtonClass}
+              disabled={
+                !pointCloudAutocalibrationAvailable ||
+                pointCloudAutocalibrationActive ||
+                pointCloudAutocalibrationReviewReady
+              }
+              onClick={requestPointCloudAutocalibration}
+            >
+              {pointCloudAutocalibrationActive
+                ? "Autocalibrating camera(s)"
+                : "Autocalibrate camera(s)"}
+            </button>
+            {pointCloudAutocalibrationReview ? (
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  className={controlButtonClass}
+                  onClick={acceptPointCloudAutocalibration}
+                >
+                  Accept calibration
+                </button>
+                <button
+                  type="button"
+                  className={controlButtonClass}
+                  onClick={discardPointCloudAutocalibration}
+                >
+                  Discard
+                </button>
+              </div>
+            ) : null}
+            <div className="truncate font-mono">
+              {pointCloudAutocalibrationReview
+                ? `${pointCloudAutocalibrationReview.cameraCount} camera preview ready.`
+                : pointCloudAutocalibrationAvailable
+                  ? `${activePointCloudFrameCount} point-cloud source${activePointCloudFrameCount === 1 ? "" : "s"} ready.`
+                  : "Autocalibration waits for live point cloud."}
+            </div>
+            <button
+              type="button"
+              className={controlButtonClass}
+              disabled={
+                !pointCloudAutocalibrationAvailable || pointCloudSceneMeshActive
+              }
+              onClick={requestPointCloudSceneMeshes}
+            >
+              {pointCloudSceneMeshActive
+                ? "Creating scene meshes"
+                : "Auto-create scene meshes from cloud"}
+            </button>
+            <div className="truncate font-mono">
+              {pointCloudSceneMeshStatus ||
+                "Scene meshes use the current point-cloud surfaces."}
+            </div>
           </div>
         </div>
-      </div>
       ) : null}
 
-      {showFollowerHardwareTools && targetMismatchBlocksControl && !followerHardwareRoleConflict ? (
+      {showFollowerHardwareTools && robotModelMismatchBlocksControl && !followerHardwareRoleConflict ? (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">
-          {targetMismatchMessage}
+          {robotModelMismatchMessage}
         </div>
       ) : null}
 

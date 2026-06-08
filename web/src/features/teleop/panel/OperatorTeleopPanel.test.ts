@@ -136,6 +136,34 @@ const TEST_CAMERA_STREAM = {
 const TEST_CAMERA_VIDEO_TRACK_NAME = `camera/${TEST_CAMERA_STREAM.id}/video`;
 const TEST_CAMERA_DEPTH_TRACK_NAME = `camera/${TEST_CAMERA_STREAM.id}/depth`;
 const TEST_CAMERA_METADATA_TRACK_NAME = `camera/${TEST_CAMERA_STREAM.id}/metadata`;
+const TEST_OPENARM_LIVE_TRANSPORT = {
+  type: "moq",
+  relay_url: TEST_LIVE_RELAY_URL,
+  namespace: TEST_LIVE_NAMESPACE,
+  tracks: [
+    {
+      id: "openarm-video",
+      kind: "video",
+      track_name: TEST_CAMERA_VIDEO_TRACK_NAME,
+      encoding: "h264",
+      camera_id: TEST_CAMERA_STREAM.id,
+    },
+    {
+      id: "openarm-depth",
+      kind: "depth",
+      track_name: TEST_CAMERA_DEPTH_TRACK_NAME,
+      encoding: "depth16",
+      camera_id: TEST_CAMERA_STREAM.id,
+    },
+    {
+      id: "openarm-metadata",
+      kind: "metadata",
+      track_name: TEST_CAMERA_METADATA_TRACK_NAME,
+      encoding: "json",
+      camera_id: TEST_CAMERA_STREAM.id,
+    },
+  ],
+} as const;
 const TEST_POINT_CLOUD_FRAME = {
   camera_id: TEST_CAMERA_STREAM.id,
   frame_id: TEST_CAMERA_STREAM.frame_id,
@@ -1823,7 +1851,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
           JSON.stringify({
             state: "idle",
             current_session_id: null,
-            robot_id: "atlas",
+            robot_id: "openarm",
             mode: "manual",
             runtime_mode: "observe",
             control_lease_owner: null,
@@ -2051,34 +2079,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
           JSON.stringify({
             ...TEST_PROVIDER_MANIFEST,
             provider_display_name: "OpenArm Provider",
-            live_transport: {
-              type: "moq",
-              relay_url: TEST_LIVE_RELAY_URL,
-              namespace: TEST_LIVE_NAMESPACE,
-              tracks: [
-                {
-                  id: "openarm-video",
-                  kind: "video",
-                  track_name: TEST_CAMERA_VIDEO_TRACK_NAME,
-                  encoding: "h264",
-                  camera_id: TEST_CAMERA_STREAM.id,
-                },
-                {
-                  id: "openarm-depth",
-                  kind: "depth",
-                  track_name: TEST_CAMERA_DEPTH_TRACK_NAME,
-                  encoding: "depth16",
-                  camera_id: TEST_CAMERA_STREAM.id,
-                },
-                {
-                  id: "openarm-metadata",
-                  kind: "metadata",
-                  track_name: TEST_CAMERA_METADATA_TRACK_NAME,
-                  encoding: "json",
-                  camera_id: TEST_CAMERA_STREAM.id,
-                },
-              ],
-            },
+            live_transport: TEST_OPENARM_LIVE_TRANSPORT,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -2179,34 +2180,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
           JSON.stringify({
             ...TEST_PROVIDER_MANIFEST,
             provider_display_name: "OpenArm Provider",
-            live_transport: {
-              type: "moq",
-              relay_url: TEST_LIVE_RELAY_URL,
-              namespace: TEST_LIVE_NAMESPACE,
-              tracks: [
-                {
-                  id: "openarm-video",
-                  kind: "video",
-                  track_name: TEST_CAMERA_VIDEO_TRACK_NAME,
-                  encoding: "h264",
-                  camera_id: TEST_CAMERA_STREAM.id,
-                },
-                {
-                  id: "openarm-depth",
-                  kind: "depth",
-                  track_name: TEST_CAMERA_DEPTH_TRACK_NAME,
-                  encoding: "depth16",
-                  camera_id: TEST_CAMERA_STREAM.id,
-                },
-                {
-                  id: "openarm-metadata",
-                  kind: "metadata",
-                  track_name: TEST_CAMERA_METADATA_TRACK_NAME,
-                  encoding: "json",
-                  camera_id: TEST_CAMERA_STREAM.id,
-                },
-              ],
-            },
+            live_transport: TEST_OPENARM_LIVE_TRANSPORT,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -2409,7 +2383,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       root.render(
         createElement(OperatorTeleopPanel, {
           panelView: "studio",
-          studioRobotName: "unnamed URDF",
+          studioRobotName: "OpenArm Bimanual",
         }),
       );
       await flushMicrotasks();
@@ -2420,7 +2394,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       root.render(
         createElement(OperatorTeleopPanel, {
           panelView: "hardware",
-          studioRobotName: "unnamed URDF",
+          studioRobotName: "OpenArm Bimanual",
         }),
       );
       await flushMicrotasks();
@@ -2434,7 +2408,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       root.render(
         createElement(OperatorTeleopPanel, {
           panelView: "camera",
-          studioRobotName: "unnamed URDF",
+          studioRobotName: "OpenArm Bimanual",
         }),
       );
       await flushMicrotasks();
@@ -2449,7 +2423,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     container.remove();
   });
 
-  it("clears stale follower role locks before rendering hardware targets", async () => {
+  it("hides gateway live tools and clears stale follower locks for model mismatches", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -2474,6 +2448,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
         control: true,
         estop: true,
       },
+      live_transport: TEST_OPENARM_LIVE_TRANSPORT,
       profiles: [
         {
           id: "lekiwi_base_drive",
@@ -2573,7 +2548,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
           },
         },
       ],
-      camera_streams: [],
+      camera_streams: [TEST_CAMERA_STREAM],
     };
     const fetchMock: typeof fetch = vi.fn(async (input) => {
       const url = String(input);
@@ -2693,6 +2668,12 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
+      if (url.endsWith("/point-cloud")) {
+        return new Response(JSON.stringify(TEST_POINT_CLOUD_FRAME), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       return new Response("not found", { status: 404 });
     }) as typeof fetch;
     vi.stubGlobal("fetch", fetchMock);
@@ -2728,6 +2709,13 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     expect(container.textContent).not.toContain("Follower connection");
     expect(container.textContent).not.toContain("This computer");
     expect(container.textContent).not.toContain("SSH tunnel");
+    expect(container.textContent).not.toContain("OpenArm live");
+    expect(container.textContent).not.toContain("Camera MoQ live tracks");
+    expect(container.textContent).not.toContain(TEST_CAMERA_STREAM.label);
+    expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(fetchMock).mock.calls.some((call) => String(call[0]).endsWith("/point-cloud")),
+    ).toBe(false);
     const targetSelect = container.querySelector(
       'select[aria-label="Follower target"]',
     ) as HTMLSelectElement | null;
