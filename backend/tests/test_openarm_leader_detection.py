@@ -381,6 +381,58 @@ def test_lerobot_control_parts_rank_matching_configured_serial_port(
     assert control_parts[1].configured_port_status == "stale"
 
 
+def test_so101_leader_calibration_uses_serial_port_alias_matching(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    calibration_root = (
+        tmp_path / "home" / ".cache" / "huggingface" / "lerobot" / "calibration"
+    )
+    calibration_dir = calibration_root / "teleoperators" / "so101_leader"
+    calibration_dir.mkdir(parents=True)
+    (calibration_dir / "desk_leader.json").write_text(
+        """
+        {
+          "shoulder_pan": {"id": 1},
+          "shoulder_lift": {"id": 2},
+          "elbow_flex": {"id": 3},
+          "wrist_flex": {"id": 4},
+          "wrist_roll": {"id": 5},
+          "gripper": {"id": 6}
+        }
+        """,
+        encoding="utf-8",
+    )
+    (calibration_root / "device_ports.json").write_text(
+        """
+        {
+          "teleop": {
+            "so101_leader": {
+              "desk_leader": "/dev/cu.usbmodem58760433331"
+            }
+          }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    control_parts = _build_leader_control_parts(
+        OpenArmLeaderMotorProbe(bus="feetech", motor_ids=[1, 2, 3, 4, 5, 6]),
+        path=Path("/dev/tty.usbmodem58760433331"),
+        resolved_path=Path("/dev/tty.usbmodem58760433331"),
+    )
+
+    assert len(control_parts) == 1
+    control_part = control_parts[0]
+    assert control_part.label == "so101_leader · desk_leader"
+    assert control_part.calibration_profile == "so101_leader"
+    assert control_part.calibration_id == "desk_leader"
+    assert control_part.configured_port == "/dev/cu.usbmodem58760433331"
+    assert control_part.configured_port_matches is True
+    assert control_part.configured_port_status == "matched"
+
+
 def test_detect_openarm_leaders_matches_robot_calibration_for_reusable_arm_config(
     tmp_path: Path,
     monkeypatch,
