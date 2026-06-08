@@ -40,8 +40,9 @@ export function HyperparameterForm() {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-xs">Batch Size</Label>
+            <Label htmlFor="training-batch-size" className="text-xs">Batch Size</Label>
             <Input
+              id="training-batch-size"
               type="number"
               min={1}
               max={512}
@@ -55,8 +56,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Learning Rate</Label>
+            <Label htmlFor="training-learning-rate" className="text-xs">Learning Rate</Label>
             <Input
+              id="training-learning-rate"
               type="number"
               step={0.00001}
               min={0}
@@ -70,8 +72,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Epochs</Label>
+            <Label htmlFor="training-epochs" className="text-xs">Epochs</Label>
             <Input
+              id="training-epochs"
               type="number"
               min={1}
               max={10000}
@@ -85,8 +88,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Max Steps</Label>
+            <Label htmlFor="training-max-steps" className="text-xs">Max Steps</Label>
             <Input
+              id="training-max-steps"
               type="number"
               min={1}
               placeholder="Full epochs"
@@ -103,8 +107,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Random Seed</Label>
+            <Label htmlFor="training-seed" className="text-xs">Random Seed</Label>
             <Input
+              id="training-seed"
               type="number"
               min={0}
               value={trainingParams.seed}
@@ -146,8 +151,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Warmup Steps</Label>
+            <Label htmlFor="training-warmup-steps" className="text-xs">Warmup Steps</Label>
             <Input
+              id="training-warmup-steps"
               type="number"
               min={0}
               value={trainingParams.warmupSteps}
@@ -157,8 +163,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Weight Decay</Label>
+            <Label htmlFor="training-weight-decay" className="text-xs">Weight Decay</Label>
             <Input
+              id="training-weight-decay"
               type="number"
               step={0.001}
               min={0}
@@ -169,8 +176,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Max Grad Norm</Label>
+            <Label htmlFor="training-max-grad-norm" className="text-xs">Max Grad Norm</Label>
             <Input
+              id="training-max-grad-norm"
               type="number"
               step={0.1}
               min={0}
@@ -184,8 +192,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Gradient Accumulation Steps</Label>
+            <Label htmlFor="training-gradient-accumulation" className="text-xs">Gradient Accumulation Steps</Label>
             <Input
+              id="training-gradient-accumulation"
               type="number"
               min={1}
               value={trainingParams.gradientAccumulationSteps}
@@ -208,8 +217,9 @@ export function HyperparameterForm() {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-xs">Checkpoint Interval (epochs)</Label>
+            <Label htmlFor="training-checkpoint-interval" className="text-xs">Checkpoint Interval (epochs)</Label>
             <Input
+              id="training-checkpoint-interval"
               type="number"
               min={1}
               value={trainingParams.checkpointInterval}
@@ -219,8 +229,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Keep Last N Checkpoints</Label>
+            <Label htmlFor="training-keep-checkpoints" className="text-xs">Keep Last N Checkpoints</Label>
             <Input
+              id="training-keep-checkpoints"
               type="number"
               min={1}
               value={trainingParams.keepLastNCheckpoints}
@@ -230,8 +241,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Early Stopping Patience</Label>
+            <Label htmlFor="training-early-stopping-patience" className="text-xs">Early Stopping Patience</Label>
             <Input
+              id="training-early-stopping-patience"
               type="number"
               min={0}
               placeholder="Disabled"
@@ -248,8 +260,9 @@ export function HyperparameterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">Output Directory</Label>
+            <Label htmlFor="training-output-dir" className="text-xs">Output Directory</Label>
             <Input
+              id="training-output-dir"
               type="text"
               value={trainingParams.outputDir}
               onChange={(e) => handleChange("outputDir", e.target.value)}
@@ -261,8 +274,9 @@ export function HyperparameterForm() {
 
       {/* Run Name */}
       <div className="space-y-2">
-        <Label className="text-xs">Run Name (optional)</Label>
+        <Label htmlFor="training-run-name" className="text-xs">Run Name (optional)</Label>
         <Input
+          id="training-run-name"
           type="text"
           placeholder="Auto-generated if empty"
           value={trainingParams.runName || ""}

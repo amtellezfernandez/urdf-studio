@@ -93,8 +93,8 @@ function mapComputeInstances(
 const COMPUTE_BACKENDS = [
   {
     type: "local" as ComputeType,
-    name: "Local GPU",
-    description: "Train on your local machine's GPU",
+    name: "This machine",
+    description: "Train where the RobotOps backend is running: laptop, workstation, or remote VM",
     icon: Cpu,
     requiresApiKey: false,
   },
@@ -230,12 +230,12 @@ export function ComputeSelector() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">Device</Label>
+            <Label htmlFor="training-compute-device" className="text-xs">Device</Label>
             <Select
               value={computeConfig.device}
               onValueChange={(v) => setComputeConfig({ device: v })}
             >
-              <SelectTrigger className="h-8 text-sm">
+              <SelectTrigger id="training-compute-device" className="h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -275,6 +275,7 @@ export function ComputeSelector() {
             onClick={runPreflight}
             disabled={runningPreflight || !datasetConfig || !modelConfig}
             className="w-full"
+            data-testid="training-run-preflight"
           >
             {runningPreflight ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />

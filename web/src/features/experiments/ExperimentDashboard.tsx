@@ -181,19 +181,8 @@ interface ExperimentDashboardProps {
 }
 
 export function ExperimentDashboard({ onSelectJob }: ExperimentDashboardProps) {
-  const { reset } = useExperimentStore();
   const openTrainingDialog = useTrainingStore((state) => state.openDialog);
   const hasActiveJobs = useExperimentStore(selectHasActiveJobs);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Don't reset if there are active jobs to preserve polling
-      if (!hasActiveJobs) {
-        reset();
-      }
-    };
-  }, [hasActiveJobs, reset]);
 
   return (
     <div className="h-full flex flex-col">

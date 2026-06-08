@@ -611,7 +611,7 @@ export function JobDetails() {
           {/* Progress */}
           <div>
             <h3 className="text-sm font-medium mb-3">Progress</h3>
-            <ProgressSection job={selectedJob} />
+            <ProgressSection job={selectedJobData} />
           </div>
 
           {/* Job Info */}

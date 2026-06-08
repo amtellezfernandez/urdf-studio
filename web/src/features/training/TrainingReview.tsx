@@ -76,7 +76,7 @@ export function TrainingReview() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground mb-4">
-        Review your configuration before starting training.
+        Review the dataset, model, training settings, and compute target before starting training.
       </p>
 
       {/* Dataset */}
@@ -163,7 +163,7 @@ export function TrainingReview() {
             <>
               <div className="text-xs opacity-75">Device: {computeConfig.device}</div>
               <div className={`text-xs ${computeReady ? "text-green-600" : "text-amber-600"}`}>
-                {computeReady ? "Preflight passed" : "Preflight required"}
+                {computeReady ? "Preflight passed on this machine" : "Preflight required"}
               </div>
             </>
           ) : (
@@ -205,7 +205,7 @@ export function TrainingReview() {
             <div>
               <div className="text-sm font-medium text-green-600">Ready to Start</div>
               <div className="text-xs text-muted-foreground">
-                All required configuration is complete. Click "Start Training" to begin.
+                All required configuration is complete for this machine. Use Smoke Test for a bounded validation run or Start Training for the configured run.
               </div>
             </div>
           </div>

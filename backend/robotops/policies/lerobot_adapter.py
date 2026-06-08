@@ -14,10 +14,11 @@ class LeRobotPolicyAdapter:
             "description": "Action Chunking Transformer - Predicts action sequences using transformer architecture",
             "default_config": {
                 "chunk_size": 100,
-                "hidden_dim": 256,
+                "dim_model": 512,
                 "n_heads": 8,
-                "n_layers": 4,
-                "dim_feedforward": 2048,
+                "n_encoder_layers": 4,
+                "n_decoder_layers": 1,
+                "dim_feedforward": 3200,
             },
             "input_modalities": ["state", "image"],
         },
@@ -25,7 +26,7 @@ class LeRobotPolicyAdapter:
             "name": "Diffusion Policy",
             "description": "Diffusion-based policy using denoising score matching for action prediction",
             "default_config": {
-                "n_diffusion_steps": 100,
+                "num_train_timesteps": 100,
                 "horizon": 16,
                 "n_obs_steps": 2,
                 "n_action_steps": 8,

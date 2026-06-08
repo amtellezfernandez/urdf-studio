@@ -66,16 +66,16 @@ MODEL_ARCHITECTURES: Dict[str, ModelArchitectureInfo] = {
         description="Transformer-based policy that predicts action chunks. Good for manipulation tasks.",
         default_config={
             "chunk_size": 100,
-            "hidden_dim": 512,
+            "dim_model": 512,
             "dim_feedforward": 3200,
             "n_heads": 8,
             "n_encoder_layers": 4,
-            "n_decoder_layers": 7,
+            "n_decoder_layers": 1,
             "dropout": 0.1,
         },
         config_schema={
             "chunk_size": {"type": "int", "min": 1, "max": 1000, "default": 100},
-            "hidden_dim": {"type": "int", "options": [256, 512, 768, 1024]},
+            "dim_model": {"type": "int", "options": [256, 512, 768, 1024]},
             "n_encoder_layers": {"type": "int", "min": 1, "max": 12},
             "n_decoder_layers": {"type": "int", "min": 1, "max": 12},
         },
@@ -90,7 +90,7 @@ MODEL_ARCHITECTURES: Dict[str, ModelArchitectureInfo] = {
             "n_obs_steps": 2,
             "n_action_steps": 8,
             "num_inference_steps": 10,
-            "noise_scheduler": "ddpm",
+            "noise_scheduler_type": "DDPM",
         },
         config_schema={
             "horizon": {"type": "int", "min": 1, "max": 64},

@@ -422,6 +422,7 @@ export function TrainingDialog() {
             variant="outline"
             onClick={prevStep}
             disabled={currentStep === "dataset"}
+            data-testid="training-back"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back
@@ -433,6 +434,7 @@ export function TrainingDialog() {
                 variant="outline"
                 onClick={() => handleStartTraining(true)}
                 disabled={!canStartTraining || isSubmitting}
+                data-testid="training-smoke-test"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -444,6 +446,7 @@ export function TrainingDialog() {
               <Button
                 onClick={() => handleStartTraining(false)}
                 disabled={!canStartTraining || isSubmitting}
+                data-testid="training-start"
               >
                 {isSubmitting ? (
                   <>
@@ -462,6 +465,7 @@ export function TrainingDialog() {
             <Button
               onClick={nextStep}
               disabled={!canProceed(currentStep)}
+              data-testid="training-next"
             >
               Next
               <ChevronRight className="w-4 h-4 ml-1" />

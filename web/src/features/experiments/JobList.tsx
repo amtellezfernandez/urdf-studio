@@ -200,6 +200,7 @@ function JobRow({ job, isSelected, onSelect }: JobRowProps) {
         isSelected && "bg-muted/70"
       )}
       onClick={() => onSelect(job.id)}
+      data-testid={`training-job-row-${job.id}`}
     >
       <td className="px-4 py-3">
         <div className="font-medium text-sm">{job.name}</div>

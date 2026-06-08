@@ -23,6 +23,7 @@ Requirements:
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import logging
 import os
@@ -210,6 +211,40 @@ def get_policy_class(architecture: str):
         raise ValueError(f"Unknown architecture: {architecture}")
 
 
+def prepare_policy_overrides(policy_config_class, overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """Filter UI/provider policy overrides against the installed LeRobot config."""
+    if not overrides:
+        return {}
+
+    signature = inspect.signature(policy_config_class)
+    accepted_keys = {
+        name
+        for name, parameter in signature.parameters.items()
+        if parameter.kind
+        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    }
+    normalized = dict(overrides)
+
+    aliases = {
+        "hidden_dim": "dim_model",
+        "n_diffusion_steps": "num_train_timesteps",
+        "noise_scheduler": "noise_scheduler_type",
+    }
+    for old_key, new_key in aliases.items():
+        if old_key in normalized and new_key in accepted_keys and new_key not in normalized:
+            normalized[new_key] = normalized[old_key]
+
+    filtered = {key: value for key, value in normalized.items() if key in accepted_keys}
+    ignored = sorted(set(normalized) - set(filtered))
+    if ignored:
+        logger.warning(
+            "Ignoring unsupported policy config keys for %s: %s",
+            policy_config_class.__name__,
+            ", ".join(ignored),
+        )
+    return filtered
+
+
 def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
     """Train using LeRobot library.
 
@@ -293,6 +328,7 @@ def train_with_lerobot(config: Dict[str, Any], job_dir: Path) -> None:
 
     # Get policy config class
     PolicyConfigClass = get_policy_config_class(architecture)
+    policy_overrides = prepare_policy_overrides(PolicyConfigClass, policy_overrides)
 
     # Create policy config
     policy_cfg = PolicyConfigClass(
