@@ -84,6 +84,7 @@ describe("v3Parquet", () => {
             timestamp: 0,
             jointPositions: {
               shoulder: 0.1,
+              gripper_frame_joint: 9,
               elbow: -0.2,
             },
           },
@@ -91,6 +92,7 @@ describe("v3Parquet", () => {
             timestamp: 50,
             jointPositions: {
               shoulder: 0.2,
+              gripper_frame_joint: 10,
               elbow: -0.1,
             },
           },
@@ -102,7 +104,7 @@ describe("v3Parquet", () => {
           },
           representation_id: "rep:joint_pos_abs:indexed:v1",
           naming_status: "named",
-          joint_names: ["shoulder", "elbow"],
+          joint_names: ["shoulder", "gripper_frame_joint", "elbow"],
           tasks: ["pick"],
         },
       },
@@ -114,7 +116,7 @@ describe("v3Parquet", () => {
       zip,
       "demo-dataset",
       "demo-bot",
-      ["shoulder", "elbow"]
+      ["shoulder", "gripper_frame_joint", "elbow"]
     );
 
     const tasksEntry = zip.file("demo-dataset/meta/tasks.parquet");
@@ -236,7 +238,7 @@ describe("v3Parquet", () => {
           dtype: "float32",
           shape: [2],
           names: {
-            [V3_DATASET_JOINT_FEATURE_GROUP]: ["shoulder", "elbow"],
+            [V3_DATASET_JOINT_FEATURE_GROUP]: ["shoulder.pos", "elbow.pos"],
           },
           fps: 20,
         },
@@ -244,7 +246,7 @@ describe("v3Parquet", () => {
           dtype: "float32",
           shape: [2],
           names: {
-            [V3_DATASET_JOINT_FEATURE_GROUP]: ["shoulder", "elbow"],
+            [V3_DATASET_JOINT_FEATURE_GROUP]: ["shoulder.pos", "elbow.pos"],
           },
           fps: 20,
         },

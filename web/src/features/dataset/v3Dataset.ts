@@ -23,6 +23,7 @@ import {
   V3_DATASET_EPISODES_PER_CHUNK,
   V3_DATASET_INDEX_DIGITS,
   V3_DATASET_JOINT_FEATURE_GROUP,
+  V3_DATASET_MOTOR_FEATURE_PARAMS,
   V3_DATASET_NO_VIDEO_PATH,
   V3_DATASET_PRIMARY_FILE_INDEX,
 } from "./v3DatasetParams";
@@ -292,6 +293,21 @@ const resolveEpisodeTaskNames = (episode: Episode, episodeIndex: number) => {
   return [`${V3_DATASET_DEFAULT_TASK_PREFIX}-${episodeIndex}`];
 };
 
+const filterV3MotorJointNames = (jointNames: string[]) =>
+  jointNames.filter((jointName) => {
+    const motorName = jointName.endsWith(V3_DATASET_MOTOR_FEATURE_PARAMS.positionSuffix)
+      ? jointName.slice(0, -V3_DATASET_MOTOR_FEATURE_PARAMS.positionSuffix.length)
+      : jointName;
+    return !(V3_DATASET_MOTOR_FEATURE_PARAMS.nonMotorJointNames as readonly string[]).includes(
+      motorName
+    );
+  });
+
+const formatV3JointFeatureName = (jointName: string) =>
+  jointName.endsWith(V3_DATASET_MOTOR_FEATURE_PARAMS.positionSuffix)
+    ? jointName
+    : `${jointName}${V3_DATASET_MOTOR_FEATURE_PARAMS.positionSuffix}`;
+
 const buildEpisodeDataForV3Internal = (
   episodes: Episode[],
   robotBaseName: string | undefined,
@@ -329,7 +345,9 @@ const buildEpisodeDataForV3Internal = (
 
   let globalJointOrder: string[];
   if (urdfJointOrder && urdfJointOrder.length > 0) {
-    globalJointOrder = urdfJointOrder.filter((joint) => globalJointSet.has(joint));
+    globalJointOrder = filterV3MotorJointNames(
+      urdfJointOrder.filter((joint) => globalJointSet.has(joint))
+    );
     const urdfSet = new Set(urdfJointOrder);
     const missingJoints = Array.from(globalJointSet).filter(
       (joint) => !urdfSet.has(joint)
@@ -338,11 +356,16 @@ const buildEpisodeDataForV3Internal = (
       missingJoints.sort((left, right) =>
         left.localeCompare(right, undefined, { numeric: true })
       );
-      globalJointOrder = [...globalJointOrder, ...missingJoints];
+      globalJointOrder = [
+        ...globalJointOrder,
+        ...filterV3MotorJointNames(missingJoints),
+      ];
     }
   } else {
-    globalJointOrder = Array.from(globalJointSet).sort((left, right) =>
-      left.localeCompare(right, undefined, { numeric: true })
+    globalJointOrder = filterV3MotorJointNames(
+      Array.from(globalJointSet).sort((left, right) =>
+        left.localeCompare(right, undefined, { numeric: true })
+      )
     );
   }
 
@@ -355,7 +378,7 @@ const buildEpisodeDataForV3Internal = (
     const jointOrder =
       Array.isArray(episode.metadata?.joint_names) &&
       episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
+        ? filterV3MotorJointNames(episode.metadata.joint_names as string[])
         : globalJointOrder;
 
     const computedFps = (() => {
@@ -518,7 +541,7 @@ function* iterateV3FlattenedRows({
     const jointOrder =
       Array.isArray(episode.metadata?.joint_names) &&
       episode.metadata.joint_names.length > 0
-        ? (episode.metadata.joint_names as string[])
+        ? filterV3MotorJointNames(episode.metadata.joint_names as string[])
         : globalJointOrder;
     for (const [frameIndex, frame] of episode.frames.entries()) {
       const actionVector = jointOrder.map((joint) => frame.jointPositions[joint] ?? 0);
@@ -682,7 +705,7 @@ const writeV3EpisodeChunk = async ({
 };
 
 const buildJointFeatureNames = (jointNames: string[]) => ({
-  [V3_DATASET_JOINT_FEATURE_GROUP]: jointNames,
+  [V3_DATASET_JOINT_FEATURE_GROUP]: jointNames.map(formatV3JointFeatureName),
 });
 
 export const generateV3DatasetArchive = async (

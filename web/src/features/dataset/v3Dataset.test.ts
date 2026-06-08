@@ -87,4 +87,46 @@ describe("buildEpisodeDataForV3", () => {
       }),
     ]);
   });
+
+  it("filters known non-motor fixed joints from v3 motor state dimensions", () => {
+    const episodeData = buildEpisodeDataForV3(
+      [
+        {
+          id: "episode-so101",
+          number: 1,
+          createdAt: 1,
+          frames: [
+            {
+              timestamp: 0,
+              jointPositions: {
+                shoulder: 0.1,
+                gripper_frame_joint: 9,
+                elbow: -0.2,
+              },
+            },
+          ],
+          metadata: {
+            robot_type: "so101",
+            embodiment_ref: {
+              embodiment_id: "lerobot:so101:v1",
+            },
+            representation_id: "rep:joint_pos_abs:indexed:v1",
+            naming_status: "named",
+            joint_names: ["shoulder", "gripper_frame_joint", "elbow"],
+          },
+        },
+      ],
+      "so101",
+      "so101",
+      ["gripper_frame_joint", "shoulder", "elbow"]
+    );
+
+    expect(episodeData.globalJointOrder).toEqual(["shoulder", "elbow"]);
+    expect(episodeData.flattenedRows).toEqual([
+      expect.objectContaining({
+        action: [0.1, -0.2],
+        "observation.state": [0.1, -0.2],
+      }),
+    ]);
+  });
 });
