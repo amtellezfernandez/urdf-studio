@@ -47,8 +47,11 @@ const readString = (envKey, fallback) => {
   return raw && raw.length > 0 ? raw : fallback;
 };
 
-const AUTO_WEB_HOST_VALUES = new Set(["auto", "lan", "local-network"]);
-const LOCAL_NETWORK_HOST_FALLBACK = "127.0.0.1";
+const LOCAL_NETWORK_HOST_RESOLUTION = {
+  autoHostAliases: ["auto", "lan", "local-network"],
+  fallbackHost: "127.0.0.1",
+};
+const AUTO_WEB_HOST_VALUES = new Set(LOCAL_NETWORK_HOST_RESOLUTION.autoHostAliases);
 
 export const formatHostForUrl = (host) => {
   const normalized = typeof host === "string" ? host.trim() : "";
@@ -124,7 +127,7 @@ export const resolveLocalNetworkHost = ({
     }
   }
   candidates.sort((left, right) => left.score - right.score || left.order - right.order);
-  return candidates[0]?.address || LOCAL_NETWORK_HOST_FALLBACK;
+  return candidates[0]?.address || LOCAL_NETWORK_HOST_RESOLUTION.fallbackHost;
 };
 
 export const resolveRuntimeHost = (
