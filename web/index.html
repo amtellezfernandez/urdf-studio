@@ -76,30 +76,69 @@
     </div>
     <script>
       (() => {
-        const bootRecovery = {
-          bodySelector: ".urdf-studio-boot-fallback__body",
-          entryRetryParam: "urdfStudioEntryRetry",
+        const bootRecoveryConfig = {
+          clearStateQueryParam: "urdfStudioClearState",
+          entryRetryQueryParam: "urdfStudioEntryRetry",
           entryScriptSelector: "script[data-urdf-studio-entry]",
+          fallbackBodySelector: ".urdf-studio-boot-fallback__body",
           fallbackSelector: ".urdf-studio-boot-fallback",
-          pageRetryParam: "urdfStudioBootRetry",
+          pageRetryQueryParam: "urdfStudioBootRetry",
           retryDelayMs: 2500,
-          retryIncrement: 1,
-          retryText: "Still waiting for the JavaScript bundle. Retrying fresh asset load",
+          retryStep: 1,
+          storageKeyPrefixes: ["urdfstudio:", "urdf-studio-"],
+          retryStatusText: "Still waiting for the JavaScript bundle. Retrying fresh asset load",
         };
 
+        const removeStudioStorageKeys = (storage) => {
+          const keys = Array.from({ length: storage.length }, (_, index) =>
+            storage.key(index),
+          ).filter((key) =>
+            Boolean(key) &&
+            bootRecoveryConfig.storageKeyPrefixes.some((prefix) =>
+              key.startsWith(prefix),
+            ),
+          );
+          keys.forEach((key) => storage.removeItem(key));
+        };
+
+        const recoverFromClearStateQuery = () => {
+          const url = new URL(window.location.href);
+          if (url.searchParams.get(bootRecoveryConfig.clearStateQueryParam) !== "1") {
+            return false;
+          }
+          try {
+            removeStudioStorageKeys(window.localStorage);
+          } catch {
+            // Storage may be blocked by browser privacy settings.
+          }
+          try {
+            removeStudioStorageKeys(window.sessionStorage);
+          } catch {
+            // Storage may be blocked by browser privacy settings.
+          }
+          url.searchParams.delete(bootRecoveryConfig.clearStateQueryParam);
+          url.searchParams.set(bootRecoveryConfig.pageRetryQueryParam, String(Date.now()));
+          window.location.replace(url.toString());
+          return true;
+        };
+
+        if (recoverFromClearStateQuery()) {
+          return;
+        }
+
         const getFallbackBody = (root) =>
-          root.querySelector(bootRecovery.bodySelector);
+          root.querySelector(bootRecoveryConfig.fallbackBodySelector);
 
         const isFallbackStillVisible = () => {
           const root = document.getElementById("root");
-          return root?.querySelector(bootRecovery.fallbackSelector) ? root : null;
+          return root?.querySelector(bootRecoveryConfig.fallbackSelector) ? root : null;
         };
 
         const updateRetryText = (root, retryCount) => {
           const body = getFallbackBody(root);
           if (!body) return;
 
-          body.textContent = `${bootRecovery.retryText} ${retryCount}.`;
+          body.textContent = `${bootRecoveryConfig.retryStatusText} ${retryCount}.`;
         };
 
         const buildFreshEntryUrl = (entryScript, retryCount) => {
@@ -108,7 +147,7 @@
             window.location.href,
           );
           entryUrl.searchParams.set(
-            bootRecovery.entryRetryParam,
+            bootRecoveryConfig.entryRetryQueryParam,
             String(retryCount),
           );
           return entryUrl.href;
@@ -116,7 +155,7 @@
 
         const retryEntryScript = (retryCount) => {
           const entryScript = document.querySelector(
-            bootRecovery.entryScriptSelector,
+            bootRecoveryConfig.entryScriptSelector,
           );
           if (!entryScript) return;
 
@@ -130,17 +169,17 @@
         const retryPageWithFreshEntry = (retryCount) => {
           const params = new URLSearchParams(window.location.search);
           const currentPageRetry = Number(
-            params.get(bootRecovery.pageRetryParam) || "0",
+            params.get(bootRecoveryConfig.pageRetryQueryParam) || "0",
           );
-          if (currentPageRetry >= bootRecovery.retryIncrement) {
+          if (currentPageRetry >= bootRecoveryConfig.retryStep) {
             return;
           }
 
           params.set(
-            bootRecovery.pageRetryParam,
-            String(currentPageRetry + bootRecovery.retryIncrement),
+            bootRecoveryConfig.pageRetryQueryParam,
+            String(currentPageRetry + bootRecoveryConfig.retryStep),
           );
-          params.set(bootRecovery.entryRetryParam, String(retryCount));
+          params.set(bootRecoveryConfig.entryRetryQueryParam, String(retryCount));
           window.location.replace(
             `${window.location.pathname}?${params.toString()}${window.location.hash}`,
           );
@@ -158,19 +197,19 @@
               if (!isFallbackStillVisible()) return;
 
               retryPageWithFreshEntry(retryCount);
-              scheduleRecovery(retryCount + bootRecovery.retryIncrement);
-            }, bootRecovery.retryDelayMs);
-          }, bootRecovery.retryDelayMs);
+              scheduleRecovery(retryCount + bootRecoveryConfig.retryStep);
+            }, bootRecoveryConfig.retryDelayMs);
+          }, bootRecoveryConfig.retryDelayMs);
         };
 
         const getInitialRetryCount = () => {
           const params = new URLSearchParams(window.location.search);
           const retryCount = Number(
-            params.get(bootRecovery.entryRetryParam) || "0",
+            params.get(bootRecoveryConfig.entryRetryQueryParam) || "0",
           );
           return Number.isFinite(retryCount)
-            ? retryCount + bootRecovery.retryIncrement
-            : bootRecovery.retryIncrement;
+            ? retryCount + bootRecoveryConfig.retryStep
+            : bootRecoveryConfig.retryStep;
         };
 
         scheduleRecovery(getInitialRetryCount());

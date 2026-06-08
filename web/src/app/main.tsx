@@ -7,6 +7,11 @@ root.classList.remove("light");
 root.classList.add("dark");
 
 const appRoot = document.getElementById("root");
+const BOOT_RECOVERY_CONFIG = {
+  clearStateQueryParam: "urdfStudioClearState",
+  pageRetryQueryParam: "urdfStudioBootRetry",
+  storageKeyPrefixes: ["urdfstudio:", "urdf-studio-"],
+} as const;
 
 const appendTextElement = (
   parent: HTMLElement,
@@ -23,31 +28,47 @@ const appendTextElement = (
 
 const retryWithFreshAssets = () => {
   const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.set("urdfStudioBootRetry", String(Date.now()));
+  nextUrl.searchParams.set(BOOT_RECOVERY_CONFIG.pageRetryQueryParam, String(Date.now()));
   window.location.replace(nextUrl.toString());
 };
 
-const clearStudioBrowserState = () => {
-  const clearMatchingKeys = (storage: Storage) => {
+const clearStoredStudioState = () => {
+  const removeStudioStorageKeys = (storage: Storage) => {
     const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
       (key): key is string =>
-        Boolean(key) && (key.startsWith("urdfstudio:") || key.startsWith("urdf-studio-"))
+        Boolean(key) &&
+        BOOT_RECOVERY_CONFIG.storageKeyPrefixes.some((prefix) => key.startsWith(prefix))
     );
     keys.forEach((key) => storage.removeItem(key));
   };
 
   try {
-    clearMatchingKeys(window.localStorage);
+    removeStudioStorageKeys(window.localStorage);
   } catch {
     // Storage may be blocked by browser privacy settings.
   }
   try {
-    clearMatchingKeys(window.sessionStorage);
+    removeStudioStorageKeys(window.sessionStorage);
   } catch {
     // Storage may be blocked by browser privacy settings.
   }
+};
 
+const resetStudioStateAndReload = () => {
+  clearStoredStudioState();
   retryWithFreshAssets();
+};
+
+const recoverFromClearStateQuery = () => {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(BOOT_RECOVERY_CONFIG.clearStateQueryParam) !== "1") {
+    return false;
+  }
+  clearStoredStudioState();
+  url.searchParams.delete(BOOT_RECOVERY_CONFIG.clearStateQueryParam);
+  url.searchParams.set(BOOT_RECOVERY_CONFIG.pageRetryQueryParam, String(Date.now()));
+  window.location.replace(url.toString());
+  return true;
 };
 
 const renderBootFailure = (error: unknown) => {
@@ -88,8 +109,8 @@ const renderBootFailure = (error: unknown) => {
   clearButton.type = "button";
   clearButton.className =
     "inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium";
-  clearButton.textContent = "Clear Studio state";
-  clearButton.addEventListener("click", clearStudioBrowserState);
+  clearButton.textContent = "Reset Studio state";
+  clearButton.addEventListener("click", resetStudioStateAndReload);
 
   actions.append(clearButton, retryButton);
   panel.appendChild(actions);
@@ -98,6 +119,9 @@ const renderBootFailure = (error: unknown) => {
 };
 
 const startApp = async () => {
+  if (recoverFromClearStateQuery()) {
+    return;
+  }
   if (!appRoot) {
     throw new Error("Missing root element.");
   }
