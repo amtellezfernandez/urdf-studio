@@ -18,7 +18,7 @@ export type ModelArchitecture =
 
 export type TrackerType = "mlflow" | "wandb" | "none";
 
-export type ComputeType = "local" | "modal" | "runpod";
+export type ComputeType = "local" | "ssh" | "modal" | "runpod";
 
 export type JobStatus =
   | "pending"
@@ -81,6 +81,15 @@ export interface ComputeConfig {
   apiKey?: string;
   useSpot: boolean;
   timeoutHours: number;
+  sshHost?: string;
+  sshUser?: string;
+  sshPort: number;
+  sshKeyPath?: string;
+  sshWorkDir: string;
+  remoteOutputDir: string;
+  dockerImage: string;
+  dockerArgs?: string;
+  sshOptions?: string;
 }
 
 // ============================================================================
@@ -284,4 +293,8 @@ export const DEFAULT_COMPUTE_CONFIG: ComputeConfig = {
   device: "cuda",
   useSpot: true,
   timeoutHours: 4.0,
+  sshPort: 22,
+  sshWorkDir: "/tmp/robotops",
+  remoteOutputDir: "/tmp/robotops/outputs",
+  dockerImage: "urdf-studio:robotops-training",
 };

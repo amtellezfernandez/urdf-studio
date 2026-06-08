@@ -198,6 +198,7 @@ async def _persist_job(job_id: str, job_info: Dict[str, Any]) -> None:
                     "dataset": request.dataset.model_dump() if hasattr(request.dataset, 'model_dump') else {},
                     "model": request.model.model_dump() if hasattr(request.model, 'model_dump') else {},
                     "training": request.training.model_dump() if hasattr(request.training, 'model_dump') else {},
+                    "compute": request.compute.model_dump() if hasattr(request.compute, 'model_dump') else {},
                 }
                 # Include resolved dataset revision if available
                 if job_info.get("resolved_revision"):
@@ -363,11 +364,245 @@ def _resolve_output_parent(output_dir: str) -> Path:
     return parent.resolve()
 
 
+def _compute_config_from_request(request: TrainingStartRequest) -> Dict[str, Any]:
+    compute_type = _get_enum_value(request.compute.type)
+    output_dir = (
+        request.compute.remote_output_dir
+        if compute_type == "ssh"
+        else request.training.output_dir
+    )
+    config = {
+        "type": compute_type,
+        "api_key": request.compute.api_key,
+        "default_gpu": request.compute.gpu,
+        "output_dir": output_dir,
+    }
+    if compute_type == "ssh":
+        config.update({
+            "host": request.compute.ssh_host,
+            "user": request.compute.ssh_user,
+            "port": request.compute.ssh_port,
+            "key_path": request.compute.ssh_key_path,
+            "docker_image": request.compute.docker_image,
+            "docker_args": request.compute.docker_args,
+            "ssh_options": request.compute.ssh_options,
+        })
+    return config
+
+
+def _compute_config_from_job(job_info: Dict[str, Any]) -> Dict[str, Any]:
+    config = job_info.get("compute_config")
+    if config:
+        return config
+
+    persisted = job_info.get("config") or {}
+    compute_config = persisted.get("compute") or {}
+    training_config = persisted.get("training") or {}
+    compute_type = compute_config.get("type", job_info.get("compute_backend", "local"))
+    output_dir = (
+        compute_config.get("remote_output_dir")
+        if compute_type == "ssh"
+        else training_config.get("output_dir")
+    ) or _get_training_output_dir(job_info)
+
+    result = {
+        "type": compute_type,
+        "output_dir": output_dir,
+        "default_gpu": compute_config.get("gpu"),
+    }
+    if compute_type == "ssh":
+        result.update({
+            "host": compute_config.get("ssh_host"),
+            "user": compute_config.get("ssh_user"),
+            "port": compute_config.get("ssh_port", 22),
+            "key_path": compute_config.get("ssh_key_path"),
+            "docker_image": compute_config.get("docker_image", "urdf-studio:robotops-training"),
+            "docker_args": compute_config.get("docker_args"),
+            "ssh_options": compute_config.get("ssh_options"),
+        })
+    return result
+
+
+def _ssh_command_parts(request: TrainingStartRequest) -> List[str]:
+    parts = [
+        "ssh",
+        "-F",
+        "/dev/null",
+        "-p",
+        str(request.compute.ssh_port),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+    ]
+    if request.compute.ssh_key_path:
+        parts.extend(["-i", str(Path(request.compute.ssh_key_path).expanduser())])
+        parts.extend(["-o", "IdentitiesOnly=yes"])
+    if request.compute.ssh_options:
+        import shlex
+
+        parts.extend(shlex.split(request.compute.ssh_options))
+    parts.append(f"{request.compute.ssh_user}@{request.compute.ssh_host}")
+    return parts
+
+
+def _run_ssh_preflight(request: TrainingStartRequest, command: str, timeout: int = 30) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [*_ssh_command_parts(request), command],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _preflight_ssh_training(request: TrainingStartRequest) -> TrainingPreflightResponse:
+    device = request.compute.device
+    checks: List[TrainingPreflightCheck] = []
+
+    if not request.compute.ssh_host or not request.compute.ssh_user:
+        checks.append(_preflight_check(
+            "ssh_config",
+            "Remote machine",
+            "fail",
+            "SSH host and user are required for bring-your-own compute.",
+        ))
+        return TrainingPreflightResponse(
+            compute_backend="ssh",
+            device=device,
+            ready=False,
+            can_train_locally=False,
+            cloud_required=True,
+            recommendation="Enter the SSH host/user for an existing GPU machine or AWS EC2 instance.",
+            checks=checks,
+        )
+
+    try:
+        result = _run_ssh_preflight(request, "echo robotops-ssh-ok", timeout=15)
+        checks.append(_preflight_check(
+            "ssh",
+            "SSH access",
+            "pass" if result.returncode == 0 else "fail",
+            "SSH connection succeeded." if result.returncode == 0 else (result.stderr.strip() or "SSH connection failed."),
+            {"host": request.compute.ssh_host, "user": request.compute.ssh_user, "port": request.compute.ssh_port},
+        ))
+    except Exception as exc:
+        checks.append(_preflight_check("ssh", "SSH access", "fail", f"SSH check failed: {exc}"))
+
+    try:
+        result = _run_ssh_preflight(request, "docker info --format '{{.DockerRootDir}}'", timeout=20)
+        checks.append(_preflight_check(
+            "docker",
+            "Remote Docker",
+            "pass" if result.returncode == 0 else "fail",
+            f"Docker daemon reachable. Root: {result.stdout.strip()}" if result.returncode == 0 else (result.stderr.strip() or "Docker daemon is not reachable."),
+        ))
+    except Exception as exc:
+        checks.append(_preflight_check("docker", "Remote Docker", "fail", f"Docker check failed: {exc}"))
+
+    docker_image = request.compute.docker_image
+    try:
+        result = _run_ssh_preflight(request, f"docker image inspect {docker_image!r} >/dev/null", timeout=30)
+        checks.append(_preflight_check(
+            "trainer_image",
+            "Trainer image",
+            "pass" if result.returncode == 0 else "fail",
+            f"Trainer image is available: {docker_image}" if result.returncode == 0 else f"Trainer image is missing on the remote machine: {docker_image}",
+            {"image": docker_image},
+        ))
+    except Exception as exc:
+        checks.append(_preflight_check("trainer_image", "Trainer image", "fail", f"Image check failed: {exc}", {"image": docker_image}))
+
+    try:
+        result = _run_ssh_preflight(
+            request,
+            (
+                f"mkdir -p {request.compute.remote_output_dir!r} && "
+                f"df -Pk {request.compute.remote_output_dir!r} | awk 'NR==2 {{print $4\" \"$2}}'"
+            ),
+            timeout=20,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            free_kb, total_kb = [int(value) for value in result.stdout.strip().split()[:2]]
+            free_gb = round(free_kb / (1024**2), 2)
+            total_gb = round(total_kb / (1024**2), 2)
+            status = "pass" if free_gb >= 20 else "warn" if free_gb >= 5 else "fail"
+            checks.append(_preflight_check(
+                "remote_storage",
+                "Remote artifact storage",
+                status,
+                f"{free_gb} GB free at {request.compute.remote_output_dir}.",
+                {"free_gb": free_gb, "total_gb": total_gb, "path": request.compute.remote_output_dir},
+            ))
+        else:
+            checks.append(_preflight_check("remote_storage", "Remote artifact storage", "fail", result.stderr.strip() or "Could not inspect remote disk."))
+    except Exception as exc:
+        checks.append(_preflight_check("remote_storage", "Remote artifact storage", "fail", f"Remote storage check failed: {exc}"))
+
+    if device == "cuda":
+        try:
+            result = _run_ssh_preflight(request, "docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi -L", timeout=120)
+            checks.append(_preflight_check(
+                "remote_gpu",
+                "Remote GPU",
+                "pass" if result.returncode == 0 else "fail",
+                result.stdout.strip() if result.returncode == 0 else (result.stderr.strip() or "No GPU visible to Docker."),
+            ))
+        except Exception as exc:
+            checks.append(_preflight_check("remote_gpu", "Remote GPU", "fail", f"GPU check failed: {exc}"))
+    else:
+        checks.append(_preflight_check("remote_gpu", "Remote GPU", "warn", f"Remote training will use device '{device}'."))
+
+    dataset_source = _get_enum_value(request.dataset.source)
+    if dataset_source == "local":
+        try:
+            result = _run_ssh_preflight(request, f"test -e {request.dataset.local_path!r}", timeout=15)
+            checks.append(_preflight_check(
+                "dataset",
+                "Dataset",
+                "pass" if result.returncode == 0 else "fail",
+                "Local dataset path exists on the remote machine." if result.returncode == 0 else "Local dataset path does not exist on the remote machine.",
+                {"local_path": request.dataset.local_path},
+            ))
+        except Exception as exc:
+            checks.append(_preflight_check("dataset", "Dataset", "fail", f"Remote dataset check failed: {exc}"))
+    elif request.dataset.repo_id:
+        checks.append(_preflight_check("dataset", "Dataset", "pass", f"Remote trainer will download HuggingFace dataset: {request.dataset.repo_id}"))
+    else:
+        checks.append(_preflight_check("dataset", "Dataset", "fail", "HuggingFace dataset source requires a repo ID."))
+
+    tracker_type = _get_enum_value(request.tracker.type)
+    checks.append(_preflight_check(
+        "tracker",
+        "Experiment tracker",
+        "warn" if tracker_type in {"mlflow", "wandb"} else "pass",
+        "Ensure tracker credentials are available to the remote container." if tracker_type in {"mlflow", "wandb"} else "Tracker disabled; metrics and artifacts remain RobotOps-native.",
+    ))
+
+    has_failures = any(check.status == "fail" for check in checks)
+    return TrainingPreflightResponse(
+        compute_backend="ssh",
+        device=device,
+        ready=not has_failures,
+        can_train_locally=False,
+        cloud_required=True,
+        recommendation=(
+            "Ready to launch on the remote Docker machine."
+            if not has_failures
+            else "Fix failed remote checks before launching paid or remote compute."
+        ),
+        checks=checks,
+    )
+
+
 async def preflight_training(request: TrainingStartRequest) -> TrainingPreflightResponse:
     """Validate whether the selected training configuration can be launched."""
     compute_backend = _get_enum_value(request.compute.type)
     device = request.compute.device
     checks: List[TrainingPreflightCheck] = []
+
+    if compute_backend == "ssh":
+        return _preflight_ssh_training(request)
 
     if compute_backend != "local":
         checks.append(
@@ -739,12 +974,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "output_dir": request.training.output_dir,
         }
         # Initialize compute backend
-        compute_config = {
-            "type": _get_enum_value(request.compute.type),
-            "api_key": request.compute.api_key,
-            "default_gpu": request.compute.gpu,
-            "output_dir": request.training.output_dir,
-        }
+        compute_config = _compute_config_from_request(request)
         compute = get_compute(compute_config)
 
         # Prepare training config for script
@@ -784,6 +1014,7 @@ async def start_training(request: TrainingStartRequest) -> TrainingStartResponse
             "tracker_url": None,
             "lineage": lineage,
             "request": request,
+            "compute_config": compute_config,
             "status": JobStatus.RUNNING,
             "started_at": started_at,
             "experiment_id": request.experiment_id,
@@ -955,10 +1186,7 @@ async def get_training_status(job_id: str) -> TrainingStatusResponse:
 
     # Get status from compute backend
     try:
-        compute_config = {
-            "type": job_info.get("compute_backend", "local"),
-            "output_dir": _get_training_output_dir(job_info),
-        }
+        compute_config = _compute_config_from_job(job_info)
         compute = get_compute(compute_config)
 
         compute_status = await compute.status(job_info["compute_job_id"])
@@ -1053,8 +1281,7 @@ async def cancel_training(job_id: str, reason: Optional[str] = None) -> bool:
     job_info = _jobs[job_id]
 
     try:
-        compute_config = {"type": job_info.get("compute_backend", "local")}
-        compute = get_compute(compute_config)
+        compute = get_compute(_compute_config_from_job(job_info))
 
         cancelled = await compute.cancel(job_info["compute_job_id"])
 
@@ -1298,6 +1525,50 @@ async def get_job_metrics(job_id: str) -> dict:
     """
     metrics: Dict[str, List[Dict[str, Any]]] = {}
 
+    await _ensure_jobs_loaded()
+    job_info = _jobs.get(job_id)
+    if job_info and job_info.get("compute_backend") == "ssh":
+        try:
+            compute = get_compute(_compute_config_from_job(job_info))
+            compute_job_id = job_info["compute_job_id"]
+            metrics_text = None
+            if hasattr(compute, "read_job_file"):
+                metrics_text = await compute.read_job_file(compute_job_id, "metrics.jsonl")
+                if not metrics_text:
+                    progress_text = await compute.read_job_file(compute_job_id, "progress.json")
+                    if progress_text:
+                        progress_data = json.loads(progress_text)
+                        for key, value in (progress_data.get("metrics") or {}).items():
+                            if isinstance(value, (int, float)):
+                                metrics[key] = [{
+                                    "step": progress_data.get("current_step", 0),
+                                    "epoch": progress_data.get("current_epoch", 0),
+                                    "value": value,
+                                    "timestamp": None,
+                                }]
+                        return {"metrics": metrics}
+            if metrics_text:
+                for line in metrics_text.splitlines():
+                    if not line.strip():
+                        continue
+                    entry = json.loads(line)
+                    step = entry.get("step", 0)
+                    epoch = entry.get("epoch", 0)
+                    timestamp = entry.get("timestamp")
+                    for key, value in entry.items():
+                        if key in ("step", "epoch", "timestamp"):
+                            continue
+                        if isinstance(value, (int, float)):
+                            metrics.setdefault(key, []).append({
+                                "step": step,
+                                "epoch": epoch,
+                                "value": value,
+                                "timestamp": timestamp,
+                            })
+            return {"metrics": metrics}
+        except Exception as exc:
+            logger.warning(f"Failed to read remote metrics for {job_id}: {exc}")
+
     job_dir = await _resolve_job_dir(job_id)
 
     # Try metrics.jsonl first (preferred format)
@@ -1381,6 +1652,21 @@ async def get_job_logs(job_id: str, tail: int = 100) -> dict:
     Returns:
         Dictionary with logs string and total line count.
     """
+    await _ensure_jobs_loaded()
+    job_info = _jobs.get(job_id)
+    if job_info and job_info.get("compute_backend") == "ssh":
+        try:
+            compute = get_compute(_compute_config_from_job(job_info))
+            if hasattr(compute, "read_job_file"):
+                logs = (
+                    await compute.read_job_file(job_info["compute_job_id"], "train.log", tail=tail)
+                    or await compute.read_job_file(job_info["compute_job_id"], "stderr.log", tail=tail)
+                    or ""
+                )
+                return {"logs": logs, "total_lines": len(logs.splitlines())}
+        except Exception as exc:
+            logger.warning(f"Failed to read remote logs for {job_id}: {exc}")
+
     job_dir = await _resolve_job_dir(job_id)
     candidate_logs = [
         job_dir / "train.log",
@@ -1419,6 +1705,29 @@ async def get_job_artifacts(job_id: str) -> dict:
     This reads the resolved compute job directory directly so artifacts remain
     visible after backend restarts and when outputs are Docker-mounted.
     """
+    await _ensure_jobs_loaded()
+    job_info = _jobs.get(job_id)
+    if job_info and job_info.get("compute_backend") == "ssh":
+        try:
+            compute = get_compute(_compute_config_from_job(job_info))
+            artifacts = await compute.list_artifacts(job_info["compute_job_id"])
+            return {
+                "job_id": job_id,
+                "artifacts": [
+                    {
+                        "path": artifact.path,
+                        "name": artifact.name,
+                        "type": artifact.artifact_type,
+                        "size_bytes": artifact.size_bytes,
+                        "modified_at": artifact.created_at,
+                    }
+                    for artifact in artifacts
+                ],
+                "total": len(artifacts),
+            }
+        except Exception as exc:
+            logger.warning(f"Failed to list remote artifacts for {job_id}: {exc}")
+
     job_dir = await _resolve_job_dir(job_id)
     artifacts: List[Dict[str, Any]] = []
 

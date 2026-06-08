@@ -8,6 +8,7 @@ import { AlertCircle, CheckCircle2, Cloud, Cpu, Info, Loader2, RefreshCw, Server
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import {
   Select,
@@ -96,6 +97,13 @@ const COMPUTE_BACKENDS = [
     name: "This machine",
     description: "Train where the RobotOps backend is running: laptop, workstation, or remote VM",
     icon: Cpu,
+    requiresApiKey: false,
+  },
+  {
+    type: "ssh" as ComputeType,
+    name: "Remote Docker machine",
+    description: "Bring your own AWS EC2, lab GPU server, workstation, or rented VM over SSH",
+    icon: Server,
     requiresApiKey: false,
   },
 ];
@@ -287,35 +295,131 @@ export function ComputeSelector() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <Label>Cloud / Remote</Label>
-        <div className="grid gap-2">
-          <div className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3 opacity-70">
-            <Server className="w-5 h-5 mt-0.5 text-muted-foreground" />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Existing GPU machine</span>
-                <Badge variant="outline">Next adapter</Badge>
-              </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                SSH Docker launch with the same trainer image, logs, metrics, and artifacts.
-              </div>
+      {computeConfig.type === "ssh" && (
+        <div className="space-y-3 p-4 bg-muted/30 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Server className="w-4 h-4 text-muted-foreground" />
+            <Label>Remote Machine</Label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="training-ssh-host" className="text-xs">Host / IP</Label>
+              <Input
+                id="training-ssh-host"
+                value={computeConfig.sshHost || ""}
+                onChange={(event) => setComputeConfig({ sshHost: event.target.value })}
+                placeholder="54.89.128.201"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="training-ssh-user" className="text-xs">User</Label>
+              <Input
+                id="training-ssh-user"
+                value={computeConfig.sshUser || ""}
+                onChange={(event) => setComputeConfig({ sshUser: event.target.value })}
+                placeholder="ubuntu"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="training-ssh-port" className="text-xs">Port</Label>
+              <Input
+                id="training-ssh-port"
+                type="number"
+                value={computeConfig.sshPort}
+                onChange={(event) => setComputeConfig({ sshPort: parseInt(event.target.value, 10) || 22 })}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="training-ssh-key" className="text-xs">SSH Key Path</Label>
+              <Input
+                id="training-ssh-key"
+                value={computeConfig.sshKeyPath || ""}
+                onChange={(event) => setComputeConfig({ sshKeyPath: event.target.value })}
+                placeholder="~/.ssh/id_rsa"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="training-remote-output" className="text-xs">Remote Output Directory</Label>
+              <Input
+                id="training-remote-output"
+                value={computeConfig.remoteOutputDir}
+                onChange={(event) => setComputeConfig({ remoteOutputDir: event.target.value })}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="training-docker-image" className="text-xs">Trainer Image</Label>
+              <Input
+                id="training-docker-image"
+                value={computeConfig.dockerImage}
+                onChange={(event) => setComputeConfig({ dockerImage: event.target.value })}
+                className="h-8 text-sm"
+              />
             </div>
           </div>
-          <div className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3 opacity-70">
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="training-ssh-device" className="text-xs">Device</Label>
+              <Select
+                value={computeConfig.device}
+                onValueChange={(v) => setComputeConfig({ device: v })}
+              >
+                <SelectTrigger id="training-ssh-device" className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOCAL_DEVICES.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="training-docker-args" className="text-xs">Docker Args</Label>
+              <Input
+                id="training-docker-args"
+                value={computeConfig.dockerArgs || ""}
+                onChange={(event) => setComputeConfig({ dockerArgs: event.target.value })}
+                placeholder="--ipc=host"
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={runPreflight}
+            disabled={runningPreflight || !datasetConfig || !modelConfig}
+            className="w-full"
+            data-testid="training-run-preflight"
+          >
+            {runningPreflight ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            Run Remote Preflight
+          </Button>
+
+          <Alert>
             <Cloud className="w-5 h-5 mt-0.5 text-muted-foreground" />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">AWS EC2</span>
-                <Badge variant="outline">Next adapter</Badge>
-              </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Instance discovery will reuse the existing-machine Docker adapter.
-              </div>
-            </div>
-          </div>
+            <AlertTitle>AWS EC2 works as bring-your-own compute</AlertTitle>
+            <AlertDescription>
+              Start or select your EC2 GPU instance, enter its public IP, user, key path, and trainer image,
+              then run preflight. Managed AWS discovery can be layered on this same adapter.
+            </AlertDescription>
+          </Alert>
         </div>
-      </div>
+      )}
 
       {preflightResult && (
         <Alert className={preflightResult.ready ? "border-green-500/40" : "border-amber-500/40"}>
@@ -357,6 +461,11 @@ export function ComputeSelector() {
           {computeConfig.type === "local" && (
             <span className="text-muted-foreground font-normal ml-2">
               → {computeConfig.device}
+            </span>
+          )}
+          {computeConfig.type === "ssh" && (
+            <span className="text-muted-foreground font-normal ml-2">
+              → {computeConfig.sshUser || "user"}@{computeConfig.sshHost || "host"} ({computeConfig.device})
             </span>
           )}
           {computeConfig.type !== "local" && computeConfig.gpu && (

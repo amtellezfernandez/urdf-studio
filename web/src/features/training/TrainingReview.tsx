@@ -65,13 +65,16 @@ export function TrainingReview() {
   const getComputeDisplayName = (type: string) => {
     const names: Record<string, string> = {
       local: "Backend machine",
+      ssh: "Remote Docker machine",
       modal: "Modal (Cloud)",
       runpod: "RunPod (Cloud)",
     };
     return names[type] || type;
   };
 
-  const computeReady = computeConfig.type === "local" && preflightResult?.ready === true;
+  const computeReady =
+    (computeConfig.type === "local" || computeConfig.type === "ssh") &&
+    preflightResult?.ready === true;
 
   return (
     <div className="space-y-3">
@@ -164,6 +167,18 @@ export function TrainingReview() {
               <div className="text-xs opacity-75">Device: {computeConfig.device}</div>
               <div className={`text-xs ${computeReady ? "text-green-600" : "text-amber-600"}`}>
                 {computeReady ? "Preflight passed on this machine" : "Preflight required"}
+              </div>
+            </>
+          ) : computeConfig.type === "ssh" ? (
+            <>
+              <div className="text-xs opacity-75">
+                SSH: {computeConfig.sshUser || "user"}@{computeConfig.sshHost || "host"}:{computeConfig.sshPort}
+              </div>
+              <div className="text-xs opacity-75">Device: {computeConfig.device}</div>
+              <div className="text-xs opacity-75">Image: {computeConfig.dockerImage}</div>
+              <div className="text-xs opacity-75">Artifacts: {computeConfig.remoteOutputDir}</div>
+              <div className={`text-xs ${computeReady ? "text-green-600" : "text-amber-600"}`}>
+                {computeReady ? "Remote preflight passed" : "Remote preflight required"}
               </div>
             </>
           ) : (

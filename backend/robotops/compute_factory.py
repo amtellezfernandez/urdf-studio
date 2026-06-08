@@ -22,18 +22,19 @@ from backend.robotops.compute_protocol import ComputeBackend
 from backend.robotops.compute.local_compute import LocalCompute
 from backend.robotops.compute.modal_compute import ModalCompute
 from backend.robotops.compute.runpod_compute import RunPodCompute
+from backend.robotops.compute.ssh_compute import SSHDockerCompute
 
 logger = logging.getLogger(__name__)
 
 
-ComputeType = Literal["local", "modal", "runpod"]
+ComputeType = Literal["local", "ssh", "modal", "runpod"]
 
 
 class ComputeConfig(BaseModel):
     """Configuration for compute backend.
 
     Attributes:
-        type: Compute type - "local", "modal", or "runpod"
+        type: Compute type - "local", "ssh", "modal", or "runpod"
 
         Local-specific:
             python_path: Path to Python interpreter
@@ -83,6 +84,14 @@ class ComputeConfig(BaseModel):
         description="Directory for job outputs",
     )
 
+    host: Optional[str] = Field(default=None, description="SSH host")
+    user: Optional[str] = Field(default=None, description="SSH user")
+    port: int = Field(default=22, description="SSH port")
+    key_path: Optional[str] = Field(default=None, description="SSH key path")
+    docker_image: str = Field(default="urdf-studio:robotops-training", description="Trainer Docker image")
+    docker_args: Optional[str] = Field(default=None, description="Extra docker run arguments")
+    ssh_options: Optional[str] = Field(default=None, description="Extra SSH options")
+
     class Config:
         extra = "allow"
 
@@ -90,6 +99,7 @@ class ComputeConfig(BaseModel):
 # Registry of available compute backends
 COMPUTE_REGISTRY: Dict[str, type] = {
     "local": LocalCompute,
+    "ssh": SSHDockerCompute,
     "modal": ModalCompute,
     "runpod": RunPodCompute,
 }
@@ -131,9 +141,13 @@ def get_compute(
 
     compute_type = config.type
 
+    cache_key = compute_type
+    if compute_type == "ssh":
+        cache_key = f"ssh:{config.user or ''}@{config.host or ''}:{config.port}:{config.output_dir}:{config.docker_image}"
+
     # Return cached instance if available
-    if compute_type in _COMPUTE_INSTANCES:
-        return _COMPUTE_INSTANCES[compute_type]
+    if cache_key in _COMPUTE_INSTANCES:
+        return _COMPUTE_INSTANCES[cache_key]
 
     compute_cls = COMPUTE_REGISTRY.get(compute_type)
 
@@ -164,6 +178,18 @@ def get_compute(
             kwargs["default_gpu"] = config.default_gpu
         kwargs["use_spot"] = config.use_spot
 
+    elif compute_type == "ssh":
+        kwargs.update({
+            "host": config.host,
+            "user": config.user,
+            "port": config.port,
+            "key_path": config.key_path,
+            "docker_image": config.docker_image,
+            "docker_args": config.docker_args,
+            "ssh_options": config.ssh_options,
+            "use_gpu": True,
+        })
+
     # Include any extra config fields
     extra_fields = set(config.model_dump().keys()) - set(ComputeConfig.model_fields.keys())
     for field in extra_fields:
@@ -171,7 +197,7 @@ def get_compute(
 
     logger.info(f"Creating {compute_type} compute backend (cached)")
     instance = compute_cls(**kwargs)
-    _COMPUTE_INSTANCES[compute_type] = instance
+    _COMPUTE_INSTANCES[cache_key] = instance
     return instance
 
 
@@ -213,13 +239,9 @@ async def get_all_available_instances() -> Dict[str, list]:
     local = LocalCompute()
     results["local"] = await local.get_available_instances()
 
-    # Cloud providers (if available)
-    for name in ["modal", "runpod"]:
-        try:
-            compute = get_compute(ComputeConfig(type=name))
-            results[name] = await compute.get_available_instances()
-        except Exception as e:
-            logger.debug(f"Could not get instances from {name}: {e}")
-            results[name] = []
+    # Bring-your-own SSH machines are configured explicitly in the UI. Managed
+    # cloud providers stay hidden until their adapters can launch, stream logs,
+    # and return artifacts through the same production contract.
+    results["ssh"] = []
 
     return results

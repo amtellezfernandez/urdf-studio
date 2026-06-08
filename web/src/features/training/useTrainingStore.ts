@@ -108,6 +108,10 @@ const defaultComputeConfig: ComputeConfig = {
   device: "cuda",
   useSpot: true,
   timeoutHours: 4.0,
+  sshPort: 22,
+  sshWorkDir: "/tmp/robotops",
+  remoteOutputDir: "/tmp/robotops/outputs",
+  dockerImage: "urdf-studio:robotops-training",
 };
 
 // ============================================================================
@@ -266,7 +270,7 @@ export const selectIsConfigComplete = (state: TrainingState): boolean => {
 export const selectCanStartTraining = (state: TrainingState): boolean => {
   return (
     selectIsConfigComplete(state) &&
-    state.computeConfig.type === "local" &&
+    (state.computeConfig.type === "local" || state.computeConfig.type === "ssh") &&
     state.preflightResult?.ready === true &&
     !state.isSubmitting &&
     state.activeJobId === null

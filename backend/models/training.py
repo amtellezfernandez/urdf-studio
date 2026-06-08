@@ -47,6 +47,7 @@ class ComputeType(str, Enum):
     """Compute backend for training."""
 
     LOCAL = "local"
+    SSH = "ssh"
     MODAL = "modal"
     RUNPOD = "runpod"
 
@@ -238,6 +239,17 @@ class ComputeConfig(BaseModel):
         default=4.0,
         description="Maximum training duration",
     )
+
+    # Bring-your-own compute over SSH + Docker
+    ssh_host: Optional[str] = Field(default=None, description="SSH host or IP for remote Docker training")
+    ssh_user: Optional[str] = Field(default=None, description="SSH username")
+    ssh_port: int = Field(default=22, description="SSH port")
+    ssh_key_path: Optional[str] = Field(default=None, description="Path to SSH private key on the RobotOps backend machine")
+    ssh_work_dir: str = Field(default="/tmp/robotops", description="Remote working directory")
+    remote_output_dir: str = Field(default="/tmp/robotops/outputs", description="Remote artifact output directory")
+    docker_image: str = Field(default="urdf-studio:robotops-training", description="Remote trainer Docker image")
+    docker_args: Optional[str] = Field(default=None, description="Additional docker run arguments")
+    ssh_options: Optional[str] = Field(default=None, description="Additional ssh/scp options")
 
     class Config:
         use_enum_values = True

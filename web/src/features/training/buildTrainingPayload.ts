@@ -73,6 +73,15 @@ export function buildTrainingPayload({
       api_key: computeConfig.apiKey,
       use_spot: computeConfig.useSpot,
       timeout_hours: computeConfig.timeoutHours,
+      ssh_host: computeConfig.sshHost,
+      ssh_user: computeConfig.sshUser,
+      ssh_port: computeConfig.sshPort,
+      ssh_key_path: computeConfig.sshKeyPath,
+      ssh_work_dir: computeConfig.sshWorkDir,
+      remote_output_dir: computeConfig.remoteOutputDir,
+      docker_image: computeConfig.dockerImage,
+      docker_args: computeConfig.dockerArgs,
+      ssh_options: computeConfig.sshOptions,
     },
   };
 }
