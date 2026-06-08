@@ -683,7 +683,7 @@ export const OperatorTeleopPanel = ({
   teleopCapabilityToken = null,
   collaborationOwnerToken = null,
 }: OperatorTeleopPanelProps) => {
-  const showCameraTools = panelView === "camera";
+  const showCameraTools = panelView === "camera" || panelView === "hardware";
   const showStudioTeleopTools = panelView === "studio";
   const showFollowerHardwareTools = panelView === "hardware";
   const showTeleopConnectionTools =

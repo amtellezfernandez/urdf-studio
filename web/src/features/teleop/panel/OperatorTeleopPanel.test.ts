@@ -1861,8 +1861,8 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       root.render(createElement(OperatorTeleopPanel, { studioRobotName: "Open Arm Bimanual" }));
       await flushMicrotasks();
     });
-    expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
-    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(false);
+    expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
+    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(true);
 
     await act(async () => {
       root.render(
@@ -1912,6 +1912,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
         })
       );
       await flushMicrotasks();
+      await flushMicrotasks();
     });
     expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledTimes(3);
 
@@ -1919,6 +1920,17 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       transitionRoot.render(
         createElement(OperatorTeleopPanel, {
           panelView: "hardware",
+          studioRobotName: "OpenArm Bimanual",
+        }),
+      );
+      await flushMicrotasks();
+    });
+    expect(stopOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      transitionRoot.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "studio",
           studioRobotName: "OpenArm Bimanual",
         }),
       );
@@ -2349,7 +2361,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     container.remove();
   });
 
-  it("auto-connects OpenArm live observe only from the camera view", async () => {
+  it("auto-connects OpenArm live observe from camera and hardware views", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -2394,10 +2406,29 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await act(async () => {
-      root.render(createElement(OperatorTeleopPanel, { studioRobotName: "unnamed URDF" }));
+      root.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "studio",
+          studioRobotName: "unnamed URDF",
+        }),
+      );
       await flushMicrotasks();
     });
     expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "hardware",
+          studioRobotName: "unnamed URDF",
+        }),
+      );
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+
+    expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
+    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(true);
 
     await act(async () => {
       root.render(
@@ -2410,7 +2441,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     });
 
     expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
-    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(true);
+    expect(stopOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -3289,13 +3320,17 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       await flushMicrotasks();
     });
 
-    expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
+    expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
     expect(
       vi.mocked(fetchMock).mock.calls.some((call) => String(call[0]).endsWith("/point-cloud"))
-    ).toBe(false);
-    expect(useOperatorPerceptionStore.getState().activePointCloudFrame).toBeNull();
-    expect(useOperatorPerceptionStore.getState().activeCameraVideoFrame).toBeNull();
-    expect(putImageDataMock).not.toHaveBeenCalled();
+    ).toBe(true);
+    expect(useOperatorPerceptionStore.getState().activePointCloudFrame?.cameraId).toBe(
+      TEST_CAMERA_STREAM.id,
+    );
+    expect(useOperatorPerceptionStore.getState().activeCameraVideoFrame?.sourceId).toBe(
+      TEST_CAMERA_STREAM.id,
+    );
+    expect(putImageDataMock).toHaveBeenCalled();
 
     const connectButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Connect",
@@ -3327,7 +3362,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     ).toBe(false);
     expect(stopOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Motion safety ready");
-    expect(container.textContent).not.toContain("Follower hardware connected");
+    expect(container.textContent).toContain("Follower hardware connected");
     expect(container.textContent).not.toContain("Before motion");
     expect(container.textContent).not.toContain("OKFollower gateway");
     expect(container.textContent).not.toContain("OKJoint rotation calibration");

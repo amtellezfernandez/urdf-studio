@@ -3140,12 +3140,10 @@ const Index = () => {
       );
     },
     onOpenDatasetReview: handleOpenDatasetReview,
-    cameraTeleopPanelOpen: teleopPanelOpen && teleopPanelView === "camera",
     leaderInputConnected,
     leaderInputPanelOpen: teleopPanelOpen && teleopPanelView === "studio",
     followerHardwareConnected,
     followerHardwarePanelOpen: teleopPanelOpen && teleopPanelView === "hardware",
-    onToggleCameraTeleopPanel: () => toggleTeleopPanelView("camera"),
     onToggleLeaderInputPanel: () => toggleTeleopPanelView("studio"),
     onToggleFollowerHardwarePanel: () => toggleTeleopPanelView("hardware"),
     collaborationOwner,

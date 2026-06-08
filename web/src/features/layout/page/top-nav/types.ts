@@ -108,12 +108,10 @@ export type TopNavBarProps = {
   onSetCollaborationSharingEnabled?: (enabled: boolean) => void | Promise<void>;
   teleopPanelOpen?: boolean;
   onToggleTeleopPanel?: () => void;
-  cameraTeleopPanelOpen?: boolean;
   leaderInputConnected?: boolean;
   leaderInputPanelOpen?: boolean;
   followerHardwareConnected?: boolean;
   followerHardwarePanelOpen?: boolean;
-  onToggleCameraTeleopPanel?: () => void;
   onToggleLeaderInputPanel?: () => void;
   onToggleFollowerHardwarePanel?: () => void;
 };

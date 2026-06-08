@@ -182,23 +182,10 @@ export const TopNavBar = (props: TopNavBarProps) => {
           </button>
         ) : null}
         {workspaceModeUi.showStudioChrome &&
-        (props.onToggleCameraTeleopPanel ||
-          props.onToggleLeaderInputPanel ||
+        (props.onToggleLeaderInputPanel ||
           props.onToggleFollowerHardwarePanel ||
           props.onToggleTeleopPanel) ? (
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className={`h-7 rounded-md border px-2 text-xs ${
-                props.cameraTeleopPanelOpen
-                  ? "border-sky-500/35 bg-sky-500/10 text-foreground"
-                  : "border-border/70 bg-background/50 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-              }`}
-              onClick={props.onToggleCameraTeleopPanel ?? props.onToggleTeleopPanel}
-              title="Open teleop camera configuration"
-            >
-              Cams
-            </button>
             <button
               type="button"
               className={`h-7 rounded-md border px-2 text-xs ${teleopConnectionButtonClassName(

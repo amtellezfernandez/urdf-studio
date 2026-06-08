@@ -82,12 +82,10 @@ const createProps = (): TopNavBarProps => ({
   onOpenSimulationPrep: vi.fn(),
   studioIssueReportUrl: undefined,
   onOpenDatasetReview: vi.fn(),
-  cameraTeleopPanelOpen: false,
   leaderInputConnected: false,
   leaderInputPanelOpen: false,
   followerHardwareConnected: false,
   followerHardwarePanelOpen: false,
-  onToggleCameraTeleopPanel: vi.fn(),
   onToggleLeaderInputPanel: vi.fn(),
   onToggleFollowerHardwarePanel: vi.fn(),
 });
@@ -307,7 +305,7 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("surfaces separate teleop panel toggles in studio mode", async () => {
+  it("surfaces leader and follower teleop panel toggles in studio mode", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const props = createProps();
@@ -323,10 +321,9 @@ describe("TopNavBar", () => {
     const hardwareButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Follower"
     );
-    expect(cameraButton).toBeTruthy();
+    expect(cameraButton).toBeUndefined();
     expect(studioButton).toBeTruthy();
     expect(hardwareButton).toBeTruthy();
-    expect(cameraButton?.getAttribute("title")).toBe("Open teleop camera configuration");
     expect(studioButton?.getAttribute("title")).toBe("Open leader input setup");
     expect(hardwareButton?.getAttribute("title")).toBe("Open follower hardware connection");
 
