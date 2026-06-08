@@ -14,6 +14,7 @@ from backend.core.simulator_security import (
     SIMULATOR_TOKEN_HEADER,
     SIMULATOR_TOKEN_QUERY_PARAM,
     classify_backend_http_route_policy,
+    resolve_backend_client_host,
 )
 
 SECURITY_AUDIT_LOGGER_NAME: Final = "urdf.security"
@@ -84,8 +85,7 @@ def log_http_security_event(
     logger = logging.getLogger(SECURITY_AUDIT_LOGGER_NAME)
     request_id = get_request_id_for_http_request(request)
     route_policy = classify_backend_http_route_policy(request.url.path, method=request.method)
-    client = request.client
-    client_host = client.host if client is not None else ""
+    client_host = resolve_backend_client_host(request)
     auth_hints = _auth_hint_summary(request.headers, request.query_params)
     log_method = logger.warning if decision == "denied" or status_code >= 400 else logger.info
     log_method(
@@ -109,8 +109,7 @@ def log_websocket_security_event(
     reason: str,
 ) -> None:
     logger = logging.getLogger(SECURITY_AUDIT_LOGGER_NAME)
-    client = websocket.client
-    client_host = client.host if client is not None else ""
+    client_host = resolve_backend_client_host(websocket)
     auth_hints = _auth_hint_summary(websocket.headers, websocket.query_params)
     log_method = logger.warning if decision != "accepted" else logger.info
     log_method(

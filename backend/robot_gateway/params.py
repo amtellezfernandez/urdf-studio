@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from backend.core.simulator_security import DEV_PROXY_CLIENT_HOST_HEADER
+
 
 @dataclass(frozen=True)
 class RobotGatewayAdapterIds:
@@ -150,7 +152,7 @@ ROBOT_GATEWAY_COLLABORATION_SESSION_HEADER: Final = (
 ROBOT_GATEWAY_COLLABORATION_TELEOP_CAPABILITY_HEADER: Final = (
     "X-URDF-Collaboration-Teleop-Capability"
 )
-ROBOT_GATEWAY_DEV_PROXY_CLIENT_HOST_HEADER: Final = "X-URDF-Dev-Proxy-Client-Host"
+ROBOT_GATEWAY_DEV_PROXY_CLIENT_HOST_HEADER: Final = DEV_PROXY_CLIENT_HOST_HEADER
 ROBOT_GATEWAY_AUTHORIZATION_HEADER: Final = "authorization"
 ROBOT_GATEWAY_BEARER_AUTH_PREFIX: Final = "bearer "
 ROBOT_GATEWAY_IPV6_MAPPED_IPV4_PREFIX: Final = "::ffff:"
