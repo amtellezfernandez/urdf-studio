@@ -11,10 +11,12 @@ import {
   resolveDevProxyClientHost,
   shouldBlockGitHubDevProxyRequest,
   shouldEnableGitHubDevProxy,
-} from '../../config/devServerProxy.js';
+} from './devServerProxy.js';
 
-const TEST_API_BASE_URL = 'http://127.0.0.1:8000';
-const TEST_RUNTIME_URLS = { apiBaseUrl: TEST_API_BASE_URL };
+const DEV_SERVER_PROXY_TEST_FIXTURE = {
+  apiBaseUrl: 'http://127.0.0.1:8000',
+  runtimeUrls: { apiBaseUrl: 'http://127.0.0.1:8000' },
+};
 
 function runtimeConfigWithWebBind(bindHost) {
   return { web: { bindHost } };
@@ -23,22 +25,22 @@ function runtimeConfigWithWebBind(bindHost) {
 test('dev server GitHub relay stays enabled for loopback development', () => {
   const proxy = buildDevServerProxy({
     runtimeConfig: runtimeConfigWithWebBind('127.0.0.1'),
-    runtimeUrls: TEST_RUNTIME_URLS,
+    runtimeUrls: DEV_SERVER_PROXY_TEST_FIXTURE.runtimeUrls,
     env: {},
   });
 
-  assert.equal(proxy[API_PROXY_PREFIX].target, TEST_API_BASE_URL);
+  assert.equal(proxy[API_PROXY_PREFIX].target, DEV_SERVER_PROXY_TEST_FIXTURE.apiBaseUrl);
   assert.equal(proxy[GITHUB_DEV_PROXY_PREFIX].target, 'https://api.github.com');
 });
 
 test('dev server GitHub relay is disabled for remote team binds by default', () => {
   const proxy = buildDevServerProxy({
     runtimeConfig: runtimeConfigWithWebBind('0.0.0.0'),
-    runtimeUrls: TEST_RUNTIME_URLS,
+    runtimeUrls: DEV_SERVER_PROXY_TEST_FIXTURE.runtimeUrls,
     env: {},
   });
 
-  assert.equal(proxy[API_PROXY_PREFIX].target, TEST_API_BASE_URL);
+  assert.equal(proxy[API_PROXY_PREFIX].target, DEV_SERVER_PROXY_TEST_FIXTURE.apiBaseUrl);
   assert.equal(Object.hasOwn(proxy, GITHUB_DEV_PROXY_PREFIX), false);
 });
 

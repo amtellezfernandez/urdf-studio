@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "description": "Baseline of existing top-level scalar const declarations. New entries fail tools/scripts/topLevelScalarConstantAudit.js.",
-  "totalConstants": 1628,
-  "fileCount": 276,
+  "totalConstants": 1613,
+  "fileCount": 273,
   "files": {
     "config/devServerProxy.js": [
       {
@@ -122,16 +122,6 @@
         "initializer": "\"Network error reaching GitHub source\""
       }
     ],
-    "tools/scripts/architecture-check.js": [
-      {
-        "name": "MAX_LOC_GLOBAL",
-        "initializer": "1200"
-      },
-      {
-        "name": "MAX_LOC_STRICT",
-        "initializer": "900"
-      }
-    ],
     "tools/scripts/deadCodeParams.js": [
       {
         "name": "DEAD_CODE_CLUSTER_FILE_POINTS",
@@ -172,12 +162,6 @@
       {
         "name": "DEAD_CODE_UNUSED_DEPENDENCY_POINTS",
         "initializer": "8"
-      }
-    ],
-    "tools/scripts/devServerProxy.test.mjs": [
-      {
-        "name": "TEST_API_BASE_URL",
-        "initializer": "'http://127.0.0.1:8000'"
       }
     ],
     "tools/scripts/githubAuth.js": [
@@ -390,56 +374,6 @@
       {
         "name": "RUN_UPDATE_CHECK_TIMEOUT_MS",
         "initializer": "5_000"
-      }
-    ],
-    "tools/scripts/setupParams.js": [
-      {
-        "name": "GITHUB_CLI_LOGIN_COMMAND",
-        "initializer": "'gh auth login'"
-      },
-      {
-        "name": "GITHUB_FINE_GRAINED_TOKEN_URL",
-        "initializer": "'https://github.com/settings/tokens?type=beta'"
-      },
-      {
-        "name": "GLOBAL_ILU_INSTALL_COMMAND",
-        "initializer": "'npm run setup -- --install-global-ilu'"
-      },
-      {
-        "name": "GLOBAL_ILU_INSTALL_ENV",
-        "initializer": "'URDF_STUDIO_INSTALL_GLOBAL_ILU'"
-      },
-      {
-        "name": "GLOBAL_ILU_INSTALL_FLAG",
-        "initializer": "'--install-global-ilu'"
-      },
-      {
-        "name": "HUGGING_FACE_TOKEN_URL",
-        "initializer": "'https://huggingface.co/settings/tokens'"
-      },
-      {
-        "name": "LEROBOT_TOOLCHAIN_DIRNAME",
-        "initializer": "'.venv-lerobot'"
-      },
-      {
-        "name": "LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT",
-        "initializer": "'import torch; import lerobot; import safetensors; print(\"lerobot training runtime ok\")'"
-      },
-      {
-        "name": "LOCAL_ILU_COMMAND",
-        "initializer": "'npx ilu'"
-      },
-      {
-        "name": "MJLAB_MUJOCO_WARP_PACKAGE",
-        "initializer": "'mujoco-warp==3.9.0.1'"
-      },
-      {
-        "name": "MJLAB_SKIP_AUTO_INSTALL_ENV",
-        "initializer": "'URDF_STUDIO_SKIP_MJLAB_AUTO_INSTALL'"
-      },
-      {
-        "name": "MJLAB_VERIFY_IMPORT_SCRIPT",
-        "initializer": "'import mjlab; import mujoco; import mujoco_warp; print(\"mjlab runtime ok\")'"
       }
     ],
     "tools/scripts/updateCheck.test.mjs": [
