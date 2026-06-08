@@ -207,7 +207,7 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("uses teleop connection state, not popup visibility, for leader and teleop colors", async () => {
+  it("uses teleop connection state, not popup visibility, for leader and follower colors", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const props = {
@@ -222,13 +222,13 @@ describe("TopNavBar", () => {
 
     const buttons = Array.from(container.querySelectorAll("button"));
     const leaderButton = buttons.find((button) => button.textContent === "Leader");
-    const teleopButton = buttons.find(
-      (button) => button.textContent === "Teleop",
+    const followerButton = buttons.find(
+      (button) => button.textContent === "Follower",
     );
 
     expect(leaderButton?.className).toContain("border-emerald-500/35");
-    expect(teleopButton?.className).not.toContain("border-emerald-500/35");
-    expect(teleopButton?.className).toContain("bg-muted/30");
+    expect(followerButton?.className).not.toContain("border-emerald-500/35");
+    expect(followerButton?.className).toContain("bg-muted/30");
 
     await act(async () => {
       root.unmount();
@@ -305,7 +305,7 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("surfaces leader and robot teleop panel toggles in studio mode", async () => {
+  it("surfaces leader and follower teleop panel toggles in studio mode", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const props = createProps();
@@ -319,13 +319,13 @@ describe("TopNavBar", () => {
       (button) => button.textContent === "Leader"
     );
     const hardwareButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Teleop"
+      (button) => button.textContent === "Follower"
     );
     expect(cameraButton).toBeUndefined();
     expect(studioButton).toBeTruthy();
     expect(hardwareButton).toBeTruthy();
     expect(studioButton?.getAttribute("title")).toBe("Open leader input setup");
-    expect(hardwareButton?.getAttribute("title")).toBe("Open teleop hardware and cameras");
+    expect(hardwareButton?.getAttribute("title")).toBe("Open follower hardware and cameras");
 
     await act(async () => {
       studioButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

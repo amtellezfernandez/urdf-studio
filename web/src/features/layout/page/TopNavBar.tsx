@@ -204,9 +204,9 @@ export const TopNavBar = (props: TopNavBarProps) => {
                 props.followerHardwarePanelOpen,
               )}`}
               onClick={props.onToggleFollowerHardwarePanel ?? props.onToggleTeleopPanel}
-              title="Open teleop hardware and cameras"
+              title="Open follower hardware and cameras"
             >
-              Teleop
+              Follower
             </button>
           </div>
         ) : null}
