@@ -25,10 +25,9 @@ This document describes what the code actually does today.
     - `web/src/studio_ui/rosviz/components/*`
     - `web/src/studio_ui/panels/RuntimeHealthPanel.tsx`
 
-## 2) Compatibility layer
+## 2) RosViz module ownership
 
-Compatibility paths under `web/src/runtime/viz2/*` remain wrappers only.
-They re-export from `runtime_engine` / `studio_ui`.
+RosViz runtime contracts live under `runtime_engine`; RosViz UI lives under `studio_ui`.
 
 ## 3) Runtime selection behavior
 

@@ -10,9 +10,8 @@ The frontend architecture is enforced by three top-level layers:
 
 - `studio_core` must not import `studio_ui`.
 - `runtime_engine` must not import `studio_ui`.
-- `studio_ui` must consume runtime contracts via `runtime_engine` (not `runtime/viz2`).
+- `studio_ui` must consume runtime contracts via `runtime_engine`.
 
-## Compatibility Layer
+## RosViz Module Ownership
 
-Compatibility `web/src/runtime/viz2/*` modules remain thin wrappers re-exporting from `runtime_engine` and `studio_ui`.
-This keeps existing imports working while preserving architectural boundaries.
+Use `runtime_engine` for runtime contracts and `studio_ui` for viewer composition.

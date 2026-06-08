@@ -30,12 +30,12 @@ function normalizePythonDistributionName(name) {
     .replace(/[-_.]+/g, '-');
 }
 
-export function selectInstalledStalePythonDependencies({
-  staleDependencies = [],
+export function selectInstalledSupersededPythonDependencies({
+  supersededDependencies = [],
   installedPackageNames = [],
 } = {}) {
   const installedNames = new Set(installedPackageNames.map(normalizePythonDistributionName));
-  return staleDependencies.filter((dependency) =>
+  return supersededDependencies.filter((dependency) =>
     installedNames.has(normalizePythonDistributionName(dependency))
   );
 }

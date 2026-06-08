@@ -5,7 +5,7 @@ import {
   buildSetupRoadmapSections,
   buildSetupSummarySections,
   isTruthyEnvValue,
-  selectInstalledStalePythonDependencies,
+  selectInstalledSupersededPythonDependencies,
   shouldInstallGlobalIlu,
 } from './setupHelpers.js';
 import { OPENARM_HARDWARE_PIP_DEPENDENCIES } from './openArmHardwareParams.js';
@@ -38,10 +38,10 @@ test('shouldInstallGlobalIlu accepts truthy env', () => {
   );
 });
 
-test('selectInstalledStalePythonDependencies only returns stale packages present in the environment', () => {
+test('selectInstalledSupersededPythonDependencies only returns superseded packages present in the environment', () => {
   assert.deepEqual(
-    selectInstalledStalePythonDependencies({
-      staleDependencies: ['libcoal', 'libpinocchio', 'lib.pinocchio', 'libmissing'],
+    selectInstalledSupersededPythonDependencies({
+      supersededDependencies: ['libcoal', 'libpinocchio', 'lib.pinocchio', 'libmissing'],
       installedPackageNames: ['LIBCOAL', 'pinocchio', 'lib_pinocchio', 'pytest'],
     }),
     ['libcoal', 'lib.pinocchio']

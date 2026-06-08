@@ -8,7 +8,7 @@ import readline from 'readline';
 import { maskToken, resolveSetupGitHubToken } from './githubAuth.js';
 import {
   isTruthyEnvValue,
-  selectInstalledStalePythonDependencies,
+  selectInstalledSupersededPythonDependencies,
   shouldInstallGlobalIlu,
 } from './setupHelpers.js';
 import { OPENARM_HARDWARE_PIP_DEPENDENCIES } from './openArmHardwareParams.js';
@@ -30,7 +30,7 @@ import {
   BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT,
   BACKEND_NATIVE_SIM_FORCE_ENV,
   BACKEND_NATIVE_SIM_SKIP_ENV,
-  BACKEND_PYTHON_STALE_DEPENDENCIES,
+  BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES,
   GENESIS_FORCE_INSTALL_ENV,
   GENESIS_PYTHON_DEPENDENCIES,
   GENESIS_SKIP_AUTO_INSTALL_ENV,
@@ -1232,16 +1232,16 @@ async function installBackendDeps() {
 
   try {
     const installedPackageNames = listInstalledPythonPackageNames(venvPython);
-    const installedStaleDependencies = selectInstalledStalePythonDependencies({
-      staleDependencies: BACKEND_PYTHON_STALE_DEPENDENCIES,
+    const installedSupersededDependencies = selectInstalledSupersededPythonDependencies({
+      supersededDependencies: BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES,
       installedPackageNames,
     });
 
-    if (installedStaleDependencies.length > 0) {
-      logInfo(`Removing stale backend packages: ${installedStaleDependencies.join(', ')}`);
+    if (installedSupersededDependencies.length > 0) {
+      logInfo(`Removing superseded backend packages: ${installedSupersededDependencies.join(', ')}`);
       execFileSync(
         uvPath,
-        ['pip', 'uninstall', '--python', venvPython, ...installedStaleDependencies],
+        ['pip', 'uninstall', '--python', venvPython, ...installedSupersededDependencies],
         {
           cwd: rootDir,
           stdio: 'inherit',
@@ -1250,7 +1250,7 @@ async function installBackendDeps() {
       );
     }
   } catch (e) {
-    logInfo('Continuing after stale backend package cleanup could not inspect or remove obsolete packages.');
+    logInfo('Continuing after superseded backend package cleanup could not inspect or remove superseded packages.');
   }
 
   const existingBackendCheck = runPythonImportCheck(venvPython, backendVerifyImportScript);

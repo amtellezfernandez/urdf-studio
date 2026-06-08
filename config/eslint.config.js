@@ -33,17 +33,11 @@ export default tseslint.config(
             {
               group: ["@/runtime/viz2/*"],
               message:
-                "Import RosViz runtime modules from '@/runtime_engine/rosviz/*' instead of '@/runtime/viz2/*'.",
+                "Import RosViz runtime modules from '@/runtime_engine/rosviz/*'.",
             },
           ],
         },
       ],
-    },
-  },
-  {
-    files: ["web/src/runtime/viz2/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": "off",
     },
   },
   {

@@ -15,7 +15,7 @@ import {
   BACKEND_PYTHON_PLACO_DEPENDENCIES,
   BACKEND_PYTHON_PORTABLE_DEPENDENCIES,
   BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT,
-  BACKEND_PYTHON_STALE_DEPENDENCIES,
+  BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES,
   BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT,
   COLLISION_STACK_SETUP,
   GENESIS_FORCE_INSTALL_ENV,
@@ -65,8 +65,8 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('cmeel-urdfdom==4.0.1'));
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('coal==3.0.1'));
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('placo==0.9.16'));
-  assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libcoal'));
-  assert.ok(BACKEND_PYTHON_STALE_DEPENDENCIES.includes('libpinocchio'));
+  assert.ok(BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES.includes('libcoal'));
+  assert.ok(BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES.includes('libpinocchio'));
   assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"yourdfpy"/);
   assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"pyarrow"/);
   assert.doesNotMatch(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);

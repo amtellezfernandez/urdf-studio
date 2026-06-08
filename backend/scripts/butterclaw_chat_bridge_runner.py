@@ -47,10 +47,6 @@ def _run_planner_mode(*, control_dir: Path, text: str) -> dict[str, object]:
     }
 
 
-def _run_direct_mode(*, control_dir: Path, command_json: str, timeout_s: float) -> dict[str, object]:
-    raise RuntimeError("deprecated direct mode entrypoint")
-
-
 def _run_scan_mode(
     *,
     repo_path: Path,

@@ -88,9 +88,9 @@ check_paths_exist \
   web/src/runtime_engine \
   web/src/studio_ui
 
-# 1) No direct compatibility runtime imports outside wrappers/tests.
+# 1) RosViz runtime imports must follow module ownership.
 check_no_match \
-  "No compatibility runtime imports in production modules" \
+  "No direct RosViz shortcut imports in production modules" \
   "@/runtime/viz2/" \
   web/src/studio_core \
   web/src/runtime_engine \
@@ -98,7 +98,7 @@ check_no_match \
   web/src/features
 
 check_no_match \
-  "No compatibility runtime imports anywhere" \
+  "No direct RosViz shortcut imports anywhere" \
   "@/runtime/viz2/" \
   web/src
 
@@ -119,7 +119,7 @@ check_no_match \
   "@/studio_ui/" \
   web/src/studio_core
 
-# 4) Compatibility wrapper contract checks.
+# 4) Runtime ownership contract checks.
 check_file_contains \
   "Viewer host resolves runtime via runtime_engine" \
   web/src/features/layout/page/ViewerHost.tsx \
