@@ -73,7 +73,7 @@ type Viewer3DPropsInput = {
   enableObjectActionsInReadOnly?: boolean;
   thumbnailMode?: boolean;
   readOnlyMode?: boolean;
-  preferLegacyRuntime?: boolean;
+  preferStudioRuntime?: boolean;
 };
 
 export const toViewer3DProps = ({
@@ -127,7 +127,7 @@ export const toViewer3DProps = ({
   enableObjectActionsInReadOnly = false,
   thumbnailMode = false,
   readOnlyMode = false,
-  preferLegacyRuntime = false,
+  preferStudioRuntime = false,
 }: Viewer3DPropsInput): Viewer3DProps => ({
   workspaceMode,
   assemblyPrimaryModel,
@@ -173,7 +173,7 @@ export const toViewer3DProps = ({
   onAutoPatchWheelRolesUrdf: updateUrdfFile,
   readOnlyMode,
   thumbnailMode,
-  preferLegacyRuntime,
+  preferStudioRuntime,
   runtimeRobotBasePose,
   onObjectSelect,
   onInertiaReliabilityChange,

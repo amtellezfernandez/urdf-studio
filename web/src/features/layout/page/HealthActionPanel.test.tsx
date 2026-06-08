@@ -1975,7 +1975,7 @@ describe("HealthActionPanel", () => {
     });
   });
 
-  it("renders legacy robot mirror selection groups without crashing", async () => {
+  it("renders compatibility robot mirror selection groups without crashing", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const onFixRobotMirrorSymmetry = vi.fn();

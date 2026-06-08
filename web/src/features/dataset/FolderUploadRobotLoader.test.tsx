@@ -28,8 +28,8 @@ const TEST_SECONDARY_CANDIDATE_PATH = "google_barkour_vb/barkour_vb_rev_1_0_head
 const TEST_SECONDARY_CANDIDATE_FILE = "barkour_vb_rev_1_0_head_straight.urdf";
 const TEST_SECONDARY_CANDIDATE_DISPLAY = "Barkour VB";
 const TEST_SECONDARY_CANDIDATE_FILE_BASE = "google-barkour-vb";
-const TEST_STALE_GALLERY_ROBOT_FILE = "legacy_barkour.urdf";
-const TEST_STALE_GALLERY_ROBOT_FILE_BASE = "legacy-barkour";
+const TEST_STALE_GALLERY_ROBOT_FILE = "stale_barkour.urdf";
+const TEST_STALE_GALLERY_ROBOT_FILE_BASE = "stale-barkour";
 
 const flushMicrotasks = async (): Promise<void> => {
   await act(async () => {
@@ -100,7 +100,7 @@ const createPublishedRepo = (overrides: Partial<IluGalleryPublishedRepo> = {}): 
       fileBase: TEST_PRIMARY_CANDIDATE_FILE_BASE,
     },
     {
-      name: "Legacy Barkour",
+      name: "Archived Barkour",
       file: TEST_STALE_GALLERY_ROBOT_FILE,
       fileBase: TEST_STALE_GALLERY_ROBOT_FILE_BASE,
     },
@@ -407,7 +407,7 @@ describe("FolderUploadRobotLoader", () => {
     expect(document.body.textContent).toContain(`Gallery source ${TEST_PRIMARY_CANDIDATE_FILE}`);
     expect(document.body.textContent).toContain("Possibly stale gallery robots:");
     expect(document.body.textContent).toContain(
-      `Legacy Barkour (gallery mapping ${TEST_STALE_GALLERY_ROBOT_FILE_BASE})`
+      `Archived Barkour (gallery mapping ${TEST_STALE_GALLERY_ROBOT_FILE_BASE})`
     );
     await act(async () => {
       root.unmount();

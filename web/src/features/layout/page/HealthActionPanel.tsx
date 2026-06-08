@@ -100,7 +100,7 @@ type MeshSanitizationSummary = {
   };
 };
 
-type LegacyRobotMirrorSelectionGroup = {
+type CompatibilityRobotMirrorSelectionGroup = {
   groupKey: string;
   linkNames?: readonly string[];
   meshLabel?: string | null;
@@ -121,7 +121,7 @@ type HealthActionPanelProps = {
     meshReference: string;
     linkNames: string[];
   }>;
-  robotMirrorSelectionGroups?: readonly LegacyRobotMirrorSelectionGroup[];
+  robotMirrorSelectionGroups?: readonly CompatibilityRobotMirrorSelectionGroup[];
   selectedRobotMirrorGroupKeys?: readonly string[];
   robotMirrorSelectionLinks?: readonly RobotMirrorSelectionLink[];
   selectedRobotMirrorLinkNames?: readonly string[];
@@ -1254,11 +1254,11 @@ const toSortedUniqueLinkNames = (linkNames: readonly string[]): string[] =>
     (left, right) => left.localeCompare(right)
   );
 
-const buildLegacyRobotMirrorSelectionState = ({
+const buildCompatibilityRobotMirrorSelectionState = ({
   robotMirrorSelectionGroups,
   selectedRobotMirrorGroupKeys,
 }: {
-  robotMirrorSelectionGroups: readonly LegacyRobotMirrorSelectionGroup[];
+  robotMirrorSelectionGroups: readonly CompatibilityRobotMirrorSelectionGroup[];
   selectedRobotMirrorGroupKeys: readonly string[];
 }): {
   selectedLinkNames: string[];
@@ -1757,9 +1757,9 @@ export const HealthActionPanel = ({
     setIsDragging(true);
   };
 
-  const legacyRobotMirrorSelectionState = useMemo(
+  const compatibilityRobotMirrorSelectionState = useMemo(
     () =>
-      buildLegacyRobotMirrorSelectionState({
+      buildCompatibilityRobotMirrorSelectionState({
         robotMirrorSelectionGroups,
         selectedRobotMirrorGroupKeys,
       }),
@@ -1769,8 +1769,8 @@ export const HealthActionPanel = ({
     () =>
       robotMirrorSelectionLinks.length > 0
         ? [...robotMirrorSelectionLinks]
-        : legacyRobotMirrorSelectionState.selectionLinks,
-    [legacyRobotMirrorSelectionState.selectionLinks, robotMirrorSelectionLinks]
+        : compatibilityRobotMirrorSelectionState.selectionLinks,
+    [compatibilityRobotMirrorSelectionState.selectionLinks, robotMirrorSelectionLinks]
   );
   const robotMirrorSimulationPrepViewState = useMemo(
     () =>
@@ -1792,7 +1792,7 @@ export const HealthActionPanel = ({
   const effectiveSelectedRobotMirrorLinkNames =
     selectedRobotMirrorLinkNames.length > 0
       ? [...selectedRobotMirrorLinkNames]
-      : legacyRobotMirrorSelectionState.selectedLinkNames;
+      : compatibilityRobotMirrorSelectionState.selectedLinkNames;
 
   if (!open) {
     return null;

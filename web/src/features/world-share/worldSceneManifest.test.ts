@@ -209,7 +209,7 @@ describe("worldSceneManifest static scene validation", () => {
     expect(parseStaticWorldSceneLayerSnapshot(payload).snapshot).toBeNull();
   });
 
-  it("rejects legacy scene-key payloads", () => {
+  it("rejects previous scene-key payloads", () => {
     const parsed = readWorldSceneLayerFromUnknown({
       scene: {
         objects: [createWorldLayoutObject()],

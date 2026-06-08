@@ -14,7 +14,7 @@ from backend.services.dataset_alignment_params import (
 
 NonEmptyDatasetValue = Annotated[str, Field(min_length=1)]
 DatasetMixJobStatus = Literal["rejected", "queued", "running", "succeeded", "failed"]
-DatasetMixExecutionMode = Literal["native-local-lerobot", "legacy-subprocess"]
+DatasetMixExecutionMode = Literal["native-local-lerobot", "subprocess-compat"]
 DatasetMixPartitionStrategy = Literal["episode-window"]
 
 

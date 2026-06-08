@@ -27,7 +27,7 @@ This document describes what the code actually does today.
 
 ## 2) Compatibility layer
 
-Legacy paths under `web/src/runtime/viz2/*` remain compatibility wrappers only.
+Compatibility paths under `web/src/runtime/viz2/*` remain wrappers only.
 They re-export from `runtime_engine` / `studio_ui`.
 
 ## 3) Runtime selection behavior
@@ -37,7 +37,7 @@ They re-export from `runtime_engine` / `studio_ui`.
 - UI host wiring is in:
   - `web/src/features/layout/page/ViewerHost.tsx`
 
-Runtime can fall back from RosViz v2 to legacy when:
+Runtime can fall back from RosViz v2 to Studio 3D when:
 - thumbnail mode is active,
 - RosViz feature/gate is unavailable,
 - WebGPU is unavailable.

@@ -57,7 +57,7 @@ describe("resolveInitialRoverApproachPhase", () => {
     expect(resolveInitialRoverApproachPhase(YAW_BELOW_INITIAL_ROTATE)).toBe("translate");
   });
 
-  it("keeps legacy behavior for non-finite initial yaw", () => {
+  it("keeps previous behavior for non-finite initial yaw", () => {
     expect(resolveInitialRoverApproachPhase(NON_FINITE_YAW)).toBe("translate");
     expect(resolveInitialRoverApproachPhase(LARGE_FINITE_YAW)).toBe("rotate");
   });

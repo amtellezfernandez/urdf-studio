@@ -303,7 +303,7 @@ export const useDemoMotionFlow = ({
   useEffect(() => {
     if (!DEMO_MODE || !DEMO_AUTOLOAD || demoAutoLoadedRef.current || hasLoadedFiles) return;
     demoAutoLoadedRef.current = true;
-    // Preserve the legacy demo startup layout from scenario generation.
+    // Preserve the demo startup layout from scenario generation.
     // Default world-layout import can overwrite it with static objects.
     skipDefaultWorldLayoutAutoImportRef.current = true;
     loadDemoBootstrapRobot().catch((error) => {

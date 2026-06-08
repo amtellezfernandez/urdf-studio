@@ -25,7 +25,7 @@ describe("iluGalleryApi", () => {
     guardedFetchMock.mockReset();
   });
 
-  it("uses the legacy GET preview lookup when no candidate list is provided", async () => {
+  it("uses the previous GET preview lookup when no candidate list is provided", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({

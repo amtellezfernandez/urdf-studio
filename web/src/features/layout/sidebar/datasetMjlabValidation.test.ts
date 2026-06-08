@@ -103,7 +103,7 @@ describe("dataset episode MJLab validation metadata", () => {
     expect(resolveDatasetEpisodeMjlabValidation(episode)).toEqual(validation);
   });
 
-  it("parses legacy MJLab issue summaries into structured markers", () => {
+  it("parses MJLab issue summaries into structured markers", () => {
     const validation = {
       phase: "rejected" as const,
       episodeId: TEST_EPISODE.id,

@@ -298,7 +298,7 @@ export const useCameraRuntimeOrchestration = ({
         .objects.filter(
           (obj) =>
             obj.source === WORLD_SCENARIO_SOURCES.current ||
-            obj.source === WORLD_SCENARIO_SOURCES.legacy
+            obj.source === WORLD_SCENARIO_SOURCES.demoWorld
         )
         .map((obj) => obj.id);
       existingScenarioObjectIds.forEach((id) => removeObject(id));
@@ -317,7 +317,7 @@ export const useCameraRuntimeOrchestration = ({
           .objects.filter(
             (obj) =>
               obj.source === WORLD_SCENARIO_SOURCES.current ||
-              obj.source === WORLD_SCENARIO_SOURCES.legacy
+              obj.source === WORLD_SCENARIO_SOURCES.demoWorld
           )
           .map((obj) => obj.id);
         createdScenarioObjectIds.forEach((id, index) => {

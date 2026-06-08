@@ -1,6 +1,6 @@
 import {
   OPERATOR_LEADER_ASSIGNMENTS_STORAGE_KEY,
-  OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
+  OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
 } from "@/features/teleop/params/operatorTeleopParams";
 import { resolveBrowserStorage } from "@/shared/lib/browserStorage";
 
@@ -67,7 +67,7 @@ export const readOperatorLeaderAssignments = (
       ) ??
       readStoredLeaderAssignments(
         storage,
-        OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
+        OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
       ) ??
       {}
     );

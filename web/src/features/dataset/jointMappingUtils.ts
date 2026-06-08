@@ -1,9 +1,9 @@
 import {
   DEFAULT_INDEXED_REPRESENTATION_ID,
   DEFAULT_SEMANTIC_REPRESENTATION_ID,
-  LEGACY_SESSION_MAPPING_STORAGE_KEY,
   LOCAL_MAPPING_STORAGE_KEY,
   MAPPING_ID_PREFIX,
+  PREVIOUS_SESSION_MAPPING_STORAGE_KEY,
 } from "@/features/dataset/datasetAlignmentParams";
 import { API_BASE_URL } from "@/shared/config/runtime";
 import { resolveBrowserStorage } from "@/shared/lib/browserStorage";
@@ -70,11 +70,11 @@ const mergeMappings = (primary: SavedMapping[], fallback: SavedMapping[]): Saved
 
 const loadAllMappings = (): SavedMapping[] => {
   const localMappings = readMappingsFromStorage(getLocalStorage(), LOCAL_MAPPING_STORAGE_KEY);
-  const legacySessionMappings = readMappingsFromStorage(
+  const previousSessionMappings = readMappingsFromStorage(
     getSessionStorage(),
-    LEGACY_SESSION_MAPPING_STORAGE_KEY
+    PREVIOUS_SESSION_MAPPING_STORAGE_KEY
   );
-  const merged = mergeMappings(localMappings, legacySessionMappings);
+  const merged = mergeMappings(localMappings, previousSessionMappings);
   if (merged.length > localMappings.length) {
     writeMappingsToStorage(getLocalStorage(), LOCAL_MAPPING_STORAGE_KEY, merged);
   }
@@ -83,7 +83,7 @@ const loadAllMappings = (): SavedMapping[] => {
 
 const persistAllMappings = (mappings: SavedMapping[]): void => {
   writeMappingsToStorage(getLocalStorage(), LOCAL_MAPPING_STORAGE_KEY, mappings);
-  writeMappingsToStorage(getSessionStorage(), LEGACY_SESSION_MAPPING_STORAGE_KEY, mappings);
+  writeMappingsToStorage(getSessionStorage(), PREVIOUS_SESSION_MAPPING_STORAGE_KEY, mappings);
 };
 
 const generateId = (): string => {

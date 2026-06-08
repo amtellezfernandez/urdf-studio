@@ -29,7 +29,7 @@ export const useIndexViewerProps = ({
         runtimeRobotBasePose: effectiveRuntimePose,
         workspaceMode: "studio",
         thumbnailMode: false,
-        preferLegacyRuntime: true,
+        preferStudioRuntime: true,
         enableObjectActionsInReadOnly: true,
         onObjectSelect: (_objectId, object) => {
           if (typeof window === "undefined" || window.parent === window) {

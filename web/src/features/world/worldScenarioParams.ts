@@ -189,5 +189,5 @@ export const WORLD_SCENARIO_MOTION = {
 
 export const WORLD_SCENARIO_SOURCES = {
   current: "world-scenario",
-  legacy: "demo-world",
+  demoWorld: "demo-world",
 } as const;

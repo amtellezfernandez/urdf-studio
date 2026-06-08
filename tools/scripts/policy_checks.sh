@@ -88,9 +88,9 @@ check_paths_exist \
   web/src/runtime_engine \
   web/src/studio_ui
 
-# 1) No direct legacy runtime imports outside compatibility wrappers/tests.
+# 1) No direct compatibility runtime imports outside wrappers/tests.
 check_no_match \
-  "No legacy runtime imports in production modules" \
+  "No compatibility runtime imports in production modules" \
   "@/runtime/viz2/" \
   web/src/studio_core \
   web/src/runtime_engine \
@@ -98,7 +98,7 @@ check_no_match \
   web/src/features
 
 check_no_match \
-  "No legacy runtime imports anywhere" \
+  "No compatibility runtime imports anywhere" \
   "@/runtime/viz2/" \
   web/src
 

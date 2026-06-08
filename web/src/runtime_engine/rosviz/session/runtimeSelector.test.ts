@@ -14,16 +14,16 @@ describe("runtimeSelector", () => {
     expect(decision.reason).toBe("enabled");
   });
 
-  it("falls back when legacy runtime is explicitly preferred", () => {
+  it("falls back when Studio 3D runtime is explicitly preferred", () => {
     const decision = getRosVizRuntimeDecision({
-      preferLegacyRuntime: true,
+      preferStudioRuntime: true,
       rosVizFlagEnabled: true,
       rosVizGateEnabled: true,
       webGpuSupported: true,
     });
 
-    expect(decision.runtime).toBe("legacy");
-    expect(decision.reason).toBe("prefer_legacy_runtime");
+    expect(decision.runtime).toBe("studio3D");
+    expect(decision.reason).toBe("prefer_studio_runtime");
   });
 
   it("falls back when flag is disabled", () => {
@@ -33,7 +33,7 @@ describe("runtimeSelector", () => {
       webGpuSupported: true,
     });
 
-    expect(decision.runtime).toBe("legacy");
+    expect(decision.runtime).toBe("studio3D");
     expect(decision.reason).toBe("flag_disabled");
   });
 
@@ -45,7 +45,7 @@ describe("runtimeSelector", () => {
       webGpuSupported: true,
     });
 
-    expect(decision.runtime).toBe("legacy");
+    expect(decision.runtime).toBe("studio3D");
     expect(decision.reason).toBe("backend_unavailable");
     expect(decision.message).toContain("Core API unavailable.");
   });
@@ -58,7 +58,7 @@ describe("runtimeSelector", () => {
       webGpuSupported: true,
     });
 
-    expect(decision.runtime).toBe("legacy");
+    expect(decision.runtime).toBe("studio3D");
     expect(decision.reason).toBe("thumbnail_mode");
   });
 });

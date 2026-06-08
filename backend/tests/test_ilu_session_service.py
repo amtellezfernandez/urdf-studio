@@ -62,7 +62,7 @@ def test_get_ilu_session_snapshot_uses_camel_case_contract(monkeypatch, tmp_path
     }
 
 
-def test_save_request_accepts_legacy_and_camel_case_payloads() -> None:
+def test_save_request_accepts_previous_and_camel_case_payloads() -> None:
     assert IluSessionSaveRequest.model_validate({"urdf_xml": "<robot />"}).urdf_xml == "<robot />"
     assert IluSessionSaveRequest.model_validate({"urdfContent": "<robot />"}).urdf_xml == "<robot />"
 

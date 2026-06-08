@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   OPERATOR_LEADER_ASSIGNMENTS_STORAGE_KEY,
-  OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
+  OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
 } from "@/features/teleop/params/operatorTeleopParams";
 import {
   assignOperatorLeaderSide,
@@ -186,7 +186,7 @@ describe("operatorLeaderAssignments", () => {
     });
   });
 
-  it("reads legacy side-only assignments as empty target assignments", () => {
+  it("reads previous side-only assignments as empty target assignments", () => {
     const storage = new Map<string, string>();
     const storageAdapter = {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -195,12 +195,12 @@ describe("operatorLeaderAssignments", () => {
       },
     } as Storage;
     storage.set(
-      OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
-      JSON.stringify({ "serial-by-id:legacy": "both" }),
+      OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
+      JSON.stringify({ "serial-by-id:previous": "both" }),
     );
 
     expect(readOperatorLeaderAssignments(storageAdapter)).toEqual({
-      "serial-by-id:legacy": {
+      "serial-by-id:previous": {
         side: "both",
         targetGroupId: "",
         targetJointNames: [],
@@ -213,7 +213,7 @@ describe("operatorLeaderAssignments", () => {
     });
   });
 
-  it("prefers generic assignments over legacy OpenArm assignments", () => {
+  it("prefers generic assignments over previous OpenArm assignments", () => {
     const storage = new Map<string, string>();
     const storageAdapter = {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -222,8 +222,8 @@ describe("operatorLeaderAssignments", () => {
       },
     } as Storage;
     storage.set(
-      OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
-      JSON.stringify({ "serial-by-id:legacy": "both" }),
+      OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY,
+      JSON.stringify({ "serial-by-id:previous": "both" }),
     );
     storage.set(
       OPERATOR_LEADER_ASSIGNMENTS_STORAGE_KEY,

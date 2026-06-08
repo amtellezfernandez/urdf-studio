@@ -10,5 +10,5 @@ export const DATASET_TREATMENT_ACTION_REQUIRES_NAMING_REVIEW =
 export const DATASET_TREATMENT_CODE_ALIGNMENT_ERROR = "alignment_error" as const;
 
 export const LOCAL_MAPPING_STORAGE_KEY = "urdf-studio-joint-mappings.v2" as const;
-export const LEGACY_SESSION_MAPPING_STORAGE_KEY = "urdf-studio-joint-mappings" as const;
+export const PREVIOUS_SESSION_MAPPING_STORAGE_KEY = "urdf-studio-joint-mappings" as const;
 export const MAPPING_ID_PREFIX = "mapping" as const;

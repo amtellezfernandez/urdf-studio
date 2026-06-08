@@ -235,7 +235,7 @@ export const ViewerLayout = ({
     updateUrdfFile,
     onInertiaReliabilityChange,
     thumbnailMode,
-    preferLegacyRuntime: true,
+    preferStudioRuntime: true,
   });
 
   if (thumbnailMode) {

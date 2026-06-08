@@ -397,7 +397,7 @@ describe("useLocalDatasetImportController round-trip", () => {
     });
   });
 
-  it("rejects v3 archives whose parquet entries contain legacy text payloads", async () => {
+  it("rejects v3 archives whose parquet entries contain text payloads", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const originalEpisodes = createRoundTripEpisodes();
     const artifact = await buildDatasetArchiveArtifact({

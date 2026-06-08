@@ -358,7 +358,7 @@ export interface Viewer3DProps {
   vizUrdfContent?: string;
   onAutoPatchWheelRolesUrdf?: (content: string) => void;
   thumbnailMode?: boolean;
-  preferLegacyRuntime?: boolean;
+  preferStudioRuntime?: boolean;
   readOnlyMode?: boolean;
   runtimeRobotBasePose?: RobotBasePose | null;
   enableObjectActionsInReadOnly?: boolean;

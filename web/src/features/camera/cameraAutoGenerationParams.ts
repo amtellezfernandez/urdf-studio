@@ -37,8 +37,8 @@ const CAMERA_AUTO_FLOOR_UP_FALLBACK_DOT_MIN = 0.995;
 export const CAMERA_AUTO_MOUNT_ALGO_VERSION = 6;
 export const CAMERA_ORIENTATION_DOT_EPSILON_STRICT = 0.999;
 const CAMERA_ORIENTATION_DOT_EPSILON_WARN = 0.995;
-const LEGACY_DEMO_CAMERA_NAMES = ["Gripper Top", "Base Front"] as const;
-export const LEGACY_DEMO_CAMERA_NAME_SET = new Set<string>(LEGACY_DEMO_CAMERA_NAMES);
+const FALLBACK_DEMO_CAMERA_NAMES = ["Gripper Top", "Base Front"] as const;
+export const FALLBACK_DEMO_CAMERA_NAME_SET = new Set<string>(FALLBACK_DEMO_CAMERA_NAMES);
 export const DEFAULT_CAMERA_POSE = {
   xyz: [0, 0, 0] as [number, number, number],
   rpy: [0, 0, 0] as [number, number, number],

@@ -156,7 +156,7 @@ describe("studioWheelDriveHeuristics", () => {
     const urdf = `<?xml version="1.0"?>
 <robot name="drive_hints">
   <transmission name="other_drive_trans">
-    <joint name="legacy_joint_a" />
+    <joint name="external_joint_a" />
   </transmission>
   <ros2_control name="${STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME}" type="system">
     <joint name="front_left_joint" />
@@ -224,7 +224,7 @@ describe("studioWheelDriveHeuristics", () => {
     <joint name="stale_joint" />
   </ros2_control>
   <ros2_control name="existing_controller" type="system">
-    <joint name="legacy_joint" />
+    <joint name="external_joint" />
   </ros2_control>
 </robot>`;
     const result = persistStudioDriveJointHintsToUrdf(urdf, ["rear_right_joint", "rear_left_joint"]);

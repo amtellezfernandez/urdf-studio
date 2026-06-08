@@ -8,7 +8,7 @@ export type RuntimeAdapterFamily =
   | "rust_adapter"
   | "shared_memory_adapter"
   | "video_gateway"
-  | "legacy_bridge";
+  | "compatibility_bridge";
 
 export type RuntimeAdapterStatus = {
   id: string;
@@ -47,7 +47,7 @@ const RUNTIME_ADAPTER_FAMILY_LABELS: Record<RuntimeAdapterFamily, string> = {
   rust_adapter: "Rust Adapters",
   shared_memory_adapter: "Shared Memory",
   video_gateway: "Video Gateways",
-  legacy_bridge: "Legacy Bridges",
+  compatibility_bridge: "Compatibility Bridges",
 };
 
 const trimSourceId = (sourceId: string): string => sourceId.trim();
@@ -79,7 +79,7 @@ export const inferRuntimeAdapterFamily = (sourceId: string): RuntimeAdapterFamil
     return "video_gateway";
   }
   if (normalized.includes("bridge") || normalized.includes("ros")) {
-    return "legacy_bridge";
+    return "compatibility_bridge";
   }
   return "custom";
 };
@@ -119,7 +119,7 @@ export const buildRuntimeAdapterFamilies = (
     rust_adapter: 0,
     shared_memory_adapter: 0,
     video_gateway: 0,
-    legacy_bridge: 0,
+    compatibility_bridge: 0,
   };
 
   collectSourceIds(channels).forEach((sourceId) => {
@@ -131,7 +131,7 @@ export const buildRuntimeAdapterFamilies = (
     { id: "rust", label: RUNTIME_ADAPTER_FAMILY_LABELS.rust_adapter, count: counts.rust_adapter },
     { id: "shm", label: RUNTIME_ADAPTER_FAMILY_LABELS.shared_memory_adapter, count: counts.shared_memory_adapter },
     { id: "video", label: RUNTIME_ADAPTER_FAMILY_LABELS.video_gateway, count: counts.video_gateway },
-    { id: "bridge", label: RUNTIME_ADAPTER_FAMILY_LABELS.legacy_bridge, count: counts.legacy_bridge },
+    { id: "bridge", label: RUNTIME_ADAPTER_FAMILY_LABELS.compatibility_bridge, count: counts.compatibility_bridge },
   ];
 };
 

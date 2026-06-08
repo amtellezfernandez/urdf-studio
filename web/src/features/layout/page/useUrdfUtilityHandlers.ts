@@ -304,7 +304,7 @@ export const useUrdfUtilityHandlers = ({
         return;
       }
 
-      // Clear any legacy soft-delete marker for this joint.
+      // Clear any previous soft-delete marker for this joint.
       if (deletedJoints.has(jointName)) {
         toggleDeletedJoint(jointName);
       }

@@ -46,7 +46,7 @@ describe("runtimeReviewHelpers", () => {
     expect(inferRuntimeAdapterFamily("robot-rust-adapter")).toBe("rust_adapter");
     expect(inferRuntimeAdapterFamily("shared-memory-camera")).toBe("shared_memory_adapter");
     expect(inferRuntimeAdapterFamily("camera-gateway")).toBe("video_gateway");
-    expect(inferRuntimeAdapterFamily("ros-bridge")).toBe("legacy_bridge");
+    expect(inferRuntimeAdapterFamily("ros-bridge")).toBe("compatibility_bridge");
     expect(inferRuntimeAdapterFamily("custom-uplink")).toBe("custom");
   });
 
@@ -62,11 +62,11 @@ describe("runtimeReviewHelpers", () => {
       { id: "rust", label: "Rust Adapters", count: 1 },
       { id: "shm", label: "Shared Memory", count: 0 },
       { id: "video", label: "Video Gateways", count: 1 },
-      { id: "bridge", label: "Legacy Bridges", count: 0 },
+      { id: "bridge", label: "Compatibility Bridges", count: 0 },
     ]);
   });
 
-  it("builds audit snapshots without legacy websocket-only transport fields", () => {
+  it("builds audit snapshots without websocket-only transport fields", () => {
     const snapshot = buildRuntimeStatsAuditSnapshot({
       capturedAtIso: "2026-03-23T00:00:00Z",
       sessionId: "demo-session",

@@ -91,7 +91,7 @@ def test_duplicate_version_is_rejected() -> None:
         raise AssertionError("Expected duplicate publish to raise FileExistsError")
 
 
-def test_validate_accepts_legacy_planning_hints_without_coupling_rules() -> None:
+def test_validate_accepts_previous_planning_hints_without_coupling_rules() -> None:
     with TemporaryDirectory() as temp_dir:
         registry_path = f"{temp_dir}/world-registry.json"
         service = WorldRegistryService(registry_path)

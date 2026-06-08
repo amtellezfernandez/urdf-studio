@@ -1731,11 +1731,11 @@
       },
       {
         "name": "TEST_STALE_GALLERY_ROBOT_FILE",
-        "initializer": "\"legacy_barkour.urdf\""
+        "initializer": "\"stale_barkour.urdf\""
       },
       {
         "name": "TEST_STALE_GALLERY_ROBOT_FILE_BASE",
-        "initializer": "\"legacy-barkour\""
+        "initializer": "\"stale-barkour\""
       }
     ],
     "web/src/features/dataset/FolderUploadScreen.test.tsx": [
@@ -3874,10 +3874,6 @@
         "initializer": "\"leader:\""
       },
       {
-        "name": "OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY",
-        "initializer": "\"urdf-studio.openarm.leaderAssignments.v1\""
-      },
-      {
         "name": "OPERATOR_LEROBOT_CALIBRATION_FILE_EDIT_MIN_MOTION_RAD",
         "initializer": "0.002"
       },
@@ -4092,6 +4088,10 @@
       {
         "name": "OPERATOR_POINT_CLOUD_SURFACE_YAW_HALF_ANGLE_FACTOR",
         "initializer": "0.5"
+      },
+      {
+        "name": "OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY",
+        "initializer": "\"urdf-studio.openarm.leaderAssignments.v1\""
       },
       {
         "name": "OPERATOR_TELEOP_INPUT_SOURCE_ESTOP",
@@ -6572,7 +6572,7 @@
         "initializer": "\"urdfstudio:featureFlagsChange\""
       },
       {
-        "name": "LEGACY_PLAYBACK_DEBUG_KEY",
+        "name": "PREVIOUS_PLAYBACK_DEBUG_KEY",
         "initializer": "\"urdfstudio:playbackDebug\""
       },
       {

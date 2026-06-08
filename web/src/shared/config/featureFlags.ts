@@ -14,7 +14,7 @@ export type FeatureFlagSource = "default" | "localStorage" | "url";
 type FeatureFlagSources = Record<FeatureFlagKey, FeatureFlagSource>;
 
 const STORAGE_KEY = "urdfstudio:featureFlags";
-const LEGACY_PLAYBACK_DEBUG_KEY = "urdfstudio:playbackDebug";
+const PREVIOUS_PLAYBACK_DEBUG_KEY = "urdfstudio:playbackDebug";
 const FEATURE_FLAGS_CHANGE_EVENT = "urdfstudio:featureFlagsChange";
 
 const DEFAULT_FEATURE_FLAGS: FeatureFlagValues = {
@@ -143,8 +143,8 @@ const getFeatureFlagState = (): {
 
   const stored = readStoredFlags();
   const url = readUrlFlags();
-  const legacyPlaybackDebug =
-    readBrowserStorageItem(LEGACY_PLAYBACK_DEBUG_KEY) === "1";
+  const previousPlaybackDebug =
+    readBrowserStorageItem(PREVIOUS_PLAYBACK_DEBUG_KEY) === "1";
 
   const values: FeatureFlagValues = {
     ...DEFAULT_FEATURE_FLAGS,
@@ -173,7 +173,7 @@ const getFeatureFlagState = (): {
   if (typeof url.values.motionKernelV2 === "boolean") {
     sources.motionKernelV2 = "url";
   }
-  if (legacyPlaybackDebug) {
+  if (previousPlaybackDebug) {
     values.playbackTrace = true;
     if (sources.playbackTrace === "default") {
       sources.playbackTrace = "localStorage";

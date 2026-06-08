@@ -2661,7 +2661,7 @@ def test_robot_gateway_session_separates_lerobot_unit_and_model_ids(
     assert session.model_robot_aliases == ["LeKiwi", "so101"]
 
 
-def test_robot_gateway_runtime_rejects_removed_lerobot_legacy_adapter_id(
+def test_robot_gateway_runtime_rejects_removed_lerobot_adapter_id(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("URDF_ROBOT_GATEWAY_ADAPTER", "lerobot_so100")

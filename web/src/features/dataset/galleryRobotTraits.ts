@@ -246,8 +246,8 @@ const resolveDisplayMacroTags = (entry: IluGalleryEntry): string[] => {
     new Set((entry.macroTags ?? []).map((tag) => normalizeMacroTag(tag)).filter(Boolean))
   );
   const metadataTags = entry.tags.map((tag) => normalizeMacroTag(tag)).filter(Boolean);
-  const legacyMacroTags = explicitMacroTags.length ? [] : Array.from(new Set(metadataTags));
-  const hasSpecificLegacyTag = legacyMacroTags.some((tag) => tag !== "Other");
+  const metadataMacroTags = explicitMacroTags.length ? [] : Array.from(new Set(metadataTags));
+  const hasSpecificMetadataTag = metadataMacroTags.some((tag) => tag !== "Other");
 
   const metadataTagMap = buildMetadataTagMap(entry);
   const armCount = parseCount(readCount(entry.armCount, entry.robotTraits?.armCount, metadataTagMap, "arms"));
@@ -262,8 +262,8 @@ const resolveDisplayMacroTags = (entry: IluGalleryEntry): string[] => {
 
   const manifestMacroTags = explicitMacroTags.length > 0
     ? explicitMacroTags
-    : hasSpecificLegacyTag
-      ? legacyMacroTags
+    : hasSpecificMetadataTag
+      ? metadataMacroTags
       : inferredMacroTags;
 
   const withoutOther = manifestMacroTags.some((tag) => tag !== "Other")

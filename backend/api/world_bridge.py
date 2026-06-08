@@ -42,7 +42,7 @@ RESULT = TypeVar("RESULT")
 
 
 def _map_worldd_status_code(status_code: int) -> int:
-    # Keep compatibility with legacy Python runtime validation semantics.
+    # Keep compatibility with previous Python runtime validation semantics.
     if status_code == HTTP_BAD_REQUEST:
         return HTTP_UNPROCESSABLE_ENTITY
     return status_code

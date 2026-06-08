@@ -81,7 +81,7 @@ export const OPERATOR_LEROBOT_CALIBRATION_FILE_EDIT_MOTION_WINDOW_MS = 2_000;
 export const OPERATOR_LEROBOT_CALIBRATION_FILE_EDIT_MIN_MOTION_RAD = 0.002;
 export const OPERATOR_LEADER_ASSIGNMENTS_STORAGE_KEY =
   "urdf-studio.leader.assignments.v1";
-export const OPERATOR_LEGACY_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY =
+export const OPERATOR_PREVIOUS_OPENARM_LEADER_ASSIGNMENTS_STORAGE_KEY =
   "urdf-studio.openarm.leaderAssignments.v1";
 export const OPERATOR_DEVICE_ROLE_ASSIGNMENTS_STORAGE_KEY =
   "urdf-studio.operator.deviceRoleAssignments.v1";

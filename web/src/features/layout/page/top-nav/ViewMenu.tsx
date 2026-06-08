@@ -113,12 +113,12 @@ export function ViewMenu({
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className={cn("w-40", menuContentClass)}>
                 <DropdownMenuItem
-                  onClick={() => onRendererRuntimeChange("legacy")}
+                  onClick={() => onRendererRuntimeChange("studio3D")}
                   disabled={rendererSubmenuDisabled}
                   title={rendererSubmenuDisabledTitle}
                   className={cn(
                     menuItemClass,
-                    rendererRuntime === "legacy" && "bg-[#3d3d3d] text-white",
+                    rendererRuntime === "studio3D" && "bg-[#3d3d3d] text-white",
                     rendererSubmenuDisabled && "opacity-50 cursor-not-allowed"
                   )}
                 >

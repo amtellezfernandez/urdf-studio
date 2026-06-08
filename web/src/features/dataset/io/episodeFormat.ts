@@ -438,11 +438,11 @@ const parseDatasetEpisodeDocument = (doc: LerobotEpisodeDocument, options: Episo
   };
 };
 
-const parseLegacyFormat = (parsed: Record<string, unknown>, options: EpisodeJsonParseOptions): EpisodeJsonParseResult => {
+const parsePreviousEpisodeFormat = (parsed: Record<string, unknown>, options: EpisodeJsonParseOptions): EpisodeJsonParseResult => {
   const kind = (parsed as { kind?: string }).kind;
   const episodesValue = (parsed as { episodes?: unknown }).episodes;
 
-  const buildEpisodeFromLegacyDocument = (doc: {
+  const buildEpisodeFromPreviousDocument = (doc: {
     joints: string[];
     frames: EpisodeFrame[];
     metadata?: EpisodeMetadata;
@@ -480,9 +480,9 @@ const parseLegacyFormat = (parsed: Record<string, unknown>, options: EpisodeJson
     kind === "collection" ||
     (Array.isArray(episodesValue) && episodesValue.every((episode) => typeof episode === "object"))
   ) {
-    const legacyEpisodes = (episodesValue as Array<Record<string, unknown>>) ?? [];
-    const episodes = legacyEpisodes.map((episode) =>
-      buildEpisodeFromLegacyDocument({
+    const previousEpisodes = (episodesValue as Array<Record<string, unknown>>) ?? [];
+    const episodes = previousEpisodes.map((episode) =>
+      buildEpisodeFromPreviousDocument({
         joints: (episode.joints as string[]) ?? [],
         frames: (episode.frames as EpisodeFrame[]) ?? [],
         metadata: episode.metadata as EpisodeMetadata | undefined,
@@ -498,7 +498,7 @@ const parseLegacyFormat = (parsed: Record<string, unknown>, options: EpisodeJson
   const frames = (parsed.frames as EpisodeFrame[]) ?? [];
   const metadata = parsed.metadata as EpisodeMetadata | undefined;
 
-  const episode = buildEpisodeFromLegacyDocument({
+  const episode = buildEpisodeFromPreviousDocument({
     joints,
     frames,
     metadata,
@@ -548,7 +548,7 @@ export const parseEpisodeJson = (rawText: string, options: EpisodeJsonParseOptio
   }
 
   if (typeof parsed === "object" && parsed !== null && "format" in parsed && (parsed as { format?: unknown }).format === FORMAT_ID) {
-    return parseLegacyFormat(parsed as Record<string, unknown>, options);
+    return parsePreviousEpisodeFormat(parsed as Record<string, unknown>, options);
   }
 
   return { error: "Unsupported animation format" };

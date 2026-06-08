@@ -14,5 +14,5 @@ The frontend architecture is enforced by three top-level layers:
 
 ## Compatibility Layer
 
-Legacy `web/src/runtime/viz2/*` modules remain thin wrappers re-exporting from `runtime_engine` and `studio_ui`.
+Compatibility `web/src/runtime/viz2/*` modules remain thin wrappers re-exporting from `runtime_engine` and `studio_ui`.
 This keeps existing imports working while preserving architectural boundaries.

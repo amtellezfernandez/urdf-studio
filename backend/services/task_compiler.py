@@ -23,7 +23,7 @@ def _first_task(req: IkSolveRequest, task_type):
 
 def compile_ik_request(req: IkSolveRequest) -> IKRequest:
     """
-    Build a legacy IKRequest from the new task IR, falling back to the original fields.
+    Build a compatibility IKRequest from the task IR, falling back to the original fields.
     """
     pose_task: Optional[PoseTask] = _first_task(req, PoseTask)
     position_task: Optional[PositionTask] = _first_task(req, PositionTask)

@@ -26,7 +26,7 @@ const createProps = (): TopNavBarProps => ({
   onRotateRobot: vi.fn(),
   angleUnit: "rad",
   setAngleUnit: vi.fn(),
-  rendererRuntime: "legacy",
+  rendererRuntime: "studio3D",
   onRendererRuntimeChange: vi.fn(),
   rendererRuntimeLocked: false,
   rosVizRuntimeAvailable: false,

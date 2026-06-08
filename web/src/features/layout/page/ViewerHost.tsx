@@ -41,14 +41,14 @@ export const ViewerHost = ({
   const rosVizGate = useFeatureGateAvailability(FEATURE_GATES.rosVizRuntime);
   const runtimeDecision = getRosVizRuntimeDecision({
     thumbnailMode: viewerProps.thumbnailMode,
-    preferLegacyRuntime: viewerProps.preferLegacyRuntime,
+    preferStudioRuntime: viewerProps.preferStudioRuntime,
     rosVizFlagEnabled,
     rosVizGateEnabled: rosVizGate.enabled,
     rosVizGateReason: rosVizGate.unavailableReason,
     webGpuSupported: canUseWebGpu(),
   });
 
-  const runtimePrefix = runtimeDecision.runtime === "rosVizV2" ? "rosviz2" : "legacy";
+  const runtimePrefix = runtimeDecision.runtime === "rosVizV2" ? "rosviz2" : "studio3d";
   const ActiveViewer = runtimeDecision.runtime === "rosVizV2" ? RosVizV2Viewer : Viewer3D;
 
   return (
