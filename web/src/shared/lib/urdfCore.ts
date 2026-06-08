@@ -60,8 +60,6 @@ export {
 export type {
   AxisSpec,
   CollisionData,
-  CollisionAutoFitResult,
-  CollisionAutoFitType,
   CollisionEntry,
   InertialEntry,
   LinkGeometryParams,

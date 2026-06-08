@@ -1730,12 +1730,12 @@
         "initializer": "\"google_barkour_vb/barkour_vb_rev_1_0_head_straight.urdf\""
       },
       {
-        "name": "TEST_STALE_GALLERY_ROBOT_FILE",
-        "initializer": "\"stale_barkour.urdf\""
+        "name": "TEST_UNMATCHED_GALLERY_ROBOT_FILE",
+        "initializer": "\"unmatched_barkour.urdf\""
       },
       {
-        "name": "TEST_STALE_GALLERY_ROBOT_FILE_BASE",
-        "initializer": "\"stale-barkour\""
+        "name": "TEST_UNMATCHED_GALLERY_ROBOT_FILE_BASE",
+        "initializer": "\"unmatched-barkour\""
       }
     ],
     "web/src/features/dataset/FolderUploadScreen.test.tsx": [

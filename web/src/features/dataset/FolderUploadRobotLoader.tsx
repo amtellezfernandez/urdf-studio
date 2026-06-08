@@ -243,7 +243,7 @@ const buildMatchedGalleryRobotIdentifiers = (
   return identifiers;
 };
 
-const buildStalePublishedRobotLabels = (
+const buildUnmatchedPublishedRobotLabels = (
   robots: IluGalleryPublishedRobot[],
   matchedGalleryRobotIdentifiers: Set<string>
 ): string[] =>
@@ -305,7 +305,7 @@ const buildCandidateGalleryMetadataRows = (
     return [];
   }
 
-  const stalePublishedRobotLabels = buildStalePublishedRobotLabels(
+  const unmatchedPublishedRobotLabels = buildUnmatchedPublishedRobotLabels(
     publishedRepo.robots,
     buildMatchedGalleryRobotIdentifiers(galleryPreviewByPath)
   );
@@ -335,8 +335,8 @@ const buildCandidateGalleryMetadataRows = (
     { label: "Tags", value: formatCandidateGalleryMetadataList(publishedRepo.tags) },
     { label: "Matched gallery robots", value: formatCandidateGalleryMetadataList(robotMappingRows) },
     {
-      label: "Possibly stale gallery robots",
-      value: formatCandidateGalleryMetadataList(stalePublishedRobotLabels),
+      label: "Unmatched published gallery robots",
+      value: formatCandidateGalleryMetadataList(unmatchedPublishedRobotLabels),
       tone: "warning",
     },
     { label: "Demo", value: formatCandidateGalleryMetadataText(publishedRepo.demo) },
@@ -528,7 +528,7 @@ export function FolderUploadRobotLoader({
     ]
   );
   const hasCandidateGalleryMetadata = candidateGalleryMetadataRows.length > 0;
-  const hasStaleCandidateGalleryMetadata = candidateGalleryMetadataRows.some((row) => row.tone === "warning");
+  const hasUnmatchedCandidateGalleryMetadata = candidateGalleryMetadataRows.some((row) => row.tone === "warning");
   const shouldShowCandidateGalleryPreview =
     !entryMode.isAssembly &&
     (isLoadingCandidateGalleryPreviews || hasCandidateGalleryPreviews);
@@ -633,11 +633,11 @@ export function FolderUploadRobotLoader({
             <span>
               {isLoadingCandidateGalleryPreviews
                 ? "Checking published gallery metadata..."
-                : hasStaleCandidateGalleryMetadata
+                : hasUnmatchedCandidateGalleryMetadata
                   ? (
                     <span className="inline-flex items-center gap-1 text-[#fca5a5]">
                       <AlertTriangle className="h-3 w-3" />
-                      GitHub is the source of truth; some gallery robots look stale.
+                      GitHub is the source of truth; some published gallery robots are unmatched.
                     </span>
                   )
                 : hasCandidateGalleryPreviews
@@ -651,7 +651,7 @@ export function FolderUploadRobotLoader({
                   variant="ghost"
                   onClick={() => setShowCandidateGalleryMetadata((current) => !current)}
                   className={`h-7 px-2 text-[11px] hover:bg-[#2a2a2a] ${
-                    hasStaleCandidateGalleryMetadata ? "text-[#fca5a5]" : "text-[#c7c7c7]"
+                    hasUnmatchedCandidateGalleryMetadata ? "text-[#fca5a5]" : "text-[#c7c7c7]"
                   }`}
                 >
                   <Info className="mr-1 h-3 w-3" />

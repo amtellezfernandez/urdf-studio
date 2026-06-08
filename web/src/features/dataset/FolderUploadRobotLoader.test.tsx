@@ -28,8 +28,8 @@ const TEST_SECONDARY_CANDIDATE_PATH = "google_barkour_vb/barkour_vb_rev_1_0_head
 const TEST_SECONDARY_CANDIDATE_FILE = "barkour_vb_rev_1_0_head_straight.urdf";
 const TEST_SECONDARY_CANDIDATE_DISPLAY = "Barkour VB";
 const TEST_SECONDARY_CANDIDATE_FILE_BASE = "google-barkour-vb";
-const TEST_STALE_GALLERY_ROBOT_FILE = "stale_barkour.urdf";
-const TEST_STALE_GALLERY_ROBOT_FILE_BASE = "stale-barkour";
+const TEST_UNMATCHED_GALLERY_ROBOT_FILE = "unmatched_barkour.urdf";
+const TEST_UNMATCHED_GALLERY_ROBOT_FILE_BASE = "unmatched-barkour";
 
 const flushMicrotasks = async (): Promise<void> => {
   await act(async () => {
@@ -101,8 +101,8 @@ const createPublishedRepo = (overrides: Partial<IluGalleryPublishedRepo> = {}): 
     },
     {
       name: "Archived Barkour",
-      file: TEST_STALE_GALLERY_ROBOT_FILE,
-      fileBase: TEST_STALE_GALLERY_ROBOT_FILE_BASE,
+      file: TEST_UNMATCHED_GALLERY_ROBOT_FILE,
+      fileBase: TEST_UNMATCHED_GALLERY_ROBOT_FILE_BASE,
     },
   ],
   hfDatasets: [],
@@ -379,7 +379,9 @@ describe("FolderUploadRobotLoader", () => {
     );
     expect(document.body.textContent).not.toContain(`Gallery mapping ${TEST_PRIMARY_CANDIDATE_FILE_BASE}`);
     expect(document.body.textContent).not.toContain(`Gallery source ${TEST_PRIMARY_CANDIDATE_FILE}`);
-    expect(document.body.textContent).toContain("GitHub is the source of truth; some gallery robots look stale.");
+    expect(document.body.textContent).toContain(
+      "GitHub is the source of truth; some published gallery robots are unmatched."
+    );
     expect(document.body.textContent).toContain("Edit gallery info");
     const editGalleryCardsButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Edit gallery info")
@@ -405,9 +407,9 @@ describe("FolderUploadRobotLoader", () => {
       `${TEST_PRIMARY_CANDIDATE_FILE}: Gallery mapping ${TEST_PRIMARY_CANDIDATE_FILE_BASE}`
     );
     expect(document.body.textContent).toContain(`Gallery source ${TEST_PRIMARY_CANDIDATE_FILE}`);
-    expect(document.body.textContent).toContain("Possibly stale gallery robots:");
+    expect(document.body.textContent).toContain("Unmatched published gallery robots:");
     expect(document.body.textContent).toContain(
-      `Archived Barkour (gallery mapping ${TEST_STALE_GALLERY_ROBOT_FILE_BASE})`
+      `Archived Barkour (gallery mapping ${TEST_UNMATCHED_GALLERY_ROBOT_FILE_BASE})`
     );
     await act(async () => {
       root.unmount();
