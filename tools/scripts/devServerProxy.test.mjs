@@ -8,6 +8,7 @@ import {
   GITHUB_DEV_PROXY_PREFIX,
   attachDevProxyClientHeaders,
   buildDevServerProxy,
+  resolveDevProxyClientHost,
   shouldBlockGitHubDevProxyRequest,
   shouldEnableGitHubDevProxy,
 } from '../../config/devServerProxy.js';
@@ -79,6 +80,43 @@ test('api dev proxy overwrites the original browser host header', () => {
   assert.equal(
     proxyRequest.headers[DEV_SERVER_PROXY_HEADERS.clientHost],
     '192.0.2.44'
+  );
+});
+
+test('api dev proxy keeps LAN clients remote for network binds', () => {
+  assert.equal(
+    resolveDevProxyClientHost('192.0.2.44', {
+      runtimeConfig: runtimeConfigWithWebBind('0.0.0.0'),
+      trustedOwnerRemoteAddresses: new Set(['172.22.210.1']),
+    }),
+    '192.0.2.44'
+  );
+});
+
+test('api dev proxy resolves the WSL owner gateway to local owner', () => {
+  assert.equal(
+    resolveDevProxyClientHost('::ffff:172.22.210.1', {
+      runtimeConfig: runtimeConfigWithWebBind('0.0.0.0'),
+      trustedOwnerRemoteAddresses: new Set(['172.22.210.1']),
+    }),
+    '127.0.0.1'
+  );
+});
+
+test('api dev proxy treats private localhost-proxy clients as local only on loopback binds', () => {
+  assert.equal(
+    resolveDevProxyClientHost('172.22.210.44', {
+      runtimeConfig: runtimeConfigWithWebBind('127.0.0.1'),
+      trustedOwnerRemoteAddresses: new Set(),
+    }),
+    '127.0.0.1'
+  );
+  assert.equal(
+    resolveDevProxyClientHost('172.22.210.44', {
+      runtimeConfig: runtimeConfigWithWebBind('0.0.0.0'),
+      trustedOwnerRemoteAddresses: new Set(),
+    }),
+    '172.22.210.44'
   );
 });
 

@@ -12,6 +12,7 @@ from backend.core.settings import settings
 SIMULATOR_TOKEN_HEADER: Final = "X-URDF-Simulator-Token"
 RUNTIME_SESSION_TOKEN_HEADER: Final = "X-Runtime-Session-Token"
 CAM_TO_SIM_PROXY_TOKEN_HEADER: Final = "X-URDF-Cam-To-Sim-Proxy-Token"
+DEV_PROXY_CLIENT_HOST_HEADER: Final = "X-URDF-Dev-Proxy-Client-Host"
 SIMULATOR_TOKEN_QUERY_PARAM: Final = "token"
 HTTP_FORBIDDEN = 403
 HTTP_UNAUTHORIZED = 401
@@ -19,6 +20,7 @@ HTTP_OPTIONS_METHOD: Final = "OPTIONS"
 BACKEND_ROUTE_POLICY_PUBLIC: Final = "public"
 BACKEND_ROUTE_POLICY_CAM_TO_SIM_SESSION: Final = "cam-to-sim-session"
 BACKEND_ROUTE_POLICY_COLLABORATION_SESSION: Final = "collaboration-session"
+BACKEND_ROUTE_POLICY_DELEGATED: Final = "delegated"
 BACKEND_ROUTE_POLICY_OPERATOR: Final = "operator"
 PUBLIC_BACKEND_EXACT_PATHS: Final[frozenset[str]] = frozenset(("/health", "/version"))
 PUBLIC_BACKEND_PREFIXES: Final[tuple[str, ...]] = ("/samples",)
@@ -37,16 +39,37 @@ COLLABORATION_SESSION_HTTP_RULES: Final[tuple[tuple[str, re.Pattern[str]], ...]]
     ("GET", re.compile(r"^/collaboration/sessions/[^/]+/stats$")),
     ("PATCH", re.compile(r"^/collaboration/sessions/[^/]+/access$")),
 )
+DELEGATED_BACKEND_HTTP_RULES: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
+    ("GET", re.compile(r"^/robot-gateway/manifest$")),
+    ("POST", re.compile(r"^/robot-gateway/hardware/follower/release$")),
+    ("POST", re.compile(r"^/robot-gateway/lease/request$")),
+    ("POST", re.compile(r"^/robot-gateway/lease/release$")),
+    ("POST", re.compile(r"^/robot-gateway/control/joint-jog$")),
+    ("POST", re.compile(r"^/robot-gateway/hardware/openarm/calibration/joint-jog$")),
+    ("POST", re.compile(r"^/robot-gateway/control/joint-jog/can-dry-run$")),
+    ("POST", re.compile(r"^/robot-gateway/control/twist$")),
+    ("POST", re.compile(r"^/robot-gateway/control/stop$")),
+    ("POST", re.compile(r"^/robot-gateway/control/estop$")),
+)
 
 
-def _client_host(connection: Request | WebSocket) -> str:
+def _normalize_client_host(host: str | None) -> str:
+    normalized = (host or "").strip().lower()
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1]
+    if normalized.startswith("::ffff:"):
+        normalized = normalized.removeprefix("::ffff:")
+    return normalized
+
+
+def _direct_client_host(connection: Request | WebSocket) -> str:
     client = connection.client
     host = client.host if client is not None else ""
-    return host.strip().lower()
+    return _normalize_client_host(host)
 
 
-def _is_loopback_client(connection: Request | WebSocket) -> bool:
-    normalized = _client_host(connection)
+def _is_loopback_host(host: str | None) -> bool:
+    normalized = _normalize_client_host(host)
     if not normalized:
         return False
     if normalized == "localhost":
@@ -55,6 +78,20 @@ def _is_loopback_client(connection: Request | WebSocket) -> bool:
         return ip_address(normalized).is_loopback
     except ValueError:
         return False
+
+
+def resolve_backend_client_host(connection: Request | WebSocket) -> str:
+    direct_host = _direct_client_host(connection)
+    proxied_host = connection.headers.get(DEV_PROXY_CLIENT_HOST_HEADER)
+    if isinstance(proxied_host, str) and _is_loopback_host(direct_host):
+        normalized_proxied_host = _normalize_client_host(proxied_host)
+        if normalized_proxied_host:
+            return normalized_proxied_host
+    return direct_host
+
+
+def _is_loopback_client(connection: Request | WebSocket) -> bool:
+    return _is_loopback_host(resolve_backend_client_host(connection))
 
 
 def _read_header_token(
@@ -127,6 +164,14 @@ def is_collaboration_session_route(path: str, *, method: str | None = None) -> b
     )
 
 
+def is_delegated_backend_route(path: str, *, method: str | None = None) -> bool:
+    normalized_method = (method or "").strip().upper()
+    return any(
+        normalized_method == expected_method and pattern.match(path)
+        for expected_method, pattern in DELEGATED_BACKEND_HTTP_RULES
+    )
+
+
 def classify_backend_http_route_policy(path: str, *, method: str | None = None) -> str:
     if is_public_backend_route(path, method=method):
         return BACKEND_ROUTE_POLICY_PUBLIC
@@ -134,6 +179,8 @@ def classify_backend_http_route_policy(path: str, *, method: str | None = None) 
         return BACKEND_ROUTE_POLICY_CAM_TO_SIM_SESSION
     if is_collaboration_session_route(path, method=method):
         return BACKEND_ROUTE_POLICY_COLLABORATION_SESSION
+    if is_delegated_backend_route(path, method=method):
+        return BACKEND_ROUTE_POLICY_DELEGATED
     return BACKEND_ROUTE_POLICY_OPERATOR
 
 
@@ -146,6 +193,8 @@ def enforce_backend_http_access_policy(request: Request) -> None:
     if route_policy == BACKEND_ROUTE_POLICY_CAM_TO_SIM_SESSION:
         return
     if route_policy == BACKEND_ROUTE_POLICY_COLLABORATION_SESSION:
+        return
+    if route_policy == BACKEND_ROUTE_POLICY_DELEGATED:
         return
     require_simulator_operator_access(request)
 

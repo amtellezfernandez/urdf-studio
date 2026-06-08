@@ -4,12 +4,19 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from backend.app import app
 from backend.core.request_audit import REQUEST_ID_HEADER, SECURITY_AUDIT_LOGGER_NAME
-from backend.core.simulator_security import HTTP_UNAUTHORIZED, SIMULATOR_TOKEN_HEADER
+from backend.core.simulator_security import (
+    DEV_PROXY_CLIENT_HOST_HEADER,
+    HTTP_UNAUTHORIZED,
+    SIMULATOR_TOKEN_HEADER,
+    require_simulator_operator_access,
+    resolve_backend_client_host,
+)
 from backend.services.collaboration_params import COLLABORATION_SESSION_TOKEN_HEADER
 from backend.ros_viz.params import ROSVIZ_STREAM_SUBPROTOCOL, ROSVIZ_STREAM_TICKET_SUBPROTOCOL_PREFIX
 
@@ -32,6 +39,58 @@ def _patch_security_settings(token: str | None):
 
 def _ros_viz_ticket_subprotocol(ticket: str) -> str:
     return f"{ROSVIZ_STREAM_TICKET_SUBPROTOCOL_PREFIX}{ticket}"
+
+
+def _fake_security_request(
+    *,
+    client_host: str,
+    headers: dict[str, str] | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        client=SimpleNamespace(host=client_host),
+        headers=headers or {},
+        query_params={},
+    )
+
+
+def test_dev_proxy_remote_client_header_is_used_for_operator_guard() -> None:
+    request = _fake_security_request(
+        client_host="127.0.0.1",
+        headers={DEV_PROXY_CLIENT_HOST_HEADER: "192.168.1.44"},
+    )
+
+    assert resolve_backend_client_host(request) == "192.168.1.44"
+    with _patch_security_settings(None), pytest.raises(HTTPException) as exc_info:
+        require_simulator_operator_access(request)
+
+    assert getattr(exc_info.value, "status_code", None) == 403
+    assert "Remote simulator access is disabled" in str(getattr(exc_info.value, "detail", ""))
+
+
+def test_dev_proxy_remote_client_header_accepts_operator_token() -> None:
+    request = _fake_security_request(
+        client_host="127.0.0.1",
+        headers={
+            DEV_PROXY_CLIENT_HOST_HEADER: "192.168.1.44",
+            SIMULATOR_TOKEN_HEADER: TEST_SIMULATOR_TOKEN,
+        },
+    )
+
+    with _patch_security_settings(TEST_SIMULATOR_TOKEN):
+        require_simulator_operator_access(request)
+
+
+def test_remote_backend_client_cannot_spoof_dev_proxy_loopback_header() -> None:
+    request = _fake_security_request(
+        client_host="192.168.1.44",
+        headers={DEV_PROXY_CLIENT_HOST_HEADER: "127.0.0.1"},
+    )
+
+    assert resolve_backend_client_host(request) == "192.168.1.44"
+    with _patch_security_settings(None), pytest.raises(HTTPException) as exc_info:
+        require_simulator_operator_access(request)
+
+    assert getattr(exc_info.value, "status_code", None) == 403
 
 
 def test_health_allows_remote_requests_without_operator_access() -> None:

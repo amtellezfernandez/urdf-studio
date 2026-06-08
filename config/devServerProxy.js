@@ -1,3 +1,6 @@
+import { resolveTeamSharingRequestRemoteAddress } from "./teamSharingGate.js";
+import { resolveWslHostRemoteAddresses } from "./wslOwnerProxy.js";
+
 export const GITHUB_DEV_PROXY_ENABLE_ENV = "URDF_STUDIO_ENABLE_GITHUB_DEV_PROXY";
 export const GITHUB_DEV_PROXY_PREFIX = "/__github_api";
 export const API_PROXY_PREFIX = "/api";
@@ -33,11 +36,37 @@ export function shouldBlockGitHubDevProxyRequest(requestUrl, { runtimeConfig, en
   return isGitHubDevProxyRequestPath(requestUrl) && !shouldEnableGitHubDevProxy(runtimeConfig, env);
 }
 
-export function attachDevProxyClientHeaders(proxy) {
+export function resolveDevProxyClientHost(
+  remoteAddress,
+  {
+    runtimeConfig = null,
+    trustedOwnerRemoteAddresses = resolveWslHostRemoteAddresses(),
+  } = {}
+) {
+  if (!runtimeConfig) {
+    return remoteAddress || "";
+  }
+  return resolveTeamSharingRequestRemoteAddress({
+    remoteAddress: remoteAddress || "",
+    trustedOwnerRemoteAddresses,
+    webBindHost: runtimeConfig?.web?.bindHost || "",
+  });
+}
+
+export function attachDevProxyClientHeaders(
+  proxy,
+  {
+    runtimeConfig = null,
+    trustedOwnerRemoteAddresses = resolveWslHostRemoteAddresses(),
+  } = {}
+) {
   proxy.on("proxyReq", (proxyRequest, request) => {
     proxyRequest.setHeader(
       DEV_SERVER_PROXY_HEADERS.clientHost,
-      request.socket?.remoteAddress || "",
+      resolveDevProxyClientHost(request.socket?.remoteAddress || "", {
+        runtimeConfig,
+        trustedOwnerRemoteAddresses,
+      }),
     );
   });
 }
@@ -48,7 +77,7 @@ export function buildDevServerProxy({ runtimeConfig, runtimeUrls, env = process.
       target: runtimeUrls.apiBaseUrl,
       changeOrigin: true,
       ws: true,
-      configure: attachDevProxyClientHeaders,
+      configure: (proxy) => attachDevProxyClientHeaders(proxy, { runtimeConfig }),
       rewrite: (requestPath) => requestPath.replace(/^\/api/, ""),
     },
   };
