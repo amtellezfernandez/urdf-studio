@@ -75,14 +75,17 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     });
   });
 
-  it("points SO101 to a bundled manifest with no GitHub dependency", () => {
+  it("points SO101 to a bundled manifest and camera config with no GitHub dependency", () => {
     const shortcut = FOLDER_UPLOAD_ROBOT_SHORTCUTS.so101;
     const manifest = loadManifest(shortcut);
     const manifestPaths = new Set(manifest.files.map((file) => file.path));
     const urdfEntry = manifest.files[0];
 
     expect(shortcut.manifestUrl).toBe("/demo/so101/manifest.json");
-    expect(shortcut.cameraConfigUrl).toBeUndefined();
+    expect(shortcut.cameraConfigUrl).toBe("/demo/so101/camera-config.json");
+    expect(
+      existsSync(path.join(PUBLIC_DEMO_ROOT, "so101/camera-config.json"))
+    ).toBe(true);
     expect(manifest.label).toBe("SO101");
     expect(urdfEntry?.path).toBe("robot.urdf");
 

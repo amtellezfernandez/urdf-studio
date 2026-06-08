@@ -41,6 +41,30 @@ const TEST_OPENARM_CAMERA_CONFIG_BODY = JSON.stringify({
     },
   ],
 });
+const TEST_SO101_CAMERA_CONFIG_BODY = JSON.stringify({
+  cameras: [
+    {
+      name: "so101_overhead_scene",
+      parent_joint: "base_link",
+      pose: [0.12, 0, 0.34, 0, 1.2217304763960306, 0],
+      intrinsics: {
+        width: 1280,
+        height: 720,
+        fov_deg: 78,
+      },
+    },
+    {
+      name: "so101_gripper_down",
+      parent_joint: "gripper_frame_joint",
+      pose: [0, 0, 0.045, 0, 1.5707963267948966, 0],
+      intrinsics: {
+        width: 1280,
+        height: 720,
+        fov_deg: 72,
+      },
+    },
+  ],
+});
 
 const galleryJobFactory = () => ({
   jobId: "gallery-job-1",
@@ -1128,10 +1152,16 @@ describe("FolderUploadScreen", () => {
     container.remove();
   });
 
-  it("loads the SO101 shortcut from the bundled manifest without GitHub or camera fetches", async () => {
+  it("loads the SO101 shortcut from the bundled manifest and camera config without GitHub", async () => {
     const shortcut = FOLDER_UPLOAD_ROBOT_SHORTCUTS.so101;
     const so101FileList = { length: 1 } as FileList;
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(shortcut.cameraConfigUrl);
+      return new Response(TEST_SO101_CAMERA_CONFIG_BODY, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) satisfies typeof fetch;
     loadRobotAssetFileListFromManifestUrlMock.mockResolvedValue(so101FileList);
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1161,9 +1191,28 @@ describe("FolderUploadScreen", () => {
       expect(loadRobotAssetFileListFromManifestUrlMock).toHaveBeenCalledWith(
         shortcut.manifestUrl
       );
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(cameraStoreState.loadCameras).not.toHaveBeenCalled();
-      expect(cameraStoreState.clearCameras).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(cameraStoreState.loadCameras).toHaveBeenCalledWith({
+        cameras: [
+          expect.objectContaining({
+            name: "so101_overhead_scene",
+            parent_joint: "base_link",
+            pose: {
+              xyz: [0.12, 0, 0.34],
+              rpy: [0, 1.2217304763960306, 0],
+            },
+          }),
+          expect.objectContaining({
+            name: "so101_gripper_down",
+            parent_joint: "gripper_frame_joint",
+            pose: {
+              xyz: [0, 0, 0.045],
+              rpy: [0, 1.5707963267948966, 0],
+            },
+          }),
+        ],
+      });
+      expect(cameraStoreState.clearCameras).not.toHaveBeenCalled();
       expect(fetchIluGitHubRepoFilesMock).not.toHaveBeenCalled();
       expect(buildIluGitHubCandidateFileListMock).not.toHaveBeenCalled();
       expect(gitHubSourceStoreState.clearSource).toHaveBeenCalledOnce();
