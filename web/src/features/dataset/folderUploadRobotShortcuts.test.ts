@@ -14,6 +14,10 @@ type ShortcutManifest = {
   files: Array<{ path: string; url: string }>;
 };
 
+type ShortcutCameraConfig = {
+  cameras: Array<{ name?: string; parent_joint?: string; pose?: unknown[] }>;
+};
+
 const PUBLIC_DEMO_ROOT = fileURLToPath(new URL("../../../public/demo/", import.meta.url));
 
 const loadManifest = (shortcut: FolderUploadRobotShortcut): ShortcutManifest => {
@@ -32,6 +36,17 @@ const resolveManifestFilePath = (
     path.join(PUBLIC_DEMO_ROOT, shortcut.manifestUrl.replace(/^\/demo\//, ""))
   );
   return path.resolve(manifestDir, fileUrl);
+};
+
+const loadCameraConfig = (shortcut: FolderUploadRobotShortcut): ShortcutCameraConfig => {
+  const cameraConfigUrl = shortcut.cameraConfigUrl;
+  expect(cameraConfigUrl).toBeTruthy();
+  return JSON.parse(
+    readFileSync(
+      path.join(PUBLIC_DEMO_ROOT, cameraConfigUrl?.replace(/^\/demo\//, "") ?? ""),
+      "utf8"
+    )
+  ) as ShortcutCameraConfig;
 };
 
 describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
@@ -86,6 +101,11 @@ describe("FOLDER_UPLOAD_ROBOT_SHORTCUTS", () => {
     expect(
       existsSync(path.join(PUBLIC_DEMO_ROOT, "so101/camera-config.json"))
     ).toBe(true);
+    expect(loadCameraConfig(shortcut).cameras.map((camera) => camera.name)).toEqual([
+      "so101_overhead_scene",
+      "so101_gripper_down",
+      "so101_port_oblique",
+    ]);
     expect(manifest.label).toBe("SO101");
     expect(urdfEntry?.path).toBe("robot.urdf");
 

@@ -1096,8 +1096,8 @@ describe("FolderUploadScreen", () => {
             name: "so101_overhead_scene",
             parent_joint: "base_link",
             pose: {
-              xyz: [0.12, 0, 0.34],
-              rpy: [0, 1.2217304763960306, 0],
+              xyz: [0.2, 0.02, 0.75],
+              rpy: [0, 1.3909428270024187, 0],
             },
           }),
           expect.objectContaining({
@@ -1105,7 +1105,23 @@ describe("FolderUploadScreen", () => {
             parent_joint: "gripper_frame_joint",
             pose: {
               xyz: [0, 0, 0.045],
-              rpy: [0, 1.5707963267948966, 0],
+              rpy: [
+                -2.9287597456336267,
+                0.5047613939080733,
+                0.055446603046238024,
+              ],
+            },
+          }),
+          expect.objectContaining({
+            name: "so101_port_oblique",
+            parent_joint: "base_link",
+            pose: {
+              xyz: [0.52, -0.38, 0.34],
+              rpy: [
+                6.740378120644072e-17,
+                0.6031350448467916,
+                2.014244663214635,
+              ],
             },
           }),
         ],
