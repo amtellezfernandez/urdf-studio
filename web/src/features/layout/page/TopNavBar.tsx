@@ -36,7 +36,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
         to="/"
         aria-label="Go to home page"
         title="Go to home page"
-        className="ml-1 mr-3 inline-flex h-7 items-center"
+        className="ml-1 mr-2 inline-flex h-7 shrink-0 items-center sm:mr-3"
         onClick={props.onGoHome}
       >
         <img
@@ -46,121 +46,124 @@ export const TopNavBar = (props: TopNavBarProps) => {
         />
       </Link>
 
-      {props.showMenus ? (
-        <>
-          <FileUtilsMenus
-            showAssemblyExportAction={workspaceModeUi.showAssemblyActions}
-            onExportAssemblyUrdf={props.onExportAssemblyUrdf}
-            openExportDialog={props.openExportDialog}
-            onSave={props.onSave}
-            onRevert={props.onRevert}
-            canRevert={props.canRevert}
-            onResetRotation={props.onResetRotation}
-            hasRotationChanges={props.hasRotationChanges}
-            onCanonicalOrder={props.onCanonicalOrder}
-            onPrettyPrint={props.onPrettyPrint}
-            onNormalizeAxes={props.onNormalizeAxes}
-            onFixMeshPaths={props.onFixMeshPaths}
-            rotationAxis={props.rotationAxis}
-            setRotationAxis={props.setRotationAxis}
-            onRotateRobot={props.onRotateRobot}
-          />
-
-          {workspaceModeUi.showStudioChrome ? (
-            <WorldsMenu
-              onExportCurrentWorldSceneLayer={props.onExportCurrentWorldSceneLayer}
-              onImportSceneLayerFromUrl={props.onImportSceneLayerFromUrl}
-              onExportCurrentWorldScenePackage={props.onExportCurrentWorldScenePackage}
-              onImportWorldScenePackage={props.onImportWorldScenePackage}
-              onValidateCurrentWorldScenePackage={props.onValidateCurrentWorldScenePackage}
-              onPublishCurrentWorldScenePackage={props.onPublishCurrentWorldScenePackage}
-              onListWorldScenePackages={props.onListWorldScenePackages}
-              onExportWorldRolloutCampaign={props.onExportWorldRolloutCampaign}
-              onRunLocalWorldRollout={props.onRunLocalWorldRollout}
-              onImportWorldRolloutResults={props.onImportWorldRolloutResults}
-              onOpenWorldRolloutReview={props.onOpenWorldRolloutReview}
-              exportCamerasAsJSON={props.exportCamerasAsJSON}
-              hasCamerasToExport={props.hasCamerasToExport}
-              setShowCameraUpload={props.setShowCameraUpload}
+      <div className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden">
+        {props.showMenus ? (
+          <>
+            <FileUtilsMenus
+              showAssemblyExportAction={workspaceModeUi.showAssemblyActions}
+              onExportAssemblyUrdf={props.onExportAssemblyUrdf}
+              openExportDialog={props.openExportDialog}
+              onSave={props.onSave}
+              onRevert={props.onRevert}
+              canRevert={props.canRevert}
+              onResetRotation={props.onResetRotation}
+              hasRotationChanges={props.hasRotationChanges}
+              onCanonicalOrder={props.onCanonicalOrder}
+              onPrettyPrint={props.onPrettyPrint}
+              onNormalizeAxes={props.onNormalizeAxes}
+              onFixMeshPaths={props.onFixMeshPaths}
+              rotationAxis={props.rotationAxis}
+              setRotationAxis={props.setRotationAxis}
+              onRotateRobot={props.onRotateRobot}
             />
-          ) : null}
 
-          {workspaceModeUi.showStudioChrome ? (
-            <ViewMenu
-              minimalMode={false}
-              angleUnit={props.angleUnit}
-              setAngleUnit={props.setAngleUnit}
-              rendererRuntime={props.rendererRuntime}
-              onRendererRuntimeChange={props.onRendererRuntimeChange}
-              rendererRuntimeLocked={props.rendererRuntimeLocked}
-              rendererRuntimeLockedReason={props.rendererRuntimeLockedReason}
-              rosVizRuntimeAvailable={props.rosVizRuntimeAvailable}
-              rosVizRuntimeUnavailableReason={props.rosVizRuntimeUnavailableReason}
-              viewerProfile={props.viewerProfile}
-              onViewerProfileChange={props.onViewerProfileChange}
-              viewerProfileLocked={props.viewerProfileLocked}
-              viewerProfileLockedReason={props.viewerProfileLockedReason}
-              displaysPanelOpen={props.displaysPanelOpen}
-              runtimeHealthPanelOpen={props.runtimeHealthPanelOpen}
-              onToggleDisplaysPanel={props.onToggleDisplaysPanel}
-              onToggleRuntimeHealthPanel={props.onToggleRuntimeHealthPanel}
-              gpuMode={props.gpuMode}
-              setGPUMode={props.setGPUMode}
-              collisionsVisible={props.collisionsVisible}
-              setCollisionsVisible={props.setCollisionsVisible}
-              showUrdfEditor={props.showUrdfEditor}
-              setShowUrdfEditor={props.setShowUrdfEditor}
-              urdfViewMode={props.urdfViewMode}
-              setUrdfViewMode={props.setUrdfViewMode}
-              showPovCameras={props.showPovCameras}
-              setShowPovCameras={props.setShowPovCameras}
-              inertialVisualization={props.inertialVisualization}
-              setInertialVisualization={props.setInertialVisualization}
-            />
-          ) : null}
+            {workspaceModeUi.showStudioChrome ? (
+              <WorldsMenu
+                onExportCurrentWorldSceneLayer={props.onExportCurrentWorldSceneLayer}
+                onImportSceneLayerFromUrl={props.onImportSceneLayerFromUrl}
+                onExportCurrentWorldScenePackage={props.onExportCurrentWorldScenePackage}
+                onImportWorldScenePackage={props.onImportWorldScenePackage}
+                onValidateCurrentWorldScenePackage={props.onValidateCurrentWorldScenePackage}
+                onPublishCurrentWorldScenePackage={props.onPublishCurrentWorldScenePackage}
+                onListWorldScenePackages={props.onListWorldScenePackages}
+                onExportWorldRolloutCampaign={props.onExportWorldRolloutCampaign}
+                onRunLocalWorldRollout={props.onRunLocalWorldRollout}
+                onImportWorldRolloutResults={props.onImportWorldRolloutResults}
+                onOpenWorldRolloutReview={props.onOpenWorldRolloutReview}
+                exportCamerasAsJSON={props.exportCamerasAsJSON}
+                hasCamerasToExport={props.hasCamerasToExport}
+                setShowCameraUpload={props.setShowCameraUpload}
+              />
+            ) : null}
 
-          {workspaceModeUi.showStudioChrome ? (
-            <DatasetMenu
-              openMappingList={props.openMappingList}
-              datasetActions={props.datasetActions}
-              onOpenDatasetReview={props.onOpenDatasetReview}
-            />
-          ) : null}
+            {workspaceModeUi.showStudioChrome ? (
+              <ViewMenu
+                minimalMode={false}
+                angleUnit={props.angleUnit}
+                setAngleUnit={props.setAngleUnit}
+                rendererRuntime={props.rendererRuntime}
+                onRendererRuntimeChange={props.onRendererRuntimeChange}
+                rendererRuntimeLocked={props.rendererRuntimeLocked}
+                rendererRuntimeLockedReason={props.rendererRuntimeLockedReason}
+                rosVizRuntimeAvailable={props.rosVizRuntimeAvailable}
+                rosVizRuntimeUnavailableReason={props.rosVizRuntimeUnavailableReason}
+                viewerProfile={props.viewerProfile}
+                onViewerProfileChange={props.onViewerProfileChange}
+                viewerProfileLocked={props.viewerProfileLocked}
+                viewerProfileLockedReason={props.viewerProfileLockedReason}
+                displaysPanelOpen={props.displaysPanelOpen}
+                runtimeHealthPanelOpen={props.runtimeHealthPanelOpen}
+                onToggleDisplaysPanel={props.onToggleDisplaysPanel}
+                onToggleRuntimeHealthPanel={props.onToggleRuntimeHealthPanel}
+                gpuMode={props.gpuMode}
+                setGPUMode={props.setGPUMode}
+                collisionsVisible={props.collisionsVisible}
+                setCollisionsVisible={props.setCollisionsVisible}
+                showUrdfEditor={props.showUrdfEditor}
+                setShowUrdfEditor={props.setShowUrdfEditor}
+                urdfViewMode={props.urdfViewMode}
+                setUrdfViewMode={props.setUrdfViewMode}
+                showPovCameras={props.showPovCameras}
+                setShowPovCameras={props.setShowPovCameras}
+                inertialVisualization={props.inertialVisualization}
+                setInertialVisualization={props.setInertialVisualization}
+              />
+            ) : null}
 
-          {workspaceModeUi.showStudioChrome ? (
-            <CreateMenu
-              openObjectCreator={props.openObjectCreator}
-              setShowCameraCreator={props.setShowCameraCreator}
-            />
-          ) : null}
+            {workspaceModeUi.showStudioChrome ? (
+              <DatasetMenu
+                openMappingList={props.openMappingList}
+                datasetActions={props.datasetActions}
+                onOpenDatasetReview={props.onOpenDatasetReview}
+              />
+            ) : null}
 
-          {workspaceModeUi.showStudioChrome ? (
-            <IkMenu
-              isIkPanelOpen={props.isIkPanelOpen}
-              onOpenIkPanel={props.onOpenIkPanel}
-              selectedIkSolverId={props.selectedIkSolverId}
-              ikSolverOptions={props.ikSolverOptions}
-              onSelectIkSolver={props.onSelectIkSolver}
-            />
-          ) : null}
-        </>
-      ) : null}
-      <div className="ml-auto flex items-center gap-2">
+            {workspaceModeUi.showStudioChrome ? (
+              <CreateMenu
+                openObjectCreator={props.openObjectCreator}
+                setShowCameraCreator={props.setShowCameraCreator}
+              />
+            ) : null}
+
+            {workspaceModeUi.showStudioChrome ? (
+              <IkMenu
+                isIkPanelOpen={props.isIkPanelOpen}
+                onOpenIkPanel={props.onOpenIkPanel}
+                selectedIkSolverId={props.selectedIkSolverId}
+                ikSolverOptions={props.ikSolverOptions}
+                onSelectIkSolver={props.onSelectIkSolver}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <div className="ml-1 flex shrink-0 items-center gap-1 sm:gap-2">
         {workspaceModeUi.showStudioChrome && props.onOpenTrainingMode ? (
           <button
             type="button"
-            className="h-7 rounded-md border border-border/70 bg-background/50 px-2.5 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            className="h-7 shrink-0 rounded-md border border-border/70 bg-background/50 px-2 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground sm:px-2.5"
             onClick={props.onOpenTrainingMode}
             aria-label="URDF Ops"
             title="Open URDF Ops training workspace"
           >
-            URDF Ops
+            <span className="sm:hidden">Ops</span>
+            <span className="hidden sm:inline">URDF Ops</span>
           </button>
         ) : null}
         {workspaceModeUi.showStudioChrome && props.simulationPrepStatusLabel && props.onOpenSimulationPrep ? (
           <button
             type="button"
-            className={`flex h-6 items-center gap-1.5 rounded-md border px-1.5 ${
+            className={`flex h-6 shrink-0 items-center gap-1 rounded-md border px-1 sm:gap-1.5 sm:px-1.5 ${
               props.simulationPrepNeedsAttention
                 ? "border-amber-500/30 bg-amber-500/5 text-muted-foreground hover:bg-amber-500/10 hover:text-foreground"
                 : "border-border/60 bg-background/35 text-muted-foreground hover:bg-muted/25 hover:text-foreground"
@@ -175,8 +178,11 @@ export const TopNavBar = (props: TopNavBarProps) => {
                 props.simulationPrepNeedsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
               }`}
             />
-            <span className="text-[10px] font-medium text-foreground">Simulator</span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[10px] font-medium text-foreground">
+              <span className="sm:hidden">Sim</span>
+              <span className="hidden sm:inline">Simulator</span>
+            </span>
+            <span className="hidden text-[10px] text-muted-foreground sm:inline">
               {props.simulationPrepNeedsAttention ? "Review" : "Ready"}
             </span>
           </button>
@@ -185,10 +191,10 @@ export const TopNavBar = (props: TopNavBarProps) => {
         (props.onToggleLeaderInputPanel ||
           props.onToggleFollowerHardwarePanel ||
           props.onToggleTeleopPanel) ? (
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              className={`h-7 rounded-md border px-2 text-xs ${teleopConnectionButtonClassName(
+              className={`h-7 shrink-0 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
                 props.leaderInputConnected,
                 props.leaderInputPanelOpen || props.teleopPanelOpen,
               )}`}
@@ -199,7 +205,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
             </button>
             <button
               type="button"
-              className={`h-7 rounded-md border px-2 text-xs ${teleopConnectionButtonClassName(
+              className={`h-7 shrink-0 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
                 props.followerHardwareConnected,
                 props.followerHardwarePanelOpen,
               )}`}
