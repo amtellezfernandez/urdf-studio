@@ -82,6 +82,8 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. It can take a while the first time.
 
+Genesis and MJLab are optional simulator adapters. Setup reports their status, but the base app install continues if an optional adapter wheel is unavailable on the current laptop.
+
 Useful setup options:
 
 ```bash

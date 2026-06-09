@@ -36,6 +36,8 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. The first run can take several minutes.
 
+Genesis and MJLab are simulator adapters. Setup checks and installs them when the platform supports their native wheels, but adapter install failures do not stop the base app install unless you explicitly force that adapter.
+
 Optional setup commands:
 
 ```bash
@@ -43,10 +45,12 @@ npm run setup -- --install-global-ilu
 npm run setup -- --twin
 ```
 
-On macOS, setup skips optional native collision checks by default. Force them only if you know you need them:
+On macOS, setup skips optional native collision checks and simulator adapters whose native wheels are not portable enough for all machines. Force optional native pieces only if you know you need them:
 
 ```bash
 URDF_STUDIO_INSTALL_COLLISION_STACK=1 npm run setup
+URDF_STUDIO_INSTALL_GENESIS=1 npm run setup
+URDF_STUDIO_INSTALL_MJLAB=1 npm run setup
 ```
 
 ## Start Locally

@@ -7,6 +7,7 @@ import { execFileSync, execSync, spawnSync } from 'child_process';
 import readline from 'readline';
 import { maskToken, resolveSetupGitHubToken } from './githubAuth.js';
 import {
+  buildSetupSummarySections,
   isTruthyEnvValue,
   selectInstalledSupersededPythonDependencies,
   shouldInstallGlobalIlu,
@@ -540,10 +541,23 @@ async function installOptionalGlobalIlu() {
   }
 }
 
-function printSetupSummary({ globalIluResult } = {}) {
-  if (globalIluResult?.attempted && !globalIluResult.installed) {
-    logInfo(`Global ilu install did not complete. Local ${LOCAL_ILU_COMMAND} still works.`);
-  }
+function printSetupSummary({
+  globalIluResult,
+  genesisRuntimeResult,
+  mjlabRuntimeResult,
+} = {}) {
+  const sections = buildSetupSummarySections({
+    globalIluAttempted: Boolean(globalIluResult?.attempted),
+    globalIluInstalled: Boolean(globalIluResult?.installed),
+    genesisRuntimeResult,
+    mjlabRuntimeResult,
+  });
+  log('');
+  logArrow('Setup summary');
+  sections.forEach((section) => {
+    logInfo(`${section.heading}:`);
+    section.lines.forEach((line) => logInfo(`  ${line}`));
+  });
 }
 
 function findUv() {
@@ -1049,6 +1063,21 @@ function printCapturedCommandOutput(result) {
   }
 }
 
+function buildOptionalRuntimeInstallFailure({ forceInstallEnv, error = null }) {
+  const fatal = isTruthyEnvValue(process.env[forceInstallEnv]);
+  return {
+    ok: false,
+    installed: false,
+    skipped: false,
+    fatal,
+    error: error instanceof Error ? error.message : null,
+  };
+}
+
+function shouldFailSetupForRuntimeResult(result) {
+  return result?.ok === false && result.fatal !== false;
+}
+
 async function installOfficialLeRobotToolchain() {
   if (!shouldInstallOfficialLeRobot()) {
     log('');
@@ -1194,11 +1223,11 @@ async function installMjlabRuntime() {
   const uvPath = findUv();
   if (!existsSync(venvPython)) {
     logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
-    return { ok: false, installed: false, skipped: false };
+    return { ok: false, installed: false, skipped: false, fatal: true };
   }
   if (!uvPath) {
     log('✗ uv not found. MJLab setup requires uv.', colors.yellow);
-    return { ok: false, installed: false, skipped: false };
+    return { ok: false, installed: false, skipped: false, fatal: true };
   }
 
   const existingCoreCheck = runPythonImportCheck(venvPython, MJLAB_VERIFY_IMPORT_SCRIPT);
@@ -1230,7 +1259,13 @@ async function installMjlabRuntime() {
     log('✗ Failed to install MJLab validation runtime', colors.yellow);
     logInfo('Try manually:');
     logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${MJLAB_DEPENDENCIES.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
-    return { ok: false, installed: false, skipped: false };
+    if (!isTruthyEnvValue(process.env[MJLAB_FORCE_INSTALL_ENV])) {
+      logInfo(`Continuing without MJLab. Set ${MJLAB_FORCE_INSTALL_ENV}=1 to require it during setup.`);
+    }
+    return buildOptionalRuntimeInstallFailure({
+      forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
+      error: e,
+    });
   }
 }
 
@@ -1330,11 +1365,11 @@ async function installGenesisRuntime() {
   const uvPath = findUv();
   if (!existsSync(venvPython)) {
     logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
-    return { ok: false, installed: false, skipped: false };
+    return { ok: false, installed: false, skipped: false, fatal: true };
   }
   if (!uvPath) {
     log('✗ uv not found. Genesis setup requires uv.', colors.yellow);
-    return { ok: false, installed: false, skipped: false };
+    return { ok: false, installed: false, skipped: false, fatal: true };
   }
 
   const existingGenesisCheck = runPythonImportCheck(venvPython, GENESIS_VERIFY_IMPORT_SCRIPT);
@@ -1362,7 +1397,13 @@ async function installGenesisRuntime() {
     log('✗ Failed to install Genesis static world viewer runtime', colors.yellow);
     logInfo('Try manually on a compatible Linux environment:');
     logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${GENESIS_PYTHON_DEPENDENCIES.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
-    return { ok: false, installed: false, skipped: false };
+    if (!isTruthyEnvValue(process.env[GENESIS_FORCE_INSTALL_ENV])) {
+      logInfo(`Continuing without Genesis. Set ${GENESIS_FORCE_INSTALL_ENV}=1 to require it during setup.`);
+    }
+    return buildOptionalRuntimeInstallFailure({
+      forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
+      error: e,
+    });
   }
 }
 
@@ -1423,7 +1464,7 @@ async function runSetupSequence(overrides = {}) {
     throw new Error('Backend dependencies installation failed');
   }
   const genesisRuntimeResult = await steps.installGenesisRuntime();
-  if (!genesisRuntimeResult.ok) {
+  if (shouldFailSetupForRuntimeResult(genesisRuntimeResult)) {
     throw new Error('Genesis static world viewer runtime installation failed');
   }
   const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
@@ -1435,7 +1476,7 @@ async function runSetupSequence(overrides = {}) {
     throw new Error('OpenArm hardware runtime installation failed');
   }
   const mjlabRuntimeResult = await steps.installMjlabRuntime();
-  if (!mjlabRuntimeResult.ok) {
+  if (shouldFailSetupForRuntimeResult(mjlabRuntimeResult)) {
     throw new Error('MJLab validation runtime installation failed');
   }
   await steps.installTwinDepsIfRequested();
@@ -1443,16 +1484,20 @@ async function runSetupSequence(overrides = {}) {
   await steps.setupHuggingFace();
   await steps.setupGitHub();
   const globalIluResult = await steps.installOptionalGlobalIlu();
-  return { globalIluResult };
+  return { globalIluResult, genesisRuntimeResult, mjlabRuntimeResult };
 }
 
 async function main() {
   console.log(banner);
 
   try {
-    const { globalIluResult } = await runSetupSequence();
+    const {
+      globalIluResult,
+      genesisRuntimeResult,
+      mjlabRuntimeResult,
+    } = await runSetupSequence();
     logSuccess('Setup complete');
-    printSetupSummary({ globalIluResult });
+    printSetupSummary({ globalIluResult, genesisRuntimeResult, mjlabRuntimeResult });
   } catch (error) {
     log('');
     log('✗ Setup failed', colors.yellow);

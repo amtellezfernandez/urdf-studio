@@ -72,3 +72,102 @@ test('setup stops before backend dependency installation when unified Python set
     'setupPythonBackendEnvironment',
   ]);
 });
+
+test('setup continues when optional simulator adapters are unavailable', async () => {
+  const calls = [];
+  const record = (name, result) => async () => {
+    calls.push(name);
+    return result;
+  };
+
+  const result = await runSetupSequence({
+    installDependencies: record('installDependencies'),
+    setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
+    setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
+    installBackendDeps: record('installBackendDeps', true),
+    installGenesisRuntime: record('installGenesisRuntime', {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    }),
+    installOfficialLeRobotToolchain: record('installOfficialLeRobotToolchain', true),
+    installOpenArmHardwareRuntime: record('installOpenArmHardwareRuntime', true),
+    installMjlabRuntime: record('installMjlabRuntime', {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    }),
+    installTwinDepsIfRequested: record('installTwinDepsIfRequested'),
+    checkIkd: record('checkIkd'),
+    setupHuggingFace: record('setupHuggingFace'),
+    setupGitHub: record('setupGitHub'),
+    installOptionalGlobalIlu: record('installOptionalGlobalIlu', {
+      attempted: false,
+      installed: false,
+    }),
+  });
+
+  assert.equal(result.genesisRuntimeResult.ok, false);
+  assert.equal(result.mjlabRuntimeResult.ok, false);
+  assert.deepEqual(calls, [
+    'installDependencies',
+    'setupUrdfOpsWorkspace',
+    'setupPythonBackendEnvironment',
+    'installBackendDeps',
+    'installGenesisRuntime',
+    'installOfficialLeRobotToolchain',
+    'installOpenArmHardwareRuntime',
+    'installMjlabRuntime',
+    'installTwinDepsIfRequested',
+    'checkIkd',
+    'setupHuggingFace',
+    'setupGitHub',
+    'installOptionalGlobalIlu',
+  ]);
+});
+
+test('setup fails when a forced simulator adapter install fails', async () => {
+  const calls = [];
+  const record = (name, result) => async () => {
+    calls.push(name);
+    return result;
+  };
+  const unreachable = (name) => async () => {
+    calls.push(name);
+    throw new Error(`${name} should not be reached`);
+  };
+
+  await assert.rejects(
+    runSetupSequence({
+      installDependencies: record('installDependencies'),
+      setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
+      setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
+      installBackendDeps: record('installBackendDeps', true),
+      installGenesisRuntime: record('installGenesisRuntime', {
+        ok: false,
+        installed: false,
+        skipped: false,
+        fatal: true,
+      }),
+      installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
+      installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
+      installMjlabRuntime: unreachable('installMjlabRuntime'),
+      installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
+      checkIkd: unreachable('checkIkd'),
+      setupHuggingFace: unreachable('setupHuggingFace'),
+      setupGitHub: unreachable('setupGitHub'),
+      installOptionalGlobalIlu: unreachable('installOptionalGlobalIlu'),
+    }),
+    /Genesis static world viewer runtime installation failed/
+  );
+
+  assert.deepEqual(calls, [
+    'installDependencies',
+    'setupUrdfOpsWorkspace',
+    'setupPythonBackendEnvironment',
+    'installBackendDeps',
+    'installGenesisRuntime',
+  ]);
+});

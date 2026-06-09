@@ -52,6 +52,12 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
   const sections = buildSetupSummarySections({
     globalIluAttempted: true,
     globalIluInstalled: false,
+    genesisRuntimeResult: {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    },
     mjlabRuntimeResult: {
       ok: true,
       installed: true,
@@ -85,6 +91,10 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
     ],
   });
   assert.deepEqual(sections[4], {
+    heading: 'Genesis',
+    lines: ['Genesis viewer runtime is unavailable. Setup continued because this adapter is optional.'],
+  });
+  assert.deepEqual(sections[5], {
     heading: 'MJLab',
     lines: ['MJLab validation runtime is available.'],
   });
@@ -95,6 +105,8 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
 
   assert.equal(sections[0].heading, 'Setup steps');
   assert.ok(sections[0].lines.includes('Unified Python backend/training runtime'));
-  assert.ok(sections[0].lines.includes('MJLab validation runtime'));
+  assert.ok(
+    sections[0].lines.includes('Simulator runtimes: Genesis viewer, MJLab motion validation')
+  );
   assert.equal(sections.length, 1);
 });

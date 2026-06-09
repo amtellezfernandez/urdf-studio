@@ -50,16 +50,40 @@ export function buildSetupRoadmapSections() {
         'Unified Python backend/training runtime',
         'LeRobot training runtime',
         'OpenArm hardware runtime',
-        'MJLab validation runtime',
+        'Simulator runtimes: Genesis viewer, MJLab motion validation',
         'Hugging Face and GitHub access',
       ],
     },
   ];
 }
 
+function buildSimulatorRuntimeLines({
+  result,
+  skippedLine,
+  installedLine,
+  unavailableLine,
+  fallbackLine,
+}) {
+  if (result?.skipped) {
+    return [skippedLine];
+  }
+  if (result?.installed) {
+    return [installedLine];
+  }
+  if (result?.ok === false) {
+    return [
+      result.fatal === false
+        ? `${unavailableLine} Setup continued because this adapter is optional.`
+        : unavailableLine,
+    ];
+  }
+  return [fallbackLine];
+}
+
 export function buildSetupSummarySections({
   globalIluAttempted = false,
   globalIluInstalled = false,
+  genesisRuntimeResult = null,
   mjlabRuntimeResult = null,
 } = {}) {
   const iluLines = [`Local i-love-urdf CLI: ${LOCAL_ILU_COMMAND}`];
@@ -70,16 +94,21 @@ export function buildSetupSummarySections({
     iluLines.push(`Global ilu install did not complete. Local ${LOCAL_ILU_COMMAND} still works.`);
   }
 
-  const mjlabLines = [];
-  if (mjlabRuntimeResult?.skipped) {
-    mjlabLines.push('MJLab install was skipped for this run.');
-  } else if (mjlabRuntimeResult?.installed) {
-    mjlabLines.push('MJLab validation runtime is available.');
-  } else if (mjlabRuntimeResult?.ok === false) {
-    mjlabLines.push('MJLab runtime is unavailable.');
-  } else {
-    mjlabLines.push('Installed into the unified .venv-lerobot Python runtime for teleop motion validation.');
-  }
+  const genesisLines = buildSimulatorRuntimeLines({
+    result: genesisRuntimeResult,
+    skippedLine: 'Genesis viewer runtime was skipped for this run.',
+    installedLine: 'Genesis viewer runtime is available.',
+    unavailableLine: 'Genesis viewer runtime is unavailable.',
+    fallbackLine: 'Genesis viewer installs into the unified Python runtime when supported.',
+  });
+  const mjlabLines = buildSimulatorRuntimeLines({
+    result: mjlabRuntimeResult,
+    skippedLine: 'MJLab install was skipped for this run.',
+    installedLine: 'MJLab validation runtime is available.',
+    unavailableLine: 'MJLab runtime is unavailable.',
+    fallbackLine:
+      'MJLab installs into the unified Python runtime for teleop motion validation when supported.',
+  });
 
   return [
     {
@@ -103,6 +132,10 @@ export function buildSetupSummarySections({
         `Installed into the unified Python runtime: ${OPENARM_HARDWARE_PIP_DEPENDENCIES.join(', ')}.`,
         'Check CAN, Feetech, and OpenArm Mini imports with npm run openarm:doctor.',
       ],
+    },
+    {
+      heading: 'Genesis',
+      lines: genesisLines,
     },
     {
       heading: 'MJLab',
