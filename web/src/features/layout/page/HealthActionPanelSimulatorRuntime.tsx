@@ -1,4 +1,4 @@
-import { CheckCircle2, LoaderCircle, Play } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Minus, Play } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/utils";
 import type { SimulatorId } from "@/features/world-share/simulatorRuntimeApi";
@@ -28,57 +28,101 @@ type HealthActionPanelSimulatorRuntimeProps = HealthActionPanelSimulatorRuntimeS
   statusLabel?: string | null;
 };
 
-const getTargetIcon = (target: SimulatorRuntimeTargetState) => {
-  if (target.isBusy) return <LoaderCircle className="h-3 w-3 animate-spin" />;
-  if (target.isActive || target.isReady) return <CheckCircle2 className="h-3 w-3" />;
-  if (target.isAvailable) return <Play className="h-3 w-3" />;
-  return null;
+const getAvailableTargetIcon = (target: SimulatorRuntimeTargetState) => {
+  if (target.isBusy) return <LoaderCircle className="h-3.5 w-3.5 animate-spin" />;
+  if (target.isActive || target.isReady) return <CheckCircle2 className="h-3.5 w-3.5" />;
+  return <Play className="h-3.5 w-3.5" />;
 };
 
-const getTargetButtonClassName = (target: SimulatorRuntimeTargetState) =>
+const getUnavailableTargetIcon = () => <Minus className="h-3 w-3" />;
+
+const getAvailableTargetButtonClassName = (target: SimulatorRuntimeTargetState) =>
   cn(
-    "h-7 min-w-0 justify-start gap-1 rounded-md px-1.5 text-[10px]",
-    target.isAvailable
-      ? "border-border/50 bg-background/45 text-foreground hover:bg-accent"
-      : "border-neutral-700 bg-neutral-800/85 text-neutral-400 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-100",
-    (target.isActive || target.isReady) && "border-emerald-400/50 text-emerald-200"
+    "h-9 min-w-0 justify-start gap-2 rounded-md px-2 text-left text-[11px]",
+    "border-border/50 bg-background/55 text-foreground shadow-none hover:border-border/70 hover:bg-muted/30",
+    (target.isActive || target.isReady) &&
+      "border-emerald-400/45 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
   );
+
+const getUnavailableTargetButtonClassName = () =>
+  cn(
+    "h-6 min-w-0 justify-start gap-1.5 rounded-md px-2 text-[10px]",
+    "border-neutral-800 bg-neutral-900/70 text-neutral-500 shadow-none",
+    "disabled:cursor-not-allowed disabled:opacity-100"
+  );
+
+const AvailableTargetButton = ({ target }: { target: SimulatorRuntimeTargetState }) => (
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    className={getAvailableTargetButtonClassName(target)}
+    onMouseDown={(event) => event.stopPropagation()}
+    onClick={target.onAction}
+    disabled={target.isBusy}
+    aria-label={target.isBusy ? target.busyLabel : target.actionLabel}
+    title={target.detail}
+  >
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-border/50 bg-background/60">
+      {getAvailableTargetIcon(target)}
+    </span>
+    <span className="min-w-0 truncate font-medium">
+      {target.isBusy ? target.busyLabel : target.label}
+    </span>
+  </Button>
+);
+
+const UnavailableTargetButton = ({ target }: { target: SimulatorRuntimeTargetState }) => (
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    className={getUnavailableTargetButtonClassName()}
+    onMouseDown={(event) => event.stopPropagation()}
+    onClick={target.onAction}
+    disabled
+    aria-label={target.unavailableLabel}
+    title={target.unavailableLabel}
+  >
+    {getUnavailableTargetIcon()}
+    <span className="min-w-0 truncate">{target.label}</span>
+  </Button>
+);
 
 export const HealthActionPanelSimulatorRuntime = ({
   className,
   targets,
-}: HealthActionPanelSimulatorRuntimeProps) => (
-  <div data-section="simulator-runtime" className={className}>
-    <div className="mb-1.5 flex items-center justify-between gap-2">
-      <div className="text-[10px] font-medium uppercase tracking-wide text-foreground/80">
-        Open in
+}: HealthActionPanelSimulatorRuntimeProps) => {
+  const availableTargets = targets.filter((target) => target.isAvailable);
+  const unavailableTargets = targets.filter((target) => !target.isAvailable);
+
+  return (
+    <div data-section="simulator-runtime" className={className}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-foreground/80">
+          Open in
+        </div>
+        <div className="rounded-sm border border-border/40 px-1.5 py-0.5 text-[9px] text-muted-foreground">
+          {availableTargets.length} ready
+        </div>
       </div>
-      <div className="truncate text-[9px] text-muted-foreground">same robot + world</div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {availableTargets.map((target) => (
+          <AvailableTargetButton key={target.id} target={target} />
+        ))}
+      </div>
+      {unavailableTargets.length > 0 ? (
+        <div className="mt-2 border-t border-border/40 pt-2">
+          <div className="mb-1.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/80">
+            Unavailable
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {unavailableTargets.map((target) => (
+              <UnavailableTargetButton key={target.id} target={target} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
-    <div className="grid grid-cols-3 gap-1">
-      {targets.map((target) => (
-        <Button
-          key={target.id}
-          type="button"
-          variant="outline"
-          size="sm"
-          className={getTargetButtonClassName(target)}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={target.onAction}
-          disabled={target.isBusy || !target.isAvailable}
-          aria-label={
-            target.isBusy
-              ? target.busyLabel
-              : target.isAvailable
-                ? target.actionLabel
-                : target.unavailableLabel
-          }
-          title={target.isAvailable ? target.detail : target.unavailableLabel}
-        >
-          {getTargetIcon(target)}
-          <span className="min-w-0 truncate">{target.isBusy ? target.busyLabel : target.label}</span>
-        </Button>
-      ))}
-    </div>
-  </div>
-);
+  );
+};

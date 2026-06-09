@@ -62,6 +62,8 @@ describe("HealthActionPanelSimulatorRuntime", () => {
     });
 
     expect(textContent(container)).toContain("Open in");
+    expect(textContent(container)).toContain("2 ready");
+    expect(textContent(container)).toContain("Unavailable");
     expect(textContent(container)).not.toContain("Simulation Prep");
     expect(textContent(container)).toContain("Genesis");
     expect(textContent(container)).toContain("MJLab");
@@ -80,7 +82,7 @@ describe("HealthActionPanelSimulatorRuntime", () => {
       'button[aria-label="PyBullet is not available yet"]'
     );
     expect(unavailableButton?.hasAttribute("disabled")).toBe(true);
-    expect(unavailableButton?.getAttribute("class")).toContain("bg-neutral-800");
+    expect(unavailableButton?.getAttribute("class")).toContain("bg-neutral-900");
     expect(openGenesis).toHaveBeenCalledTimes(1);
     expect(openMjlab).toHaveBeenCalledTimes(1);
     expect(openPybullet).not.toHaveBeenCalled();
