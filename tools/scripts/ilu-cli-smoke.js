@@ -3,7 +3,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { JSDOM } from "jsdom";
 import {
   urdfCore,
   urdfCoreLoadSourceNode,
@@ -12,10 +11,6 @@ import {
 
 const { loadSourceFromPath } = urdfCoreLoadSourceNode;
 const { inspectLocalRepositoryUrdfs } = urdfCoreLocal;
-
-const dom = new JSDOM("<!doctype html><html><body></body></html>");
-globalThis.DOMParser = dom.window.DOMParser;
-globalThis.XMLSerializer = dom.window.XMLSerializer;
 
 const urdf =
   "<robot name=\"smoke_robot\"><link name=\"base\"/><link name=\"tip\"/>" +

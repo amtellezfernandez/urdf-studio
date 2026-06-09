@@ -51,8 +51,8 @@ const buildStoredReviewSession = () => {
   };
   const summary: DatasetSessionSummary = {
     schema_version: "dataset-session/v1",
-    session_id: "review-session-so101-defense",
-    dataset_label: "SO101 Defense Mixed Review",
+    session_id: "review-session-so101-inspection",
+    dataset_label: "SO101 Mixed Inspection Review",
     source_kind: "mixed",
     source_name: "mixed",
     episode_count: 1,
@@ -126,7 +126,7 @@ describe("DatasetReviewStandalonePage", () => {
       offset: 0,
       reason: undefined,
     });
-    expect(container.textContent).toContain("SO101 Defense Mixed Review");
+    expect(container.textContent).toContain("SO101 Mixed Inspection Review");
 
     await unmount(root);
   });

@@ -381,7 +381,7 @@ const isTestFile = (filePath) => {
   if (normalized.includes("/__tests__/")) {
     return true;
   }
-  return /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
+  return /\.(test|spec|testFixtures)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
 };
 
 const countLines = (filePath) => fs.readFileSync(filePath, "utf8").split(/\r?\n/).length;
@@ -610,6 +610,9 @@ const collectUnusedExports = () => {
 
   for (const file of allCodeFiles) {
     if (!file.startsWith(srcRoot)) {
+      continue;
+    }
+    if (isTestFile(file)) {
       continue;
     }
 

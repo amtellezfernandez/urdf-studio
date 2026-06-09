@@ -76,6 +76,14 @@ class IluSessionLocalAssetContext:
     working_asset_path: str
 
 
+@dataclass(frozen=True)
+class IluSessionLocalUrdfSourceContext:
+    source_urdf_path: Path
+    source_root_dir: Path
+    working_urdf_path: Path
+    extra_search_roots: tuple[Path, ...]
+
+
 def _validate_session_id(session_id: str) -> str:
     normalized = session_id.strip()
     if not normalized or not SESSION_ID_PATTERN.match(normalized):
@@ -397,6 +405,32 @@ def resolve_ilu_session_asset_file(session_id: str, asset_path: str, kind: str) 
         raise IluSessionError(status_code=404, detail="ilu session asset not found.")
 
     return IluSessionAssetFile(file_path=candidate, media_type=_guess_media_type(candidate))
+
+
+def get_ilu_session_local_urdf_source_context(
+    session_id: str,
+) -> IluSessionLocalUrdfSourceContext:
+    _, working_file, local_context = _read_asset_source_context(session_id)
+    source_urdf_path = (local_context.root_dir / local_context.working_asset_path).resolve()
+    if not source_urdf_path.exists() or not source_urdf_path.is_file():
+        source_urdf_path = working_file.resolve()
+    extra_search_roots = tuple(
+        dict.fromkeys(
+            path.resolve()
+            for path in (
+                local_context.root_dir,
+                source_urdf_path.parent,
+                working_file.expanduser().parent,
+            )
+            if path.exists() and path.is_dir()
+        )
+    )
+    return IluSessionLocalUrdfSourceContext(
+        source_urdf_path=source_urdf_path,
+        source_root_dir=local_context.root_dir,
+        working_urdf_path=working_file.resolve(),
+        extra_search_roots=extra_search_roots,
+    )
 
 
 def save_ilu_session_urdf(session_id: str, urdf_xml: str) -> IluSessionSaveResponse:

@@ -13,7 +13,7 @@ import type {
 } from "@/features/dataset/datasetSessionTypes";
 import { createDefaultDatasetConstraintSettings } from "@/features/dataset/episode-viewer/constraintSettings";
 
-const buildMixedDefenseSession = () => {
+const buildMixedInspectionSession = () => {
   const hfEpisode: DatasetSessionEpisodeSummary = {
     episode_id: "hf-so101-pickplace-episode-000004",
     episode_number: 4,
@@ -46,9 +46,9 @@ const buildMixedDefenseSession = () => {
     manual_reasons: [],
     review_reasons: [],
     source_kind: "local",
-    source_name: "/mnt/defense/inspection-run-17",
-    source_id: "local:/mnt/defense/inspection-run-17:episode-2",
-    canonical_source: "/mnt/defense/inspection-run-17",
+    source_name: "/mnt/inspection/inspection-run-17",
+    source_id: "local:/mnt/inspection/inspection-run-17:episode-2",
+    canonical_source: "/mnt/inspection/inspection-run-17",
     recorded_video_camera_count: 1,
     recorded_video_stream_count: 1,
     robot_type: "so101",
@@ -56,8 +56,8 @@ const buildMixedDefenseSession = () => {
   };
   const summary: DatasetSessionSummary = {
     schema_version: "dataset-session/v1",
-    session_id: "review-session-so101-defense",
-    dataset_label: "SO101 Defense Mixed Review",
+    session_id: "review-session-so101-inspection",
+    dataset_label: "SO101 Mixed Inspection Review",
     source_kind: "mixed",
     source_name: "mixed",
     robot_type: "so101",
@@ -84,7 +84,7 @@ const buildMixedDefenseSession = () => {
 };
 
 const buildHighLossCurationSession = () => {
-  const session = buildMixedDefenseSession();
+  const session = buildMixedInspectionSession();
   const highLossEpisode: DatasetSessionEpisodeSummary = {
     ...session.hfEpisode,
     episode_id: "hf-so101-pickplace-episode-high-loss",
@@ -117,7 +117,7 @@ const buildHighLossCurationSession = () => {
 };
 
 const buildVlaCurationSession = () => {
-  const session = buildMixedDefenseSession();
+  const session = buildMixedInspectionSession();
   const vlaEpisode: DatasetSessionEpisodeSummary = {
     ...session.hfEpisode,
     episode_id: "recorded-so101-vla-failed-demo",
@@ -165,7 +165,7 @@ const buildVlaCurationSession = () => {
 };
 
 const createDatasetActions = (
-  session = buildMixedDefenseSession()
+  session = buildMixedInspectionSession()
 ): DatasetActions => ({
   loadFromLocal: vi.fn(),
   loadFromHuggingFace: vi.fn(),
@@ -244,7 +244,7 @@ describe("DatasetReviewPage", () => {
   });
 
   it("renders a backend mixed-source review queue with source correspondence", async () => {
-    const session = buildMixedDefenseSession();
+    const session = buildMixedInspectionSession();
     const datasetActions = createDatasetActions(session);
     const { container, root } = await renderReview(datasetActions);
 
@@ -253,7 +253,7 @@ describe("DatasetReviewPage", () => {
     expect(renderedText).toContain("IKD session");
     expect(renderedText).toContain("Mixed lineage resolver");
     expect(renderedText).toContain("episode 4 from lerobot/svla_so101_pickplace");
-    expect(renderedText).toContain("episode 2 from /mnt/defense/inspection-run-17");
+    expect(renderedText).toContain("episode 2 from /mnt/inspection/inspection-run-17");
     expect(renderedText).toContain("Video 2 cams");
     expect(renderedText).toContain("Timing");
     expect(datasetActions.listReviewEpisodes).toHaveBeenCalledWith({
@@ -267,7 +267,7 @@ describe("DatasetReviewPage", () => {
   });
 
   it("delegates filtering and row actions to the backend session contract", async () => {
-    const session = buildMixedDefenseSession();
+    const session = buildMixedInspectionSession();
     const datasetActions = createDatasetActions(session);
     const { container, root } = await renderReview(datasetActions);
 
@@ -345,7 +345,7 @@ describe("DatasetReviewPage", () => {
     const datasetActions = createDatasetActions({
       ...session,
       hfEpisode: session.highLossEpisode,
-      localEpisode: buildMixedDefenseSession().localEpisode,
+      localEpisode: buildMixedInspectionSession().localEpisode,
     });
     vi.mocked(datasetActions.listReviewEpisodes).mockImplementation(async (options) =>
       options?.reason === "high_loss" ? session.highLossPage : session.page
@@ -418,7 +418,7 @@ describe("DatasetReviewPage", () => {
   });
 
   it("clamps pagination from backend totals instead of locally deleting rows", async () => {
-    const session = buildMixedDefenseSession();
+    const session = buildMixedInspectionSession();
     const datasetActions = createDatasetActions(session);
     vi.mocked(datasetActions.listReviewEpisodes).mockImplementation(async (options) => {
       const deletedLastPage = vi.mocked(datasetActions.deleteEpisodes).mock.calls.length > 0;
@@ -469,7 +469,7 @@ describe("DatasetReviewPage", () => {
   });
 
   it("does not expose 3D replay without backend-detail playback", async () => {
-    const session = buildMixedDefenseSession();
+    const session = buildMixedInspectionSession();
     const datasetActions = createDatasetActions(session);
     datasetActions.playReviewEpisode = undefined;
     const { container, root } = await renderReview(datasetActions);

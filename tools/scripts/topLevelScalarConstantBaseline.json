@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Baseline of existing top-level scalar const declarations. New entries fail tools/scripts/topLevelScalarConstantAudit.js.",
-  "totalConstants": 1613,
+  "totalConstants": 1597,
   "fileCount": 273,
   "files": {
     "config/devServerProxy.js": [
@@ -1736,36 +1736,6 @@
       {
         "name": "TEST_UNMATCHED_GALLERY_ROBOT_FILE_BASE",
         "initializer": "\"unmatched-barkour\""
-      }
-    ],
-    "web/src/features/dataset/FolderUploadScreen.test.tsx": [
-      {
-        "name": "TEST_GITHUB_BRANCH",
-        "initializer": "\"main\""
-      },
-      {
-        "name": "TEST_GITHUB_OWNER",
-        "initializer": "\"google-deepmind\""
-      },
-      {
-        "name": "TEST_GITHUB_REPO",
-        "initializer": "\"mujoco_menagerie\""
-      },
-      {
-        "name": "TEST_PRIMARY_CANDIDATE_FILE",
-        "initializer": "\"barkour_v0.urdf\""
-      },
-      {
-        "name": "TEST_PRIMARY_CANDIDATE_PATH",
-        "initializer": "\"google_barkour_v0/barkour_v0.urdf\""
-      },
-      {
-        "name": "TEST_SECONDARY_CANDIDATE_FILE",
-        "initializer": "\"barkour_vb_rev_1_0_head_straight.urdf\""
-      },
-      {
-        "name": "TEST_SECONDARY_CANDIDATE_PATH",
-        "initializer": "\"google_barkour_vb/barkour_vb_rev_1_0_head_straight.urdf\""
       }
     ],
     "web/src/features/dataset/FolderUploadScreen.tsx": [
@@ -3594,50 +3564,6 @@
       {
         "name": "SECOND_COMMAND_TS_MS",
         "initializer": "125"
-      },
-      {
-        "name": "TEST_CALIBRATION_REVISION",
-        "initializer": "2"
-      },
-      {
-        "name": "TEST_CALIBRATION_SESSION_ID",
-        "initializer": "1"
-      },
-      {
-        "name": "TEST_ELBOW_MOTOR_ID",
-        "initializer": "1"
-      },
-      {
-        "name": "TEST_LEADER_TARGET_DIRECTION",
-        "initializer": "1"
-      },
-      {
-        "name": "TEST_LIVE_NAMESPACE",
-        "initializer": "\"robot-gateway/openarm\""
-      },
-      {
-        "name": "TEST_LIVE_RELAY_URL",
-        "initializer": "\"https://relay.test\""
-      },
-      {
-        "name": "TEST_PROVIDER_COMMAND_TICK_MS",
-        "initializer": "100"
-      },
-      {
-        "name": "TEST_PROVIDER_DEADMAN_TIMEOUT_MS",
-        "initializer": "300"
-      },
-      {
-        "name": "TEST_PROVIDER_MAX_LINEAR_SPEED_MPS",
-        "initializer": "1"
-      },
-      {
-        "name": "TEST_PROVIDER_MAX_YAW_SPEED_RPS",
-        "initializer": "3.14"
-      },
-      {
-        "name": "TEST_SHOULDER_MOTOR_ID",
-        "initializer": "3"
       }
     ],
     "web/src/features/teleop/panel/OperatorTeleopPanel.tsx": [
@@ -6298,6 +6224,16 @@
       {
         "name": "GITHUB_RAW_URL",
         "initializer": "\"https://raw.githubusercontent.com/acme/worlds/main/world-layouts/factory.world-layout.json\""
+      }
+    ],
+    "web/src/features/world-share/simulatorRuntimeParams.ts": [
+      {
+        "name": "MAX_SIMULATOR_ASSET_ALIASES",
+        "initializer": "64"
+      },
+      {
+        "name": "SIMULATOR_API_BASE_PATH",
+        "initializer": "\"/simulators\""
       }
     ],
     "web/src/features/world-share/WorldRegistryPanel.tsx": [

@@ -7,12 +7,14 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from backend.services.world_layout_static_transfer import (
+    append_primitives_to_mujoco_mjcf,
     build_sim_primitives,
     build_static_transfer_report,
     check_genesis_transfer,
     check_mujoco_transfer,
     export_primitives_to_mujoco_mjcf,
     parse_static_world_layout_payload,
+    resolve_world_layout_frame_map,
 )
 
 
@@ -43,13 +45,16 @@ def _layout_payload() -> dict:
                     "name": "Safety cylinder",
                     "type": "cylinder",
                     "position_xyz": [-0.35, 0.4, 0.25],
-                    "size_xyz": [0.18, 0.18, 0.8],
+                    "size_xyz": [0.18, 0.8, 0.18],
                     "color": "#22c55e",
                 },
             ],
             "scenario_time_ms": 0,
             "scenario_duration_ms": 0,
-        }
+        },
+        "environment": {
+            "frame_map": "studio-y-up-to-z-up",
+        },
     }
 
 
@@ -66,6 +71,80 @@ def test_parse_and_build_primitives_uses_static_layout_contract() -> None:
     assert primitives[0].sim_type == "box"
     assert primitives[0].position_xyz == (0.0, 0.0, 0.05)
     assert primitives[0].size_xyz == (1.0, 0.6, 0.1)
+
+
+def test_auto_frame_map_preserves_ros_rep_103_world_package_axes() -> None:
+    payload = {
+        "package_id": "axis_probe",
+        "version": "1.0.0",
+        "title": "Axis Probe",
+        "interface": {
+            "observation_modalities": ["state"],
+            "action_semantics": "joint_position",
+            "timestep_ms": 10,
+            "frame_convention": "ros-rep-103",
+        },
+        "world_snapshot": {
+            "objects": [
+                {
+                    "id": "asymmetric-box",
+                    "name": "Asymmetric box",
+                    "type": "cube",
+                    "position_xyz": [1.0, 2.0, 3.0],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.4, 0.8],
+                    "color": "#22c55e",
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
+
+    assert warnings == ()
+    assert resolve_world_layout_frame_map(layout, "auto") == "identity"
+    assert primitives[0].position_xyz == (1.0, 2.0, 3.0)
+    assert primitives[0].size_xyz == (0.2, 0.4, 0.8)
+
+
+def test_auto_frame_map_converts_legacy_studio_y_up_package_axes() -> None:
+    payload = {
+        "package_id": "legacy_axis_probe",
+        "version": "1.0.0",
+        "title": "Legacy Axis Probe",
+        "interface": {
+            "observation_modalities": ["state"],
+            "action_semantics": "joint_position",
+            "timestep_ms": 10,
+            "frame_convention": "studio-y-up",
+        },
+        "world_snapshot": {
+            "objects": [
+                {
+                    "id": "asymmetric-box",
+                    "name": "Asymmetric box",
+                    "type": "cube",
+                    "position_xyz": [1.0, 2.0, 3.0],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.4, 0.8],
+                    "color": "#22c55e",
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
+
+    assert warnings == ()
+    assert resolve_world_layout_frame_map(layout, "auto") == "studio-y-up-to-z-up"
+    assert primitives[0].position_xyz == (1.0, -3.0, 2.0)
+    assert primitives[0].size_xyz == (0.2, 0.8, 0.4)
 
 
 def test_rejects_non_static_layouts() -> None:
@@ -95,6 +174,21 @@ def test_exported_mjcf_loads_in_mujoco() -> None:
     assert report["max_size_error_m"] <= 1e-6
     assert report["type_mismatch_source_ids"] == []
     assert report["collision_mismatch_source_ids"] == []
+
+
+def test_appends_world_primitives_to_robot_mjcf_for_mujoco() -> None:
+    pytest.importorskip("mujoco")
+    layout = parse_static_world_layout_payload(_layout_payload())
+    primitives, _warnings = build_sim_primitives(layout)
+    combined_mjcf = append_primitives_to_mujoco_mjcf(
+        "<mujoco model=\"robot\"><worldbody><body name=\"base\"/></worldbody></mujoco>",
+        primitives,
+    )
+
+    report = check_mujoco_transfer(primitives, mjcf_text=combined_mjcf)
+
+    assert report["ok"] is True
+    assert report["compiled_geom_count"] == 3
 
 
 def test_mujoco_gate_fails_on_substantial_size_mismatch() -> None:

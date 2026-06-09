@@ -13,9 +13,31 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 WorldLayoutBackend = Literal["mujoco", "genesis"]
-WorldLayoutFrameMap = Literal["identity", "studio-y-up-to-z-up"]
+ConcreteWorldLayoutFrameMap = Literal["identity", "studio-y-up-to-z-up"]
+WorldLayoutFrameMap = Literal["auto", "identity", "studio-y-up-to-z-up"]
 
 SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point"}
+CONCRETE_WORLD_LAYOUT_FRAME_MAPS = {"identity", "studio-y-up-to-z-up"}
+Z_UP_FRAME_CONVENTIONS = {
+    "ros",
+    "ros-rep-103",
+    "rep-103",
+    "urdf",
+    "world",
+    "z-up",
+    "zup",
+    "studio-z-up",
+    "urdf-studio",
+    "urdf-studio-z-up",
+}
+Y_UP_FRAME_CONVENTIONS = {
+    "studio-y-up",
+    "three-y-up",
+    "threejs-y-up",
+    "webgl-y-up",
+    "y-up",
+    "yup",
+}
 STATIC_SCENARIO_TIME_MS = 0
 STATIC_SCENARIO_DURATION_MS = 0
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
@@ -55,6 +77,8 @@ class StaticWorldLayout:
     scenario_time_ms: int
     scenario_duration_ms: int
     source_kind: str
+    frame_convention: str | None = None
+    frame_map_hint: ConcreteWorldLayoutFrameMap | None = None
 
 
 @dataclass(frozen=True)
@@ -153,7 +177,52 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
     )
 
 
-def _read_snapshot_from_payload(payload: Any) -> tuple[dict[str, Any], str, str]:
+def _read_optional_string(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _normalize_frame_convention(value: str) -> str:
+    normalized = value.strip().lower().replace("_", "-")
+    return re.sub(r"\s+", "-", normalized)
+
+
+def _read_frame_map_hint(payload: dict[str, Any]) -> ConcreteWorldLayoutFrameMap | None:
+    environment = payload.get("environment")
+    if not _is_record(environment):
+        return None
+    raw_frame_map = _read_optional_string(environment.get("frame_map"))
+    normalized_frame_map = raw_frame_map.lower() if raw_frame_map is not None else None
+    if normalized_frame_map is None or normalized_frame_map == "auto":
+        return None
+    if normalized_frame_map not in CONCRETE_WORLD_LAYOUT_FRAME_MAPS:
+        allowed = ", ".join(sorted(CONCRETE_WORLD_LAYOUT_FRAME_MAPS))
+        raise WorldLayoutTransferError(f"environment.frame_map must be one of: {allowed}")
+    return normalized_frame_map  # type: ignore[return-value]
+
+
+def _read_frame_convention(payload: dict[str, Any], snapshot: dict[str, Any]) -> str | None:
+    interface = payload.get("interface")
+    if _is_record(interface):
+        frame_convention = _read_optional_string(interface.get("frame_convention"))
+        if frame_convention is not None:
+            return frame_convention
+    frame_convention = _read_optional_string(snapshot.get("frame_convention"))
+    if frame_convention is not None:
+        return frame_convention
+    frame_convention = _read_optional_string(payload.get("frame_convention"))
+    if frame_convention is not None:
+        return frame_convention
+    environment = payload.get("environment")
+    if _is_record(environment):
+        return _read_optional_string(environment.get("frame_convention"))
+    return None
+
+
+def _read_snapshot_from_payload(
+    payload: Any,
+) -> tuple[dict[str, Any], str, str, str | None, ConcreteWorldLayoutFrameMap | None]:
     if not _is_record(payload):
         raise WorldLayoutTransferError("World layout payload must be a JSON object")
     if _is_record(payload.get("manifest")):
@@ -161,16 +230,30 @@ def _read_snapshot_from_payload(payload: Any) -> tuple[dict[str, Any], str, str]
     if _is_record(payload.get("world_layout")):
         snapshot = payload["world_layout"]
         name = snapshot.get("name") if isinstance(snapshot.get("name"), str) else "static-world-layout"
-        return snapshot, name, "world_layout"
+        return (
+            snapshot,
+            name,
+            "world_layout",
+            _read_frame_convention(payload, snapshot),
+            _read_frame_map_hint(payload),
+        )
     if _is_record(payload.get("world_snapshot")):
         snapshot = payload["world_snapshot"]
         name = payload.get("title") if isinstance(payload.get("title"), str) else "world-snapshot"
-        return snapshot, name, "world_snapshot"
+        return (
+            snapshot,
+            name,
+            "world_snapshot",
+            _read_frame_convention(payload, snapshot),
+            _read_frame_map_hint(payload),
+        )
     raise WorldLayoutTransferError("Payload must contain world_layout, world_snapshot, or manifest")
 
 
 def parse_static_world_layout_payload(payload: Any) -> StaticWorldLayout:
-    snapshot, name, source_kind = _read_snapshot_from_payload(payload)
+    snapshot, name, source_kind, frame_convention, frame_map_hint = _read_snapshot_from_payload(
+        payload
+    )
     raw_objects = snapshot.get("objects")
     if not isinstance(raw_objects, list):
         raise WorldLayoutTransferError("World layout objects must be an array")
@@ -182,6 +265,8 @@ def parse_static_world_layout_payload(payload: Any) -> StaticWorldLayout:
         scenario_time_ms=scenario_time_ms,
         scenario_duration_ms=scenario_duration_ms,
         source_kind=source_kind,
+        frame_convention=frame_convention,
+        frame_map_hint=frame_map_hint,
     )
 
 
@@ -195,7 +280,30 @@ def load_static_world_layout(path: Path) -> StaticWorldLayout:
     return parse_static_world_layout_payload(payload)
 
 
-def _frame_matrix(frame_map: WorldLayoutFrameMap) -> np.ndarray:
+def resolve_world_layout_frame_map(
+    layout: StaticWorldLayout,
+    frame_map: WorldLayoutFrameMap = "auto",
+) -> ConcreteWorldLayoutFrameMap:
+    if frame_map != "auto":
+        _frame_matrix(frame_map)
+        return frame_map
+    if layout.frame_map_hint is not None:
+        return layout.frame_map_hint
+    if layout.frame_convention is None:
+        return "identity"
+    normalized = _normalize_frame_convention(layout.frame_convention)
+    if normalized in Z_UP_FRAME_CONVENTIONS:
+        return "identity"
+    if normalized in Y_UP_FRAME_CONVENTIONS:
+        return "studio-y-up-to-z-up"
+    raise WorldLayoutTransferError(
+        f"Unsupported world frame convention: {layout.frame_convention}. "
+        "Use ros-rep-103 for Z-up packages, studio-y-up for legacy Y-up layouts, "
+        "or set environment.frame_map explicitly."
+    )
+
+
+def _frame_matrix(frame_map: ConcreteWorldLayoutFrameMap) -> np.ndarray:
     if frame_map == "identity":
         return np.eye(3)
     if frame_map == "studio-y-up-to-z-up":
@@ -203,17 +311,26 @@ def _frame_matrix(frame_map: WorldLayoutFrameMap) -> np.ndarray:
     raise WorldLayoutTransferError(f"Unsupported frame map: {frame_map}")
 
 
-def _transform_position(position: Sequence[float], frame_map: WorldLayoutFrameMap) -> tuple[float, float, float]:
+def _transform_position(
+    position: Sequence[float],
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> tuple[float, float, float]:
     transformed = _frame_matrix(frame_map) @ np.array(position, dtype=float)
     return tuple(float(component) for component in transformed)
 
 
-def _transform_size(size: Sequence[float], frame_map: WorldLayoutFrameMap) -> tuple[float, float, float]:
+def _transform_size(
+    size: Sequence[float],
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> tuple[float, float, float]:
     transformed = np.abs(_frame_matrix(frame_map)) @ np.array(size, dtype=float)
     return tuple(float(component) for component in transformed)
 
 
-def _transform_quat_wxyz(rotation_rpy_rad: Sequence[float], frame_map: WorldLayoutFrameMap) -> tuple[float, float, float, float]:
+def _transform_quat_wxyz(
+    rotation_rpy_rad: Sequence[float],
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> tuple[float, float, float, float]:
     frame = _frame_matrix(frame_map)
     studio_rotation = Rotation.from_euler("xyz", rotation_rpy_rad).as_matrix()
     sim_rotation = frame @ studio_rotation @ frame.T
@@ -260,9 +377,10 @@ def _safe_sim_name(value: str, used_names: set[str], fallback: str) -> str:
 def build_sim_primitives(
     layout: StaticWorldLayout,
     *,
-    frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
+    frame_map: WorldLayoutFrameMap = "auto",
     include_hidden: bool = False,
 ) -> tuple[tuple[SimPrimitive, ...], tuple[str, ...]]:
+    resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     used_names: set[str] = set()
     primitives: list[SimPrimitive] = []
     warnings: list[str] = []
@@ -272,10 +390,10 @@ def build_sim_primitives(
             continue
         sim_name = _safe_sim_name(obj.id, used_names, f"object_{index}")
         rgba = _parse_rgba(obj.color)
-        position = _transform_position(obj.position_xyz, frame_map)
-        quat = _transform_quat_wxyz(obj.rotation_rpy_rad, frame_map)
+        position = _transform_position(obj.position_xyz, resolved_frame_map)
+        quat = _transform_quat_wxyz(obj.rotation_rpy_rad, resolved_frame_map)
         if obj.primitive_type == "cube":
-            sim_size = _transform_size(obj.size_xyz, frame_map)
+            sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
             primitives.append(
                 SimPrimitive(
                     source_id=obj.id,
@@ -311,8 +429,9 @@ def build_sim_primitives(
             )
             continue
         if obj.primitive_type == "cylinder":
-            diameter = max(obj.size_xyz[0], obj.size_xyz[1])
-            if abs(obj.size_xyz[0] - obj.size_xyz[1]) > 1e-12:
+            sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
+            diameter = max(sim_size[0], sim_size[1])
+            if abs(sim_size[0] - sim_size[1]) > 1e-12:
                 warnings.append(f"Normalized non-uniform cylinder diameter for object: {obj.id}")
             primitives.append(
                 SimPrimitive(
@@ -323,7 +442,7 @@ def build_sim_primitives(
                     sim_type="cylinder",
                     position_xyz=position,
                     quat_wxyz=quat,
-                    size_xyz=(diameter, diameter, obj.size_xyz[2]),
+                    size_xyz=(diameter, diameter, sim_size[2]),
                     rgba=rgba,
                     collision=True,
                 )
@@ -359,6 +478,79 @@ def _format_vec(values: Sequence[float]) -> str:
     return " ".join(_format_float(value) for value in values)
 
 
+def _mujoco_geom_attrs(primitive: SimPrimitive) -> dict[str, str]:
+    attrs = {
+        "name": primitive.sim_name,
+        "type": primitive.sim_type,
+        "pos": _format_vec(primitive.position_xyz),
+        "quat": _format_vec(primitive.quat_wxyz),
+        "rgba": _format_vec(primitive.rgba),
+    }
+    if primitive.sim_type == "box":
+        attrs["size"] = _format_vec(component * 0.5 for component in primitive.size_xyz)
+    elif primitive.sim_type == "sphere":
+        attrs["size"] = _format_float(max(primitive.size_xyz) * 0.5)
+    elif primitive.sim_type == "cylinder":
+        attrs["size"] = _format_vec((primitive.size_xyz[0] * 0.5, primitive.size_xyz[2] * 0.5))
+    else:
+        raise WorldLayoutTransferError(f"Unsupported MuJoCo primitive type: {primitive.sim_type}")
+    if not primitive.collision:
+        attrs["contype"] = "0"
+        attrs["conaffinity"] = "0"
+    return attrs
+
+
+def _add_mujoco_floor(worldbody: ET.Element) -> None:
+    ET.SubElement(
+        worldbody,
+        "geom",
+        {
+            "name": "wl_reference_floor",
+            "type": "plane",
+            "pos": "0 0 0",
+            "size": "4 4 0.01",
+            "rgba": "0.16 0.16 0.16 0.35",
+        },
+    )
+
+
+def _set_mujoco_offscreen_size(root: ET.Element, offscreen_size: tuple[int, int]) -> None:
+    visual = root.find("visual")
+    if visual is None:
+        visual = ET.SubElement(root, "visual")
+    global_visual = visual.find("global")
+    if global_visual is None:
+        global_visual = ET.SubElement(visual, "global")
+    global_visual.set("offwidth", str(max(int(offscreen_size[0]), 1)))
+    global_visual.set("offheight", str(max(int(offscreen_size[1]), 1)))
+
+
+def append_primitives_to_mujoco_mjcf(
+    mjcf_text: str,
+    primitives: Sequence[SimPrimitive],
+    *,
+    include_floor: bool = False,
+    offscreen_size: tuple[int, int] | None = None,
+) -> str:
+    try:
+        root = ET.fromstring(mjcf_text)
+    except ET.ParseError as exc:
+        raise WorldLayoutTransferError(f"Invalid MuJoCo MJCF XML: {exc}") from exc
+    if root.tag != "mujoco":
+        raise WorldLayoutTransferError("MuJoCo MJCF root element must be <mujoco>")
+    if offscreen_size is not None:
+        _set_mujoco_offscreen_size(root, offscreen_size)
+    worldbody = root.find("worldbody")
+    if worldbody is None:
+        worldbody = ET.SubElement(root, "worldbody")
+    if include_floor:
+        _add_mujoco_floor(worldbody)
+    for primitive in primitives:
+        ET.SubElement(worldbody, "geom", _mujoco_geom_attrs(primitive))
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode")
+
+
 def export_primitives_to_mujoco_mjcf(
     primitives: Sequence[SimPrimitive],
     *,
@@ -381,37 +573,9 @@ def export_primitives_to_mujoco_mjcf(
         )
     worldbody = ET.SubElement(root, "worldbody")
     if include_floor:
-        ET.SubElement(
-            worldbody,
-            "geom",
-            {
-                "name": "wl_reference_floor",
-                "type": "plane",
-                "pos": "0 0 0",
-                "size": "4 4 0.01",
-                "rgba": "0.16 0.16 0.16 0.35",
-            },
-        )
+        _add_mujoco_floor(worldbody)
     for primitive in primitives:
-        attrs = {
-            "name": primitive.sim_name,
-            "type": primitive.sim_type,
-            "pos": _format_vec(primitive.position_xyz),
-            "quat": _format_vec(primitive.quat_wxyz),
-            "rgba": _format_vec(primitive.rgba),
-        }
-        if primitive.sim_type == "box":
-            attrs["size"] = _format_vec(component * 0.5 for component in primitive.size_xyz)
-        elif primitive.sim_type == "sphere":
-            attrs["size"] = _format_float(max(primitive.size_xyz) * 0.5)
-        elif primitive.sim_type == "cylinder":
-            attrs["size"] = _format_vec((primitive.size_xyz[0] * 0.5, primitive.size_xyz[2] * 0.5))
-        else:
-            raise WorldLayoutTransferError(f"Unsupported MuJoCo primitive type: {primitive.sim_type}")
-        if not primitive.collision:
-            attrs["contype"] = "0"
-            attrs["conaffinity"] = "0"
-        ET.SubElement(worldbody, "geom", attrs)
+        ET.SubElement(worldbody, "geom", _mujoco_geom_attrs(primitive))
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode")
 
@@ -732,16 +896,17 @@ def build_static_transfer_report(
     layout: StaticWorldLayout,
     *,
     backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
-    frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
+    frame_map: WorldLayoutFrameMap = "auto",
     include_hidden: bool = False,
     write_mjcf_path: Path | None = None,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
 ) -> dict[str, Any]:
+    resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     primitives, warnings = build_sim_primitives(
         layout,
-        frame_map=frame_map,
+        frame_map=resolved_frame_map,
         include_hidden=include_hidden,
     )
     mjcf_text = export_primitives_to_mujoco_mjcf(primitives, model_name=layout.name)
@@ -786,8 +951,11 @@ def build_static_transfer_report(
             "active_object_count": len(primitives),
             "scenario_time_ms": layout.scenario_time_ms,
             "scenario_duration_ms": layout.scenario_duration_ms,
+            "frame_convention": layout.frame_convention,
+            "frame_map_hint": layout.frame_map_hint,
         },
-        "frame_map": frame_map,
+        "requested_frame_map": frame_map,
+        "frame_map": resolved_frame_map,
         "tolerances": {
             "position_m": position_tolerance_m,
             "size_m": size_tolerance_m,
@@ -816,7 +984,7 @@ def check_static_world_layout_file(
     layout_path: Path,
     *,
     backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
-    frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
+    frame_map: WorldLayoutFrameMap = "auto",
     include_hidden: bool = False,
     write_mjcf_path: Path | None = None,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
@@ -840,7 +1008,7 @@ def check_static_world_layout_text(
     raw_json: str,
     *,
     backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
-    frame_map: WorldLayoutFrameMap = "studio-y-up-to-z-up",
+    frame_map: WorldLayoutFrameMap = "auto",
     include_hidden: bool = False,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,

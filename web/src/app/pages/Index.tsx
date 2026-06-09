@@ -90,6 +90,7 @@ import { useIluAssemblyBridge } from "@/app/pages/index/useIluAssemblyBridge";
 import { useIndexPageLayoutProps } from "@/app/pages/index/useIndexPageLayoutProps";
 import { useIndexViewerProps } from "@/app/pages/index/useIndexViewerProps";
 import { resolveViewerDraftPreview } from "@/app/pages/index/viewerDraftPreview";
+import { useSimulatorRuntimeLauncher } from "@/app/pages/index/useSimulatorRuntimeLauncher";
 import {
   FolderUploadScreen,
   IkDebuggerPanel,
@@ -393,7 +394,7 @@ const Index = () => {
     urdfFileName: urdfFile?.name,
     vizUrdfContent,
   });
-  const { isAttachingIluSession } = useIluSessionBridge({
+  const { attachedIluSessionId, isAttachingIluSession } = useIluSessionBridge({
     clearGitHubSource,
     hydrateLoadedAssetsFromFiles,
     iluSessionParam,
@@ -745,6 +746,7 @@ const Index = () => {
   );
   const {
     activeWorldSnapshotRef,
+    buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
@@ -802,6 +804,15 @@ const Index = () => {
     updateUrdfFile: updateUrdfFileWithCollaboration,
     vizUrdfContent,
     worldImportParams,
+  });
+  const { simulatorRuntime } = useSimulatorRuntimeLauncher({
+    activeUrdfPath,
+    attachedIluSessionId,
+    buildCurrentWorldScenePackageManifest,
+    meshFiles,
+    originalUrdfContent,
+    packageRoots,
+    vizUrdfContent,
   });
   const {
     effectiveRuntimePose,
@@ -2568,6 +2579,7 @@ const Index = () => {
     setSimulationPrepResetPoseRequestKey(String(Date.now()));
     setShowHealthActionPanel(true);
   };
+
   useEffect(() => {
     if (showHealthActionPanel) {
       return;
@@ -3185,22 +3197,10 @@ const Index = () => {
     onClose: () => setShowLoadIssues(false),
   };
 
-  const shouldShowHealthActionPanel =
-    Boolean(robotFrameLint && robotFrameLint.verdict !== "canonical") ||
-    inertialIssues.missing.length > 0 ||
-    inertialIssues.invalidMass.length > 0 ||
-    inertialIssues.invalidTensor.length > 0 ||
-    (resolvedPhysicsPlausibilitySummary?.excludedLinks.length ?? 0) > 0 ||
-    resolvedPhysicsPlausibilitySummary?.verdict === "mass-too-high" ||
-    resolvedPhysicsPlausibilitySummary?.verdict === "mass-too-low" ||
-    repeatedInertiaDiagnostics.length > 0 ||
-    Boolean(inertialSynthesisSession) ||
-    Boolean(bakePreviewSession) ||
-    Boolean(canonicalSynthesisPreview);
-
   const healthActionPanelProps: PageLayoutProps["healthActionPanelProps"] = {
-    open: showHealthActionPanel && shouldShowHealthActionPanel,
+    open: showHealthActionPanel,
     onClose: () => setShowHealthActionPanel(false),
+    simulatorRuntime,
     statusTone: simulationPrepStatus.tone,
     statusLabel: simulationPrepStatus.label,
     statusSummary: simulationPrepStatus.summary,
@@ -3459,7 +3459,7 @@ const Index = () => {
     collisionSimplifyLinks,
     collisionMergedLinks,
     inertialVisualization,
-    simulationPrepPanelOpen: showHealthActionPanel && shouldShowHealthActionPanel,
+    simulationPrepPanelOpen: showHealthActionPanel,
     simulationPrepResetPoseRequestKey,
     simulationPrepRobotMirrorVisualization: activeSimulationPrepRobotMirrorVisualization,
     simulationPrepRobotMirrorDeemphasizedLinkNames:

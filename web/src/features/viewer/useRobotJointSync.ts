@@ -231,7 +231,9 @@ export const useRobotJointSync = ({
       // IK drag and live teleop telemetry both own the visual pose directly.
       // Skipping the smoother avoids competing writes and hidden telemetry lag.
       const shouldDirectApplyLiveTeleop =
-        liveTeleopJointSyncActive && !isPlaying && !isDraggingJoint;
+        liveTeleopJointSyncActive &&
+        !isPlaying &&
+        !isDraggingJoint;
       if (
         !isPlaying &&
         (shouldDirectApplyLiveTeleop || (!isIkHandleDragging && !isIkTrajectoryApplying))

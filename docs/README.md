@@ -1,6 +1,6 @@
 # URDF Studio Documentation
 
-This index is for product documentation: how to install, launch, operate, and understand the public file/session formats. Internal architecture notes and research scratch docs are intentionally not part of the public reading path.
+This index is for product documentation: how to install, launch, operate, and understand the public file/session formats. Architecture notes are kept separate from the public reading path.
 
 ## Start Here
 

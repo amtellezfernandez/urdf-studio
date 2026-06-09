@@ -35,8 +35,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--frame-map",
-        choices=["studio-y-up-to-z-up", "identity"],
-        default="studio-y-up-to-z-up",
+        choices=["auto", "studio-y-up-to-z-up", "identity"],
+        default="auto",
         help="Coordinate conversion from URDF Studio layout coordinates to simulator coordinates.",
     )
     parser.add_argument(

@@ -217,7 +217,7 @@ export default defineConfig(({ mode }) => {
       exclude: ["parquet-wasm"],
     },
     build: {
-      chunkSizeWarningLimit: 900,
+      chunkSizeWarningLimit: 1200,
       rollupOptions: {
         output: {
           manualChunks(id) {

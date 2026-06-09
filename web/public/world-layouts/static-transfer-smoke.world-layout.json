@@ -32,7 +32,7 @@
         "name": "transfer-column",
         "type": "cylinder",
         "position_xyz": [-0.38, 0.4, 0.24],
-        "size_xyz": [0.18, 0.18, 0.8],
+        "size_xyz": [0.18, 0.8, 0.18],
         "color": "#22c55e",
         "source": "user",
         "tracked_joint_name": null,

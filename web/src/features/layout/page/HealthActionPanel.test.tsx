@@ -659,7 +659,7 @@ describe("HealthActionPanel", () => {
       );
     });
 
-    expect(getText(container)).toContain("Simulation Prep");
+    expect(getText(container)).toContain("Simulator");
     const closePanelButton = container.querySelector('button[aria-label="Close simulation prep panel"]');
     expect(closePanelButton).toBeTruthy();
     expect(getText(container)).toContain("Physics Warning");

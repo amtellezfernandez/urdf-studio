@@ -1,7 +1,48 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolvePythonForLeRobotVenv, runSetupSequence } from './setup.js';
+import {
+  assertIluRuntimeContract,
+  resolvePythonForLeRobotVenv,
+  runSetupSequence,
+} from './setup.js';
+
+test('setup validates the i-love-urdf simulator transfer contract', () => {
+  assert.doesNotThrow(() =>
+    assertIluRuntimeContract(
+      {
+        urdfCore: {
+          convertURDFToMJCF: () => ({ mjcfContent: '<mujoco model="demo"/>' }),
+        },
+        urdfCoreBundleMeshAssetsNode: {
+          bundleMeshAssetsForUrdfFile: () => ({}),
+        },
+        urdfCoreNodeDomRuntime: {
+          installNodeDomGlobals: () => {},
+        },
+      },
+      {
+        DOMParser: function DOMParser() {},
+        XMLSerializer: function XMLSerializer() {},
+      }
+    )
+  );
+});
+
+test('setup rejects an incomplete i-love-urdf simulator transfer contract', () => {
+  assert.throws(
+    () =>
+      assertIluRuntimeContract(
+        {
+          urdfCore: {},
+          urdfCoreBundleMeshAssetsNode: {},
+          urdfCoreNodeDomRuntime: {},
+        },
+        {}
+      ),
+    /convertURDFToMJCF/
+  );
+});
 
 test('setup uses uv-managed Python 3.12 by default', () => {
   const originalBootstrapPython = process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
@@ -50,6 +91,7 @@ test('setup stops before backend dependency installation when unified Python set
   await assert.rejects(
     runSetupSequence({
       installDependencies: record('installDependencies'),
+      verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
       setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', false),
       installBackendDeps: unreachable('installBackendDeps'),
@@ -68,8 +110,46 @@ test('setup stops before backend dependency installation when unified Python set
 
   assert.deepEqual(calls, [
     'installDependencies',
+    'verifyIluRuntimeContract',
     'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
+  ]);
+});
+
+test('setup stops before workspace setup when i-love-urdf runtime check fails', async () => {
+  const calls = [];
+  const record = (name, result) => async () => {
+    calls.push(name);
+    return result;
+  };
+  const unreachable = (name) => async () => {
+    calls.push(name);
+    throw new Error(`${name} should not be reached`);
+  };
+
+  await assert.rejects(
+    runSetupSequence({
+      installDependencies: record('installDependencies'),
+      verifyIluRuntimeContract: record('verifyIluRuntimeContract', false),
+      setupUrdfOpsWorkspace: unreachable('setupUrdfOpsWorkspace'),
+      setupPythonBackendEnvironment: unreachable('setupPythonBackendEnvironment'),
+      installBackendDeps: unreachable('installBackendDeps'),
+      installGenesisRuntime: unreachable('installGenesisRuntime'),
+      installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
+      installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
+      installMjlabRuntime: unreachable('installMjlabRuntime'),
+      installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
+      checkIkd: unreachable('checkIkd'),
+      setupHuggingFace: unreachable('setupHuggingFace'),
+      setupGitHub: unreachable('setupGitHub'),
+      installOptionalGlobalIlu: unreachable('installOptionalGlobalIlu'),
+    }),
+    /i-love-urdf runtime setup failed/
+  );
+
+  assert.deepEqual(calls, [
+    'installDependencies',
+    'verifyIluRuntimeContract',
   ]);
 });
 
@@ -82,6 +162,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
 
   const result = await runSetupSequence({
     installDependencies: record('installDependencies'),
+    verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
     setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
     setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
     installBackendDeps: record('installBackendDeps', true),
@@ -113,6 +194,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
   assert.equal(result.mjlabRuntimeResult.ok, false);
   assert.deepEqual(calls, [
     'installDependencies',
+    'verifyIluRuntimeContract',
     'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
     'installBackendDeps',
@@ -142,6 +224,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
   await assert.rejects(
     runSetupSequence({
       installDependencies: record('installDependencies'),
+      verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
       setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
       installBackendDeps: record('installBackendDeps', true),
@@ -165,6 +248,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
 
   assert.deepEqual(calls, [
     'installDependencies',
+    'verifyIluRuntimeContract',
     'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
     'installBackendDeps',

@@ -32,7 +32,7 @@ Expected flow:
 4. URDF Studio renders those state frames.
 5. Browser motion buttons stay disabled because the browser does not have control authority.
 
-This mode should be the default for defense/fleet demos because it is lower risk: no browser command path is armed.
+This mode should be the default for controlled fleet demos because it is lower risk: no browser command path is armed.
 
 ### Drive From This Browser
 
@@ -194,12 +194,12 @@ serials, or simulator tokens in share URLs. Guests should receive scoped URDF
 Studio capabilities only. The gateway remains the only component that knows the
 raw transport ids and can convert accepted commands into hardware frames.
 
-When debugging XoQ, remember that an endpoint returning Damiao-looking frames on
+When validating XoQ, remember that an endpoint returning Damiao-looking frames on
 `0x11` through `0x18` is not enough proof that it is the physical robot in front
 of you. The upstream package also includes a fake Damiao CAN server. Require a
 positive physical correlation check before enabling motion: manually move a
 known joint, verify the reported encoder delta, verify side/joint mapping, and
-reject control if the endpoint behaves like a simulator, stale demo, or different
+reject control if the endpoint behaves like a simulator, stale endpoint, or different
 robot.
 
 See `third_party/xoq-can/README.md` for the inspected upstream behavior and the
@@ -221,7 +221,7 @@ OPENARM_SINGLE_MINI_PORT=/dev/serial/by-id/<one-openarm-mini-leader>
 npm run openarm:single-mini-snapshot
 ```
 
-The single-Mini snapshot command reads that one leader arm and prints a virtual bimanual mirror payload for Studio/debug tests. It does not send follower CAN frames.
+The single-Mini snapshot command reads that one leader arm and prints a virtual bimanual mirror payload for bench checks. It does not send follower CAN frames.
 
 Print the exact command before running it:
 

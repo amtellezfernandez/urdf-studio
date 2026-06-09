@@ -1344,12 +1344,7 @@ export const useIkSolver = ({
         endEffectorLink: targetEndEffectorLink,
       });
       const rawNextSafe = applyIkMotionSafety(rawNextJointValues);
-
-      // Visual drag smoothing — purely cosmetic, keeps the 3D robot from
-      // snapping between IK throttle intervals.
-      // Uses a fixed alpha independent of the solver's smoothAlpha (which is
-      // for solve blending and is far too low for interactive drag feedback).
-      // α=0.55 at ~30–60 Hz solves: reaches 95% of target in 4–5 ticks (~80ms).
+      // Visual smoothing only; store/recording keep the raw IK target.
       const DRAG_VISUAL_ALPHA = 0.55;
       const eeKey = targetEndEffectorLink ?? "";
       const prev = dragSmoothedJointsRef.current.get(eeKey) ?? {};
@@ -1371,8 +1366,7 @@ export const useIkSolver = ({
         // Visual: apply smoothed values so the 3D robot glides.
         applyJointValues(robotAny, nextJointValues, { filter: false });
       }
-      // Store and recording get the raw (unsmoothed) solution — the user's true
-      // intent. Smoothing is visual only; it must not lag or distort the dataset.
+      // Store and recording get the raw solution.
       setStoreJointValues(rawNextSafe);
       onIkApplied?.(rawNextSafe, {
         inputSource: OPERATOR_TELEOP_INPUT_SOURCE_IK_DRAG,

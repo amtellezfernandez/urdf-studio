@@ -166,8 +166,8 @@ export const TopNavBar = (props: TopNavBarProps) => {
                 : "border-border/60 bg-background/35 text-muted-foreground hover:bg-muted/25 hover:text-foreground"
             }`}
             onClick={props.onOpenSimulationPrep}
-            aria-label="Open simulation prep"
-            title={`Simulation Prep: ${props.simulationPrepStatusLabel}`}
+            aria-label="Open simulator"
+            title={`Simulator: ${props.simulationPrepStatusLabel}`}
           >
             <span
               aria-hidden="true"
@@ -175,7 +175,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
                 props.simulationPrepNeedsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
               }`}
             />
-            <span className="text-[10px] font-medium text-foreground">Sim Prep</span>
+            <span className="text-[10px] font-medium text-foreground">Simulator</span>
             <span className="text-[10px] text-muted-foreground">
               {props.simulationPrepNeedsAttention ? "Review" : "Ready"}
             </span>

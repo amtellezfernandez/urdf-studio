@@ -186,7 +186,7 @@ function runNpmInstallIn(cwd, args, options = {}) {
 
 async function installDependencies() {
   logArrow('Installing dependencies...');
-  
+
   try {
     const nodeModulesPath = join(rootDir, 'node_modules');
     const viteBin = join(nodeModulesPath, '.bin', 'vite');
@@ -203,6 +203,60 @@ async function installDependencies() {
   } catch (error) {
     log('✗ Failed to install dependencies', colors.yellow);
     throw error;
+  }
+}
+
+function assertIluRuntimeContract(
+  {
+    urdfCore,
+    urdfCoreBundleMeshAssetsNode,
+    urdfCoreNodeDomRuntime,
+  },
+  domGlobals = globalThis
+) {
+  const missingApis = [];
+  if (typeof urdfCore?.convertURDFToMJCF !== 'function') {
+    missingApis.push('convertURDFToMJCF');
+  }
+  if (typeof urdfCoreBundleMeshAssetsNode?.bundleMeshAssetsForUrdfFile !== 'function') {
+    missingApis.push('bundleMeshAssetsForUrdfFile');
+  }
+  if (typeof urdfCoreNodeDomRuntime?.installNodeDomGlobals !== 'function') {
+    missingApis.push('installNodeDomGlobals');
+  }
+  if (typeof domGlobals.DOMParser !== 'function') {
+    missingApis.push('DOMParser');
+  }
+  if (typeof domGlobals.XMLSerializer !== 'function') {
+    missingApis.push('XMLSerializer');
+  }
+  if (missingApis.length > 0) {
+    throw new Error(`i-love-urdf runtime is missing required API(s): ${missingApis.join(', ')}`);
+  }
+
+  const conversion = urdfCore.convertURDFToMJCF(
+    '<robot name="setup_check"><link name="base"/></robot>'
+  );
+  if (typeof conversion?.mjcfContent !== 'string' || !conversion.mjcfContent.includes('<mujoco')) {
+    throw new Error('i-love-urdf MJCF conversion check failed.');
+  }
+}
+
+async function verifyIluRuntimeContract() {
+  log('');
+  logArrow('Checking i-love-urdf runtime');
+  log('');
+
+  try {
+    const modules = await import('./urdfCoreModules.js');
+    assertIluRuntimeContract(modules);
+    logSuccess('i-love-urdf runtime ready');
+    return true;
+  } catch (error) {
+    log('✗ i-love-urdf runtime check failed', colors.yellow);
+    logInfo(error?.message || String(error));
+    logInfo('Run npm install, then rerun npm run setup.');
+    return false;
   }
 }
 
@@ -1435,6 +1489,7 @@ async function installTwinDepsIfRequested() {
 async function runSetupSequence(overrides = {}) {
   const steps = {
     installDependencies,
+    verifyIluRuntimeContract,
     setupUrdfOpsWorkspace,
     setupPythonBackendEnvironment,
     installBackendDeps,
@@ -1451,6 +1506,10 @@ async function runSetupSequence(overrides = {}) {
   };
 
   await steps.installDependencies();
+  const iluRuntimeReady = await steps.verifyIluRuntimeContract();
+  if (!iluRuntimeReady) {
+    throw new Error('i-love-urdf runtime setup failed');
+  }
   const urdfOpsInstalled = await steps.setupUrdfOpsWorkspace();
   if (!urdfOpsInstalled) {
     throw new Error('URDF Ops setup failed');
@@ -1517,7 +1576,9 @@ if (isMainModule()) {
 }
 
 export {
+  assertIluRuntimeContract,
   findPythonForLeRobot,
   resolvePythonForLeRobotVenv,
   runSetupSequence,
+  verifyIluRuntimeContract,
 };

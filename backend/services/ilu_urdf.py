@@ -50,6 +50,40 @@ class RobotMorphologySummary:
     wheel_count: int
 
 
+@dataclass(frozen=True)
+class BundledMeshAsset:
+    original: str
+    rewritten: str
+    source_path: str
+    target_path: str
+
+
+@dataclass(frozen=True)
+class BundleMeshAssetsResult:
+    success: bool
+    content: str
+    out_path: str
+    assets_root: str
+    copied_files: int
+    bundled: tuple[BundledMeshAsset, ...]
+    unresolved: tuple[str, ...]
+    error: str | None
+
+
+@dataclass(frozen=True)
+class MjcfConversionStats:
+    bodies_created: int
+    joints_converted: int
+    geometries_converted: int
+
+
+@dataclass(frozen=True)
+class MjcfConversionResult:
+    mjcf_content: str
+    warnings: tuple[str, ...]
+    stats: MjcfConversionStats
+
+
 def _map_bridge_error(command: str, detail: str) -> IluUrdfBridgeError:
     lowered = detail.lower()
     if "target xacro file not found" in lowered:
@@ -189,6 +223,102 @@ def expand_github_xacro(request: GitHubXacroExpandRequest) -> tuple[str, str | N
     if not isinstance(urdf, str) or not urdf.strip():
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid GitHub xacro expansion response.")
     return urdf, None
+
+
+def bundle_mesh_assets_for_urdf_file(
+    *,
+    urdf_path: str,
+    urdf_xml: str,
+    out_path: str,
+    extra_search_roots: list[str] | None = None,
+) -> BundleMeshAssetsResult:
+    response = _run_bridge(
+        "bundle-mesh-assets",
+        {
+            "urdfPath": urdf_path,
+            "urdfXml": urdf_xml,
+            "outPath": out_path,
+            "extraSearchRoots": extra_search_roots or [],
+        },
+    )
+    raw_bundled = response.get("bundled")
+    raw_unresolved = response.get("unresolved")
+    if not isinstance(raw_bundled, list) or not isinstance(raw_unresolved, list):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle response.")
+
+    def _read_asset(value: object) -> BundledMeshAsset:
+        if not isinstance(value, dict):
+            raise IluUrdfBridgeError(502, "ilu bridge returned an invalid bundled mesh entry.")
+        original = value.get("original")
+        rewritten = value.get("rewritten")
+        source_path = value.get("sourcePath")
+        target_path = value.get("targetPath")
+        if not all(isinstance(item, str) for item in (original, rewritten, source_path, target_path)):
+            raise IluUrdfBridgeError(502, "ilu bridge returned an invalid bundled mesh entry.")
+        return BundledMeshAsset(
+            original=original,
+            rewritten=rewritten,
+            source_path=source_path,
+            target_path=target_path,
+        )
+
+    success = response.get("success")
+    content = response.get("content")
+    returned_out_path = response.get("outPath")
+    assets_root = response.get("assetsRoot")
+    copied_files = response.get("copiedFiles")
+    error = response.get("error")
+    if not isinstance(success, bool) or not isinstance(content, str):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle response.")
+    if not isinstance(returned_out_path, str) or not isinstance(assets_root, str):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle path.")
+    if not isinstance(copied_files, int) or copied_files < 0:
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid copied file count.")
+    if error is not None and not isinstance(error, str):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid mesh bundle error.")
+    unresolved = tuple(item for item in raw_unresolved if isinstance(item, str))
+    if len(unresolved) != len(raw_unresolved):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid unresolved mesh entry.")
+    return BundleMeshAssetsResult(
+        success=success,
+        content=content,
+        out_path=returned_out_path,
+        assets_root=assets_root,
+        copied_files=copied_files,
+        bundled=tuple(_read_asset(item) for item in raw_bundled),
+        unresolved=unresolved,
+        error=error,
+    )
+
+
+def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
+    response = _run_bridge("convert-mjcf", {"urdfXml": urdf_xml})
+    mjcf_content = response.get("mjcfContent")
+    raw_warnings = response.get("warnings")
+    raw_stats = response.get("stats")
+    if not isinstance(mjcf_content, str) or not isinstance(raw_warnings, list):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion response.")
+    if not isinstance(raw_stats, dict):
+        raise IluUrdfBridgeError(502, "ilu bridge returned invalid MJCF conversion stats.")
+
+    def _read_count(key: str) -> int:
+        value = raw_stats.get(key)
+        if not isinstance(value, int) or value < 0:
+            raise IluUrdfBridgeError(502, f"ilu bridge returned invalid MJCF conversion stat: {key}.")
+        return value
+
+    warnings = tuple(item for item in raw_warnings if isinstance(item, str))
+    if len(warnings) != len(raw_warnings):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion warning.")
+    return MjcfConversionResult(
+        mjcf_content=mjcf_content,
+        warnings=warnings,
+        stats=MjcfConversionStats(
+            bodies_created=_read_count("bodiesCreated"),
+            joints_converted=_read_count("jointsConverted"),
+            geometries_converted=_read_count("geometriesConverted"),
+        ),
+    )
 
 
 def compute_sha256_text(value: str) -> str:

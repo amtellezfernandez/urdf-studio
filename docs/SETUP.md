@@ -5,7 +5,8 @@ This guide covers installing and launching URDF Studio. For the product walkthro
 ## Quick Start
 
 ```bash
-cd ~/studio/urdf-studio
+git clone https://github.com/amtellezfernandez/urdf-studio.git
+cd urdf-studio
 npm run setup
 npm run start
 ```
@@ -41,7 +42,7 @@ Genesis and MJLab are simulator adapters. Setup checks and installs them when th
 Optional setup commands:
 
 ```bash
-npm run setup -- --install-global-ilu
+npm run setup:check
 npm run setup -- --twin
 ```
 
@@ -120,6 +121,7 @@ npm run start -- --help
 | `npm run start` | Start the local app |
 | `npm run team` | Start a trusted-network team session |
 | `npm run data` | Start phone/data workflow with tunnel acknowledgement |
+| `npm run release:check` | Run release-readiness checks |
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |

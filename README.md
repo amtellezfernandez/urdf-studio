@@ -30,7 +30,8 @@ One click loads a sample robot, scene objects, cameras, and replayable episodes.
 ## Start Here
 
 ```bash
-cd ~/studio/urdf-studio
+git clone https://github.com/amtellezfernandez/urdf-studio.git
+cd urdf-studio
 npm run setup
 npm run start
 ```
@@ -84,10 +85,10 @@ Setup installs the app dependencies and local runtime used by URDF Studio. It ca
 
 Genesis and MJLab are optional simulator adapters. Setup reports their status, but the base app install continues if an optional adapter wheel is unavailable on the current laptop.
 
-Useful setup options:
+Useful setup commands:
 
 ```bash
-npm run setup -- --install-global-ilu
+npm run setup:check
 npm run setup -- --twin
 ```
 
@@ -211,6 +212,7 @@ npm run data -- --ack-public-tunnel
 ## Developer Checks
 
 ```bash
+npm run release:check
 npm run lint
 npm run typecheck
 npm run test

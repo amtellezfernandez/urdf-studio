@@ -748,6 +748,7 @@ export const useWorldSceneManager = ({
 
   return {
     activeWorldSnapshotRef,
+    buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,

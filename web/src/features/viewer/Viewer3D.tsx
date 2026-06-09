@@ -4699,10 +4699,8 @@ export const Viewer3D = ({
         currentJointValues,
       });
     if (!changed || Object.keys(liveJointValues).length === 0) return;
-    setStoreJointValues({
-      ...currentJointValues,
-      ...liveJointValues,
-    });
+    const candidateJointValues = { ...currentJointValues, ...liveJointValues };
+    setStoreJointValues(candidateJointValues);
   }, [
     availableJointNames,
     liveTeleopJointSyncActive,

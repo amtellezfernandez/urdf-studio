@@ -3,14 +3,18 @@
 import process from "node:process";
 import {
   urdfCore,
+  urdfCoreBundleMeshAssetsNode,
   urdfCoreLoadSourceNode,
   urdfCoreUrdfNode,
   urdfCoreXacroNode,
 } from "../../tools/scripts/urdfCoreModules.js";
+import fs from "node:fs";
+import path from "node:path";
 
 const {
   analyzeRobotMorphology,
   analyzeUrdf,
+  convertURDFToMJCF,
 } = urdfCore;
 const {
   computeKinematicFingerprint,
@@ -22,6 +26,9 @@ const {
 const {
   loadSourceFromGitHub,
 } = urdfCoreLoadSourceNode;
+const {
+  bundleMeshAssetsForUrdfFile,
+} = urdfCoreBundleMeshAssetsNode;
 
 const readJsonStdin = async () => {
   const chunks = [];
@@ -60,6 +67,33 @@ const main = async () => {
   if (command === "strip-kinematics-urdf") {
     const urdfXml = String(payload.urdfXml || "");
     process.stdout.write(JSON.stringify({ urdf: stripUrdfForKinematics(urdfXml) }));
+    return;
+  }
+
+  if (command === "bundle-mesh-assets") {
+    const urdfPath = String(payload.urdfPath || "").trim();
+    const outPath = String(payload.outPath || "").trim();
+    if (!urdfPath || !outPath) {
+      fail("bundle-mesh-assets requires urdfPath and outPath.");
+    }
+
+    const result = bundleMeshAssetsForUrdfFile({
+      urdfPath,
+      urdfContent: String(payload.urdfXml || ""),
+      outPath,
+      extraSearchRoots: Array.isArray(payload.extraSearchRoots)
+        ? payload.extraSearchRoots.map((value) => String(value || "").trim()).filter(Boolean)
+        : [],
+    });
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, result.content, "utf8");
+    process.stdout.write(JSON.stringify(result));
+    return;
+  }
+
+  if (command === "convert-mjcf") {
+    const urdfXml = String(payload.urdfXml || "");
+    process.stdout.write(JSON.stringify(convertURDFToMJCF(urdfXml)));
     return;
   }
 

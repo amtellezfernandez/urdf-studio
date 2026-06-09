@@ -31,7 +31,8 @@ Episode replay keeps the robot pose, frame counter, graph cursor, and joint curv
 ## First Launch
 
 ```bash
-cd ~/studio/urdf-studio
+git clone https://github.com/amtellezfernandez/urdf-studio.git
+cd urdf-studio
 npm run setup
 npm run start
 ```

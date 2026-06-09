@@ -71,6 +71,11 @@ import {
 } from "@/features/viewer/inertialVisualizationParams";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shared/ui/tooltip";
 import { HEALTH_ACTION_PANEL_PARAMS } from "@/features/layout/page/healthActionPanelParams";
+import { HealthActionPanelHeader } from "@/features/layout/page/HealthActionPanelHeader";
+import {
+  HealthActionPanelSimulatorRuntime,
+  type HealthActionPanelSimulatorRuntimeState,
+} from "@/features/layout/page/HealthActionPanelSimulatorRuntime";
 
 type SimStatusTone = "safe" | "warning" | "danger";
 
@@ -109,6 +114,7 @@ type CompatibilityRobotMirrorSelectionGroup = {
 type HealthActionPanelProps = {
   open: boolean;
   onClose?: () => void;
+  simulatorRuntime?: HealthActionPanelSimulatorRuntimeState | null;
   statusTone?: SimStatusTone;
   statusLabel?: string | null;
   statusSummary?: string | null;
@@ -1545,6 +1551,7 @@ const resolveRepeatedInertiaSymmetryOutcome = ({
 export const HealthActionPanel = ({
   open,
   onClose,
+  simulatorRuntime = null,
   statusTone = "warning",
   statusLabel = null,
   statusSummary = null,
@@ -2088,33 +2095,23 @@ export const HealthActionPanel = ({
           maxHeight: `calc(100vh - ${SIMULATION_PREP_PANEL_DEFAULT_TOP_PX + SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX}px)`,
         }}
       >
-        <div
-          data-drag-handle="simulation-prep"
-          className={`flex items-start gap-3 border-b border-border/60 p-3 select-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
-          onMouseDown={handlePanelDragStart}
-          title="Drag simulation prep panel"
-        >
-          <StatusIcon className="mt-0.5 h-4 w-4 text-foreground" />
-          <div className="min-w-0 flex-1 pr-2">
-            <div className="text-sm font-semibold text-foreground">Simulation Prep</div>
-          </div>
-          <div className="-mr-1 -mt-1 flex shrink-0 items-center self-start">
-            {onClose ? (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 shrink-0"
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={onClose}
-                aria-label="Close simulation prep panel"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
+        <HealthActionPanelHeader
+          isDragging={isDragging}
+          onClose={onClose}
+          onDragStart={handlePanelDragStart}
+          statusIcon={StatusIcon}
+          title="Simulator"
+        />
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          {simulatorRuntime ? (
+            <HealthActionPanelSimulatorRuntime
+              className={CHECKLIST_CARD_CLASS}
+              statusLabel={statusLabel}
+              {...simulatorRuntime}
+            />
+          ) : null}
+
           {hasSymmetryPlanesSection ? (
             <div data-section="symmetry-planes" className={CHECKLIST_CARD_CLASS}>
               <div className="text-[11px] font-medium text-foreground/85">Symmetry Planes</div>

@@ -45,7 +45,7 @@ The room token lives in the URL fragment after `#`, so normal HTTP requests do n
 
 ## Network Notes
 
-Use `npm run team` only on a network you intentionally trust. For a hackathon or defense demo with several teams on the same Wi-Fi, each team should run its own server laptop and share only its own collaboration link.
+Use `npm run team` only on a network you intentionally trust. For controlled internal demos with several teams on the same Wi-Fi, each team should run its own server laptop and share only its own collaboration link.
 
 If a teammate cannot connect:
 

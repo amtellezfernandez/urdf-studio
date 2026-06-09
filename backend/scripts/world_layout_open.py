@@ -12,6 +12,7 @@ from backend.services.world_layout_static_transfer import (
     build_sim_primitives,
     export_primitives_to_mujoco_mjcf,
     load_static_world_layout,
+    resolve_world_layout_frame_map,
 )
 
 
@@ -36,8 +37,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--frame-map",
-        choices=["studio-y-up-to-z-up", "identity"],
-        default="studio-y-up-to-z-up",
+        choices=["auto", "studio-y-up-to-z-up", "identity"],
+        default="auto",
         help="Coordinate conversion from URDF Studio layout coordinates to simulator coordinates.",
     )
     parser.add_argument(
@@ -283,16 +284,18 @@ def _open_genesis_viewer(
 def main() -> int:
     args = _parse_args()
     layout = load_static_world_layout(Path(args.layout))
+    resolved_frame_map = resolve_world_layout_frame_map(layout, args.frame_map)
     primitives, warnings = build_sim_primitives(
         layout,
-        frame_map=args.frame_map,  # type: ignore[arg-type]
+        frame_map=resolved_frame_map,
         include_hidden=args.include_hidden,
     )
     for warning in warnings:
         print(f"[world-layout-open] warning: {warning}")
     print(
         "[world-layout-open] "
-        f"layout={layout.name} backend={args.backend} objects={len(primitives)} frame_map={args.frame_map}"
+        f"layout={layout.name} backend={args.backend} objects={len(primitives)} "
+        f"frame_map={resolved_frame_map} requested_frame_map={args.frame_map}"
     )
     if args.backend == "mujoco":
         _open_mujoco_viewer(

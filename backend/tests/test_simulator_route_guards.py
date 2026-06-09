@@ -24,6 +24,8 @@ from backend.ros_viz.params import ROSVIZ_STREAM_SUBPROTOCOL, ROSVIZ_STREAM_TICK
 TEST_SIMULATOR_TOKEN = "sim-token"
 TEST_OPERATOR_ONLY_PATHS = (
     "/world-bridge/status",
+    "/simulators",
+    "/simulators/genesis/runtime",
     "/runtime/sessions/demo/stats",
     "/attestation/status",
     "/ilu-session/demo-session",

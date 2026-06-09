@@ -361,6 +361,7 @@ export const useIluSessionBridge = ({
   ]);
 
   return {
+    attachedIluSessionId,
     isAttachingIluSession,
   };
 };
