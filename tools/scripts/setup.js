@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { appendFileSync, readFileSync, writeFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { dirname, join, resolve } from 'path';
 import { execFileSync, execSync, spawnSync } from 'child_process';
 import readline from 'readline';
 import { maskToken, resolveSetupGitHubToken } from './githubAuth.js';
@@ -760,16 +760,20 @@ async function setupPythonBackendEnvironment() {
     return true;
   }
 
-  const pythonPath = findPythonForLeRobot();
-  if (!pythonPath) {
-    log('✗ Python 3.12+ was not found for the unified Python environment.', colors.yellow);
-    logInfo('Install Python 3.12+ or set URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12');
+  const pythonResolution = resolvePythonForLeRobotVenv();
+  if (!pythonResolution) {
+    log('✗ URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON must point to Python 3.12+.', colors.yellow);
+    logPythonBootstrapHelp();
     return false;
   }
 
-  logInfo(`Creating ${venvPath} with ${pythonPath}`);
+  if (pythonResolution.usesUvManagedPython) {
+    logInfo('Using uv-managed Python 3.12 for the unified runtime.');
+  }
+
+  logInfo(`Creating ${venvPath} with ${pythonResolution.python}`);
   try {
-    execFileSync(uvPath, ['venv', '--python', pythonPath, venvPath], {
+    execFileSync(uvPath, ['venv', '--python', pythonResolution.python, venvPath], {
       cwd: rootDir,
       stdio: 'inherit',
       env: getUvEnv(),
@@ -778,39 +782,62 @@ async function setupPythonBackendEnvironment() {
     return true;
   } catch (e) {
     log('✗ Failed to create unified Python environment', colors.yellow);
+    logPythonBootstrapHelp();
+    return false;
+  }
+}
+
+function getConfiguredPythonForLeRobot() {
+  return typeof process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON === 'string'
+    ? process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON.trim()
+    : '';
+}
+
+function isSupportedPythonExecutable(candidate) {
+  try {
+    const version = execFileSync(
+      candidate,
+      ['-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'],
+      { encoding: 'utf-8' }
+    ).trim();
+    const [major, minor] = version.split('.').map(Number);
+    return major > 3 || (major === 3 && minor >= 12);
+  } catch (e) {
     return false;
   }
 }
 
 function findPythonForLeRobot() {
-  const configuredPython = process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
-  const candidates = [
-    configuredPython,
-    'python3.13',
-    'python3.12',
-    '/usr/bin/python3.13',
-    '/usr/bin/python3.12',
-    join(process.env.HOME || '', 'miniconda3', 'bin', 'python3.13'),
-    join(process.env.HOME || '', 'miniconda3', 'bin', 'python3.12'),
-  ].filter(Boolean);
+  const configuredPython = getConfiguredPythonForLeRobot();
+  if (!configuredPython) {
+    return null;
+  }
+  return isSupportedPythonExecutable(configuredPython) ? configuredPython : null;
+}
 
-  for (const candidate of candidates) {
-    try {
-      const version = execFileSync(
-        candidate,
-        ['-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'],
-        { encoding: 'utf-8' }
-      ).trim();
-      const [major, minor] = version.split('.').map(Number);
-      if (major > 3 || (major === 3 && minor >= 12)) {
-        return candidate;
-      }
-    } catch (e) {
-      // Try the next candidate.
-    }
+function resolvePythonForLeRobotVenv() {
+  const configuredPython = getConfiguredPythonForLeRobot();
+  if (!configuredPython) {
+    return {
+      python: '3.12',
+      usesUvManagedPython: true,
+    };
   }
 
+  const pythonPath = findPythonForLeRobot();
+  if (pythonPath) {
+    return {
+      python: pythonPath,
+      usesUvManagedPython: false,
+    };
+  }
   return null;
+}
+
+function logPythonBootstrapHelp() {
+  logInfo('Use uv for Python 3.12: uv python install 3.12');
+  logInfo('Then rerun: npm run setup');
+  logInfo('Optional manual override: URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12');
 }
 
 function shouldInstallOfficialLeRobot() {
@@ -1044,14 +1071,17 @@ async function installOfficialLeRobotToolchain() {
   const toolchainPath = join(rootDir, LEROBOT_TOOLCHAIN_DIRNAME);
   const toolchainPython = join(toolchainPath, 'bin', 'python3');
   if (!existsSync(toolchainPython)) {
-    const pythonPath = findPythonForLeRobot();
-    if (!pythonPath) {
-      log('✗ Python 3.12+ was not found for official LeRobot.', colors.yellow);
-      logInfo('Install Python 3.12+ or set URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12');
+    const pythonResolution = resolvePythonForLeRobotVenv();
+    if (!pythonResolution) {
+      log('✗ URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON must point to Python 3.12+.', colors.yellow);
+      logPythonBootstrapHelp();
       return false;
     }
-    logInfo(`Creating ${toolchainPath} with ${pythonPath}`);
-    execFileSync(uvPath, ['venv', '--python', pythonPath, toolchainPath], {
+    if (pythonResolution.usesUvManagedPython) {
+      logInfo('Using uv-managed Python 3.12 for the official LeRobot runtime.');
+    }
+    logInfo(`Creating ${toolchainPath} with ${pythonResolution.python}`);
+    execFileSync(uvPath, ['venv', '--python', pythonResolution.python, toolchainPath], {
       cwd: rootDir,
       stdio: 'inherit',
       env: getUvEnv(),
@@ -1361,48 +1391,88 @@ async function installTwinDepsIfRequested() {
   execFileSync('node', [twinScript, '--twin'], { cwd: rootDir, stdio: 'inherit' });
 }
 
+async function runSetupSequence(overrides = {}) {
+  const steps = {
+    installDependencies,
+    setupUrdfOpsWorkspace,
+    setupPythonBackendEnvironment,
+    installBackendDeps,
+    installGenesisRuntime,
+    installOfficialLeRobotToolchain,
+    installOpenArmHardwareRuntime,
+    installMjlabRuntime,
+    installTwinDepsIfRequested,
+    checkIkd,
+    setupHuggingFace,
+    setupGitHub,
+    installOptionalGlobalIlu,
+    ...overrides,
+  };
+
+  await steps.installDependencies();
+  const urdfOpsInstalled = await steps.setupUrdfOpsWorkspace();
+  if (!urdfOpsInstalled) {
+    throw new Error('URDF Ops setup failed');
+  }
+  const pythonBackendEnvironmentReady = await steps.setupPythonBackendEnvironment();
+  if (!pythonBackendEnvironmentReady) {
+    throw new Error('Unified Python environment setup failed');
+  }
+  const backendDepsInstalled = await steps.installBackendDeps();
+  if (!backendDepsInstalled) {
+    throw new Error('Backend dependencies installation failed');
+  }
+  const genesisRuntimeResult = await steps.installGenesisRuntime();
+  if (!genesisRuntimeResult.ok) {
+    throw new Error('Genesis static world viewer runtime installation failed');
+  }
+  const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
+  if (!lerobotToolchainInstalled) {
+    throw new Error('Official LeRobot dataset toolchain installation failed');
+  }
+  const openArmHardwareRuntimeInstalled = await steps.installOpenArmHardwareRuntime();
+  if (!openArmHardwareRuntimeInstalled) {
+    throw new Error('OpenArm hardware runtime installation failed');
+  }
+  const mjlabRuntimeResult = await steps.installMjlabRuntime();
+  if (!mjlabRuntimeResult.ok) {
+    throw new Error('MJLab validation runtime installation failed');
+  }
+  await steps.installTwinDepsIfRequested();
+  await steps.checkIkd();
+  await steps.setupHuggingFace();
+  await steps.setupGitHub();
+  const globalIluResult = await steps.installOptionalGlobalIlu();
+  return { globalIluResult };
+}
+
 async function main() {
   console.log(banner);
-  
+
   try {
-    await installDependencies();
-    const urdfOpsInstalled = await setupUrdfOpsWorkspace();
-    if (!urdfOpsInstalled) {
-      throw new Error('URDF Ops setup failed');
-    }
-    await setupPythonBackendEnvironment();
-    const backendDepsInstalled = await installBackendDeps();
-    if (!backendDepsInstalled) {
-      throw new Error('Backend dependencies installation failed');
-    }
-    const genesisRuntimeResult = await installGenesisRuntime();
-    if (!genesisRuntimeResult.ok) {
-      throw new Error('Genesis static world viewer runtime installation failed');
-    }
-    const lerobotToolchainInstalled = await installOfficialLeRobotToolchain();
-    if (!lerobotToolchainInstalled) {
-      throw new Error('Official LeRobot dataset toolchain installation failed');
-    }
-    const openArmHardwareRuntimeInstalled = await installOpenArmHardwareRuntime();
-    if (!openArmHardwareRuntimeInstalled) {
-      throw new Error('OpenArm hardware runtime installation failed');
-    }
-    const mjlabRuntimeResult = await installMjlabRuntime();
-    if (!mjlabRuntimeResult.ok) {
-      throw new Error('MJLab validation runtime installation failed');
-    }
-    await installTwinDepsIfRequested();
-    await checkIkd();
-    await setupHuggingFace();
-    await setupGitHub();
-    const globalIluResult = await installOptionalGlobalIlu();
+    const { globalIluResult } = await runSetupSequence();
     logSuccess('Setup complete');
     printSetupSummary({ globalIluResult });
   } catch (error) {
     log('');
     log('✗ Setup failed', colors.yellow);
+    if (error?.message) {
+      logInfo(error.message);
+    }
     process.exit(1);
   }
 }
 
-main();
+function isMainModule() {
+  return Boolean(process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href);
+}
+
+if (isMainModule()) {
+  main();
+}
+
+export {
+  findPythonForLeRobot,
+  resolvePythonForLeRobotVenv,
+  runSetupSequence,
+};

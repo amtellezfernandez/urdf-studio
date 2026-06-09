@@ -64,8 +64,7 @@ Fast smoke test:
 ## Prerequisites
 
 - Node.js and npm
-- Python 3
-- `uv` from <https://astral.sh/uv>
+- `uv` from <https://astral.sh/uv>. No separate Python install is required; setup creates the Python 3.12 backend/training runtime through `uv`.
 - Linux build tools for native Python dependencies:
 
 ```bash
@@ -134,6 +133,21 @@ npm run team
 Open the printed Team URL on the server laptop, use `Share`, then send the collaboration link to the people who should join. Use sharing only on a network you trust.
 
 ## Troubleshooting
+
+### Setup Fails Creating Python 3.12
+
+Use `uv` to install Python 3.12, then rerun setup:
+
+```bash
+uv python install 3.12
+npm run setup
+```
+
+Advanced: point setup at a specific interpreter instead of the `uv` managed one:
+
+```bash
+URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12 npm run setup
+```
 
 ### The App Does Not Open
 

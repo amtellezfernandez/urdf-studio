@@ -19,8 +19,7 @@ http://127.0.0.1:5173
 ## Prerequisites
 
 - Node.js and npm
-- Python 3
-- `uv` from <https://astral.sh/uv>
+- `uv` from <https://astral.sh/uv>. No separate Python install is required; setup creates the Python 3.12 backend/training runtime through `uv`.
 
 On Linux, install build tools before setup:
 
@@ -122,6 +121,21 @@ npm run start -- --help
 | `npm run build` | Build production assets |
 
 ## Troubleshooting
+
+### Setup Fails Creating Python 3.12
+
+Use `uv` to install Python 3.12, then rerun setup:
+
+```bash
+uv python install 3.12
+npm run setup
+```
+
+Advanced: point setup at a specific interpreter instead of the `uv` managed one:
+
+```bash
+URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12 npm run setup
+```
 
 ### Setup Seems Stuck
 

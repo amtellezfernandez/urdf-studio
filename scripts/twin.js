@@ -46,29 +46,26 @@ function findUv() {
   return null;
 }
 
-function findPythonForUnifiedEnv() {
-  const candidates = [
-    process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON,
-    'python3.13',
-    'python3.12',
-    '/usr/bin/python3.13',
-    '/usr/bin/python3.12',
-    join(process.env.HOME || '', 'miniconda3', 'bin', 'python3.13'),
-    join(process.env.HOME || '', 'miniconda3', 'bin', 'python3.12'),
-  ].filter(Boolean);
+function getConfiguredPythonForUnifiedEnv() {
+  return typeof process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON === 'string'
+    ? process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON.trim()
+    : '';
+}
 
-  for (const candidate of candidates) {
-    try {
-      const version = runQuiet(
-        `${candidate} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"`
-      );
-      const [major, minor] = version.split('.').map(Number);
-      if (major > 3 || (major === 3 && minor >= 12)) {
-        return candidate;
-      }
-    } catch {
-      // Try the next candidate.
+function findPythonForUnifiedEnv() {
+  const configuredPython = getConfiguredPythonForUnifiedEnv();
+  if (!configuredPython) return null;
+
+  try {
+    const version = runQuiet(
+      `${configuredPython} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"`
+    );
+    const [major, minor] = version.split('.').map(Number);
+    if (major > 3 || (major === 3 && minor >= 12)) {
+      return configuredPython;
     }
+  } catch {
+    // The caller reports the invalid override.
   }
 
   return null;
@@ -80,17 +77,22 @@ function ensureVenv() {
 
   if (existsSync(venvPython)) return { venvPath, venvPython };
 
-  const pythonPath = findPythonForUnifiedEnv();
-  if (!pythonPath) {
-    throw new Error('Python 3.12+ is required for the unified Python environment');
+  const uvPath = findUv();
+  if (!uvPath) {
+    throw new Error('uv is required to create the unified Python environment.');
   }
 
-  const uvPath = findUv();
-  if (uvPath) {
-    run(`"${uvPath}" venv --python "${pythonPath}" "${PYTHON_ENV_DIRNAME}"`, { cwd: rootDir });
-  } else {
-    run(`"${pythonPath}" -m venv "${PYTHON_ENV_DIRNAME}"`, { cwd: rootDir });
+  const configuredPython = getConfiguredPythonForUnifiedEnv();
+  const pythonPath = findPythonForUnifiedEnv();
+  if (configuredPython && !pythonPath) {
+    throw new Error('URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON must point to Python 3.12+.');
   }
+
+  const bootstrapPython = pythonPath || '3.12';
+  if (!pythonPath) {
+    console.log('[twin] Using uv-managed Python 3.12 for the unified runtime.');
+  }
+  run(`"${uvPath}" venv --python "${bootstrapPython}" "${PYTHON_ENV_DIRNAME}"`, { cwd: rootDir });
 
   if (!existsSync(venvPython)) {
     throw new Error(`Failed to create ${PYTHON_ENV_DIRNAME} (missing ${PYTHON_ENV_DIRNAME}/bin/python3)`);
