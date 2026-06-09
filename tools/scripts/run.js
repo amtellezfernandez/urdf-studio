@@ -57,6 +57,10 @@ import {
   terminateManagedProcess,
   terminateStaleUrdfStudioProcessGroups,
 } from './processLifecycle.js';
+import {
+  ensureWslWindowsLocalhostAccess,
+  stopWslWindowsLocalhostRelay,
+} from './wslWindowsLocalhostRelay.js';
 import { startCamToSimIngressProxy } from './camToSimIngressProxy.js';
 import {
   buildOutdatedVersionMessage,
@@ -1006,6 +1010,12 @@ async function main() {
     throw error;
   }
 
+  const wslWindowsLocalhostAccess = ensureWslWindowsLocalhostAccess({ runtimeConfig });
+  let wslWindowsLocalhostRelay = null;
+  if (wslWindowsLocalhostAccess.status === 'relay-started') {
+    wslWindowsLocalhostRelay = wslWindowsLocalhostAccess;
+  }
+
   log('');
   log('  Ready:', colors.reset);
   for (const overviewLine of buildStartupOverviewLines({
@@ -1027,6 +1037,30 @@ async function main() {
         ? '  Training: Studio links reuse the already-running Ops session.'
         : '  Training: Studio links open this synchronized Ops session.',
       colors.gray
+    );
+  }
+  if (
+    wslWindowsLocalhostAccess.status === 'relay-started' ||
+    wslWindowsLocalhostAccess.status === 'recovered-after-stale-relay-stop'
+  ) {
+    const killedCount = wslWindowsLocalhostAccess.killedStaleRelayPids?.length || 0;
+    const repairPrefix =
+      killedCount > 0
+        ? `replaced ${killedCount} stale WSL localhost relay${killedCount === 1 ? '' : 's'}`
+        : 'started WSL localhost relay';
+    log(
+      `  Windows localhost: ${wslWindowsLocalhostAccess.localUrl} (${repairPrefix}; target ${wslWindowsLocalhostAccess.targetUrl})`,
+      colors.yellow
+    );
+  } else if (wslWindowsLocalhostAccess.status === 'blocked-by-windows-listener') {
+    log(
+      `  Windows localhost is blocked by another Windows process on port ${runtimeConfig.web.port}; use ${wslWindowsLocalhostAccess.targetUrl}.`,
+      colors.yellow
+    );
+  } else if (wslWindowsLocalhostAccess.status === 'target-unreachable') {
+    log(
+      `  Windows localhost forwarding is unavailable and Windows cannot reach ${wslWindowsLocalhostAccess.targetUrl}.`,
+      colors.yellow
     );
   }
 
@@ -1096,6 +1130,7 @@ async function main() {
     terminateManagedProcess(urdfOpsFrontendProcess, signal);
     terminateManagedProcess(urdfOpsBackendProcess, signal);
     terminateManagedProcess(tunnelProcess, signal);
+    stopWslWindowsLocalhostRelay(wslWindowsLocalhostRelay);
     if (camToSimIngressProxy) {
       camToSimIngressProxy.server.close();
     }

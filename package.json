@@ -22,7 +22,7 @@
     "postinstall": "node scripts/twin.js",
     "preview": "vite preview --config config/vite.config.ts",
     "setup": "node tools/scripts/setup.js",
-    "setup:check": "node --test tools/scripts/setup.test.mjs tools/scripts/setupParams.test.mjs tools/scripts/setupHelpers.test.mjs tools/scripts/resolveIluRequire.test.mjs",
+    "setup:check": "node --test tools/scripts/setup.test.mjs tools/scripts/setupParams.test.mjs tools/scripts/setupHelpers.test.mjs tools/scripts/resolveIluRequire.test.mjs tools/scripts/wslWindowsLocalhostRelay.test.mjs",
     "start": "node tools/scripts/run.js",
     "start:data": "node tools/scripts/run.js --data",
     "data": "node tools/scripts/run.js --data",
