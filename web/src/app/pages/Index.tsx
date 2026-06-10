@@ -196,7 +196,6 @@ import {
 import { ROBOT_MASTERING_PREFLIGHT_DEBOUNCE_MS } from "@/features/urdf/inertia/robotMasteringApiParams";
 import {
   buildSimulationPrepUpdateToastPlan,
-  buildSimulationPrepChecklistRefreshMessage,
   buildSimulationPrepPhysicsActionStatusMap,
   buildSimulationPrepDraftFingerprint,
   buildPhysicsDraftSummaryText,
@@ -205,8 +204,8 @@ import {
   canQueueSimulationPrepPhysicsAction,
   resolveSimulationPrepPreflightRequestDecision,
   resolveSimulationPrepPhysicsSourceContent,
-  resolveSimulationPrepChecklistRefreshStatus,
-  type SimulationPrepChecklistRefreshResult,
+  resolveSimulationPrepPreparationRefreshStatus,
+  type SimulationPrepPreparationRefreshResult,
   type SimulationPrepPhysicsActionKey,
 } from "@/features/layout/page/simulationPrepState";
 import { buildRepeatedInertiaDiagnostics } from "@/features/layout/page/repeatedInertiaDiagnostics";
@@ -1427,15 +1426,15 @@ const Index = () => {
     }
     await loadPhysicsPreflight({ showErrorToast: true });
   }, [isPhysicsPreflightLoading, loadPhysicsPreflight]);
-  const refreshSimulationPrepChecklist = useCallback(
+  const refreshSimulationPrepPreparation = useCallback(
     async ({ sourceUrdf }: { sourceUrdf: string }) => {
       const [frameResult, physicsResult] = await Promise.all([
         loadFramePreflight({ force: true, sourceUrdf }),
         loadPhysicsPreflight({ force: true, sourceUrdf }),
       ]);
-      const refreshStatus = resolveSimulationPrepChecklistRefreshStatus({
-        frameResult: frameResult as SimulationPrepChecklistRefreshResult,
-        physicsResult: physicsResult as SimulationPrepChecklistRefreshResult,
+      const refreshStatus = resolveSimulationPrepPreparationRefreshStatus({
+        frameResult: frameResult as SimulationPrepPreparationRefreshResult,
+        physicsResult: physicsResult as SimulationPrepPreparationRefreshResult,
       });
       return {
         frameResult,
@@ -1489,10 +1488,10 @@ const Index = () => {
       setRobotMirrorOutcome(robotMirrorOutcome ?? null);
       updateUrdfFileWithCollaboration(nextUrdfContent);
       setUrdfContentVersion((currentVersion) => currentVersion + 1);
-      const checklistRefresh = await refreshSimulationPrepChecklist({ sourceUrdf: nextUrdfContent });
+      const preparationRefresh = await refreshSimulationPrepPreparation({ sourceUrdf: nextUrdfContent });
       const toastPlan = buildSimulationPrepUpdateToastPlan({
         successMessage,
-        checklistRefreshStatus: checklistRefresh.status,
+        preparationRefreshStatus: preparationRefresh.status,
       });
       toast.success(toastPlan.successMessage);
       if (toastPlan.followupMessage) {
@@ -1500,7 +1499,7 @@ const Index = () => {
       }
     },
     [
-      refreshSimulationPrepChecklist,
+      refreshSimulationPrepPreparation,
       setBakePreviewSession,
       setCanonicalSynthesisPreview,
       setInertialSynthesisSession,

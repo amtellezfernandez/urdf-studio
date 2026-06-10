@@ -67,7 +67,7 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 ### Top Bar
 
 - `File`, `Utils`, `Worlds`, `View`, `Dataset`, `Create`, `IK`: main action menus.
-- `Sim Prep Review`: physics/readiness review state.
+- `Simulation Prep`: physics/readiness state.
 - `Cams`, `Leader`, `Follower`: camera and teleoperation setup.
 - Share/action icons: session and collaboration controls.
 
@@ -116,7 +116,7 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 2. Use the episode list to play the first or second episode.
 3. Watch the graph and 3D robot together. They should stay synchronized.
 
-### Review Dataset Replay
+### Replay Dataset Episodes
 
 1. Load a dataset or sample motion.
 2. Choose replay zero mode:

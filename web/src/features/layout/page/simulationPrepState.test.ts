@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSimulationPrepUpdateToastPlan,
-  buildSimulationPrepChecklistRefreshMessage,
+  buildSimulationPrepPreparationRefreshMessage,
   buildSimulationPrepDraftFingerprint,
   buildSimulationPrepPhysicsActionStatusMap,
   resolveSimulationPrepPreflightRequestDecision,
-  resolveSimulationPrepChecklistRefreshStatus,
+  resolveSimulationPrepPreparationRefreshStatus,
   canQueueSimulationPrepPhysicsAction,
   hasSimulationPrepPhysicsActionPending,
   buildPhysicsDraftSummaryText,
@@ -222,10 +222,10 @@ describe("buildSimulationPrepPhysicsActionStatusMap", () => {
   });
 });
 
-describe("resolveSimulationPrepChecklistRefreshStatus", () => {
+describe("resolveSimulationPrepPreparationRefreshStatus", () => {
   it("marks the refresh complete when both preflights succeed or are skipped", () => {
     expect(
-      resolveSimulationPrepChecklistRefreshStatus({
+      resolveSimulationPrepPreparationRefreshStatus({
         frameResult: "success",
         physicsResult: "skipped",
       })
@@ -237,7 +237,7 @@ describe("resolveSimulationPrepChecklistRefreshStatus", () => {
 
   it("marks the refresh pending when either preflight is superseded", () => {
     expect(
-      resolveSimulationPrepChecklistRefreshStatus({
+      resolveSimulationPrepPreparationRefreshStatus({
         frameResult: "superseded",
         physicsResult: "success",
       })
@@ -249,7 +249,7 @@ describe("resolveSimulationPrepChecklistRefreshStatus", () => {
 
   it("marks the refresh pending when either preflight is already running for the same source", () => {
     expect(
-      resolveSimulationPrepChecklistRefreshStatus({
+      resolveSimulationPrepPreparationRefreshStatus({
         frameResult: "pending",
         physicsResult: "success",
       })
@@ -261,7 +261,7 @@ describe("resolveSimulationPrepChecklistRefreshStatus", () => {
 
   it("marks the refresh failed when either preflight fails", () => {
     expect(
-      resolveSimulationPrepChecklistRefreshStatus({
+      resolveSimulationPrepPreparationRefreshStatus({
         frameResult: "success",
         physicsResult: "failed",
       })
@@ -272,10 +272,10 @@ describe("resolveSimulationPrepChecklistRefreshStatus", () => {
   });
 });
 
-describe("buildSimulationPrepChecklistRefreshMessage", () => {
+describe("buildSimulationPrepPreparationRefreshMessage", () => {
   it("returns no message for a complete refresh", () => {
     expect(
-      buildSimulationPrepChecklistRefreshMessage({
+      buildSimulationPrepPreparationRefreshMessage({
         status: "complete",
       })
     ).toBeNull();
@@ -283,31 +283,31 @@ describe("buildSimulationPrepChecklistRefreshMessage", () => {
 
   it("returns the failed-refresh message", () => {
     expect(
-      buildSimulationPrepChecklistRefreshMessage({
+      buildSimulationPrepPreparationRefreshMessage({
         status: "failed",
       })
     ).toBe(
-      "Checklist refresh failed. Previous review is still shown until the next successful check."
+      "Preparation refresh failed. Previous status is still shown until the next successful check."
     );
   });
 
   it("returns the pending-refresh message", () => {
     expect(
-      buildSimulationPrepChecklistRefreshMessage({
+      buildSimulationPrepPreparationRefreshMessage({
         status: "pending",
       })
     ).toBe(
-      "Checklist refresh is still running. Previous review will stay visible until the new check completes."
+      "Preparation refresh is still running. Previous status will stay visible until the new check completes."
     );
   });
 });
 
 describe("buildSimulationPrepUpdateToastPlan", () => {
-  it("emits only the success toast when checklist refresh completes", () => {
+  it("emits only the success toast when preparation refresh completes", () => {
     expect(
       buildSimulationPrepUpdateToastPlan({
         successMessage: "Mirror aligned.",
-        checklistRefreshStatus: "complete",
+        preparationRefreshStatus: "complete",
       })
     ).toEqual({
       successMessage: "Mirror aligned.",
@@ -315,29 +315,29 @@ describe("buildSimulationPrepUpdateToastPlan", () => {
     });
   });
 
-  it("emits the pending followup toast when checklist refresh is still running", () => {
+  it("emits the pending followup toast when preparation refresh is still running", () => {
     expect(
       buildSimulationPrepUpdateToastPlan({
         successMessage: "Mirror aligned.",
-        checklistRefreshStatus: "pending",
+        preparationRefreshStatus: "pending",
       })
     ).toEqual({
       successMessage: "Mirror aligned.",
       followupMessage:
-        "Checklist refresh is still running. Previous review will stay visible until the new check completes.",
+        "Preparation refresh is still running. Previous status will stay visible until the new check completes.",
     });
   });
 
-  it("emits the failure followup toast when checklist refresh fails", () => {
+  it("emits the failure followup toast when preparation refresh fails", () => {
     expect(
       buildSimulationPrepUpdateToastPlan({
         successMessage: "Mirror aligned.",
-        checklistRefreshStatus: "failed",
+        preparationRefreshStatus: "failed",
       })
     ).toEqual({
       successMessage: "Mirror aligned.",
       followupMessage:
-        "Checklist refresh failed. Previous review is still shown until the next successful check.",
+        "Preparation refresh failed. Previous status is still shown until the next successful check.",
     });
   });
 });

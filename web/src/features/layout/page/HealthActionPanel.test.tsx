@@ -666,7 +666,7 @@ describe("HealthActionPanel", () => {
     expect(getText(container)).not.toContain("Next Step");
     expect(getText(container)).toContain("Recover 1 skipped inertial link");
     expect(getText(container)).toContain(
-      "1 rescued and now voxel-ready | 1 can use PSD regularization | 1 need manual geometry review | 1 removed as ghost geometry"
+      "1 rescued and now voxel-ready | 1 can use PSD regularization | 1 need geometry attention | 1 removed as ghost geometry"
     );
     expect(getText(container)).toContain("Voxel-derived links: 1");
     expect(getText(container)).toContain("Unified repeated meshes: 2");
@@ -674,7 +674,7 @@ describe("HealthActionPanel", () => {
     expect(getText(container)).toContain("Frame:");
     expect(getText(container)).toContain("Plausibility:");
     expect(getText(container)).toContain("Partial plausibility");
-    expect(getText(container)).toContain("Geometry diagnosis • 4 flagged, 3 need review");
+    expect(getText(container)).toContain("Geometry diagnosis • 4 flagged, 3 need attention");
     const symmetryPlanesSection = container.querySelector('[data-section="symmetry-planes"]');
     const symmetryChainsSection = container.querySelector('[data-section="symmetry-chains"]');
     expect(symmetryPlanesSection).toBeTruthy();
@@ -981,13 +981,13 @@ describe("HealthActionPanel", () => {
       ["wheel_left", "wheel_right", "wheel_rear"]
     );
     expect(getText(container)).toContain(
-      "Precheck flagged geometry for review: disconnected parts may be physically important."
+      "Precheck flagged geometry: disconnected parts may be physically important."
     );
     expect(getText(container)).toContain("Why");
     expect(getText(container)).toContain("1 rescued and now voxel-ready");
     expect(getText(container)).toContain("1 can use PSD regularization");
     expect(getText(container)).toContain("1 removed as ghost geometry");
-    expect(getText(container)).toContain("1 need manual geometry review");
+    expect(getText(container)).toContain("1 need geometry attention");
     expect(getText(container)).toContain("In URDF Studio, click Recover, then choose a material.");
     expect(getText(container)).toContain("In URDF Studio, click Regularize, then choose a material.");
     expect(getText(container)).toContain(
@@ -998,14 +998,14 @@ describe("HealthActionPanel", () => {
     expect(getText(container)).toContain("1 rescued and now voxel-ready");
     expect(getText(container)).toContain("1 removed as ghost geometry");
     expect(getText(container)).toContain("1 can use PSD regularization");
-    expect(getText(container)).toContain("1 need manual geometry review");
+    expect(getText(container)).toContain("1 need geometry attention");
     expect(getText(container)).not.toContain("voxel_ready_link");
     expect(getText(container)).not.toContain("near_miss_link");
     expect(getText(container)).not.toContain("ghost_link");
     expect(getText(container)).not.toContain("proxy_link");
 
     const proxyGroupToggle = container.querySelector(
-      'button[aria-label="Show 1 manual review link"]'
+      'button[aria-label="Show 1 manual attention link"]'
     );
     expect(proxyGroupToggle).toBeTruthy();
 
@@ -1394,7 +1394,7 @@ describe("HealthActionPanel", () => {
     const symmetryPlanesSection = container.querySelector('[data-section="symmetry-planes"]');
     const mirrorSection = container.querySelector('[data-section="robot-mirror-symmetry"]');
     const mirrorEyeButton = container.querySelector(
-      'button[aria-label="Show robot-wide mirror plane review"]'
+      'button[aria-label="Show robot-wide mirror plane guide"]'
     );
     const mirrorExpandButton = container.querySelector(
       'button[aria-label="Expand mirror controls"]'
@@ -2708,7 +2708,7 @@ describe("HealthActionPanel", () => {
     });
 
     const physicsButton = Array.from(container.querySelectorAll("button")).find(
-      (node) => node.textContent?.includes("Analyzing physics review")
+      (node) => node.textContent?.includes("Analyzing physics check")
     );
     expect(physicsButton).toBeTruthy();
     expect(physicsButton?.hasAttribute("disabled")).toBe(true);
@@ -2972,17 +2972,17 @@ describe("HealthActionPanel", () => {
     });
 
     const physicsButton = Array.from(container.querySelectorAll("button")).find(
-      (node) => node.textContent?.includes("Run physics review")
+      (node) => node.textContent?.includes("Run physics check")
     );
     expect(physicsButton).toBeTruthy();
     expect(physicsButton?.hasAttribute("disabled")).toBe(false);
-    expect(getText(container)).toContain("Run the physics review before repairing masses.");
+    expect(getText(container)).toContain("Run the physics check before repairing masses.");
 
     await act(async () => {
       physicsButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onOpenGeneratePhysicsDialog).toHaveBeenCalledTimes(1);
-    expect(getText(container)).toContain("Run physics review");
+    expect(getText(container)).toContain("Run physics check");
 
     await act(async () => {
       root.unmount();
@@ -3022,11 +3022,11 @@ describe("HealthActionPanel", () => {
       );
     });
 
-    expect(getText(container)).toContain("Physics review complete. No repair action is needed.");
+    expect(getText(container)).toContain("Physics check complete. No repair action is needed.");
     expect(getText(container)).not.toContain("Recalculate all");
     expect(
       Array.from(container.querySelectorAll("button")).some((node) =>
-        node.textContent?.includes("Physics review complete")
+        node.textContent?.includes("Physics check complete")
       )
     ).toBe(false);
 
@@ -3035,7 +3035,7 @@ describe("HealthActionPanel", () => {
     });
   });
 
-  it("shows checklist loading instead of a completion message while physics review is still running", async () => {
+  it("shows preparation loading instead of a completion message while physics check is still running", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
 
@@ -3069,8 +3069,8 @@ describe("HealthActionPanel", () => {
       );
     });
 
-    expect(getText(container)).toContain("Physics review running...");
-    expect(getText(container)).not.toContain("Physics review complete. No repair action is needed.");
+    expect(getText(container)).toContain("Physics check running...");
+    expect(getText(container)).not.toContain("Physics check complete. No repair action is needed.");
     expect(getText(container)).not.toContain("Recalculate all");
 
     await act(async () => {

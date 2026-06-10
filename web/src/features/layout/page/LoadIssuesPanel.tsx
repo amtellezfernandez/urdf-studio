@@ -88,7 +88,7 @@ export const LoadIssuesPanel = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-xs font-medium text-foreground">
-            {hasAttention ? "Load needs review" : cleanLoadSummary}
+            {hasAttention ? "Load needs attention" : cleanLoadSummary}
           </div>
           {hasAttention ? (
             <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
@@ -158,8 +158,8 @@ export const LoadIssuesPanel = ({
             <div className="min-w-0 flex-1 text-[11px] leading-4 text-muted-foreground">
               <span className="font-medium text-foreground">Simulation Prep</span>
               {simulationPrepStatusLabel
-                ? ` needs review: ${simulationPrepStatusLabel}`
-                : " needs review"}
+                ? ` needs attention: ${simulationPrepStatusLabel}`
+                : " needs attention"}
             </div>
             <Button
               size="sm"

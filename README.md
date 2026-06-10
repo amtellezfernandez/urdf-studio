@@ -83,7 +83,7 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. It can take a while the first time.
 
-Genesis and MJLab are optional simulator adapters. Setup reports their status, but the base app install continues if an optional adapter wheel is unavailable on the current laptop.
+Setup also prepares supported simulator launchers when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
 
 Useful setup commands:
 
@@ -118,7 +118,7 @@ Use `npm run start` when you want the real app.
 3. Check the scene tree and joints panel after load.
 4. Use `Reset Pose`, joint controls, and replay tools to inspect behavior.
 
-### Replay Or Review Episodes
+### Replay Episodes
 
 1. Load or record episodes.
 2. Use the left `Episodes` list to choose an episode.
@@ -213,6 +213,7 @@ npm run data -- --ack-public-tunnel
 
 ```bash
 npm run release:check
+npm run simulator:launch:check
 npm run lint
 npm run typecheck
 npm run test

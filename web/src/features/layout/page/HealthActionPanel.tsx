@@ -433,13 +433,13 @@ const buildPanelSubtitle = ({
     return `${audit.repairableLinkCount} physics issue${audit.repairableLinkCount === 1 ? "" : "s"} ready to fix.`;
   }
   if (excludedCount > 0) {
-    return `${excludedCount} skipped link${excludedCount === 1 ? "" : "s"} need review.`;
+    return `${excludedCount} skipped link${excludedCount === 1 ? "" : "s"} need attention.`;
   }
   const issueCount = audit.missingLinkCount + audit.invalidLinkCount;
   if (issueCount > 0) {
     return `${issueCount} inertial issue${issueCount === 1 ? "" : "s"} found.`;
   }
-  return "Physics review ready.";
+  return "Physics check ready.";
 };
 
 const buildGeneratePhysicsDialogDescription = ({
@@ -454,19 +454,19 @@ const buildGeneratePhysicsDialogDescription = ({
   skippedLinkCount: number;
 }): string => {
   if (!audit) {
-    return "Run the physics review, then choose how to recalculate the selected links.";
+    return "Run the physics check, then choose how to recalculate the selected links.";
   }
   if (audit.repairableLinkCount > 0) {
     return `Recalculate ${audit.repairableLinkCount} missing or invalid inertial link${audit.repairableLinkCount === 1 ? "" : "s"} with one material assumption.`;
   }
   if (voxelRecoveryCount > 0) {
-    return `${skippedLinkCount} link${skippedLinkCount === 1 ? "" : "s"} were skipped in review. ${voxelRecoveryCount} passed voxel recovery precheck${nearMissCount > 0 ? ` and ${nearMissCount} can use PSD regularization` : ""}.`;
+    return `${skippedLinkCount} link${skippedLinkCount === 1 ? "" : "s"} were skipped in check. ${voxelRecoveryCount} passed voxel recovery precheck${nearMissCount > 0 ? ` and ${nearMissCount} can use PSD regularization` : ""}.`;
   }
   if (nearMissCount > 0) {
-    return `${skippedLinkCount} link${skippedLinkCount === 1 ? "" : "s"} were skipped in review. ${nearMissCount} can use PSD regularization.`;
+    return `${skippedLinkCount} link${skippedLinkCount === 1 ? "" : "s"} were skipped in check. ${nearMissCount} can use PSD regularization.`;
   }
   if (skippedLinkCount > 0) {
-    return `${skippedLinkCount} link${skippedLinkCount === 1 ? "" : "s"} were skipped in review. None passed voxel recovery precheck.`;
+    return `${skippedLinkCount} link${skippedLinkCount === 1 ? "" : "s"} were skipped in check. None passed voxel recovery precheck.`;
   }
   return "No missing or invalid inertials were found.";
 };
@@ -731,7 +731,7 @@ const buildPhysicsActionSummary = ({
     return {
       summary: physicsPreflightLoading
         ? "Analyzing physics now. Wait for the audit before clicking."
-        : "Run the physics review before repairing masses.",
+        : "Run the physics check before repairing masses.",
       disabled: physicsPreflightLoading,
     };
   }
@@ -751,7 +751,7 @@ const buildPhysicsActionSummary = ({
     };
   }
   return {
-    summary: "Physics review ready.",
+    summary: "Physics check ready.",
     disabled: false,
   };
 };
@@ -768,7 +768,7 @@ const buildPhysicsActionLabel = ({
   nearMissCount: number;
 }): string => {
   if (!physicsAuditSummary) {
-    return physicsPreflightLoading ? "Analyzing physics review" : "Run physics review";
+    return physicsPreflightLoading ? "Analyzing physics check" : "Run physics check";
   }
   if (physicsAuditSummary.repairableLinkCount > 0) {
     return `Recalculate ${physicsAuditSummary.repairableLinkCount} missing / invalid inertial link${physicsAuditSummary.repairableLinkCount === 1 ? "" : "s"}`;
@@ -779,7 +779,7 @@ const buildPhysicsActionLabel = ({
   if (nearMissCount > 0) {
     return `Regularize ${nearMissCount} near-miss inertial link${nearMissCount === 1 ? "" : "s"}`;
   }
-  return "Physics review complete";
+  return "Physics check complete";
 };
 
 const buildRecommendedAction = ({
@@ -926,7 +926,7 @@ type ExcludedLinkGroup = {
   linkEntries: ExcludedLinkEntry[];
 };
 
-type ChecklistVisualizationScope = {
+type PreparationVisualizationScope = {
   scopeKey: string;
   linkNames: string[];
   label: string;
@@ -976,8 +976,8 @@ const getExcludedLinkGroupMeta = (
       };
     case "proxy-review":
       return {
-        label: "Manual review",
-        summary: `${count} need manual geometry review`,
+        label: "Manual attention",
+        summary: `${count} need geometry attention`,
         guidance:
           "In URDF Studio, inspect the mesh first. Use a box or cylinder proxy only if the source mesh cannot be repaired.",
       };
@@ -986,7 +986,7 @@ const getExcludedLinkGroupMeta = (
       return {
         label: label.charAt(0).toUpperCase() + label.slice(1),
         summary: `${count} ${label}`,
-        guidance: "Review this link in URDF Studio before recalculating physics.",
+        guidance: "Inspect this link in URDF Studio before recalculating physics.",
       };
     }
   }
@@ -1041,9 +1041,9 @@ const buildExcludedLinkGroups = (excludedLinks: ExcludedLinkEntry[]): ExcludedLi
     .sort((left, right) => EXCLUDED_LINK_GROUP_ORDER[left.key] - EXCLUDED_LINK_GROUP_ORDER[right.key] || right.linkEntries.length - left.linkEntries.length);
 };
 
-const getChecklistVisualizationScope = (
+const getPreparationVisualizationScope = (
   group: ExcludedLinkGroup
-): ChecklistVisualizationScope | null => {
+): PreparationVisualizationScope | null => {
   switch (group.key) {
     case "voxel-ready":
       return {
@@ -1073,13 +1073,13 @@ const buildSanitizationSummary = (
   const sanitizedEntries = excludedLinks
     .flatMap((entry) => entry.meshSanitization ?? [])
     .filter((entry) => entry.status === "sanitized" && entry.removedComponents > 0);
-  const manualReviewSanitizationCount = excludedLinks
+  const manualAttentionSanitizationCount = excludedLinks
     .flatMap((entry) => entry.meshSanitization ?? [])
     .filter((entry) => entry.deletionSafetyReport.status === "manual-review").length;
   const blockedLinkCount = excludedLinks.filter(
     (entry) => entry.recoveryDisposition === "manual-review-proxy"
   ).length;
-  if (sanitizedEntries.length === 0 && blockedLinkCount === 0 && manualReviewSanitizationCount === 0) {
+  if (sanitizedEntries.length === 0 && blockedLinkCount === 0 && manualAttentionSanitizationCount === 0) {
     return {
       status: "ok",
       sanitizedLinkCount: 0,
@@ -1093,30 +1093,30 @@ const buildSanitizationSummary = (
   );
 
   return {
-    status: blockedLinkCount > 0 || manualReviewSanitizationCount > 0 ? "needs-review" : "ok",
+    status: blockedLinkCount > 0 || manualAttentionSanitizationCount > 0 ? "needs-review" : "ok",
     sanitizedLinkCount: sanitizedEntries.length,
-    blockedLinkCount: blockedLinkCount + manualReviewSanitizationCount,
+    blockedLinkCount: blockedLinkCount + manualAttentionSanitizationCount,
     maxPhysicsImpactRatio,
   };
 };
 
-const countGeometryDiagnosisReviewLinks = (excludedLinks: ExcludedLinkEntry[]): number =>
+const countGeometryDiagnosisAttentionLinks = (excludedLinks: ExcludedLinkEntry[]): number =>
   excludedLinks.filter((entry) => entry.recoveryDisposition !== "auto-exclude-ghost").length;
 
 const buildGeometryDiagnosisHeadline = ({
   excludedCount,
-  reviewCount,
+  attentionCount,
 }: {
   excludedCount: number;
-  reviewCount: number;
+  attentionCount: number;
 }): string => {
   if (excludedCount === 0) {
     return "Geometry diagnosis";
   }
-  if (reviewCount === excludedCount) {
+  if (attentionCount === excludedCount) {
     return `Geometry diagnosis • ${excludedCount} flagged link${excludedCount === 1 ? "" : "s"}`;
   }
-  return `Geometry diagnosis • ${excludedCount} flagged, ${reviewCount} need review`;
+  return `Geometry diagnosis • ${excludedCount} flagged, ${attentionCount} need attention`;
 };
 
 const buildGeometryDiagnosisNote = ({
@@ -1125,7 +1125,7 @@ const buildGeometryDiagnosisNote = ({
   sanitizationSummary: ReturnType<typeof buildSanitizationSummary>;
 }): string | null => {
   if (sanitizationSummary.status === "needs-review") {
-    return "Precheck flagged geometry for review: disconnected parts may be physically important.";
+    return "Precheck flagged geometry: disconnected parts may be physically important.";
   }
   if (sanitizationSummary.sanitizedLinkCount > 0) {
     return `Precheck found removable disconnected geometry on ${sanitizationSummary.sanitizedLinkCount} link${sanitizationSummary.sanitizedLinkCount === 1 ? "" : "s"} (< ${(sanitizationSummary.maxPhysicsImpactRatio * 100).toFixed(1)}% estimated physics impact).`;
@@ -1181,7 +1181,7 @@ const resolveMirrorSelectionStatusBadge = (
     return {
       className: `${MIRROR_SELECTION_STATUS_BADGE_BASE_CLASS} border-amber-400/30 bg-amber-500/10 text-amber-100`,
       icon: AlertTriangle,
-      label: "review",
+      label: "attention",
     };
   }
   return null;
@@ -1492,7 +1492,7 @@ const formatRepeatedInertiaSymmetryRepairMode = (
   repairPlan: RepeatedInertiaSymmetryChain["recommendedRepair"]
 ): string => {
   if (!repairPlan) {
-    return "Manual review";
+    return "Manual alignment";
   }
   return repairPlan.stepCount === 1 ? "1 joint move" : `${repairPlan.stepCount} joint moves`;
 };
@@ -2116,7 +2116,7 @@ export const HealthActionPanel = ({
             <div data-section="symmetry-planes" className={CHECKLIST_CARD_CLASS}>
               <div className="text-[11px] font-medium text-foreground/85">Symmetry Planes</div>
               <div className="mt-0.5 text-[9px] text-muted-foreground">
-                Review bilateral mirror alignment and repeated radial branches in one place.
+                Check bilateral mirror alignment and repeated radial branches in one place.
               </div>
               <div className="mt-2 space-y-2">
           {effectiveRobotMirrorSymmetryCheck ? (
@@ -2176,7 +2176,7 @@ export const HealthActionPanel = ({
                       }
                       aria-label={`${
                         isRobotMirrorVisualizationActive ? "Hide" : "Show"
-                      } robot-wide mirror plane review`}
+                      } robot-wide mirror plane guide`}
                       title={`${
                         isRobotMirrorVisualizationActive ? "Hide" : "Show"
                       } the mirror plane and the selected mirror links`}
@@ -2830,13 +2830,13 @@ export const HealthActionPanel = ({
               </div>
             </div>
           ) : null}
-          <div data-section="checklist" className={CHECKLIST_CARD_CLASS}>
-            <div className="font-semibold text-foreground">Checklist</div>
+          <div data-section="preparation" className={CHECKLIST_CARD_CLASS}>
+            <div className="font-semibold text-foreground">Preparation</div>
             <div className="mt-2 space-y-1 text-[11px]">
               {physicsPreflightLoading ? (
                 <div className={`flex items-center gap-2 rounded border px-2 py-1 ${SUBTLE_STATUS_TONE_CLASS[statusTone]}`}>
                   <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  <span>Physics review running...</span>
+                  <span>Physics check running...</span>
                 </div>
               ) : null}
               {overviewRows.length > 0 ? (
@@ -2876,7 +2876,7 @@ export const HealthActionPanel = ({
                   <div className="font-medium text-amber-200">
                     {buildGeometryDiagnosisHeadline({
                       excludedCount: physicsPlausibilitySummary.excludedLinks.length,
-                      reviewCount: countGeometryDiagnosisReviewLinks(
+                      attentionCount: countGeometryDiagnosisAttentionLinks(
                         physicsPlausibilitySummary.excludedLinks
                       ),
                     })}
@@ -2930,39 +2930,39 @@ export const HealthActionPanel = ({
                       ) : null}
                       <div className="space-y-1.5" aria-label="Diagnosis details list">
                         {excludedLinkGroups.map((group) => {
-                          const checklistVisualizationScope = getChecklistVisualizationScope(group);
-                          const isChecklistScopeActive =
-                            checklistVisualizationScope?.scopeKey === activeInertiaVisualizationScopeKey;
+                          const preparationVisualizationScope = getPreparationVisualizationScope(group);
+                          const isPreparationScopeActive =
+                            preparationVisualizationScope?.scopeKey === activeInertiaVisualizationScopeKey;
 
                           return (
                             <div key={group.key} className={DIAGNOSIS_GROUP_CLASS}>
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0 font-medium text-foreground">{group.summary}</div>
                                 <div className="flex items-center gap-1">
-                                  {checklistVisualizationScope && onToggleInertiaVisualizationScope ? (
+                                  {preparationVisualizationScope && onToggleInertiaVisualizationScope ? (
                                     <Button
                                       type="button"
                                       size="icon"
                                       variant="ghost"
                                       className={`${VISUALIZATION_TOGGLE_BUTTON_BASE_CLASS} ${
-                                        isChecklistScopeActive
+                                        isPreparationScopeActive
                                           ? VISUALIZATION_TOGGLE_BUTTON_ACTIVE_CLASS
                                           : VISUALIZATION_TOGGLE_BUTTON_INACTIVE_CLASS
                                       }`}
                                       onClick={() =>
                                         onToggleInertiaVisualizationScope(
-                                          checklistVisualizationScope.scopeKey,
-                                          checklistVisualizationScope.linkNames
+                                          preparationVisualizationScope.scopeKey,
+                                          preparationVisualizationScope.linkNames
                                         )
                                       }
                                       aria-label={`${
-                                        isChecklistScopeActive ? "Hide" : "Show"
-                                      } ${checklistVisualizationScope.label} inertia boxes`}
+                                        isPreparationScopeActive ? "Hide" : "Show"
+                                      } ${preparationVisualizationScope.label} inertia boxes`}
                                       title={`${
-                                        isChecklistScopeActive ? "Hide" : "Show"
-                                      } ${checklistVisualizationScope.label} inertia boxes in the viewer`}
+                                        isPreparationScopeActive ? "Hide" : "Show"
+                                      } ${preparationVisualizationScope.label} inertia boxes in the viewer`}
                                     >
-                                      {isChecklistScopeActive ? (
+                                      {isPreparationScopeActive ? (
                                         <EyeOff className={VISUALIZATION_TOGGLE_ICON_CLASS} />
                                       ) : (
                                         <Eye className={VISUALIZATION_TOGGLE_ICON_CLASS} />
@@ -3112,7 +3112,7 @@ export const HealthActionPanel = ({
                   </Button>
                 ) : physicsPreflightLoading ? null : (
                   <div className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] text-foreground">
-                    Physics review complete. No repair action is needed.
+                    Physics check complete. No repair action is needed.
                   </div>
                 )}
                 <div className="text-[11px] text-muted-foreground">{physicsAction.summary}</div>

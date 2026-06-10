@@ -73,7 +73,7 @@ describe("LoadIssuesPanel", () => {
     const buttons = Array.from(container.querySelectorAll("button"));
     const meshButton = buttons.find((node) => node.textContent?.trim() === "Correct Mesh Paths");
     expect(meshButton).toBeTruthy();
-    expect(getText(container)).toContain("Load needs review");
+    expect(getText(container)).toContain("Load needs attention");
     expect(getText(container)).toContain("Mesh refs need attention");
     expect(getText(container)).not.toContain("Frame orientation");
     expect(getText(container)).not.toContain("Align Orientation");
@@ -150,7 +150,7 @@ describe("LoadIssuesPanel", () => {
     expect(getText(container)).not.toContain("Ready");
     expect(getText(container)).toContain("Valid");
     expect(getText(container)).toContain("Mesh refs OK");
-    expect(getText(container)).toContain("Simulation Prep needs review: Physics Warning");
+    expect(getText(container)).toContain("Simulation Prep needs attention: Physics Warning");
 
     const openSimulationPrepButton = Array.from(container.querySelectorAll("button")).find(
       (node) => node.textContent?.trim() === "Open"

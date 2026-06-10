@@ -15,7 +15,7 @@ const SIMULATION_PREP_PHYSICS_ACTION_KEYS = [
 export type SimulationPrepPhysicsActionKey =
   (typeof SIMULATION_PREP_PHYSICS_ACTION_KEYS)[number];
 export type SimulationPrepPhysicsActionStatus = "idle" | "queued" | "running";
-export type SimulationPrepChecklistRefreshResult =
+export type SimulationPrepPreparationRefreshResult =
   | "success"
   | "failed"
   | "superseded"
@@ -104,12 +104,12 @@ export const resolveSimulationPrepPreflightRequestDecision = ({
   return "start";
 };
 
-export const resolveSimulationPrepChecklistRefreshStatus = ({
+export const resolveSimulationPrepPreparationRefreshStatus = ({
   frameResult,
   physicsResult,
 }: {
-  frameResult: SimulationPrepChecklistRefreshResult;
-  physicsResult: SimulationPrepChecklistRefreshResult;
+  frameResult: SimulationPrepPreparationRefreshResult;
+  physicsResult: SimulationPrepPreparationRefreshResult;
 }): {
   status: "complete" | "failed" | "pending";
   ok: boolean;
@@ -133,33 +133,33 @@ export const resolveSimulationPrepChecklistRefreshStatus = ({
   };
 };
 
-export const buildSimulationPrepChecklistRefreshMessage = ({
+export const buildSimulationPrepPreparationRefreshMessage = ({
   status,
 }: {
   status: "complete" | "failed" | "pending";
 }): string | null => {
   if (status === "failed") {
-    return "Checklist refresh failed. Previous review is still shown until the next successful check.";
+    return "Preparation refresh failed. Previous status is still shown until the next successful check.";
   }
   if (status === "pending") {
-    return "Checklist refresh is still running. Previous review will stay visible until the new check completes.";
+    return "Preparation refresh is still running. Previous status will stay visible until the new check completes.";
   }
   return null;
 };
 
 export const buildSimulationPrepUpdateToastPlan = ({
   successMessage,
-  checklistRefreshStatus,
+  preparationRefreshStatus,
 }: {
   successMessage: string;
-  checklistRefreshStatus: "complete" | "failed" | "pending";
+  preparationRefreshStatus: "complete" | "failed" | "pending";
 }): {
   successMessage: string;
   followupMessage: string | null;
 } => ({
   successMessage,
-  followupMessage: buildSimulationPrepChecklistRefreshMessage({
-    status: checklistRefreshStatus,
+  followupMessage: buildSimulationPrepPreparationRefreshMessage({
+    status: preparationRefreshStatus,
   }),
 });
 
