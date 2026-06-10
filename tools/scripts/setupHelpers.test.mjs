@@ -63,6 +63,11 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
       installed: true,
       skipped: false,
     },
+    pybulletRuntimeResult: {
+      ok: true,
+      installed: true,
+      skipped: false,
+    },
   });
 
   assert.deepEqual(sections[0], {
@@ -95,6 +100,10 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
     lines: ['Genesis viewer runtime is unavailable. Setup continued because this adapter is optional.'],
   });
   assert.deepEqual(sections[5], {
+    heading: 'PyBullet',
+    lines: ['PyBullet world viewer runtime is available.'],
+  });
+  assert.deepEqual(sections[6], {
     heading: 'MJLab',
     lines: ['MJLab validation runtime is available.'],
   });
@@ -106,7 +115,7 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
   assert.equal(sections[0].heading, 'Setup steps');
   assert.ok(sections[0].lines.includes('Unified Python backend/training runtime'));
   assert.ok(
-    sections[0].lines.includes('Simulator runtimes: Genesis viewer, MJLab motion validation')
+    sections[0].lines.includes('Simulator runtimes: Genesis, PyBullet, and MJLab')
   );
   assert.equal(sections.length, 1);
 });

@@ -50,7 +50,7 @@ export function buildSetupRoadmapSections() {
         'Unified Python backend/training runtime',
         'LeRobot training runtime',
         'OpenArm hardware runtime',
-        'Simulator runtimes: Genesis viewer, MJLab motion validation',
+        'Simulator runtimes: Genesis, PyBullet, and MJLab',
         'Hugging Face and GitHub access',
       ],
     },
@@ -85,6 +85,7 @@ export function buildSetupSummarySections({
   globalIluInstalled = false,
   genesisRuntimeResult = null,
   mjlabRuntimeResult = null,
+  pybulletRuntimeResult = null,
 } = {}) {
   const iluLines = [`Local i-love-urdf CLI: ${LOCAL_ILU_COMMAND}`];
 
@@ -108,6 +109,13 @@ export function buildSetupSummarySections({
     unavailableLine: 'MJLab runtime is unavailable.',
     fallbackLine:
       'MJLab installs into the unified Python runtime for teleop motion validation when supported.',
+  });
+  const pybulletLines = buildSimulatorRuntimeLines({
+    result: pybulletRuntimeResult,
+    skippedLine: 'PyBullet install was skipped for this run.',
+    installedLine: 'PyBullet world viewer runtime is available.',
+    unavailableLine: 'PyBullet world viewer runtime is unavailable.',
+    fallbackLine: 'PyBullet installs into the unified Python runtime for direct URDF world viewing.',
   });
 
   return [
@@ -136,6 +144,10 @@ export function buildSetupSummarySections({
     {
       heading: 'Genesis',
       lines: genesisLines,
+    },
+    {
+      heading: 'PyBullet',
+      lines: pybulletLines,
     },
     {
       heading: 'MJLab',

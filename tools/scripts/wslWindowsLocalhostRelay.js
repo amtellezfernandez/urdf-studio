@@ -1,6 +1,6 @@
 import { execFileSync } from 'child_process';
 
-import { formatHostForUrl } from '../../config/runtime.js';
+import { formatHostForUrl, resolveLocalNetworkHost } from '../../config/runtime.js';
 import { isWslEnvironment } from '../../config/wslOwnerProxy.js';
 
 const WSL_WINDOWS_LOCALHOST_RELAY_PARAMS = {
@@ -211,10 +211,27 @@ export const stopWslWindowsLocalhostRelay = (
   }
 };
 
+export const resolveWslWindowsLocalhostRelayTargetHost = (
+  {
+    runtimeConfig,
+    networkInterfaces,
+  } = {},
+) => {
+  const configuredHost = normalizeHost(runtimeConfig?.web?.host);
+  if (
+    isRemoteBindHost(runtimeConfig?.web?.bindHost) &&
+    (!configuredHost || isLoopbackHost(configuredHost))
+  ) {
+    return resolveLocalNetworkHost({ networkInterfaces });
+  }
+  return configuredHost;
+};
+
 export const ensureWslWindowsLocalhostAccess = (
   {
     runtimeConfig,
-    targetHost = runtimeConfig?.web?.host,
+    targetHost = null,
+    networkInterfaces,
     isWslEnvironmentImpl = isWslEnvironment,
     windowsCanFetchUrlImpl = windowsCanFetchUrl,
     stopStaleWslRelayListenersImpl = stopStaleWslRelayListeners,
@@ -225,7 +242,13 @@ export const ensureWslWindowsLocalhostAccess = (
 ) => {
   const port = Number(runtimeConfig?.web?.port);
   const bindHost = runtimeConfig?.web?.bindHost;
-  const normalizedTargetHost = normalizeHost(targetHost);
+  const normalizedTargetHost = normalizeHost(
+    targetHost ??
+      resolveWslWindowsLocalhostRelayTargetHost({
+        runtimeConfig,
+        networkInterfaces,
+      }),
+  );
   const localUrl = `http://${WSL_WINDOWS_LOCALHOST_RELAY_PARAMS.listenHost}:${port}`;
   const targetUrl = `http://${formatHostForUrl(normalizedTargetHost)}:${port}`;
 

@@ -5,6 +5,7 @@ import {
   buildWslWindowsLocalhostRelayScript,
   ensureWslWindowsLocalhostAccess,
   parseWindowsProcessId,
+  resolveWslWindowsLocalhostRelayTargetHost,
 } from './wslWindowsLocalhostRelay.js';
 
 const REMOTE_BIND_RUNTIME_CONFIG = {
@@ -53,6 +54,67 @@ test('WSL localhost access check leaves working Windows localhost untouched', ()
     status: 'already-working',
     localUrl: 'http://127.0.0.1:5173',
   });
+});
+
+test('WSL localhost access check targets detected WSL address for gated local starts', () => {
+  const calls = [];
+  let localWorks = false;
+  const result = ensureWslWindowsLocalhostAccess({
+    runtimeConfig: {
+      web: {
+        bindHost: '0.0.0.0',
+        host: '127.0.0.1',
+        port: 5173,
+      },
+    },
+    networkInterfaces: () => ({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+      eth0: [{ family: 'IPv4', internal: false, address: '172.22.210.70' }],
+    }),
+    isWslEnvironmentImpl: () => true,
+    windowsCanFetchUrlImpl: (url) => {
+      calls.push(['fetch', url]);
+      if (url === 'http://127.0.0.1:5173') return localWorks;
+      return url === 'http://172.22.210.70:5173';
+    },
+    stopStaleWslRelayListenersImpl: () => [],
+    isWindowsLocalPortFreeImpl: () => true,
+    startWindowsLocalhostRelayImpl: ({ listenPort, targetHost, targetPort }) => {
+      calls.push(['start-relay', listenPort, targetHost, targetPort]);
+      localWorks = true;
+      return 44072;
+    },
+  });
+
+  assert.equal(
+    resolveWslWindowsLocalhostRelayTargetHost({
+      runtimeConfig: {
+        web: {
+          bindHost: '0.0.0.0',
+          host: '127.0.0.1',
+          port: 5173,
+        },
+      },
+      networkInterfaces: () => ({
+        docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+        eth0: [{ family: 'IPv4', internal: false, address: '172.22.210.70' }],
+      }),
+    }),
+    '172.22.210.70'
+  );
+  assert.deepEqual(result, {
+    status: 'relay-started',
+    killedStaleRelayPids: [],
+    localUrl: 'http://127.0.0.1:5173',
+    targetUrl: 'http://172.22.210.70:5173',
+    pid: 44072,
+  });
+  assert.deepEqual(calls, [
+    ['fetch', 'http://127.0.0.1:5173'],
+    ['fetch', 'http://172.22.210.70:5173'],
+    ['start-relay', 5173, '172.22.210.70', 5173],
+    ['fetch', 'http://127.0.0.1:5173'],
+  ]);
 });
 
 test('WSL localhost access check replaces stale wslrelay with a loopback relay', () => {

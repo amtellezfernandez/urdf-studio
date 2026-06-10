@@ -96,6 +96,7 @@ test('setup stops before backend dependency installation when unified Python set
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', false),
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
+      installPybulletRuntime: unreachable('installPybulletRuntime'),
       installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),
@@ -135,6 +136,7 @@ test('setup stops before workspace setup when i-love-urdf runtime check fails', 
       setupPythonBackendEnvironment: unreachable('setupPythonBackendEnvironment'),
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
+      installPybulletRuntime: unreachable('installPybulletRuntime'),
       installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),
@@ -172,6 +174,12 @@ test('setup continues when optional simulator adapters are unavailable', async (
       skipped: false,
       fatal: false,
     }),
+    installPybulletRuntime: record('installPybulletRuntime', {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    }),
     installOfficialLeRobotToolchain: record('installOfficialLeRobotToolchain', true),
     installOpenArmHardwareRuntime: record('installOpenArmHardwareRuntime', true),
     installMjlabRuntime: record('installMjlabRuntime', {
@@ -191,6 +199,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
   });
 
   assert.equal(result.genesisRuntimeResult.ok, false);
+  assert.equal(result.pybulletRuntimeResult.ok, false);
   assert.equal(result.mjlabRuntimeResult.ok, false);
   assert.deepEqual(calls, [
     'installDependencies',
@@ -199,6 +208,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
     'setupPythonBackendEnvironment',
     'installBackendDeps',
     'installGenesisRuntime',
+    'installPybulletRuntime',
     'installOfficialLeRobotToolchain',
     'installOpenArmHardwareRuntime',
     'installMjlabRuntime',
@@ -234,6 +244,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
         skipped: false,
         fatal: true,
       }),
+      installPybulletRuntime: unreachable('installPybulletRuntime'),
       installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),

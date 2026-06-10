@@ -49,6 +49,10 @@ import {
   MJLAB_SKIP_AUTO_INSTALL_ENV,
   MJX_SYSTEM_ID_DEPENDENCIES,
   MJLAB_VERIFY_IMPORT_SCRIPT,
+  PYBULLET_DEPENDENCIES,
+  PYBULLET_FORCE_INSTALL_ENV,
+  PYBULLET_SKIP_AUTO_INSTALL_ENV,
+  PYBULLET_VERIFY_IMPORT_SCRIPT,
   PYTHON_ENV_DIRNAME,
   SETUP_NPM_INSTALL_FLAGS,
 } from './setupParams.js';
@@ -599,12 +603,14 @@ function printSetupSummary({
   globalIluResult,
   genesisRuntimeResult,
   mjlabRuntimeResult,
+  pybulletRuntimeResult,
 } = {}) {
   const sections = buildSetupSummarySections({
     globalIluAttempted: Boolean(globalIluResult?.attempted),
     globalIluInstalled: Boolean(globalIluResult?.installed),
     genesisRuntimeResult,
     mjlabRuntimeResult,
+    pybulletRuntimeResult,
   });
   log('');
   logArrow('Setup summary');
@@ -926,13 +932,11 @@ function getLeRobotToolchainSkipMessage() {
 }
 
 function shouldInstallMjlab() {
-  if (isTruthyEnvValue(process.env[MJLAB_SKIP_AUTO_INSTALL_ENV])) {
-    return false;
-  }
-  if (isTruthyEnvValue(process.env[MJLAB_FORCE_INSTALL_ENV])) {
-    return true;
-  }
-  return process.platform !== 'darwin';
+  return shouldInstallOptionalPythonRuntime({
+    skipAutoInstallEnv: MJLAB_SKIP_AUTO_INSTALL_ENV,
+    forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
+    defaultInstall: process.platform !== 'darwin',
+  });
 }
 
 function shouldInstallOpenArmHardwareRuntime() {
@@ -1026,13 +1030,11 @@ function resolveBackendPythonVerifyImportScript() {
 }
 
 function shouldInstallGenesisRuntime() {
-  if (isTruthyEnvValue(process.env[GENESIS_SKIP_AUTO_INSTALL_ENV])) {
-    return false;
-  }
-  if (isTruthyEnvValue(process.env[GENESIS_FORCE_INSTALL_ENV])) {
-    return true;
-  }
-  return process.platform === 'linux';
+  return shouldInstallOptionalPythonRuntime({
+    skipAutoInstallEnv: GENESIS_SKIP_AUTO_INSTALL_ENV,
+    forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
+    defaultInstall: process.platform === 'linux',
+  });
 }
 
 function getGenesisRuntimeSkipMessage() {
@@ -1064,6 +1066,35 @@ function getMjlabRuntimeSkipMessage() {
     ].join(' ');
   }
   return `MJLab validation runtime skipped. Set ${MJLAB_FORCE_INSTALL_ENV}=1 to force install.`;
+}
+
+function shouldInstallPybulletRuntime() {
+  return shouldInstallOptionalPythonRuntime({
+    skipAutoInstallEnv: PYBULLET_SKIP_AUTO_INSTALL_ENV,
+    forceInstallEnv: PYBULLET_FORCE_INSTALL_ENV,
+    defaultInstall: true,
+  });
+}
+
+function getPybulletRuntimeSkipMessage() {
+  if (isTruthyEnvValue(process.env[PYBULLET_SKIP_AUTO_INSTALL_ENV])) {
+    return `PyBullet world viewer runtime skipped by ${PYBULLET_SKIP_AUTO_INSTALL_ENV}.`;
+  }
+  return `PyBullet world viewer runtime skipped. Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`;
+}
+
+function shouldInstallOptionalPythonRuntime({
+  skipAutoInstallEnv,
+  forceInstallEnv,
+  defaultInstall,
+}) {
+  if (isTruthyEnvValue(process.env[skipAutoInstallEnv])) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env[forceInstallEnv])) {
+    return true;
+  }
+  return defaultInstall;
 }
 
 function listInstalledPythonPackageNames(venvPython) {
@@ -1260,17 +1291,27 @@ async function installOpenArmHardwareRuntime() {
   }
 }
 
-async function installMjlabRuntime() {
-  if (!shouldInstallMjlab()) {
+async function installOptionalPythonRuntime({
+  shouldInstall,
+  skipMessage,
+  icon,
+  displayName,
+  setupName,
+  dependencies,
+  verifyImportScript,
+  forceInstallEnv,
+  manualInstallIntro = 'Try manually:',
+}) {
+  if (!shouldInstall()) {
     log('');
-    logArrow('🧪 Checking MJLab validation runtime');
+    logArrow(`${icon} Checking ${displayName}`);
     log('');
-    logInfo(getMjlabRuntimeSkipMessage());
+    logInfo(skipMessage());
     return { ok: true, installed: false, skipped: true };
   }
 
   log('');
-  logArrow('🧪 Installing MJLab validation runtime');
+  logArrow(`${icon} Installing ${displayName}`);
   log('');
 
   const venvPython = getManagedPythonPath();
@@ -1280,47 +1321,73 @@ async function installMjlabRuntime() {
     return { ok: false, installed: false, skipped: false, fatal: true };
   }
   if (!uvPath) {
-    log('✗ uv not found. MJLab setup requires uv.', colors.yellow);
+    log(`✗ uv not found. ${setupName} setup requires uv.`, colors.yellow);
     return { ok: false, installed: false, skipped: false, fatal: true };
   }
 
-  const existingCoreCheck = runPythonImportCheck(venvPython, MJLAB_VERIFY_IMPORT_SCRIPT);
-  if (existingCoreCheck.ok) {
-    logSuccess('MJLab runtime ready');
+  const existingRuntimeCheck = runPythonImportCheck(venvPython, verifyImportScript);
+  if (existingRuntimeCheck.ok) {
+    logSuccess(`${displayName} ready`);
     return { ok: true, installed: true, skipped: false };
   }
 
-  if (existingCoreCheck.output) {
-    logInfo('MJLab runtime check failed; reinstalling packages.');
+  if (existingRuntimeCheck.output) {
+    logInfo(`${displayName} check failed; reinstalling packages.`);
   }
 
   try {
-    logInfo(`Installing MJLab packages in ${PYTHON_ENV_DIRNAME}...`);
-    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...MJLAB_DEPENDENCIES], {
+    logInfo(`Installing ${displayName} packages in ${PYTHON_ENV_DIRNAME}...`);
+    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...dependencies], {
       cwd: rootDir,
       stdio: 'inherit',
       env: getUvEnv(),
     });
 
-    const installedCoreCheck = runPythonImportCheck(venvPython, MJLAB_VERIFY_IMPORT_SCRIPT);
-    if (!installedCoreCheck.ok) {
-      printCapturedCommandOutput(installedCoreCheck);
-      throw new Error(installedCoreCheck.output || 'MJLab core import check failed after install.');
+    const installedRuntimeCheck = runPythonImportCheck(venvPython, verifyImportScript);
+    if (!installedRuntimeCheck.ok) {
+      printCapturedCommandOutput(installedRuntimeCheck);
+      throw new Error(installedRuntimeCheck.output || `${setupName} import check failed after install.`);
     }
-    logSuccess('MJLab validation runtime installed');
+    logSuccess(`${displayName} installed`);
     return { ok: true, installed: true, skipped: false };
   } catch (e) {
-    log('✗ Failed to install MJLab validation runtime', colors.yellow);
-    logInfo('Try manually:');
-    logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${MJLAB_DEPENDENCIES.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
-    if (!isTruthyEnvValue(process.env[MJLAB_FORCE_INSTALL_ENV])) {
-      logInfo(`Continuing without MJLab. Set ${MJLAB_FORCE_INSTALL_ENV}=1 to require it during setup.`);
+    log(`✗ Failed to install ${displayName}`, colors.yellow);
+    logInfo(manualInstallIntro);
+    logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${dependencies.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
+    if (!isTruthyEnvValue(process.env[forceInstallEnv])) {
+      logInfo(`Continuing without ${setupName}. Set ${forceInstallEnv}=1 to require it during setup.`);
     }
     return buildOptionalRuntimeInstallFailure({
-      forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
+      forceInstallEnv,
       error: e,
     });
   }
+}
+
+async function installMjlabRuntime() {
+  return installOptionalPythonRuntime({
+    shouldInstall: shouldInstallMjlab,
+    skipMessage: getMjlabRuntimeSkipMessage,
+    icon: '🧪',
+    displayName: 'MJLab validation runtime',
+    setupName: 'MJLab',
+    dependencies: MJLAB_DEPENDENCIES,
+    verifyImportScript: MJLAB_VERIFY_IMPORT_SCRIPT,
+    forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
+  });
+}
+
+async function installPybulletRuntime() {
+  return installOptionalPythonRuntime({
+    shouldInstall: shouldInstallPybulletRuntime,
+    skipMessage: getPybulletRuntimeSkipMessage,
+    icon: '🧱',
+    displayName: 'PyBullet world viewer runtime',
+    setupName: 'PyBullet',
+    dependencies: PYBULLET_DEPENDENCIES,
+    verifyImportScript: PYBULLET_VERIFY_IMPORT_SCRIPT,
+    forceInstallEnv: PYBULLET_FORCE_INSTALL_ENV,
+  });
 }
 
 async function installBackendDeps() {
@@ -1403,62 +1470,17 @@ async function installBackendDeps() {
 }
 
 async function installGenesisRuntime() {
-  if (!shouldInstallGenesisRuntime()) {
-    log('');
-    logArrow('🌐 Checking Genesis static world viewer runtime');
-    log('');
-    logInfo(getGenesisRuntimeSkipMessage());
-    return { ok: true, installed: false, skipped: true };
-  }
-
-  log('');
-  logArrow('🌐 Installing Genesis static world viewer runtime');
-  log('');
-
-  const venvPython = getManagedPythonPath();
-  const uvPath = findUv();
-  if (!existsSync(venvPython)) {
-    logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
-    return { ok: false, installed: false, skipped: false, fatal: true };
-  }
-  if (!uvPath) {
-    log('✗ uv not found. Genesis setup requires uv.', colors.yellow);
-    return { ok: false, installed: false, skipped: false, fatal: true };
-  }
-
-  const existingGenesisCheck = runPythonImportCheck(venvPython, GENESIS_VERIFY_IMPORT_SCRIPT);
-  if (existingGenesisCheck.ok) {
-    logSuccess('Genesis static world viewer runtime ready');
-    return { ok: true, installed: true, skipped: false };
-  }
-
-  try {
-    logInfo(`Installing Genesis packages in ${PYTHON_ENV_DIRNAME}...`);
-    execFileSync(uvPath, ['pip', 'install', '--python', venvPython, ...GENESIS_PYTHON_DEPENDENCIES], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: getUvEnv(),
-    });
-
-    const installedGenesisCheck = runPythonImportCheck(venvPython, GENESIS_VERIFY_IMPORT_SCRIPT);
-    if (!installedGenesisCheck.ok) {
-      printCapturedCommandOutput(installedGenesisCheck);
-      throw new Error(installedGenesisCheck.output || 'Genesis import check failed after install.');
-    }
-    logSuccess('Genesis static world viewer runtime installed');
-    return { ok: true, installed: true, skipped: false };
-  } catch (e) {
-    log('✗ Failed to install Genesis static world viewer runtime', colors.yellow);
-    logInfo('Try manually on a compatible Linux environment:');
-    logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${GENESIS_PYTHON_DEPENDENCIES.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
-    if (!isTruthyEnvValue(process.env[GENESIS_FORCE_INSTALL_ENV])) {
-      logInfo(`Continuing without Genesis. Set ${GENESIS_FORCE_INSTALL_ENV}=1 to require it during setup.`);
-    }
-    return buildOptionalRuntimeInstallFailure({
-      forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
-      error: e,
-    });
-  }
+  return installOptionalPythonRuntime({
+    shouldInstall: shouldInstallGenesisRuntime,
+    skipMessage: getGenesisRuntimeSkipMessage,
+    icon: '🌐',
+    displayName: 'Genesis static world viewer runtime',
+    setupName: 'Genesis',
+    dependencies: GENESIS_PYTHON_DEPENDENCIES,
+    verifyImportScript: GENESIS_VERIFY_IMPORT_SCRIPT,
+    forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
+    manualInstallIntro: 'Try manually on a compatible Linux environment:',
+  });
 }
 
 async function installTwinDepsIfRequested() {
@@ -1494,6 +1516,7 @@ async function runSetupSequence(overrides = {}) {
     setupPythonBackendEnvironment,
     installBackendDeps,
     installGenesisRuntime,
+    installPybulletRuntime,
     installOfficialLeRobotToolchain,
     installOpenArmHardwareRuntime,
     installMjlabRuntime,
@@ -1526,6 +1549,10 @@ async function runSetupSequence(overrides = {}) {
   if (shouldFailSetupForRuntimeResult(genesisRuntimeResult)) {
     throw new Error('Genesis static world viewer runtime installation failed');
   }
+  const pybulletRuntimeResult = await steps.installPybulletRuntime();
+  if (shouldFailSetupForRuntimeResult(pybulletRuntimeResult)) {
+    throw new Error('PyBullet world viewer runtime installation failed');
+  }
   const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
   if (!lerobotToolchainInstalled) {
     throw new Error('Official LeRobot dataset toolchain installation failed');
@@ -1543,7 +1570,7 @@ async function runSetupSequence(overrides = {}) {
   await steps.setupHuggingFace();
   await steps.setupGitHub();
   const globalIluResult = await steps.installOptionalGlobalIlu();
-  return { globalIluResult, genesisRuntimeResult, mjlabRuntimeResult };
+  return { globalIluResult, genesisRuntimeResult, mjlabRuntimeResult, pybulletRuntimeResult };
 }
 
 async function main() {
@@ -1554,9 +1581,10 @@ async function main() {
       globalIluResult,
       genesisRuntimeResult,
       mjlabRuntimeResult,
+      pybulletRuntimeResult,
     } = await runSetupSequence();
     logSuccess('Setup complete');
-    printSetupSummary({ globalIluResult, genesisRuntimeResult, mjlabRuntimeResult });
+    printSetupSummary({ globalIluResult, genesisRuntimeResult, mjlabRuntimeResult, pybulletRuntimeResult });
   } catch (error) {
     log('');
     log('✗ Setup failed', colors.yellow);

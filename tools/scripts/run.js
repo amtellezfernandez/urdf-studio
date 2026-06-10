@@ -489,8 +489,10 @@ function isStaleProcessCleanupEnabled(env = process.env) {
   return !/^(1|true|yes)$/i.test(env[RUN_SKIP_STALE_PROCESS_CLEANUP_ENV] || '');
 }
 
-function shouldStartUrdfOps(env = process.env) {
-  return !/^(1|true|yes)$/i.test(env[URDF_OPS_SKIP_START_ENV] || '');
+export function shouldStartUrdfOps(env = process.env) {
+  return !/^(1|true|yes)$/i.test(
+    env[URDF_OPS_SKIP_START_ENV] || env.URDF_OPS_SKIP_START || ''
+  );
 }
 
 async function cleanupStaleProcessGroups({ concurrentRobotGateway = false } = {}) {

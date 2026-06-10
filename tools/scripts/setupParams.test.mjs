@@ -35,6 +35,12 @@ import {
   MJLAB_SKIP_AUTO_INSTALL_ENV,
   MJLAB_VERIFY_IMPORT_SCRIPT,
   NATIVE_SIM_SETUP,
+  PYBULLET_DEPENDENCIES,
+  PYBULLET_FORCE_INSTALL_ENV,
+  PYBULLET_PACKAGE,
+  PYBULLET_SETUP,
+  PYBULLET_SKIP_AUTO_INSTALL_ENV,
+  PYBULLET_VERIFY_IMPORT_SCRIPT,
   SETUP_NPM_INSTALL_FLAGS,
 } from './setupParams.js';
 
@@ -47,6 +53,7 @@ test('simulator setup params stay grouped by runtime stack', () => {
   assert.equal(GENESIS_WORLD_PACKAGE, GENESIS_SETUP.packages.world);
   assert.equal(GENESIS_RENDER_PACKAGE, GENESIS_SETUP.packages.renderer);
   assert.equal(MJLAB_MUJOCO_WARP_PACKAGE, MJLAB_SETUP.packages.mujocoWarp);
+  assert.equal(PYBULLET_PACKAGE, PYBULLET_SETUP.packages.pybullet);
   assert.equal(LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT, LEROBOT_TRAINING_SETUP.verifyImportScript);
 });
 
@@ -100,6 +107,15 @@ test('MJLab setup pins and verifies MuJoCo-Warp', () => {
   assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mjlab/);
   assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mujoco/);
   assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mujoco_warp/);
+});
+
+test('PyBullet world viewer runtime is portable and direct URDF based', () => {
+  assert.equal(PYBULLET_SKIP_AUTO_INSTALL_ENV, 'URDF_STUDIO_SKIP_PYBULLET_AUTO_INSTALL');
+  assert.equal(PYBULLET_FORCE_INSTALL_ENV, 'URDF_STUDIO_INSTALL_PYBULLET');
+  assert.equal(PYBULLET_PACKAGE, 'pybullet');
+  assert.deepEqual(PYBULLET_DEPENDENCIES, [PYBULLET_PACKAGE]);
+  assert.match(PYBULLET_VERIFY_IMPORT_SCRIPT, /import pybullet/);
+  assert.match(PYBULLET_VERIFY_IMPORT_SCRIPT, /import pybullet_data/);
 });
 
 test('Genesis static world viewer runtime is pinned separately from portable backend setup', () => {

@@ -4,6 +4,7 @@ export * from './setupParams/collisionStack.js';
 export * from './setupParams/nativeSim.js';
 export * from './setupParams/mjlab.js';
 export * from './setupParams/genesis.js';
+export * from './setupParams/pybullet.js';
 export * from './setupParams/lerobotTraining.js';
 
 import { BACKEND_PYTHON_CORE_SETUP } from './setupParams/backendPythonCore.js';
