@@ -62,8 +62,8 @@ describe("HealthActionPanelSimulatorRuntime", () => {
     });
 
     expect(textContent(container)).toContain("Open in");
-    expect(textContent(container)).toContain("2 ready");
-    expect(textContent(container)).toContain("Unavailable");
+    expect(textContent(container)).not.toContain("ready");
+    expect(textContent(container)).toContain("Soon available");
     expect(textContent(container)).not.toContain("Simulation Prep");
     expect(textContent(container)).toContain("Genesis");
     expect(textContent(container)).toContain("MJLab");

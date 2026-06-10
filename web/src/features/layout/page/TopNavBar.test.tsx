@@ -134,7 +134,7 @@ describe("TopNavBar", () => {
     expect(container.textContent).not.toContain("Credentials");
     expect(container.textContent).not.toContain("Browser token entry");
     expect(container.textContent).toContain("Simulator");
-    expect(container.textContent).toContain("Review");
+    expect(container.textContent).not.toContain("Review");
 
     await act(async () => {
       root.unmount();
@@ -191,7 +191,7 @@ describe("TopNavBar", () => {
 
     expect(container.textContent).toContain("Simulator");
     expect(container.textContent).not.toContain("Physics Warning");
-    expect(container.textContent).toContain("Review");
+    expect(container.textContent).not.toContain("Review");
 
     const simulationPrepButton = container.querySelector('button[aria-label="Open simulator"]');
     expect(simulationPrepButton).toBeTruthy();

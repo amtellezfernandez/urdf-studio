@@ -98,13 +98,8 @@ export const HealthActionPanelSimulatorRuntime = ({
 
   return (
     <div data-section="simulator-runtime" className={className}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-foreground/80">
+      <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-foreground/80">
           Open in
-        </div>
-        <div className="rounded-sm border border-border/40 px-1.5 py-0.5 text-[9px] text-muted-foreground">
-          {availableTargets.length} ready
-        </div>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {availableTargets.map((target) => (
@@ -114,7 +109,7 @@ export const HealthActionPanelSimulatorRuntime = ({
       {unavailableTargets.length > 0 ? (
         <div className="mt-2 border-t border-border/40 pt-2">
           <div className="mb-1.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/80">
-            Unavailable
+            Soon available
           </div>
           <div className="grid grid-cols-3 gap-1">
             {unavailableTargets.map((target) => (

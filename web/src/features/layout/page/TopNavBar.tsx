@@ -163,9 +163,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
         {workspaceModeUi.showStudioChrome && props.simulationPrepStatusLabel && props.onOpenSimulationPrep ? (
           <button
             type="button"
-            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/45 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground ${
-              props.simulationPrepNeedsAttention ? "ring-1 ring-amber-400/10" : ""
-            }`}
+            className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/45 px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground sm:px-2"
             onClick={props.onOpenSimulationPrep}
             aria-label="Open simulator"
             title={`Simulator: ${props.simulationPrepStatusLabel}`}
@@ -179,13 +177,6 @@ export const TopNavBar = (props: TopNavBarProps) => {
             <span className="font-medium text-foreground">
               <span className="sm:hidden">Sim</span>
               <span className="hidden sm:inline">Simulator</span>
-            </span>
-            <span
-              className={`hidden text-[10px] sm:inline ${
-                props.simulationPrepNeedsAttention ? "text-amber-200/80" : "text-muted-foreground"
-              }`}
-            >
-              {props.simulationPrepNeedsAttention ? "Review" : "Ready"}
             </span>
           </button>
         ) : null}
