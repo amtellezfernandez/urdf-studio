@@ -13,6 +13,7 @@ import {
   applyRuntimeEnvOverrides,
   applyRobotGatewayEnvSelection,
   applyTeamModeRuntimeProfile,
+  applyTeamSharingGatewayRuntimeProfile,
   assertRemoteBindingsAllowed,
   buildSecurityPostureLines,
   buildFrontendReadyUrl,
@@ -32,6 +33,7 @@ import {
   parseRunArgs,
   recoverLoopbackPorts,
   resolveTeamModeHost,
+  isLoopbackHost,
   shouldExposeIkdRuntime,
 } from './runConfig.js';
 import {
@@ -61,6 +63,7 @@ import {
   ensureWslWindowsLocalhostAccess,
   stopWslWindowsLocalhostRelay,
 } from './wslWindowsLocalhostRelay.js';
+import { isWslEnvironment } from '../../config/wslOwnerProxy.js';
 import { startCamToSimIngressProxy } from './camToSimIngressProxy.js';
 import {
   buildOutdatedVersionMessage,
@@ -257,6 +260,23 @@ function writePrefixedDiagnosticOutput(prefix, stream, data) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function shouldUseWslTeamSharingGateway({
+  allowRemote = false,
+  dataMode = false,
+  isWsl = false,
+  runtimeConfig,
+  teamMode = false,
+} = {}) {
+  return (
+    !teamMode &&
+    !allowRemote &&
+    !dataMode &&
+    isWsl &&
+    isLoopbackHost(runtimeConfig?.web?.host) &&
+    isLoopbackHost(runtimeConfig?.web?.bindHost)
+  );
 }
 
 async function waitForHttpReady({
@@ -548,11 +568,19 @@ async function main() {
     parsedRunArgs.runtimeDemoMode ||
     /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_RUNTIME_DEMO || '');
   const mergedRuntimeConfigBase = mergeRuntimeConfig(baseRuntimeConfig, parsedRunArgs.overrides);
+  const useTeamSharingGateway = shouldUseWslTeamSharingGateway({
+    allowRemote: parsedRunArgs.allowRemote,
+    dataMode: isDataMode,
+    isWsl: isWslEnvironment(),
+    runtimeConfig: mergedRuntimeConfigBase,
+    teamMode: parsedRunArgs.teamMode,
+  });
   const teamModeHost = parsedRunArgs.teamMode
     ? resolveTeamModeHost({ explicitHost: parsedRunArgs.teamHost })
     : null;
-  const useTeamSharingGateway = false;
-  const exposedFrontendRuntimeConfig = mergedRuntimeConfigBase;
+  const exposedFrontendRuntimeConfig = useTeamSharingGateway
+    ? applyTeamSharingGatewayRuntimeProfile(mergedRuntimeConfigBase)
+    : mergedRuntimeConfigBase;
   const teamRuntimeConfig = parsedRunArgs.teamMode
     ? applyTeamModeRuntimeProfile(mergedRuntimeConfigBase, { publicHost: teamModeHost })
     : exposedFrontendRuntimeConfig;
@@ -1144,7 +1172,12 @@ async function main() {
   process.on('SIGHUP', () => shutdown('SIGHUP'));
 }
 
-main().catch((error) => {
-  log(`✗ Failed to start: ${error instanceof Error ? error.message : String(error)}`, colors.red);
-  process.exit(1);
-});
+const isMainModule = () =>
+  Boolean(process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]);
+
+if (isMainModule()) {
+  main().catch((error) => {
+    log(`✗ Failed to start: ${error instanceof Error ? error.message : String(error)}`, colors.red);
+    process.exit(1);
+  });
+}
