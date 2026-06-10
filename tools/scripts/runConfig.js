@@ -382,7 +382,10 @@ export function buildStartupOverviewLines({
       accessLine,
       sharingLine
     );
-    if (hasSeparateNetworkAccessUrl) {
+    if (teamSharingGateway) {
+      // In gated local mode the non-loopback bind is an implementation detail used
+      // for WSL/owner access stability, not a user-facing entry point.
+    } else if (hasSeparateNetworkAccessUrl) {
       lines.push(`Network link: ${networkAccessUrl}`);
     } else if (hasSeparateLocalNetworkUrl) {
       lines.push(`Direct access: ${localNetworkUrl}`);

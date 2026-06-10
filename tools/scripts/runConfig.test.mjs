@@ -262,6 +262,23 @@ test('startup overview gives in-session team-sharing local instructions', () => 
   ]);
 });
 
+test('startup overview hides raw network bind details in gated WSL local mode', () => {
+  const runtimeConfig = applyTeamSharingGatewayRuntimeProfile(BASE_RUNTIME_CONFIG);
+  const lines = buildStartupOverviewLines({
+    localNetworkUrl: 'http://172.22.210.70:5173',
+    remoteExposureIssues: [],
+    runtimeConfig,
+    runtimeUrls: buildRuntimeUrls(runtimeConfig),
+    teamSharingGateway: true,
+  });
+
+  assert.deepEqual(lines, [
+    'Open URDF Studio: http://127.0.0.1:5173',
+    'Access: local by default; remote browsers are blocked until Team sharing is on.',
+    'Sharing: open Share to turn Wi-Fi/Tailnet invites on or off in this session.',
+  ]);
+});
+
 test('startup overview gives loopback-only local instructions by default', () => {
   const lines = buildStartupOverviewLines({
     runtimeConfig: BASE_RUNTIME_CONFIG,
