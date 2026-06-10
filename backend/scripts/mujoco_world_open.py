@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.simulator_adapters.mujoco import sanitize_mjcf_inertials
 from backend.services.simulator_adapters.params import MUJOCO_LAUNCH_PARAMS
 from backend.services.world_layout_static_transfer import (
     WorldLayoutFrameMap,
@@ -70,6 +71,18 @@ def _apply_initial_joint_positions(model: Any, data: Any, joint_positions: dict[
     return applied_count
 
 
+def _sanitize_mjcf_path(mjcf_path: Path) -> tuple[Path, tuple[str, ...]]:
+    sanitized_content, warnings = sanitize_mjcf_inertials(
+        mjcf_path.read_text(encoding="utf-8")
+    )
+    if not warnings:
+        return mjcf_path, ()
+
+    sanitized_path = mjcf_path.with_name(f"{mjcf_path.stem}.sanitized{mjcf_path.suffix}")
+    sanitized_path.write_text(sanitized_content, encoding="utf-8")
+    return sanitized_path, warnings
+
+
 def open_mujoco_world_scene(
     *,
     world_package_path: Path,
@@ -100,6 +113,10 @@ def open_mujoco_world_scene(
         )
         mjcf_path = robot_mjcf_path.with_name("robot.world.xml")
         mjcf_path.write_text(combined_mjcf, encoding="utf-8")
+
+    mjcf_path, mjcf_sanitize_warnings = _sanitize_mjcf_path(mjcf_path)
+    for warning in mjcf_sanitize_warnings:
+        print(f"[mujoco-world-open] warning: {warning}", flush=True)
 
     model = mujoco.MjModel.from_xml_path(str(mjcf_path.resolve()))
     data = mujoco.MjData(model)
