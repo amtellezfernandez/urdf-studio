@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import html
 import json
+import re
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -26,6 +29,23 @@ class PreparedSimulatorLaunch:
     bundle_result: BundleMeshAssetsResult
 
 
+URDF_VISUAL_FALLBACK_COLOR_PALETTE = (
+    "0.74 0.76 0.72 1.0",
+    "0.42 0.46 0.50 1.0",
+    "0.20 0.53 0.43 1.0",
+    "0.93 0.70 0.22 1.0",
+    "0.13 0.34 0.50 1.0",
+)
+
+URDF_VISUAL_SEMANTIC_FALLBACK_COLORS = (
+    (("wheel", "tire", "tyre"), "0.04 0.045 0.05 1.0"),
+    (("camera", "lens", "sensor"), "0.06 0.15 0.24 1.0"),
+    (("battery", "lipo", "power"), "0.08 0.09 0.10 1.0"),
+    (("motor", "servo", "actuator"), "0.45 0.48 0.52 1.0"),
+    (("frame", "plate", "base", "mount", "bracket", "body", "chassis"), "0.66 0.69 0.64 1.0"),
+)
+
+
 def _timestamped_launch_dir(launch_root: Path) -> Path:
     path = launch_root / f"launch-{time.time_ns()}"
     path.mkdir(parents=True, exist_ok=False)
@@ -34,6 +54,16 @@ def _timestamped_launch_dir(launch_root: Path) -> Path:
 
 def _normalize_relative_path(value: str) -> str:
     return value.replace("\\", "/").strip().lstrip("/")
+
+
+def _normalize_resolved_urdf_asset_path(value: str | None) -> str:
+    normalized = _normalize_relative_path(value or "robot.urdf")
+    lowered = normalized.lower()
+    if lowered.endswith(".urdf.xacro"):
+        return f"{normalized[:-len('.urdf.xacro')]}.urdf"
+    if lowered.endswith(".xacro"):
+        return f"{normalized[:-len('.xacro')]}.urdf"
+    return normalized
 
 
 def _raise(error: Callable[[str], Exception], message: str) -> None:
@@ -132,6 +162,74 @@ def _package_root_hint_paths(source_root: Path, package_roots: dict[str, list[st
     return paths
 
 
+def _prepare_urdf_visual_material_colors(urdf_path: Path) -> int:
+    tree = ET.parse(urdf_path)
+    root = tree.getroot()
+    material_colors = {
+        material.get("name"): color.get("rgba", "").strip()
+        for material in root.findall("material")
+        if material.get("name")
+        for color in [material.find("color")]
+        if color is not None and color.get("rgba", "").strip()
+    }
+    changed_count = 0
+    for link in root.findall("link"):
+        link_name = link.get("name", "")
+        for visual_index, visual in enumerate(link.findall("visual")):
+            material = visual.find("material")
+            if _urdf_material_has_color(material):
+                continue
+            if material is None:
+                material = ET.SubElement(
+                    visual,
+                    "material",
+                    {"name": _fallback_urdf_material_name(link_name, visual_index)},
+                )
+            material_name = material.get("name", "").strip()
+            named_rgba = material_colors.get(material_name)
+            ET.SubElement(
+                material,
+                "color",
+                {"rgba": named_rgba or _fallback_urdf_visual_rgba(link_name, visual, visual_index)},
+            )
+            changed_count += 1
+
+    if changed_count:
+        ET.indent(root, space="  ")
+        tree.write(urdf_path, encoding="unicode", xml_declaration=False)
+    return changed_count
+
+
+def _urdf_material_has_color(material: ET.Element | None) -> bool:
+    if material is None:
+        return False
+    color = material.find("color")
+    return color is not None and bool(color.get("rgba", "").strip())
+
+
+def _fallback_urdf_material_name(link_name: str, visual_index: int) -> str:
+    safe_link_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", link_name.strip()).strip("_")
+    return f"urdf_studio_{safe_link_name or 'visual'}_{visual_index}"
+
+
+def _fallback_urdf_visual_rgba(link_name: str, visual: ET.Element, visual_index: int) -> str:
+    fingerprint = _urdf_visual_fingerprint(link_name, visual, visual_index)
+    fingerprint_lower = fingerprint.lower()
+    for terms, rgba in URDF_VISUAL_SEMANTIC_FALLBACK_COLORS:
+        if any(term in fingerprint_lower for term in terms):
+            return rgba
+    digest = hashlib.sha256(fingerprint_lower.encode("utf-8")).digest()
+    return URDF_VISUAL_FALLBACK_COLOR_PALETTE[digest[0] % len(URDF_VISUAL_FALLBACK_COLOR_PALETTE)]
+
+
+def _urdf_visual_fingerprint(link_name: str, visual: ET.Element, visual_index: int) -> str:
+    parts = [link_name, visual.get("name", ""), str(visual_index)]
+    mesh = visual.find("./geometry/mesh")
+    if mesh is not None:
+        parts.append(mesh.get("filename", ""))
+    return " ".join(part for part in parts if part)
+
+
 def prepare_simulator_launch_package(
     request: SimulatorWorldOpenRequest,
     *,
@@ -150,16 +248,21 @@ def prepare_simulator_launch_package(
         encoding="utf-8",
     )
 
-    staged_urdf_path = source_root / (request.urdf_asset_path or "robot.urdf")
+    requested_asset_path = request.urdf_asset_path or "robot.urdf"
+    staged_urdf_relative_path = _normalize_resolved_urdf_asset_path(requested_asset_path)
+    staged_urdf_path = source_root / staged_urdf_relative_path
     _write_asset_file(
         source_root,
-        request.urdf_asset_path or "robot.urdf",
+        staged_urdf_relative_path,
         request.world_package.world_snapshot.urdf_xml.encode("utf-8"),
         error=error,
     )
 
     source_urdf_path = staged_urdf_path
     extra_search_roots: list[Path] = [source_root, staged_urdf_path.parent]
+    requested_asset_parent = (source_root / _normalize_relative_path(requested_asset_path)).parent
+    if requested_asset_parent != staged_urdf_path.parent:
+        extra_search_roots.append(requested_asset_parent)
     if request.ilu_session_id:
         try:
             session_context = get_ilu_session_local_urdf_source_context(request.ilu_session_id)
@@ -192,6 +295,10 @@ def prepare_simulator_launch_package(
         unresolved = ", ".join(bundle_result.unresolved[:8])
         suffix = "" if len(bundle_result.unresolved) <= 8 else " ..."
         _raise(error, f"Simulator launch could not resolve robot mesh assets: {unresolved}{suffix}")
+    try:
+        _prepare_urdf_visual_material_colors(bundled_urdf_path)
+    except ET.ParseError as exc:
+        _raise(error, f"Simulator launch could not parse robot URDF materials: {exc}")
 
     return PreparedSimulatorLaunch(
         launch_dir=launch_dir,

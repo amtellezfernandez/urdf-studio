@@ -78,9 +78,18 @@ class MjcfConversionStats:
 
 
 @dataclass(frozen=True)
+class MjcfConversionDiagnostic:
+    code: str
+    severity: str
+    link_name: str
+    message: str
+
+
+@dataclass(frozen=True)
 class MjcfConversionResult:
     mjcf_content: str
     warnings: tuple[str, ...]
+    diagnostics: tuple[MjcfConversionDiagnostic, ...]
     stats: MjcfConversionStats
 
 
@@ -295,8 +304,13 @@ def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
     response = _run_bridge("convert-mjcf", {"urdfXml": urdf_xml})
     mjcf_content = response.get("mjcfContent")
     raw_warnings = response.get("warnings")
+    raw_diagnostics = response.get("diagnostics", [])
     raw_stats = response.get("stats")
-    if not isinstance(mjcf_content, str) or not isinstance(raw_warnings, list):
+    if (
+        not isinstance(mjcf_content, str)
+        or not isinstance(raw_warnings, list)
+        or not isinstance(raw_diagnostics, list)
+    ):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion response.")
     if not isinstance(raw_stats, dict):
         raise IluUrdfBridgeError(502, "ilu bridge returned invalid MJCF conversion stats.")
@@ -310,9 +324,29 @@ def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
     warnings = tuple(item for item in raw_warnings if isinstance(item, str))
     if len(warnings) != len(raw_warnings):
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion warning.")
+
+    diagnostics: list[MjcfConversionDiagnostic] = []
+    for item in raw_diagnostics:
+        if not isinstance(item, dict):
+            raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion diagnostic.")
+        code = item.get("code")
+        severity = item.get("severity")
+        link_name = item.get("linkName")
+        message = item.get("message")
+        if not all(isinstance(value, str) and value for value in (code, severity, link_name, message)):
+            raise IluUrdfBridgeError(502, "ilu bridge returned an invalid MJCF conversion diagnostic.")
+        diagnostics.append(
+            MjcfConversionDiagnostic(
+                code=code,
+                severity=severity,
+                link_name=link_name,
+                message=message,
+            )
+        )
     return MjcfConversionResult(
         mjcf_content=mjcf_content,
         warnings=warnings,
+        diagnostics=tuple(diagnostics),
         stats=MjcfConversionStats(
             bodies_created=_read_count("bodiesCreated"),
             joints_converted=_read_count("jointsConverted"),

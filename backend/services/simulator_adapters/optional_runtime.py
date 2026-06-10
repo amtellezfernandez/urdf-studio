@@ -13,8 +13,7 @@ from backend.models.simulator_runtime import (
 from backend.services.simulator_adapters.base import (
     SimulatorAdapter,
     SimulatorCapabilityError,
-    build_runtime_dependency_statuses,
-    format_runtime_dependency_status,
+    build_simulator_runtime_status,
 )
 
 
@@ -40,17 +39,9 @@ class OptionalSimulatorAdapter:
         )
 
     def runtime_status(self) -> SimulatorRuntimeStatus:
-        dependency_statuses = build_runtime_dependency_statuses(self.spec.dependencies)
-        available, status = format_runtime_dependency_status(
-            ready_status="ready",
+        return build_simulator_runtime_status(
+            self.spec,
             missing_status_prefix="Missing optional dependency",
-            dependencies=dependency_statuses,
-        )
-        return SimulatorRuntimeStatus(
-            runtimeName=self.simulator_id,
-            available=available,
-            status=status,
-            dependencies=dependency_statuses,
         )
 
 

@@ -41,10 +41,22 @@ const defaultRuntimeDescriptors = DEFAULT_SIMULATOR_RUNTIME_DESCRIPTORS.map(
   (descriptor) => descriptor as SimulatorRuntimeDescriptor
 );
 
+const SIMULATOR_ASSET_FORMAT_LABELS = new Map<string, string>([
+  ["urdf", "URDF"],
+  ["mjcf", "MJCF"],
+  ["mjx_mjcf", "MJX MJCF"],
+  ["usd", "USD"],
+  ["native", "native"],
+]);
+
+const formatSimulatorAssetFormat = (format: string): string =>
+  SIMULATOR_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
+
 const resolveSimulatorRuntimeDetail = (descriptor: SimulatorRuntimeDescriptor): string => {
-  if (!descriptor.capabilities.worldViewer) return "Not available yet";
-  if (descriptor.capabilities.motionValidation) return "World viewer and motion validation";
-  return "World viewer";
+  const assetFormat = formatSimulatorAssetFormat(descriptor.transferPolicy.robotAssetFormat);
+  if (!descriptor.capabilities.worldViewer) return `${assetFormat} adapter planned`;
+  if (descriptor.capabilities.motionValidation) return `${assetFormat} viewer and validation`;
+  return `${assetFormat} viewer`;
 };
 
 const mergeSimulatorRuntimeDescriptors = (

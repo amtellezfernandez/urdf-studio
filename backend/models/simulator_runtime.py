@@ -9,6 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.models.world_scene_package import WorldScenePackageManifest
 
 
+SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
+SimulatorLaunchAssetFormat = Literal["urdf", "mjcf", "usd"]
+SimulatorLaunchStrategy = Literal["direct", "convert", "planned"]
+SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",
     "mjlab",
@@ -110,7 +114,7 @@ class SimulatorWorldOpenResponse(BaseModel):
     world_package_path: str
     robot_urdf_path: str
     simulator_asset_path: str | None = None
-    simulator_asset_format: Literal["urdf", "mjcf", "usd"] | None = None
+    simulator_asset_format: SimulatorLaunchAssetFormat | None = None
     bundled_mesh_count: int = 0
     unresolved_mesh_refs: list[str] = Field(default_factory=list)
 
@@ -129,6 +133,16 @@ class SimulatorRuntimeCapabilities(SimulatorRuntimeCamelModel):
     motion_validation: bool = Field(default=False, alias="motionValidation")
 
 
+class SimulatorRuntimeTransferPolicy(SimulatorRuntimeCamelModel):
+    robot_asset_format: SimulatorAssetFormat = Field(..., alias="robotAssetFormat")
+    scene_asset_format: SimulatorAssetFormat = Field(..., alias="sceneAssetFormat")
+    frame_convention: str = Field(
+        default=SIMULATOR_CANONICAL_FRAME_CONVENTION,
+        alias="frameConvention",
+    )
+    launch_strategy: SimulatorLaunchStrategy = Field(..., alias="launchStrategy")
+
+
 @dataclass(frozen=True)
 class SimulatorDependencySpec:
     name: str
@@ -136,9 +150,31 @@ class SimulatorDependencySpec:
 
 
 @dataclass(frozen=True)
+class SimulatorTransferSpec:
+    robot_asset_format: SimulatorAssetFormat
+    scene_asset_format: SimulatorAssetFormat
+    launch_strategy: SimulatorLaunchStrategy
+    frame_convention: str = SIMULATOR_CANONICAL_FRAME_CONVENTION
+
+    def runtime_model(self) -> SimulatorRuntimeTransferPolicy:
+        return SimulatorRuntimeTransferPolicy(
+            robotAssetFormat=self.robot_asset_format,
+            sceneAssetFormat=self.scene_asset_format,
+            frameConvention=self.frame_convention,
+            launchStrategy=self.launch_strategy,
+        )
+
+    def launch_asset_format(self) -> SimulatorLaunchAssetFormat:
+        if self.robot_asset_format not in ("urdf", "mjcf", "usd"):
+            raise ValueError(f"{self.robot_asset_format} is not a launchable simulator asset format")
+        return self.robot_asset_format
+
+
+@dataclass(frozen=True)
 class SimulatorRuntimeSpec:
     simulator_id: SimulatorId
     label: str
+    transfer: SimulatorTransferSpec
     world_viewer: bool = False
     motion_validation: bool = False
     dependencies: tuple[SimulatorDependencySpec, ...] = ()
@@ -154,6 +190,7 @@ class SimulatorRuntimeDescriptor(SimulatorRuntimeCamelModel):
     simulator_id: SimulatorId = Field(..., alias="simulatorId")
     label: str
     capabilities: SimulatorRuntimeCapabilities
+    transfer_policy: SimulatorRuntimeTransferPolicy = Field(..., alias="transferPolicy")
 
 
 class SimulatorRuntimeListResponse(SimulatorRuntimeCamelModel):
@@ -167,72 +204,139 @@ class SimulatorRuntimeStatus(SimulatorRuntimeCamelModel):
     dependencies: list[SimulatorRuntimeDependency] = Field(default_factory=list)
 
 
+def _transfer(
+    robot_asset_format: SimulatorAssetFormat,
+    launch_strategy: SimulatorLaunchStrategy,
+    *,
+    scene_asset_format: SimulatorAssetFormat | None = None,
+) -> SimulatorTransferSpec:
+    return SimulatorTransferSpec(
+        robot_asset_format=robot_asset_format,
+        scene_asset_format=scene_asset_format or robot_asset_format,
+        launch_strategy=launch_strategy,
+    )
+
+
+def _dependency(name: str, import_name: str | None = None) -> SimulatorDependencySpec:
+    return SimulatorDependencySpec(name=name, import_name=import_name or name)
+
+
+def _runtime(
+    simulator_id: SimulatorId,
+    label: str,
+    robot_asset_format: SimulatorAssetFormat,
+    launch_strategy: SimulatorLaunchStrategy,
+    *,
+    world_viewer: bool = False,
+    motion_validation: bool = False,
+    dependencies: tuple[SimulatorDependencySpec, ...] = (),
+) -> SimulatorRuntimeSpec:
+    return SimulatorRuntimeSpec(
+        simulator_id=simulator_id,
+        label=label,
+        transfer=_transfer(robot_asset_format, launch_strategy),
+        world_viewer=world_viewer,
+        motion_validation=motion_validation,
+        dependencies=dependencies,
+    )
+
+
 SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_GENESIS_ID,
-        label="Genesis",
+    _runtime(
+        SIMULATOR_GENESIS_ID,
+        "Genesis",
+        "urdf",
+        "direct",
         world_viewer=True,
-        dependencies=(SimulatorDependencySpec(name="genesis", import_name="genesis"),),
+        dependencies=(_dependency("genesis"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_MJLAB_ID,
-        label="MJLab",
+    _runtime(
+        SIMULATOR_MJLAB_ID,
+        "MJLab",
+        "mjcf",
+        "convert",
         world_viewer=True,
         motion_validation=True,
-    ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_MUJOCO_ID,
-        label="MuJoCo",
-        world_viewer=True,
-        dependencies=(SimulatorDependencySpec(name="mujoco", import_name="mujoco"),),
-    ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_MJX_ID,
-        label="MJX",
         dependencies=(
-            SimulatorDependencySpec(name="mujoco", import_name="mujoco"),
-            SimulatorDependencySpec(name="jax", import_name="jax"),
+            _dependency("mjlab"),
+            _dependency("mujoco"),
+            _dependency("mujoco_warp"),
         ),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_PYBULLET_ID,
-        label="PyBullet",
-        dependencies=(SimulatorDependencySpec(name="pybullet", import_name="pybullet"),),
+    _runtime(
+        SIMULATOR_MUJOCO_ID,
+        "MuJoCo",
+        "mjcf",
+        "convert",
+        world_viewer=True,
+        dependencies=(_dependency("mujoco"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_SAPIEN2_ID,
-        label="SAPIEN 2",
-        dependencies=(SimulatorDependencySpec(name="sapien", import_name="sapien"),),
+    _runtime(
+        SIMULATOR_MJX_ID,
+        "MJX",
+        "mjx_mjcf",
+        "planned",
+        dependencies=(
+            _dependency("mujoco"),
+            _dependency("jax"),
+        ),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_SAPIEN3_ID,
-        label="SAPIEN 3",
-        dependencies=(SimulatorDependencySpec(name="sapien", import_name="sapien"),),
+    _runtime(
+        SIMULATOR_PYBULLET_ID,
+        "PyBullet",
+        "urdf",
+        "direct",
+        world_viewer=True,
+        dependencies=(_dependency("pybullet"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_ISAACSIM_ID,
-        label="Isaac Sim",
-        dependencies=(SimulatorDependencySpec(name="isaacsim", import_name="isaacsim"),),
+    _runtime(
+        SIMULATOR_SAPIEN2_ID,
+        "SAPIEN 2",
+        "urdf",
+        "planned",
+        dependencies=(_dependency("sapien"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_ISAACGYM_ID,
-        label="Isaac Gym",
-        dependencies=(SimulatorDependencySpec(name="isaacgym", import_name="isaacgym"),),
+    _runtime(
+        SIMULATOR_SAPIEN3_ID,
+        "SAPIEN 3",
+        "urdf",
+        "planned",
+        dependencies=(_dependency("sapien"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_NEWTON_ID,
-        label="Newton",
-        dependencies=(SimulatorDependencySpec(name="newton", import_name="newton"),),
+    _runtime(
+        SIMULATOR_ISAACSIM_ID,
+        "Isaac Sim",
+        "usd",
+        "planned",
+        dependencies=(_dependency("isaacsim"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_BLENDER_ID,
-        label="Blender",
-        dependencies=(SimulatorDependencySpec(name="bpy", import_name="bpy"),),
+    _runtime(
+        SIMULATOR_ISAACGYM_ID,
+        "Isaac Gym",
+        "urdf",
+        "planned",
+        dependencies=(_dependency("isaacgym"),),
     ),
-    SimulatorRuntimeSpec(
-        simulator_id=SIMULATOR_ROBOSPLATTER_ID,
-        label="RoboSplatter",
-        dependencies=(SimulatorDependencySpec(name="robosplatter", import_name="robosplatter"),),
+    _runtime(
+        SIMULATOR_NEWTON_ID,
+        "Newton",
+        "mjcf",
+        "planned",
+        dependencies=(_dependency("newton"),),
+    ),
+    _runtime(
+        SIMULATOR_BLENDER_ID,
+        "Blender",
+        "usd",
+        "planned",
+        dependencies=(_dependency("bpy"),),
+    ),
+    _runtime(
+        SIMULATOR_ROBOSPLATTER_ID,
+        "RoboSplatter",
+        "native",
+        "planned",
+        dependencies=(_dependency("robosplatter"),),
     ),
 )
 SUPPORTED_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(

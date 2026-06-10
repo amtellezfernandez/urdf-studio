@@ -8,6 +8,7 @@ from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
+    SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
     SimulatorWorldOpenRequest,
     SimulatorWorldOpenResponse,
@@ -64,3 +65,23 @@ def format_runtime_dependency_status(
         return True, ready_status
     missing = ", ".join(dependency.name for dependency in dependencies if not dependency.available)
     return False, f"{missing_status_prefix}: {missing}"
+
+
+def build_simulator_runtime_status(
+    spec: SimulatorRuntimeSpec,
+    *,
+    missing_status_prefix: str = "Missing dependency",
+    ready_status: str = "ready",
+) -> SimulatorRuntimeStatus:
+    dependencies = build_runtime_dependency_statuses(spec.dependencies)
+    available, status = format_runtime_dependency_status(
+        ready_status=ready_status,
+        missing_status_prefix=missing_status_prefix,
+        dependencies=dependencies,
+    )
+    return SimulatorRuntimeStatus(
+        runtimeName=spec.simulator_id,
+        available=available,
+        status=status,
+        dependencies=dependencies,
+    )

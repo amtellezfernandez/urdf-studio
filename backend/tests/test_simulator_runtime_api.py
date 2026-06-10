@@ -11,6 +11,8 @@ from backend.app import app
 from backend.api import simulator_runtime as simulator_runtime_api
 from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
 from backend.models.simulator_runtime import (
+    SIMULATOR_CANONICAL_FRAME_CONVENTION,
+    SIMULATOR_RUNTIME_SPECS,
     SimulatorId,
     SimulatorRuntimeStatus,
     SimulatorWorldOpenResponse,
@@ -19,6 +21,10 @@ from backend.services.simulator_adapters import (
     SUPPORTED_SIMULATOR_IDS,
     get_simulator_adapter,
     list_simulator_runtime_descriptors,
+)
+from backend.services.simulator_adapters.params import (
+    SIMULATOR_LAUNCH_PARAMS_BY_ID,
+    SIMULATOR_SCENE_PARAMS_BY_ID,
 )
 
 
@@ -69,6 +75,7 @@ def _open_request_payload() -> dict:
 
 def test_simulator_registry_covers_literal_ids() -> None:
     assert set(SUPPORTED_SIMULATOR_IDS) == set(get_args(SimulatorId))
+    assert [spec.simulator_id for spec in SIMULATOR_RUNTIME_SPECS] == list(SUPPORTED_SIMULATOR_IDS)
     descriptors = list_simulator_runtime_descriptors().simulators
 
     assert [descriptor.simulator_id for descriptor in descriptors] == list(SUPPORTED_SIMULATOR_IDS)
@@ -77,6 +84,53 @@ def test_simulator_registry_covers_literal_ids() -> None:
         assert adapter.simulator_id == simulator_id
         assert adapter.label
         assert adapter.capabilities is not None
+
+
+def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
+    expected_robot_asset_formats = {
+        "genesis": "urdf",
+        "mjlab": "mjcf",
+        "mujoco": "mjcf",
+        "mjx": "mjx_mjcf",
+        "pybullet": "urdf",
+        "sapien2": "urdf",
+        "sapien3": "urdf",
+        "isaacsim": "usd",
+        "isaacgym": "urdf",
+        "newton": "mjcf",
+        "blender": "usd",
+        "robosplatter": "native",
+    }
+
+    for spec in SIMULATOR_RUNTIME_SPECS:
+        assert spec.transfer.frame_convention == SIMULATOR_CANONICAL_FRAME_CONVENTION
+        assert spec.transfer.robot_asset_format == expected_robot_asset_formats[spec.simulator_id]
+        if spec.capabilities_model().world_viewer:
+            assert spec.transfer.launch_strategy in {"direct", "convert"}
+        else:
+            assert spec.transfer.launch_strategy == "planned"
+
+
+def test_openable_simulator_runtime_params_are_centralized() -> None:
+    openable_simulator_ids = {
+        spec.simulator_id
+        for spec in SIMULATOR_RUNTIME_SPECS
+        if spec.capabilities_model().world_viewer and spec.transfer.launch_strategy != "planned"
+    }
+
+    assert openable_simulator_ids == set(SIMULATOR_LAUNCH_PARAMS_BY_ID)
+    assert openable_simulator_ids == set(SIMULATOR_SCENE_PARAMS_BY_ID)
+
+    for simulator_id in openable_simulator_ids:
+        launch_params = SIMULATOR_LAUNCH_PARAMS_BY_ID[simulator_id]
+        scene_params = SIMULATOR_SCENE_PARAMS_BY_ID[simulator_id]
+
+        assert launch_params.ready_log_marker
+        assert launch_params.ready_timeout_sec > 0
+        if hasattr(scene_params, "viewer_step_hz"):
+            assert scene_params.viewer_step_hz > 0
+        if hasattr(scene_params, "gravity_xyz"):
+            assert len(scene_params.gravity_xyz) == 3
 
 
 def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
@@ -94,6 +148,17 @@ def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
         "worldViewer": True,
         "motionValidation": True,
     }
+    assert simulators[0]["transferPolicy"] == {
+        "robotAssetFormat": "urdf",
+        "sceneAssetFormat": "urdf",
+        "frameConvention": SIMULATOR_CANONICAL_FRAME_CONVENTION,
+        "launchStrategy": "direct",
+    }
+    assert simulators[1]["transferPolicy"]["robotAssetFormat"] == "mjcf"
+    assert simulators[1]["transferPolicy"]["launchStrategy"] == "convert"
+    assert simulators[4]["simulatorId"] == "pybullet"
+    assert simulators[4]["capabilities"]["worldViewer"] is True
+    assert simulators[4]["transferPolicy"]["launchStrategy"] == "direct"
 
 
 def test_simulator_world_open_delegates_to_selected_adapter(monkeypatch) -> None:
@@ -137,7 +202,7 @@ def test_simulator_world_open_delegates_to_selected_adapter(monkeypatch) -> None
 def test_optional_simulator_world_open_reports_missing_launcher() -> None:
     with _patch_security_settings():
         response = TestClient(app).post(
-            "/simulators/pybullet/world/open",
+            "/simulators/sapien2/world/open",
             headers=_operator_headers(),
             json=_open_request_payload(),
         )
@@ -156,7 +221,6 @@ def test_non_world_viewer_simulators_are_registered_but_not_openable() -> None:
 
     assert non_world_viewer_ids == [
         "mjx",
-        "pybullet",
         "sapien2",
         "sapien3",
         "isaacsim",

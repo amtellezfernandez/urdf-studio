@@ -12,7 +12,7 @@ describe("HealthActionPanelSimulatorRuntime", () => {
     const root = createRoot(container);
     const openGenesis = vi.fn();
     const openMjlab = vi.fn();
-    const openPybullet = vi.fn();
+    const openSapien = vi.fn();
 
     await act(async () => {
       root.render(
@@ -45,16 +45,16 @@ describe("HealthActionPanelSimulatorRuntime", () => {
               onAction: openMjlab,
             },
             {
-              id: "pybullet",
-              label: "PyBullet",
+              id: "sapien2",
+              label: "SAPIEN 2",
               detail: "Not available yet",
-              actionLabel: "Open in PyBullet",
-              busyLabel: "Opening PyBullet",
+              actionLabel: "Open in SAPIEN 2",
+              busyLabel: "Opening SAPIEN 2",
               isBusy: false,
               isAvailable: false,
               isReady: null,
-              unavailableLabel: "PyBullet is not available yet",
-              onAction: openPybullet,
+              unavailableLabel: "SAPIEN 2 is not available yet",
+              onAction: openSapien,
             },
           ],
         })
@@ -67,7 +67,7 @@ describe("HealthActionPanelSimulatorRuntime", () => {
     expect(textContent(container)).not.toContain("Simulation Prep");
     expect(textContent(container)).toContain("Genesis");
     expect(textContent(container)).toContain("MJLab");
-    expect(textContent(container)).toContain("PyBullet");
+    expect(textContent(container)).toContain("SAPIEN 2");
 
     await act(async () => {
       container
@@ -79,13 +79,13 @@ describe("HealthActionPanelSimulatorRuntime", () => {
     });
 
     const unavailableButton = container.querySelector(
-      'button[aria-label="PyBullet is not available yet"]'
+      'button[aria-label="SAPIEN 2 is not available yet"]'
     );
     expect(unavailableButton?.hasAttribute("disabled")).toBe(true);
     expect(unavailableButton?.getAttribute("class")).toContain("bg-neutral-900");
     expect(openGenesis).toHaveBeenCalledTimes(1);
     expect(openMjlab).toHaveBeenCalledTimes(1);
-    expect(openPybullet).not.toHaveBeenCalled();
+    expect(openSapien).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();

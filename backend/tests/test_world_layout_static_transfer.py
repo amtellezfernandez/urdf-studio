@@ -172,8 +172,10 @@ def test_exported_mjcf_loads_in_mujoco() -> None:
     assert report["loaded_count"] == 3
     assert report["max_position_error_m"] <= 1e-6
     assert report["max_size_error_m"] <= 1e-6
+    assert report["max_color_error"] <= 1e-6
     assert report["type_mismatch_source_ids"] == []
     assert report["collision_mismatch_source_ids"] == []
+    assert report["color_mismatch_source_ids"] == []
 
 
 def test_appends_world_primitives_to_robot_mjcf_for_mujoco() -> None:
@@ -222,6 +224,7 @@ def test_layout_builds_in_genesis_when_enabled() -> None:
     assert report["loaded_count"] == 3
     assert report["max_position_error_m"] <= 1e-6
     assert report["max_size_error_m"] <= 1e-6
+    assert report["max_color_error"] <= 1e-6
 
 
 def test_end_to_end_report_can_skip_genesis_for_fast_checks() -> None:
@@ -295,3 +298,4 @@ def test_varied_static_layout_primitives_and_rotations_load_in_mujoco() -> None:
     assert report["backends"]["mujoco"]["max_position_error_m"] <= 1e-6
     assert report["backends"]["mujoco"]["max_size_error_m"] <= 1e-6
     assert report["backends"]["mujoco"]["max_quat_error"] <= 1e-6
+    assert report["backends"]["mujoco"]["max_color_error"] <= 1e-6

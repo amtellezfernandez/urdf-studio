@@ -1,32 +1,25 @@
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import sys
 import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.models.world_scene_package import WorldScenePackageManifest
-from backend.services.simulator_adapters.params import GENESIS_LAUNCH_PARAMS
+from backend.services.simulator_adapters.camera_transfer import (
+    CAMERA_MARKER_RGBA,
+    CAMERA_MARKER_SIZE_XYZ,
+    SimCameraSpec,
+    build_sim_camera_specs,
+)
+from backend.services.simulator_adapters.numeric import is_finite_number
+from backend.services.simulator_adapters.params import GENESIS_LAUNCH_PARAMS, GENESIS_SCENE_PARAMS
+from backend.services.simulator_adapters.world_scene import prepare_world_scene
 from backend.services.so101_genesis_urdf import materialize_so101_genesis_urdf
 from backend.services.world_layout_static_transfer import (
     WorldLayoutFrameMap,
-    build_sim_primitives,
-    parse_static_world_layout_payload,
-    resolve_world_layout_frame_map,
 )
-
-GENESIS_FLOOR_SIZE_XY = (4.0, 4.0)
-GENESIS_FLOOR_THICKNESS_M = 0.08
-GENESIS_ROBOT_BASE_Z_OFFSET_M = 0.004
-GENESIS_ARM_KP = 600.0
-GENESIS_ARM_KV = 35.0
-GENESIS_ARM_FORCE_LIMIT = 220.0
-GENESIS_GRIPPER_KP = 700.0
-GENESIS_GRIPPER_KV = 42.0
-GENESIS_GRIPPER_FORCE_LIMIT = 260.0
 
 
 def _parse_args() -> argparse.Namespace:
@@ -50,12 +43,12 @@ def _scene_center_and_radius(
     positions: Sequence[tuple[float, float, float]]
 ) -> tuple[tuple[float, float, float], float]:
     if not positions:
-        return (0.0, 0.0, 0.4), 1.0
+        return GENESIS_SCENE_PARAMS.viewer.default_center_xyz, GENESIS_SCENE_PARAMS.viewer.default_radius_m
     mins = [min(position[axis] for position in positions) for axis in range(3)]
     maxs = [max(position[axis] for position in positions) for axis in range(3)]
     center = tuple((mins[axis] + maxs[axis]) * 0.5 for axis in range(3))
     radius = max(
-        0.75,
+        GENESIS_SCENE_PARAMS.viewer.min_radius_m,
         max(
             sum((position[axis] - center[axis]) ** 2 for axis in range(3)) ** 0.5
             for position in positions
@@ -66,10 +59,6 @@ def _scene_center_and_radius(
 
 def _viewer_run_in_thread() -> bool:
     return sys.platform != "darwin"
-
-
-def _is_finite_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _to_float_list(value: Any) -> list[float]:
@@ -89,7 +78,7 @@ def _to_float_list(value: Any) -> list[float]:
     for item in value:
         if isinstance(item, list | tuple):
             flattened.extend(_to_float_list(item))
-        elif _is_finite_number(item):
+        elif is_finite_number(item):
             flattened.append(float(item))
     return flattened
 
@@ -127,9 +116,14 @@ def _configure_robot_position_controller(
             or "finger" in normalized_joint_name
             or "slide" in normalized_joint_name
         )
-        kp_values.append(GENESIS_GRIPPER_KP if is_gripper else GENESIS_ARM_KP)
-        kv_values.append(GENESIS_GRIPPER_KV if is_gripper else GENESIS_ARM_KV)
-        force_limit = GENESIS_GRIPPER_FORCE_LIMIT if is_gripper else GENESIS_ARM_FORCE_LIMIT
+        controller = (
+            GENESIS_SCENE_PARAMS.gripper_controller
+            if is_gripper
+            else GENESIS_SCENE_PARAMS.arm_controller
+        )
+        kp_values.append(controller.kp)
+        kv_values.append(controller.kv)
+        force_limit = controller.force_limit
         force_lower.append(-force_limit)
         force_upper.append(force_limit)
 
@@ -150,7 +144,7 @@ def _apply_joint_values(
     dof_indices: list[int] = []
     positions: list[float] = []
     for joint_name, value in joint_values.items():
-        if joint_name not in joint_dof_indices or not _is_finite_number(value):
+        if joint_name not in joint_dof_indices or not is_finite_number(value):
             continue
         dof_indices.append(joint_dof_indices[joint_name])
         positions.append(float(value))
@@ -171,14 +165,15 @@ def _apply_joint_values(
 
 
 def _add_floor_entity(gs, scene) -> None:
+    floor = GENESIS_SCENE_PARAMS.floor
     scene.add_entity(
         gs.morphs.Box(
-            size=(GENESIS_FLOOR_SIZE_XY[0], GENESIS_FLOOR_SIZE_XY[1], GENESIS_FLOOR_THICKNESS_M),
-            pos=(0.0, 0.0, -GENESIS_FLOOR_THICKNESS_M / 2.0),
+            size=(floor.size_xy_m[0], floor.size_xy_m[1], floor.thickness_m),
+            pos=(0.0, 0.0, -floor.thickness_m / 2.0),
             fixed=True,
             collision=True,
         ),
-        surface=gs.surfaces.Default(color=(0.16, 0.16, 0.16), opacity=0.35),
+        surface=gs.surfaces.Default(color=floor.rgba[:3], opacity=floor.rgba[3]),
         name="wl_reference_floor",
     )
 
@@ -218,14 +213,43 @@ def _add_primitive_entity(gs, scene, primitive) -> None:
     )
 
 
-def _load_world_package(path: Path) -> WorldScenePackageManifest:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise ValueError(f"Failed to read world package: {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid world package JSON: {exc}") from exc
-    return WorldScenePackageManifest.model_validate(payload)
+def _add_camera_marker_entity(gs, scene, camera: SimCameraSpec) -> None:
+    scene.add_entity(
+        gs.morphs.Box(
+            size=CAMERA_MARKER_SIZE_XYZ,
+            pos=camera.position_xyz,
+            quat=camera.quat_wxyz,
+            fixed=True,
+            collision=False,
+        ),
+        surface=gs.surfaces.Default(color=CAMERA_MARKER_RGBA[:3], opacity=CAMERA_MARKER_RGBA[3]),
+        name=f"{camera.sim_name}_marker",
+    )
+
+
+def _add_scene_camera(gs, scene, camera: SimCameraSpec):
+    forward = camera.forward_xyz
+    lookat = tuple(camera.position_xyz[axis] + forward[axis] for axis in range(3))
+    return scene.add_camera(
+        res=(camera.width, camera.height),
+        pos=camera.position_xyz,
+        lookat=lookat,
+        up=camera.up_xyz,
+        fov=camera.fov_deg,
+        GUI=False,
+    )
+
+
+def _robot_urdf_morph_kwargs(robot_urdf_path: Path) -> dict[str, Any]:
+    return {
+        "file": str(robot_urdf_path.resolve()),
+        "pos": (0.0, 0.0, GENESIS_SCENE_PARAMS.robot_base_z_offset_m),
+        "fixed": GENESIS_SCENE_PARAMS.fixed_base,
+        "merge_fixed_links": GENESIS_SCENE_PARAMS.merge_fixed_links,
+        "prioritize_urdf_material": GENESIS_SCENE_PARAMS.prioritize_urdf_material,
+        "collision": GENESIS_SCENE_PARAMS.enable_collision,
+        "visualization": GENESIS_SCENE_PARAMS.visualization,
+    }
 
 
 def open_genesis_world_scene(
@@ -242,66 +266,70 @@ def open_genesis_world_scene(
 ) -> None:
     import genesis as gs
 
-    world_package = _load_world_package(world_package_path)
-    layout = parse_static_world_layout_payload(world_package.model_dump(mode="json"))
-    resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
-    primitives, warnings = build_sim_primitives(
-        layout,
-        frame_map=resolved_frame_map,
+    prepared_scene = prepare_world_scene(
+        world_package_path=world_package_path,
+        frame_map=frame_map,
         include_hidden=include_hidden,
     )
     print(
         "[genesis-world-open] "
-        f"package={world_package.package_id}@{world_package.version} "
-        f"objects={len(layout.objects)} primitives={len(primitives)} "
-        f"frame_map={resolved_frame_map} requested_frame_map={frame_map}",
+        f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
+        f"objects={len(prepared_scene.layout.objects)} primitives={len(prepared_scene.primitives)} "
+        f"frame_map={prepared_scene.frame_map} requested_frame_map={frame_map}",
         flush=True,
     )
-    for warning in warnings:
+    for warning in prepared_scene.warnings:
+        print(f"[genesis-world-open] warning: {warning}", flush=True)
+    cameras, camera_warnings = build_sim_camera_specs(
+        prepared_scene.world_package,
+        robot_urdf_path=robot_urdf_path,
+    )
+    for warning in camera_warnings:
         print(f"[genesis-world-open] warning: {warning}", flush=True)
 
     gs.init(backend=gs.cpu, logging_level="warning")
     center, radius = _scene_center_and_radius(
-        [primitive.position_xyz for primitive in primitives] + [(0.0, 0.0, 0.35)]
+        [primitive.position_xyz for primitive in prepared_scene.primitives] + [(0.0, 0.0, 0.35)]
     )
     camera_pos = (
-        center[0] + radius * 2.6,
-        center[1] - radius * 2.4,
-        max(center[2] + radius * 1.7, 0.8),
+        center[0] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[0],
+        center[1] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[1],
+        max(
+            center[2] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[2],
+            GENESIS_SCENE_PARAMS.viewer.min_camera_z_m,
+        ),
     )
     scene = gs.Scene(
         show_viewer=not no_viewer,
-        sim_options=gs.options.SimOptions(dt=0.01, gravity=(0.0, 0.0, -9.81)),
+        sim_options=gs.options.SimOptions(
+            dt=GENESIS_SCENE_PARAMS.sim_dt_sec,
+            gravity=GENESIS_SCENE_PARAMS.gravity_xyz,
+        ),
         rigid_options=gs.options.RigidOptions(
-            enable_collision=True,
-            enable_self_collision=False,
-            enable_adjacent_collision=False,
-            box_box_detection=True,
+            enable_collision=GENESIS_SCENE_PARAMS.enable_collision,
+            enable_self_collision=GENESIS_SCENE_PARAMS.enable_self_collision,
+            enable_adjacent_collision=GENESIS_SCENE_PARAMS.enable_adjacent_collision,
+            box_box_detection=GENESIS_SCENE_PARAMS.box_box_detection,
         ),
         viewer_options=gs.options.ViewerOptions(
             camera_pos=camera_pos,
             camera_lookat=center,
             camera_up=(0.0, 0.0, 1.0),
-            camera_fov=45,
+            camera_fov=GENESIS_SCENE_PARAMS.viewer.fov_deg,
             run_in_thread=_viewer_run_in_thread(),
             enable_gui=True,
         ),
     )
     if include_floor:
         _add_floor_entity(gs, scene)
-    for primitive in primitives:
+    for primitive in prepared_scene.primitives:
         _add_primitive_entity(gs, scene, primitive)
+    for camera_spec in cameras:
+        _add_camera_marker_entity(gs, scene, camera_spec)
 
     genesis_robot_urdf_path = materialize_so101_genesis_urdf(robot_urdf_path)
     robot_entity = scene.add_entity(
-        gs.morphs.URDF(
-            file=str(genesis_robot_urdf_path.resolve()),
-            pos=(0.0, 0.0, GENESIS_ROBOT_BASE_Z_OFFSET_M),
-            fixed=True,
-            merge_fixed_links=False,
-            collision=True,
-            visualization=True,
-        ),
+        gs.morphs.URDF(**_robot_urdf_morph_kwargs(genesis_robot_urdf_path)),
         name="robot",
     )
 
@@ -312,9 +340,10 @@ def open_genesis_world_scene(
             pos=camera_pos,
             lookat=center,
             up=(0.0, 0.0, 1.0),
-            fov=45,
+            fov=GENESIS_SCENE_PARAMS.viewer.fov_deg,
             GUI=False,
         )
+    scene_cameras = [_add_scene_camera(gs, scene, camera_spec) for camera_spec in cameras]
 
     scene.build()
     joint_dof_indices = _joint_dof_indices_by_name(robot_entity)
@@ -322,9 +351,10 @@ def open_genesis_world_scene(
     _apply_joint_values(
         robot_entity,
         joint_dof_indices,
-        world_package.world_snapshot.joint_positions,
+        prepared_scene.world_package.world_snapshot.joint_positions,
     )
     print(GENESIS_LAUNCH_PARAMS.ready_log_marker, flush=True)
+    print(f"[genesis-world-open] cameras={len(scene_cameras)}", flush=True)
 
     def step_runtime() -> None:
         scene.step()
@@ -340,9 +370,12 @@ def open_genesis_world_scene(
             print(f"[genesis-world-open] screenshot written: {screenshot_path}", flush=True)
 
         if no_viewer:
-            headless_steps = 5
+            headless_steps = GENESIS_SCENE_PARAMS.viewer.headless_min_steps
             if duration_sec > 0 and math.isfinite(duration_sec):
-                headless_steps = max(headless_steps, int(math.ceil(duration_sec / 0.01)))
+                headless_steps = max(
+                    headless_steps,
+                    int(math.ceil(duration_sec / GENESIS_SCENE_PARAMS.sim_dt_sec)),
+                )
             for _ in range(headless_steps):
                 step_runtime()
             return
@@ -351,12 +384,12 @@ def open_genesis_world_scene(
             print("[genesis-world-open] Genesis viewer opened. Press Ctrl-C to return.", flush=True)
             while True:
                 step_runtime()
-                time.sleep(1.0 / 60.0)
+                time.sleep(1.0 / GENESIS_SCENE_PARAMS.viewer.step_hz)
 
         deadline = time.monotonic() + duration_sec
         while time.monotonic() < deadline:
             step_runtime()
-            time.sleep(1.0 / 60.0)
+            time.sleep(1.0 / GENESIS_SCENE_PARAMS.viewer.step_hz)
     except KeyboardInterrupt:
         return
 

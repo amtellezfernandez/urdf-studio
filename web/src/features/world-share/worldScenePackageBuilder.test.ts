@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildWorldScenePackageManifest,
+  toSerializableWorldObject,
   toWorldSceneLayerDownloadName,
   toWorldScenePackageDownloadName,
 } from "@/features/world-share/worldScenePackageBuilder";
@@ -10,6 +11,7 @@ import type { CreatedObject } from "@/features/objects";
 import { WORLD_SCENE_PACKAGE_CRYPTO_UNAVAILABLE_ERROR_CODE } from "@/features/world-share/worldScenePackageParams";
 import type { Camera } from "@/shared/types/camera";
 import { WORLD_OBJECT_GEOMETRY_PARAMS } from "@/features/objects/worldObjectGeometryParams";
+import { WORLD_OBJECT_RENDER_PARAMS } from "@/features/objects/worldObjectRenderParams";
 
 const TEST_SCENARIO_TIME_MS = 200;
 const TEST_SCENARIO_DURATION_MS = 12_000;
@@ -78,6 +80,13 @@ const TEST_CYLINDER_OBJECT: CreatedObject = {
   size: new THREE.Vector3(0.1, 0.2, 0.4),
 };
 
+const TEST_POINT_OBJECT: CreatedObject = {
+  ...TEST_OBJECT,
+  id: "obj-point",
+  type: "point",
+  size: new THREE.Vector3(0.08, 0.08, 0.08),
+};
+
 const TEST_INVALID_GEOMETRY_OBJECT: CreatedObject = {
   ...TEST_OBJECT,
   id: "obj-4",
@@ -126,6 +135,14 @@ describe("buildWorldScenePackageManifest", () => {
     expect(manifest.world_snapshot.objects[1].type).toBe("cylinder");
     expect(manifest.world_snapshot.objects[1].rotation_rpy_rad).toEqual([0.1, 0.2, 0.3]);
     expect(manifest.world_snapshot.objects[1].size_xyz).toEqual([0.2, 0.2, 0.4]);
+  });
+
+  it("exports point markers at the same size Studio renders", () => {
+    expect(toSerializableWorldObject(TEST_POINT_OBJECT).size_xyz).toEqual([
+      WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
+      WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
+      WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
+    ]);
   });
 
   it("omits orbit fields for non-orbit objects", async () => {

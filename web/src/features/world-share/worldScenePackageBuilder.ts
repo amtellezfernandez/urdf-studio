@@ -3,6 +3,7 @@ import {
   normalizeWorldObjectRotationEuler,
   resolveWorldObjectGeometry,
 } from "@/features/objects/worldObjectGeometry";
+import { WORLD_OBJECT_RENDER_PARAMS } from "@/features/objects/worldObjectRenderParams";
 import type { Camera } from "@/shared/types/camera";
 import {
   WORLD_SCENE_PACKAGE_CRYPTO_UNAVAILABLE_ERROR_CODE,
@@ -88,12 +89,20 @@ const digestSha256 = async (content: string): Promise<string> => {
 export const toSerializableWorldObject = (object: CreatedObject): SerializableWorldObject => {
   const ikTargetType = object.ikTargetType === "orbit" ? "orbit" : "punctual";
   const geometry = resolveWorldObjectGeometry(object);
+  const size: [number, number, number] =
+    object.type === "point"
+      ? [
+          WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
+          WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
+          WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
+        ]
+      : [geometry.size.x, geometry.size.y, geometry.size.z];
   const serializable: SerializableWorldObject = {
     id: object.id,
     name: object.id,
     type: object.type,
     position_xyz: [geometry.position.x, geometry.position.y, geometry.position.z],
-    size_xyz: [geometry.size.x, geometry.size.y, geometry.size.z],
+    size_xyz: size,
     color: object.color,
     source: object.source ?? "user",
     tracked_joint_name: object.trackedJointName,

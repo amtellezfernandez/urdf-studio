@@ -99,7 +99,7 @@ export const HealthActionPanelSimulatorRuntime = ({
   return (
     <div data-section="simulator-runtime" className={className}>
       <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-foreground/80">
-          Open in
+        Open in
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {availableTargets.map((target) => (

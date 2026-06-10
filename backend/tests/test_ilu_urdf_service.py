@@ -88,6 +88,14 @@ def test_convert_urdf_to_mjcf_maps_bridge_response(monkeypatch) -> None:
         return {
             "mjcfContent": "<mujoco model=\"demo\"/>",
             "warnings": ["mesh converted by basename"],
+            "diagnostics": [
+                {
+                    "code": "mjcf.inertial.regularized",
+                    "severity": "warning",
+                    "linkName": "arm_link",
+                    "message": "Regularized invalid inertial for link \"arm_link\" during MJCF export.",
+                }
+            ],
             "stats": {
                 "bodiesCreated": 1,
                 "jointsConverted": 0,
@@ -101,5 +109,7 @@ def test_convert_urdf_to_mjcf_maps_bridge_response(monkeypatch) -> None:
 
     assert result.mjcf_content == "<mujoco model=\"demo\"/>"
     assert result.warnings == ("mesh converted by basename",)
+    assert result.diagnostics[0].code == "mjcf.inertial.regularized"
+    assert result.diagnostics[0].link_name == "arm_link"
     assert result.stats.bodies_created == 1
     assert result.stats.geometries_converted == 2

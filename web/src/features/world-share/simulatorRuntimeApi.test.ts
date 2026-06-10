@@ -148,6 +148,12 @@ describe("simulatorRuntimeApi", () => {
                 worldViewer: true,
                 motionValidation: false,
               },
+              transferPolicy: {
+                robotAssetFormat: "urdf",
+                sceneAssetFormat: "urdf",
+                frameConvention: "ros-rep-103",
+                launchStrategy: "direct",
+              },
             },
             {
               simulatorId: "mjlab",
@@ -155,6 +161,12 @@ describe("simulatorRuntimeApi", () => {
               capabilities: {
                 worldViewer: true,
                 motionValidation: true,
+              },
+              transferPolicy: {
+                robotAssetFormat: "mjcf",
+                sceneAssetFormat: "mjcf",
+                frameConvention: "ros-rep-103",
+                launchStrategy: "convert",
               },
             },
           ],
@@ -170,6 +182,7 @@ describe("simulatorRuntimeApi", () => {
       "mjlab",
     ]);
     expect(descriptors[0].capabilities.worldViewer).toBe(true);
+    expect(descriptors[1].transferPolicy.robotAssetFormat).toBe("mjcf");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/simulators"),
       {

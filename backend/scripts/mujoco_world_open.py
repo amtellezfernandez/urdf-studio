@@ -1,31 +1,28 @@
 from __future__ import annotations
 
 import argparse
-import json
-import math
 import time
 from pathlib import Path
 from typing import Any
 
-from backend.models.world_scene_package import WorldScenePackageManifest
-from backend.services.simulator_adapters.mujoco import sanitize_mjcf_inertials
-from backend.services.simulator_adapters.params import MUJOCO_LAUNCH_PARAMS
+from backend.services.simulator_adapters.camera_transfer import (
+    append_cameras_to_mujoco_mjcf,
+    build_sim_camera_specs,
+)
+from backend.services.simulator_adapters.mujoco import apply_mjcf_launch_repairs
+from backend.services.simulator_adapters.numeric import is_finite_number
+from backend.services.simulator_adapters.params import MUJOCO_LAUNCH_PARAMS, MUJOCO_SCENE_PARAMS
+from backend.services.simulator_adapters.world_scene import prepare_world_scene
 from backend.services.world_layout_static_transfer import (
     WorldLayoutFrameMap,
     append_primitives_to_mujoco_mjcf,
-    build_sim_primitives,
-    parse_static_world_layout_payload,
-    resolve_world_layout_frame_map,
 )
-
-
-MUJOCO_VIEWER_STEP_HZ = 60.0
-
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Open a URDF Studio robot in MuJoCo.")
     parser.add_argument("--world-package", required=True)
     parser.add_argument("--robot-mjcf", required=True)
+    parser.add_argument("--robot-urdf", required=True)
     parser.add_argument(
         "--frame-map",
         choices=["auto", "studio-y-up-to-z-up", "identity"],
@@ -37,20 +34,10 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_world_package(path: Path) -> WorldScenePackageManifest:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise ValueError(f"Failed to read world package: {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid world package JSON: {exc}") from exc
-    return WorldScenePackageManifest.model_validate(payload)
-
-
 def _apply_initial_joint_positions(model: Any, data: Any, joint_positions: dict[str, float]) -> int:
     applied_count = 0
     for joint_name, position in joint_positions.items():
-        if not isinstance(position, int | float) or not math.isfinite(position):
+        if not is_finite_number(position):
             continue
         try:
             joint = data.joint(joint_name)
@@ -71,22 +58,31 @@ def _apply_initial_joint_positions(model: Any, data: Any, joint_positions: dict[
     return applied_count
 
 
-def _sanitize_mjcf_path(mjcf_path: Path) -> tuple[Path, tuple[str, ...]]:
-    sanitized_content, warnings = sanitize_mjcf_inertials(
-        mjcf_path.read_text(encoding="utf-8")
-    )
-    if not warnings:
-        return mjcf_path, ()
+def _load_model_with_launch_repair(mujoco: Any, mjcf_path: Path) -> tuple[Any, Path, tuple[str, ...]]:
+    try:
+        return mujoco.MjModel.from_xml_path(str(mjcf_path.resolve())), mjcf_path, ()
+    except ValueError as exc:
+        if not _is_known_mjcf_inertial_load_error(exc):
+            raise
+        repaired_content, warnings = apply_mjcf_launch_repairs(mjcf_path.read_text(encoding="utf-8"))
+        if not warnings:
+            raise
+        repaired_path = mjcf_path.with_name(f"{mjcf_path.stem}.repaired{mjcf_path.suffix}")
+        repaired_path.write_text(repaired_content, encoding="utf-8")
+        model = mujoco.MjModel.from_xml_path(str(repaired_path.resolve()))
+        return model, repaired_path, warnings
 
-    sanitized_path = mjcf_path.with_name(f"{mjcf_path.stem}.sanitized{mjcf_path.suffix}")
-    sanitized_path.write_text(sanitized_content, encoding="utf-8")
-    return sanitized_path, warnings
+
+def _is_known_mjcf_inertial_load_error(error: ValueError) -> bool:
+    message = str(error).lower()
+    return "inertia" in message or "inertial" in message
 
 
 def open_mujoco_world_scene(
     *,
     world_package_path: Path,
     robot_mjcf_path: Path,
+    robot_urdf_path: Path,
     frame_map: WorldLayoutFrameMap,
     duration_sec: float,
     include_hidden: bool,
@@ -94,66 +90,64 @@ def open_mujoco_world_scene(
 ) -> None:
     import mujoco
 
-    world_package = _load_world_package(world_package_path)
-    layout = parse_static_world_layout_payload(world_package.model_dump(mode="json"))
-    resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
-    primitives, warnings = build_sim_primitives(
-        layout,
-        frame_map=resolved_frame_map,
+    prepared_scene = prepare_world_scene(
+        world_package_path=world_package_path,
+        frame_map=frame_map,
         include_hidden=include_hidden,
     )
-    for warning in warnings:
+    for warning in prepared_scene.warnings:
+        print(f"[mujoco-world-open] warning: {warning}", flush=True)
+    cameras, camera_warnings = build_sim_camera_specs(
+        prepared_scene.world_package,
+        robot_urdf_path=robot_urdf_path,
+    )
+    for warning in camera_warnings:
         print(f"[mujoco-world-open] warning: {warning}", flush=True)
 
     mjcf_path = robot_mjcf_path
-    if primitives:
-        combined_mjcf = append_primitives_to_mujoco_mjcf(
-            robot_mjcf_path.read_text(encoding="utf-8"),
-            primitives,
-        )
+    if prepared_scene.primitives or cameras:
+        combined_mjcf = robot_mjcf_path.read_text(encoding="utf-8")
+        if prepared_scene.primitives:
+            combined_mjcf = append_primitives_to_mujoco_mjcf(
+                combined_mjcf,
+                prepared_scene.primitives,
+            )
+        combined_mjcf = append_cameras_to_mujoco_mjcf(combined_mjcf, cameras)
         mjcf_path = robot_mjcf_path.with_name("robot.world.xml")
         mjcf_path.write_text(combined_mjcf, encoding="utf-8")
 
-    mjcf_path, mjcf_sanitize_warnings = _sanitize_mjcf_path(mjcf_path)
-    for warning in mjcf_sanitize_warnings:
+    model, mjcf_path, mjcf_repair_warnings = _load_model_with_launch_repair(mujoco, mjcf_path)
+    for warning in mjcf_repair_warnings:
         print(f"[mujoco-world-open] warning: {warning}", flush=True)
-
-    model = mujoco.MjModel.from_xml_path(str(mjcf_path.resolve()))
     data = mujoco.MjData(model)
     applied_joints = _apply_initial_joint_positions(
         model,
         data,
-        world_package.world_snapshot.joint_positions,
+        prepared_scene.world_package.world_snapshot.joint_positions,
     )
     print(
         "[mujoco-world-open] "
-        f"package={world_package.package_id}@{world_package.version} "
-        f"joints={model.njnt} world_objects={len(primitives)} "
-        f"frame_map={resolved_frame_map} requested_frame_map={frame_map} "
+        f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
+        f"joints={model.njnt} world_objects={len(prepared_scene.primitives)} cameras={len(cameras)} "
+        f"frame_map={prepared_scene.frame_map} requested_frame_map={frame_map} "
         f"applied_initial_joints={applied_joints}",
         flush=True,
     )
     print(MUJOCO_LAUNCH_PARAMS.ready_log_marker, flush=True)
 
     if no_viewer:
-        mujoco.mj_step(model, data)
+        mujoco.mj_forward(model, data)
         return
 
     import mujoco.viewer
 
-    if duration_sec <= 0:
-        mujoco.viewer.launch(model, data)
-        return
-
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        deadline = time.monotonic() + duration_sec
-        while viewer.is_running() and time.monotonic() < deadline:
-            step_started = time.monotonic()
-            mujoco.mj_step(model, data)
+        deadline = time.monotonic() + duration_sec if duration_sec > 0 else None
+        while viewer.is_running():
             viewer.sync()
-            sleep_sec = (1.0 / MUJOCO_VIEWER_STEP_HZ) - (time.monotonic() - step_started)
-            if sleep_sec > 0:
-                time.sleep(sleep_sec)
+            if deadline is not None and time.monotonic() >= deadline:
+                break
+            time.sleep(1.0 / MUJOCO_SCENE_PARAMS.viewer_step_hz)
 
 
 def main() -> int:
@@ -161,6 +155,7 @@ def main() -> int:
     open_mujoco_world_scene(
         world_package_path=Path(args.world_package),
         robot_mjcf_path=Path(args.robot_mjcf),
+        robot_urdf_path=Path(args.robot_urdf),
         frame_map=args.frame_map,
         duration_sec=args.duration_sec,
         include_hidden=args.include_hidden,
