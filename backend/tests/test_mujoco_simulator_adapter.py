@@ -109,7 +109,7 @@ def test_prepare_mujoco_launch_converts_bundled_urdf_to_mjcf(
 
     assert result.shared_launch is prepared
     assert result.mjcf_path == robot_dir / "robot.xml"
-    assert result.mjcf_path.read_text(encoding="utf-8").startswith("<?xml")
+    assert result.mjcf_path.read_text(encoding="utf-8").startswith("<mujoco")
     assert (robot_dir / "meshes" / "base.stl").read_bytes() == bundled_mesh_path.read_bytes()
 
 
@@ -147,3 +147,42 @@ def test_stage_mjcf_mesh_assets_rejects_duplicate_basenames(tmp_path: Path) -> N
 
     with pytest.raises(mujoco_adapter.MujocoWorldLaunchError, match="duplicate mesh basenames"):
         mujoco_adapter._stage_mjcf_mesh_assets(bundle_result, tmp_path / "robot.xml")
+
+
+def test_sanitize_mjcf_inertials_removes_invalid_frame_body_inertial() -> None:
+    mjcf = """
+    <mujoco model="demo">
+      <worldbody>
+        <body name="gripper_frame_link">
+          <inertial mass="0" fullinertia="0 0 0 0 0 0"/>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+
+    sanitized, warnings = mujoco_adapter.sanitize_mjcf_inertials(mjcf)
+
+    assert 'name="gripper_frame_link"' in sanitized
+    assert "<inertial" not in sanitized
+    assert warnings == ("Removed invalid frame inertial from MJCF body 'gripper_frame_link'.",)
+
+
+def test_sanitize_mjcf_inertials_regularizes_invalid_dynamic_body_inertial() -> None:
+    mjcf = """
+    <mujoco model="demo">
+      <worldbody>
+        <body name="dynamic_link">
+          <joint name="hinge" type="hinge" axis="0 0 1"/>
+          <geom type="box" size="0.01 0.01 0.01"/>
+          <inertial mass="0" fullinertia="0 0 0 0 0 0"/>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+
+    sanitized, warnings = mujoco_adapter.sanitize_mjcf_inertials(mjcf)
+
+    assert 'mass="1e-09"' in sanitized
+    assert 'diaginertia="1e-12 1e-12 1e-12"' in sanitized
+    assert "fullinertia=" not in sanitized
+    assert warnings == ("Regularized invalid inertial on MJCF body 'dynamic_link'.",)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,11 @@ class PreparedMujocoLaunch:
     mjcf_path: Path
 
 
+_MUJOCO_MIN_INERTIAL_MASS = 1e-9
+_MUJOCO_MIN_INERTIA_DIAGONAL = 1e-12
+_MUJOCO_INERTIA_SHIFT_ATTEMPTS = 12
+
+
 def _mujoco_error(message: str) -> MujocoWorldLaunchError:
     return MujocoWorldLaunchError(message)
 
@@ -66,6 +72,138 @@ def _mujoco_runtime_status(spec: SimulatorRuntimeSpec) -> SimulatorRuntimeStatus
         status=status,
         dependencies=dependencies,
     )
+
+
+def _parse_float_attr(element: ET.Element, attr_name: str) -> float | None:
+    raw = element.get(attr_name)
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _has_positive_diagonal_inertia(inertial: ET.Element) -> bool:
+    diaginertia = inertial.get("diaginertia")
+    if not diaginertia:
+        return False
+    try:
+        values = [float(value) for value in diaginertia.split()]
+    except ValueError:
+        return False
+    return len(values) == 3 and all(value > _MUJOCO_MIN_INERTIA_DIAGONAL for value in values)
+
+
+def _has_positive_full_inertia(inertial: ET.Element) -> bool:
+    fullinertia = inertial.get("fullinertia")
+    if not fullinertia:
+        return False
+    try:
+        ixx, iyy, izz, ixy, ixz, iyz = [float(value) for value in fullinertia.split()]
+    except ValueError:
+        return False
+    if ixx <= _MUJOCO_MIN_INERTIA_DIAGONAL:
+        return False
+    determinant_2x2 = (ixx * iyy) - (ixy * ixy)
+    if determinant_2x2 <= _MUJOCO_MIN_INERTIA_DIAGONAL:
+        return False
+    determinant_3x3 = (
+        ixx * ((iyy * izz) - (iyz * iyz))
+        - ixy * ((ixy * izz) - (ixz * iyz))
+        + ixz * ((ixy * iyz) - (ixz * iyy))
+    )
+    return determinant_3x3 > _MUJOCO_MIN_INERTIA_DIAGONAL
+
+
+def _parse_full_inertia(inertial: ET.Element) -> tuple[float, float, float, float, float, float] | None:
+    fullinertia = inertial.get("fullinertia")
+    if not fullinertia:
+        return None
+    try:
+        values = tuple(float(value) for value in fullinertia.split())
+    except ValueError:
+        return None
+    if len(values) != 6:
+        return None
+    return values  # type: ignore[return-value]
+
+
+def _regularize_full_inertia(
+    values: tuple[float, float, float, float, float, float]
+) -> tuple[float, float, float, float, float, float] | None:
+    ixx, iyy, izz, ixy, ixz, iyz = values
+    base_scale = max(abs(value) for value in values) or _MUJOCO_MIN_INERTIA_DIAGONAL
+
+    for attempt in range(_MUJOCO_INERTIA_SHIFT_ATTEMPTS):
+        diagonal_shift = (10**attempt) * base_scale * 1e-9
+        candidate = (
+            max(ixx, _MUJOCO_MIN_INERTIA_DIAGONAL) + diagonal_shift,
+            max(iyy, _MUJOCO_MIN_INERTIA_DIAGONAL) + diagonal_shift,
+            max(izz, _MUJOCO_MIN_INERTIA_DIAGONAL) + diagonal_shift,
+            ixy,
+            ixz,
+            iyz,
+        )
+        probe = ET.Element(
+            "inertial",
+            {
+                "fullinertia": " ".join(f"{value:.12g}" for value in candidate),
+            },
+        )
+        if _has_positive_full_inertia(probe):
+            return candidate
+    return None
+
+
+def _body_needs_only_frame_inertial(body: ET.Element) -> bool:
+    return body.find("joint") is None and body.find("freejoint") is None and body.find("geom") is None
+
+
+def sanitize_mjcf_inertials(mjcf_content: str) -> tuple[str, tuple[str, ...]]:
+    root = ET.fromstring(mjcf_content)
+    warnings: list[str] = []
+
+    for body in root.findall(".//body"):
+        inertial = body.find("inertial")
+        if inertial is None:
+            continue
+
+        mass = _parse_float_attr(inertial, "mass")
+        has_valid_inertia = _has_positive_diagonal_inertia(inertial) or _has_positive_full_inertia(inertial)
+        if mass is not None and mass > _MUJOCO_MIN_INERTIAL_MASS and has_valid_inertia:
+            continue
+
+        body_name = body.get("name", "<unnamed-body>")
+        if _body_needs_only_frame_inertial(body):
+            body.remove(inertial)
+            warnings.append(f"Removed invalid frame inertial from MJCF body '{body_name}'.")
+            continue
+
+        inertial.set("mass", f"{max(mass or 0.0, _MUJOCO_MIN_INERTIAL_MASS):.12g}")
+        full_inertia = _parse_full_inertia(inertial)
+        regularized_full_inertia = (
+            _regularize_full_inertia(full_inertia)
+            if full_inertia is not None and (mass or 0.0) > _MUJOCO_MIN_INERTIAL_MASS
+            else None
+        )
+        if regularized_full_inertia is not None:
+            inertial.set(
+                "fullinertia",
+                " ".join(f"{value:.12g}" for value in regularized_full_inertia),
+            )
+            inertial.attrib.pop("diaginertia", None)
+        else:
+            inertial.attrib.pop("fullinertia", None)
+            inertial.set(
+                "diaginertia",
+                f"{_MUJOCO_MIN_INERTIA_DIAGONAL:.12g} "
+                f"{_MUJOCO_MIN_INERTIA_DIAGONAL:.12g} "
+                f"{_MUJOCO_MIN_INERTIA_DIAGONAL:.12g}"
+            )
+        warnings.append(f"Regularized invalid inertial on MJCF body '{body_name}'.")
+
+    return ET.tostring(root, encoding="unicode"), tuple(warnings)
 
 
 def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Path) -> None:
@@ -116,11 +254,18 @@ def _prepare_mujoco_launch(
     if not conversion.mjcf_content.strip():
         details = "; ".join(conversion.warnings) or "empty MJCF output"
         raise MujocoWorldLaunchError(f"MuJoCo MJCF conversion failed: {details}")
+    sanitized_mjcf_content, sanitize_warnings = sanitize_mjcf_inertials(conversion.mjcf_content)
 
     mjcf_path = prepared.launch_dir / "robot" / "robot.xml"
     mjcf_path.parent.mkdir(parents=True, exist_ok=True)
-    mjcf_path.write_text(conversion.mjcf_content, encoding="utf-8")
+    mjcf_path.write_text(sanitized_mjcf_content, encoding="utf-8")
     _stage_mjcf_mesh_assets(prepared.bundle_result, mjcf_path)
+    if sanitize_warnings:
+        print(
+            "[mujoco-launch] "
+            + " ".join(sanitize_warnings),
+            flush=True,
+        )
     return PreparedMujocoLaunch(
         shared_launch=prepared,
         mjcf_path=mjcf_path,
