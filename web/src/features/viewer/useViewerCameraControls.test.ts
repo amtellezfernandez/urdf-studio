@@ -9,7 +9,7 @@ import {
   resolveCameraPovDisplayQuaternion,
   shouldSyncSelectedViewerCamera,
 } from "@/features/viewer/useViewerCameraControls";
-import { toThreeViewQuaternionFromUrdf } from "@/features/camera/cameraOrientationContract";
+import { toThreeViewQuaternionFromStudioCamera } from "@/features/camera/cameraOrientationContract";
 import { VIEWER_CAMERA_CONTROL_PARAMS } from "@/features/viewer/viewerCameraControlParams";
 
 const TEST_VIEWER_CAMERA_CONTROLS = {
@@ -183,7 +183,7 @@ describe("useViewerCameraControls", () => {
 
     expect(
       resolveCameraPovDisplayQuaternion(cameraQuaternion).dot(
-        toThreeViewQuaternionFromUrdf(cameraQuaternion),
+        toThreeViewQuaternionFromStudioCamera(cameraQuaternion),
       ),
     ).toBeCloseTo(1);
   });

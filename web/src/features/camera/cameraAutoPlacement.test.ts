@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
-import { toThreeViewQuaternionFromUrdf } from "./cameraOrientationContract";
+import { toThreeViewQuaternionFromStudioCamera } from "./cameraOrientationContract";
 import {
   resolveCameraPoseAtBoundsCenter,
   resolveCameraPoseAtLocalPointFacingOutward,
@@ -46,8 +46,8 @@ const resolveUpFromPose = (pose: { rpy: [number, number, number] }) =>
     .applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(...pose.rpy, "ZYX")))
     .normalize();
 const resolveDisplayForwardFromPose = (pose: { rpy: [number, number, number] }) => {
-  const urdfQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(...pose.rpy, "ZYX"));
-  const displayQuaternion = toThreeViewQuaternionFromUrdf(urdfQuaternion);
+  const studioQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(...pose.rpy, "ZYX"));
+  const displayQuaternion = toThreeViewQuaternionFromStudioCamera(studioQuaternion);
   return THREE_VIEW_FORWARD.clone().applyQuaternion(displayQuaternion).normalize();
 };
 
@@ -167,13 +167,13 @@ describe("resolveCameraPoseAtLocalPointFacingOutward", () => {
     expect(up.dot(LOCAL_UP_HINT_POSITIVE_Y)).toBeGreaterThan(UP_ALIGNMENT_THRESHOLD);
   });
 
-  it("keeps icon display forward aligned with solved URDF forward", () => {
+  it("keeps icon display forward aligned with solved Studio forward", () => {
     const cameraLink = new THREE.Group();
     const pose = resolveCameraPoseAtLocalPointFacingOutward(cameraLink, LOCAL_CAMERA_ORIGIN, null, {
       preferredForwardLocal: LOCAL_FORWARD_HINT_POSITIVE_Y,
     });
-    const urdfForward = resolveForwardFromPose(pose);
+    const studioForward = resolveForwardFromPose(pose);
     const displayForward = resolveDisplayForwardFromPose(pose);
-    expect(displayForward.dot(urdfForward)).toBeGreaterThan(FORWARD_ALIGNMENT_THRESHOLD);
+    expect(displayForward.dot(studioForward)).toBeGreaterThan(FORWARD_ALIGNMENT_THRESHOLD);
   });
 });

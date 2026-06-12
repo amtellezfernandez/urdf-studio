@@ -144,6 +144,10 @@ def require_robot_gateway_control_access(request: Request) -> None:
     raise HTTPException(status_code=status_code, detail=detail)
 
 
+async def require_robot_gateway_control_access_async(request: Request) -> None:
+    require_robot_gateway_control_access(request)
+
+
 def require_robot_gateway_local_workstation_access(request: Request) -> None:
     if _is_local_workstation_request(request):
         return
@@ -151,3 +155,7 @@ def require_robot_gateway_local_workstation_access(request: Request) -> None:
         status_code=HTTP_UNAUTHORIZED,
         detail="Robot gateway backend file editing requires the local workstation UI.",
     )
+
+
+async def require_robot_gateway_local_workstation_access_async(request: Request) -> None:
+    require_robot_gateway_local_workstation_access(request)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+from backend.tests.asgi_test_client import AsgiTestClient
 
 from backend.app import create_app
 from backend.models.simulation_prep import SimulationPrepValidationReport
@@ -27,7 +27,7 @@ def test_validate_simulation_prep_uploads_urdf_and_meshes(monkeypatch) -> None:
 
     monkeypatch.setattr("backend.api.simulation_prep.run_simulation_prep_validation", fake_run_validation)
 
-    client = TestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
+    client = AsgiTestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
     response = client.post(
         "/simulation-prep/validate",
         files=[
@@ -43,7 +43,7 @@ def test_validate_simulation_prep_uploads_urdf_and_meshes(monkeypatch) -> None:
 
 
 def test_validate_simulation_prep_rejects_non_utf8_urdf() -> None:
-    client = TestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
+    client = AsgiTestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
     response = client.post(
         "/simulation-prep/validate",
         files={"urdf_file": ("robot.urdf", b"\xff", "text/xml")},

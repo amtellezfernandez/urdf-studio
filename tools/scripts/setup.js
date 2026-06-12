@@ -1033,23 +1033,16 @@ function shouldInstallGenesisRuntime() {
   return shouldInstallOptionalPythonRuntime({
     skipAutoInstallEnv: GENESIS_SKIP_AUTO_INSTALL_ENV,
     forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
-    defaultInstall: process.platform === 'linux',
+    defaultInstall: process.platform !== 'win32',
   });
 }
 
 function getGenesisRuntimeSkipMessage() {
   if (isTruthyEnvValue(process.env[GENESIS_SKIP_AUTO_INSTALL_ENV])) {
-    return `Genesis static world viewer runtime skipped by ${GENESIS_SKIP_AUTO_INSTALL_ENV}.`;
-  }
-  if (process.platform === 'darwin') {
-    return [
-      'Genesis static world viewer runtime skipped on macOS.',
-      'The pinned Genesis viewer packages include native wheels that are not consistently available for macOS.',
-      `MuJoCo static layout checks still install; set ${GENESIS_FORCE_INSTALL_ENV}=1 to force Genesis install.`,
-    ].join(' ');
+    return `Genesis workspace adapter runtime skipped by ${GENESIS_SKIP_AUTO_INSTALL_ENV}.`;
   }
   return [
-    `Genesis static world viewer runtime skipped on ${process.platform}.`,
+    `Genesis workspace adapter runtime skipped on ${process.platform}.`,
     `Set ${GENESIS_FORCE_INSTALL_ENV}=1 to force install.`,
   ].join(' ');
 }
@@ -1078,9 +1071,9 @@ function shouldInstallPybulletRuntime() {
 
 function getPybulletRuntimeSkipMessage() {
   if (isTruthyEnvValue(process.env[PYBULLET_SKIP_AUTO_INSTALL_ENV])) {
-    return `PyBullet world viewer runtime skipped by ${PYBULLET_SKIP_AUTO_INSTALL_ENV}.`;
+    return `PyBullet workspace adapter runtime skipped by ${PYBULLET_SKIP_AUTO_INSTALL_ENV}.`;
   }
-  return `PyBullet world viewer runtime skipped. Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`;
+  return `PyBullet workspace adapter runtime skipped. Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`;
 }
 
 function shouldInstallOptionalPythonRuntime({
@@ -1382,7 +1375,7 @@ async function installPybulletRuntime() {
     shouldInstall: shouldInstallPybulletRuntime,
     skipMessage: getPybulletRuntimeSkipMessage,
     icon: '🧱',
-    displayName: 'PyBullet world viewer runtime',
+    displayName: 'PyBullet workspace adapter runtime',
     setupName: 'PyBullet',
     dependencies: PYBULLET_DEPENDENCIES,
     verifyImportScript: PYBULLET_VERIFY_IMPORT_SCRIPT,
@@ -1474,7 +1467,7 @@ async function installGenesisRuntime() {
     shouldInstall: shouldInstallGenesisRuntime,
     skipMessage: getGenesisRuntimeSkipMessage,
     icon: '🌐',
-    displayName: 'Genesis static world viewer runtime',
+    displayName: 'Genesis workspace adapter runtime',
     setupName: 'Genesis',
     dependencies: GENESIS_PYTHON_DEPENDENCIES,
     verifyImportScript: GENESIS_VERIFY_IMPORT_SCRIPT,
@@ -1547,11 +1540,11 @@ async function runSetupSequence(overrides = {}) {
   }
   const genesisRuntimeResult = await steps.installGenesisRuntime();
   if (shouldFailSetupForRuntimeResult(genesisRuntimeResult)) {
-    throw new Error('Genesis static world viewer runtime installation failed');
+    throw new Error('Genesis workspace adapter runtime installation failed');
   }
   const pybulletRuntimeResult = await steps.installPybulletRuntime();
   if (shouldFailSetupForRuntimeResult(pybulletRuntimeResult)) {
-    throw new Error('PyBullet world viewer runtime installation failed');
+    throw new Error('PyBullet workspace adapter runtime installation failed');
   }
   const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
   if (!lerobotToolchainInstalled) {

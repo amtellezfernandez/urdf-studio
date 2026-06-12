@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from copy import deepcopy
 
-from fastapi.testclient import TestClient
+from backend.tests.asgi_test_client import AsgiTestClient
 
 from backend.app import create_app
 from backend.models.teleop_mjlab import (
@@ -132,7 +132,7 @@ def _kinematic_recording() -> TeleopReplayRecording:
 
 
 def test_teleop_mjlab_runtime_endpoint_reports_dependency_status() -> None:
-    client = TestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
+    client = AsgiTestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
 
     response = client.get("/teleop/mjlab/runtime")
 
@@ -283,7 +283,7 @@ def test_teleop_mjlab_validation_flags_joint_acceleration_spikes() -> None:
 
 
 def test_teleop_mjlab_validate_endpoint_returns_motion_quality_report() -> None:
-    client = TestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
+    client = AsgiTestClient(create_app(), client=TEST_LOOPBACK_CLIENT)
 
     response = client.post(
         "/teleop/mjlab/validate",

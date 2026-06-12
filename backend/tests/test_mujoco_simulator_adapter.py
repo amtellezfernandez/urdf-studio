@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from backend.models.simulator_runtime import SimulatorWorldOpenRequest
-from backend.tests.simulator_adapter_test_utils import make_world_open_request
+from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
+from backend.tests.simulator_adapter_test_utils import make_workspace_prepare_request
 from backend.services.ilu_urdf import (
     BundleMeshAssetsResult,
     BundledMeshAsset,
@@ -15,8 +15,8 @@ from backend.services.ilu_urdf import (
     MjcfConversionStats,
 )
 from backend.services.simulator_adapters import mujoco as mujoco_adapter
-from backend.services.simulator_adapters import world_process
-from backend.services.simulator_adapters.launch_package import PreparedSimulatorLaunch
+from backend.services.simulator_adapters import workspace_process
+from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 
 
 DEMO_URDF = "<robot name=\"demo\"><link name=\"base\"/></robot>"
@@ -24,26 +24,26 @@ DEMO_MJCF = "<mujoco model=\"demo\"><worldbody/></mujoco>"
 
 
 @dataclass(frozen=True)
-class PreparedMujocoLaunchFixture:
-    prepared: PreparedSimulatorLaunch
+class PreparedMujocoWorkspaceFixture:
+    prepared: PreparedSimulatorWorkspace
     robot_dir: Path
     robot_urdf_path: Path
     bundled_mesh_path: Path | None = None
 
 
-def _request() -> SimulatorWorldOpenRequest:
-    return make_world_open_request(DEMO_URDF)
+def _request() -> SimulatorWorkspacePrepareRequest:
+    return make_workspace_prepare_request(DEMO_URDF)
 
 
-def _make_prepared_launch_fixture(
+def _make_prepared_workspace_fixture(
     tmp_path: Path,
     *,
     bundled_mesh_content: bytes | None = None,
-) -> PreparedMujocoLaunchFixture:
-    launch_dir = tmp_path / "launch"
-    robot_dir = launch_dir / "robot"
+) -> PreparedMujocoWorkspaceFixture:
+    workspace_dir = tmp_path / "workspace"
+    robot_dir = workspace_dir / "robot"
     robot_dir.mkdir(parents=True)
-    world_package_path = launch_dir / "world-package.json"
+    world_package_path = workspace_dir / "world-package.json"
     robot_urdf_path = robot_dir / "robot.urdf"
     world_package_path.write_text("{}", encoding="utf-8")
     robot_urdf_path.write_text(DEMO_URDF, encoding="utf-8")
@@ -65,8 +65,8 @@ def _make_prepared_launch_fixture(
             ),
         )
 
-    prepared = PreparedSimulatorLaunch(
-        launch_dir=launch_dir,
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
         world_package_path=world_package_path,
         robot_urdf_path=robot_urdf_path,
         bundle_result=BundleMeshAssetsResult(
@@ -80,7 +80,7 @@ def _make_prepared_launch_fixture(
             error=None,
         ),
     )
-    return PreparedMujocoLaunchFixture(
+    return PreparedMujocoWorkspaceFixture(
         prepared=prepared,
         robot_dir=robot_dir,
         robot_urdf_path=robot_urdf_path,
@@ -108,18 +108,18 @@ def _conversion_result(mjcf_content: str, *, warnings: tuple[str, ...] = ()) -> 
     )
 
 
-def test_prepare_mujoco_launch_converts_bundled_urdf_to_mjcf(
+def test_prepare_mujoco_workspace_converts_bundled_urdf_to_mjcf(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    fixture = _make_prepared_launch_fixture(
+    fixture = _make_prepared_workspace_fixture(
         tmp_path,
         bundled_mesh_content=b"solid base\nendsolid base\n",
     )
 
     monkeypatch.setattr(
         mujoco_adapter,
-        "prepare_simulator_launch_package",
+        "prepare_simulator_workspace_package",
         lambda *args, **kwargs: fixture.prepared,
     )
     monkeypatch.setattr(
@@ -133,9 +133,9 @@ def test_prepare_mujoco_launch_converts_bundled_urdf_to_mjcf(
         ),
     )
 
-    result = mujoco_adapter.prepare_mujoco_launch(_request(), simulator_id="mujoco")
+    result = mujoco_adapter.prepare_mujoco_workspace(_request(), simulator_id="mujoco")
 
-    assert result.shared_launch is fixture.prepared
+    assert result.shared_workspace is fixture.prepared
     assert result.mjcf_path == fixture.robot_dir / "robot.xml"
     assert "<mujoco" in result.mjcf_path.read_text(encoding="utf-8")
     assert fixture.bundled_mesh_path is not None
@@ -144,12 +144,12 @@ def test_prepare_mujoco_launch_converts_bundled_urdf_to_mjcf(
     ).read_bytes() == fixture.bundled_mesh_path.read_bytes()
 
 
-def test_prepare_mujoco_launch_stages_raw_converter_output(monkeypatch, tmp_path: Path) -> None:
-    fixture = _make_prepared_launch_fixture(tmp_path)
+def test_prepare_mujoco_workspace_stages_raw_converter_output(monkeypatch, tmp_path: Path) -> None:
+    fixture = _make_prepared_workspace_fixture(tmp_path)
 
     monkeypatch.setattr(
         mujoco_adapter,
-        "prepare_simulator_launch_package",
+        "prepare_simulator_workspace_package",
         lambda *args, **kwargs: fixture.prepared,
     )
     monkeypatch.setattr(
@@ -161,7 +161,7 @@ def test_prepare_mujoco_launch_stages_raw_converter_output(monkeypatch, tmp_path
         ),
     )
 
-    result = mujoco_adapter.prepare_mujoco_launch(_request(), simulator_id="mujoco")
+    result = mujoco_adapter.prepare_mujoco_workspace(_request(), simulator_id="mujoco")
 
     assert result.mjcf_path.read_text(encoding="utf-8") == DEMO_MJCF
 
@@ -170,13 +170,13 @@ def test_prepare_mujoco_launch_stages_raw_converter_output(monkeypatch, tmp_path
     "simulator_id,simulator_label",
     [("mujoco", "MuJoCo"), ("mjlab", "MJLab")],
 )
-def test_launch_mujoco_world_passes_canonical_urdf_to_viewer(
+def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
     monkeypatch,
     tmp_path: Path,
     simulator_id: str,
     simulator_label: str,
 ) -> None:
-    fixture = _make_prepared_launch_fixture(tmp_path)
+    fixture = _make_prepared_workspace_fixture(tmp_path)
     robot_mjcf_path = fixture.robot_dir / "robot.xml"
     robot_mjcf_path.write_text(DEMO_MJCF, encoding="utf-8")
 
@@ -188,20 +188,20 @@ def test_launch_mujoco_world_passes_canonical_urdf_to_viewer(
 
     monkeypatch.setattr(
         mujoco_adapter,
-        "prepare_mujoco_launch",
-        lambda request, *, simulator_id: mujoco_adapter.PreparedMujocoLaunch(
-            shared_launch=fixture.prepared,
+        "prepare_mujoco_workspace",
+        lambda request, *, simulator_id: mujoco_adapter.PreparedMujocoWorkspace(
+            shared_workspace=fixture.prepared,
             mjcf_path=robot_mjcf_path,
         ),
     )
     monkeypatch.setattr(
-        world_process.subprocess,
+        workspace_process.subprocess,
         "Popen",
         lambda *args, **kwargs: _FakeProcess(),
     )
-    monkeypatch.setattr(world_process, "wait_for_launch_readiness", lambda *args, **kwargs: None)
+    monkeypatch.setattr(workspace_process, "wait_for_workspace_readiness", lambda *args, **kwargs: None)
 
-    response = mujoco_adapter.launch_mujoco_world(
+    response = mujoco_adapter.start_mujoco_workspace(
         _request(),
         simulator_id=simulator_id,
         simulator_label=simulator_label,
@@ -247,11 +247,11 @@ def test_stage_mjcf_mesh_assets_rejects_duplicate_basenames(tmp_path: Path) -> N
         error=None,
     )
 
-    with pytest.raises(mujoco_adapter.MujocoWorldLaunchError, match="duplicate mesh basenames"):
+    with pytest.raises(mujoco_adapter.MujocoWorkspaceError, match="duplicate mesh basenames"):
         mujoco_adapter._stage_mjcf_mesh_assets(bundle_result, tmp_path / "robot.xml")
 
 
-def test_apply_mjcf_launch_repairs_removes_invalid_frame_body_inertial() -> None:
+def test_apply_mjcf_workspace_repairs_removes_invalid_frame_body_inertial() -> None:
     mjcf = """
     <mujoco model="demo">
       <worldbody>
@@ -262,14 +262,14 @@ def test_apply_mjcf_launch_repairs_removes_invalid_frame_body_inertial() -> None
     </mujoco>
     """
 
-    sanitized, warnings = mujoco_adapter.apply_mjcf_launch_repairs(mjcf)
+    sanitized, warnings = mujoco_adapter.apply_mjcf_workspace_repairs(mjcf)
 
     assert 'name="gripper_frame_link"' in sanitized
     assert "<inertial" not in sanitized
-    assert warnings == ("Launch repair removed invalid frame inertial from MJCF body 'gripper_frame_link'.",)
+    assert warnings == ("Workspace repair removed invalid frame inertial from MJCF body 'gripper_frame_link'.",)
 
 
-def test_apply_mjcf_launch_repairs_regularizes_invalid_dynamic_body_inertial() -> None:
+def test_apply_mjcf_workspace_repairs_regularizes_invalid_dynamic_body_inertial() -> None:
     mjcf = """
     <mujoco model="demo">
       <worldbody>
@@ -282,15 +282,15 @@ def test_apply_mjcf_launch_repairs_regularizes_invalid_dynamic_body_inertial() -
     </mujoco>
     """
 
-    sanitized, warnings = mujoco_adapter.apply_mjcf_launch_repairs(mjcf)
+    sanitized, warnings = mujoco_adapter.apply_mjcf_workspace_repairs(mjcf)
 
     assert 'mass="1e-09"' in sanitized
     assert 'diaginertia="1e-12 1e-12 1e-12"' in sanitized
     assert "fullinertia=" not in sanitized
-    assert warnings == ("Launch repair regularized invalid inertial on MJCF body 'dynamic_link'.",)
+    assert warnings == ("Workspace repair regularized invalid inertial on MJCF body 'dynamic_link'.",)
 
 
-def test_apply_mjcf_launch_repairs_preserves_or_defaults_inertial_pos() -> None:
+def test_apply_mjcf_workspace_repairs_preserves_or_defaults_inertial_pos() -> None:
     mjcf = """
     <mujoco model="demo">
       <worldbody>
@@ -308,7 +308,7 @@ def test_apply_mjcf_launch_repairs_preserves_or_defaults_inertial_pos() -> None:
     </mujoco>
     """
 
-    sanitized, _warnings = mujoco_adapter.apply_mjcf_launch_repairs(mjcf)
+    sanitized, _warnings = mujoco_adapter.apply_mjcf_workspace_repairs(mjcf)
 
     assert 'name="dynamic_link"' in sanitized
     assert 'pos="0 0 0"' in sanitized

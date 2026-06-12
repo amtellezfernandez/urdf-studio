@@ -17,7 +17,7 @@ router = APIRouter(prefix="/ik", tags=["ik"])
 
 
 @router.get("/solvers", response_model=IkSolversResponse)
-def list_ik_solvers() -> IkSolversResponse:
+async def list_ik_solvers() -> IkSolversResponse:
     solvers = list_available_solvers()
     default_chain = default_solver_chain()
     return IkSolversResponse(
@@ -28,10 +28,10 @@ def list_ik_solvers() -> IkSolversResponse:
 
 
 @router.get("/config", response_model=IkConfigResponse)
-def get_ik_runtime_config() -> IkConfigResponse:
+async def get_ik_runtime_config() -> IkConfigResponse:
     return get_ik_config()
 
 
 @router.post("/solve", response_model=IKResponse)
-def solve_ik(req: IkSolveRequest) -> IKResponse:
+async def solve_ik(req: IkSolveRequest) -> IKResponse:
     return orchestrated_ik(req)

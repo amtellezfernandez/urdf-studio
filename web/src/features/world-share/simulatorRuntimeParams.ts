@@ -1,37 +1,37 @@
 export const SIMULATOR_API_BASE_PATH = "/simulators";
 
 export type SimulatorRuntimeCapabilities = {
-  worldViewer: boolean;
+  workspaceTarget: boolean;
   motionValidation: boolean;
 };
 
 export type SimulatorAssetFormat = "urdf" | "mjcf" | "mjx_mjcf" | "usd" | "native";
-export type SimulatorLaunchStrategy = "direct" | "convert" | "planned";
+export type SimulatorTransferStrategy = "direct" | "convert" | "planned";
 
 export type SimulatorRuntimeTransferPolicy = {
   robotAssetFormat: SimulatorAssetFormat;
   sceneAssetFormat: SimulatorAssetFormat;
   frameConvention: string;
-  launchStrategy: SimulatorLaunchStrategy;
+  transferStrategy: SimulatorTransferStrategy;
 };
 
 type SimulatorRuntimeSpecRow = readonly [
   simulatorId: string,
   label: string,
   robotAssetFormat: SimulatorAssetFormat,
-  launchStrategy: SimulatorLaunchStrategy,
-  worldViewer?: boolean,
+  transferStrategy: SimulatorTransferStrategy,
+  workspaceTarget?: boolean,
   motionValidation?: boolean,
 ];
 
 const transfer = (
   robotAssetFormat: SimulatorAssetFormat,
-  launchStrategy: SimulatorLaunchStrategy
+  transferStrategy: SimulatorTransferStrategy
 ): SimulatorRuntimeTransferPolicy => ({
   robotAssetFormat,
   sceneAssetFormat: robotAssetFormat,
   frameConvention: "ros-rep-103",
-  launchStrategy,
+  transferStrategy,
 });
 
 const SIMULATOR_RUNTIME_ROWS = [
@@ -63,17 +63,17 @@ const SIMULATOR_RUNTIME_SPECS = SIMULATOR_RUNTIME_ROWS.map(
     simulatorId,
     label,
     robotAssetFormat,
-    launchStrategy,
-    worldViewer = false,
+    transferStrategy,
+    workspaceTarget = false,
     motionValidation = false,
   ]): SimulatorRuntimeSpecShape => ({
     simulatorId,
     label,
     capabilities: {
-      worldViewer,
+      workspaceTarget,
       motionValidation,
     },
-    transferPolicy: transfer(robotAssetFormat, launchStrategy),
+    transferPolicy: transfer(robotAssetFormat, transferStrategy),
   })
 );
 export type SimulatorRuntimeDescriptor = {
@@ -83,14 +83,11 @@ export type SimulatorRuntimeDescriptor = {
   transferPolicy: SimulatorRuntimeTransferPolicy;
 };
 
+export const canOpenSimulatorWorkspace = (
+  descriptor: Pick<SimulatorRuntimeDescriptor, "capabilities">
+): boolean => descriptor.capabilities.workspaceTarget;
+
 export const SIMULATOR_GENESIS_ID: SimulatorId = SIMULATOR_RUNTIME_SPECS[0].simulatorId;
 export const SIMULATOR_MJLAB_ID: SimulatorId = SIMULATOR_RUNTIME_SPECS[1].simulatorId;
-export const DEFAULT_SIMULATOR_RUNTIME_DESCRIPTORS: readonly SimulatorRuntimeDescriptor[] =
-  SIMULATOR_RUNTIME_SPECS.map(({ simulatorId, label, capabilities, transferPolicy }) => ({
-    simulatorId,
-    label,
-    capabilities,
-    transferPolicy,
-  }));
 
 export const MAX_SIMULATOR_ASSET_ALIASES = 64;

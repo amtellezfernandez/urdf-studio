@@ -24,12 +24,12 @@ router = APIRouter(prefix="/attestation", tags=["attestation"])
 
 
 @router.get("/status", response_model=list[AttestationStatusResponse])
-def list_attestation_statuses() -> list[AttestationStatusResponse]:
+async def list_attestation_statuses() -> list[AttestationStatusResponse]:
     return attestation_status_store.list()
 
 
 @router.get("/status/{robot_id}", response_model=AttestationStatusResponse)
-def get_attestation_status(robot_id: str) -> AttestationStatusResponse:
+async def get_attestation_status(robot_id: str) -> AttestationStatusResponse:
     status = attestation_status_store.get(robot_id)
     if status is None:
         raise HTTPException(status_code=404, detail=f"unknown robot attestation status: {robot_id}")
@@ -37,7 +37,7 @@ def get_attestation_status(robot_id: str) -> AttestationStatusResponse:
 
 
 @router.get("/summary/{robot_id}", response_model=AttestationSummary)
-def get_attestation_summary(robot_id: str) -> AttestationSummary:
+async def get_attestation_summary(robot_id: str) -> AttestationSummary:
     summary = attestation_status_store.summary(robot_id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"unknown robot attestation summary: {robot_id}")
@@ -45,19 +45,19 @@ def get_attestation_summary(robot_id: str) -> AttestationSummary:
 
 
 @router.get("/orchestrator/status", response_model=ZraOrchestratorStatusResponse)
-def get_zra_orchestrator_status() -> ZraOrchestratorStatusResponse:
+async def get_zra_orchestrator_status() -> ZraOrchestratorStatusResponse:
     return zra_orchestrator_service.status()
 
 
 @router.post("/status", response_model=AttestationStatusResponse)
-def upsert_attestation_status(
+async def upsert_attestation_status(
     request: AttestationStatusUpsertRequest,
 ) -> AttestationStatusResponse:
     return attestation_status_store.upsert(request)
 
 
 @router.post("/import/zra-gateway", response_model=AttestationStatusResponse)
-def import_zra_gateway_attestation(
+async def import_zra_gateway_attestation(
     request: ZraGatewayImportRequest,
 ) -> AttestationStatusResponse:
     converted = convert_zra_gateway_to_attestation(
@@ -68,7 +68,7 @@ def import_zra_gateway_attestation(
 
 
 @router.post("/pull/zra-gateway", response_model=AttestationStatusResponse)
-def pull_zra_gateway_attestation(
+async def pull_zra_gateway_attestation(
     request: ZraGatewayPullRequest,
 ) -> AttestationStatusResponse:
     try:
@@ -94,7 +94,7 @@ def pull_zra_gateway_attestation(
 
 
 @router.post("/status/{robot_id}/allow", response_model=AttestationStatusResponse)
-def allow_attestation_connection(
+async def allow_attestation_connection(
     robot_id: str,
     request: AttestationOverrideRequest,
 ) -> AttestationStatusResponse:
@@ -105,7 +105,7 @@ def allow_attestation_connection(
 
 
 @router.post("/status/{robot_id}/scan-trigger", response_model=AttestationStatusResponse)
-def mark_attestation_scan_triggered(
+async def mark_attestation_scan_triggered(
     robot_id: str,
     request: AttestationScanTriggerRequest,
 ) -> AttestationStatusResponse:

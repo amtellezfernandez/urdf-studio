@@ -223,6 +223,18 @@ def require_simulator_operator_access(request: Request) -> None:
     )
 
 
+async def require_simulator_operator_access_async(request: Request) -> None:
+    require_simulator_operator_access(request)
+
+
+async def require_simulator_session_access_async(
+    request: Request,
+    *,
+    session_token: str | None,
+) -> None:
+    require_simulator_session_access(request, session_token=session_token)
+
+
 def require_simulator_session_access(request: Request, *, session_token: str | None) -> None:
     if _is_loopback_client(request) and not _is_valid_cam_to_sim_proxy_request(request):
         return

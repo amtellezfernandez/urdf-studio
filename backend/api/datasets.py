@@ -47,7 +47,7 @@ def _validate_hf_proxy_url(url: str) -> urllib.parse.ParseResult:
 
 
 @router.get("/hf-proxy")
-def hf_proxy(
+async def hf_proxy(
     url: str = Query(..., min_length=1),
     authorization: str | None = Header(default=None),
 ) -> Response:
@@ -98,7 +98,7 @@ def hf_proxy(
     "/treatments/analyze",
     response_model=DatasetTreatmentAnalysisResponse,
 )
-def analyze_dataset_treatments(
+async def analyze_dataset_treatments(
     req: DatasetMixRequest,
 ) -> DatasetTreatmentAnalysisResponse:
     return analyze_dataset_treatment(
@@ -108,22 +108,22 @@ def analyze_dataset_treatments(
 
 
 @router.post("/embodiments/resolve", response_model=EmbodimentResolveResponse)
-def resolve_embodiment(req: EmbodimentResolveRequest) -> EmbodimentResolveResponse:
+async def resolve_embodiment(req: EmbodimentResolveRequest) -> EmbodimentResolveResponse:
     return get_dataset_alignment_service().resolve_embodiment(req)
 
 
 @router.get("/embodiments", response_model=list[EmbodimentRef])
-def list_embodiments() -> list[EmbodimentRef]:
+async def list_embodiments() -> list[EmbodimentRef]:
     return get_dataset_alignment_service().list_embodiments()
 
 
 @router.post("/mappings", response_model=MappingSpec)
-def upsert_mapping(req: MappingSpec) -> MappingSpec:
+async def upsert_mapping(req: MappingSpec) -> MappingSpec:
     return get_dataset_alignment_service().upsert_mapping(req)
 
 
 @router.get("/mappings", response_model=list[MappingSpec])
-def list_mappings(
+async def list_mappings(
     source_embodiment_id: str | None = Query(default=None),
     source_representation_id: str | None = Query(default=None),
     target_embodiment_id: str | None = Query(default=None),
@@ -143,7 +143,7 @@ def list_mappings(
     "/representations/validate",
     response_model=DatasetRepresentationValidationResponse,
 )
-def validate_representations(
+async def validate_representations(
     req: DatasetRepresentationValidationRequest,
 ) -> DatasetRepresentationValidationResponse:
     return get_dataset_alignment_service().validate_dataset_representations(req)

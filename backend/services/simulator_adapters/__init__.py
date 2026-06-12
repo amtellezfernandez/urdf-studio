@@ -11,8 +11,8 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeDescriptor,
     SimulatorRuntimeListResponse,
     SimulatorRuntimeStatus,
-    SimulatorWorldOpenRequest,
-    SimulatorWorldOpenResponse,
+    SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareResponse,
 )
 from backend.services.simulator_adapters.base import (
     SimulatorAdapter,
@@ -28,17 +28,17 @@ from backend.services.simulator_adapters.optional_runtime import make_optional_s
 from backend.services.simulator_adapters.pybullet import PYBULLET_SIMULATOR_ADAPTER
 
 
-WORLD_LAUNCH_SIMULATOR_IDS: tuple[SimulatorId, ...] = (
+WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = (
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
 )
-WORLD_LAUNCH_SIMULATOR_ID_SET = set(WORLD_LAUNCH_SIMULATOR_IDS)
+WORKSPACE_SIMULATOR_ID_SET = set(WORKSPACE_SIMULATOR_IDS)
 _OPTIONAL_SIMULATOR_ADAPTERS: dict[SimulatorId, SimulatorAdapter] = {
     spec.simulator_id: make_optional_simulator_adapter(spec=spec)
     for spec in SIMULATOR_RUNTIME_SPECS
-    if spec.simulator_id not in WORLD_LAUNCH_SIMULATOR_ID_SET
+    if spec.simulator_id not in WORKSPACE_SIMULATOR_ID_SET
 }
 _SIMULATOR_ADAPTERS: dict[SimulatorId, SimulatorAdapter] = {
     GENESIS_SIMULATOR_ADAPTER.simulator_id: GENESIS_SIMULATOR_ADAPTER,
@@ -73,11 +73,11 @@ def list_simulator_runtime_descriptors() -> SimulatorRuntimeListResponse:
     )
 
 
-def launch_simulator_world(
+def prepare_simulator_workspace(
     simulator_id: SimulatorId,
-    request: SimulatorWorldOpenRequest,
-) -> SimulatorWorldOpenResponse:
-    return get_simulator_adapter(simulator_id).open_world(request)
+    request: SimulatorWorkspacePrepareRequest,
+) -> SimulatorWorkspacePrepareResponse:
+    return get_simulator_adapter(simulator_id).prepare_workspace(request)
 
 
 def get_simulator_runtime_status(simulator_id: SimulatorId) -> SimulatorRuntimeStatus:
@@ -86,12 +86,12 @@ def get_simulator_runtime_status(simulator_id: SimulatorId) -> SimulatorRuntimeS
 
 __all__ = [
     "SUPPORTED_SIMULATOR_IDS",
-    "WORLD_LAUNCH_SIMULATOR_IDS",
+    "WORKSPACE_SIMULATOR_IDS",
     "SimulatorAdapter",
     "SimulatorAdapterError",
     "SimulatorCapabilityError",
     "get_simulator_adapter",
     "get_simulator_runtime_status",
-    "launch_simulator_world",
     "list_simulator_runtime_descriptors",
+    "prepare_simulator_workspace",
 ]

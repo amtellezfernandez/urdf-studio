@@ -113,8 +113,8 @@ export function buildSetupSummarySections({
   const pybulletLines = buildSimulatorRuntimeLines({
     result: pybulletRuntimeResult,
     skippedLine: 'PyBullet install was skipped for this run.',
-    installedLine: 'PyBullet world viewer runtime is available.',
-    unavailableLine: 'PyBullet world viewer runtime is unavailable.',
+    installedLine: 'PyBullet workspace adapter runtime is available.',
+    unavailableLine: 'PyBullet workspace adapter runtime is unavailable.',
     fallbackLine: 'PyBullet installs into the unified Python runtime for direct URDF world viewing.',
   });
 

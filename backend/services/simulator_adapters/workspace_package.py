@@ -15,21 +15,25 @@ from typing import Callable
 
 from backend.models.simulator_runtime import (
     SimulatorMeshAssetUpload,
-    SimulatorWorldOpenRequest,
+    SimulatorWorkspacePrepareRequest,
 )
 from backend.services.ilu_session import IluSessionError, get_ilu_session_local_urdf_source_context
-from backend.services.ilu_urdf import BundleMeshAssetsResult, IluUrdfBridgeError, bundle_mesh_assets_for_urdf_file
+from backend.services.ilu_urdf import (
+    BundleMeshAssetsResult,
+    IluUrdfBridgeError,
+    bundle_mesh_assets_for_urdf_file,
+)
 
 
 @dataclass(frozen=True)
-class PreparedSimulatorLaunch:
-    launch_dir: Path
+class PreparedSimulatorWorkspace:
+    workspace_dir: Path
     world_package_path: Path
     robot_urdf_path: Path
     bundle_result: BundleMeshAssetsResult
 
 
-URDF_VISUAL_FALLBACK_COLOR_PALETTE = (
+URDF_VISUAL_SYNTHETIC_COLOR_PALETTE = (
     "0.74 0.76 0.72 1.0",
     "0.42 0.46 0.50 1.0",
     "0.20 0.53 0.43 1.0",
@@ -37,7 +41,7 @@ URDF_VISUAL_FALLBACK_COLOR_PALETTE = (
     "0.13 0.34 0.50 1.0",
 )
 
-URDF_VISUAL_SEMANTIC_FALLBACK_COLORS = (
+URDF_VISUAL_SEMANTIC_SYNTHETIC_COLORS = (
     (("wheel", "tire", "tyre"), "0.04 0.045 0.05 1.0"),
     (("camera", "lens", "sensor"), "0.06 0.15 0.24 1.0"),
     (("battery", "lipo", "power"), "0.08 0.09 0.10 1.0"),
@@ -46,8 +50,8 @@ URDF_VISUAL_SEMANTIC_FALLBACK_COLORS = (
 )
 
 
-def _timestamped_launch_dir(launch_root: Path) -> Path:
-    path = launch_root / f"launch-{time.time_ns()}"
+def _timestamped_workspace_dir(workspace_root: Path) -> Path:
+    path = workspace_root / f"workspace-{time.time_ns()}"
     path.mkdir(parents=True, exist_ok=False)
     return path
 
@@ -140,7 +144,7 @@ def _write_package_root_hints(
                     "<package format=\"3\">\n"
                     f"  <name>{html.escape(normalized_package_name)}</name>\n"
                     "  <version>0.0.0</version>\n"
-                    "  <description>URDF Studio simulator launch package hint</description>\n"
+                    "  <description>URDF Studio simulator workspace package hint</description>\n"
                     "  <maintainer email=\"noreply@localhost\">URDF Studio</maintainer>\n"
                     "  <license>UNSPECIFIED</license>\n"
                     "</package>\n"
@@ -183,14 +187,14 @@ def _prepare_urdf_visual_material_colors(urdf_path: Path) -> int:
                 material = ET.SubElement(
                     visual,
                     "material",
-                    {"name": _fallback_urdf_material_name(link_name, visual_index)},
+                    {"name": _synthetic_urdf_material_name(link_name, visual_index)},
                 )
             material_name = material.get("name", "").strip()
             named_rgba = material_colors.get(material_name)
             ET.SubElement(
                 material,
                 "color",
-                {"rgba": named_rgba or _fallback_urdf_visual_rgba(link_name, visual, visual_index)},
+                {"rgba": named_rgba or _synthetic_urdf_visual_rgba(link_name, visual, visual_index)},
             )
             changed_count += 1
 
@@ -207,19 +211,19 @@ def _urdf_material_has_color(material: ET.Element | None) -> bool:
     return color is not None and bool(color.get("rgba", "").strip())
 
 
-def _fallback_urdf_material_name(link_name: str, visual_index: int) -> str:
+def _synthetic_urdf_material_name(link_name: str, visual_index: int) -> str:
     safe_link_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", link_name.strip()).strip("_")
     return f"urdf_studio_{safe_link_name or 'visual'}_{visual_index}"
 
 
-def _fallback_urdf_visual_rgba(link_name: str, visual: ET.Element, visual_index: int) -> str:
+def _synthetic_urdf_visual_rgba(link_name: str, visual: ET.Element, visual_index: int) -> str:
     fingerprint = _urdf_visual_fingerprint(link_name, visual, visual_index)
     fingerprint_lower = fingerprint.lower()
-    for terms, rgba in URDF_VISUAL_SEMANTIC_FALLBACK_COLORS:
+    for terms, rgba in URDF_VISUAL_SEMANTIC_SYNTHETIC_COLORS:
         if any(term in fingerprint_lower for term in terms):
             return rgba
     digest = hashlib.sha256(fingerprint_lower.encode("utf-8")).digest()
-    return URDF_VISUAL_FALLBACK_COLOR_PALETTE[digest[0] % len(URDF_VISUAL_FALLBACK_COLOR_PALETTE)]
+    return URDF_VISUAL_SYNTHETIC_COLOR_PALETTE[digest[0] % len(URDF_VISUAL_SYNTHETIC_COLOR_PALETTE)]
 
 
 def _urdf_visual_fingerprint(link_name: str, visual: ET.Element, visual_index: int) -> str:
@@ -230,19 +234,19 @@ def _urdf_visual_fingerprint(link_name: str, visual: ET.Element, visual_index: i
     return " ".join(part for part in parts if part)
 
 
-def prepare_simulator_launch_package(
-    request: SimulatorWorldOpenRequest,
+def prepare_simulator_workspace_package(
+    request: SimulatorWorkspacePrepareRequest,
     *,
-    launch_root: Path,
+    workspace_root: Path,
     error: Callable[[str], Exception],
-) -> PreparedSimulatorLaunch:
-    launch_dir = _timestamped_launch_dir(launch_root)
-    source_root = launch_dir / "source"
+) -> PreparedSimulatorWorkspace:
+    workspace_dir = _timestamped_workspace_dir(workspace_root)
+    source_root = workspace_dir / "source"
     source_root.mkdir(parents=True, exist_ok=True)
     _write_uploaded_assets(source_root, request.mesh_assets, error=error)
     _write_package_root_hints(source_root, request.package_roots)
 
-    world_package_path = launch_dir / "world-package.json"
+    world_package_path = workspace_dir / "world-package.json"
     world_package_path.write_text(
         f"{json.dumps(request.world_package.model_dump(mode='json'), indent=2)}\n",
         encoding="utf-8",
@@ -274,7 +278,7 @@ def prepare_simulator_launch_package(
 
     extra_search_roots.extend(_package_root_hint_paths(source_root, request.package_roots))
 
-    bundled_urdf_path = launch_dir / "robot" / "robot.urdf"
+    bundled_urdf_path = workspace_dir / "robot" / "robot.urdf"
     try:
         bundle_result = bundle_mesh_assets_for_urdf_file(
             urdf_path=str(source_urdf_path),
@@ -290,18 +294,18 @@ def prepare_simulator_launch_package(
         _raise(error, exc.detail)
 
     if not bundle_result.success:
-        _raise(error, bundle_result.error or "Simulator launch could not bundle robot mesh assets.")
+        _raise(error, bundle_result.error or "Simulator workspace could not bundle robot mesh assets.")
     if bundle_result.unresolved:
         unresolved = ", ".join(bundle_result.unresolved[:8])
         suffix = "" if len(bundle_result.unresolved) <= 8 else " ..."
-        _raise(error, f"Simulator launch could not resolve robot mesh assets: {unresolved}{suffix}")
+        _raise(error, f"Simulator workspace could not resolve robot mesh assets: {unresolved}{suffix}")
     try:
         _prepare_urdf_visual_material_colors(bundled_urdf_path)
     except ET.ParseError as exc:
-        _raise(error, f"Simulator launch could not parse robot URDF materials: {exc}")
+        _raise(error, f"Simulator workspace could not parse robot URDF materials: {exc}")
 
-    return PreparedSimulatorLaunch(
-        launch_dir=launch_dir,
+    return PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
         world_package_path=world_package_path,
         robot_urdf_path=bundled_urdf_path,
         bundle_result=bundle_result,
@@ -319,7 +323,7 @@ def read_log_tail(log_path: Path, *, tail_chars: int) -> str:
         return ""
 
 
-def wait_for_launch_readiness(
+def wait_for_workspace_readiness(
     process: subprocess.Popen,
     *,
     simulator_label: str,
@@ -361,8 +365,8 @@ def wait_for_launch_readiness(
         time.sleep(poll_sec)
     _raise(
         error,
-        f"{simulator_label} launch did not become ready within {ready_timeout_sec:.0f}s. "
-        f"Launch log: {log_path}",
+        f"{simulator_label} workspace did not become ready within {ready_timeout_sec:.0f}s. "
+        f"Workspace log: {log_path}",
     )
 
 
@@ -374,8 +378,8 @@ def _format_startup_failure(
     log_tail_chars: int,
 ) -> str:
     detail = (
-        f"{simulator_label} launch exited immediately with code {returncode}. "
-        f"Launch log: {log_path}"
+        f"{simulator_label} workspace process exited immediately with code {returncode}. "
+        f"Workspace log: {log_path}"
     )
     log_tail = read_log_tail(log_path, tail_chars=log_tail_chars)
     if log_tail:

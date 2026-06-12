@@ -6,13 +6,15 @@ from pathlib import Path
 
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.world_layout_static_transfer import (
+    build_sim_primitives,
+    parse_static_world_layout_payload,
+    resolve_world_layout_frame_map,
+)
+from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     SimPrimitive,
     StaticWorldLayout,
     WorldLayoutFrameMap,
-    build_sim_primitives,
-    parse_static_world_layout_payload,
-    resolve_world_layout_frame_map,
 )
 
 

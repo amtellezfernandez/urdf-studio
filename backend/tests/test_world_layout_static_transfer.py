@@ -14,6 +14,7 @@ from backend.services.world_layout_static_transfer import (
     check_mujoco_transfer,
     export_primitives_to_mujoco_mjcf,
     parse_static_world_layout_payload,
+    resolve_world_layout_asset_path,
     resolve_world_layout_frame_map,
 )
 
@@ -60,7 +61,7 @@ def _layout_payload() -> dict:
 
 def test_parse_and_build_primitives_uses_static_layout_contract() -> None:
     layout = parse_static_world_layout_payload(_layout_payload())
-    primitives, warnings = build_sim_primitives(layout)
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
 
     assert warnings == ()
     assert [primitive.source_id for primitive in primitives] == [
@@ -71,6 +72,16 @@ def test_parse_and_build_primitives_uses_static_layout_contract() -> None:
     assert primitives[0].sim_type == "box"
     assert primitives[0].position_xyz == (0.0, 0.0, 0.05)
     assert primitives[0].size_xyz == (1.0, 0.6, 0.1)
+
+
+def test_default_frame_map_is_identity_for_deterministic_launches() -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+    primitives, warnings = build_sim_primitives(layout)
+
+    assert warnings == ("Normalized non-uniform cylinder diameter for object: safety-cylinder",)
+    assert resolve_world_layout_frame_map(layout) == "identity"
+    assert primitives[0].position_xyz == (0.0, 0.05, 0.0)
+    assert primitives[0].size_xyz == (1.0, 0.1, 0.6)
 
 
 def test_auto_frame_map_preserves_ros_rep_103_world_package_axes() -> None:
@@ -145,6 +156,104 @@ def test_auto_frame_map_converts_legacy_studio_y_up_package_axes() -> None:
     assert resolve_world_layout_frame_map(layout, "auto") == "studio-y-up-to-z-up"
     assert primitives[0].position_xyz == (1.0, -3.0, 2.0)
     assert primitives[0].size_xyz == (0.2, 0.8, 0.4)
+
+
+def test_build_primitives_preserves_object_simulation_metadata() -> None:
+    payload = {
+        "package_id": "dynamic_world",
+        "version": "1.0.0",
+        "interface": {
+            "frame_convention": "ros-rep-103",
+        },
+        "world_snapshot": {
+            "objects": [
+                {
+                    "id": "green-container",
+                    "name": "Green container",
+                    "type": "cube",
+                    "position_xyz": [0.2, -0.1, 0.15],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.4, 0.2, 0.3],
+                    "color": "#22c55e",
+                    "simulation": {
+                        "fixed": False,
+                        "collision": True,
+                        "mass_kg": 4.5,
+                        "friction": 0.8,
+                        "restitution": 0.1,
+                        "semantic_role": "manipulation_target",
+                    },
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
+
+    assert warnings == ()
+    assert len(primitives) == 1
+    assert primitives[0].fixed is False
+    assert primitives[0].collision is True
+    assert primitives[0].mass_kg == 4.5
+    assert primitives[0].friction == 0.8
+    assert primitives[0].restitution == 0.1
+    assert primitives[0].semantic_role == "manipulation_target"
+
+
+def test_mesh_object_preserves_asset_metadata_and_uses_proxy_for_primitive_adapters(tmp_path) -> None:
+    mesh_path = tmp_path / "assets" / "crate.obj"
+    mesh_path.parent.mkdir()
+    mesh_path.write_text("o crate\n", encoding="utf-8")
+    payload = {
+        "package_id": "mesh_world",
+        "version": "1.0.0",
+        "interface": {
+            "frame_convention": "ros-rep-103",
+        },
+        "world_snapshot": {
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "mesh",
+                    "position_xyz": [0.0, 0.0, 0.1],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.3, 0.4],
+                    "color": "#22c55e",
+                    "mesh": {
+                        "path": "assets/crate.obj",
+                        "scale": [1.0, 1.2, 1.4],
+                    },
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
+
+    assert warnings == ("Mesh object keeps asset_ref for mesh-capable adapters: crate",)
+    assert primitives[0].source_type == "mesh"
+    assert primitives[0].sim_type == "box"
+    assert primitives[0].asset_ref == "assets/crate.obj"
+    assert primitives[0].asset_scale_xyz == (1.0, 1.2, 1.4)
+    assert resolve_world_layout_asset_path(primitives[0].asset_ref, (tmp_path,)) == mesh_path
+    assert resolve_world_layout_asset_path("../crate.obj", (tmp_path,)) is None
+    mjcf = export_primitives_to_mujoco_mjcf(primitives, asset_roots=(tmp_path,))
+    root = ET.fromstring(mjcf)
+    mesh = root.find("./asset/mesh[@name='wl_crate_mesh']")
+    geom = root.find("./worldbody/geom[@name='wl_crate']")
+    assert mesh is not None
+    assert mesh.get("file") == str(mesh_path)
+    assert mesh.get("scale") == "1 1.2 1.4"
+    assert geom is not None
+    assert geom.get("type") == "mesh"
+    assert geom.get("mesh") == "wl_crate_mesh"
 
 
 def test_rejects_non_static_layouts() -> None:

@@ -6,9 +6,9 @@
         "id": "transfer-table",
         "name": "transfer-table",
         "type": "cube",
-        "position_xyz": [0.0, 0.05, 0.0],
-        "rotation_rpy_rad": [0.0, 0.25, 0.0],
-        "size_xyz": [1.2, 0.1, 0.8],
+        "position_xyz": [0.55, -0.05, 0.03],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.5, 0.3, 0.06],
         "color": "#ef4444",
         "source": "user",
         "tracked_joint_name": null,
@@ -19,9 +19,17 @@
         "id": "transfer-target",
         "name": "transfer-target",
         "type": "sphere",
-        "position_xyz": [0.36, 0.22, -0.18],
+        "position_xyz": [0.25, 0.25, 0.12],
         "size_xyz": [0.2, 0.2, 0.2],
         "color": "#3b82f6",
+        "simulation": {
+          "fixed": false,
+          "collision": true,
+          "mass_kg": 0.35,
+          "friction": 0.7,
+          "restitution": 0.0,
+          "semantic_role": "manipulation_target"
+        },
         "source": "user",
         "tracked_joint_name": null,
         "is_ik_target": false,
@@ -31,8 +39,8 @@
         "id": "transfer-column",
         "name": "transfer-column",
         "type": "cylinder",
-        "position_xyz": [-0.38, 0.4, 0.24],
-        "size_xyz": [0.18, 0.8, 0.18],
+        "position_xyz": [-0.45, 0.3, 0.175],
+        "size_xyz": [0.12, 0.12, 0.35],
         "color": "#22c55e",
         "source": "user",
         "tracked_joint_name": null,
@@ -45,6 +53,7 @@
   },
   "environment": {
     "preset": "static-transfer-smoke",
-    "frame_map": "studio-y-up-to-z-up"
+    "frame_convention": "ros-rep-103",
+    "frame_map": "identity"
   }
 }

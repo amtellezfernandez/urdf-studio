@@ -10,8 +10,8 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeDependency,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
-    SimulatorWorldOpenRequest,
-    SimulatorWorldOpenResponse,
+    SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareResponse,
 )
 
 
@@ -28,7 +28,10 @@ class SimulatorAdapter(Protocol):
     label: str
     capabilities: SimulatorRuntimeCapabilities
 
-    def open_world(self, request: SimulatorWorldOpenRequest) -> SimulatorWorldOpenResponse:
+    def prepare_workspace(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+    ) -> SimulatorWorkspacePrepareResponse:
         ...
 
     def runtime_status(self) -> SimulatorRuntimeStatus:

@@ -7,63 +7,60 @@ import { HealthActionPanelSimulatorRuntime } from "./HealthActionPanelSimulatorR
 const textContent = (node: ParentNode) => node.textContent ?? "";
 
 describe("HealthActionPanelSimulatorRuntime", () => {
-  it("renders compact open targets and disabled future adapters", async () => {
+  it("renders compact simulator workspace targets and disabled future adapters", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
-    const openGenesis = vi.fn();
-    const openMjlab = vi.fn();
-    const openSapien = vi.fn();
+    const prepareGenesis = vi.fn();
+    const prepareMjlab = vi.fn();
+    const prepareSapien = vi.fn();
 
     await act(async () => {
       root.render(
         createElement(HealthActionPanelSimulatorRuntime, {
           className: "",
-          statusLabel: "Ready",
           targets: [
             {
               id: "genesis",
               label: "Genesis",
-              detail: "Interactive world viewer",
-              actionLabel: "Open in Genesis",
-              busyLabel: "Opening Genesis",
+              detail: "URDF open",
+              openLabel: "Open Genesis",
+              openingLabel: "Opening Genesis",
               isBusy: false,
-              isAvailable: true,
-              isReady: null,
-              unavailableLabel: "Genesis is not available yet",
-              onAction: openGenesis,
+              canOpen: true,
+              plannedLabel: "Genesis support planned",
+              onAction: prepareGenesis,
             },
             {
               id: "mjlab",
               label: "MJLab",
-              detail: "World viewer and motion validation",
-              actionLabel: "Open in MJLab",
-              busyLabel: "Opening MJLab",
+              detail: "MJCF open and validation",
+              openLabel: "Open MJLab",
+              openingLabel: "Opening MJLab",
               isBusy: false,
-              isAvailable: true,
-              isReady: true,
-              unavailableLabel: "MJLab is not available yet",
-              onAction: openMjlab,
+              isActive: true,
+              canOpen: true,
+              plannedLabel: "MJLab support planned",
+              onAction: prepareMjlab,
             },
             {
               id: "sapien2",
               label: "SAPIEN 2",
-              detail: "Not available yet",
-              actionLabel: "Open in SAPIEN 2",
-              busyLabel: "Opening SAPIEN 2",
+              detail: "URDF support planned",
+              openLabel: "Open SAPIEN 2",
+              openingLabel: "Opening SAPIEN 2",
               isBusy: false,
-              isAvailable: false,
-              isReady: null,
-              unavailableLabel: "SAPIEN 2 is not available yet",
-              onAction: openSapien,
+              canOpen: false,
+              plannedLabel: "SAPIEN 2 support planned",
+              onAction: prepareSapien,
             },
           ],
         })
       );
     });
 
-    expect(textContent(container)).toContain("Open in");
+    expect(textContent(container)).toContain("Sim");
     expect(textContent(container)).not.toContain("ready");
-    expect(textContent(container)).toContain("Soon available");
+    expect(textContent(container)).not.toContain("Adapt");
     expect(textContent(container)).not.toContain("Simulation Prep");
     expect(textContent(container)).toContain("Genesis");
     expect(textContent(container)).toContain("MJLab");
@@ -71,21 +68,22 @@ describe("HealthActionPanelSimulatorRuntime", () => {
 
     await act(async () => {
       container
-        .querySelector('button[aria-label="Open in Genesis"]')
+        .querySelector('button[aria-label="Open Genesis"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       container
-        .querySelector('button[aria-label="Open in MJLab"]')
+        .querySelector('button[aria-label="Open MJLab"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const unavailableButton = container.querySelector(
-      'button[aria-label="SAPIEN 2 is not available yet"]'
+      'button[aria-label="SAPIEN 2 support planned"]'
     );
     expect(unavailableButton?.hasAttribute("disabled")).toBe(true);
-    expect(unavailableButton?.getAttribute("class")).toContain("bg-neutral-900");
-    expect(openGenesis).toHaveBeenCalledTimes(1);
-    expect(openMjlab).toHaveBeenCalledTimes(1);
-    expect(openSapien).not.toHaveBeenCalled();
+    expect(unavailableButton?.getAttribute("class")).toContain("bg-neutral-950");
+    expect(unavailableButton?.getAttribute("class")).toContain("text-neutral-500");
+    expect(prepareGenesis).toHaveBeenCalledTimes(1);
+    expect(prepareMjlab).toHaveBeenCalledTimes(1);
+    expect(prepareSapien).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();

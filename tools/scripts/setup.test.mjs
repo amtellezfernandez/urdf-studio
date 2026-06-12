@@ -254,7 +254,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
       setupGitHub: unreachable('setupGitHub'),
       installOptionalGlobalIlu: unreachable('installOptionalGlobalIlu'),
     }),
-    /Genesis static world viewer runtime installation failed/
+    /Genesis workspace adapter runtime installation failed/
   );
 
   assert.deepEqual(calls, [

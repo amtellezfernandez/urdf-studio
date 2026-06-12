@@ -75,7 +75,7 @@ def _extract_stream_ticket(websocket: WebSocket) -> str:
 
 
 @http_router.post("/sessions", response_model=RosVizSessionSnapshot)
-def create_ros_viz_session(req: RosVizSessionCreateRequest) -> RosVizSessionSnapshot:
+async def create_ros_viz_session(req: RosVizSessionCreateRequest) -> RosVizSessionSnapshot:
     try:
         return runtime.create_session(req)
     except ValueError as exc:
@@ -83,12 +83,12 @@ def create_ros_viz_session(req: RosVizSessionCreateRequest) -> RosVizSessionSnap
 
 
 @http_router.get("/sessions", response_model=list[RosVizSessionSnapshot])
-def list_ros_viz_sessions() -> list[RosVizSessionSnapshot]:
+async def list_ros_viz_sessions() -> list[RosVizSessionSnapshot]:
     return runtime.list_sessions()
 
 
 @http_router.get("/sessions/{session_id}", response_model=RosVizSessionSnapshot)
-def get_ros_viz_session(session_id: str) -> RosVizSessionSnapshot:
+async def get_ros_viz_session(session_id: str) -> RosVizSessionSnapshot:
     try:
         return runtime.get_session(session_id)
     except KeyError as exc:
@@ -96,7 +96,7 @@ def get_ros_viz_session(session_id: str) -> RosVizSessionSnapshot:
 
 
 @http_router.get("/sessions/{session_id}/state", response_model=RosVizSessionStateResponse)
-def get_ros_viz_session_state(session_id: str) -> RosVizSessionStateResponse:
+async def get_ros_viz_session_state(session_id: str) -> RosVizSessionStateResponse:
     try:
         return runtime.get_session_state(session_id)
     except KeyError as exc:
@@ -104,7 +104,7 @@ def get_ros_viz_session_state(session_id: str) -> RosVizSessionStateResponse:
 
 
 @http_router.post("/sessions/{session_id}/mode", response_model=RosVizSessionStateResponse)
-def update_ros_viz_session_mode(
+async def update_ros_viz_session_mode(
     session_id: str,
     req: RosVizModeUpdateRequest,
 ) -> RosVizSessionStateResponse:
@@ -117,7 +117,7 @@ def update_ros_viz_session_mode(
 
 
 @http_router.get("/sessions/{session_id}/clock", response_model=RosVizClockState)
-def get_ros_viz_clock_state(session_id: str) -> RosVizClockState:
+async def get_ros_viz_clock_state(session_id: str) -> RosVizClockState:
     try:
         return runtime.get_clock_state(session_id)
     except KeyError as exc:
@@ -125,7 +125,7 @@ def get_ros_viz_clock_state(session_id: str) -> RosVizClockState:
 
 
 @http_router.post("/sessions/{session_id}/clock", response_model=RosVizClockState)
-def update_ros_viz_clock_state(
+async def update_ros_viz_clock_state(
     session_id: str,
     req: RosVizClockControlRequest,
 ) -> RosVizClockState:
@@ -138,7 +138,7 @@ def update_ros_viz_clock_state(
 
 
 @http_router.get("/sessions/{session_id}/topics", response_model=RosVizTopicCatalogResponse)
-def get_ros_viz_topics(session_id: str) -> RosVizTopicCatalogResponse:
+async def get_ros_viz_topics(session_id: str) -> RosVizTopicCatalogResponse:
     try:
         return runtime.list_topics(session_id)
     except KeyError as exc:
@@ -149,7 +149,7 @@ def get_ros_viz_topics(session_id: str) -> RosVizTopicCatalogResponse:
     "/sessions/{session_id}/subscriptions",
     response_model=RosVizSubscriptionResponse,
 )
-def update_ros_viz_subscriptions(
+async def update_ros_viz_subscriptions(
     session_id: str,
     req: RosVizSubscriptionRequest,
 ) -> RosVizSubscriptionResponse:
@@ -165,7 +165,7 @@ def update_ros_viz_subscriptions(
     "/sessions/{session_id}/stream-ticket",
     response_model=RosVizStreamTicketResponse,
 )
-def issue_ros_viz_stream_ticket(request: Request, session_id: str) -> RosVizStreamTicketResponse:
+async def issue_ros_viz_stream_ticket(request: Request, session_id: str) -> RosVizStreamTicketResponse:
     try:
         return runtime.issue_stream_ticket(
             session_id,

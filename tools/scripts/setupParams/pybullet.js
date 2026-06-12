@@ -4,7 +4,7 @@ export const PYBULLET_SETUP = {
   packages: {
     pybullet: 'pybullet',
   },
-  verifyImportScript: 'import pybullet; import pybullet_data; print("pybullet world viewer runtime ok")',
+  verifyImportScript: 'import pybullet; import pybullet_data; print("pybullet workspace adapter runtime ok")',
 };
 
 export const PYBULLET_SKIP_AUTO_INSTALL_ENV = PYBULLET_SETUP.skipAutoInstallEnv;

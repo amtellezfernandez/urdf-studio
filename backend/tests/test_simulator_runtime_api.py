@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import get_args
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+import pytest
 
-from backend.app import app
+pytest.importorskip("httpx")
+
+from httpx import ASGITransport, AsyncClient
+
+from backend.app import create_app
 from backend.api import simulator_runtime as simulator_runtime_api
 from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
 from backend.models.simulator_runtime import (
@@ -15,7 +20,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_RUNTIME_SPECS,
     SimulatorId,
     SimulatorRuntimeStatus,
-    SimulatorWorldOpenResponse,
+    SimulatorWorkspacePrepareResponse,
 )
 from backend.services.simulator_adapters import (
     SUPPORTED_SIMULATOR_IDS,
@@ -23,12 +28,15 @@ from backend.services.simulator_adapters import (
     list_simulator_runtime_descriptors,
 )
 from backend.services.simulator_adapters.params import (
-    SIMULATOR_LAUNCH_PARAMS_BY_ID,
+    SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,
 )
 
 
 TEST_SIMULATOR_TOKEN = "sim-token"
+TEST_BASE_URL = "http://testserver"
+TEST_CLIENT_HOST = "127.0.0.1"
+TEST_CLIENT_PORT = 8001
 
 
 def _operator_headers() -> dict[str, str]:
@@ -40,6 +48,21 @@ def _patch_security_settings():
         "backend.core.simulator_security.settings",
         SimpleNamespace(simulator_api_token=TEST_SIMULATOR_TOKEN, cam_to_sim_proxy_token=None),
     )
+
+
+async def _request_json(
+    method: str,
+    path: str,
+    *,
+    client_host: str = TEST_CLIENT_HOST,
+    **kwargs,
+):
+    transport = ASGITransport(
+        app=create_app(),
+        client=(client_host, TEST_CLIENT_PORT),
+    )
+    async with AsyncClient(transport=transport, base_url=TEST_BASE_URL) as client:
+        return await client.request(method, path, **kwargs)
 
 
 def _world_package_payload() -> dict:
@@ -105,28 +128,28 @@ def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
     for spec in SIMULATOR_RUNTIME_SPECS:
         assert spec.transfer.frame_convention == SIMULATOR_CANONICAL_FRAME_CONVENTION
         assert spec.transfer.robot_asset_format == expected_robot_asset_formats[spec.simulator_id]
-        if spec.capabilities_model().world_viewer:
-            assert spec.transfer.launch_strategy in {"direct", "convert"}
+        if spec.capabilities_model().workspace_target:
+            assert spec.transfer.transfer_strategy in {"direct", "convert"}
         else:
-            assert spec.transfer.launch_strategy == "planned"
+            assert spec.transfer.transfer_strategy == "planned"
 
 
 def test_openable_simulator_runtime_params_are_centralized() -> None:
     openable_simulator_ids = {
         spec.simulator_id
         for spec in SIMULATOR_RUNTIME_SPECS
-        if spec.capabilities_model().world_viewer and spec.transfer.launch_strategy != "planned"
+        if spec.capabilities_model().workspace_target and spec.transfer.transfer_strategy != "planned"
     }
 
-    assert openable_simulator_ids == set(SIMULATOR_LAUNCH_PARAMS_BY_ID)
+    assert openable_simulator_ids == set(SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID)
     assert openable_simulator_ids == set(SIMULATOR_SCENE_PARAMS_BY_ID)
 
     for simulator_id in openable_simulator_ids:
-        launch_params = SIMULATOR_LAUNCH_PARAMS_BY_ID[simulator_id]
+        workspace_process = SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID[simulator_id]
         scene_params = SIMULATOR_SCENE_PARAMS_BY_ID[simulator_id]
 
-        assert launch_params.ready_log_marker
-        assert launch_params.ready_timeout_sec > 0
+        assert workspace_process.ready_log_marker
+        assert workspace_process.ready_timeout_sec > 0
         if hasattr(scene_params, "viewer_step_hz"):
             assert scene_params.viewer_step_hz > 0
         if hasattr(scene_params, "gravity_xyz"):
@@ -135,39 +158,53 @@ def test_openable_simulator_runtime_params_are_centralized() -> None:
 
 def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     with _patch_security_settings():
-        response = TestClient(app).get("/simulators", headers=_operator_headers())
+        response = asyncio.run(_request_json("GET", "/simulators", headers=_operator_headers()))
 
     assert response.status_code == 200
     simulators = response.json()["simulators"]
     assert [simulator["simulatorId"] for simulator in simulators] == list(SUPPORTED_SIMULATOR_IDS)
     assert simulators[0]["capabilities"] == {
-        "worldViewer": True,
+        "workspaceTarget": True,
         "motionValidation": False,
     }
     assert simulators[1]["capabilities"] == {
-        "worldViewer": True,
+        "workspaceTarget": True,
         "motionValidation": True,
     }
     assert simulators[0]["transferPolicy"] == {
         "robotAssetFormat": "urdf",
         "sceneAssetFormat": "urdf",
         "frameConvention": SIMULATOR_CANONICAL_FRAME_CONVENTION,
-        "launchStrategy": "direct",
+        "transferStrategy": "direct",
     }
     assert simulators[1]["transferPolicy"]["robotAssetFormat"] == "mjcf"
-    assert simulators[1]["transferPolicy"]["launchStrategy"] == "convert"
+    assert simulators[1]["transferPolicy"]["transferStrategy"] == "convert"
     assert simulators[4]["simulatorId"] == "pybullet"
-    assert simulators[4]["capabilities"]["worldViewer"] is True
-    assert simulators[4]["transferPolicy"]["launchStrategy"] == "direct"
+    assert simulators[4]["capabilities"]["workspaceTarget"] is True
+    assert simulators[4]["transferPolicy"]["transferStrategy"] == "direct"
 
 
-def test_simulator_world_open_delegates_to_selected_adapter(monkeypatch) -> None:
+def test_simulator_runtime_routes_require_token_for_remote_clients() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "GET",
+                "/simulators",
+                client_host="192.168.1.10",
+            )
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Simulator API token required for remote simulator access."
+
+
+def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_launch_simulator_world(simulator_id, request):
+    def fake_prepare_simulator_workspace(simulator_id, request):
         captured["simulator_id"] = simulator_id
         captured["request_title"] = request.world_package.title
-        return SimulatorWorldOpenResponse(
+        return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
             started=True,
             pid=1234,
@@ -179,15 +216,18 @@ def test_simulator_world_open_delegates_to_selected_adapter(monkeypatch) -> None
 
     monkeypatch.setattr(
         simulator_runtime_api,
-        "launch_simulator_world",
-        fake_launch_simulator_world,
+        "prepare_simulator_workspace",
+        fake_prepare_simulator_workspace,
     )
 
     with _patch_security_settings():
-        response = TestClient(app).post(
-            "/simulators/genesis/world/open",
-            headers=_operator_headers(),
-            json=_open_request_payload(),
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/genesis/workspace/prepare",
+                headers=_operator_headers(),
+                json=_open_request_payload(),
+            )
         )
 
     assert response.status_code == 200
@@ -199,27 +239,30 @@ def test_simulator_world_open_delegates_to_selected_adapter(monkeypatch) -> None
     }
 
 
-def test_optional_simulator_world_open_reports_missing_launcher() -> None:
+def test_optional_simulator_workspace_prepare_reports_missing_adapter() -> None:
     with _patch_security_settings():
-        response = TestClient(app).post(
-            "/simulators/sapien2/world/open",
-            headers=_operator_headers(),
-            json=_open_request_payload(),
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/sapien2/workspace/prepare",
+                headers=_operator_headers(),
+                json=_open_request_payload(),
+            )
         )
 
     assert response.status_code == 501
-    assert "not available yet" in response.json()["detail"]
+    assert "workspace adapter is planned" in response.json()["detail"]
 
 
-def test_non_world_viewer_simulators_are_registered_but_not_openable() -> None:
+def test_non_workspace_target_simulators_are_registered_but_not_openable() -> None:
     descriptors = list_simulator_runtime_descriptors().simulators
-    non_world_viewer_ids = [
+    non_workspace_target_ids = [
         descriptor.simulator_id
         for descriptor in descriptors
-        if not descriptor.capabilities.world_viewer
+        if not descriptor.capabilities.workspace_target
     ]
 
-    assert non_world_viewer_ids == [
+    assert non_workspace_target_ids == [
         "mjx",
         "sapien2",
         "sapien3",
@@ -231,16 +274,18 @@ def test_non_world_viewer_simulators_are_registered_but_not_openable() -> None:
     ]
 
     with _patch_security_settings():
-        client = TestClient(app)
-        for simulator_id in non_world_viewer_ids:
-            response = client.post(
-                f"/simulators/{simulator_id}/world/open",
-                headers=_operator_headers(),
-                json=_open_request_payload(),
+        for simulator_id in non_workspace_target_ids:
+            response = asyncio.run(
+                _request_json(
+                    "POST",
+                    f"/simulators/{simulator_id}/workspace/prepare",
+                    headers=_operator_headers(),
+                    json=_open_request_payload(),
+                )
             )
 
             assert response.status_code == 501
-            assert "not available yet" in response.json()["detail"]
+            assert "workspace adapter is planned" in response.json()["detail"]
 
 
 def test_simulator_runtime_status_uses_adapter_registry(monkeypatch) -> None:
@@ -259,9 +304,12 @@ def test_simulator_runtime_status_uses_adapter_registry(monkeypatch) -> None:
     )
 
     with _patch_security_settings():
-        response = TestClient(app).get(
-            "/simulators/genesis/runtime",
-            headers=_operator_headers(),
+        response = asyncio.run(
+            _request_json(
+                "GET",
+                "/simulators/genesis/runtime",
+                headers=_operator_headers(),
+            )
         )
 
     assert response.status_code == 200

@@ -15,7 +15,7 @@ import {
 } from "@/shared/lib/cameraIntrinsics";
 import { type PackageRootMap } from "@/shared/lib/urdfBrowser";
 import type { MeshFiles } from "@/shared/types/feature";
-import { toThreeViewQuaternionFromUrdf } from "./cameraOrientationContract";
+import { toThreeViewQuaternionFromStudioCamera } from "./cameraOrientationContract";
 import { getCameraWorldPose } from "./cameraWorldPose";
 import { createUrdfMeshLoadCallback } from "@/features/urdf/runtime/urdfMeshLoader";
 import { createUrdfVisualMaterialApplyScheduler } from "@/features/urdf/runtime/materialApplyScheduler";
@@ -376,7 +376,7 @@ const CameraPoseController = ({
       updateRobotWorld: true,
     });
     // Preserve full camera orientation (including roll) to avoid top/down flip discontinuities.
-    const finalQuat = toThreeViewQuaternionFromUrdf(quaternion);
+    const finalQuat = toThreeViewQuaternionFromStudioCamera(quaternion);
     previewCamera.position.copy(position);
     previewCamera.quaternion.copy(finalQuat);
     previewCamera.updateMatrixWorld();

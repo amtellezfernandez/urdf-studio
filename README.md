@@ -73,7 +73,7 @@ sudo apt-get update
 sudo apt-get install python3-dev build-essential
 ```
 
-On macOS, setup skips optional native collision checks by default because those libraries are less portable across local Python environments.
+On macOS, setup attempts the app and workspace viewer runtimes. Some optional native training/collision packages are skipped when their wheels are not portable across local Python environments.
 
 ## Setup
 
@@ -83,7 +83,7 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. It can take a while the first time.
 
-Setup also prepares supported simulator launchers when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
+Setup also prepares supported simulator workspace adapters when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
 
 Useful setup commands:
 
@@ -213,7 +213,7 @@ npm run data -- --ack-public-tunnel
 
 ```bash
 npm run release:check
-npm run simulator:launch:check
+npm run simulator:workspace:check
 npm run lint
 npm run typecheck
 npm run test

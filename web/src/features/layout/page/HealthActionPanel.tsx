@@ -2107,7 +2107,6 @@ export const HealthActionPanel = ({
           {simulatorRuntime ? (
             <HealthActionPanelSimulatorRuntime
               className={CHECKLIST_CARD_CLASS}
-              statusLabel={statusLabel}
               {...simulatorRuntime}
             />
           ) : null}

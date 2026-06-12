@@ -10,8 +10,8 @@ from backend.models.world_scene_package import WorldScenePackageManifest
 
 
 SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
-SimulatorLaunchAssetFormat = Literal["urdf", "mjcf", "usd"]
-SimulatorLaunchStrategy = Literal["direct", "convert", "planned"]
+SimulatorWorkspaceAssetFormat = Literal["urdf", "mjcf", "usd"]
+SimulatorTransferStrategy = Literal["direct", "convert", "planned"]
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",
@@ -67,7 +67,7 @@ class SimulatorMeshAssetUpload(BaseModel):
         return [validate_simulator_relative_path(value, "mesh asset alias") for value in values]
 
 
-class SimulatorWorldOpenRequest(BaseModel):
+class SimulatorWorkspacePrepareRequest(BaseModel):
     world_package: WorldScenePackageManifest
     urdf_asset_path: str | None = Field(default=None, max_length=512)
     mesh_assets: list[SimulatorMeshAssetUpload] = Field(
@@ -105,7 +105,7 @@ class SimulatorWorldOpenRequest(BaseModel):
         return cleaned
 
 
-class SimulatorWorldOpenResponse(BaseModel):
+class SimulatorWorkspacePrepareResponse(BaseModel):
     simulator_id: SimulatorId = SIMULATOR_GENESIS_ID
     started: bool
     pid: int
@@ -114,7 +114,7 @@ class SimulatorWorldOpenResponse(BaseModel):
     world_package_path: str
     robot_urdf_path: str
     simulator_asset_path: str | None = None
-    simulator_asset_format: SimulatorLaunchAssetFormat | None = None
+    simulator_asset_format: SimulatorWorkspaceAssetFormat | None = None
     bundled_mesh_count: int = 0
     unresolved_mesh_refs: list[str] = Field(default_factory=list)
 
@@ -129,7 +129,7 @@ class SimulatorRuntimeDependency(SimulatorRuntimeCamelModel):
 
 
 class SimulatorRuntimeCapabilities(SimulatorRuntimeCamelModel):
-    world_viewer: bool = Field(default=False, alias="worldViewer")
+    workspace_target: bool = Field(default=False, alias="workspaceTarget")
     motion_validation: bool = Field(default=False, alias="motionValidation")
 
 
@@ -140,7 +140,7 @@ class SimulatorRuntimeTransferPolicy(SimulatorRuntimeCamelModel):
         default=SIMULATOR_CANONICAL_FRAME_CONVENTION,
         alias="frameConvention",
     )
-    launch_strategy: SimulatorLaunchStrategy = Field(..., alias="launchStrategy")
+    transfer_strategy: SimulatorTransferStrategy = Field(..., alias="transferStrategy")
 
 
 @dataclass(frozen=True)
@@ -153,7 +153,7 @@ class SimulatorDependencySpec:
 class SimulatorTransferSpec:
     robot_asset_format: SimulatorAssetFormat
     scene_asset_format: SimulatorAssetFormat
-    launch_strategy: SimulatorLaunchStrategy
+    transfer_strategy: SimulatorTransferStrategy
     frame_convention: str = SIMULATOR_CANONICAL_FRAME_CONVENTION
 
     def runtime_model(self) -> SimulatorRuntimeTransferPolicy:
@@ -161,12 +161,14 @@ class SimulatorTransferSpec:
             robotAssetFormat=self.robot_asset_format,
             sceneAssetFormat=self.scene_asset_format,
             frameConvention=self.frame_convention,
-            launchStrategy=self.launch_strategy,
+            transferStrategy=self.transfer_strategy,
         )
 
-    def launch_asset_format(self) -> SimulatorLaunchAssetFormat:
+    def workspace_asset_format(self) -> SimulatorWorkspaceAssetFormat:
         if self.robot_asset_format not in ("urdf", "mjcf", "usd"):
-            raise ValueError(f"{self.robot_asset_format} is not a launchable simulator asset format")
+            raise ValueError(
+                f"{self.robot_asset_format} is not a workspace simulator asset format"
+            )
         return self.robot_asset_format
 
 
@@ -175,13 +177,13 @@ class SimulatorRuntimeSpec:
     simulator_id: SimulatorId
     label: str
     transfer: SimulatorTransferSpec
-    world_viewer: bool = False
+    workspace_target: bool = False
     motion_validation: bool = False
     dependencies: tuple[SimulatorDependencySpec, ...] = ()
 
     def capabilities_model(self) -> SimulatorRuntimeCapabilities:
         return SimulatorRuntimeCapabilities(
-            world_viewer=self.world_viewer,
+            workspace_target=self.workspace_target,
             motion_validation=self.motion_validation,
         )
 
@@ -206,14 +208,14 @@ class SimulatorRuntimeStatus(SimulatorRuntimeCamelModel):
 
 def _transfer(
     robot_asset_format: SimulatorAssetFormat,
-    launch_strategy: SimulatorLaunchStrategy,
+    transfer_strategy: SimulatorTransferStrategy,
     *,
     scene_asset_format: SimulatorAssetFormat | None = None,
 ) -> SimulatorTransferSpec:
     return SimulatorTransferSpec(
         robot_asset_format=robot_asset_format,
         scene_asset_format=scene_asset_format or robot_asset_format,
-        launch_strategy=launch_strategy,
+        transfer_strategy=transfer_strategy,
     )
 
 
@@ -225,17 +227,17 @@ def _runtime(
     simulator_id: SimulatorId,
     label: str,
     robot_asset_format: SimulatorAssetFormat,
-    launch_strategy: SimulatorLaunchStrategy,
+    transfer_strategy: SimulatorTransferStrategy,
     *,
-    world_viewer: bool = False,
+    workspace_target: bool = False,
     motion_validation: bool = False,
     dependencies: tuple[SimulatorDependencySpec, ...] = (),
 ) -> SimulatorRuntimeSpec:
     return SimulatorRuntimeSpec(
         simulator_id=simulator_id,
         label=label,
-        transfer=_transfer(robot_asset_format, launch_strategy),
-        world_viewer=world_viewer,
+        transfer=_transfer(robot_asset_format, transfer_strategy),
+        workspace_target=workspace_target,
         motion_validation=motion_validation,
         dependencies=dependencies,
     )
@@ -247,7 +249,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "Genesis",
         "urdf",
         "direct",
-        world_viewer=True,
+        workspace_target=True,
         dependencies=(_dependency("genesis"),),
     ),
     _runtime(
@@ -255,7 +257,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "MJLab",
         "mjcf",
         "convert",
-        world_viewer=True,
+        workspace_target=True,
         motion_validation=True,
         dependencies=(
             _dependency("mjlab"),
@@ -268,7 +270,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "MuJoCo",
         "mjcf",
         "convert",
-        world_viewer=True,
+        workspace_target=True,
         dependencies=(_dependency("mujoco"),),
     ),
     _runtime(
@@ -286,7 +288,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "PyBullet",
         "urdf",
         "direct",
-        world_viewer=True,
+        workspace_target=True,
         dependencies=(_dependency("pybullet"),),
     ),
     _runtime(

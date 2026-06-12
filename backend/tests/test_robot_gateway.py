@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 from pathlib import Path
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
+from backend.tests.asgi_test_client import AsgiTestClient
 
 from backend.app import create_app
 from backend.api import robot_gateway as robot_gateway_api
@@ -225,6 +226,10 @@ TEST_LEROBOT_LEKIWI_MODEL_JOINT_NAMES = (
     "arm_wrist_roll",
     "arm_gripper",
 )
+
+
+def _run_api(coro):
+    return asyncio.run(coro)
 
 
 class FakeCapabilityVerifyResponse:
@@ -3339,7 +3344,7 @@ def test_robot_gateway_authorized_manifest_exposes_transport_descriptors(
     monkeypatch.setenv(ROBOT_GATEWAY_MOQ_RELAY_URL_ENV, TEST_PRIVATE_MOQ_RELAY_URL)
 
     with patch("backend.api.robot_gateway.runtime", RobotGatewayRuntime()):
-        client = TestClient(create_app(), client=("127.0.0.1", 50000))
+        client = AsgiTestClient(create_app(), client=("127.0.0.1", 50000))
         response = client.get("/robot-gateway/manifest")
 
     assert response.status_code == 200
@@ -3361,7 +3366,7 @@ def test_robot_gateway_authorized_manifest_accepts_collaboration_teleop_capabili
         ),
         session_token=created.owner_token,
     )
-    client = TestClient(create_app(), client=("127.0.0.1", 50000))
+    client = AsgiTestClient(create_app(), client=("127.0.0.1", 50000))
 
     with patch("backend.api.robot_gateway.runtime", RobotGatewayRuntime()):
         response = client.get(
@@ -3400,10 +3405,10 @@ def test_robot_gateway_control_routes_dispatch_to_runtime() -> None:
     )
 
     with patch("backend.api.robot_gateway.runtime", control_runtime):
-        joint_ack = robot_gateway_api.apply_robot_gateway_joint_jog(joint_jog_request)
-        twist_ack = robot_gateway_api.apply_robot_gateway_twist(twist_request)
-        stop_ack = robot_gateway_api.stop_robot_gateway()
-        estop_ack = robot_gateway_api.estop_robot_gateway()
+        joint_ack = _run_api(robot_gateway_api.apply_robot_gateway_joint_jog(joint_jog_request))
+        twist_ack = _run_api(robot_gateway_api.apply_robot_gateway_twist(twist_request))
+        stop_ack = _run_api(robot_gateway_api.stop_robot_gateway())
+        estop_ack = _run_api(robot_gateway_api.estop_robot_gateway())
 
     assert joint_ack.accepted is True
     assert joint_ack.applied_joint_name == TEST_FIRST_JOINT_NAME
@@ -3419,7 +3424,7 @@ def test_robot_gateway_follower_release_route_dispatches_to_runtime() -> None:
     release_runtime = SimpleNamespace(release_hardware=lambda: 1)
 
     with patch("backend.api.robot_gateway.runtime", release_runtime):
-        client = TestClient(create_app(), client=("127.0.0.1", 50000))
+        client = AsgiTestClient(create_app(), client=("127.0.0.1", 50000))
         response = client.post("/robot-gateway/hardware/follower/release")
 
     assert response.status_code == 200

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
+from backend.tests.asgi_test_client import AsgiTestClient
 
 from backend.app import create_app
 from backend.core.simulator_security import RUNTIME_SESSION_TOKEN_HEADER, SIMULATOR_TOKEN_HEADER
@@ -33,7 +33,7 @@ def _operator_headers() -> dict[str, str]:
 
 
 def test_runtime_session_endpoints_round_trip() -> None:
-    client = TestClient(create_app())
+    client = AsgiTestClient(create_app())
 
     with _patch_security_settings():
         channels_response = client.post(
@@ -95,7 +95,7 @@ def test_runtime_session_endpoints_round_trip() -> None:
 
 
 def test_runtime_session_reads_fail_closed_for_unknown_or_invalid_ids() -> None:
-    client = TestClient(create_app())
+    client = AsgiTestClient(create_app())
 
     with _patch_security_settings():
         missing_response = client.get("/runtime/sessions/missing/stats", headers=_operator_headers())
@@ -109,7 +109,7 @@ def test_runtime_session_reads_fail_closed_for_unknown_or_invalid_ids() -> None:
 
 
 def test_runtime_video_refs_strip_query_auth_metadata() -> None:
-    client = TestClient(create_app())
+    client = AsgiTestClient(create_app())
 
     with _patch_security_settings():
         video_response = client.post(
@@ -142,7 +142,7 @@ def test_runtime_video_refs_strip_query_auth_metadata() -> None:
 
 
 def test_runtime_telemetry_rejects_oversized_frames_with_drop_reason() -> None:
-    client = TestClient(create_app())
+    client = AsgiTestClient(create_app())
     oversized_payload = "x" * (RUNTIME_SESSION_MAX_FRAME_BYTES + 1)
 
     with _patch_security_settings():
@@ -162,7 +162,7 @@ def test_runtime_telemetry_rejects_oversized_frames_with_drop_reason() -> None:
 
 
 def test_runtime_provider_session_lifecycle_round_trip() -> None:
-    client = TestClient(create_app())
+    client = AsgiTestClient(create_app())
 
     with _patch_security_settings():
         request_response = client.post(
@@ -275,7 +275,7 @@ def test_runtime_provider_session_lifecycle_round_trip() -> None:
 
 
 def test_runtime_provider_approval_requires_scoped_token_for_post_approval_writes() -> None:
-    client = TestClient(create_app())
+    client = AsgiTestClient(create_app())
 
     with _patch_security_settings():
         request_response = client.post(

@@ -20,7 +20,7 @@ from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorMeshAssetUpload,
     SimulatorRuntimeStatus,
-    SimulatorWorldOpenRequest,
+    SimulatorWorkspacePrepareRequest,
 )
 from backend.models.world_scene_package import (
     WorldInterfaceSpec,
@@ -29,19 +29,20 @@ from backend.models.world_scene_package import (
     WorldSnapshot,
 )
 from backend.services.simulator_adapters import get_simulator_runtime_status
-from backend.services.simulator_adapters.genesis import prepare_genesis_launch
-from backend.services.simulator_adapters.launch_package import PreparedSimulatorLaunch
-from backend.services.simulator_adapters.mujoco import PreparedMujocoLaunch, prepare_mujoco_launch
+from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
+from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
-    GENESIS_LAUNCH_PARAMS,
-    MUJOCO_LAUNCH_PARAMS,
-    PYBULLET_LAUNCH_PARAMS,
-    SimulatorLaunchParams,
+    GENESIS_WORKSPACE_PROCESS_PARAMS,
+    MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    PYBULLET_WORKSPACE_PROCESS_PARAMS,
+    SimulatorWorkspaceProcessParams,
 )
-from backend.services.simulator_adapters.pybullet import prepare_pybullet_launch
+from backend.services.simulator_adapters.pybullet import prepare_pybullet_workspace
+from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
+from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
 
 
-WORLD_LAUNCH_SIMULATORS: tuple[SimulatorId, ...] = (
+WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
@@ -53,35 +54,38 @@ SO101_CAMERA_CONFIG_PATH = DEMO_ROOT / "so101" / "camera-config.json"
 STATIC_WORLD_LAYOUT_PATH = (
     BASE_DIR / "web" / "public" / "world-layouts" / "static-transfer-smoke.world-layout.json"
 )
-REQUIRE_SIMULATOR_LAUNCH_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_LAUNCH"
+REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
 DEFAULT_DURATION_SEC = 0.02
 DEFAULT_TIMEOUT_SEC = 180.0
 
 
 @dataclass(frozen=True)
-class PreparedLaunchCommand:
+class PreparedWorkspaceCommand:
     command: list[str]
     ready_marker: str
     expected_object_marker: str
-    expected_camera_marker: str
+    expected_camera_log_marker: str
+    extra_expected_markers: tuple[str, ...] = ()
+    expected_image_paths: tuple[Path, ...] = ()
+    expected_image_dirs: tuple[tuple[Path, int], ...] = ()
 
 
 @dataclass(frozen=True)
-class LaunchExpectations:
+class WorkspaceExpectations:
     object_count: int
     camera_count: int
     duration_sec: float
 
 
 @dataclass(frozen=True)
-class LaunchTarget:
+class WorkspaceTarget:
     simulator_id: SimulatorId
     label: str
-    prepare: Callable[[SimulatorWorldOpenRequest, LaunchExpectations], PreparedLaunchCommand]
+    prepare: Callable[[SimulatorWorkspacePrepareRequest, WorkspaceExpectations], PreparedWorkspaceCommand]
 
 
 @dataclass(frozen=True)
-class LaunchCheckResult:
+class WorkspaceCheckResult:
     simulator_id: SimulatorId
     label: str
     status: str
@@ -90,18 +94,21 @@ class LaunchCheckResult:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Headlessly launch the SO101 demo world in installed simulator runtimes."
+        description="Headlessly prepare the SO101 demo workspace in installed simulator runtimes."
     )
     parser.add_argument(
         "--simulator",
         action="append",
-        choices=WORLD_LAUNCH_SIMULATORS,
+        choices=WORKSPACE_SIMULATORS,
         help="Simulator to check. May be passed more than once. Defaults to every openable simulator.",
     )
     parser.add_argument(
         "--require-all",
         action="store_true",
-        help=f"Fail when a simulator runtime is missing. Also enabled by {REQUIRE_SIMULATOR_LAUNCH_ENV}=1.",
+        help=(
+            "Fail when a simulator runtime is missing. "
+            f"Also enabled by {REQUIRE_SIMULATOR_WORKSPACE_ENV}=1."
+        ),
     )
     parser.add_argument("--duration-sec", type=float, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--timeout-sec", type=float, default=DEFAULT_TIMEOUT_SEC)
@@ -170,18 +177,18 @@ def _load_demo_objects() -> list[dict]:
     return [item for item in objects if isinstance(item, dict)]
 
 
-def build_demo_world_open_request() -> SimulatorWorldOpenRequest:
+def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
     urdf_xml = (DEMO_ROOT / "robot.urdf").read_text(encoding="utf-8")
     cameras = _load_demo_cameras()
     objects = _load_demo_objects()
     world_package = WorldScenePackageManifest(
-        package_id="so101-simulator-launch-check",
+        package_id="so101-simulator-workspaces-check",
         version="1.0.0",
-        title="SO101 Simulator Launch Check",
+        title="SO101 Simulator Workspace Check",
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         runtime_targets=[
             WorldRuntimeTarget(name=simulator_id, mode="python")
-            for simulator_id in WORLD_LAUNCH_SIMULATORS
+            for simulator_id in WORKSPACE_SIMULATORS
         ],
         interface=WorldInterfaceSpec(
             observation_modalities=["state", "rgb"],
@@ -203,7 +210,7 @@ def build_demo_world_open_request() -> SimulatorWorldOpenRequest:
             "world_layout": str(STATIC_WORLD_LAYOUT_PATH.relative_to(BASE_DIR)),
         },
     )
-    return SimulatorWorldOpenRequest(
+    return SimulatorWorkspacePrepareRequest(
         world_package=world_package,
         urdf_asset_path="robot.urdf",
         mesh_assets=_load_demo_mesh_assets(),
@@ -211,7 +218,7 @@ def build_demo_world_open_request() -> SimulatorWorldOpenRequest:
 
 
 def _module_command(
-    launch_params: SimulatorLaunchParams,
+    workspace_process: SimulatorWorkspaceProcessParams,
     *,
     world_package_path: Path,
     robot_asset_flag: str,
@@ -223,14 +230,14 @@ def _module_command(
         sys.executable,
         "-u",
         "-m",
-        launch_params.module_name,
+        workspace_process.module_name,
         "--world-package",
         str(world_package_path),
         robot_asset_flag,
         str(robot_asset_path),
         *extra_args,
         "--frame-map",
-        "auto",
+        "identity",
         "--no-viewer",
         "--duration-sec",
         str(duration_sec),
@@ -238,84 +245,117 @@ def _module_command(
 
 
 def _prepare_direct_urdf_command(
-    prepared: PreparedSimulatorLaunch,
+    prepared: PreparedSimulatorWorkspace,
     *,
-    launch_params: SimulatorLaunchParams,
+    workspace_process: SimulatorWorkspaceProcessParams,
     object_marker: str,
-    expectations: LaunchExpectations,
-) -> PreparedLaunchCommand:
-    return PreparedLaunchCommand(
+    camera_log_marker: str | None = None,
+    extra_expected_markers: tuple[str, ...] = (),
+    extra_args: Sequence[str] = (),
+    expected_image_paths: tuple[Path, ...] = (),
+    expected_image_dirs: tuple[tuple[Path, int], ...] = (),
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    return PreparedWorkspaceCommand(
         command=_module_command(
-            launch_params,
+            workspace_process,
             world_package_path=prepared.world_package_path,
             robot_asset_flag="--robot-urdf",
             robot_asset_path=prepared.robot_urdf_path,
             duration_sec=expectations.duration_sec,
+            extra_args=extra_args,
         ),
-        ready_marker=launch_params.ready_log_marker,
+        ready_marker=workspace_process.ready_log_marker,
         expected_object_marker=object_marker,
-        expected_camera_marker=f"cameras={expectations.camera_count}",
+        expected_camera_log_marker=camera_log_marker or f"cameras={expectations.camera_count}",
+        extra_expected_markers=extra_expected_markers,
+        expected_image_paths=expected_image_paths,
+        expected_image_dirs=expected_image_dirs,
     )
 
 
 def _prepare_genesis_command(
-    request: SimulatorWorldOpenRequest,
-    expectations: LaunchExpectations,
-) -> PreparedLaunchCommand:
-    prepared = prepare_genesis_launch(request)
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_genesis_workspace(request)
+    screenshot_dir = prepared.workspace_dir / "artifacts"
+    camera_screenshot_dir = screenshot_dir / "cameras"
+    sensor_screenshot_dir = screenshot_dir / "sensors"
     return _prepare_direct_urdf_command(
         prepared,
-        launch_params=GENESIS_LAUNCH_PARAMS,
+        workspace_process=GENESIS_WORKSPACE_PROCESS_PARAMS,
         object_marker=f"primitives={expectations.object_count}",
+        camera_log_marker=f"attached_cameras={expectations.camera_count}",
+        extra_expected_markers=(
+            f"camera_screenshots={expectations.camera_count}",
+            f"observation_cameras={expectations.camera_count}",
+            f"sensor_reads={expectations.camera_count}",
+            f"sensor_screenshots={expectations.camera_count}",
+            "merge_fixed_links=True",
+        ),
+        extra_args=(
+            "--screenshot",
+            str(screenshot_dir / "viewer.png"),
+            "--camera-screenshot-dir",
+            str(camera_screenshot_dir),
+            "--sensor-screenshot-dir",
+            str(sensor_screenshot_dir),
+        ),
         expectations=expectations,
+        expected_image_paths=(screenshot_dir / "viewer.png",),
+        expected_image_dirs=(
+            (camera_screenshot_dir, expectations.camera_count),
+            (sensor_screenshot_dir, expectations.camera_count),
+        ),
     )
 
 
 def _prepare_pybullet_command(
-    request: SimulatorWorldOpenRequest,
-    expectations: LaunchExpectations,
-) -> PreparedLaunchCommand:
-    prepared = prepare_pybullet_launch(request)
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_pybullet_workspace(request)
     return _prepare_direct_urdf_command(
         prepared,
-        launch_params=PYBULLET_LAUNCH_PARAMS,
+        workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
         object_marker=f"world_objects={expectations.object_count}",
         expectations=expectations,
     )
 
 
 def _prepare_mujoco_command(
-    request: SimulatorWorldOpenRequest,
-    expectations: LaunchExpectations,
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
     *,
     simulator_id: SimulatorId,
-) -> PreparedLaunchCommand:
-    prepared: PreparedMujocoLaunch = prepare_mujoco_launch(
+) -> PreparedWorkspaceCommand:
+    prepared: PreparedMujocoWorkspace = prepare_mujoco_workspace(
         request,
         simulator_id=simulator_id,
     )
-    return PreparedLaunchCommand(
+    return PreparedWorkspaceCommand(
         command=_module_command(
-            MUJOCO_LAUNCH_PARAMS,
-            world_package_path=prepared.shared_launch.world_package_path,
+            MUJOCO_WORKSPACE_PROCESS_PARAMS,
+            world_package_path=prepared.shared_workspace.world_package_path,
             robot_asset_flag="--robot-mjcf",
             robot_asset_path=prepared.mjcf_path,
             duration_sec=expectations.duration_sec,
-            extra_args=("--robot-urdf", str(prepared.shared_launch.robot_urdf_path)),
+            extra_args=("--robot-urdf", str(prepared.shared_workspace.robot_urdf_path)),
         ),
-        ready_marker=MUJOCO_LAUNCH_PARAMS.ready_log_marker,
+        ready_marker=MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker,
         expected_object_marker=f"world_objects={expectations.object_count}",
-        expected_camera_marker=f"cameras={expectations.camera_count}",
+        expected_camera_log_marker=f"cameras={expectations.camera_count}",
     )
 
 
-LAUNCH_TARGETS: dict[SimulatorId, LaunchTarget] = {
-    SIMULATOR_GENESIS_ID: LaunchTarget(
+WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
+    SIMULATOR_GENESIS_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_GENESIS_ID,
         label="Genesis",
         prepare=_prepare_genesis_command,
     ),
-    SIMULATOR_MJLAB_ID: LaunchTarget(
+    SIMULATOR_MJLAB_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_MJLAB_ID,
         label="MJLab",
         prepare=lambda request, expectations: _prepare_mujoco_command(
@@ -324,7 +364,7 @@ LAUNCH_TARGETS: dict[SimulatorId, LaunchTarget] = {
             simulator_id=SIMULATOR_MJLAB_ID,
         ),
     ),
-    SIMULATOR_MUJOCO_ID: LaunchTarget(
+    SIMULATOR_MUJOCO_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_MUJOCO_ID,
         label="MuJoCo",
         prepare=lambda request, expectations: _prepare_mujoco_command(
@@ -333,7 +373,7 @@ LAUNCH_TARGETS: dict[SimulatorId, LaunchTarget] = {
             simulator_id=SIMULATOR_MUJOCO_ID,
         ),
     ),
-    SIMULATOR_PYBULLET_ID: LaunchTarget(
+    SIMULATOR_PYBULLET_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_PYBULLET_ID,
         label="PyBullet",
         prepare=_prepare_pybullet_command,
@@ -352,8 +392,8 @@ def _format_missing_runtime(status: SimulatorRuntimeStatus) -> str:
     return status.status
 
 
-def _run_launch_command(
-    command: PreparedLaunchCommand,
+def _run_workspace_command(
+    command: PreparedWorkspaceCommand,
     *,
     timeout_sec: float,
 ) -> tuple[bool, str]:
@@ -364,6 +404,9 @@ def _run_launch_command(
         text=True,
         timeout=timeout_sec,
         check=False,
+        env=build_simulator_workspace_env(
+            BASE_DIR / ".cache" / "simulator-workspaces" / "runtime-cache"
+        ),
     )
     output = "\n".join(part for part in (process.stdout, process.stderr) if part)
     if process.returncode != 0:
@@ -371,40 +414,73 @@ def _run_launch_command(
     required_markers = (
         command.ready_marker,
         command.expected_object_marker,
-        command.expected_camera_marker,
+        command.expected_camera_log_marker,
+        *command.extra_expected_markers,
     )
     missing_markers = [marker for marker in required_markers if marker not in output]
     if missing_markers:
-        return False, f"missing launch marker(s): {', '.join(missing_markers)}\n{output.strip()}"
+        return False, f"missing workspace marker(s): {', '.join(missing_markers)}\n{output.strip()}"
+    image_error = _validate_image_artifacts(command)
+    if image_error:
+        return False, f"{image_error}\n{output.strip()}"
     return True, output.strip()
 
 
+def _validate_image_artifacts(command: PreparedWorkspaceCommand) -> str | None:
+    image_paths = list(command.expected_image_paths)
+    for directory, expected_count in command.expected_image_dirs:
+        directory_images = sorted(directory.glob("*.png")) if directory.exists() else []
+        if len(directory_images) != expected_count:
+            return f"expected {expected_count} PNG artifact(s) in {directory}, found {len(directory_images)}"
+        image_paths.extend(directory_images)
+    if not image_paths:
+        return None
+
+    try:
+        from PIL import Image
+    except Exception as exc:
+        return f"could not validate image artifacts: {exc}"
+
+    for path in image_paths:
+        if not path.exists():
+            return f"missing image artifact: {path}"
+        try:
+            image = Image.open(path).convert("RGB")
+        except Exception as exc:
+            return f"invalid image artifact {path}: {exc}"
+        extrema = image.getextrema()
+        channel_span = max(high - low for low, high in extrema)
+        if channel_span <= 5:
+            return f"blank image artifact: {path}"
+    return None
+
+
 def _check_target(
-    target: LaunchTarget,
+    target: WorkspaceTarget,
     *,
-    request: SimulatorWorldOpenRequest,
-    expectations: LaunchExpectations,
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
     timeout_sec: float,
     require_runtime: bool,
-) -> LaunchCheckResult:
+) -> WorkspaceCheckResult:
     status = get_simulator_runtime_status(target.simulator_id)
     if not status.available:
         detail = _format_missing_runtime(status)
         if require_runtime:
-            return LaunchCheckResult(target.simulator_id, target.label, "failed", detail)
-        return LaunchCheckResult(target.simulator_id, target.label, "skipped", detail)
+            return WorkspaceCheckResult(target.simulator_id, target.label, "failed", detail)
+        return WorkspaceCheckResult(target.simulator_id, target.label, "skipped", detail)
 
     try:
         command = target.prepare(request, expectations)
-        ok, detail = _run_launch_command(command, timeout_sec=timeout_sec)
+        ok, detail = _run_workspace_command(command, timeout_sec=timeout_sec)
     except Exception as exc:
-        return LaunchCheckResult(
+        return WorkspaceCheckResult(
             target.simulator_id,
             target.label,
             "failed",
             f"{type(exc).__name__}: {exc}",
         )
-    return LaunchCheckResult(
+    return WorkspaceCheckResult(
         target.simulator_id,
         target.label,
         "passed" if ok else "failed",
@@ -412,12 +488,12 @@ def _check_target(
     )
 
 
-def _selected_targets(simulator_ids: Sequence[SimulatorId] | None) -> tuple[LaunchTarget, ...]:
-    selected_ids = tuple(simulator_ids or WORLD_LAUNCH_SIMULATORS)
-    return tuple(LAUNCH_TARGETS[simulator_id] for simulator_id in selected_ids)
+def _selected_targets(simulator_ids: Sequence[SimulatorId] | None) -> tuple[WorkspaceTarget, ...]:
+    selected_ids = tuple(simulator_ids or WORKSPACE_SIMULATORS)
+    return tuple(WORKSPACE_TARGETS[simulator_id] for simulator_id in selected_ids)
 
 
-def _active_object_count(request: SimulatorWorldOpenRequest) -> int:
+def _active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
     return sum(
         1
         for item in request.world_package.world_snapshot.objects
@@ -425,14 +501,14 @@ def _active_object_count(request: SimulatorWorldOpenRequest) -> int:
     )
 
 
-def _print_human_results(results: Sequence[LaunchCheckResult]) -> None:
+def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
     for result in results:
         if result.status == "passed":
-            print(f"[simulator-launch-check] {result.label}: passed", flush=True)
+            print(f"[simulator-workspaces-check] {result.label}: passed", flush=True)
         elif result.status == "skipped":
-            print(f"[simulator-launch-check] {result.label}: skipped ({result.detail})", flush=True)
+            print(f"[simulator-workspaces-check] {result.label}: skipped ({result.detail})", flush=True)
         else:
-            print(f"[simulator-launch-check] {result.label}: failed", flush=True)
+            print(f"[simulator-workspaces-check] {result.label}: failed", flush=True)
             if result.detail:
                 print(result.detail, flush=True)
 
@@ -440,9 +516,13 @@ def _print_human_results(results: Sequence[LaunchCheckResult]) -> None:
 def main() -> int:
     args = _parse_args()
     selected_ids = tuple(args.simulator or ())
-    require_runtime = bool(selected_ids) or args.require_all or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_LAUNCH_ENV))
-    request = build_demo_world_open_request()
-    expectations = LaunchExpectations(
+    require_runtime = (
+        bool(selected_ids)
+        or args.require_all
+        or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
+    )
+    request = build_demo_workspace_request()
+    expectations = WorkspaceExpectations(
         object_count=_active_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
         duration_sec=args.duration_sec,

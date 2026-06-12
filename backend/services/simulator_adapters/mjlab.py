@@ -4,12 +4,12 @@ from backend.models.simulator_runtime import (
     SIMULATOR_MJLAB_ID,
     SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
-    SimulatorWorldOpenRequest,
-    SimulatorWorldOpenResponse,
+    SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareResponse,
     get_simulator_runtime_spec,
 )
 from backend.services.simulator_adapters.base import SimulatorAdapter
-from backend.services.simulator_adapters.mujoco import launch_mujoco_world
+from backend.services.simulator_adapters.mujoco import start_mujoco_workspace
 from backend.services.teleop_mjlab import resolve_teleop_mjlab_runtime_status
 
 
@@ -21,8 +21,11 @@ class MjlabSimulatorAdapter:
     label = MJLAB_RUNTIME_SPEC.label
     capabilities = MJLAB_RUNTIME_SPEC.capabilities_model()
 
-    def open_world(self, request: SimulatorWorldOpenRequest) -> SimulatorWorldOpenResponse:
-        return launch_mujoco_world(
+    def prepare_workspace(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+    ) -> SimulatorWorkspacePrepareResponse:
+        return start_mujoco_workspace(
             request,
             simulator_id=self.simulator_id,
             simulator_label=self.label,

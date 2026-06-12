@@ -4,7 +4,7 @@ import {
   buildSimulatorMeshAssetUploads,
   fetchSimulatorRuntimeStatus,
   fetchSimulatorRuntimes,
-  openSimulatorWorld,
+  prepareSimulatorWorkspace,
 } from "@/features/world-share/simulatorRuntimeApi";
 import {
   SIMULATOR_GENESIS_ID,
@@ -24,14 +24,14 @@ describe("simulatorRuntimeApi", () => {
     guardedFetchMock.mockReset();
   });
 
-  it("opens a simulator world through the neutral simulator endpoint", async () => {
+  it("prepares a simulator workspace through the neutral simulator endpoint", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           simulator_id: "genesis",
           started: true,
           pid: 1234,
-          command: ["python", "-m", "backend.scripts.genesis_world_open"],
+          command: ["python", "-m", "backend.scripts.genesis_workspace_prepare"],
           log_path: "/tmp/genesis.log",
           world_package_path: "/tmp/world-package.json",
           robot_urdf_path: "/tmp/robot.urdf",
@@ -44,7 +44,7 @@ describe("simulatorRuntimeApi", () => {
       )
     );
 
-    const launched = await openSimulatorWorld({
+    const prepared = await prepareSimulatorWorkspace({
       simulatorId: SIMULATOR_GENESIS_ID,
       worldPackage: {
         schema_version: "urdf-studio.world-scene-package.v1",
@@ -77,17 +77,18 @@ describe("simulatorRuntimeApi", () => {
         },
       },
       meshFiles: {},
+      simulatorLabel: "Genesis",
     });
 
-    expect(launched.pid).toBe(1234);
+    expect(prepared.pid).toBe(1234);
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/simulators/genesis/world/open"),
+      expect.stringContaining("/simulators/genesis/workspace/prepare"),
       expect.objectContaining({
         method: "POST",
       }),
       {
         requiredBackends: ["core-api"],
-        context: "Open Genesis world",
+        context: "Open Genesis",
       }
     );
   });
@@ -145,28 +146,28 @@ describe("simulatorRuntimeApi", () => {
               simulatorId: "genesis",
               label: "Genesis",
               capabilities: {
-                worldViewer: true,
+                workspaceTarget: true,
                 motionValidation: false,
               },
               transferPolicy: {
                 robotAssetFormat: "urdf",
                 sceneAssetFormat: "urdf",
                 frameConvention: "ros-rep-103",
-                launchStrategy: "direct",
+                transferStrategy: "direct",
               },
             },
             {
               simulatorId: "mjlab",
               label: "MJLab",
               capabilities: {
-                worldViewer: true,
+                workspaceTarget: true,
                 motionValidation: true,
               },
               transferPolicy: {
                 robotAssetFormat: "mjcf",
                 sceneAssetFormat: "mjcf",
                 frameConvention: "ros-rep-103",
-                launchStrategy: "convert",
+                transferStrategy: "convert",
               },
             },
           ],
@@ -181,7 +182,7 @@ describe("simulatorRuntimeApi", () => {
       "genesis",
       "mjlab",
     ]);
-    expect(descriptors[0].capabilities.worldViewer).toBe(true);
+    expect(descriptors[0].capabilities.workspaceTarget).toBe(true);
     expect(descriptors[1].transferPolicy.robotAssetFormat).toBe("mjcf");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/simulators"),
@@ -225,7 +226,7 @@ describe("simulatorRuntimeApi", () => {
       },
       {
         requiredBackends: ["core-api"],
-        context: "Check MJLab runtime",
+        context: "Check mjlab runtime",
       }
     );
   });

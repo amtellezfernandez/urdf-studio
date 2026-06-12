@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+from backend.tests.asgi_test_client import AsgiTestClient
 
 from backend.app import app
 from backend.api.cam_to_sim import _resolve_public_base_url
@@ -105,7 +105,7 @@ def test_resolve_public_base_url_keeps_loopback_without_discovery() -> None:
 
 
 def test_network_guess_prefers_request_host_when_reachable_ip() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     headers = _simulator_headers()
     headers["host"] = TEST_HOST_HEADER
     with _patch_simulator_settings(), patch(
@@ -124,7 +124,7 @@ def test_network_guess_prefers_request_host_when_reachable_ip() -> None:
 
 
 def test_network_guess_filters_wsl_bridge_addresses() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     headers = _simulator_headers()
     headers["host"] = "127.0.0.1:8000"
     with _patch_simulator_settings(), patch(
@@ -146,7 +146,7 @@ def test_network_guess_filters_wsl_bridge_addresses() -> None:
 
 
 def test_network_guess_rejects_remote_requests_without_operator_token() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     with _patch_simulator_settings(None):
         response = client.get("/cam-to-sim/network/guess")
 
@@ -155,7 +155,7 @@ def test_network_guess_rejects_remote_requests_without_operator_token() -> None:
 
 
 def test_static_world_test_run_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimStaticWorldTestRunResponse(
         run_id="run-123",
         created_at_iso="2026-02-20T12:00:00+00:00",
@@ -188,7 +188,7 @@ def test_static_world_test_run_endpoint_returns_payload() -> None:
 
 
 def test_geometry_mesh_job_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimGeometryMeshRunResponse(
         job_id="geom-job-123",
         created_at_iso="2026-02-20T12:10:00+00:00",
@@ -226,7 +226,7 @@ def test_geometry_mesh_job_endpoint_returns_payload() -> None:
 
 
 def test_phone_frame_stats_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimPhoneFrameStatsResponse(
         session_id=TEST_SESSION_ID,
         frame_count=7,
@@ -259,7 +259,7 @@ def test_phone_frame_stats_endpoint_returns_payload() -> None:
 
 
 def test_prepare_r2r2r_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimR2R2RPrepareResponse(
         session_id=TEST_SESSION_ID,
         frame_count=7,
@@ -293,7 +293,7 @@ def test_prepare_r2r2r_endpoint_returns_payload() -> None:
 
 
 def test_capture_readiness_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimCaptureReadinessResponse(
         session_id=TEST_SESSION_ID,
         frame_count=7,
@@ -326,7 +326,7 @@ def test_capture_readiness_endpoint_returns_payload() -> None:
 
 
 def test_capture_coach_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimCaptureCoachResponse(
         session_id=TEST_SESSION_ID,
         frame_count=24,
@@ -356,7 +356,7 @@ def test_capture_coach_endpoint_returns_payload() -> None:
 
 
 def test_runtime_result_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimRuntimeResultResponse(
         session_id=TEST_SESSION_ID,
         frame_count=8,
@@ -389,7 +389,7 @@ def test_runtime_result_endpoint_returns_payload() -> None:
 
 
 def test_reset_frames_endpoint_returns_payload() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimPhoneFrameStatsResponse(
         session_id=TEST_SESSION_ID,
         frame_count=0,
@@ -421,7 +421,7 @@ def test_reset_frames_endpoint_returns_payload() -> None:
 
 
 def test_connect_page_allows_valid_session_token_without_operator_token() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     snapshot = _session_snapshot()
     with _patch_simulator_settings(None), patch(
         "backend.api.cam_to_sim.cam_to_sim_service.get_session_access_token",
@@ -438,7 +438,7 @@ def test_connect_page_allows_valid_session_token_without_operator_token() -> Non
 
 
 def test_stream_endpoint_accepts_valid_session_token() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     mocked_payload = CamToSimStreamIngestResponse(
         session_id=TEST_SESSION_ID,
         accepted_count=1,
@@ -472,7 +472,7 @@ def test_stream_endpoint_accepts_valid_session_token() -> None:
 
 
 def test_connect_page_requires_session_token_when_request_is_proxied() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     snapshot = _session_snapshot()
     with patch(
         "backend.core.simulator_security.settings",
@@ -491,7 +491,7 @@ def test_connect_page_requires_session_token_when_request_is_proxied() -> None:
 
 
 def test_connect_page_accepts_valid_session_token_when_request_is_proxied() -> None:
-    client = TestClient(app)
+    client = AsgiTestClient(app)
     snapshot = _session_snapshot()
     with patch(
         "backend.core.simulator_security.settings",

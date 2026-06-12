@@ -37,7 +37,7 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. The first run can take several minutes.
 
-Setup also prepares supported simulator launchers when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
+Setup also prepares supported simulator workspace adapters when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
 
 Optional setup commands:
 
@@ -46,7 +46,7 @@ npm run setup:check
 npm run setup -- --twin
 ```
 
-On macOS, setup skips optional native packages whose wheels are not portable enough for all machines.
+On macOS, setup attempts the app and workspace viewer runtimes. Some optional native training/collision packages are skipped when their wheels are not portable across local Python environments.
 
 ## Start Locally
 
@@ -116,7 +116,7 @@ npm run start -- --help
 | `npm run team` | Start a trusted-network team session |
 | `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run release:check` | Run release-readiness checks |
-| `npm run simulator:launch:check` | Headlessly open the demo scene in installed simulators |
+| `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed simulators |
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |

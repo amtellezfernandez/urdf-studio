@@ -5,7 +5,7 @@ from typing import Callable, TypeVar
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.core.settings import settings
-from backend.core.simulator_security import require_simulator_operator_access
+from backend.core.simulator_security import require_simulator_operator_access_async
 from backend.services.attestation import attestation_status_store
 from backend.world_bridge.readiness import is_readiness_at_least
 from backend.world_bridge.runtime import WorldBridgeRuntime
@@ -149,8 +149,8 @@ def _require_attestation_control_allowed(robot_id: str) -> None:
 
 
 @router.get("/status", response_model=WorldBridgeStatusResponse)
-def get_world_bridge_status(
-    _access: None = Depends(require_simulator_operator_access),
+async def get_world_bridge_status(
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeStatusResponse:
     return _dispatch_world_bridge_call(
         worldd_call=worldd_client.get_status,
@@ -160,8 +160,8 @@ def get_world_bridge_status(
 
 
 @router.get("/sessions", response_model=list[WorldBridgeSessionSnapshot])
-def list_world_bridge_sessions(
-    _access: None = Depends(require_simulator_operator_access),
+async def list_world_bridge_sessions(
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> list[WorldBridgeSessionSnapshot]:
     return _dispatch_world_bridge_call(
         worldd_call=worldd_client.list_sessions,
@@ -171,8 +171,8 @@ def list_world_bridge_sessions(
 
 
 @router.get("/readiness", response_model=WorldBridgeReadinessResponse)
-def get_world_bridge_readiness(
-    _access: None = Depends(require_simulator_operator_access),
+async def get_world_bridge_readiness(
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeReadinessResponse:
     # Readiness is control-plane telemetry owned by the Python API layer.
     return _runtime_get_readiness()
@@ -182,9 +182,9 @@ def get_world_bridge_readiness(
     "/readiness/assert/{minimum}",
     response_model=WorldBridgeReadinessResponse,
 )
-def assert_world_bridge_readiness(
+async def assert_world_bridge_readiness(
     minimum: WorldBridgeReadinessDecision,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeReadinessResponse:
     readiness = _runtime_get_readiness()
     if is_readiness_at_least(actual=readiness.decision, minimum=minimum):
@@ -200,9 +200,9 @@ def assert_world_bridge_readiness(
 
 
 @router.post("/sessions", response_model=WorldBridgeSessionSnapshot)
-def create_world_bridge_session(
+async def create_world_bridge_session(
     req: WorldBridgeSessionCreateRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeSessionSnapshot:
     if not settings.world_bridge_use_worldd_proxy:
         return _runtime_create_session(req)
@@ -212,9 +212,9 @@ def create_world_bridge_session(
 
 
 @router.get("/sessions/{session_id}", response_model=WorldBridgeSessionSnapshot)
-def get_world_bridge_session(
+async def get_world_bridge_session(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeSessionSnapshot:
     return _dispatch_world_bridge_call(
         worldd_call=lambda: worldd_client.get_session(session_id),
@@ -224,10 +224,10 @@ def get_world_bridge_session(
 
 
 @router.post("/sessions/{session_id}/joint-command", response_model=WorldBridgeCommandAck)
-def apply_world_bridge_joint_command(
+async def apply_world_bridge_joint_command(
     session_id: str,
     req: WorldBridgeJointCommandRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeCommandAck:
     robot_name = runtime.resolve_robot_name(session_id)
     if robot_name is None and not settings.world_bridge_use_worldd_proxy:
@@ -242,10 +242,10 @@ def apply_world_bridge_joint_command(
 
 
 @router.post("/sessions/{session_id}/scenario-time", response_model=WorldBridgeSessionSnapshot)
-def update_world_bridge_scenario_time(
+async def update_world_bridge_scenario_time(
     session_id: str,
     req: WorldBridgeScenarioTimeUpdateRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeSessionSnapshot:
     robot_name = runtime.resolve_robot_name(session_id)
     if robot_name is None and not settings.world_bridge_use_worldd_proxy:

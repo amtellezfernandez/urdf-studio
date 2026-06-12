@@ -84,7 +84,7 @@ def _attach_mjlab_export_gate_result(
 
 
 @router.post("/validate", response_model=TeleopReplayValidationResult)
-def validate_teleop_replay_recording(
+async def validate_teleop_replay_recording(
     req: TeleopReplayValidateRequest,
 ) -> TeleopReplayValidationResult:
     try:
@@ -97,7 +97,7 @@ def validate_teleop_replay_recording(
 
 
 @router.post("/export/lerobot", response_model=TeleopReplayExportResult)
-def export_teleop_replay_recording_to_lerobot(
+async def export_teleop_replay_recording_to_lerobot(
     req: TeleopReplayExportRequest,
 ) -> TeleopReplayExportResult:
     try:
@@ -124,7 +124,7 @@ def export_teleop_replay_recording_to_lerobot(
 
 
 @router.post("/export/kinematic/lerobot", response_model=TeleopReplayExportResult)
-def export_teleop_kinematic_recording_to_lerobot(
+async def export_teleop_kinematic_recording_to_lerobot(
     req: TeleopReplayExportRequest,
 ) -> TeleopReplayExportResult:
     try:

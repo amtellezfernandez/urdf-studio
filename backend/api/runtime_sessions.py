@@ -82,17 +82,17 @@ def _runtime_session_token(request: Request) -> str | None:
 
 
 @router.get("/integrations/butterclaw/objects", response_model=ButterClawRuntimeObjectsResponse)
-def list_butterclaw_runtime_objects() -> ButterClawRuntimeObjectsResponse:
+async def list_butterclaw_runtime_objects() -> ButterClawRuntimeObjectsResponse:
     return butterclaw_runtime_objects_service.list_objects()
 
 
 @router.get("/integrations/butterclaw/pose", response_model=ButterClawRuntimePoseResponse)
-def get_butterclaw_runtime_pose() -> ButterClawRuntimePoseResponse:
+async def get_butterclaw_runtime_pose() -> ButterClawRuntimePoseResponse:
     return butterclaw_runtime_pose_service.get_pose()
 
 
 @router.post("/integrations/butterclaw/chat", response_model=ButterClawChatResponse)
-def send_butterclaw_chat_command(request: ButterClawChatRequest) -> ButterClawChatResponse:
+async def send_butterclaw_chat_command(request: ButterClawChatRequest) -> ButterClawChatResponse:
     try:
         return butterclaw_bridge_service.run_chat_command(request)
     except ButterClawBridgeError as exc:
@@ -111,7 +111,7 @@ def send_butterclaw_chat_command(request: ButterClawChatRequest) -> ButterClawCh
     "/integrations/verifiable-robotics/prove",
     response_model=VerifiableRoboticsProofResponse,
 )
-def prove_verifiable_robotics_execution(
+async def prove_verifiable_robotics_execution(
     request: VerifiableRoboticsProofRequest,
 ) -> VerifiableRoboticsProofResponse:
     try:
@@ -121,7 +121,7 @@ def prove_verifiable_robotics_execution(
 
 
 @router.post("/{session_id}/telemetry/channels", response_model=RuntimeTelemetryChannelsResponse)
-def upsert_runtime_telemetry_channels(
+async def upsert_runtime_telemetry_channels(
     request_context: Request,
     session_id: str,
     request: RuntimeTelemetryChannelsUpsertRequest,
@@ -137,7 +137,7 @@ def upsert_runtime_telemetry_channels(
 
 
 @router.get("/{session_id}/telemetry/channels", response_model=RuntimeTelemetryChannelsResponse)
-def list_runtime_telemetry_channels(session_id: str) -> RuntimeTelemetryChannelsResponse:
+async def list_runtime_telemetry_channels(session_id: str) -> RuntimeTelemetryChannelsResponse:
     try:
         return runtime_sessions_service.list_channels(session_id)
     except Exception as exc:
@@ -145,7 +145,7 @@ def list_runtime_telemetry_channels(session_id: str) -> RuntimeTelemetryChannels
 
 
 @router.post("/{session_id}/telemetry/ingest", response_model=RuntimeSessionStatsResponse)
-def ingest_runtime_telemetry(
+async def ingest_runtime_telemetry(
     request_context: Request,
     session_id: str,
     request: RuntimeTelemetryIngestRequest,
@@ -161,7 +161,7 @@ def ingest_runtime_telemetry(
 
 
 @router.get("/{session_id}/telemetry/frames", response_model=RuntimeTelemetryFramesResponse)
-def list_runtime_telemetry_frames(session_id: str) -> RuntimeTelemetryFramesResponse:
+async def list_runtime_telemetry_frames(session_id: str) -> RuntimeTelemetryFramesResponse:
     try:
         return runtime_sessions_service.list_frames(session_id)
     except Exception as exc:
@@ -169,7 +169,7 @@ def list_runtime_telemetry_frames(session_id: str) -> RuntimeTelemetryFramesResp
 
 
 @router.post("/{session_id}/video_refs", response_model=RuntimeVideoRefsResponse)
-def upsert_runtime_video_refs(
+async def upsert_runtime_video_refs(
     request_context: Request,
     session_id: str,
     request: RuntimeVideoRefsUpsertRequest,
@@ -185,7 +185,7 @@ def upsert_runtime_video_refs(
 
 
 @router.get("/{session_id}/video_refs", response_model=RuntimeVideoRefsResponse)
-def list_runtime_video_refs(session_id: str) -> RuntimeVideoRefsResponse:
+async def list_runtime_video_refs(session_id: str) -> RuntimeVideoRefsResponse:
     try:
         return runtime_sessions_service.list_video_refs(session_id)
     except Exception as exc:
@@ -193,7 +193,7 @@ def list_runtime_video_refs(session_id: str) -> RuntimeVideoRefsResponse:
 
 
 @router.post("/{session_id}/commands", response_model=RuntimeSessionStatsResponse)
-def ingest_runtime_command(
+async def ingest_runtime_command(
     session_id: str,
     request: RuntimeCommandRequest,
 ) -> RuntimeSessionStatsResponse:
@@ -204,7 +204,7 @@ def ingest_runtime_command(
 
 
 @router.get("/{session_id}/stats", response_model=RuntimeSessionStatsResponse)
-def get_runtime_session_stats(session_id: str) -> RuntimeSessionStatsResponse:
+async def get_runtime_session_stats(session_id: str) -> RuntimeSessionStatsResponse:
     try:
         return runtime_sessions_service.stats(session_id)
     except Exception as exc:
@@ -212,7 +212,7 @@ def get_runtime_session_stats(session_id: str) -> RuntimeSessionStatsResponse:
 
 
 @router.post("/{session_id}/provider", response_model=RuntimeProviderSessionRequestResponse)
-def request_runtime_provider_session(
+async def request_runtime_provider_session(
     session_id: str,
     request: RuntimeProviderSessionRequest,
 ) -> RuntimeProviderSessionRequestResponse:
@@ -223,7 +223,7 @@ def request_runtime_provider_session(
 
 
 @router.get("/{session_id}/provider", response_model=RuntimeProviderSessionSnapshot)
-def get_runtime_provider_session(session_id: str) -> RuntimeProviderSessionSnapshot:
+async def get_runtime_provider_session(session_id: str) -> RuntimeProviderSessionSnapshot:
     try:
         return runtime_sessions_service.get_provider_session(session_id)
     except Exception as exc:
@@ -231,7 +231,7 @@ def get_runtime_provider_session(session_id: str) -> RuntimeProviderSessionSnaps
 
 
 @router.post("/{session_id}/provider/approve", response_model=RuntimeProviderApprovalResponse)
-def approve_runtime_provider_session(
+async def approve_runtime_provider_session(
     session_id: str,
     request: RuntimeProviderApprovalRequest,
 ) -> RuntimeProviderApprovalResponse:
@@ -242,7 +242,7 @@ def approve_runtime_provider_session(
 
 
 @router.post("/{session_id}/provider/claim", response_model=RuntimeProviderClaimResponse)
-def claim_runtime_provider_session_token(
+async def claim_runtime_provider_session_token(
     session_id: str,
     request: RuntimeProviderClaimRequest,
 ) -> RuntimeProviderClaimResponse:
@@ -253,7 +253,7 @@ def claim_runtime_provider_session_token(
 
 
 @router.post("/{session_id}/provider/disconnect", response_model=RuntimeProviderSessionSnapshot)
-def disconnect_runtime_provider_session(session_id: str) -> RuntimeProviderSessionSnapshot:
+async def disconnect_runtime_provider_session(session_id: str) -> RuntimeProviderSessionSnapshot:
     try:
         return runtime_sessions_service.disconnect_provider_session(session_id)
     except Exception as exc:
@@ -261,7 +261,7 @@ def disconnect_runtime_provider_session(session_id: str) -> RuntimeProviderSessi
 
 
 @router.post("/{session_id}/provider/robot", response_model=RuntimeProviderRobotDescriptionRequest)
-def publish_runtime_provider_robot_description(
+async def publish_runtime_provider_robot_description(
     request_context: Request,
     session_id: str,
     request: RuntimeProviderRobotDescriptionRequest,
@@ -277,7 +277,7 @@ def publish_runtime_provider_robot_description(
 
 
 @router.get("/{session_id}/provider/robot", response_model=RuntimeProviderRobotDescriptionRequest)
-def get_runtime_provider_robot_description(session_id: str) -> RuntimeProviderRobotDescriptionRequest:
+async def get_runtime_provider_robot_description(session_id: str) -> RuntimeProviderRobotDescriptionRequest:
     try:
         return runtime_sessions_service.get_provider_robot_description(session_id)
     except Exception as exc:
@@ -285,7 +285,7 @@ def get_runtime_provider_robot_description(session_id: str) -> RuntimeProviderRo
 
 
 @router.post("/{session_id}/provider/recording/start", response_model=RuntimeProviderSessionSnapshot)
-def start_runtime_provider_recording(
+async def start_runtime_provider_recording(
     session_id: str,
     request: RuntimeProviderRecordingRequest,
 ) -> RuntimeProviderSessionSnapshot:
@@ -296,7 +296,7 @@ def start_runtime_provider_recording(
 
 
 @router.post("/{session_id}/provider/recording/stop", response_model=RuntimeProviderSessionSnapshot)
-def stop_runtime_provider_recording(session_id: str) -> RuntimeProviderSessionSnapshot:
+async def stop_runtime_provider_recording(session_id: str) -> RuntimeProviderSessionSnapshot:
     try:
         return runtime_sessions_service.stop_provider_recording(session_id)
     except Exception as exc:

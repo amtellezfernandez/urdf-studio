@@ -35,7 +35,7 @@ const buildHfCameraQuaternion = (rotationRpyDeg: [number, number, number]): THRE
   return new THREE.Quaternion().setFromRotationMatrix(rotation).normalize();
 };
 
-const buildUrdfCameraQuaternion = (rotationRpyDeg: [number, number, number]): THREE.Quaternion => {
+const buildStudioCameraQuaternion = (rotationRpyDeg: [number, number, number]): THREE.Quaternion => {
   const [rollDeg, pitchDeg, yawDeg] = rotationRpyDeg;
   return new THREE.Quaternion()
     .setFromEuler(
@@ -84,7 +84,7 @@ export const buildOperatorPointCloudPoseTransform = (
             )
           : null) ??
         buildHfCameraQuaternion(cameraPose.rotationRpyDeg)
-      : buildUrdfCameraQuaternion(cameraPose.rotationRpyDeg);
+      : buildStudioCameraQuaternion(cameraPose.rotationRpyDeg);
   const transform =
     cameraPose.worldFrame !== "hf_y_up"
       ? {

@@ -12,8 +12,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from backend.core.settings import settings
 from backend.core.simulator_security import (
-    require_simulator_operator_access,
-    require_simulator_session_access,
+    require_simulator_operator_access_async,
+    require_simulator_session_access_async,
 )
 from backend.models.cam_to_sim import (
     CamToSimCaptureCoachResponse,
@@ -171,18 +171,18 @@ def _derive_session_endpoint_url(
     )
 
 
-def require_cam_to_sim_session_access(request: Request, session_id: str) -> None:
+async def require_cam_to_sim_session_access(request: Request, session_id: str) -> None:
     session_token = cam_to_sim_service.get_session_access_token(session_id)
-    require_simulator_session_access(
+    await require_simulator_session_access_async(
         request,
         session_token=session_token,
     )
 
 
 @router.get("/network/guess", response_model=CamToSimNetworkGuessResponse)
-def guess_cam_to_sim_network(
+async def guess_cam_to_sim_network(
     request: Request,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimNetworkGuessResponse:
     base_host = (urlsplit(str(request.base_url)).hostname or "").strip()
     candidates: list[str] = []
@@ -207,7 +207,7 @@ def guess_cam_to_sim_network(
     "/sessions/{session_id}/capture-coach",
     response_model=CamToSimCaptureCoachResponse,
 )
-def get_cam_to_sim_capture_coach(
+async def get_cam_to_sim_capture_coach(
     session_id: str,
     _access: None = Depends(require_cam_to_sim_session_access),
 ) -> CamToSimCaptureCoachResponse:
@@ -218,9 +218,9 @@ def get_cam_to_sim_capture_coach(
     "/static-world-tests/run",
     response_model=CamToSimStaticWorldTestRunResponse,
 )
-def run_cam_to_sim_static_world_test(
+async def run_cam_to_sim_static_world_test(
     req: CamToSimStaticWorldTestRunRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimStaticWorldTestRunResponse:
     return cam_to_sim_service.run_static_world_test(req)
 
@@ -229,9 +229,9 @@ def run_cam_to_sim_static_world_test(
     "/geometry-mesh-jobs/run",
     response_model=CamToSimGeometryMeshRunResponse,
 )
-def run_cam_to_sim_geometry_mesh_job(
+async def run_cam_to_sim_geometry_mesh_job(
     req: CamToSimGeometryMeshRunRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimGeometryMeshRunResponse:
     return cam_to_sim_service.run_geometry_mesh_job(req)
 
@@ -240,10 +240,10 @@ def run_cam_to_sim_geometry_mesh_job(
     "/geometry-mesh-jobs/{job_id}/execute",
     response_model=CamToSimGeometryMeshRunResponse,
 )
-def execute_cam_to_sim_geometry_mesh_job(
+async def execute_cam_to_sim_geometry_mesh_job(
     job_id: str,
     req: CamToSimGeometryMeshExecuteRequest | None = None,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimGeometryMeshRunResponse:
     payload = req or CamToSimGeometryMeshExecuteRequest()
     return cam_to_sim_service.execute_geometry_mesh_job(
@@ -1281,10 +1281,10 @@ def _render_connect_page_html(
 
 
 @router.post("/sessions", response_model=CamToSimSessionSnapshot)
-def create_cam_to_sim_session(
+async def create_cam_to_sim_session(
     request: Request,
     req: CamToSimSessionCreateRequest | None = None,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimSessionSnapshot:
     payload = req or CamToSimSessionCreateRequest()
     base_url = _resolve_public_base_url(
@@ -1295,15 +1295,15 @@ def create_cam_to_sim_session(
 
 
 @router.get("/sessions/{session_id}", response_model=CamToSimSessionSnapshot)
-def get_cam_to_sim_session(
+async def get_cam_to_sim_session(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimSessionSnapshot:
     return cam_to_sim_service.get_session(session_id)
 
 
 @router.post("/sessions/{session_id}/stream", response_model=CamToSimStreamIngestResponse)
-def ingest_cam_to_sim_stream(
+async def ingest_cam_to_sim_stream(
     session_id: str,
     req: CamToSimStreamIngestRequest,
     _access: None = Depends(require_cam_to_sim_session_access),
@@ -1315,9 +1315,9 @@ def ingest_cam_to_sim_stream(
     "/sessions/{session_id}/phone-frame-stats",
     response_model=CamToSimPhoneFrameStatsResponse,
 )
-def get_cam_to_sim_phone_frame_stats(
+async def get_cam_to_sim_phone_frame_stats(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimPhoneFrameStatsResponse:
     return cam_to_sim_service.get_phone_frame_stats(session_id)
 
@@ -1326,9 +1326,9 @@ def get_cam_to_sim_phone_frame_stats(
     "/sessions/{session_id}/capture-readiness",
     response_model=CamToSimCaptureReadinessResponse,
 )
-def get_cam_to_sim_capture_readiness(
+async def get_cam_to_sim_capture_readiness(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimCaptureReadinessResponse:
     return cam_to_sim_service.get_capture_readiness(session_id)
 
@@ -1337,9 +1337,9 @@ def get_cam_to_sim_capture_readiness(
     "/sessions/{session_id}/reset-frames",
     response_model=CamToSimPhoneFrameStatsResponse,
 )
-def reset_cam_to_sim_phone_frames(
+async def reset_cam_to_sim_phone_frames(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimPhoneFrameStatsResponse:
     return cam_to_sim_service.reset_phone_frames(session_id)
 
@@ -1348,9 +1348,9 @@ def reset_cam_to_sim_phone_frames(
     "/sessions/{session_id}/r2r2r/prepare",
     response_model=CamToSimR2R2RPrepareResponse,
 )
-def prepare_cam_to_sim_r2r2r_export(
+async def prepare_cam_to_sim_r2r2r_export(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimR2R2RPrepareResponse:
     return cam_to_sim_service.prepare_r2r2r_export(session_id)
 
@@ -1359,25 +1359,25 @@ def prepare_cam_to_sim_r2r2r_export(
     "/sessions/{session_id}/runtime-result",
     response_model=CamToSimRuntimeResultResponse,
 )
-def run_cam_to_sim_runtime_result(
+async def run_cam_to_sim_runtime_result(
     session_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> CamToSimRuntimeResultResponse:
     return cam_to_sim_service.build_runtime_result(session_id)
 
 
 @router.get("/sessions/{session_id}/frames/{filename}")
-def get_cam_to_sim_session_frame(
+async def get_cam_to_sim_session_frame(
     session_id: str,
     filename: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> FileResponse:
     frame_path = cam_to_sim_service.get_phone_frame_file_path(session_id, filename)
     return FileResponse(path=frame_path)
 
 
 @router.get("/connect/{session_id}", response_class=HTMLResponse)
-def render_cam_to_sim_connect_page(
+async def render_cam_to_sim_connect_page(
     session_id: str,
     _access: None = Depends(require_cam_to_sim_session_access),
 ) -> HTMLResponse:

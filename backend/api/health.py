@@ -10,12 +10,12 @@ router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
+async def health() -> HealthResponse:
     return dependency_health()
 
 
 @router.get("/version")
-def version() -> dict:
+async def version() -> dict:
     build = (
         os.getenv("URDF_STUDIO_BUILD_SHA")
         or os.getenv("VERCEL_GIT_COMMIT_SHA")

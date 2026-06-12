@@ -9,9 +9,9 @@ import {
 
 const OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS = {
   rpyOrder: "ZYX",
-  pointCloudImageLeftInUrdfCamera: [0, 1, 0] as [number, number, number],
-  pointCloudImageUpInUrdfCamera: [0, 0, 1] as [number, number, number],
-  pointCloudForwardInUrdfCamera: [1, 0, 0] as [number, number, number],
+  pointCloudImageLeftInStudioCamera: [0, 1, 0] as [number, number, number],
+  pointCloudImageUpInStudioCamera: [0, 0, 1] as [number, number, number],
+  pointCloudForwardInStudioCamera: [1, 0, 0] as [number, number, number],
   rotationPrecisionFactor: 1_000_000_000_000,
   halfTurnDeg: 180,
   zeroDeg: 0,
@@ -29,13 +29,13 @@ const buildOpenArmPointCloudOpticalQuaternion = (): THREE.Quaternion =>
   new THREE.Quaternion().setFromRotationMatrix(
     new THREE.Matrix4().makeBasis(
       new THREE.Vector3(
-        ...OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS.pointCloudImageLeftInUrdfCamera,
+        ...OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS.pointCloudImageLeftInStudioCamera,
       ),
       new THREE.Vector3(
-        ...OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS.pointCloudImageUpInUrdfCamera,
+        ...OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS.pointCloudImageUpInStudioCamera,
       ),
       new THREE.Vector3(
-        ...OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS.pointCloudForwardInUrdfCamera,
+        ...OPENARM_HF_LIVE_CAMERA_CONFIG_FRAME_PARAMS.pointCloudForwardInStudioCamera,
       ),
     ),
   );

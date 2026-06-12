@@ -6,11 +6,11 @@ import type {
 } from "@/features/layout/page/HealthActionPanelSimulatorRuntime";
 import {
   fetchSimulatorRuntimes,
-  openSimulatorWorld,
+  prepareSimulatorWorkspace,
   type SimulatorRuntimeDescriptor,
 } from "@/features/world-share/simulatorRuntimeApi";
 import {
-  DEFAULT_SIMULATOR_RUNTIME_DESCRIPTORS,
+  canOpenSimulatorWorkspace,
   type SimulatorId,
 } from "@/features/world-share/simulatorRuntimeParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
@@ -25,22 +25,6 @@ type UseSimulatorRuntimeLauncherParams = {
   vizUrdfContent: string;
 };
 
-type RuntimeUiState = {
-  detail: string;
-  actionLabel: string;
-  busyLabel: string;
-  isBusy: boolean;
-  isActive?: boolean;
-  isAvailable: boolean;
-  isReady?: boolean | null;
-  unavailableLabel: string;
-  onAction: () => void;
-};
-
-const defaultRuntimeDescriptors = DEFAULT_SIMULATOR_RUNTIME_DESCRIPTORS.map(
-  (descriptor) => descriptor as SimulatorRuntimeDescriptor
-);
-
 const SIMULATOR_ASSET_FORMAT_LABELS = new Map<string, string>([
   ["urdf", "URDF"],
   ["mjcf", "MJCF"],
@@ -54,20 +38,9 @@ const formatSimulatorAssetFormat = (format: string): string =>
 
 const resolveSimulatorRuntimeDetail = (descriptor: SimulatorRuntimeDescriptor): string => {
   const assetFormat = formatSimulatorAssetFormat(descriptor.transferPolicy.robotAssetFormat);
-  if (!descriptor.capabilities.worldViewer) return `${assetFormat} adapter planned`;
-  if (descriptor.capabilities.motionValidation) return `${assetFormat} viewer and validation`;
-  return `${assetFormat} viewer`;
-};
-
-const mergeSimulatorRuntimeDescriptors = (
-  descriptors: readonly SimulatorRuntimeDescriptor[]
-): SimulatorRuntimeDescriptor[] => {
-  const descriptorById = new Map(
-    descriptors.map((descriptor) => [descriptor.simulatorId, descriptor])
-  );
-  return defaultRuntimeDescriptors.map(
-    (fallbackDescriptor) => descriptorById.get(fallbackDescriptor.simulatorId) ?? fallbackDescriptor
-  );
+  if (!canOpenSimulatorWorkspace(descriptor)) return `${assetFormat} support planned`;
+  if (descriptor.capabilities.motionValidation) return `${assetFormat} open and validation`;
+  return `${assetFormat} open`;
 };
 
 export const useSimulatorRuntimeLauncher = ({
@@ -79,59 +52,62 @@ export const useSimulatorRuntimeLauncher = ({
   packageRoots,
   vizUrdfContent,
 }: UseSimulatorRuntimeLauncherParams) => {
-  const [openingSimulatorId, setOpeningSimulatorId] = useState<SimulatorId | null>(null);
-  const [lastOpenedSimulatorId, setLastOpenedSimulatorId] = useState<SimulatorId | null>(null);
-  const [runtimeDescriptors, setRuntimeDescriptors] = useState<SimulatorRuntimeDescriptor[]>(
-    defaultRuntimeDescriptors
-  );
+  const [loadingSimulatorId, setLoadingSimulatorId] = useState<SimulatorId | null>(null);
+  const [lastLoadedSimulatorId, setLastLoadedSimulatorId] = useState<SimulatorId | null>(null);
+  const [runtimeDescriptors, setRuntimeDescriptors] = useState<SimulatorRuntimeDescriptor[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void fetchSimulatorRuntimes()
       .then((descriptors) => {
-        if (cancelled || descriptors.length === 0) return;
-        setRuntimeDescriptors(mergeSimulatorRuntimeDescriptors(descriptors));
+        if (cancelled) return;
+        setRuntimeDescriptors(descriptors);
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        if (cancelled) return;
+        setRuntimeDescriptors([]);
+        toast.error(error instanceof Error ? error.message : "Simulator runtimes unavailable.");
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const handleOpenSimulatorWorld = useCallback(
+  const handleOpenSimulator = useCallback(
     async (descriptor: SimulatorRuntimeDescriptor) => {
-      if (openingSimulatorId !== null) return;
-      if (!descriptor.capabilities.worldViewer) {
-        toast.message(`${descriptor.label} is not available yet.`);
+      if (loadingSimulatorId !== null) return;
+      if (!canOpenSimulatorWorkspace(descriptor)) {
+        toast.message(`${descriptor.label} support is planned.`);
         return;
       }
       if (!vizUrdfContent && !originalUrdfContent) {
         toast.error(`Load a robot before opening ${descriptor.label}.`);
         return;
       }
-      setOpeningSimulatorId(descriptor.simulatorId);
+      setLoadingSimulatorId(descriptor.simulatorId);
       try {
         const worldPackage = await buildCurrentWorldScenePackageManifest();
-        const launched = await openSimulatorWorld({
+        const prepared = await prepareSimulatorWorkspace({
           simulatorId: descriptor.simulatorId,
           worldPackage,
           urdfAssetPath: activeUrdfPath ?? undefined,
           meshFiles,
           packageRoots,
           iluSessionId: attachedIluSessionId || undefined,
+          simulatorLabel: descriptor.label,
         });
-        setLastOpenedSimulatorId(descriptor.simulatorId);
+        setLastLoadedSimulatorId(descriptor.simulatorId);
         const meshSummary =
-          launched.bundled_mesh_count > 0
-            ? `, ${launched.bundled_mesh_count} mesh asset${
-                launched.bundled_mesh_count === 1 ? "" : "s"
+          prepared.bundled_mesh_count > 0
+            ? `, ${prepared.bundled_mesh_count} mesh asset${
+                prepared.bundled_mesh_count === 1 ? "" : "s"
               }`
             : "";
-        toast.success(`${descriptor.label} is open (pid ${launched.pid}${meshSummary}).`);
+        toast.success(`${descriptor.label} opened (pid ${prepared.pid}${meshSummary}).`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : `Failed to open ${descriptor.label}`);
       } finally {
-        setOpeningSimulatorId(null);
+        setLoadingSimulatorId(null);
       }
     },
     [
@@ -139,7 +115,7 @@ export const useSimulatorRuntimeLauncher = ({
       attachedIluSessionId,
       buildCurrentWorldScenePackageManifest,
       meshFiles,
-      openingSimulatorId,
+      loadingSimulatorId,
       originalUrdfContent,
       packageRoots,
       vizUrdfContent,
@@ -148,28 +124,24 @@ export const useSimulatorRuntimeLauncher = ({
 
   const simulatorRuntime: HealthActionPanelSimulatorRuntimeState = useMemo(() => {
     const targets = runtimeDescriptors.map((descriptor): SimulatorRuntimeTargetState => {
-      const isBusy = openingSimulatorId === descriptor.simulatorId;
-      const isActive = lastOpenedSimulatorId === descriptor.simulatorId;
-      const isAvailable = descriptor.capabilities.worldViewer;
-      const runtimeUi: RuntimeUiState = {
-        detail: resolveSimulatorRuntimeDetail(descriptor),
-        actionLabel: `Open in ${descriptor.label}`,
-        busyLabel: `Opening ${descriptor.label}`,
-        isBusy,
-        isActive,
-        isAvailable,
-        isReady: isActive ? true : null,
-        unavailableLabel: `${descriptor.label} is not available yet`,
-        onAction: () => handleOpenSimulatorWorld(descriptor),
-      };
+      const isBusy = loadingSimulatorId === descriptor.simulatorId;
+      const isActive = lastLoadedSimulatorId === descriptor.simulatorId;
+      const canOpen = canOpenSimulatorWorkspace(descriptor);
       return {
         id: descriptor.simulatorId,
         label: descriptor.label,
-        ...runtimeUi,
+        detail: resolveSimulatorRuntimeDetail(descriptor),
+        openLabel: `Open ${descriptor.label}`,
+        openingLabel: `Opening ${descriptor.label}`,
+        isBusy,
+        isActive,
+        canOpen,
+        plannedLabel: `${descriptor.label} support planned`,
+        onAction: () => handleOpenSimulator(descriptor),
       };
     });
     return { targets };
-  }, [handleOpenSimulatorWorld, lastOpenedSimulatorId, openingSimulatorId, runtimeDescriptors]);
+  }, [handleOpenSimulator, lastLoadedSimulatorId, loadingSimulatorId, runtimeDescriptors]);
 
   return {
     simulatorRuntime,

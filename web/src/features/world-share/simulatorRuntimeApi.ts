@@ -2,7 +2,6 @@ import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import {
-  DEFAULT_SIMULATOR_RUNTIME_DESCRIPTORS,
   MAX_SIMULATOR_ASSET_ALIASES,
   SIMULATOR_API_BASE_PATH,
   type SimulatorRuntimeDescriptor,
@@ -18,7 +17,7 @@ export type SimulatorMeshAssetUpload = {
   mime?: string | null;
 };
 
-export type SimulatorWorldOpenResponse = {
+export type SimulatorWorkspacePrepareResponse = {
   simulator_id: SimulatorId;
   started: boolean;
   pid: number;
@@ -43,28 +42,21 @@ export type SimulatorRuntimeListResponse = {
   simulators: SimulatorRuntimeDescriptor[];
 };
 
-export type OpenSimulatorWorldParams = {
+export type PrepareSimulatorWorkspaceParams = {
   simulatorId: SimulatorId;
   worldPackage: WorldScenePackageManifest;
   urdfAssetPath?: string | null;
   meshFiles: Record<string, Blob>;
   packageRoots?: Record<string, string[]>;
   iluSessionId?: string | null;
+  simulatorLabel?: string | null;
 };
 
 const simulatorRuntimePath = (simulatorId: SimulatorId, path: string): string =>
   `${SIMULATOR_API_BASE_PATH}/${simulatorId}${path}`;
 
-const simulatorDisplayNames = new Map<SimulatorId, string>(
-  DEFAULT_SIMULATOR_RUNTIME_DESCRIPTORS.map((descriptor) => [
-    descriptor.simulatorId,
-    descriptor.label,
-  ])
-);
-
-const formatSimulatorName = (simulatorId: SimulatorId): string => {
-  return simulatorDisplayNames.get(simulatorId) ?? simulatorId;
-};
+const formatSimulatorName = (simulatorId: SimulatorId, simulatorLabel?: string | null): string =>
+  simulatorLabel?.trim() || simulatorId;
 
 const normalizeUploadPath = (value: string): string | null => {
   const normalized = value.replace(/\\/g, "/").trim().replace(/^\/+/, "").replace(/\/+/g, "/");
@@ -169,17 +161,18 @@ const readErrorDetail = async (response: Response): Promise<string> => {
   return (await response.text()).trim();
 };
 
-export const openSimulatorWorld = async ({
+export const prepareSimulatorWorkspace = async ({
   simulatorId,
   worldPackage,
   urdfAssetPath,
   meshFiles,
   packageRoots,
   iluSessionId,
-}: OpenSimulatorWorldParams): Promise<SimulatorWorldOpenResponse> => {
+  simulatorLabel,
+}: PrepareSimulatorWorkspaceParams): Promise<SimulatorWorkspacePrepareResponse> => {
   const meshAssets = await buildSimulatorMeshAssetUploads(meshFiles, packageRoots);
   const response = await guardedFetch(
-    `${API_BASE_URL}${simulatorRuntimePath(simulatorId, "/world/open")}`,
+    `${API_BASE_URL}${simulatorRuntimePath(simulatorId, "/workspace/prepare")}`,
     {
       method: "POST",
       headers: {
@@ -196,14 +189,14 @@ export const openSimulatorWorld = async ({
     },
     {
       requiredBackends: ["core-api"],
-      context: `Open ${formatSimulatorName(simulatorId)} world`,
+      context: `Open ${formatSimulatorName(simulatorId, simulatorLabel)}`,
     }
   );
   if (!response.ok) {
     const detail = await readErrorDetail(response);
-    throw new Error(detail || `${simulatorId} launch failed (${response.status})`);
+    throw new Error(detail || `${simulatorId} workspace preparation failed (${response.status})`);
   }
-  return (await response.json()) as SimulatorWorldOpenResponse;
+  return (await response.json()) as SimulatorWorkspacePrepareResponse;
 };
 
 export const fetchSimulatorRuntimeStatus = async (

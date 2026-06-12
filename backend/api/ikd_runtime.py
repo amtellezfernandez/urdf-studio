@@ -9,12 +9,12 @@ router = APIRouter(prefix="/ikd/runtime", tags=["ikd-runtime"])
 
 
 @router.get("/status", response_model=IkdRuntimeStatusResponse)
-def get_ikd_runtime_status() -> IkdRuntimeStatusResponse:
+async def get_ikd_runtime_status() -> IkdRuntimeStatusResponse:
     return IkdRuntimeStatusResponse.model_validate(ikd_runtime_manager.status().to_dict())
 
 
 @router.post("/start", response_model=IkdRuntimeActionResponse)
-def start_ikd_runtime() -> IkdRuntimeActionResponse:
+async def start_ikd_runtime() -> IkdRuntimeActionResponse:
     try:
         status = ikd_runtime_manager.start()
     except RuntimeError as exc:
@@ -26,7 +26,7 @@ def start_ikd_runtime() -> IkdRuntimeActionResponse:
 
 
 @router.post("/stop", response_model=IkdRuntimeActionResponse)
-def stop_ikd_runtime() -> IkdRuntimeActionResponse:
+async def stop_ikd_runtime() -> IkdRuntimeActionResponse:
     status = ikd_runtime_manager.stop()
     payload = status.to_dict()
     return IkdRuntimeActionResponse.model_validate({"action": "stop", **payload})

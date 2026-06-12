@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.models.simulator_runtime import SimulatorWorldOpenRequest
+from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
 from backend.models.world_scene_package import (
     WorldInterfaceSpec,
     WorldScenePackageManifest,
@@ -37,5 +37,5 @@ def make_world_package(
     )
 
 
-def make_world_open_request(urdf_xml: str) -> SimulatorWorldOpenRequest:
-    return SimulatorWorldOpenRequest(world_package=make_world_package(urdf_xml))
+def make_workspace_prepare_request(urdf_xml: str) -> SimulatorWorkspacePrepareRequest:
+    return SimulatorWorkspacePrepareRequest(world_package=make_world_package(urdf_xml))

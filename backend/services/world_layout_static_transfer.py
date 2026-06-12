@@ -4,19 +4,29 @@ import json
 import math
 import re
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Sequence
-from xml.etree import ElementTree as ET
+from typing import Any, Sequence
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-WorldLayoutBackend = Literal["mujoco", "genesis"]
-ConcreteWorldLayoutFrameMap = Literal["identity", "studio-y-up-to-z-up"]
-WorldLayoutFrameMap = Literal["auto", "identity", "studio-y-up-to-z-up"]
+from backend.services.world_layout_transfer_constants import (
+    COLOR_TOLERANCE,
+    POSITION_TOLERANCE_M,
+    QUATERNION_TOLERANCE,
+    SIZE_TOLERANCE_M,
+)
+from backend.services.world_layout_transfer_types import (
+    ConcreteWorldLayoutFrameMap,
+    SimPrimitive,
+    StaticWorldLayout,
+    WorldLayoutBackend,
+    WorldLayoutFrameMap,
+    WorldLayoutObject,
+    WorldLayoutTransferError,
+)
 
-SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point"}
+SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point", "mesh"}
 CONCRETE_WORLD_LAYOUT_FRAME_MAPS = {"identity", "studio-y-up-to-z-up"}
 Z_UP_FRAME_CONVENTIONS = {
     "ros",
@@ -41,10 +51,6 @@ Y_UP_FRAME_CONVENTIONS = {
 STATIC_SCENARIO_TIME_MS = 0
 STATIC_SCENARIO_DURATION_MS = 0
 DEFAULT_RGBA = (0.231372549, 0.509803922, 0.964705882, 1.0)
-POSITION_TOLERANCE_M = 1e-6
-SIZE_TOLERANCE_M = 1e-6
-QUATERNION_TOLERANCE = 1e-6
-COLOR_TOLERANCE = 1e-6
 
 STUDIO_Y_UP_TO_Z_UP = np.array(
     [
@@ -53,59 +59,6 @@ STUDIO_Y_UP_TO_Z_UP = np.array(
         [0.0, 1.0, 0.0],
     ]
 )
-
-
-class WorldLayoutTransferError(ValueError):
-    pass
-
-
-@dataclass(frozen=True)
-class WorldLayoutObject:
-    id: str
-    name: str
-    primitive_type: str
-    position_xyz: tuple[float, float, float]
-    rotation_rpy_rad: tuple[float, float, float]
-    size_xyz: tuple[float, float, float]
-    color: str
-    is_hidden: bool = False
-
-
-@dataclass(frozen=True)
-class StaticWorldLayout:
-    name: str
-    objects: tuple[WorldLayoutObject, ...]
-    scenario_time_ms: int
-    scenario_duration_ms: int
-    source_kind: str
-    frame_convention: str | None = None
-    frame_map_hint: ConcreteWorldLayoutFrameMap | None = None
-
-
-@dataclass(frozen=True)
-class SimPrimitive:
-    source_id: str
-    source_name: str
-    sim_name: str
-    source_type: str
-    sim_type: str
-    position_xyz: tuple[float, float, float]
-    quat_wxyz: tuple[float, float, float, float]
-    size_xyz: tuple[float, float, float]
-    rgba: tuple[float, float, float, float]
-    collision: bool
-
-
-@dataclass(frozen=True)
-class LoadedPrimitive:
-    source_id: str
-    sim_name: str
-    sim_type: str | None
-    position_xyz: tuple[float, float, float]
-    quat_wxyz: tuple[float, float, float, float] | None
-    size_xyz: tuple[float, float, float] | None
-    collision: bool | None
-    rgba: tuple[float, float, float, float] | None = None
 
 
 def _is_record(value: Any) -> bool:
@@ -122,6 +75,31 @@ def _read_finite_number(value: Any, field: str) -> float:
     if not math.isfinite(parsed):
         raise WorldLayoutTransferError(f"{field} must be a finite number")
     return parsed
+
+
+def _read_optional_finite_number(
+    value: Any,
+    field: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float | None:
+    if value is None:
+        return None
+    parsed = _read_finite_number(value, field)
+    if minimum is not None and parsed < minimum:
+        raise WorldLayoutTransferError(f"{field} must be >= {minimum:g}")
+    if maximum is not None and parsed > maximum:
+        raise WorldLayoutTransferError(f"{field} must be <= {maximum:g}")
+    return parsed
+
+
+def _read_optional_bool(value: Any, default: bool, field: str) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise WorldLayoutTransferError(f"{field} must be a boolean")
 
 
 def _read_vector3(value: Any, field: str, *, positive: bool = False) -> tuple[float, float, float]:
@@ -167,6 +145,42 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
     )
     size = _read_vector3(value.get("size_xyz"), f"objects[{index}].size_xyz", positive=True)
     raw_color = value.get("color")
+    simulation = value.get("simulation")
+    if simulation is not None and not _is_record(simulation):
+        raise WorldLayoutTransferError(f"objects[{index}].simulation must be an object")
+    simulation = simulation if _is_record(simulation) else {}
+    fixed = _read_optional_bool(
+        simulation.get("fixed", value.get("fixed", value.get("is_fixed"))),
+        True,
+        f"objects[{index}].simulation.fixed",
+    )
+    collision = _read_optional_bool(
+        simulation.get("collision", value.get("collision")),
+        True,
+        f"objects[{index}].simulation.collision",
+    )
+    mass_kg = _read_optional_finite_number(
+        simulation.get("mass_kg", value.get("mass_kg")),
+        f"objects[{index}].simulation.mass_kg",
+        minimum=0.0,
+    )
+    friction = _read_optional_finite_number(
+        simulation.get("friction", value.get("friction")),
+        f"objects[{index}].simulation.friction",
+        minimum=0.01,
+        maximum=5.0,
+    )
+    restitution = _read_optional_finite_number(
+        simulation.get("restitution", value.get("restitution")),
+        f"objects[{index}].simulation.restitution",
+        minimum=0.0,
+        maximum=1.0,
+    )
+    semantic_role = _read_optional_string(
+        simulation.get("semantic_role", value.get("semantic_role", value.get("role")))
+    )
+    asset_ref = _read_object_asset_ref(value)
+    asset_scale = _read_object_asset_scale(value, index)
     return WorldLayoutObject(
         id=raw_id.strip(),
         name=raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else raw_id.strip(),
@@ -176,12 +190,79 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
         size_xyz=size,
         color=raw_color.strip() if isinstance(raw_color, str) and raw_color.strip() else "#3b82f6",
         is_hidden=value.get("is_hidden") is True,
+        fixed=fixed,
+        collision=collision,
+        mass_kg=mass_kg,
+        friction=friction,
+        restitution=restitution,
+        semantic_role=semantic_role,
+        asset_ref=asset_ref,
+        asset_scale_xyz=asset_scale,
     )
 
 
 def _read_optional_string(value: Any) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
+    return None
+
+
+def _read_object_asset_ref(value: dict[str, Any]) -> str | None:
+    for key in ("asset_ref", "asset_path", "mesh_ref", "mesh_path", "meshReference"):
+        asset_ref = _read_optional_string(value.get(key))
+        if asset_ref is not None:
+            return asset_ref
+    mesh = value.get("mesh")
+    if _is_record(mesh):
+        for key in ("asset_ref", "path", "uri", "filename"):
+            asset_ref = _read_optional_string(mesh.get(key))
+            if asset_ref is not None:
+                return asset_ref
+    geometry = value.get("geometry")
+    if _is_record(geometry):
+        mesh = geometry.get("mesh")
+        if _is_record(mesh):
+            for key in ("asset_ref", "path", "uri", "filename"):
+                asset_ref = _read_optional_string(mesh.get(key))
+                if asset_ref is not None:
+                    return asset_ref
+    return None
+
+
+def _read_object_asset_scale(value: dict[str, Any], index: int) -> tuple[float, float, float] | None:
+    for key in ("asset_scale_xyz", "mesh_scale_xyz", "scale_xyz"):
+        if key in value:
+            return _read_vector3(value.get(key), f"objects[{index}].{key}", positive=True)
+    mesh = value.get("mesh")
+    if _is_record(mesh):
+        for key in ("scale_xyz", "scale"):
+            if key not in mesh:
+                continue
+            raw_scale = mesh.get(key)
+            if isinstance(raw_scale, int | float) and not isinstance(raw_scale, bool):
+                scale = _read_finite_number(raw_scale, f"objects[{index}].mesh.{key}")
+                if scale <= 0.0:
+                    raise WorldLayoutTransferError(f"objects[{index}].mesh.{key} must be > 0")
+                return (scale, scale, scale)
+            return _read_vector3(raw_scale, f"objects[{index}].mesh.{key}", positive=True)
+    return None
+
+
+def resolve_world_layout_asset_path(asset_ref: str | None, roots: Sequence[Path]) -> Path | None:
+    if asset_ref is None:
+        return None
+    normalized = asset_ref.replace("\\", "/").strip().lstrip("/")
+    if not normalized or "://" in normalized or normalized.startswith("package://"):
+        return None
+    for root in roots:
+        root_path = root.resolve()
+        candidate = (root_path / normalized).resolve()
+        try:
+            candidate.relative_to(root_path)
+        except ValueError:
+            continue
+        if candidate.exists():
+            return candidate
     return None
 
 
@@ -284,7 +365,7 @@ def load_static_world_layout(path: Path) -> StaticWorldLayout:
 
 def resolve_world_layout_frame_map(
     layout: StaticWorldLayout,
-    frame_map: WorldLayoutFrameMap = "auto",
+    frame_map: WorldLayoutFrameMap = "identity",
 ) -> ConcreteWorldLayoutFrameMap:
     if frame_map != "auto":
         _frame_matrix(frame_map)
@@ -376,10 +457,28 @@ def _safe_sim_name(value: str, used_names: set[str], fallback: str) -> str:
     return candidate
 
 
+def _primitive_simulation_fields(
+    obj: WorldLayoutObject,
+    *,
+    collision: bool | None = None,
+    fixed: bool | None = None,
+) -> dict[str, Any]:
+    return {
+        "collision": obj.collision if collision is None else collision,
+        "fixed": obj.fixed if fixed is None else fixed,
+        "mass_kg": obj.mass_kg,
+        "friction": obj.friction,
+        "restitution": obj.restitution,
+        "semantic_role": obj.semantic_role,
+        "asset_ref": obj.asset_ref,
+        "asset_scale_xyz": obj.asset_scale_xyz,
+    }
+
+
 def build_sim_primitives(
     layout: StaticWorldLayout,
     *,
-    frame_map: WorldLayoutFrameMap = "auto",
+    frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
 ) -> tuple[tuple[SimPrimitive, ...], tuple[str, ...]]:
     resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
@@ -407,7 +506,7 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=sim_size,
                     rgba=rgba,
-                    collision=True,
+                    **_primitive_simulation_fields(obj),
                 )
             )
             continue
@@ -426,7 +525,7 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=(diameter, diameter, diameter),
                     rgba=rgba,
-                    collision=True,
+                    **_primitive_simulation_fields(obj),
                 )
             )
             continue
@@ -446,7 +545,7 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=(diameter, diameter, sim_size[2]),
                     rgba=rgba,
-                    collision=True,
+                    **_primitive_simulation_fields(obj),
                 )
             )
             continue
@@ -464,67 +563,33 @@ def build_sim_primitives(
                     quat_wxyz=quat,
                     size_xyz=(diameter, diameter, diameter),
                     rgba=rgba,
-                    collision=False,
+                    **_primitive_simulation_fields(obj, collision=False, fixed=True),
+                )
+            )
+            continue
+        if obj.primitive_type == "mesh":
+            sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
+            if obj.asset_ref is None:
+                warnings.append(f"Mesh object has no asset_ref; using primitive proxy: {obj.id}")
+            else:
+                warnings.append(f"Mesh object keeps asset_ref for mesh-capable adapters: {obj.id}")
+            primitives.append(
+                SimPrimitive(
+                    source_id=obj.id,
+                    source_name=obj.name,
+                    sim_name=sim_name,
+                    source_type=obj.primitive_type,
+                    sim_type="box",
+                    position_xyz=position,
+                    quat_wxyz=quat,
+                    size_xyz=sim_size,
+                    rgba=rgba,
+                    **_primitive_simulation_fields(obj),
                 )
             )
             continue
         raise WorldLayoutTransferError(f"Unsupported primitive type: {obj.primitive_type}")
     return tuple(primitives), tuple(warnings)
-
-
-def _format_float(value: float) -> str:
-    return f"{value:.12g}"
-
-
-def _format_vec(values: Sequence[float]) -> str:
-    return " ".join(_format_float(value) for value in values)
-
-
-def _mujoco_geom_attrs(primitive: SimPrimitive) -> dict[str, str]:
-    attrs = {
-        "name": primitive.sim_name,
-        "type": primitive.sim_type,
-        "pos": _format_vec(primitive.position_xyz),
-        "quat": _format_vec(primitive.quat_wxyz),
-        "rgba": _format_vec(primitive.rgba),
-    }
-    if primitive.sim_type == "box":
-        attrs["size"] = _format_vec(component * 0.5 for component in primitive.size_xyz)
-    elif primitive.sim_type == "sphere":
-        attrs["size"] = _format_float(max(primitive.size_xyz) * 0.5)
-    elif primitive.sim_type == "cylinder":
-        attrs["size"] = _format_vec((primitive.size_xyz[0] * 0.5, primitive.size_xyz[2] * 0.5))
-    else:
-        raise WorldLayoutTransferError(f"Unsupported MuJoCo primitive type: {primitive.sim_type}")
-    if not primitive.collision:
-        attrs["contype"] = "0"
-        attrs["conaffinity"] = "0"
-    return attrs
-
-
-def _add_mujoco_floor(worldbody: ET.Element) -> None:
-    ET.SubElement(
-        worldbody,
-        "geom",
-        {
-            "name": "wl_reference_floor",
-            "type": "plane",
-            "pos": "0 0 0",
-            "size": "4 4 0.01",
-            "rgba": "0.16 0.16 0.16 0.35",
-        },
-    )
-
-
-def _set_mujoco_offscreen_size(root: ET.Element, offscreen_size: tuple[int, int]) -> None:
-    visual = root.find("visual")
-    if visual is None:
-        visual = ET.SubElement(root, "visual")
-    global_visual = visual.find("global")
-    if global_visual is None:
-        global_visual = ET.SubElement(visual, "global")
-    global_visual.set("offwidth", str(max(int(offscreen_size[0]), 1)))
-    global_visual.set("offheight", str(max(int(offscreen_size[1]), 1)))
 
 
 def append_primitives_to_mujoco_mjcf(
@@ -533,24 +598,17 @@ def append_primitives_to_mujoco_mjcf(
     *,
     include_floor: bool = False,
     offscreen_size: tuple[int, int] | None = None,
+    asset_roots: Sequence[Path] = (),
 ) -> str:
-    try:
-        root = ET.fromstring(mjcf_text)
-    except ET.ParseError as exc:
-        raise WorldLayoutTransferError(f"Invalid MuJoCo MJCF XML: {exc}") from exc
-    if root.tag != "mujoco":
-        raise WorldLayoutTransferError("MuJoCo MJCF root element must be <mujoco>")
-    if offscreen_size is not None:
-        _set_mujoco_offscreen_size(root, offscreen_size)
-    worldbody = root.find("worldbody")
-    if worldbody is None:
-        worldbody = ET.SubElement(root, "worldbody")
-    if include_floor:
-        _add_mujoco_floor(worldbody)
-    for primitive in primitives:
-        ET.SubElement(worldbody, "geom", _mujoco_geom_attrs(primitive))
-    ET.indent(root, space="  ")
-    return ET.tostring(root, encoding="unicode")
+    from backend.services.world_layout_transfer_mujoco import append_primitives_to_mujoco_mjcf as _impl
+
+    return _impl(
+        mjcf_text,
+        primitives,
+        include_floor=include_floor,
+        offscreen_size=offscreen_size,
+        asset_roots=asset_roots,
+    )
 
 
 def export_primitives_to_mujoco_mjcf(
@@ -559,170 +617,17 @@ def export_primitives_to_mujoco_mjcf(
     model_name: str = "static_world_layout",
     include_floor: bool = False,
     offscreen_size: tuple[int, int] | None = None,
+    asset_roots: Sequence[Path] = (),
 ) -> str:
-    root = ET.Element("mujoco", {"model": _safe_xml_token(model_name)})
-    ET.SubElement(root, "compiler", {"angle": "radian"})
-    ET.SubElement(root, "option", {"timestep": "0.01", "gravity": "0 0 -9.81"})
-    if offscreen_size is not None:
-        visual = ET.SubElement(root, "visual")
-        ET.SubElement(
-            visual,
-            "global",
-            {
-                "offwidth": str(max(int(offscreen_size[0]), 1)),
-                "offheight": str(max(int(offscreen_size[1]), 1)),
-            },
-        )
-    worldbody = ET.SubElement(root, "worldbody")
-    if include_floor:
-        _add_mujoco_floor(worldbody)
-    for primitive in primitives:
-        ET.SubElement(worldbody, "geom", _mujoco_geom_attrs(primitive))
-    ET.indent(root, space="  ")
-    return ET.tostring(root, encoding="unicode")
+    from backend.services.world_layout_transfer_mujoco import export_primitives_to_mujoco_mjcf as _impl
 
-
-def _safe_xml_token(value: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip()).strip("_")
-    return normalized or "static_world_layout"
-
-
-def _quat_error(lhs: Sequence[float] | None, rhs: Sequence[float]) -> float | None:
-    if lhs is None:
-        return None
-    lhs_array = np.array(lhs, dtype=float)
-    rhs_array = np.array(rhs, dtype=float)
-    direct = np.linalg.norm(lhs_array - rhs_array)
-    negated = np.linalg.norm(lhs_array + rhs_array)
-    return float(min(direct, negated))
-
-
-def _position_error(lhs: Sequence[float], rhs: Sequence[float]) -> float:
-    return float(np.linalg.norm(np.array(lhs, dtype=float) - np.array(rhs, dtype=float)))
-
-
-def _size_error(lhs: Sequence[float] | None, rhs: Sequence[float]) -> float | None:
-    if lhs is None:
-        return None
-    return float(np.linalg.norm(np.array(lhs, dtype=float) - np.array(rhs, dtype=float)))
-
-
-def _rgba_error(
-    lhs: Sequence[float] | None,
-    rhs: Sequence[float],
-) -> float | None:
-    if lhs is None:
-        return None
-    return float(np.linalg.norm(np.array(lhs, dtype=float) - np.array(rhs, dtype=float)))
-
-
-def _primitive_check_report(
-    primitives: Sequence[SimPrimitive],
-    loaded: Sequence[LoadedPrimitive],
-    *,
-    position_tolerance_m: float = POSITION_TOLERANCE_M,
-    size_tolerance_m: float = SIZE_TOLERANCE_M,
-    quaternion_tolerance: float = QUATERNION_TOLERANCE,
-    color_tolerance: float = COLOR_TOLERANCE,
-) -> dict[str, Any]:
-    loaded_by_name = {item.sim_name: item for item in loaded}
-    objects: list[dict[str, Any]] = []
-    max_position_error = 0.0
-    max_size_error = 0.0
-    max_quat_error = 0.0
-    max_color_error = 0.0
-    missing: list[str] = []
-    type_mismatches: list[str] = []
-    collision_mismatches: list[str] = []
-    color_mismatches: list[str] = []
-    for primitive in primitives:
-        loaded_primitive = loaded_by_name.get(primitive.sim_name)
-        if loaded_primitive is None:
-            missing.append(primitive.source_id)
-            continue
-        position_error = _position_error(primitive.position_xyz, loaded_primitive.position_xyz)
-        quat_error = _quat_error(loaded_primitive.quat_wxyz, primitive.quat_wxyz)
-        size_error = _size_error(loaded_primitive.size_xyz, primitive.size_xyz)
-        color_error = _rgba_error(loaded_primitive.rgba, primitive.rgba)
-        type_matches = loaded_primitive.sim_type == primitive.sim_type
-        collision_matches = (
-            loaded_primitive.collision is None or loaded_primitive.collision == primitive.collision
-        )
-        color_matches = color_error is not None and color_error <= color_tolerance
-        max_position_error = max(max_position_error, position_error)
-        if quat_error is not None:
-            max_quat_error = max(max_quat_error, quat_error)
-        if size_error is not None:
-            max_size_error = max(max_size_error, size_error)
-        if color_error is not None:
-            max_color_error = max(max_color_error, color_error)
-        if not type_matches:
-            type_mismatches.append(primitive.source_id)
-        if not collision_matches:
-            collision_mismatches.append(primitive.source_id)
-        if not color_matches:
-            color_mismatches.append(primitive.source_id)
-        objects.append(
-            {
-                "source_id": primitive.source_id,
-                "sim_name": primitive.sim_name,
-                "source_type": primitive.source_type,
-                "sim_type": primitive.sim_type,
-                "loaded_sim_type": loaded_primitive.sim_type,
-                "expected_position_xyz": list(primitive.position_xyz),
-                "loaded_position_xyz": list(loaded_primitive.position_xyz),
-                "position_error_m": position_error,
-                "expected_quat_wxyz": list(primitive.quat_wxyz),
-                "loaded_quat_wxyz": (
-                    list(loaded_primitive.quat_wxyz) if loaded_primitive.quat_wxyz is not None else None
-                ),
-                "quat_error": quat_error,
-                "expected_size_xyz": list(primitive.size_xyz),
-                "loaded_size_xyz": (
-                    list(loaded_primitive.size_xyz) if loaded_primitive.size_xyz is not None else None
-                ),
-                "size_error_m": size_error,
-                "expected_rgba": list(primitive.rgba),
-                "loaded_rgba": (
-                    list(loaded_primitive.rgba) if loaded_primitive.rgba is not None else None
-                ),
-                "color_error": color_error,
-                "collision": primitive.collision,
-                "loaded_collision": loaded_primitive.collision,
-                "type_matches": type_matches,
-                "collision_matches": collision_matches,
-                "color_matches": color_matches,
-            }
-        )
-    ok = (
-        len(missing) == 0
-        and len(type_mismatches) == 0
-        and len(collision_mismatches) == 0
-        and len(color_mismatches) == 0
-        and len(loaded) == len(primitives)
-        and max_position_error <= position_tolerance_m
-        and max_size_error <= size_tolerance_m
-        and max_quat_error <= quaternion_tolerance
-        and max_color_error <= color_tolerance
+    return _impl(
+        primitives,
+        model_name=model_name,
+        include_floor=include_floor,
+        offscreen_size=offscreen_size,
+        asset_roots=asset_roots,
     )
-    return {
-        "ok": ok,
-        "expected_count": len(primitives),
-        "loaded_count": len(loaded),
-        "missing_source_ids": missing,
-        "type_mismatch_source_ids": type_mismatches,
-        "collision_mismatch_source_ids": collision_mismatches,
-        "color_mismatch_source_ids": color_mismatches,
-        "max_position_error_m": max_position_error,
-        "max_size_error_m": max_size_error,
-        "max_quat_error": max_quat_error,
-        "max_color_error": max_color_error,
-        "position_tolerance_m": position_tolerance_m,
-        "size_tolerance_m": size_tolerance_m,
-        "quat_tolerance": quaternion_tolerance,
-        "color_tolerance": color_tolerance,
-        "objects": objects,
-    }
 
 
 def check_mujoco_transfer(
@@ -734,96 +639,16 @@ def check_mujoco_transfer(
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
 ) -> dict[str, Any]:
-    import mujoco
+    from backend.services.world_layout_transfer_mujoco import check_mujoco_transfer as _impl
 
-    compiled_mjcf = mjcf_text or export_primitives_to_mujoco_mjcf(primitives)
-    model = mujoco.MjModel.from_xml_string(compiled_mjcf)
-    data = mujoco.MjData(model)
-    mujoco.mj_forward(model, data)
-    loaded: list[LoadedPrimitive] = []
-    for primitive in primitives:
-        geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, primitive.sim_name)
-        if geom_id < 0:
-            continue
-        loaded.append(
-            LoadedPrimitive(
-                source_id=primitive.source_id,
-                sim_name=primitive.sim_name,
-                sim_type=_mujoco_geom_type_name(mujoco, model, geom_id),
-                position_xyz=tuple(float(value) for value in data.geom_xpos[geom_id]),
-                quat_wxyz=_matrix9_to_quat_wxyz(data.geom_xmat[geom_id]),
-                size_xyz=_mujoco_geom_full_size(mujoco, model, geom_id),
-                collision=bool(model.geom_contype[geom_id] != 0 or model.geom_conaffinity[geom_id] != 0),
-                rgba=tuple(float(value) for value in model.geom_rgba[geom_id]),
-            )
-        )
-    report = _primitive_check_report(
+    return _impl(
         primitives,
-        loaded,
+        mjcf_text=mjcf_text,
         position_tolerance_m=position_tolerance_m,
         size_tolerance_m=size_tolerance_m,
         quaternion_tolerance=quaternion_tolerance,
         color_tolerance=color_tolerance,
     )
-    report.update(
-        {
-            "backend": "mujoco",
-            "mujoco_version": getattr(mujoco, "__version__", "unknown"),
-            "compiled_geom_count": int(model.ngeom),
-        }
-    )
-    return report
-
-
-def _mujoco_geom_type_name(mujoco: Any, model: Any, geom_id: int) -> str | None:
-    geom_type = int(model.geom_type[geom_id])
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_BOX):
-        return "box"
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_SPHERE):
-        return "sphere"
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
-        return "cylinder"
-    return None
-
-
-def _mujoco_geom_full_size(mujoco: Any, model: Any, geom_id: int) -> tuple[float, float, float] | None:
-    geom_type = int(model.geom_type[geom_id])
-    size = model.geom_size[geom_id]
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_BOX):
-        return (float(size[0] * 2.0), float(size[1] * 2.0), float(size[2] * 2.0))
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_SPHERE):
-        diameter = float(size[0] * 2.0)
-        return (diameter, diameter, diameter)
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
-        diameter = float(size[0] * 2.0)
-        return (diameter, diameter, float(size[1] * 2.0))
-    return None
-
-
-def _matrix9_to_quat_wxyz(matrix9: Sequence[float]) -> tuple[float, float, float, float]:
-    matrix = np.array(matrix9, dtype=float).reshape(3, 3)
-    quat_xyzw = Rotation.from_matrix(matrix).as_quat()
-    return (
-        float(quat_xyzw[3]),
-        float(quat_xyzw[0]),
-        float(quat_xyzw[1]),
-        float(quat_xyzw[2]),
-    )
-
-
-_GENESIS_INITIALIZED = False
-
-
-def _ensure_genesis_initialized(gs: Any) -> None:
-    global _GENESIS_INITIALIZED
-    if _GENESIS_INITIALIZED:
-        return
-    try:
-        gs.init(backend=gs.cpu, logging_level="warning")
-    except Exception as exc:
-        if "already" not in str(exc).lower() and "initialized" not in str(exc).lower():
-            raise
-    _GENESIS_INITIALIZED = True
 
 
 def check_genesis_transfer(
@@ -834,126 +659,22 @@ def check_genesis_transfer(
     quaternion_tolerance: float = QUATERNION_TOLERANCE,
     color_tolerance: float = COLOR_TOLERANCE,
 ) -> dict[str, Any]:
-    import genesis as gs
+    from backend.services.world_layout_transfer_genesis import check_genesis_transfer as _impl
 
-    _ensure_genesis_initialized(gs)
-    scene = gs.Scene(show_viewer=False)
-    entities: list[tuple[SimPrimitive, Any]] = []
-    for primitive in primitives:
-        if primitive.sim_type == "box":
-            morph = gs.morphs.Box(
-                size=primitive.size_xyz,
-                pos=primitive.position_xyz,
-                quat=primitive.quat_wxyz,
-                fixed=True,
-                collision=primitive.collision,
-            )
-        elif primitive.sim_type == "sphere":
-            morph = gs.morphs.Sphere(
-                radius=max(primitive.size_xyz) * 0.5,
-                pos=primitive.position_xyz,
-                quat=primitive.quat_wxyz,
-                fixed=True,
-                collision=primitive.collision,
-            )
-        elif primitive.sim_type == "cylinder":
-            morph = gs.morphs.Cylinder(
-                radius=primitive.size_xyz[0] * 0.5,
-                height=primitive.size_xyz[2],
-                pos=primitive.position_xyz,
-                quat=primitive.quat_wxyz,
-                fixed=True,
-                collision=primitive.collision,
-            )
-        else:
-            raise WorldLayoutTransferError(f"Unsupported Genesis primitive type: {primitive.sim_type}")
-        surface = gs.surfaces.Default(color=primitive.rgba[:3], opacity=primitive.rgba[3])
-        entity = scene.add_entity(morph, surface=surface, name=primitive.sim_name)
-        entities.append((primitive, entity))
-    scene.build()
-    loaded: list[LoadedPrimitive] = []
-    for primitive, entity in entities:
-        pos = entity.get_pos()
-        quat = entity.get_quat()
-        loaded.append(
-            LoadedPrimitive(
-                source_id=primitive.source_id,
-                sim_name=primitive.sim_name,
-                sim_type=_genesis_morph_type_name(entity.main_morph),
-                position_xyz=tuple(float(value) for value in pos.tolist()),
-                quat_wxyz=tuple(float(value) for value in quat.tolist()),
-                size_xyz=_genesis_morph_full_size(entity.main_morph),
-                collision=bool(entity.main_morph.collision),
-                rgba=_genesis_entity_rgba(entity),
-            )
-        )
-    report = _primitive_check_report(
+    return _impl(
         primitives,
-        loaded,
         position_tolerance_m=position_tolerance_m,
         size_tolerance_m=size_tolerance_m,
         quaternion_tolerance=quaternion_tolerance,
         color_tolerance=color_tolerance,
     )
-    report.update(
-        {
-            "backend": "genesis",
-            "genesis_version": getattr(gs, "__version__", "unknown"),
-            "entity_count": len(entities),
-        }
-    )
-    return report
-
-
-def _genesis_morph_type_name(morph: Any) -> str | None:
-    class_name = type(morph).__name__.lower()
-    if class_name == "box":
-        return "box"
-    if class_name == "sphere":
-        return "sphere"
-    if class_name == "cylinder":
-        return "cylinder"
-    return None
-
-
-def _genesis_morph_full_size(morph: Any) -> tuple[float, float, float] | None:
-    morph_type = _genesis_morph_type_name(morph)
-    if morph_type == "box":
-        return tuple(float(value) for value in morph.size)
-    if morph_type == "sphere":
-        diameter = float(morph.radius * 2.0)
-        return (diameter, diameter, diameter)
-    if morph_type == "cylinder":
-        diameter = float(morph.radius * 2.0)
-        return (diameter, diameter, float(morph.height))
-    return None
-
-
-def _genesis_entity_rgba(entity: Any) -> tuple[float, float, float, float] | None:
-    surface = getattr(entity, "surface", None)
-    diffuse = _genesis_texture_color(getattr(surface, "diffuse_texture", None))
-    if diffuse is None or len(diffuse) < 3:
-        return None
-    opacity = _genesis_texture_color(getattr(surface, "opacity_texture", None))
-    alpha = opacity[0] if opacity else 1.0
-    return (float(diffuse[0]), float(diffuse[1]), float(diffuse[2]), float(alpha))
-
-
-def _genesis_texture_color(texture: Any) -> tuple[float, ...] | None:
-    color = getattr(texture, "color", None)
-    if color is None:
-        return None
-    try:
-        return tuple(float(value) for value in color)
-    except TypeError:
-        return None
 
 
 def build_static_transfer_report(
     layout: StaticWorldLayout,
     *,
     backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
-    frame_map: WorldLayoutFrameMap = "auto",
+    frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
     write_mjcf_path: Path | None = None,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
@@ -1030,6 +751,13 @@ def build_static_transfer_report(
                 "size_xyz": list(primitive.size_xyz),
                 "rgba": list(primitive.rgba),
                 "collision": primitive.collision,
+                "fixed": primitive.fixed,
+                "mass_kg": primitive.mass_kg,
+                "friction": primitive.friction,
+                "restitution": primitive.restitution,
+                "semantic_role": primitive.semantic_role,
+                "asset_ref": primitive.asset_ref,
+                "asset_scale_xyz": list(primitive.asset_scale_xyz) if primitive.asset_scale_xyz else None,
             }
             for primitive in primitives
         ],
@@ -1041,7 +769,7 @@ def check_static_world_layout_file(
     layout_path: Path,
     *,
     backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
-    frame_map: WorldLayoutFrameMap = "auto",
+    frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
     write_mjcf_path: Path | None = None,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
@@ -1065,7 +793,7 @@ def check_static_world_layout_text(
     raw_json: str,
     *,
     backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
-    frame_map: WorldLayoutFrameMap = "auto",
+    frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
     size_tolerance_m: float = SIZE_TOLERANCE_M,

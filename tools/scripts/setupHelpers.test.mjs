@@ -101,7 +101,7 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
   });
   assert.deepEqual(sections[5], {
     heading: 'PyBullet',
-    lines: ['PyBullet world viewer runtime is available.'],
+    lines: ['PyBullet workspace adapter runtime is available.'],
   });
   assert.deepEqual(sections[6], {
     heading: 'MJLab',

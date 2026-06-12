@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import type { CameraIntrinsics } from "@/shared/types/camera";
 import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
-import { toThreeViewQuaternionFromUrdf } from "@/features/camera/cameraOrientationContract";
+import {
+  getThreeViewForwardLocal,
+  toThreeViewQuaternionFromStudioCamera,
+} from "@/features/camera/cameraOrientationContract";
 import {
   CAMERA_ICON_FRUSTUM_FAR_M,
   CAMERA_ICON_FRUSTUM_NEAR_M,
@@ -9,21 +12,18 @@ import {
   CAMERA_ICON_LEVELING_UP_PARALLEL_DOT,
   CAMERA_ICON_LENS_ROTATION_RAD,
 } from "@/features/camera/cameraIconParams";
-import { getThreeViewForwardLocal } from "@/features/camera/cameraOrientationContract";
 
 export const toCameraIconDisplayQuaternion = (cameraQuaternion: THREE.Quaternion) =>
-  toThreeViewQuaternionFromUrdf(cameraQuaternion);
+  toThreeViewQuaternionFromStudioCamera(cameraQuaternion);
 
 const WORLD_UP_AXIS = new THREE.Vector3(0, 0, 1);
 const WORLD_UP_FALLBACK_AXIS = new THREE.Vector3(0, 1, 0);
-const THREE_VIEW_UP_LOCAL = new THREE.Vector3(0, 1, 0);
-const THREE_VIEW_FORWARD_LOCAL = new THREE.Vector3(0, 0, -1);
 
 export const toLeveledCameraIconDisplayQuaternion = (
   cameraQuaternion: THREE.Quaternion
 ) => {
   const displayQuaternion = toCameraIconDisplayQuaternion(cameraQuaternion);
-  const worldForward = THREE_VIEW_FORWARD_LOCAL.clone()
+  const worldForward = getThreeViewForwardLocal()
     .applyQuaternion(displayQuaternion)
     .normalize();
   const worldZAxis = worldForward.clone().multiplyScalar(-1);

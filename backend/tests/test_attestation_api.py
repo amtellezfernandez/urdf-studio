@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import timedelta
 
-from fastapi.testclient import TestClient
+from backend.tests.asgi_test_client import AsgiTestClient
 import pytest
 
 from backend.app import create_app
@@ -20,8 +20,8 @@ TEST_PROOF_DIGEST = "0xabc123"
 LOCAL_TEST_CLIENT = ("127.0.0.1", 50000)
 
 
-def _local_client() -> TestClient:
-    return TestClient(create_app(), client=LOCAL_TEST_CLIENT)
+def _local_client() -> AsgiTestClient:
+    return AsgiTestClient(create_app(), client=LOCAL_TEST_CLIENT)
 
 
 def test_attestation_status_round_trip() -> None:

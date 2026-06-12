@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.core.simulator_security import require_simulator_operator_access
+from backend.core.simulator_security import require_simulator_operator_access_async
 from backend.models.world_rollouts import (
     WorldRolloutImportRequest,
     WorldRolloutImportResponse,
@@ -19,9 +19,9 @@ HTTP_UNPROCESSABLE_ENTITY = 422
 
 
 @router.post("/jobs", response_model=WorldRolloutJobResponse)
-def create_world_rollout_job(
+async def create_world_rollout_job(
     request: WorldRolloutJobCreateRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldRolloutJobResponse:
     try:
         return world_rollout_service.create_job(request)
@@ -32,9 +32,9 @@ def create_world_rollout_job(
 
 
 @router.get("/jobs/{job_id}", response_model=WorldRolloutJobResponse)
-def get_world_rollout_job(
+async def get_world_rollout_job(
     job_id: str,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldRolloutJobResponse:
     try:
         return world_rollout_service.get_job(job_id)
@@ -43,9 +43,9 @@ def get_world_rollout_job(
 
 
 @router.post("/import", response_model=WorldRolloutImportResponse)
-def import_world_rollout_results(
+async def import_world_rollout_results(
     request: WorldRolloutImportRequest,
-    _access: None = Depends(require_simulator_operator_access),
+    _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldRolloutImportResponse:
     try:
         return world_rollout_service.import_results(request)

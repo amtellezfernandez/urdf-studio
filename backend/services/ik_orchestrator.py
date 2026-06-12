@@ -18,7 +18,9 @@ from backend.services.kinematics import (
     rotation_matrix_to_wxyz,
 )
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
-from backend.services.lerobot_kinematics import inverse_kinematics as lerobot_ik
+from backend.services.lerobot_kinematics import (
+    inverse_kinematics as lerobot_inverse_kinematics,
+)
 from backend.services.task_compiler import compile_ik_request
 
 
@@ -145,7 +147,7 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                     )
                 try:
                     if solver_id == "lerobot-placo":
-                        response = lerobot_ik(attempt_req)
+                        response = lerobot_inverse_kinematics(attempt_req)
                     elif solver_id == "amik":
                         response = amik_ik(attempt_req)
                     else:

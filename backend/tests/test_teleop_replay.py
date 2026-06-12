@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 import json
 
@@ -112,6 +113,10 @@ TEST_GATEWAY_EXPORT_TIMESTAMP_SEC = (
 ) / TELEOP_REPLAY_MILLISECONDS_PER_SECOND
 TEST_KINEMATIC_EXPORT_TIMESTAMP_SEC = TEST_GATEWAY_EXPORT_TIMESTAMP_SEC
 TEST_SPY_TIMING_MODE = "spy"
+
+
+def _run_api(coro):
+    return asyncio.run(coro)
 
 
 class SpyTeleopReplayClock:
@@ -409,7 +414,7 @@ def test_teleop_replay_api_rejects_unsupported_gateway_command_kind() -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        validate_teleop_replay_recording(req)
+        _run_api(validate_teleop_replay_recording(req))
 
     assert exc_info.value.status_code == 422
     assert "only supports gateway command kinds" in str(exc_info.value.detail)
@@ -421,7 +426,7 @@ def test_teleop_replay_api_rejects_missing_post_state() -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        validate_teleop_replay_recording(req)
+        _run_api(validate_teleop_replay_recording(req))
 
     assert exc_info.value.status_code == 422
     assert "post-command gateway state" in str(exc_info.value.detail)
@@ -597,19 +602,21 @@ def test_teleop_kinematic_export_api_rejects_non_kinematic_provenance() -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        export_teleop_kinematic_recording_to_lerobot(req)
+        _run_api(export_teleop_kinematic_recording_to_lerobot(req))
 
     assert exc_info.value.status_code == 422
     assert "studio_kinematic/none/kinematic provenance" in str(exc_info.value.detail)
 
 
 def test_teleop_kinematic_export_api_returns_mjlab_gate_result() -> None:
-    result = export_teleop_kinematic_recording_to_lerobot(
-        TeleopReplayExportRequest.model_validate(
-            {
-                "recording": _two_sample_kinematic_recording_payload(),
-                "robotModel": TEST_MJLAB_ROBOT_MODEL,
-            }
+    result = _run_api(
+        export_teleop_kinematic_recording_to_lerobot(
+            TeleopReplayExportRequest.model_validate(
+                {
+                    "recording": _two_sample_kinematic_recording_payload(),
+                    "robotModel": TEST_MJLAB_ROBOT_MODEL,
+                }
+            )
         )
     )
 
@@ -630,7 +637,7 @@ def test_teleop_kinematic_export_api_rejects_mjlab_motion_failures() -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        export_teleop_kinematic_recording_to_lerobot(req)
+        _run_api(export_teleop_kinematic_recording_to_lerobot(req))
 
     assert exc_info.value.status_code == 422
     assert TELEOP_REPLAY_MJLAB_EXPORT_REJECTION_PREFIX in str(exc_info.value.detail)
@@ -642,7 +649,7 @@ def test_teleop_kinematic_export_api_rejects_missing_self_collision_check() -> N
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        export_teleop_kinematic_recording_to_lerobot(req)
+        _run_api(export_teleop_kinematic_recording_to_lerobot(req))
 
     assert exc_info.value.status_code == 422
     assert TELEOP_REPLAY_MJLAB_EXPORT_SELF_COLLISION_UNCHECKED in str(
@@ -659,7 +666,7 @@ def test_teleop_replay_export_api_rejects_output_dir_outside_replay_root() -> No
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        export_teleop_replay_recording_to_lerobot(req)
+        _run_api(export_teleop_replay_recording_to_lerobot(req))
 
     assert exc_info.value.status_code == 422
     assert str(TELEOP_REPLAY_OUTPUT_ROOT) in str(exc_info.value.detail)
@@ -679,7 +686,7 @@ def test_teleop_replay_export_api_reports_missing_pyarrow(monkeypatch) -> None:
     monkeypatch.setattr(teleop_replay_service, "_load_pyarrow", _raise_missing_pyarrow)
 
     with pytest.raises(HTTPException) as exc_info:
-        export_teleop_kinematic_recording_to_lerobot(req)
+        _run_api(export_teleop_kinematic_recording_to_lerobot(req))
 
     assert exc_info.value.status_code == 503
     assert "pyarrow missing for test" in str(exc_info.value.detail)

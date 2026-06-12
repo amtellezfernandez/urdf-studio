@@ -16,11 +16,23 @@ from backend.services.simulator_adapters.numeric import is_finite_number
 
 CAMERA_MARKER_RGBA = (1.0, 0.82, 0.12, 1.0)
 CAMERA_MARKER_SIZE_XYZ = (0.05, 0.035, 0.025)
-DEFAULT_CAMERA_FOV_DEG = 70.0
-DEFAULT_CAMERA_WIDTH = 640
-DEFAULT_CAMERA_HEIGHT = 480
-CAMERA_FORWARD_LOCAL_XYZ = (0.0, 0.0, -1.0)
-CAMERA_UP_LOCAL_XYZ = (0.0, 1.0, 0.0)
+
+# Studio stores camera poses in its robot mount frame: +X looks out of the
+# camera body and +Z is up. Most simulator render cameras use the graphics
+# convention: -Z forward and +Y up. Keep the Studio contract stable and convert
+# once at simulator boundaries.
+STUDIO_CAMERA_FORWARD_LOCAL_XYZ = (1.0, 0.0, 0.0)
+STUDIO_CAMERA_UP_LOCAL_XYZ = (0.0, 0.0, 1.0)
+RENDER_CAMERA_FORWARD_LOCAL_XYZ = (0.0, 0.0, -1.0)
+RENDER_CAMERA_UP_LOCAL_XYZ = (0.0, 1.0, 0.0)
+STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX = np.array(
+    [
+        [0.0, 0.0, -1.0],
+        [-1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ],
+    dtype=np.float64,
+)
 
 
 @dataclass(frozen=True)
@@ -45,35 +57,35 @@ class SimCameraSpec:
     sim_name: str
     parent_joint: str
     parent_link: str
-    local_pose: Transform
-    world_pose: Transform
+    render_local_pose: Transform
+    render_world_pose: Transform
     fov_deg: float
     width: int
     height: int
 
     @property
     def position_xyz(self) -> tuple[float, float, float]:
-        return self.world_pose.position_xyz
+        return self.render_world_pose.position_xyz
 
     @property
     def quat_wxyz(self) -> tuple[float, float, float, float]:
-        return self.world_pose.quat_wxyz
+        return self.render_world_pose.quat_wxyz
 
     @property
     def quat_xyzw(self) -> tuple[float, float, float, float]:
-        return self.world_pose.quat_xyzw
+        return self.render_world_pose.quat_xyzw
 
     @property
-    def forward_xyz(self) -> tuple[float, float, float]:
-        return _tuple3(self.world_pose.rotation.apply(CAMERA_FORWARD_LOCAL_XYZ))
+    def render_forward_xyz(self) -> tuple[float, float, float]:
+        return _tuple3(self.render_world_pose.rotation.apply(RENDER_CAMERA_FORWARD_LOCAL_XYZ))
 
     @property
-    def up_xyz(self) -> tuple[float, float, float]:
-        return _tuple3(self.world_pose.rotation.apply(CAMERA_UP_LOCAL_XYZ))
+    def render_up_xyz(self) -> tuple[float, float, float]:
+        return _tuple3(self.render_world_pose.rotation.apply(RENDER_CAMERA_UP_LOCAL_XYZ))
 
     @property
     def rotation(self) -> Rotation:
-        return self.world_pose.rotation
+        return self.render_world_pose.rotation
 
 
 def build_sim_camera_specs(
@@ -129,7 +141,9 @@ def _build_camera_spec(
     link_transforms: Mapping[str, Transform],
     joint_child_link_by_name: Mapping[str, str],
 ) -> tuple[SimCameraSpec | None, str | None]:
-    name = _read_string(camera_record.get("name")) or f"camera_{index + 1}"
+    name = _read_string(camera_record.get("name")) or _read_string(camera_record.get("id"))
+    if not name:
+        return None, f"Camera at index {index} has no id or name; skipping simulator camera."
     camera_id = _read_string(camera_record.get("id")) or name
     parent_joint = _read_string(camera_record.get("parent_joint"))
     if not parent_joint:
@@ -153,20 +167,29 @@ def _build_camera_spec(
             "skipping simulator camera.",
         )
 
-    local_transform = _read_camera_local_transform(camera_record)
-    world_transform = _compose_transform(base_transform, local_transform)
+    render_local_transform, pose_warning = _read_render_camera_local_transform(camera_record, name)
+    if render_local_transform is None:
+        return None, pose_warning
+    fov_deg = _read_camera_fov_deg(camera_record)
+    if fov_deg is None:
+        return None, f"Camera '{name}' has invalid intrinsics.fov_deg; skipping simulator camera."
+    width = _read_camera_dimension(camera_record, "width")
+    height = _read_camera_dimension(camera_record, "height")
+    if width is None or height is None:
+        return None, f"Camera '{name}' has invalid intrinsics width or height; skipping simulator camera."
+    render_world_transform = _compose_transform(base_transform, render_local_transform)
     return (
         SimCameraSpec(
             camera_id=camera_id,
             name=name,
-            sim_name=_safe_sim_name(name or camera_id, fallback=f"camera_{index + 1}"),
+            sim_name=_safe_sim_name(name or camera_id, default_name=f"camera_{index + 1}"),
             parent_joint=parent_joint,
             parent_link=parent_link,
-            local_pose=local_transform,
-            world_pose=world_transform,
-            fov_deg=_read_camera_fov_deg(camera_record),
-            width=_read_camera_dimension(camera_record, "width", DEFAULT_CAMERA_WIDTH),
-            height=_read_camera_dimension(camera_record, "height", DEFAULT_CAMERA_HEIGHT),
+            render_local_pose=render_local_transform,
+            render_world_pose=render_world_transform,
+            fov_deg=fov_deg,
+            width=width,
+            height=height,
         ),
         None,
     )
@@ -211,6 +234,8 @@ def _build_link_transforms(robot: yourdfpy.URDF) -> dict[str, Transform]:
 def append_cameras_to_mujoco_mjcf(
     mjcf_text: str,
     cameras: Sequence[SimCameraSpec],
+    *,
+    include_markers: bool = False,
 ) -> str:
     if not cameras:
         return mjcf_text
@@ -236,18 +261,19 @@ def append_cameras_to_mujoco_mjcf(
                 "fovy": f"{camera.fov_deg:.12g}",
             },
         )
-        ET.SubElement(
-            parent,
-            "site",
-            {
-                "name": f"{camera.sim_name}_marker",
-                "type": "box",
-                "pos": _format_vector(pose.position_xyz),
-                "quat": _format_vector(pose.quat_wxyz),
-                "size": _format_vector(tuple(value * 0.5 for value in CAMERA_MARKER_SIZE_XYZ)),
-                "rgba": _format_vector(CAMERA_MARKER_RGBA),
-            },
-        )
+        if include_markers:
+            ET.SubElement(
+                parent,
+                "site",
+                {
+                    "name": f"{camera.sim_name}_marker",
+                    "type": "box",
+                    "pos": _format_vector(pose.position_xyz),
+                    "quat": _format_vector(pose.quat_wxyz),
+                    "size": _format_vector(tuple(value * 0.5 for value in CAMERA_MARKER_SIZE_XYZ)),
+                    "rgba": _format_vector(CAMERA_MARKER_RGBA),
+                },
+            )
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode")
 
@@ -258,8 +284,8 @@ def _mujoco_camera_parent_and_pose(
 ) -> tuple[ET.Element, Transform]:
     parent_body = _find_mujoco_body(worldbody, camera.parent_link)
     if parent_body is not None:
-        return parent_body, camera.local_pose
-    return worldbody, camera.world_pose
+        return parent_body, camera.render_local_pose
+    return worldbody, camera.render_world_pose
 
 
 def _find_mujoco_body(worldbody: ET.Element, body_name: str) -> ET.Element | None:
@@ -269,32 +295,42 @@ def _find_mujoco_body(worldbody: ET.Element, body_name: str) -> ET.Element | Non
     return None
 
 
-def _read_camera_local_transform(camera: dict[str, Any]) -> Transform:
+def _read_render_camera_local_transform(
+    camera: dict[str, Any],
+    name: str,
+) -> tuple[Transform | None, str | None]:
     pose = camera.get("pose")
     if isinstance(pose, dict):
         xyz = _read_vector3(pose.get("xyz"))
         rpy = _read_vector3(pose.get("rpy"))
-        return _transform_from_xyz_rpy(xyz, rpy)
+        if xyz is None or rpy is None:
+            return None, f"Camera '{name}' has invalid pose.xyz or pose.rpy; skipping simulator camera."
+        return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
     if isinstance(pose, list | tuple) and len(pose) >= 6:
-        return _transform_from_xyz_rpy(
-            _read_vector3(pose[:3]),
-            _read_vector3(pose[3:6]),
-        )
-    return Transform(position_xyz=(0.0, 0.0, 0.0), rotation=Rotation.identity())
+        xyz = _read_vector3(pose[:3])
+        rpy = _read_vector3(pose[3:6])
+        if xyz is None or rpy is None:
+            return None, f"Camera '{name}' has invalid pose values; skipping simulator camera."
+        return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
+    return None, f"Camera '{name}' has no pose; skipping simulator camera."
 
 
-def _read_camera_fov_deg(camera: dict[str, Any]) -> float:
+def _read_camera_fov_deg(camera: dict[str, Any]) -> float | None:
     intrinsics = camera.get("intrinsics")
     if isinstance(intrinsics, dict) and is_finite_number(intrinsics.get("fov_deg")):
-        return max(1.0, min(179.0, float(intrinsics["fov_deg"])))
-    return DEFAULT_CAMERA_FOV_DEG
+        fov_deg = float(intrinsics["fov_deg"])
+        if 1.0 <= fov_deg <= 179.0:
+            return fov_deg
+    return None
 
 
-def _read_camera_dimension(camera: dict[str, Any], key: str, fallback: int) -> int:
+def _read_camera_dimension(camera: dict[str, Any], key: str) -> int | None:
     intrinsics = camera.get("intrinsics")
     if isinstance(intrinsics, dict) and is_finite_number(intrinsics.get(key)):
-        return max(1, int(float(intrinsics[key])))
-    return fallback
+        value = float(intrinsics[key])
+        if value >= 1.0 and value.is_integer():
+            return int(value)
+    return None
 
 
 def _transform_from_xyz_rpy(
@@ -307,6 +343,25 @@ def _transform_from_xyz_rpy(
     )
 
 
+def _render_camera_transform_from_studio_xyz_rpy(
+    xyz: tuple[float, float, float],
+    rpy: tuple[float, float, float],
+) -> Transform:
+    studio_camera_transform = _transform_from_xyz_rpy(xyz, rpy)
+    return camera_render_transform_from_studio_transform(studio_camera_transform)
+
+
+def camera_render_transform_from_studio_transform(studio_camera_transform: Transform) -> Transform:
+    return Transform(
+        position_xyz=studio_camera_transform.position_xyz,
+        rotation=studio_camera_transform.rotation * studio_camera_to_render_view_rotation(),
+    )
+
+
+def studio_camera_to_render_view_rotation() -> Rotation:
+    return Rotation.from_matrix(STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX)
+
+
 def _compose_transform(parent: Transform, child: Transform) -> Transform:
     return Transform(
         position_xyz=_tuple3(
@@ -316,26 +371,23 @@ def _compose_transform(parent: Transform, child: Transform) -> Transform:
     )
 
 
-def _read_vector3(
-    value: Any,
-    fallback: tuple[float, float, float] = (0.0, 0.0, 0.0),
-) -> tuple[float, float, float]:
+def _read_vector3(value: Any) -> tuple[float, float, float] | None:
     if isinstance(value, str):
         parts: Sequence[Any] = value.split()
     elif isinstance(value, list | tuple):
         parts = value
     else:
-        return fallback
+        return None
     if len(parts) < 3:
-        return fallback
+        return None
     result: list[float] = []
     for item in parts[:3]:
         try:
             parsed = float(item)
         except (TypeError, ValueError):
-            return fallback
+            return None
         if not is_finite_number(parsed):
-            return fallback
+            return None
         result.append(parsed)
     return (result[0], result[1], result[2])
 
@@ -362,6 +414,6 @@ def _read_string(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def _safe_sim_name(value: str, *, fallback: str) -> str:
+def _safe_sim_name(value: str, *, default_name: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip()).strip("_")
-    return normalized or fallback
+    return normalized or default_name

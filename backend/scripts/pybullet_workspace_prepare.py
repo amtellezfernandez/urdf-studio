@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
+from backend.scripts.simulator_workspace_cli import add_common_workspace_args
 from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
     CAMERA_MARKER_SIZE_XYZ,
@@ -12,27 +13,23 @@ from backend.services.simulator_adapters.camera_transfer import (
     build_sim_camera_specs,
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
-from backend.services.simulator_adapters.params import PYBULLET_LAUNCH_PARAMS, PYBULLET_SCENE_PARAMS
-from backend.services.simulator_adapters.world_scene import prepare_world_scene
-from backend.services.world_layout_static_transfer import (
-    SimPrimitive,
-    WorldLayoutFrameMap,
+from backend.services.simulator_adapters.params import (
+    PYBULLET_SCENE_PARAMS,
+    PYBULLET_WORKSPACE_PROCESS_PARAMS,
 )
+from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
+from backend.services.simulator_adapters.world_scene import prepare_world_scene
+from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
+from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutFrameMap
+
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Open a URDF Studio world package in PyBullet.")
-    parser.add_argument("--world-package", required=True)
+    parser = argparse.ArgumentParser(description="Prepare a URDF Studio workspace in PyBullet.")
     parser.add_argument("--robot-urdf", required=True)
-    parser.add_argument(
-        "--frame-map",
-        choices=["auto", "studio-y-up-to-z-up", "identity"],
-        default="auto",
-    )
-    parser.add_argument("--duration-sec", type=float, default=0.0)
-    parser.add_argument("--include-hidden", action="store_true")
+    add_common_workspace_args(parser)
     parser.add_argument("--no-floor", action="store_true")
-    parser.add_argument("--no-viewer", action="store_true")
     parser.add_argument("--free-base", action="store_true")
+    parser.add_argument("--show-camera-markers", action="store_true")
     return parser.parse_args()
 
 
@@ -62,7 +59,19 @@ def _apply_initial_joint_positions(
     return applied_count
 
 
-def _primitive_shape(pybullet: Any, primitive: SimPrimitive) -> tuple[int, dict[str, Any], dict[str, Any]]:
+def _primitive_shape(
+    pybullet: Any,
+    primitive: SimPrimitive,
+    *,
+    asset_roots: Sequence[Path] = (),
+) -> tuple[int, dict[str, Any], dict[str, Any]]:
+    asset_path = resolve_world_layout_asset_path(primitive.asset_ref, asset_roots)
+    if asset_path is not None and hasattr(pybullet, "GEOM_MESH"):
+        shape_kwargs = {
+            "fileName": str(asset_path),
+            "meshScale": primitive.asset_scale_xyz or (1.0, 1.0, 1.0),
+        }
+        return pybullet.GEOM_MESH, shape_kwargs, shape_kwargs
     if primitive.sim_type == "box":
         shape_kwargs = {
             "halfExtents": [component * 0.5 for component in primitive.size_xyz],
@@ -84,8 +93,17 @@ def _primitive_shape(pybullet: Any, primitive: SimPrimitive) -> tuple[int, dict[
     raise ValueError(f"Unsupported PyBullet primitive type: {primitive.sim_type}")
 
 
-def _add_primitive(pybullet: Any, primitive: SimPrimitive) -> int:
-    shape_type, collision_shape_kwargs, visual_shape_kwargs = _primitive_shape(pybullet, primitive)
+def _add_primitive(
+    pybullet: Any,
+    primitive: SimPrimitive,
+    *,
+    asset_roots: Sequence[Path] = (),
+) -> int:
+    shape_type, collision_shape_kwargs, visual_shape_kwargs = _primitive_shape(
+        pybullet,
+        primitive,
+        asset_roots=asset_roots,
+    )
     collision_shape = (
         pybullet.createCollisionShape(shape_type, **collision_shape_kwargs)
         if primitive.collision
@@ -96,13 +114,22 @@ def _add_primitive(pybullet: Any, primitive: SimPrimitive) -> int:
         rgbaColor=primitive.rgba,
         **visual_shape_kwargs,
     )
-    return pybullet.createMultiBody(
-        baseMass=0.0,
+    base_mass = 0.0 if primitive.fixed else (primitive.mass_kg if primitive.mass_kg is not None else 1.0)
+    body_id = pybullet.createMultiBody(
+        baseMass=base_mass,
         baseCollisionShapeIndex=collision_shape,
         baseVisualShapeIndex=visual_shape,
         basePosition=primitive.position_xyz,
         baseOrientation=_quat_wxyz_to_xyzw(primitive.quat_wxyz),
     )
+    dynamics_kwargs: dict[str, float] = {}
+    if primitive.friction is not None:
+        dynamics_kwargs["lateralFriction"] = primitive.friction
+    if primitive.restitution is not None:
+        dynamics_kwargs["restitution"] = primitive.restitution
+    if dynamics_kwargs:
+        pybullet.changeDynamics(body_id, -1, **dynamics_kwargs)
+    return body_id
 
 
 def _add_camera_marker(pybullet: Any, camera: SimCameraSpec) -> int:
@@ -120,7 +147,7 @@ def _add_camera_marker(pybullet: Any, camera: SimCameraSpec) -> int:
     )
 
 
-def open_pybullet_world_scene(
+def prepare_pybullet_workspace_scene(
     *,
     world_package_path: Path,
     robot_urdf_path: Path,
@@ -130,6 +157,7 @@ def open_pybullet_world_scene(
     no_floor: bool,
     no_viewer: bool,
     free_base: bool,
+    show_camera_markers: bool,
 ) -> None:
     import pybullet
     import pybullet_data
@@ -140,13 +168,13 @@ def open_pybullet_world_scene(
         include_hidden=include_hidden,
     )
     for warning in prepared_scene.warnings:
-        print(f"[pybullet-world-open] warning: {warning}", flush=True)
+        print(f"[pybullet-workspace] warning: {warning}", flush=True)
     cameras, camera_warnings = build_sim_camera_specs(
         prepared_scene.world_package,
         robot_urdf_path=robot_urdf_path,
     )
     for warning in camera_warnings:
-        print(f"[pybullet-world-open] warning: {warning}", flush=True)
+        print(f"[pybullet-workspace] warning: {warning}", flush=True)
 
     connection_mode = pybullet.DIRECT if no_viewer else pybullet.GUI
     client_id = pybullet.connect(connection_mode)
@@ -168,19 +196,27 @@ def open_pybullet_world_scene(
             robot_id,
             prepared_scene.world_package.world_snapshot.joint_positions,
         )
-        object_ids = [_add_primitive(pybullet, primitive) for primitive in prepared_scene.primitives]
-        camera_marker_ids = [_add_camera_marker(pybullet, camera) for camera in cameras]
+        asset_roots = workspace_asset_roots(world_package_path, robot_urdf_path)
+        object_ids = [
+            _add_primitive(pybullet, primitive, asset_roots=asset_roots)
+            for primitive in prepared_scene.primitives
+        ]
+        camera_marker_ids = (
+            [_add_camera_marker(pybullet, camera) for camera in cameras]
+            if show_camera_markers
+            else []
+        )
         pybullet.stepSimulation()
         print(
-            "[pybullet-world-open] "
+            "[pybullet-workspace] "
             f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
             f"robot_joints={pybullet.getNumJoints(robot_id)} world_objects={len(object_ids)} "
-            f"cameras={len(camera_marker_ids)} "
+            f"cameras={len(cameras)} camera_markers={len(camera_marker_ids)} "
             f"frame_map={prepared_scene.frame_map} requested_frame_map={frame_map} "
             f"applied_initial_joints={applied_joints}",
             flush=True,
         )
-        print(PYBULLET_LAUNCH_PARAMS.ready_log_marker, flush=True)
+        print(PYBULLET_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
 
         deadline = time.monotonic() + duration_sec if duration_sec > 0 else None
         while True:
@@ -196,7 +232,7 @@ def open_pybullet_world_scene(
 
 def main() -> int:
     args = _parse_args()
-    open_pybullet_world_scene(
+    prepare_pybullet_workspace_scene(
         world_package_path=Path(args.world_package),
         robot_urdf_path=Path(args.robot_urdf),
         frame_map=args.frame_map,
@@ -205,6 +241,7 @@ def main() -> int:
         no_floor=args.no_floor,
         no_viewer=args.no_viewer,
         free_base=args.free_base,
+        show_camera_markers=args.show_camera_markers,
     )
     return 0
 

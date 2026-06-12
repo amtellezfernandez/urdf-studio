@@ -7,8 +7,8 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeSpec,
     SimulatorRuntimeStatus,
-    SimulatorWorldOpenRequest,
-    SimulatorWorldOpenResponse,
+    SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareResponse,
 )
 from backend.services.simulator_adapters.base import (
     SimulatorAdapter,
@@ -33,9 +33,13 @@ class OptionalSimulatorAdapter:
     def capabilities(self) -> SimulatorRuntimeCapabilities:
         return self.spec.capabilities_model()
 
-    def open_world(self, _request: SimulatorWorldOpenRequest) -> SimulatorWorldOpenResponse:
+    def prepare_workspace(
+        self,
+        _request: SimulatorWorkspacePrepareRequest,
+    ) -> SimulatorWorkspacePrepareResponse:
         raise SimulatorCapabilityError(
-            f"{self.label} is registered for runtime discovery, but world launch is not available yet."
+            f"{self.label} is registered for runtime discovery, "
+            "but its workspace adapter is planned."
         )
 
     def runtime_status(self) -> SimulatorRuntimeStatus:

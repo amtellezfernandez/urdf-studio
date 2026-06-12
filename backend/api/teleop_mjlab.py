@@ -16,12 +16,12 @@ router = APIRouter(prefix="/teleop/mjlab", tags=["teleop-mjlab"])
 
 
 @router.get("/runtime", response_model=TeleopMjlabRuntimeStatus)
-def get_teleop_mjlab_runtime_status() -> TeleopMjlabRuntimeStatus:
+async def get_teleop_mjlab_runtime_status() -> TeleopMjlabRuntimeStatus:
     return resolve_teleop_mjlab_runtime_status()
 
 
 @router.post("/validate", response_model=TeleopMjlabValidationResult)
-def validate_teleop_mjlab_recording(
+async def validate_teleop_mjlab_recording(
     req: TeleopMjlabValidateRequest,
 ) -> TeleopMjlabValidationResult:
     return validate_teleop_mjlab_motion(

@@ -1,7 +1,7 @@
 import type * as THREE from "three";
 
 import { applyUrdfVisualMaterials } from "@/features/urdf/runtime/materialApply";
-import { URDF_VISUAL_MATERIAL_APPLY_FALLBACK_DELAY_MS } from "@/features/urdf/runtime/materialApplySchedulerParams";
+import { URDF_VISUAL_MATERIAL_APPLY_FRAMELESS_DELAY_MS } from "@/features/urdf/runtime/materialApplySchedulerParams";
 
 type FrameRequest = (callback: FrameRequestCallback) => number;
 type FrameCancel = (frameId: number) => void;
@@ -25,7 +25,7 @@ const defaultRequestFrame: FrameRequest = (callback) => {
   }
   return window.setTimeout(
     () => callback(typeof performance !== "undefined" ? performance.now() : Date.now()),
-    URDF_VISUAL_MATERIAL_APPLY_FALLBACK_DELAY_MS
+    URDF_VISUAL_MATERIAL_APPLY_FRAMELESS_DELAY_MS
   );
 };
 

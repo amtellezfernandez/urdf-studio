@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
+from backend.core.paths import BASE_DIR
+from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
 from backend.services.world_layout_static_transfer import (
     POSITION_TOLERANCE_M,
     QUATERNION_TOLERANCE,
     SIZE_TOLERANCE_M,
-    WorldLayoutBackend,
-    WorldLayoutFrameMap,
     check_static_world_layout_file,
 )
+from backend.services.world_layout_transfer_types import WorldLayoutBackend
 
 
 DEFAULT_LAYOUT_PATH = Path("web/public/world-layouts/static-transfer-smoke.world-layout.json")
+TRANSFER_CHECK_CACHE_ROOT = BASE_DIR / ".cache" / "simulator-workspaces" / "runtime-cache"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -36,7 +39,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--frame-map",
         choices=["auto", "studio-y-up-to-z-up", "identity"],
-        default="auto",
+        default="identity",
         help="Coordinate conversion from URDF Studio layout coordinates to simulator coordinates.",
     )
     parser.add_argument(
@@ -78,6 +81,7 @@ def _selected_backends(value: str) -> tuple[WorldLayoutBackend, ...]:
 
 def main() -> int:
     args = _parse_args()
+    os.environ.update(build_simulator_workspace_env(TRANSFER_CHECK_CACHE_ROOT))
     report = check_static_world_layout_file(
         Path(args.layout),
         backends=_selected_backends(args.backend),

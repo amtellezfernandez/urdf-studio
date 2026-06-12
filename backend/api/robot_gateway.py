@@ -61,8 +61,8 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_ROBOT_CALIBRATION_RELATIVE_DIR,
 )
 from backend.robot_gateway.rest_authorization import (
-    require_robot_gateway_control_access,
-    require_robot_gateway_local_workstation_access,
+    require_robot_gateway_control_access_async,
+    require_robot_gateway_local_workstation_access_async,
 )
 from backend.robot_gateway.runtime import build_robot_gateway_runtime_from_env
 
@@ -75,7 +75,7 @@ runtime = build_robot_gateway_runtime_from_env()
     response_model=RobotGatewayManifest,
     response_model_by_alias=False,
 )
-def get_robot_gateway_manifest() -> RobotGatewayManifest:
+async def get_robot_gateway_manifest() -> RobotGatewayManifest:
     manifest = runtime.get_manifest()
     return manifest.model_copy(
         update={
@@ -90,24 +90,24 @@ def get_robot_gateway_manifest() -> RobotGatewayManifest:
     response_model=RobotGatewayManifest,
     response_model_by_alias=False,
 )
-def get_authorized_robot_gateway_manifest(
-    _access: None = Depends(require_robot_gateway_control_access),
+async def get_authorized_robot_gateway_manifest(
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayManifest:
     return runtime.get_manifest()
 
 
 @router.get("/session", response_model=RobotGatewaySessionSnapshot)
-def get_robot_gateway_session() -> RobotGatewaySessionSnapshot:
+async def get_robot_gateway_session() -> RobotGatewaySessionSnapshot:
     return runtime.get_session()
 
 
 @router.get("/stats", response_model=RobotGatewayStatsSnapshot)
-def get_robot_gateway_stats() -> RobotGatewayStatsSnapshot:
+async def get_robot_gateway_stats() -> RobotGatewayStatsSnapshot:
     return runtime.get_stats()
 
 
 @router.get("/telemetry/state", response_model=RobotGatewayStateFrame)
-def get_robot_gateway_state() -> RobotGatewayStateFrame:
+async def get_robot_gateway_state() -> RobotGatewayStateFrame:
     return runtime.read_state()
 
 
@@ -116,8 +116,8 @@ def get_robot_gateway_state() -> RobotGatewayStateFrame:
     response_model=RobotGatewayEnvConfigFile,
     response_model_by_alias=False,
 )
-def get_robot_gateway_env_config(
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+async def get_robot_gateway_env_config(
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayEnvConfigFile:
     return read_robot_gateway_env_config_file()
 
@@ -127,9 +127,9 @@ def get_robot_gateway_env_config(
     response_model=RobotGatewayEnvConfigFile,
     response_model_by_alias=False,
 )
-def update_robot_gateway_env_config(
+async def update_robot_gateway_env_config(
     req: RobotGatewayEnvConfigUpdate,
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayEnvConfigFile:
     return write_robot_gateway_env_config_file(req.content)
 
@@ -139,8 +139,8 @@ def update_robot_gateway_env_config(
     response_model=RobotGatewayEnvConfigOpenResult,
     response_model_by_alias=False,
 )
-def open_robot_gateway_env_config(
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+async def open_robot_gateway_env_config(
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayEnvConfigOpenResult:
     return open_robot_gateway_env_config_file()
 
@@ -150,7 +150,7 @@ def open_robot_gateway_env_config(
     response_model=OpenArmLeaderDetectionResult,
     response_model_by_alias=False,
 )
-def detect_robot_gateway_hardware_leaders() -> OpenArmLeaderDetectionResult:
+async def detect_robot_gateway_hardware_leaders() -> OpenArmLeaderDetectionResult:
     return detect_openarm_leaders()
 
 
@@ -160,8 +160,8 @@ def detect_robot_gateway_hardware_leaders() -> OpenArmLeaderDetectionResult:
     response_model_by_alias=False,
     include_in_schema=False,
 )
-def detect_robot_gateway_openarm_leaders() -> OpenArmLeaderDetectionResult:
-    return detect_robot_gateway_hardware_leaders()
+async def detect_robot_gateway_openarm_leaders() -> OpenArmLeaderDetectionResult:
+    return detect_openarm_leaders()
 
 
 @router.get(
@@ -169,8 +169,8 @@ def detect_robot_gateway_openarm_leaders() -> OpenArmLeaderDetectionResult:
     response_model=RobotGatewayLeRobotCalibrationCatalog,
     response_model_by_alias=False,
 )
-def list_robot_gateway_lerobot_calibrations(
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+async def list_robot_gateway_lerobot_calibrations(
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayLeRobotCalibrationCatalog:
     adapter_config = runtime.config.adapter_config
     active_source = _build_active_lerobot_calibration_source()
@@ -218,9 +218,9 @@ def _build_active_lerobot_calibration_source(
     response_model=RobotGatewayEnvConfigOpenResult,
     response_model_by_alias=False,
 )
-def open_robot_gateway_lerobot_calibration(
+async def open_robot_gateway_lerobot_calibration(
     req: RobotGatewayLeRobotCalibrationStartRequest,
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayEnvConfigOpenResult:
     if req.calibration_source is None:
         raise HTTPException(status_code=400, detail="Calibration source is required.")
@@ -237,9 +237,9 @@ def open_robot_gateway_lerobot_calibration(
     response_model=RobotGatewayLeRobotCalibrationFileSyncResult,
     response_model_by_alias=False,
 )
-def sync_robot_gateway_lerobot_calibration_file(
+async def sync_robot_gateway_lerobot_calibration_file(
     req: RobotGatewayLeRobotCalibrationFileSyncRequest,
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayLeRobotCalibrationFileSyncResult:
     if req.calibration_source is None:
         raise HTTPException(status_code=400, detail="Calibration source is required.")
@@ -311,7 +311,7 @@ def _reload_robot_gateway_lerobot_calibration_file(
     response_model=OpenArmLeaderStateResult,
     response_model_by_alias=False,
 )
-def read_robot_gateway_hardware_leader_state(
+async def read_robot_gateway_hardware_leader_state(
     port: str,
     side: OpenArmLeaderStateSide = "both",
     motor_ids: str | None = None,
@@ -338,7 +338,7 @@ def read_robot_gateway_hardware_leader_state(
     response_model=OpenArmLeaderReleaseResult,
     response_model_by_alias=False,
 )
-def release_robot_gateway_hardware_leaders(
+async def release_robot_gateway_hardware_leaders(
     req: OpenArmLeaderReleaseRequest | None = None,
 ) -> OpenArmLeaderReleaseResult:
     if req is None:
@@ -359,9 +359,9 @@ def release_robot_gateway_hardware_leaders(
     response_model=RobotGatewayLeRobotCalibrationStartResult,
     response_model_by_alias=False,
 )
-def start_robot_gateway_leader_calibration(
+async def start_robot_gateway_leader_calibration(
     req: OpenArmLeaderReleaseRequest,
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayLeRobotCalibrationStartResult:
     openarm_leader_state_service.release(
         port=req.port,
@@ -386,8 +386,8 @@ def start_robot_gateway_leader_calibration(
     response_model=OpenArmLeaderReleaseResult,
     response_model_by_alias=False,
 )
-def release_robot_gateway_hardware_follower(
-    _access: None = Depends(require_robot_gateway_control_access),
+async def release_robot_gateway_hardware_follower(
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> OpenArmLeaderReleaseResult:
     return OpenArmLeaderReleaseResult(released=runtime.release_hardware())
 
@@ -397,9 +397,9 @@ def release_robot_gateway_hardware_follower(
     response_model=RobotGatewayLeRobotCalibrationStartResult,
     response_model_by_alias=False,
 )
-def start_robot_gateway_follower_calibration(
+async def start_robot_gateway_follower_calibration(
     req: RobotGatewayLeRobotCalibrationStartRequest | None = None,
-    _access: None = Depends(require_robot_gateway_local_workstation_access),
+    _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayLeRobotCalibrationStartResult:
     runtime.release_hardware()
     return start_lerobot_calibration(
@@ -414,7 +414,7 @@ def start_robot_gateway_follower_calibration(
     response_model_by_alias=False,
     include_in_schema=False,
 )
-def read_robot_gateway_openarm_leader_state(
+async def read_robot_gateway_openarm_leader_state(
     port: str,
     side: OpenArmLeaderStateSide = "both",
     motor_ids: str | None = None,
@@ -424,7 +424,7 @@ def read_robot_gateway_openarm_leader_state(
     calibration_id: str | None = None,
     calibration_group: str | None = None,
 ) -> OpenArmLeaderStateResult:
-    return read_robot_gateway_hardware_leader_state(
+    return await read_robot_gateway_hardware_leader_state(
         port=port,
         side=side,
         motor_ids=motor_ids,
@@ -442,10 +442,10 @@ def read_robot_gateway_openarm_leader_state(
     response_model_by_alias=False,
     include_in_schema=False,
 )
-def release_robot_gateway_openarm_leaders(
+async def release_robot_gateway_openarm_leaders(
     req: OpenArmLeaderReleaseRequest | None = None,
 ) -> OpenArmLeaderReleaseResult:
-    return release_robot_gateway_hardware_leaders(req)
+    return await release_robot_gateway_hardware_leaders(req)
 
 
 def _parse_motor_ids_query(value: str | None) -> tuple[int, ...] | None:
@@ -482,38 +482,38 @@ def _parse_motor_ids_query(value: str | None) -> tuple[int, ...] | None:
     response_model=RobotGatewayPointCloudFrame,
     response_model_by_alias=False,
 )
-def get_robot_gateway_point_cloud(camera_id: str) -> RobotGatewayPointCloudFrame:
+async def get_robot_gateway_point_cloud(camera_id: str) -> RobotGatewayPointCloudFrame:
     return runtime.read_point_cloud(camera_id)
 
 
 @router.post("/lease/request", response_model=RobotGatewayLeaseResponse)
-def request_robot_gateway_lease(
+async def request_robot_gateway_lease(
     req: RobotGatewayLeaseRequest,
-    _access: None = Depends(require_robot_gateway_control_access),
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayLeaseResponse:
     return runtime.request_lease(req)
 
 
 @router.post("/lease/release", response_model=RobotGatewayLeaseResponse)
-def release_robot_gateway_lease(
+async def release_robot_gateway_lease(
     req: RobotGatewayLeaseRequest,
-    _access: None = Depends(require_robot_gateway_control_access),
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayLeaseResponse:
     return runtime.release_lease(req)
 
 
 @router.post("/control/joint-jog", response_model=RobotGatewayControlAck)
-def apply_robot_gateway_joint_jog(
+async def apply_robot_gateway_joint_jog(
     req: RobotGatewayJointJogRequest,
-    _access: None = Depends(require_robot_gateway_control_access),
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
     return runtime.apply_joint_jog(req)
 
 
 @router.post("/hardware/openarm/calibration/joint-jog", response_model=RobotGatewayControlAck)
-def apply_robot_gateway_openarm_calibration_jog(
+async def apply_robot_gateway_openarm_calibration_jog(
     req: RobotGatewayOpenArmCalibrationJogRequest,
-    _access: None = Depends(require_robot_gateway_control_access),
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
     return runtime.apply_openarm_calibration_jog(req)
 
@@ -523,30 +523,30 @@ def apply_robot_gateway_openarm_calibration_jog(
     response_model=RobotGatewayOpenArmCanDryRunPlan,
     response_model_by_alias=False,
 )
-def prepare_robot_gateway_joint_jog_can_dry_run(
+async def prepare_robot_gateway_joint_jog_can_dry_run(
     req: RobotGatewayJointJogRequest,
-    _access: None = Depends(require_robot_gateway_control_access),
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayOpenArmCanDryRunPlan:
     return runtime.prepare_joint_jog_can_dry_run(req)
 
 
 @router.post("/control/twist", response_model=RobotGatewayControlAck)
-def apply_robot_gateway_twist(
+async def apply_robot_gateway_twist(
     req: RobotGatewayTwistRequest,
-    _access: None = Depends(require_robot_gateway_control_access),
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
     return runtime.apply_twist(req)
 
 
 @router.post("/control/stop", response_model=RobotGatewayControlAck)
-def stop_robot_gateway(
-    _access: None = Depends(require_robot_gateway_control_access),
+async def stop_robot_gateway(
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
     return runtime.stop()
 
 
 @router.post("/control/estop", response_model=RobotGatewayControlAck)
-def estop_robot_gateway(
-    _access: None = Depends(require_robot_gateway_control_access),
+async def estop_robot_gateway(
+    _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
     return runtime.estop()

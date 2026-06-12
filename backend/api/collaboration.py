@@ -155,7 +155,7 @@ async def _close_revoked_collaboration_peers(
 
 
 @http_router.post("/sessions", response_model=CollaborationSessionCreateResponse)
-def create_collaboration_session(
+async def create_collaboration_session(
     request: CollaborationSessionCreateRequest,
 ) -> CollaborationSessionCreateResponse:
     try:
@@ -165,7 +165,7 @@ def create_collaboration_session(
 
 
 @http_router.get("/sessions/{session_id}", response_model=CollaborationSessionSnapshot)
-def get_collaboration_session(request_context: Request, session_id: str) -> CollaborationSessionSnapshot:
+async def get_collaboration_session(request_context: Request, session_id: str) -> CollaborationSessionSnapshot:
     try:
         return collaboration_service.get_session(session_id, session_token=_session_token(request_context))
     except Exception as exc:
@@ -173,7 +173,7 @@ def get_collaboration_session(request_context: Request, session_id: str) -> Coll
 
 
 @http_router.get("/sessions/{session_id}/events", response_model=list[CollaborationEventSnapshot])
-def list_collaboration_events(
+async def list_collaboration_events(
     request_context: Request,
     session_id: str,
 ) -> list[CollaborationEventSnapshot]:
@@ -184,7 +184,7 @@ def list_collaboration_events(
 
 
 @http_router.get("/sessions/{session_id}/stats", response_model=CollaborationSessionStats)
-def get_collaboration_session_stats(
+async def get_collaboration_session_stats(
     request_context: Request,
     session_id: str,
 ) -> CollaborationSessionStats:
@@ -216,7 +216,7 @@ async def update_collaboration_access(
 
 
 @http_router.post("/sessions/{session_id}/capabilities", response_model=CollaborationCapabilityIssueResponse)
-def issue_collaboration_capability(
+async def issue_collaboration_capability(
     request_context: Request,
     session_id: str,
     request: CollaborationCapabilityIssueRequest,
@@ -235,7 +235,7 @@ def issue_collaboration_capability(
     "/sessions/{session_id}/capabilities/verify",
     response_model=CollaborationCapabilityVerifyResponse,
 )
-def verify_collaboration_capability(
+async def verify_collaboration_capability(
     session_id: str,
     request: CollaborationCapabilityVerifyRequest,
 ) -> CollaborationCapabilityVerifyResponse:
@@ -249,7 +249,7 @@ def verify_collaboration_capability(
     "/sessions/{session_id}/capabilities/revoke",
     response_model=CollaborationCapabilityRevokeResponse,
 )
-def revoke_collaboration_capability(
+async def revoke_collaboration_capability(
     request_context: Request,
     session_id: str,
     request: CollaborationCapabilityRevokeRequest,

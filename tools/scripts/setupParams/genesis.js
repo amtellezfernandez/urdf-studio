@@ -5,7 +5,7 @@ export const GENESIS_SETUP = {
     world: 'genesis-world==1.1.0',
     renderer: 'imgui-bundle==1.92.801',
   },
-  verifyImportScript: 'import genesis; import imgui_bundle; print("genesis static world viewer runtime ok")',
+  verifyImportScript: 'import genesis; import imgui_bundle; print("genesis workspace adapter runtime ok")',
 };
 
 export const GENESIS_SKIP_AUTO_INSTALL_ENV = GENESIS_SETUP.skipAutoInstallEnv;

@@ -12,7 +12,7 @@ import { useCameraStore } from "@/shared/store/useCameraStore";
 import { computeRobotFocusBounds } from "@/features/viewer/cameraBounds";
 import {
   getWorldForwardFromThreeViewQuaternion,
-  toThreeViewQuaternionFromUrdf,
+  toThreeViewQuaternionFromStudioCamera,
 } from "@/features/camera/cameraOrientationContract";
 import { getCameraWorldPose } from "@/features/camera/cameraWorldPose";
 import {
@@ -95,7 +95,7 @@ export const shouldSyncSelectedViewerCamera = (
 
 export const resolveCameraPovDisplayQuaternion = (
   cameraQuaternion: THREE.Quaternion,
-): THREE.Quaternion => toThreeViewQuaternionFromUrdf(cameraQuaternion);
+): THREE.Quaternion => toThreeViewQuaternionFromStudioCamera(cameraQuaternion);
 
 export const captureGlobalCameraSnapshotState = (
   camera: THREE.PerspectiveCamera,

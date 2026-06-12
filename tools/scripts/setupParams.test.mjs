@@ -63,6 +63,8 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.equal(BACKEND_NATIVE_SIM_SKIP_ENV, 'URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL');
   assert.equal(BACKEND_NATIVE_SIM_FORCE_ENV, 'URDF_STUDIO_INSTALL_NATIVE_SIM');
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('fastapi'));
+  assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('httpx'));
+  assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('httpx2'));
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('python-multipart'));
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('pyarrow'));
   assert.ok(BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('yourdfpy'));
@@ -75,6 +77,8 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.ok(BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES.includes('libcoal'));
   assert.ok(BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES.includes('libpinocchio'));
   assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"yourdfpy"/);
+  assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"httpx"/);
+  assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"httpx2"/);
   assert.match(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"pyarrow"/);
   assert.doesNotMatch(BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);
   assert.match(BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT, /"hppfcl"/);
@@ -109,7 +113,7 @@ test('MJLab setup pins and verifies MuJoCo-Warp', () => {
   assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mujoco_warp/);
 });
 
-test('PyBullet world viewer runtime is portable and direct URDF based', () => {
+test('PyBullet workspace adapter runtime is portable and direct URDF based', () => {
   assert.equal(PYBULLET_SKIP_AUTO_INSTALL_ENV, 'URDF_STUDIO_SKIP_PYBULLET_AUTO_INSTALL');
   assert.equal(PYBULLET_FORCE_INSTALL_ENV, 'URDF_STUDIO_INSTALL_PYBULLET');
   assert.equal(PYBULLET_PACKAGE, 'pybullet');
@@ -118,7 +122,7 @@ test('PyBullet world viewer runtime is portable and direct URDF based', () => {
   assert.match(PYBULLET_VERIFY_IMPORT_SCRIPT, /import pybullet_data/);
 });
 
-test('Genesis static world viewer runtime is pinned separately from portable backend setup', () => {
+test('Genesis workspace adapter runtime is pinned separately from portable backend setup', () => {
   assert.equal(GENESIS_WORLD_PACKAGE, 'genesis-world==1.1.0');
   assert.equal(GENESIS_RENDER_PACKAGE, 'imgui-bundle==1.92.801');
   assert.deepEqual(GENESIS_PYTHON_DEPENDENCIES, [GENESIS_WORLD_PACKAGE, GENESIS_RENDER_PACKAGE]);

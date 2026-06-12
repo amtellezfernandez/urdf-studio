@@ -15,7 +15,7 @@ router = APIRouter(prefix="/ilu-assembly", tags=["ilu-assembly"])
 
 
 @router.get("/{assembly_id}/manifest", response_model=IluAssemblyManifestResponse)
-def get_assembly_manifest(assembly_id: str) -> IluAssemblyManifestResponse:
+async def get_assembly_manifest(assembly_id: str) -> IluAssemblyManifestResponse:
     try:
         return get_ilu_assembly_manifest(assembly_id)
     except IluAssemblyError as exc:
@@ -23,7 +23,7 @@ def get_assembly_manifest(assembly_id: str) -> IluAssemblyManifestResponse:
 
 
 @router.get("/{assembly_id}/asset")
-def get_assembly_asset(
+async def get_assembly_asset(
     assembly_id: str,
     path: str = Query(..., min_length=1),
 ) -> FileResponse:
