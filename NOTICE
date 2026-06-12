@@ -13,3 +13,12 @@ AGPLv3 section 13.
 
 Preferred upstream repository for public modifications:
 https://github.com/amtellezfernandez/urdf-studio
+
+Third-party notices:
+
+MetaSim camera conventions and pinhole camera contract
+Portions of backend/services/simulator_adapters/camera_conventions.py and
+backend/services/simulator_adapters/camera_intrinsics.py are adapted from
+RoboVerse MetaSim's camera frame convention and camera configuration utilities.
+MetaSim is licensed under the Apache License 2.0.
+Source: https://github.com/RoboVerseOrg/MetaSim

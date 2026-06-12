@@ -10,10 +10,22 @@ from backend.services.simulator_adapters.camera_transfer import (
     RENDER_CAMERA_FORWARD_LOCAL_XYZ,
     RENDER_CAMERA_UP_LOCAL_XYZ,
     STUDIO_CAMERA_FORWARD_LOCAL_XYZ,
+    STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX,
     STUDIO_CAMERA_UP_LOCAL_XYZ,
     append_cameras_to_mujoco_mjcf,
     build_sim_camera_specs,
     studio_camera_to_render_view_rotation,
+)
+from backend.services.simulator_adapters.camera_conventions import (
+    OPENGL_CAMERA_FORWARD_LOCAL_XYZ,
+    OPENGL_CAMERA_UP_LOCAL_XYZ,
+    ROS_CAMERA_FORWARD_LOCAL_XYZ,
+    ROS_CAMERA_UP_LOCAL_XYZ,
+    WORLD_CAMERA_TO_OPENGL_CAMERA_MATRIX,
+    camera_frame_conversion_rotation,
+)
+from backend.services.simulator_adapters.camera_intrinsics import (
+    vertical_fov_deg_from_focal_length_px,
 )
 from backend.tests.simulator_adapter_test_utils import make_world_package
 
@@ -65,6 +77,7 @@ def test_build_sim_camera_specs_resolves_parent_joint_world_pose(tmp_path: Path)
     assert cameras[0].width == 1280
     assert cameras[0].height == 720
     assert cameras[0].fov_deg == 55
+    assert cameras[0].intrinsics is not None
     assert cameras[0].render_local_pose.position_xyz == (1.0, 0.0, 0.0)
     assert cameras[0].position_xyz[0] == pytest.approx(0.0, abs=1e-9)
     assert cameras[0].position_xyz[1] == pytest.approx(1.0, abs=1e-9)
@@ -106,6 +119,44 @@ def test_build_sim_camera_specs_maps_studio_x_forward_to_render_negative_z(tmp_p
     assert cameras[0].render_up_xyz[2] == pytest.approx(1.0, abs=1e-9)
 
 
+def test_build_sim_camera_specs_preserves_explicit_pinhole_intrinsics(tmp_path: Path) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text(
+        "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "calibrated camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {
+                "width": 640,
+                "height": 480,
+                "fov_deg": 70,
+                "fx": 501.0,
+                "fy": 502.0,
+                "cx": 319.5,
+                "cy": 241.25,
+            },
+        }
+    ]
+
+    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    assert warnings == ()
+    assert len(cameras) == 1
+    assert cameras[0].fov_deg == pytest.approx(vertical_fov_deg_from_focal_length_px(502.0, 480))
+    assert cameras[0].intrinsics is not None
+    assert cameras[0].intrinsics.matrix == (
+        (501.0, 0.0, 319.5),
+        (0.0, 502.0, 241.25),
+        (0.0, 0.0, 1.0),
+    )
+
+
 def test_studio_camera_frame_maps_to_render_camera_frame() -> None:
     rotation = studio_camera_to_render_view_rotation()
 
@@ -118,6 +169,35 @@ def test_studio_camera_frame_maps_to_render_camera_frame() -> None:
     assert render_up_in_studio[0] == pytest.approx(STUDIO_CAMERA_UP_LOCAL_XYZ[0])
     assert render_up_in_studio[1] == pytest.approx(STUDIO_CAMERA_UP_LOCAL_XYZ[1])
     assert render_up_in_studio[2] == pytest.approx(STUDIO_CAMERA_UP_LOCAL_XYZ[2])
+
+
+def test_camera_conventions_match_roboverse_metasim_world_to_opengl_contract() -> None:
+    rotation = camera_frame_conversion_rotation("world", "opengl")
+
+    render_forward_in_world = rotation.apply(OPENGL_CAMERA_FORWARD_LOCAL_XYZ)
+    render_up_in_world = rotation.apply(OPENGL_CAMERA_UP_LOCAL_XYZ)
+
+    assert STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX.tolist() == WORLD_CAMERA_TO_OPENGL_CAMERA_MATRIX.tolist()
+    assert render_forward_in_world[0] == pytest.approx(STUDIO_CAMERA_FORWARD_LOCAL_XYZ[0])
+    assert render_forward_in_world[1] == pytest.approx(STUDIO_CAMERA_FORWARD_LOCAL_XYZ[1])
+    assert render_forward_in_world[2] == pytest.approx(STUDIO_CAMERA_FORWARD_LOCAL_XYZ[2])
+    assert render_up_in_world[0] == pytest.approx(STUDIO_CAMERA_UP_LOCAL_XYZ[0])
+    assert render_up_in_world[1] == pytest.approx(STUDIO_CAMERA_UP_LOCAL_XYZ[1])
+    assert render_up_in_world[2] == pytest.approx(STUDIO_CAMERA_UP_LOCAL_XYZ[2])
+
+
+def test_camera_conventions_match_roboverse_metasim_opengl_to_ros_contract() -> None:
+    rotation = camera_frame_conversion_rotation("opengl", "ros")
+
+    ros_forward_in_opengl = rotation.apply(ROS_CAMERA_FORWARD_LOCAL_XYZ)
+    ros_up_in_opengl = rotation.apply(ROS_CAMERA_UP_LOCAL_XYZ)
+
+    assert ros_forward_in_opengl[0] == pytest.approx(OPENGL_CAMERA_FORWARD_LOCAL_XYZ[0])
+    assert ros_forward_in_opengl[1] == pytest.approx(OPENGL_CAMERA_FORWARD_LOCAL_XYZ[1])
+    assert ros_forward_in_opengl[2] == pytest.approx(OPENGL_CAMERA_FORWARD_LOCAL_XYZ[2])
+    assert ros_up_in_opengl[0] == pytest.approx(OPENGL_CAMERA_UP_LOCAL_XYZ[0])
+    assert ros_up_in_opengl[1] == pytest.approx(OPENGL_CAMERA_UP_LOCAL_XYZ[1])
+    assert ros_up_in_opengl[2] == pytest.approx(OPENGL_CAMERA_UP_LOCAL_XYZ[2])
 
 
 def test_build_sim_camera_specs_warns_for_missing_parent(tmp_path: Path) -> None:
@@ -170,7 +250,32 @@ def test_build_sim_camera_specs_requires_pose_and_intrinsics(tmp_path: Path) -> 
     assert cameras == ()
     assert len(warnings) == 2
     assert "has no pose" in warnings[0]
-    assert "invalid intrinsics.fov_deg" in warnings[1]
+    assert "invalid pinhole intrinsics" in warnings[1]
+
+
+def test_build_sim_camera_specs_skips_duplicate_simulator_camera_names(tmp_path: Path) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text(
+        "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    base_camera = {
+        "parent_joint": "base_link",
+        "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
+        "intrinsics": {"width": 640, "height": 480, "fov_deg": 60},
+    }
+    world_package.world_snapshot.cameras = [
+        {"id": "cam-a", "name": "wrist camera", **base_camera},
+        {"id": "cam-b", "name": "wrist camera", **base_camera},
+    ]
+
+    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    assert len(cameras) == 1
+    assert cameras[0].camera_id == "cam-a"
+    assert len(warnings) == 1
+    assert "duplicates another camera" in warnings[0]
 
 
 def test_append_cameras_to_mujoco_mjcf_adds_native_camera_without_marker_by_default() -> None:

@@ -11,28 +11,32 @@ import yourdfpy  # type: ignore
 from scipy.spatial.transform import Rotation
 
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.simulator_adapters.camera_conventions import (
+    OPENGL_CAMERA_FORWARD_LOCAL_XYZ,
+    OPENGL_CAMERA_UP_LOCAL_XYZ,
+    WORLD_CAMERA_FORWARD_LOCAL_XYZ,
+    WORLD_CAMERA_TO_OPENGL_CAMERA_MATRIX,
+    WORLD_CAMERA_UP_LOCAL_XYZ,
+    world_camera_to_opengl_camera_rotation,
+)
+from backend.services.simulator_adapters.camera_intrinsics import (
+    PinholeCameraIntrinsics,
+    pinhole_camera_intrinsics_from_record,
+)
 from backend.services.simulator_adapters.numeric import is_finite_number
 
 
 CAMERA_MARKER_RGBA = (1.0, 0.82, 0.12, 1.0)
 CAMERA_MARKER_SIZE_XYZ = (0.05, 0.035, 0.025)
 
-# Studio stores camera poses in its robot mount frame: +X looks out of the
-# camera body and +Z is up. Most simulator render cameras use the graphics
-# convention: -Z forward and +Y up. Keep the Studio contract stable and convert
-# once at simulator boundaries.
-STUDIO_CAMERA_FORWARD_LOCAL_XYZ = (1.0, 0.0, 0.0)
-STUDIO_CAMERA_UP_LOCAL_XYZ = (0.0, 0.0, 1.0)
-RENDER_CAMERA_FORWARD_LOCAL_XYZ = (0.0, 0.0, -1.0)
-RENDER_CAMERA_UP_LOCAL_XYZ = (0.0, 1.0, 0.0)
-STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX = np.array(
-    [
-        [0.0, 0.0, -1.0],
-        [-1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-    ],
-    dtype=np.float64,
-)
+# Studio camera poses follow the same canonical camera frame as RoboVerse
+# MetaSim: +X forward and +Z up. Simulator render cameras use the OpenGL camera
+# frame: -Z forward and +Y up.
+STUDIO_CAMERA_FORWARD_LOCAL_XYZ = WORLD_CAMERA_FORWARD_LOCAL_XYZ
+STUDIO_CAMERA_UP_LOCAL_XYZ = WORLD_CAMERA_UP_LOCAL_XYZ
+RENDER_CAMERA_FORWARD_LOCAL_XYZ = OPENGL_CAMERA_FORWARD_LOCAL_XYZ
+RENDER_CAMERA_UP_LOCAL_XYZ = OPENGL_CAMERA_UP_LOCAL_XYZ
+STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX = WORLD_CAMERA_TO_OPENGL_CAMERA_MATRIX
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,7 @@ class SimCameraSpec:
     fov_deg: float
     width: int
     height: int
+    intrinsics: PinholeCameraIntrinsics | None = None
 
     @property
     def position_xyz(self) -> tuple[float, float, float]:
@@ -115,6 +120,7 @@ def build_sim_camera_specs(
     link_transforms = _build_link_transforms(robot)
     camera_specs: list[SimCameraSpec] = []
     warnings: list[str] = []
+    used_sim_names: set[str] = set()
 
     for index, camera in enumerate(cameras):
         camera_record = camera if isinstance(camera, dict) else {}
@@ -128,6 +134,13 @@ def build_sim_camera_specs(
         if warning:
             warnings.append(warning)
         if spec is not None:
+            if spec.sim_name in used_sim_names:
+                warnings.append(
+                    f"Camera '{spec.name}' simulator name '{spec.sim_name}' duplicates another camera; "
+                    "skipping simulator camera."
+                )
+                continue
+            used_sim_names.add(spec.sim_name)
             camera_specs.append(spec)
 
     return tuple(camera_specs), tuple(warnings)
@@ -170,13 +183,9 @@ def _build_camera_spec(
     render_local_transform, pose_warning = _read_render_camera_local_transform(camera_record, name)
     if render_local_transform is None:
         return None, pose_warning
-    fov_deg = _read_camera_fov_deg(camera_record)
-    if fov_deg is None:
-        return None, f"Camera '{name}' has invalid intrinsics.fov_deg; skipping simulator camera."
-    width = _read_camera_dimension(camera_record, "width")
-    height = _read_camera_dimension(camera_record, "height")
-    if width is None or height is None:
-        return None, f"Camera '{name}' has invalid intrinsics width or height; skipping simulator camera."
+    intrinsics = pinhole_camera_intrinsics_from_record(camera_record.get("intrinsics"))
+    if intrinsics is None:
+        return None, f"Camera '{name}' has invalid pinhole intrinsics; skipping simulator camera."
     render_world_transform = _compose_transform(base_transform, render_local_transform)
     return (
         SimCameraSpec(
@@ -187,9 +196,10 @@ def _build_camera_spec(
             parent_link=parent_link,
             render_local_pose=render_local_transform,
             render_world_pose=render_world_transform,
-            fov_deg=fov_deg,
-            width=width,
-            height=height,
+            fov_deg=intrinsics.vertical_fov_deg,
+            width=intrinsics.width,
+            height=intrinsics.height,
+            intrinsics=intrinsics,
         ),
         None,
     )
@@ -315,24 +325,6 @@ def _read_render_camera_local_transform(
     return None, f"Camera '{name}' has no pose; skipping simulator camera."
 
 
-def _read_camera_fov_deg(camera: dict[str, Any]) -> float | None:
-    intrinsics = camera.get("intrinsics")
-    if isinstance(intrinsics, dict) and is_finite_number(intrinsics.get("fov_deg")):
-        fov_deg = float(intrinsics["fov_deg"])
-        if 1.0 <= fov_deg <= 179.0:
-            return fov_deg
-    return None
-
-
-def _read_camera_dimension(camera: dict[str, Any], key: str) -> int | None:
-    intrinsics = camera.get("intrinsics")
-    if isinstance(intrinsics, dict) and is_finite_number(intrinsics.get(key)):
-        value = float(intrinsics[key])
-        if value >= 1.0 and value.is_integer():
-            return int(value)
-    return None
-
-
 def _transform_from_xyz_rpy(
     xyz: tuple[float, float, float],
     rpy: tuple[float, float, float],
@@ -359,7 +351,7 @@ def camera_render_transform_from_studio_transform(studio_camera_transform: Trans
 
 
 def studio_camera_to_render_view_rotation() -> Rotation:
-    return Rotation.from_matrix(STUDIO_CAMERA_TO_RENDER_VIEW_MATRIX)
+    return world_camera_to_opengl_camera_rotation()
 
 
 def _compose_transform(parent: Transform, child: Transform) -> Transform:
