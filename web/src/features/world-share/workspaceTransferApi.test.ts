@@ -304,4 +304,63 @@ describe("workspaceTransferApi", () => {
       }
     );
   });
+
+  it("accepts backend-provided target ids outside the built-in release set", async () => {
+    guardedFetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            targets: [
+              {
+                targetId: "internal-adapter",
+                label: "Internal Adapter",
+                targetKind: "physics_simulator",
+                capabilities: {
+                  workspaceTarget: true,
+                  motionValidation: false,
+                  layoutRoundTrip: false,
+                },
+                transferPolicy: {
+                  robotAssetFormat: "urdf",
+                  sceneAssetFormat: "urdf",
+                  frameConvention: "ros-rep-103",
+                  transferStrategy: "direct",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            targetId: "internal-adapter",
+            available: true,
+            status: "ready",
+            dependencies: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    const [descriptor] = await fetchWorkspaceTransferTargets();
+    const status = await fetchWorkspaceTransferTargetStatus(descriptor.targetId);
+
+    expect(descriptor.targetId).toBe("internal-adapter");
+    expect(status.targetId).toBe("internal-adapter");
+    expect(guardedFetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/workspace-transfer/targets/internal-adapter/status"),
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+      {
+        requiredBackends: ["core-api"],
+        context: "Check internal-adapter availability",
+      }
+    );
+  });
 });
