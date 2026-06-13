@@ -61,13 +61,9 @@ def validate_simulator_workspace_report(
         return f"simulator validation report missing field(s): {', '.join(missing_fields)}"
 
     simulator = payload.get("simulator")
-    if not isinstance(simulator, Mapping):
-        return "simulator validation report field 'simulator' must be an object"
-    if expectations.simulator_id is not None and simulator.get("id") != expectations.simulator_id:
-        return (
-            "simulator validation report has wrong simulator id: "
-            f"{simulator.get('id')!r}, expected {expectations.simulator_id!r}"
-        )
+    simulator_error = _validate_report_simulator(simulator, expectations)
+    if simulator_error:
+        return simulator_error
 
     header_error = _validate_report_header(payload)
     if header_error:
@@ -135,6 +131,27 @@ def validate_simulator_workspace_report(
             "intrinsics",
         ),
     )
+
+
+def _validate_report_simulator(
+    value: Any,
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    if not isinstance(value, Mapping):
+        return "simulator validation report field 'simulator' must be an object"
+    for field_name in ("id", "label"):
+        error = _validate_report_string(value.get(field_name), f"simulator.{field_name}")
+        if error:
+            return error
+    runtime = value.get("runtime")
+    if not isinstance(runtime, Mapping):
+        return "simulator validation report field 'simulator.runtime' must be an object"
+    if expectations.simulator_id is not None and value.get("id") != expectations.simulator_id:
+        return (
+            "simulator validation report has wrong simulator id: "
+            f"{value.get('id')!r}, expected {expectations.simulator_id!r}"
+        )
+    return None
 
 
 def _validate_report_header(payload: Mapping[str, Any]) -> str | None:

@@ -308,6 +308,46 @@ def test_workspace_report_validation_rejects_wrong_simulator_id(tmp_path) -> Non
     )
 
 
+def test_workspace_report_validation_rejects_missing_simulator_label(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'simulator.label' must be a non-empty string"
+    )
+
+
+def test_workspace_report_validation_rejects_missing_simulator_runtime(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis"},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'simulator.runtime' must be an object"
+    )
+
+
 def test_workspace_report_validation_rejects_missing_object_fields(tmp_path) -> None:
     report_path = _write_report(
         tmp_path,
