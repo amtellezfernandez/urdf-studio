@@ -48,6 +48,28 @@ WORKSPACE_ASSET_IGNORED_DIR_NAMES = frozenset(
         "node_modules",
     }
 )
+WORKSPACE_TRANSFER_ASSET_FILENAMES = frozenset({"package.xml"})
+WORKSPACE_TRANSFER_ASSET_SUFFIXES = frozenset(
+    {
+        ".bin",
+        ".bmp",
+        ".dae",
+        ".glb",
+        ".gltf",
+        ".jpeg",
+        ".jpg",
+        ".mtl",
+        ".obj",
+        ".ply",
+        ".png",
+        ".stl",
+        ".tga",
+        ".usd",
+        ".usda",
+        ".usdc",
+        ".webp",
+    }
+)
 
 
 def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
@@ -204,7 +226,7 @@ def _load_workspace_asset_uploads(
             if resolved_source_path in skipped:
                 continue
             relative_path = resolved_source_path.relative_to(resolved_root).as_posix()
-            if _is_ignored_workspace_asset_path(relative_path):
+            if not _is_workspace_transfer_asset_path(relative_path):
                 continue
             content = resolved_source_path.read_bytes()
             existing = content_by_path.get(relative_path)
@@ -223,3 +245,12 @@ def _load_workspace_asset_uploads(
 
 def _is_ignored_workspace_asset_path(relative_path: str) -> bool:
     return any(part in WORKSPACE_ASSET_IGNORED_DIR_NAMES for part in Path(relative_path).parts)
+
+
+def _is_workspace_transfer_asset_path(relative_path: str) -> bool:
+    path = Path(relative_path)
+    if _is_ignored_workspace_asset_path(relative_path):
+        return False
+    if path.name.lower() in WORKSPACE_TRANSFER_ASSET_FILENAMES:
+        return True
+    return path.suffix.lower() in WORKSPACE_TRANSFER_ASSET_SUFFIXES
