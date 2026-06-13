@@ -213,6 +213,8 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         tmp_path / "artifacts" / "blender-edit-session.json",
         tmp_path / "artifacts" / "open_blender_scene.py",
         tmp_path / "artifacts" / "export_blender_changes.py",
+        tmp_path / "artifacts" / "robot-reference.glb",
+        tmp_path / "artifacts" / "robot-reference.usda",
     )
 
 

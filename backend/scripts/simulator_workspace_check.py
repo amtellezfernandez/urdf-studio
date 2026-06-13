@@ -35,6 +35,8 @@ from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_EDIT_SESSION_FILENAME,
     BLENDER_EXPORT_SCRIPT_FILENAME,
     BLENDER_OPEN_SCRIPT_FILENAME,
+    BLENDER_ROBOT_GLB_FILENAME,
+    BLENDER_ROBOT_USD_FILENAME,
 )
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
@@ -432,6 +434,8 @@ def _prepare_blender_command(
             artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
             artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME,
             artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME,
+            artifact_dir / BLENDER_ROBOT_GLB_FILENAME,
+            artifact_dir / BLENDER_ROBOT_USD_FILENAME,
         ),
         expected_report_path=report_path,
     )

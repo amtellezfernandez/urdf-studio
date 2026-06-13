@@ -14,6 +14,8 @@ from backend.services.simulator_adapters.blender_runtime import resolve_blender_
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_CHANGE_SET_SCHEMA,
     BLENDER_EDIT_SESSION_SCHEMA,
+    BLENDER_ROBOT_GLB_FILENAME,
+    BLENDER_ROBOT_USD_FILENAME,
     apply_blender_layout_change_set,
     apply_blender_layout_change_set_with_summary,
     write_blender_workspace_artifacts,
@@ -25,7 +27,13 @@ from backend.tests.simulator_adapter_test_utils import make_world_package
 def _write_scene_inputs(tmp_path: Path):
     urdf_xml = """
 <robot name="blender_demo">
-  <link name="base_link"/>
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.1 0.2 0.3"/>
+      </geometry>
+    </visual>
+  </link>
 </robot>
 """.strip()
     world_package = make_world_package(
@@ -80,9 +88,17 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
 
     assert edit_session["schema"] == BLENDER_EDIT_SESSION_SCHEMA
     assert edit_session["robot"]["locked"] is True
+    assert Path(edit_session["robot"]["visual_glb_path"]).name == BLENDER_ROBOT_GLB_FILENAME
+    assert edit_session["robot"]["visual_glb_stats"]["geometry_count"] == 1
+    assert Path(edit_session["robot"]["visual_usd_path"]).name == BLENDER_ROBOT_USD_FILENAME
+    assert edit_session["robot"]["visual_usd_stats"]["links_converted"] == 1
     assert edit_session["objects"][0]["stable_id"] == "crate"
     assert edit_session["cameras"][0]["stable_id"] == "cam-1"
     assert "robot.kinematics" in edit_session["round_trip"]["locked"]
+    assert artifacts.robot_glb_path is not None
+    assert artifacts.robot_glb_path.exists()
+    assert artifacts.robot_usd_path.exists()
+    assert artifacts.robot_usd_path.read_text(encoding="utf-8").startswith("#usda")
     assert artifacts.open_script_path.exists()
     assert artifacts.export_script_path.exists()
 
@@ -274,6 +290,8 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert Path(report["artifacts"]["edit_session_path"]).exists()
     assert Path(report["artifacts"]["open_script_path"]).exists()
     assert Path(report["artifacts"]["export_script_path"]).exists()
+    assert Path(report["artifacts"]["robot_glb_path"]).exists()
+    assert Path(report["artifacts"]["robot_usd_path"]).exists()
     ast.parse(Path(report["artifacts"]["open_script_path"]).read_text(encoding="utf-8"))
     ast.parse(Path(report["artifacts"]["export_script_path"]).read_text(encoding="utf-8"))
 

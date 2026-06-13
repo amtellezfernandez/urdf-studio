@@ -82,12 +82,16 @@ def prepare_blender_workspace_scene(
                 "open_script_path": artifacts.open_script_path,
                 "export_script_path": artifacts.export_script_path,
                 "change_set_path": artifacts.change_set_path,
+                "robot_glb_path": artifacts.robot_glb_path,
+                "robot_usd_path": artifacts.robot_usd_path,
             },
             artifacts={
                 "edit_session_path": artifacts.edit_session_path,
                 "open_script_path": artifacts.open_script_path,
                 "export_script_path": artifacts.export_script_path,
                 "change_set_path": artifacts.change_set_path,
+                "robot_glb_path": artifacts.robot_glb_path,
+                "robot_usd_path": artifacts.robot_usd_path,
                 "blend_path": blend_path,
             },
         )

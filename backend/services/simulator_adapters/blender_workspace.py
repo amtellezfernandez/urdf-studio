@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from scipy.spatial.transform import Rotation
+import yourdfpy  # type: ignore
 
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.ilu_urdf import convert_urdf_to_usd
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 
@@ -19,6 +21,8 @@ BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
 BLENDER_OPEN_SCRIPT_FILENAME = "open_blender_scene.py"
 BLENDER_EXPORT_SCRIPT_FILENAME = "export_blender_changes.py"
+BLENDER_ROBOT_GLB_FILENAME = "robot-reference.glb"
+BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,15 @@ class BlenderWorkspaceArtifacts:
     open_script_path: Path
     export_script_path: Path
     change_set_path: Path
+    robot_glb_path: Path | None
+    robot_usd_path: Path
+
+
+@dataclass(frozen=True)
+class BlenderRobotGlbReference:
+    path: Path
+    geometry_count: int
+    node_count: int
 
 
 @dataclass(frozen=True)
@@ -56,9 +69,31 @@ def write_blender_workspace_artifacts(
     open_script_path = artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME
     export_script_path = artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME
     change_set_path = artifact_dir / BLENDER_CHANGE_SET_FILENAME
+    robot_glb_path = artifact_dir / BLENDER_ROBOT_GLB_FILENAME
+    robot_glb = _write_robot_glb_reference(robot_urdf_path, robot_glb_path)
+    robot_usd_path = artifact_dir / BLENDER_ROBOT_USD_FILENAME
+    usd_conversion = convert_urdf_to_usd(robot_urdf_path.read_text(encoding="utf-8"))
+    robot_usd_path.write_text(usd_conversion.usd_content, encoding="utf-8")
     edit_session = build_blender_edit_session(
         scene,
         robot_urdf_path=robot_urdf_path,
+        robot_glb_path=robot_glb.path if robot_glb else None,
+        robot_glb_stats={
+            "geometry_count": robot_glb.geometry_count,
+            "node_count": robot_glb.node_count,
+        }
+        if robot_glb
+        else None,
+        robot_usd_path=robot_usd_path,
+        robot_usd_warnings=usd_conversion.warnings,
+        robot_usd_stats={
+            "links_converted": usd_conversion.stats.links_converted,
+            "joints_converted": usd_conversion.stats.joints_converted,
+            "visuals_converted": usd_conversion.stats.visuals_converted,
+            "collisions_converted": usd_conversion.stats.collisions_converted,
+            "inline_meshes_converted": usd_conversion.stats.inline_meshes_converted,
+            "unsupported_meshes": usd_conversion.stats.unsupported_meshes,
+        },
         blend_path=blend_path,
         change_set_path=change_set_path,
         export_script_path=export_script_path,
@@ -80,6 +115,35 @@ def write_blender_workspace_artifacts(
         open_script_path=open_script_path,
         export_script_path=export_script_path,
         change_set_path=change_set_path,
+        robot_glb_path=robot_glb.path if robot_glb else None,
+        robot_usd_path=robot_usd_path,
+    )
+
+
+def _write_robot_glb_reference(
+    robot_urdf_path: Path,
+    robot_glb_path: Path,
+) -> BlenderRobotGlbReference | None:
+    robot = yourdfpy.URDF.load(
+        str(robot_urdf_path),
+        build_scene_graph=True,
+        load_meshes=True,
+    )
+    scene = robot.scene
+    geometry_count = len(scene.geometry)
+    node_count = len(scene.graph.nodes_geometry)
+    if geometry_count == 0 or node_count == 0:
+        return None
+    exported = scene.export(file_type="glb")
+    if isinstance(exported, bytes | bytearray):
+        glb_bytes = bytes(exported)
+    else:
+        glb_bytes = exported.read()
+    robot_glb_path.write_bytes(glb_bytes)
+    return BlenderRobotGlbReference(
+        path=robot_glb_path,
+        geometry_count=geometry_count,
+        node_count=node_count,
     )
 
 
@@ -87,6 +151,11 @@ def build_blender_edit_session(
     scene: SimulatorSceneSpec,
     *,
     robot_urdf_path: Path,
+    robot_glb_path: Path | None,
+    robot_glb_stats: Mapping[str, int] | None,
+    robot_usd_path: Path,
+    robot_usd_warnings: Sequence[str],
+    robot_usd_stats: Mapping[str, int],
     blend_path: Path,
     change_set_path: Path,
     export_script_path: Path,
@@ -122,6 +191,11 @@ def build_blender_edit_session(
         },
         "robot": {
             "urdf_path": str(robot_urdf_path),
+            "visual_glb_path": str(robot_glb_path) if robot_glb_path else None,
+            "visual_glb_stats": dict(robot_glb_stats or {}),
+            "visual_usd_path": str(robot_usd_path),
+            "visual_usd_warnings": list(robot_usd_warnings),
+            "visual_usd_stats": dict(robot_usd_stats),
             "locked": True,
         },
         "objects": [_blender_object_entry(primitive) for primitive in scene.primitives],
@@ -222,13 +296,62 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 assign_metadata(obj, "camera", entry)
 
 
-            def add_robot_reference(session):
-                bpy.ops.object.empty_add(type="ARROWS", location=(0.0, 0.0, 0.0))
-                obj = bpy.context.object
-                obj.name = "robot_urdf_locked_reference"
+            def lock_robot_object(obj, root=None):
                 obj["urdf_studio_kind"] = "robot_reference"
                 obj["urdf_studio_locked"] = True
-                obj["urdf_studio_urdf_path"] = session.get("robot", {{}}).get("urdf_path", "")
+                obj["urdf_studio_urdf_path"] = session_robot_urdf_path
+                obj.hide_select = True
+                obj.lock_location = (True, True, True)
+                obj.lock_rotation = (True, True, True)
+                obj.lock_scale = (True, True, True)
+                if root is not None and obj is not root and obj.parent is None:
+                    obj.parent = root
+
+
+            def import_visual_file(root, path, importer, status):
+                if importer is None:
+                    root["urdf_studio_robot_visual_status"] = f"{{status}}_import_unavailable"
+                    print(f"[urdf-studio-blender] {{status}} importer unavailable.", flush=True)
+                    return False
+                if not path.is_file():
+                    root["urdf_studio_robot_visual_status"] = f"missing_{{status}}"
+                    print(f"[urdf-studio-blender] robot {{status}} missing: {{path}}", flush=True)
+                    return False
+                before_import = set(bpy.data.objects)
+                try:
+                    importer(filepath=str(path))
+                except Exception as exc:
+                    root["urdf_studio_robot_visual_status"] = f"{{status}}_import_failed"
+                    root["urdf_studio_robot_visual_error"] = str(exc)
+                    print(f"[urdf-studio-blender] robot {{status}} import failed: {{exc}}", flush=True)
+                    return False
+                imported = [obj for obj in bpy.data.objects if obj not in before_import]
+                for obj in imported:
+                    lock_robot_object(obj, root)
+                root["urdf_studio_robot_visual_status"] = f"{{status}}_imported"
+                root["urdf_studio_robot_visual_object_count"] = len(imported)
+                root["urdf_studio_robot_visual_path"] = str(path)
+                print(f"[urdf-studio-blender] robot {{status}} imported: {{path}} objects={{len(imported)}}", flush=True)
+                return True
+
+
+            def add_robot_reference(session):
+                global session_robot_urdf_path
+                robot = session.get("robot", {{}})
+                session_robot_urdf_path = robot.get("urdf_path", "")
+                bpy.ops.object.empty_add(type="ARROWS", location=(0.0, 0.0, 0.0))
+                root = bpy.context.object
+                root.name = "robot_urdf_locked_reference"
+                lock_robot_object(root)
+                glb_value = robot.get("visual_glb_path")
+                glb_path = Path(glb_value) if glb_value else None
+                gltf_importer = getattr(bpy.ops.import_scene, "gltf", None)
+                if glb_path is not None and import_visual_file(root, glb_path, gltf_importer, "glb"):
+                    return root
+                usd_path = Path(robot.get("visual_usd_path", ""))
+                importer = getattr(bpy.ops.wm, "usd_import", None)
+                import_visual_file(root, usd_path, importer, "usd")
+                return root
 
 
             def add_session_notes(session):
@@ -238,6 +361,8 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     "script to write the change-set JSON. Robot kinematics remain locked in URDF Studio.\\n"
                 )
                 text.write(json.dumps(session.get("round_trip", {{}}), indent=2))
+                text.write("\\n\\nRobot visual reference:\\n")
+                text.write(json.dumps(session.get("robot", {{}}), indent=2))
 
 
             def main():
