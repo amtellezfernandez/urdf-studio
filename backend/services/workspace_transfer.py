@@ -5,8 +5,8 @@ from backend.models.simulator_runtime import (
     SIMULATOR_RUNTIME_SPECS,
     SimulatorId,
     SimulatorWorkspacePrepareRequest,
-    WorkspaceChangeSetApplyRequest as LegacyWorkspaceChangeSetApplyRequest,
-    WorkspaceChangeSetApplyResponse as LegacyWorkspaceChangeSetApplyResponse,
+    WorkspaceChangeSetApplyRequest as AdapterWorkspaceChangeSetApplyRequest,
+    WorkspaceChangeSetApplyResponse as AdapterWorkspaceChangeSetApplyResponse,
 )
 from backend.models.workspace_transfer import (
     WorkspaceChangeSetApplyRequest,
@@ -31,10 +31,10 @@ from backend.services.simulator_adapters import (
 from backend.services.simulator_adapters.blender_workspace import BLENDER_CHANGE_SET_SCHEMA
 
 
-def _legacy_change_set_request(
+def _adapter_change_set_request(
     request: WorkspaceChangeSetApplyRequest,
-) -> LegacyWorkspaceChangeSetApplyRequest:
-    return LegacyWorkspaceChangeSetApplyRequest(
+) -> AdapterWorkspaceChangeSetApplyRequest:
+    return AdapterWorkspaceChangeSetApplyRequest(
         world_package=request.world_package,
         change_set=request.change_set,
     )
@@ -70,7 +70,7 @@ def _target_descriptor_for_spec(spec) -> WorkspaceTransferTargetDescriptor:
     )
 
 
-def _open_response_from_legacy(response) -> WorkspaceOpenResponse:
+def _open_response_from_adapter(response) -> WorkspaceOpenResponse:
     return WorkspaceOpenResponse(
         targetId=response.simulator_id,
         started=response.started,
@@ -86,8 +86,8 @@ def _open_response_from_legacy(response) -> WorkspaceOpenResponse:
     )
 
 
-def _change_set_response_from_legacy(
-    response: LegacyWorkspaceChangeSetApplyResponse,
+def _change_set_response_from_adapter(
+    response: AdapterWorkspaceChangeSetApplyResponse,
 ) -> WorkspaceChangeSetApplyResponse:
     return WorkspaceChangeSetApplyResponse(
         targetId=response.simulator_id,
@@ -122,13 +122,13 @@ def open_workspace_transfer_target(
     target_id: WorkspaceTransferTargetId,
     request: WorkspaceOpenRequest,
 ) -> WorkspaceOpenResponse:
-    return _open_response_from_legacy(
+    return _open_response_from_adapter(
         prepare_simulator_workspace(target_id, _workspace_open_request(request))
     )
 
 
 def resolve_workspace_change_set_target(
-    request: WorkspaceChangeSetApplyRequest | LegacyWorkspaceChangeSetApplyRequest,
+    request: WorkspaceChangeSetApplyRequest | AdapterWorkspaceChangeSetApplyRequest,
 ) -> SimulatorId:
     schema = request.change_set.get("schema")
     if schema == BLENDER_CHANGE_SET_SCHEMA:
@@ -139,10 +139,10 @@ def resolve_workspace_change_set_target(
 def apply_workspace_transfer_change_set(
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyResponse:
-    return _change_set_response_from_legacy(
+    return _change_set_response_from_adapter(
         apply_simulator_workspace_change_set(
             resolve_workspace_change_set_target(request),
-            _legacy_change_set_request(request),
+            _adapter_change_set_request(request),
         )
     )
 
@@ -151,15 +151,6 @@ def apply_workspace_transfer_target_change_set(
     target_id: WorkspaceTransferTargetId,
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyResponse:
-    return _change_set_response_from_legacy(
-        apply_simulator_workspace_change_set(target_id, _legacy_change_set_request(request))
-    )
-
-
-def apply_schema_routed_legacy_change_set(
-    request: LegacyWorkspaceChangeSetApplyRequest,
-) -> LegacyWorkspaceChangeSetApplyResponse:
-    return apply_simulator_workspace_change_set(
-        resolve_workspace_change_set_target(request),
-        request,
+    return _change_set_response_from_adapter(
+        apply_simulator_workspace_change_set(target_id, _adapter_change_set_request(request))
     )

@@ -602,6 +602,33 @@ def test_apply_workspace_change_set_rejects_unsupported_schema() -> None:
     assert "Unsupported workspace change-set schema" in response.json()["detail"]
 
 
+def test_schema_routed_change_set_import_is_not_exposed_under_simulators() -> None:
+    world_package = _world_package_with_layout_object_payload()
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/workspace/change-set/apply",
+                headers=_operator_headers(),
+                json={
+                    "world_package": world_package,
+                    "change_set": _blender_change_set_payload(
+                        world_package,
+                        changes=[],
+                        review_only=[
+                            {
+                                "entity_type": "camera",
+                                "stable_id": "scene-camera",
+                            }
+                        ],
+                    ),
+                },
+            )
+        )
+
+    assert response.status_code == 404
+
+
 def test_apply_blender_layout_change_set_rejects_invalid_schema() -> None:
     with _patch_security_settings():
         response = asyncio.run(
