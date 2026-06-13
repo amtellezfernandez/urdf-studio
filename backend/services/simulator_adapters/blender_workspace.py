@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import textwrap
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -26,6 +27,9 @@ BLENDER_EXPORT_SCRIPT_FILENAME = "export_blender_changes.py"
 BLENDER_ROBOT_GLB_FILENAME = "robot-reference.glb"
 BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
 BLENDER_APPLY_FRAME_MAPS = frozenset({"identity"})
+BLENDER_REVIEW_ONLY_ENTITY_TYPES = frozenset(
+    {"camera", "new_world_object", "deleted_world_object"}
+)
 
 
 @dataclass(frozen=True)
@@ -64,8 +68,9 @@ def build_blender_change_set_source(
     world_package: WorldScenePackageManifest,
     *,
     frame_map: str | None = None,
-) -> dict[str, str]:
-    source = {
+    world_object_ids: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    source: dict[str, Any] = {
         "schema": BLENDER_CHANGE_SET_SOURCE_SCHEMA,
         "package_id": world_package.package_id,
         "version": world_package.version,
@@ -74,6 +79,8 @@ def build_blender_change_set_source(
     }
     if frame_map is not None:
         source["frame_map"] = frame_map
+    if world_object_ids is not None:
+        source["world_object_ids"] = list(world_object_ids)
     return source
 
 
@@ -183,9 +190,11 @@ def build_blender_edit_session(
     change_set_path: Path,
     export_script_path: Path,
 ) -> dict[str, Any]:
+    objects = [_blender_object_entry(primitive) for primitive in scene.primitives]
     change_set_source = build_blender_change_set_source(
         scene.world_package,
         frame_map=scene.frame_map,
+        world_object_ids=[str(entry["stable_id"]) for entry in objects],
     )
     return {
         "schema": BLENDER_EDIT_SESSION_SCHEMA,
@@ -226,7 +235,7 @@ def build_blender_edit_session(
             "visual_usd_stats": dict(robot_usd_stats),
             "locked": True,
         },
-        "objects": [_blender_object_entry(primitive) for primitive in scene.primitives],
+        "objects": objects,
         "cameras": [
             {
                 "kind": "camera",
@@ -431,7 +440,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
     )
 
 
-def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, str]) -> str:
+def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, Any]) -> str:
     source_json = json.dumps(dict(source), sort_keys=True)
     return (
         textwrap.dedent(
@@ -473,10 +482,16 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, s
             def main():
                 changes = []
                 review_only = []
+                source_world_object_ids = [
+                    str(stable_id)
+                    for stable_id in CHANGE_SET_SOURCE.get("world_object_ids", [])
+                ]
+                exported_world_object_ids = set()
                 for obj in bpy.data.objects:
                     kind = obj.get("urdf_studio_kind")
                     stable_id = obj.get("urdf_studio_stable_id")
                     if kind == "world_object" and stable_id:
+                        exported_world_object_ids.add(str(stable_id))
                         changes.append(
                             {{
                                 "entity_type": "world_object",
@@ -507,6 +522,15 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, s
                                 "quat_wxyz": quat_wxyz(obj),
                                 "size_xyz": local_size_xyz(obj),
                                 "reason": "new Blender objects require Studio review before import",
+                            }}
+                        )
+                for stable_id in source_world_object_ids:
+                    if stable_id not in exported_world_object_ids:
+                        review_only.append(
+                            {{
+                                "entity_type": "deleted_world_object",
+                                "stable_id": stable_id,
+                                "reason": "deleted Studio world objects require Studio review before removal",
                             }}
                         )
                 payload = {{
@@ -591,10 +615,15 @@ def _validate_blender_change_set(
 
     seen_review_ids: set[str] = set()
     for index, entry in enumerate(review_only):
-        stable_id = _validate_review_only_entry(entry, f"review_only[{index}]")
-        if stable_id in seen_review_ids:
-            raise ValueError(f"Blender change-set review_only duplicates stable_id {stable_id!r}.")
-        seen_review_ids.add(stable_id)
+        review_key = _validate_review_only_entry(entry, f"review_only[{index}]")
+        if review_key in seen_review_ids:
+            raise ValueError(f"Blender change-set review_only duplicates stable_id {review_key!r}.")
+        entity_type, _, stable_id = review_key.partition(":")
+        if entity_type == "deleted_world_object" and stable_id in object_updates:
+            raise ValueError(
+                f"Blender change-set cannot both update and delete world object {stable_id!r}."
+            )
+        seen_review_ids.add(review_key)
 
     return object_updates, len(review_only)
 
@@ -615,6 +644,7 @@ def _validate_change_set_source(
             "world_snapshot_digest_sha256",
             "frame_convention",
             "frame_map",
+            "world_object_ids",
         },
     )
     schema = _required_string(value.get("schema"), "source.schema")
@@ -635,6 +665,10 @@ def _validate_change_set_source(
     actual_frame_map = value.get("frame_map")
     if actual_frame_map is not None:
         actual_frame_map = _required_string(actual_frame_map, "source.frame_map")
+    actual_world_object_ids = _optional_string_list(
+        value.get("world_object_ids"),
+        "source.world_object_ids",
+    )
 
     if actual_package_id != expected["package_id"] or actual_version != expected["version"]:
         raise ValueError(
@@ -653,6 +687,8 @@ def _validate_change_set_source(
             "Blender change-set source frame_map is not supported for direct apply. "
             "Only identity frame_map sessions can be imported without coordinate conversion."
         )
+    if actual_world_object_ids is not None:
+        _validate_source_world_object_ids(actual_world_object_ids, world_package)
 
 
 def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectChange:
@@ -702,16 +738,15 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
         },
     )
     entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
-    if entity_type not in {"camera", "new_world_object"}:
+    if entity_type not in BLENDER_REVIEW_ONLY_ENTITY_TYPES:
         raise ValueError(
-            f"Blender change-set {path}.entity_type must be 'camera' or "
-            "'new_world_object' for review-only edits."
+            f"Blender change-set {path}.entity_type must be one of: "
+            f"{', '.join(sorted(BLENDER_REVIEW_ONLY_ENTITY_TYPES))}."
         )
-    stable_id = (
-        _required_string(value.get("stable_id"), f"{path}.stable_id")
-        if entity_type == "camera"
-        else _required_string(value.get("sim_name"), f"{path}.sim_name")
-    )
+    if entity_type == "new_world_object":
+        stable_id = _required_string(value.get("sim_name"), f"{path}.sim_name")
+    else:
+        stable_id = _required_string(value.get("stable_id"), f"{path}.stable_id")
     if "position_xyz" in value:
         _required_vector3(value.get("position_xyz"), f"{path}.position_xyz")
     if "quat_wxyz" in value:
@@ -735,6 +770,39 @@ def _world_package_object_ids(world_package: WorldScenePackageManifest) -> set[s
             raise ValueError(f"World package contains duplicate object id {object_id!r}.")
         object_ids.add(object_id)
     return object_ids
+
+
+def _validate_source_world_object_ids(
+    stable_ids: Sequence[str],
+    world_package: WorldScenePackageManifest,
+) -> None:
+    duplicate_ids = sorted(
+        stable_id
+        for stable_id, count in Counter(stable_ids).items()
+        if count > 1
+    )
+    if duplicate_ids:
+        raise ValueError(
+            "Blender change-set source world_object_ids contains duplicate id(s): "
+            f"{', '.join(duplicate_ids)}."
+        )
+    package_object_ids = _world_package_object_ids(world_package)
+    unknown_ids = sorted(set(stable_ids) - package_object_ids)
+    if unknown_ids:
+        raise ValueError(
+            "Blender change-set source world_object_ids references unknown world object id(s): "
+            f"{', '.join(unknown_ids)}."
+        )
+
+
+def _optional_string_list(value: Any, label: str) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    values = _required_list(value, f"Blender change-set {label}")
+    return tuple(
+        _required_string(item, f"{label}[{index}]")
+        for index, item in enumerate(values)
+    )
 
 
 def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, Any]:

@@ -100,6 +100,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert edit_session["source"] == build_blender_change_set_source(
         _world_package,
         frame_map="identity",
+        world_object_ids=("crate",),
     )
     assert edit_session["robot"]["locked"] is True
     assert Path(edit_session["robot"]["visual_glb_path"]).name == BLENDER_ROBOT_GLB_FILENAME
@@ -188,6 +189,28 @@ def test_blender_change_set_reports_applied_and_review_only_counts(tmp_path: Pat
 
     assert result.applied_change_count == 1
     assert result.review_only_count == 2
+
+
+def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[],
+            review_only=[
+                {
+                    "entity_type": "deleted_world_object",
+                    "stable_id": "crate",
+                    "reason": "deleted Studio world objects require Studio review before removal",
+                }
+            ],
+        ),
+    )
+
+    assert result.applied_change_count == 0
+    assert result.review_only_count == 1
 
 
 def test_blender_change_set_rejects_camera_edits_in_apply_list(tmp_path: Path) -> None:
@@ -280,6 +303,34 @@ def test_blender_change_set_rejects_duplicate_stable_ids(tmp_path: Path) -> None
         )
 
 
+def test_blender_change_set_rejects_update_and_delete_for_same_object(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    with pytest.raises(ValueError, match="both update and delete"):
+        apply_blender_layout_change_set(
+            world_package,
+            _blender_change_set(
+                world_package,
+                changes=[
+                    {
+                        "entity_type": "world_object",
+                        "stable_id": "crate",
+                        "position_xyz": [1.0, 2.0, 3.0],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                        "size_xyz": [0.5, 0.6, 0.7],
+                    }
+                ],
+                review_only=[
+                    {
+                        "entity_type": "deleted_world_object",
+                        "stable_id": "crate",
+                        "reason": "deleted Studio world objects require Studio review before removal",
+                    }
+                ],
+            ),
+        )
+
+
 def test_blender_change_set_rejects_missing_source(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
 
@@ -313,6 +364,24 @@ def test_blender_change_set_rejects_non_identity_frame_map_source(tmp_path: Path
         apply_blender_layout_change_set(world_package, change_set)
 
 
+def test_blender_change_set_rejects_unknown_source_world_object_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["world_object_ids"] = ["crate", "missing"]
+
+    with pytest.raises(ValueError, match="unknown world object"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_duplicate_source_world_object_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["world_object_ids"] = ["crate", "crate"]
+
+    with pytest.raises(ValueError, match="duplicate id"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
 def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path: Path) -> None:
     _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
     report_path = tmp_path / "artifacts" / "report.json"
@@ -342,6 +411,7 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     ast.parse(open_script)
     ast.parse(export_script)
     assert "new_world_object" in export_script
+    assert "deleted_world_object" in export_script
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
