@@ -29,8 +29,7 @@ from backend.services.world_scene_package_params import (
 )
 from backend.services.world_scene_package_digest import (
     canonical_world_scene_package_json,
-    computed_world_snapshot_digest,
-    declared_world_snapshot_digest,
+    validate_world_snapshot_artifact_digests,
     world_scene_package_digest,
 )
 
@@ -164,13 +163,7 @@ class WorldRegistryService:
             warnings.append("No external artifacts declared. Package is embedded-only.")
         if not manifest.security.signature_ref:
             warnings.append("No signature_ref present. Package remains metadata-only.")
-        declared_snapshot_digest = declared_world_snapshot_digest(manifest)
-        if declared_snapshot_digest is not None:
-            actual_snapshot_digest = computed_world_snapshot_digest(manifest)
-            if declared_snapshot_digest != actual_snapshot_digest:
-                errors.append(
-                    "world_snapshot artifact digest does not match the embedded world_snapshot."
-                )
+        errors.extend(validate_world_snapshot_artifact_digests(manifest))
         manifest_bytes = len(canonical_world_scene_package_json(manifest).encode("utf-8"))
         if manifest_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
             errors.append(

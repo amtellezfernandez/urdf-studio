@@ -173,13 +173,21 @@ def test_blender_change_set_reports_applied_and_review_only_counts(tmp_path: Pat
                     "position_xyz": [0.0, 0.0, 1.0],
                     "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
                     "reason": "camera round-trip requires camera-frame review before apply",
+                },
+                {
+                    "entity_type": "new_world_object",
+                    "sim_name": "Added cube",
+                    "position_xyz": [0.2, 0.3, 0.4],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.1, 0.2, 0.3],
+                    "reason": "new Blender objects require Studio review before import",
                 }
             ],
         ),
     )
 
     assert result.applied_change_count == 1
-    assert result.review_only_count == 1
+    assert result.review_only_count == 2
 
 
 def test_blender_change_set_rejects_camera_edits_in_apply_list(tmp_path: Path) -> None:
@@ -296,6 +304,15 @@ def test_blender_change_set_rejects_stale_world_snapshot_source(tmp_path: Path) 
         apply_blender_layout_change_set(world_package, change_set)
 
 
+def test_blender_change_set_rejects_non_identity_frame_map_source(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["frame_map"] = "studio-y-up-to-z-up"
+
+    with pytest.raises(ValueError, match="frame_map is not supported"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
 def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path: Path) -> None:
     _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
     report_path = tmp_path / "artifacts" / "report.json"
@@ -320,8 +337,11 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert Path(report["artifacts"]["export_script_path"]).exists()
     assert Path(report["artifacts"]["robot_glb_path"]).exists()
     assert Path(report["artifacts"]["robot_usd_path"]).exists()
-    ast.parse(Path(report["artifacts"]["open_script_path"]).read_text(encoding="utf-8"))
-    ast.parse(Path(report["artifacts"]["export_script_path"]).read_text(encoding="utf-8"))
+    open_script = Path(report["artifacts"]["open_script_path"]).read_text(encoding="utf-8")
+    export_script = Path(report["artifacts"]["export_script_path"]).read_text(encoding="utf-8")
+    ast.parse(open_script)
+    ast.parse(export_script)
+    assert "new_world_object" in export_script
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:

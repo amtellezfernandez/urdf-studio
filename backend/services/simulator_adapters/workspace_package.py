@@ -17,12 +17,14 @@ from backend.models.simulator_runtime import (
     SimulatorMeshAssetUpload,
     SimulatorWorkspacePrepareRequest,
 )
+from backend.services.simulator_adapters.base import SimulatorAdapterError
 from backend.services.ilu_session import IluSessionError, get_ilu_session_local_urdf_source_context
 from backend.services.ilu_urdf import (
     BundleMeshAssetsResult,
     IluUrdfBridgeError,
     bundle_mesh_assets_for_urdf_file,
 )
+from backend.services.world_scene_package_digest import validate_world_snapshot_artifact_digests
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,10 @@ class PreparedSimulatorWorkspace:
     world_package_path: Path
     robot_urdf_path: Path
     bundle_result: BundleMeshAssetsResult
+
+
+class SimulatorWorkspacePackageValidationError(SimulatorAdapterError):
+    status_code = 422
 
 
 URDF_VISUAL_SYNTHETIC_COLOR_PALETTE = (
@@ -72,6 +78,16 @@ def _normalize_resolved_urdf_asset_path(value: str | None) -> str:
 
 def _raise(error: Callable[[str], Exception], message: str) -> None:
     raise error(message)
+
+
+def validate_simulator_workspace_package_request(
+    request: SimulatorWorkspacePrepareRequest,
+) -> None:
+    errors = validate_world_snapshot_artifact_digests(request.world_package)
+    if errors:
+        raise SimulatorWorkspacePackageValidationError(
+            f"Simulator workspace world package invalid: {'; '.join(errors)}"
+        )
 
 
 def _write_asset_file(
@@ -240,6 +256,7 @@ def prepare_simulator_workspace_package(
     workspace_root: Path,
     error: Callable[[str], Exception],
 ) -> PreparedSimulatorWorkspace:
+    validate_simulator_workspace_package_request(request)
     workspace_dir = _timestamped_workspace_dir(workspace_root)
     source_root = workspace_dir / "source"
     source_root.mkdir(parents=True, exist_ok=True)

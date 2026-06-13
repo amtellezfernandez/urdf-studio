@@ -100,6 +100,18 @@ def _open_request_payload() -> dict:
     }
 
 
+def _open_request_payload_with_bad_world_snapshot_digest() -> dict:
+    payload = _open_request_payload()
+    payload["world_package"]["artifacts"] = [
+        {
+            "kind": "world_snapshot",
+            "digest_sha256": "0" * 64,
+            "uri": "inline://snapshot",
+        }
+    ]
+    return payload
+
+
 def _world_package_with_layout_object_payload() -> dict:
     payload = _world_package_payload()
     payload["world_snapshot"]["objects"] = [
@@ -328,6 +340,36 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
         "simulator_id": "genesis",
         "request_title": "Demo World",
     }
+
+
+def test_simulator_workspace_prepare_rejects_mismatched_world_snapshot_digest() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/genesis/workspace/prepare",
+                headers=_operator_headers(),
+                json=_open_request_payload_with_bad_world_snapshot_digest(),
+            )
+        )
+
+    assert response.status_code == 422
+    assert "world_snapshot" in response.json()["detail"]
+
+
+def test_blender_workspace_prepare_validates_package_before_runtime_detection() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/blender/workspace/prepare",
+                headers=_operator_headers(),
+                json=_open_request_payload_with_bad_world_snapshot_digest(),
+            )
+        )
+
+    assert response.status_code == 422
+    assert "world_snapshot" in response.json()["detail"]
 
 
 def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:

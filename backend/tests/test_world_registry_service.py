@@ -160,7 +160,7 @@ def test_validate_rejects_mismatched_world_snapshot_artifact_digest() -> None:
 
         assert validation.valid is False
         assert validation.errors == [
-            "world_snapshot artifact digest does not match the embedded world_snapshot."
+            "artifacts[world_snapshot:0].digest_sha256 does not match world_snapshot."
         ]
 
 

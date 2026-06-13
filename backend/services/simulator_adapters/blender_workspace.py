@@ -25,6 +25,7 @@ BLENDER_OPEN_SCRIPT_FILENAME = "open_blender_scene.py"
 BLENDER_EXPORT_SCRIPT_FILENAME = "export_blender_changes.py"
 BLENDER_ROBOT_GLB_FILENAME = "robot-reference.glb"
 BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
+BLENDER_APPLY_FRAME_MAPS = frozenset({"identity"})
 
 
 @dataclass(frozen=True)
@@ -264,6 +265,18 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 bpy.ops.object.delete()
 
 
+            def configure_scene():
+                scene = bpy.context.scene
+                scene.unit_settings.system = "METRIC"
+                scene.unit_settings.scale_length = 1.0
+                try:
+                    scene.render.engine = "BLENDER_EEVEE_NEXT"
+                except TypeError:
+                    scene.render.engine = "BLENDER_EEVEE"
+                if scene.world is not None:
+                    scene.world.color = (0.03, 0.035, 0.04)
+
+
             def material_for(name, rgba):
                 material = bpy.data.materials.new(name)
                 material.diffuse_color = tuple(rgba)
@@ -320,6 +333,9 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 obj.rotation_mode = "QUATERNION"
                 obj.rotation_quaternion = quat
                 obj.data.angle = math.radians(float(entry.get("fov_deg", 60.0)))
+                obj.data.clip_start = 0.01
+                obj.data.clip_end = 25.0
+                obj.data.display_size = 0.08
                 assign_metadata(obj, "camera", entry)
 
 
@@ -395,6 +411,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             def main():
                 session = json.loads(SESSION_PATH.read_text(encoding="utf-8"))
                 clear_scene()
+                configure_scene()
                 add_robot_reference(session)
                 for entry in session.get("objects", []):
                     add_object(entry)
@@ -479,6 +496,17 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, s
                                 "position_xyz": vector3(obj.location),
                                 "quat_wxyz": quat_wxyz(obj),
                                 "reason": "camera round-trip requires camera-frame review before apply",
+                            }}
+                        )
+                    elif kind is None and getattr(obj, "type", "") == "MESH":
+                        review_only.append(
+                            {{
+                                "entity_type": "new_world_object",
+                                "sim_name": str(obj.name),
+                                "position_xyz": vector3(obj.location),
+                                "quat_wxyz": quat_wxyz(obj),
+                                "size_xyz": local_size_xyz(obj),
+                                "reason": "new Blender objects require Studio review before import",
                             }}
                         )
                 payload = {{
@@ -604,6 +632,9 @@ def _validate_change_set_source(
         value.get("frame_convention"),
         "source.frame_convention",
     )
+    actual_frame_map = value.get("frame_map")
+    if actual_frame_map is not None:
+        actual_frame_map = _required_string(actual_frame_map, "source.frame_map")
 
     if actual_package_id != expected["package_id"] or actual_version != expected["version"]:
         raise ValueError(
@@ -616,6 +647,11 @@ def _validate_change_set_source(
     if actual_digest != expected["world_snapshot_digest_sha256"]:
         raise ValueError(
             "Blender change-set source world snapshot does not match the current world package."
+        )
+    if actual_frame_map is not None and actual_frame_map not in BLENDER_APPLY_FRAME_MAPS:
+        raise ValueError(
+            "Blender change-set source frame_map is not supported for direct apply. "
+            "Only identity frame_map sessions can be imported without coordinate conversion."
         )
 
 
@@ -661,22 +697,30 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
             "sim_name",
             "position_xyz",
             "quat_wxyz",
+            "size_xyz",
             "reason",
         },
     )
     entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
-    if entity_type != "camera":
+    if entity_type not in {"camera", "new_world_object"}:
         raise ValueError(
-            f"Blender change-set {path}.entity_type must be 'camera' for review-only edits."
+            f"Blender change-set {path}.entity_type must be 'camera' or "
+            "'new_world_object' for review-only edits."
         )
-    stable_id = _required_string(value.get("stable_id"), f"{path}.stable_id")
+    stable_id = (
+        _required_string(value.get("stable_id"), f"{path}.stable_id")
+        if entity_type == "camera"
+        else _required_string(value.get("sim_name"), f"{path}.sim_name")
+    )
     if "position_xyz" in value:
         _required_vector3(value.get("position_xyz"), f"{path}.position_xyz")
     if "quat_wxyz" in value:
         _required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz")
+    if "size_xyz" in value:
+        _required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz")
     if "reason" in value:
         _required_string(value.get("reason"), f"{path}.reason")
-    return stable_id
+    return f"{entity_type}:{stable_id}"
 
 
 def _world_package_object_ids(world_package: WorldScenePackageManifest) -> set[str]:
