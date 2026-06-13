@@ -23,6 +23,7 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeStatus,
     SimulatorWorkspacePrepareResponse,
 )
+from backend.models.workspace_transfer import WorkspaceOpenResponse
 from backend.services.simulator_adapters import (
     SUPPORTED_SIMULATOR_IDS,
     get_simulator_adapter,
@@ -231,9 +232,9 @@ def test_list_workspace_transfer_targets_returns_capability_descriptors() -> Non
 
     assert response.status_code == 200
     targets = response.json()["targets"]
-    assert [target["simulatorId"] for target in targets] == list(SUPPORTED_SIMULATOR_IDS)
+    assert [target["targetId"] for target in targets] == list(SUPPORTED_SIMULATOR_IDS)
     assert targets[0]["targetKind"] == "physics_simulator"
-    assert targets[10]["simulatorId"] == "blender"
+    assert targets[10]["targetId"] == "blender"
     assert targets[10]["targetKind"] == "authoring_tool"
     assert targets[10]["capabilities"]["layoutRoundTrip"] is True
 
@@ -310,23 +311,23 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
 def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_prepare_simulator_workspace(simulator_id, request):
-        captured["simulator_id"] = simulator_id
+    def fake_open_workspace_transfer_target(target_id, request):
+        captured["target_id"] = target_id
         captured["request_title"] = request.world_package.title
-        return SimulatorWorkspacePrepareResponse(
-            simulator_id=simulator_id,
+        return WorkspaceOpenResponse(
+            targetId=target_id,
             started=True,
             pid=1234,
             command=["python", "-m", "sim"],
-            log_path="/tmp/sim.log",
-            world_package_path="/tmp/world.json",
-            robot_urdf_path="/tmp/robot.urdf",
+            logPath="/tmp/sim.log",
+            worldPackagePath="/tmp/world.json",
+            robotUrdfPath="/tmp/robot.urdf",
         )
 
     monkeypatch.setattr(
         workspace_transfer_api,
-        "prepare_simulator_workspace",
-        fake_prepare_simulator_workspace,
+        "open_workspace_transfer_target",
+        fake_open_workspace_transfer_target,
     )
 
     with _patch_security_settings():
@@ -340,10 +341,10 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
         )
 
     assert response.status_code == 200
-    assert response.json()["simulator_id"] == "genesis"
+    assert response.json()["targetId"] == "genesis"
     assert response.json()["pid"] == 1234
     assert captured == {
-        "simulator_id": "genesis",
+        "target_id": "genesis",
         "request_title": "Demo World",
     }
 
@@ -430,12 +431,12 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
     assert response.status_code == 200
     payload = response.json()
     updated_object = payload["world_package"]["world_snapshot"]["objects"][0]
-    assert payload["simulator_id"] == "blender"
+    assert payload["targetId"] == "blender"
     assert updated_object["position_xyz"] == [1.0, 2.0, 3.0]
     assert updated_object["rotation_rpy_rad"] == [0.0, 0.0, 0.0]
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
-    assert payload["applied_change_count"] == 1
-    assert payload["review_only_count"] == 1
+    assert payload["appliedChangeCount"] == 1
+    assert payload["reviewOnlyCount"] == 1
 
 
 def test_apply_workspace_change_set_rejects_unsupported_schema() -> None:

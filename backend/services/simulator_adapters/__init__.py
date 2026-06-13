@@ -12,7 +12,6 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeDescriptor,
     SimulatorRuntimeListResponse,
     SimulatorRuntimeStatus,
-    WorkspaceTransferTargetListResponse,
     WorkspaceChangeSetApplyRequest,
     WorkspaceChangeSetApplyResponse,
     SimulatorWorkspacePrepareRequest,
@@ -24,7 +23,6 @@ from backend.services.simulator_adapters.base import (
     SimulatorCapabilityError,
 )
 from backend.services.simulator_adapters.blender import BLENDER_SIMULATOR_ADAPTER
-from backend.services.simulator_adapters.blender_workspace import BLENDER_CHANGE_SET_SCHEMA
 from backend.services.simulator_adapters.genesis import (
     GENESIS_SIMULATOR_ADAPTER,
 )
@@ -82,12 +80,6 @@ def list_simulator_runtime_descriptors() -> SimulatorRuntimeListResponse:
     )
 
 
-def list_workspace_transfer_targets() -> WorkspaceTransferTargetListResponse:
-    return WorkspaceTransferTargetListResponse(
-        targets=list_simulator_runtime_descriptors().simulators,
-    )
-
-
 def prepare_simulator_workspace(
     simulator_id: SimulatorId,
     request: SimulatorWorkspacePrepareRequest,
@@ -108,22 +100,6 @@ def apply_simulator_workspace_change_set(
     return apply_change_set(request)
 
 
-def resolve_workspace_change_set_target(request: WorkspaceChangeSetApplyRequest) -> SimulatorId:
-    schema = request.change_set.get("schema")
-    if schema == BLENDER_CHANGE_SET_SCHEMA:
-        return SIMULATOR_BLENDER_ID
-    raise SimulatorCapabilityError("Unsupported workspace change-set schema.")
-
-
-def apply_workspace_change_set(
-    request: WorkspaceChangeSetApplyRequest,
-) -> WorkspaceChangeSetApplyResponse:
-    return apply_simulator_workspace_change_set(
-        resolve_workspace_change_set_target(request),
-        request,
-    )
-
-
 def get_simulator_runtime_status(simulator_id: SimulatorId) -> SimulatorRuntimeStatus:
     return get_simulator_adapter(simulator_id).runtime_status()
 
@@ -136,9 +112,7 @@ __all__ = [
     "SimulatorCapabilityError",
     "get_simulator_adapter",
     "get_simulator_runtime_status",
-    "apply_workspace_change_set",
     "apply_simulator_workspace_change_set",
     "list_simulator_runtime_descriptors",
-    "list_workspace_transfer_targets",
     "prepare_simulator_workspace",
 ]

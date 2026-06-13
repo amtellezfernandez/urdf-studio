@@ -2,12 +2,12 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { HealthActionPanelSimulatorRuntime } from "./HealthActionPanelSimulatorRuntime";
+import { HealthActionPanelWorkspaceTransfer } from "./HealthActionPanelWorkspaceTransfer";
 
 const textContent = (node: ParentNode) => node.textContent ?? "";
 
-describe("HealthActionPanelSimulatorRuntime", () => {
-  it("renders compact simulator workspace targets and disabled future adapters", async () => {
+describe("HealthActionPanelWorkspaceTransfer", () => {
+  it("renders compact workspace transfer targets and disabled future adapters", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const prepareGenesis = vi.fn();
@@ -16,7 +16,7 @@ describe("HealthActionPanelSimulatorRuntime", () => {
 
     await act(async () => {
       root.render(
-        createElement(HealthActionPanelSimulatorRuntime, {
+        createElement(HealthActionPanelWorkspaceTransfer, {
           className: "",
           targets: [
             {

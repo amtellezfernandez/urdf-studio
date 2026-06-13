@@ -1,17 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  applySimulatorWorkspaceChangeSet,
+  applyWorkspaceTransferTargetChangeSet,
   applyWorkspaceChangeSet,
-  buildSimulatorMeshAssetUploads,
+  buildWorkspaceTransferMeshAssetUploads,
   fetchWorkspaceTransferTargetStatus,
   fetchWorkspaceTransferTargets,
   openWorkspaceTransferTarget,
-} from "@/features/world-share/simulatorRuntimeApi";
-import {
-  SIMULATOR_GENESIS_ID,
-  SIMULATOR_MJLAB_ID,
-} from "@/features/world-share/simulatorRuntimeParams";
+} from "@/features/world-share/workspaceTransferApi";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 
 const { guardedFetchMock } = vi.hoisted(() => ({
@@ -53,7 +49,7 @@ const createWorldPackage = (): WorldScenePackageManifest => ({
   },
 });
 
-describe("simulatorRuntimeApi", () => {
+describe("workspaceTransferApi", () => {
   beforeEach(() => {
     guardedFetchMock.mockReset();
   });
@@ -62,30 +58,31 @@ describe("simulatorRuntimeApi", () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          simulator_id: "genesis",
+          targetId: "genesis",
           started: true,
           pid: 1234,
           command: ["python", "-m", "backend.scripts.genesis_workspace_prepare"],
-          log_path: "/tmp/genesis.log",
-          world_package_path: "/tmp/world-package.json",
-          robot_urdf_path: "/tmp/robot.urdf",
-          simulator_asset_path: "/tmp/robot.urdf",
-          simulator_asset_format: "urdf",
-          bundled_mesh_count: 0,
-          unresolved_mesh_refs: [],
+          logPath: "/tmp/genesis.log",
+          worldPackagePath: "/tmp/world-package.json",
+          robotUrdfPath: "/tmp/robot.urdf",
+          targetAssetPath: "/tmp/robot.urdf",
+          targetAssetFormat: "urdf",
+          bundledMeshCount: 0,
+          unresolvedMeshRefs: [],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
     );
 
     const prepared = await openWorkspaceTransferTarget({
-      simulatorId: SIMULATOR_GENESIS_ID,
+      targetId: "genesis",
       worldPackage: createWorldPackage(),
       meshFiles: {},
-      simulatorLabel: "Genesis",
+      targetLabel: "Genesis",
     });
 
     expect(prepared.pid).toBe(1234);
+    expect(prepared.targetId).toBe("genesis");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/workspace-transfer/targets/genesis/open"),
       expect.objectContaining({
@@ -101,7 +98,7 @@ describe("simulatorRuntimeApi", () => {
   it("builds package-root aliases for browser mesh uploads", async () => {
     const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
 
-    const uploads = await buildSimulatorMeshAssetUploads(
+    const uploads = await buildWorkspaceTransferMeshAssetUploads(
       {
         "meshes/base.stl": mesh,
       },
@@ -124,15 +121,15 @@ describe("simulatorRuntimeApi", () => {
       new Response(
         JSON.stringify({
           world_package: createWorldPackage(),
-          simulator_id: "blender",
-          applied_change_count: 1,
-          review_only_count: 0,
+          targetId: "blender",
+          appliedChangeCount: 1,
+          reviewOnlyCount: 0,
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
     );
 
-    const response = await applySimulatorWorkspaceChangeSet(
+    const response = await applyWorkspaceTransferTargetChangeSet(
       "blender",
       createWorldPackage(),
       {
@@ -141,8 +138,8 @@ describe("simulatorRuntimeApi", () => {
       }
     );
 
-    expect(response.applied_change_count).toBe(1);
-    expect(response.simulator_id).toBe("blender");
+    expect(response.appliedChangeCount).toBe(1);
+    expect(response.targetId).toBe("blender");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/workspace-transfer/targets/blender/change-set/apply"),
       expect.objectContaining({
@@ -160,9 +157,9 @@ describe("simulatorRuntimeApi", () => {
       new Response(
         JSON.stringify({
           world_package: createWorldPackage(),
-          simulator_id: "blender",
-          applied_change_count: 1,
-          review_only_count: 0,
+          targetId: "blender",
+          appliedChangeCount: 1,
+          reviewOnlyCount: 0,
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
@@ -173,7 +170,7 @@ describe("simulatorRuntimeApi", () => {
       changes: [],
     });
 
-    expect(response.simulator_id).toBe("blender");
+    expect(response.targetId).toBe("blender");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/workspace-transfer/change-set/apply"),
       expect.objectContaining({
@@ -190,7 +187,7 @@ describe("simulatorRuntimeApi", () => {
     const first = new Blob(["first"], { type: "model/stl" });
     const second = new Blob(["second"], { type: "model/stl" });
 
-    const uploads = await buildSimulatorMeshAssetUploads(
+    const uploads = await buildWorkspaceTransferMeshAssetUploads(
       {
         "meshes/base.stl": first,
         "demo_description/meshes/base.stl": second,
@@ -215,7 +212,7 @@ describe("simulatorRuntimeApi", () => {
         JSON.stringify({
           targets: [
             {
-              simulatorId: "genesis",
+              targetId: "genesis",
               label: "Genesis",
               targetKind: "physics_simulator",
               capabilities: {
@@ -231,7 +228,7 @@ describe("simulatorRuntimeApi", () => {
               },
             },
             {
-              simulatorId: "mjlab",
+              targetId: "mjlab",
               label: "MJLab",
               targetKind: "physics_simulator",
               capabilities: {
@@ -254,7 +251,7 @@ describe("simulatorRuntimeApi", () => {
 
     const descriptors = await fetchWorkspaceTransferTargets();
 
-    expect(descriptors.map((descriptor) => descriptor.simulatorId)).toEqual([
+    expect(descriptors.map((descriptor) => descriptor.targetId)).toEqual([
       "genesis",
       "mjlab",
     ]);
@@ -280,7 +277,7 @@ describe("simulatorRuntimeApi", () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          runtimeName: "mjlab",
+          targetId: "mjlab",
           available: true,
           status: "ready",
           dependencies: [{ name: "mujoco", available: true }],
@@ -289,10 +286,10 @@ describe("simulatorRuntimeApi", () => {
       )
     );
 
-    const status = await fetchWorkspaceTransferTargetStatus(SIMULATOR_MJLAB_ID);
+    const status = await fetchWorkspaceTransferTargetStatus("mjlab");
 
     expect(status.available).toBe(true);
-    expect(status.runtimeName).toBe("mjlab");
+    expect(status.targetId).toBe("mjlab");
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/workspace-transfer/targets/mjlab/runtime"),
       {

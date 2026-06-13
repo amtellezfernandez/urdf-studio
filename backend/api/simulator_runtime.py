@@ -15,11 +15,11 @@ from backend.models.simulator_runtime import (
 from backend.services.simulator_adapters import (
     SimulatorAdapterError,
     apply_simulator_workspace_change_set,
-    apply_workspace_change_set,
     get_simulator_runtime_status,
     list_simulator_runtime_descriptors,
     prepare_simulator_workspace,
 )
+from backend.services.workspace_transfer import apply_schema_routed_legacy_change_set
 
 
 router = APIRouter(prefix="/simulators", tags=["simulator-runtime"])
@@ -61,7 +61,7 @@ async def apply_workspace_change_set_route(
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorkspaceChangeSetApplyResponse:
     try:
-        return apply_workspace_change_set(request)
+        return apply_schema_routed_legacy_change_set(request)
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:

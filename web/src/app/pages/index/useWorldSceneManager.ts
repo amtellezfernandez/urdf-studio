@@ -22,7 +22,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
-import { applyWorkspaceChangeSet } from "@/features/world-share/simulatorRuntimeApi";
+import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransferApi";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import { resolveWorldObjectGeometry, type CreatedObject } from "@/features/objects";
 import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjectGeometry";
@@ -531,9 +531,9 @@ export const useWorldSceneManager = ({
         applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
         setActiveWorldSnapshotRef(null);
         const reviewOnly =
-          applied.review_only_count > 0 ? `, ${applied.review_only_count} review-only` : "";
+          applied.reviewOnlyCount > 0 ? `, ${applied.reviewOnlyCount} review-only` : "";
         toast.success(
-          `Imported workspace changes: ${applied.applied_change_count} object changes${reviewOnly}`
+          `Imported workspace changes: ${applied.appliedChangeCount} object changes${reviewOnly}`
         );
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to import workspace changes");

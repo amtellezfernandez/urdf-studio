@@ -2,69 +2,73 @@ import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import {
-  MAX_SIMULATOR_ASSET_ALIASES,
-  type SimulatorRuntimeDescriptor,
-  type SimulatorId,
-} from "@/features/world-share/simulatorRuntimeParams";
+  WORKSPACE_TRANSFER_PARAMS,
+  type WorkspaceTransferTargetDescriptor,
+  type WorkspaceTransferTargetId,
+} from "@/features/world-share/workspaceTransferParams";
 
-export type { SimulatorId, SimulatorRuntimeDescriptor };
+export type { WorkspaceTransferTargetDescriptor, WorkspaceTransferTargetId };
 
-export type SimulatorMeshAssetUpload = {
+export type WorkspaceTransferMeshAssetUpload = {
   path: string;
   aliases: string[];
   content_base64: string;
   mime?: string | null;
 };
 
-export type SimulatorWorkspacePrepareResponse = {
-  simulator_id: SimulatorId;
+export type WorkspaceOpenResponse = {
+  targetId: WorkspaceTransferTargetId;
   started: boolean;
   pid: number;
   command: string[];
-  log_path?: string | null;
-  world_package_path: string;
-  robot_urdf_path: string;
-  simulator_asset_path?: string | null;
-  simulator_asset_format?: "urdf" | "mjcf" | "usd" | "native" | null;
-  bundled_mesh_count: number;
-  unresolved_mesh_refs: string[];
+  logPath?: string | null;
+  worldPackagePath: string;
+  robotUrdfPath: string;
+  targetAssetPath?: string | null;
+  targetAssetFormat?: "urdf" | "mjcf" | "usd" | "native" | null;
+  bundledMeshCount: number;
+  unresolvedMeshRefs: string[];
 };
 
-export type SimulatorRuntimeStatus = {
-  runtimeName: SimulatorId;
+export type WorkspaceTransferTargetStatus = {
+  targetId: WorkspaceTransferTargetId;
   available: boolean;
   status: string;
   dependencies: { name: string; available: boolean }[];
 };
 
 export type WorkspaceTransferTargetListResponse = {
-  targets: SimulatorRuntimeDescriptor[];
+  targets: WorkspaceTransferTargetDescriptor[];
 };
 
 export type WorkspaceChangeSetApplyResponse = {
-  simulator_id: SimulatorId;
+  targetId: WorkspaceTransferTargetId;
   world_package: WorldScenePackageManifest;
-  applied_change_count: number;
-  review_only_count: number;
+  appliedChangeCount: number;
+  reviewOnlyCount: number;
 };
 
-export type PrepareSimulatorWorkspaceParams = {
-  simulatorId: SimulatorId;
+export type OpenWorkspaceTransferTargetParams = {
+  targetId: WorkspaceTransferTargetId;
   worldPackage: WorldScenePackageManifest;
   urdfAssetPath?: string | null;
   meshFiles: Record<string, Blob>;
   packageRoots?: Record<string, string[]>;
   iluSessionId?: string | null;
-  simulatorLabel?: string | null;
+  targetLabel?: string | null;
 };
 
-const workspaceTransferTargetPath = (simulatorId: SimulatorId, path: string): string =>
-  `${workspaceTransferBasePath()}/targets/${simulatorId}${path}`;
+const workspaceTransferTargetPath = (
+  targetId: WorkspaceTransferTargetId,
+  path: string
+): string => `${workspaceTransferBasePath()}/targets/${targetId}${path}`;
 
 const workspaceTransferBasePath = (): string => "/workspace-transfer";
 
-const formatSimulatorName = (simulatorId: SimulatorId, simulatorLabel?: string | null): string =>
-  simulatorLabel?.trim() || simulatorId;
+const formatTargetName = (
+  targetId: WorkspaceTransferTargetId,
+  targetLabel?: string | null
+): string => targetLabel?.trim() || targetId;
 
 const normalizeUploadPath = (value: string): string | null => {
   const normalized = value.replace(/\\/g, "/").trim().replace(/^\/+/, "").replace(/\/+/g, "/");
@@ -75,7 +79,7 @@ const normalizeUploadPath = (value: string): string | null => {
 };
 
 const addAlias = (aliases: Set<string>, value: string | null | undefined): void => {
-  if (!value || aliases.size >= MAX_SIMULATOR_ASSET_ALIASES) return;
+  if (!value || aliases.size >= WORKSPACE_TRANSFER_PARAMS.maxAssetAliases) return;
   const normalized = normalizeUploadPath(value);
   if (normalized) aliases.add(normalized);
 };
@@ -124,10 +128,10 @@ const blobToBase64 = async (blob: Blob): Promise<string> => {
   return btoa(binary);
 };
 
-export const buildSimulatorMeshAssetUploads = async (
+export const buildWorkspaceTransferMeshAssetUploads = async (
   meshFiles: Record<string, Blob>,
   packageRoots?: Record<string, string[]>
-): Promise<SimulatorMeshAssetUpload[]> => {
+): Promise<WorkspaceTransferMeshAssetUpload[]> => {
   const pathsByBlob = new Map<Blob, Set<string>>();
   const blobByAlias = new Map<string, Blob>();
 
@@ -149,7 +153,7 @@ export const buildSimulatorMeshAssetUploads = async (
       const [path, ...aliases] = sortedPaths;
       return {
         path,
-        aliases: aliases.slice(0, MAX_SIMULATOR_ASSET_ALIASES),
+        aliases: aliases.slice(0, WORKSPACE_TRANSFER_PARAMS.maxAssetAliases),
         content_base64: await blobToBase64(blob),
         mime: blob.type || null,
       };
@@ -170,17 +174,17 @@ const readErrorDetail = async (response: Response): Promise<string> => {
 };
 
 export const openWorkspaceTransferTarget = async ({
-  simulatorId,
+  targetId,
   worldPackage,
   urdfAssetPath,
   meshFiles,
   packageRoots,
   iluSessionId,
-  simulatorLabel,
-}: PrepareSimulatorWorkspaceParams): Promise<SimulatorWorkspacePrepareResponse> => {
-  const meshAssets = await buildSimulatorMeshAssetUploads(meshFiles, packageRoots);
+  targetLabel,
+}: OpenWorkspaceTransferTargetParams): Promise<WorkspaceOpenResponse> => {
+  const meshAssets = await buildWorkspaceTransferMeshAssetUploads(meshFiles, packageRoots);
   const response = await guardedFetch(
-    `${API_BASE_URL}${workspaceTransferTargetPath(simulatorId, "/open")}`,
+    `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/open")}`,
     {
       method: "POST",
       headers: {
@@ -197,23 +201,23 @@ export const openWorkspaceTransferTarget = async ({
     },
     {
       requiredBackends: ["core-api"],
-      context: `Open ${formatSimulatorName(simulatorId, simulatorLabel)}`,
+      context: `Open ${formatTargetName(targetId, targetLabel)}`,
     }
   );
   if (!response.ok) {
     const detail = await readErrorDetail(response);
-    throw new Error(detail || `${simulatorId} workspace preparation failed (${response.status})`);
+    throw new Error(detail || `${targetId} workspace open failed (${response.status})`);
   }
-  return (await response.json()) as SimulatorWorkspacePrepareResponse;
+  return (await response.json()) as WorkspaceOpenResponse;
 };
 
-export const applySimulatorWorkspaceChangeSet = async (
-  simulatorId: SimulatorId,
+export const applyWorkspaceTransferTargetChangeSet = async (
+  targetId: WorkspaceTransferTargetId,
   worldPackage: WorldScenePackageManifest,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
   const response = await guardedFetch(
-    `${API_BASE_URL}${workspaceTransferTargetPath(simulatorId, "/change-set/apply")}`,
+    `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/change-set/apply")}`,
     {
       method: "POST",
       headers: {
@@ -227,12 +231,12 @@ export const applySimulatorWorkspaceChangeSet = async (
     },
     {
       requiredBackends: ["core-api"],
-      context: `Import ${formatSimulatorName(simulatorId)} workspace changes`,
+      context: `Import ${formatTargetName(targetId)} workspace changes`,
     }
   );
   if (!response.ok) {
     const detail = await readErrorDetail(response);
-    throw new Error(detail || `${simulatorId} workspace change import failed (${response.status})`);
+    throw new Error(detail || `${targetId} workspace change import failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceChangeSetApplyResponse;
 };
@@ -267,10 +271,10 @@ export const applyWorkspaceChangeSet = async (
 };
 
 export const fetchWorkspaceTransferTargetStatus = async (
-  simulatorId: SimulatorId
-): Promise<SimulatorRuntimeStatus> => {
+  targetId: WorkspaceTransferTargetId
+): Promise<WorkspaceTransferTargetStatus> => {
   const response = await guardedFetch(
-    `${API_BASE_URL}${workspaceTransferTargetPath(simulatorId, "/runtime")}`,
+    `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/runtime")}`,
     {
       method: "GET",
       headers: {
@@ -279,17 +283,19 @@ export const fetchWorkspaceTransferTargetStatus = async (
     },
     {
       requiredBackends: ["core-api"],
-      context: `Check ${formatSimulatorName(simulatorId)} runtime`,
+      context: `Check ${formatTargetName(targetId)} runtime`,
     }
   );
   if (!response.ok) {
     const detail = await readErrorDetail(response);
-    throw new Error(detail || `${simulatorId} runtime check failed (${response.status})`);
+    throw new Error(detail || `${targetId} runtime check failed (${response.status})`);
   }
-  return (await response.json()) as SimulatorRuntimeStatus;
+  return (await response.json()) as WorkspaceTransferTargetStatus;
 };
 
-export const fetchWorkspaceTransferTargets = async (): Promise<SimulatorRuntimeDescriptor[]> => {
+export const fetchWorkspaceTransferTargets = async (): Promise<
+  WorkspaceTransferTargetDescriptor[]
+> => {
   const response = await guardedFetch(
     `${API_BASE_URL}${workspaceTransferBasePath()}/targets`,
     {

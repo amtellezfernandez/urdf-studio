@@ -73,9 +73,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shar
 import { HEALTH_ACTION_PANEL_PARAMS } from "@/features/layout/page/healthActionPanelParams";
 import { HealthActionPanelHeader } from "@/features/layout/page/HealthActionPanelHeader";
 import {
-  HealthActionPanelSimulatorRuntime,
-  type HealthActionPanelSimulatorRuntimeState,
-} from "@/features/layout/page/HealthActionPanelSimulatorRuntime";
+  HealthActionPanelWorkspaceTransfer,
+  type HealthActionPanelWorkspaceTransferState,
+} from "@/features/layout/page/HealthActionPanelWorkspaceTransfer";
 
 type SimStatusTone = "safe" | "warning" | "danger";
 
@@ -114,7 +114,7 @@ type CompatibilityRobotMirrorSelectionGroup = {
 type HealthActionPanelProps = {
   open: boolean;
   onClose?: () => void;
-  simulatorRuntime?: HealthActionPanelSimulatorRuntimeState | null;
+  workspaceTransfer?: HealthActionPanelWorkspaceTransferState | null;
   statusTone?: SimStatusTone;
   statusLabel?: string | null;
   statusSummary?: string | null;
@@ -1551,7 +1551,7 @@ const resolveRepeatedInertiaSymmetryOutcome = ({
 export const HealthActionPanel = ({
   open,
   onClose,
-  simulatorRuntime = null,
+  workspaceTransfer = null,
   statusTone = "warning",
   statusLabel = null,
   statusSummary = null,
@@ -2105,10 +2105,10 @@ export const HealthActionPanel = ({
         />
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-          {simulatorRuntime ? (
-            <HealthActionPanelSimulatorRuntime
+          {workspaceTransfer ? (
+            <HealthActionPanelWorkspaceTransfer
               className={CHECKLIST_CARD_CLASS}
-              {...simulatorRuntime}
+              {...workspaceTransfer}
             />
           ) : null}
 

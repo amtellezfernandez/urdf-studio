@@ -2,12 +2,10 @@ import { Cuboid, LoaderCircle, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/utils";
-import type { SimulatorId } from "@/features/world-share/simulatorRuntimeApi";
+import type { WorkspaceTransferTargetId } from "@/features/world-share/workspaceTransferApi";
 
-export type SimulatorRuntimeTargetId = SimulatorId;
-
-export type SimulatorRuntimeTargetState = {
-  id: SimulatorRuntimeTargetId;
+export type WorkspaceTransferTargetState = {
+  id: WorkspaceTransferTargetId;
   label: string;
   detail: string;
   openLabel: string;
@@ -19,22 +17,22 @@ export type SimulatorRuntimeTargetState = {
   onAction: () => void;
 };
 
-export type HealthActionPanelSimulatorRuntimeState = {
-  targets: SimulatorRuntimeTargetState[];
+export type HealthActionPanelWorkspaceTransferState = {
+  targets: WorkspaceTransferTargetState[];
 };
 
-type HealthActionPanelSimulatorRuntimeProps = HealthActionPanelSimulatorRuntimeState & {
+type HealthActionPanelWorkspaceTransferProps = HealthActionPanelWorkspaceTransferState & {
   className: string;
 };
 
-const getAvailableTargetIcon = (target: SimulatorRuntimeTargetState) => {
+const getAvailableTargetIcon = (target: WorkspaceTransferTargetState) => {
   if (target.isBusy) return <LoaderCircle className="h-2.5 w-2.5 animate-spin" />;
   return <Cuboid className="h-2.5 w-2.5" />;
 };
 
 const getUnavailableTargetIcon = () => <Minus className="h-2.5 w-2.5" />;
 
-const getAvailableTargetButtonClassName = (target: SimulatorRuntimeTargetState) =>
+const getAvailableTargetButtonClassName = (target: WorkspaceTransferTargetState) =>
   cn(
     "h-6 min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
     "border-neutral-700/70 bg-neutral-900/60 text-neutral-200 shadow-none hover:border-neutral-600 hover:bg-neutral-800/70",
@@ -48,7 +46,7 @@ const getUnavailableTargetButtonClassName = () =>
     "disabled:cursor-not-allowed disabled:opacity-100"
   );
 
-const AvailableTargetButton = ({ target }: { target: SimulatorRuntimeTargetState }) => (
+const AvailableTargetButton = ({ target }: { target: WorkspaceTransferTargetState }) => (
   <Button
     type="button"
     variant="outline"
@@ -69,7 +67,7 @@ const AvailableTargetButton = ({ target }: { target: SimulatorRuntimeTargetState
   </Button>
 );
 
-const UnavailableTargetButton = ({ target }: { target: SimulatorRuntimeTargetState }) => (
+const UnavailableTargetButton = ({ target }: { target: WorkspaceTransferTargetState }) => (
   <Button
     type="button"
     variant="outline"
@@ -86,7 +84,7 @@ const UnavailableTargetButton = ({ target }: { target: SimulatorRuntimeTargetSta
   </Button>
 );
 
-const SimulatorRuntimeRow = ({ children, label }: { children: ReactNode; label: string }) => (
+const WorkspaceTransferRow = ({ children, label }: { children: ReactNode; label: string }) => (
   <div className="flex items-start gap-1">
     <div
       className={cn(
@@ -100,13 +98,13 @@ const SimulatorRuntimeRow = ({ children, label }: { children: ReactNode; label: 
   </div>
 );
 
-export const HealthActionPanelSimulatorRuntime = ({
+export const HealthActionPanelWorkspaceTransfer = ({
   className,
   targets,
-}: HealthActionPanelSimulatorRuntimeProps) => {
+}: HealthActionPanelWorkspaceTransferProps) => {
   return (
-    <div data-section="simulator-runtime" className={cn("space-y-1", className)}>
-      <SimulatorRuntimeRow label="Open">
+    <div data-section="workspace-transfer" className={cn("space-y-1", className)}>
+      <WorkspaceTransferRow label="Open">
         {targets.map((target) =>
           target.canOpen ? (
             <AvailableTargetButton key={target.id} target={target} />
@@ -114,7 +112,7 @@ export const HealthActionPanelSimulatorRuntime = ({
             <UnavailableTargetButton key={target.id} target={target} />
           )
         )}
-      </SimulatorRuntimeRow>
+      </WorkspaceTransferRow>
     </div>
   );
 };

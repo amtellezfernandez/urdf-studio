@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type {
-  HealthActionPanelSimulatorRuntimeState,
-  SimulatorRuntimeTargetState,
-} from "@/features/layout/page/HealthActionPanelSimulatorRuntime";
+  HealthActionPanelWorkspaceTransferState,
+  WorkspaceTransferTargetState,
+} from "@/features/layout/page/HealthActionPanelWorkspaceTransfer";
 import {
   fetchWorkspaceTransferTargets,
   fetchWorkspaceTransferTargetStatus,
   openWorkspaceTransferTarget,
-  type SimulatorRuntimeDescriptor,
-  type SimulatorRuntimeStatus,
-} from "@/features/world-share/simulatorRuntimeApi";
+  type WorkspaceTransferTargetDescriptor,
+  type WorkspaceTransferTargetStatus,
+} from "@/features/world-share/workspaceTransferApi";
 import {
   canOpenWorkspaceTarget,
-  type SimulatorId,
-} from "@/features/world-share/simulatorRuntimeParams";
+  type WorkspaceTransferTargetId,
+} from "@/features/world-share/workspaceTransferParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 
-type UseSimulatorRuntimeLauncherParams = {
+type UseWorkspaceTransferLauncherParams = {
   activeUrdfPath: string | null;
   attachedIluSessionId: string;
   buildCurrentWorldScenePackageManifest: () => Promise<WorldScenePackageManifest>;
@@ -27,7 +27,7 @@ type UseSimulatorRuntimeLauncherParams = {
   vizUrdfContent: string;
 };
 
-const SIMULATOR_ASSET_FORMAT_LABELS = new Map<string, string>([
+const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
   ["urdf", "URDF"],
   ["mjcf", "MJCF"],
   ["mjx_mjcf", "MJX MJCF"],
@@ -35,14 +35,14 @@ const SIMULATOR_ASSET_FORMAT_LABELS = new Map<string, string>([
   ["native", "native"],
 ]);
 
-const formatSimulatorAssetFormat = (format: string): string =>
-  SIMULATOR_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
+const formatWorkspaceAssetFormat = (format: string): string =>
+  WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
 
-const resolveSimulatorRuntimeDetail = (
-  descriptor: SimulatorRuntimeDescriptor,
-  status?: SimulatorRuntimeStatus
+const resolveWorkspaceTransferTargetDetail = (
+  descriptor: WorkspaceTransferTargetDescriptor,
+  status?: WorkspaceTransferTargetStatus
 ): string => {
-  const assetFormat = formatSimulatorAssetFormat(descriptor.transferPolicy.robotAssetFormat);
+  const assetFormat = formatWorkspaceAssetFormat(descriptor.transferPolicy.robotAssetFormat);
   if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} support planned`;
   if (status && !status.available) return `${assetFormat} runtime unavailable: ${status.status}`;
   if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
@@ -52,7 +52,7 @@ const resolveSimulatorRuntimeDetail = (
   return `${assetFormat} open`;
 };
 
-export const useSimulatorRuntimeLauncher = ({
+export const useWorkspaceTransferLauncher = ({
   activeUrdfPath,
   attachedIluSessionId,
   buildCurrentWorldScenePackageManifest,
@@ -60,12 +60,15 @@ export const useSimulatorRuntimeLauncher = ({
   originalUrdfContent,
   packageRoots,
   vizUrdfContent,
-}: UseSimulatorRuntimeLauncherParams) => {
-  const [loadingSimulatorId, setLoadingSimulatorId] = useState<SimulatorId | null>(null);
-  const [lastLoadedSimulatorId, setLastLoadedSimulatorId] = useState<SimulatorId | null>(null);
-  const [runtimeDescriptors, setRuntimeDescriptors] = useState<SimulatorRuntimeDescriptor[]>([]);
-  const [runtimeStatuses, setRuntimeStatuses] = useState<
-    Partial<Record<SimulatorId, SimulatorRuntimeStatus>>
+}: UseWorkspaceTransferLauncherParams) => {
+  const [loadingTargetId, setLoadingTargetId] = useState<WorkspaceTransferTargetId | null>(null);
+  const [lastOpenedTargetId, setLastOpenedTargetId] =
+    useState<WorkspaceTransferTargetId | null>(null);
+  const [targetDescriptors, setTargetDescriptors] = useState<WorkspaceTransferTargetDescriptor[]>(
+    []
+  );
+  const [targetStatuses, setTargetStatuses] = useState<
+    Partial<Record<WorkspaceTransferTargetId, WorkspaceTransferTargetStatus>>
   >({});
 
   useEffect(() => {
@@ -73,11 +76,11 @@ export const useSimulatorRuntimeLauncher = ({
     void fetchWorkspaceTransferTargets()
       .then((descriptors) => {
         if (cancelled) return;
-        setRuntimeDescriptors(descriptors);
+        setTargetDescriptors(descriptors);
       })
       .catch((error) => {
         if (cancelled) return;
-        setRuntimeDescriptors([]);
+        setTargetDescriptors([]);
         toast.error(error instanceof Error ? error.message : "Workspace targets unavailable.");
       });
     return () => {
@@ -86,23 +89,23 @@ export const useSimulatorRuntimeLauncher = ({
   }, []);
 
   useEffect(() => {
-    if (runtimeDescriptors.length === 0) {
-      setRuntimeStatuses({});
+    if (targetDescriptors.length === 0) {
+      setTargetStatuses({});
       return;
     }
     let cancelled = false;
     void Promise.all(
-      runtimeDescriptors.map(async (descriptor) => {
+      targetDescriptors.map(async (descriptor) => {
         try {
           return [
-            descriptor.simulatorId,
-            await fetchWorkspaceTransferTargetStatus(descriptor.simulatorId),
+            descriptor.targetId,
+            await fetchWorkspaceTransferTargetStatus(descriptor.targetId),
           ] as const;
         } catch (error) {
           return [
-            descriptor.simulatorId,
+            descriptor.targetId,
             {
-              runtimeName: descriptor.simulatorId,
+              targetId: descriptor.targetId,
               available: false,
               status: error instanceof Error ? error.message : "runtime status unavailable",
               dependencies: [],
@@ -112,19 +115,21 @@ export const useSimulatorRuntimeLauncher = ({
       })
     ).then((entries) => {
       if (cancelled) return;
-      setRuntimeStatuses(
-        Object.fromEntries(entries) as Partial<Record<SimulatorId, SimulatorRuntimeStatus>>
+      setTargetStatuses(
+        Object.fromEntries(entries) as Partial<
+          Record<WorkspaceTransferTargetId, WorkspaceTransferTargetStatus>
+        >
       );
     });
     return () => {
       cancelled = true;
     };
-  }, [runtimeDescriptors]);
+  }, [targetDescriptors]);
 
-  const handleOpenSimulator = useCallback(
-    async (descriptor: SimulatorRuntimeDescriptor) => {
-      if (loadingSimulatorId !== null) return;
-      const status = runtimeStatuses[descriptor.simulatorId];
+  const handleOpenTarget = useCallback(
+    async (descriptor: WorkspaceTransferTargetDescriptor) => {
+      if (loadingTargetId !== null) return;
+      const status = targetStatuses[descriptor.targetId];
       if (!canOpenWorkspaceTarget(descriptor) || status?.available === false) {
         toast.message(status?.status || `${descriptor.label} support is planned.`);
         return;
@@ -133,30 +138,30 @@ export const useSimulatorRuntimeLauncher = ({
         toast.error(`Load a robot before opening ${descriptor.label}.`);
         return;
       }
-      setLoadingSimulatorId(descriptor.simulatorId);
+      setLoadingTargetId(descriptor.targetId);
       try {
         const worldPackage = await buildCurrentWorldScenePackageManifest();
         const prepared = await openWorkspaceTransferTarget({
-          simulatorId: descriptor.simulatorId,
+          targetId: descriptor.targetId,
           worldPackage,
           urdfAssetPath: activeUrdfPath ?? undefined,
           meshFiles,
           packageRoots,
           iluSessionId: attachedIluSessionId || undefined,
-          simulatorLabel: descriptor.label,
+          targetLabel: descriptor.label,
         });
-        setLastLoadedSimulatorId(descriptor.simulatorId);
+        setLastOpenedTargetId(descriptor.targetId);
         const meshSummary =
-          prepared.bundled_mesh_count > 0
-            ? `, ${prepared.bundled_mesh_count} mesh asset${
-                prepared.bundled_mesh_count === 1 ? "" : "s"
+          prepared.bundledMeshCount > 0
+            ? `, ${prepared.bundledMeshCount} mesh asset${
+                prepared.bundledMeshCount === 1 ? "" : "s"
               }`
             : "";
         toast.success(`${descriptor.label} opened (pid ${prepared.pid}${meshSummary}).`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : `Failed to open ${descriptor.label}`);
       } finally {
-        setLoadingSimulatorId(null);
+        setLoadingTargetId(null);
       }
     },
     [
@@ -164,46 +169,46 @@ export const useSimulatorRuntimeLauncher = ({
       attachedIluSessionId,
       buildCurrentWorldScenePackageManifest,
       meshFiles,
-      loadingSimulatorId,
+      loadingTargetId,
       originalUrdfContent,
       packageRoots,
-      runtimeStatuses,
+      targetStatuses,
       vizUrdfContent,
     ]
   );
 
-  const simulatorRuntime: HealthActionPanelSimulatorRuntimeState = useMemo(() => {
-    const targets = runtimeDescriptors.map((descriptor): SimulatorRuntimeTargetState => {
-      const isBusy = loadingSimulatorId === descriptor.simulatorId;
-      const isActive = lastLoadedSimulatorId === descriptor.simulatorId;
-      const status = runtimeStatuses[descriptor.simulatorId];
+  const workspaceTransfer: HealthActionPanelWorkspaceTransferState = useMemo(() => {
+    const targets = targetDescriptors.map((descriptor): WorkspaceTransferTargetState => {
+      const isBusy = loadingTargetId === descriptor.targetId;
+      const isActive = lastOpenedTargetId === descriptor.targetId;
+      const status = targetStatuses[descriptor.targetId];
       const canOpen = canOpenWorkspaceTarget(descriptor) && status?.available !== false;
       const plannedLabel = canOpenWorkspaceTarget(descriptor)
         ? `${descriptor.label} runtime unavailable`
         : `${descriptor.label} support planned`;
       return {
-        id: descriptor.simulatorId,
+        id: descriptor.targetId,
         label: descriptor.label,
-        detail: resolveSimulatorRuntimeDetail(descriptor, status),
+        detail: resolveWorkspaceTransferTargetDetail(descriptor, status),
         openLabel: `Open ${descriptor.label}`,
         openingLabel: `Opening ${descriptor.label}`,
         isBusy,
         isActive,
         canOpen,
         plannedLabel: status?.available === false ? status.status : plannedLabel,
-        onAction: () => handleOpenSimulator(descriptor),
+        onAction: () => handleOpenTarget(descriptor),
       };
     });
     return { targets };
   }, [
-    handleOpenSimulator,
-    lastLoadedSimulatorId,
-    loadingSimulatorId,
-    runtimeDescriptors,
-    runtimeStatuses,
+    handleOpenTarget,
+    lastOpenedTargetId,
+    loadingTargetId,
+    targetDescriptors,
+    targetStatuses,
   ]);
 
   return {
-    simulatorRuntime,
+    workspaceTransfer,
   };
 };

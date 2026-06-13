@@ -4,7 +4,7 @@ This guide explains how to launch URDF Studio, use the main workspace, and troub
 
 ## Mental Model
 
-URDF Studio is a local robotics workspace. Start it with one command, then use the browser UI to load robots, inspect scenes, replay episodes, and share a session when needed.
+URDF Studio is a local robotics workspace and transfer workbench. Start it with one command, load or author a robot-world scene once, then use `Open In` to move that scene into validated external targets such as Genesis, MuJoCo, PyBullet, or Blender.
 
 The launcher manages the supporting local services for you. In normal use, you only need the Studio URL printed in the terminal.
 
@@ -67,7 +67,7 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 ### Top Bar
 
 - `File`, `Utils`, `Worlds`, `View`, `Dataset`, `Create`, `IK`: main action menus.
-- `Simulation Prep`: physics/readiness state.
+- `Open In`: open the current robot-world scene in validated transfer targets.
 - `Cams`, `Leader`, `Follower`: camera and teleoperation setup.
 - Share/action icons: session and collaboration controls.
 

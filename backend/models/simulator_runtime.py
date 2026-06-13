@@ -217,10 +217,6 @@ class SimulatorRuntimeListResponse(SimulatorRuntimeCamelModel):
     simulators: list[SimulatorRuntimeDescriptor] = Field(default_factory=list)
 
 
-class WorkspaceTransferTargetListResponse(SimulatorRuntimeCamelModel):
-    targets: list[SimulatorRuntimeDescriptor] = Field(default_factory=list)
-
-
 class SimulatorRuntimeStatus(SimulatorRuntimeCamelModel):
     runtime_name: str = Field(..., alias="runtimeName")
     available: bool

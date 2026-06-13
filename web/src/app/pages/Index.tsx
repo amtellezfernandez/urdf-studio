@@ -88,7 +88,7 @@ import { useIluAssemblyBridge } from "@/app/pages/index/useIluAssemblyBridge";
 import { useIndexPageLayoutProps } from "@/app/pages/index/useIndexPageLayoutProps";
 import { useIndexViewerProps } from "@/app/pages/index/useIndexViewerProps";
 import { resolveViewerDraftPreview } from "@/app/pages/index/viewerDraftPreview";
-import { useSimulatorRuntimeLauncher } from "@/app/pages/index/useSimulatorRuntimeLauncher";
+import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTransferLauncher";
 import {
   FolderUploadScreen,
   IkDebuggerPanel,
@@ -803,7 +803,7 @@ const Index = () => {
     vizUrdfContent,
     worldImportParams,
   });
-  const { simulatorRuntime } = useSimulatorRuntimeLauncher({
+  const { workspaceTransfer } = useWorkspaceTransferLauncher({
     activeUrdfPath,
     attachedIluSessionId,
     buildCurrentWorldScenePackageManifest,
@@ -3199,7 +3199,7 @@ const Index = () => {
   const healthActionPanelProps: PageLayoutProps["healthActionPanelProps"] = {
     open: showHealthActionPanel,
     onClose: () => setShowHealthActionPanel(false),
-    simulatorRuntime,
+    workspaceTransfer,
     statusTone: simulationPrepStatus.tone,
     statusLabel: simulationPrepStatus.label,
     statusSummary: simulationPrepStatus.summary,

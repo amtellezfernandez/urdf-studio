@@ -3,22 +3,24 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.core.simulator_security import require_simulator_operator_access_async
-from backend.models.simulator_runtime import (
-    SimulatorId,
-    SimulatorRuntimeStatus,
-    SimulatorWorkspacePrepareRequest,
-    SimulatorWorkspacePrepareResponse,
+from backend.models.workspace_transfer import (
     WorkspaceChangeSetApplyRequest,
     WorkspaceChangeSetApplyResponse,
+    WorkspaceOpenRequest,
+    WorkspaceOpenResponse,
+    WorkspaceTransferTargetId,
     WorkspaceTransferTargetListResponse,
+    WorkspaceTransferTargetStatus,
 )
 from backend.services.simulator_adapters import (
     SimulatorAdapterError,
-    apply_simulator_workspace_change_set,
-    apply_workspace_change_set,
-    get_simulator_runtime_status,
+)
+from backend.services.workspace_transfer import (
+    apply_workspace_transfer_change_set,
+    apply_workspace_transfer_target_change_set,
+    get_workspace_transfer_target_status,
     list_workspace_transfer_targets,
-    prepare_simulator_workspace,
+    open_workspace_transfer_target,
 )
 
 
@@ -32,25 +34,25 @@ async def list_workspace_transfer_targets_route(
     return list_workspace_transfer_targets()
 
 
-@router.get("/targets/{simulator_id}/runtime", response_model=SimulatorRuntimeStatus)
+@router.get("/targets/{target_id}/runtime", response_model=WorkspaceTransferTargetStatus)
 async def get_workspace_transfer_target_runtime_route(
-    simulator_id: SimulatorId,
+    target_id: WorkspaceTransferTargetId,
     _access: None = Depends(require_simulator_operator_access_async),
-) -> SimulatorRuntimeStatus:
-    return get_simulator_runtime_status(simulator_id)
+) -> WorkspaceTransferTargetStatus:
+    return get_workspace_transfer_target_status(target_id)
 
 
 @router.post(
-    "/targets/{simulator_id}/open",
-    response_model=SimulatorWorkspacePrepareResponse,
+    "/targets/{target_id}/open",
+    response_model=WorkspaceOpenResponse,
 )
 async def open_workspace_transfer_target_route(
-    simulator_id: SimulatorId,
-    request: SimulatorWorkspacePrepareRequest,
+    target_id: WorkspaceTransferTargetId,
+    request: WorkspaceOpenRequest,
     _access: None = Depends(require_simulator_operator_access_async),
-) -> SimulatorWorkspacePrepareResponse:
+) -> WorkspaceOpenResponse:
     try:
-        return prepare_simulator_workspace(simulator_id, request)
+        return open_workspace_transfer_target(target_id, request)
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
@@ -64,7 +66,7 @@ async def apply_workspace_change_set_route(
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorkspaceChangeSetApplyResponse:
     try:
-        return apply_workspace_change_set(request)
+        return apply_workspace_transfer_change_set(request)
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:
@@ -72,16 +74,16 @@ async def apply_workspace_change_set_route(
 
 
 @router.post(
-    "/targets/{simulator_id}/change-set/apply",
+    "/targets/{target_id}/change-set/apply",
     response_model=WorkspaceChangeSetApplyResponse,
 )
 async def apply_workspace_transfer_target_change_set_route(
-    simulator_id: SimulatorId,
+    target_id: WorkspaceTransferTargetId,
     request: WorkspaceChangeSetApplyRequest,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorkspaceChangeSetApplyResponse:
     try:
-        return apply_simulator_workspace_change_set(simulator_id, request)
+        return apply_workspace_transfer_target_change_set(target_id, request)
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:
