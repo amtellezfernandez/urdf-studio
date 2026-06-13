@@ -83,18 +83,44 @@ def test_simulator_workspace_parity_rejects_camera_image_mismatch(tmp_path: Path
     assert "camera_images" in result.detail
 
 
+def test_simulator_workspace_parity_rejects_camera_image_name_mismatch(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+        image_name="01_wrong_camera.png",
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "PNG names do not match report cameras" in result.detail
+
+
 def _write_parity_report(
     root: Path,
     *,
     simulator_id: str,
     object_x: float,
     image_size: tuple[int, int] = (64, 48),
+    image_name: str = "01_scene_camera.png",
 ) -> Path:
     from PIL import Image
 
     camera_dir = root / "cameras"
     camera_dir.mkdir(parents=True)
-    Image.new("RGB", image_size, (255, 0, 0)).save(camera_dir / "01_scene_camera.png")
+    Image.new("RGB", image_size, (255, 0, 0)).save(camera_dir / image_name)
     report_path = root / "report.json"
     report_path.write_text(
         json.dumps(

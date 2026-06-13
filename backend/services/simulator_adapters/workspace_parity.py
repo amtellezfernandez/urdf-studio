@@ -181,26 +181,87 @@ def _camera_image_manifest(
     item, report = loaded_report
     artifacts = report.get("artifacts")
     if not isinstance(artifacts, Mapping):
-        return item.label, f"{item.label} validation report has no artifacts object"
+        return item.label, f"{item.label} camera_images validation report has no artifacts object"
     directory_raw = artifacts.get("camera_screenshot_dir")
     if not isinstance(directory_raw, str) or not directory_raw.strip():
-        return item.label, f"{item.label} validation report has no camera_screenshot_dir"
+        return item.label, f"{item.label} camera_images validation report has no camera_screenshot_dir"
     directory = Path(directory_raw)
     image_paths = sorted(directory.glob("*.png")) if directory.exists() else []
     if not image_paths:
-        return item.label, f"{item.label} has no camera PNG artifacts in {directory}"
+        return item.label, f"{item.label} camera_images has no PNG artifacts in {directory}"
+    cameras = _list_field(report, "cameras")
+    expected_images_or_error = _expected_camera_images(item.label, cameras)
+    if isinstance(expected_images_or_error, str):
+        return item.label, expected_images_or_error
+    expected_images = expected_images_or_error
+    actual_names = sorted(path.name for path in image_paths)
+    expected_names = sorted(entry["name"] for entry in expected_images)
+    if actual_names != expected_names:
+        return (
+            item.label,
+            f"{item.label} camera_images PNG names do not match report cameras: "
+            f"actual={actual_names}, expected={expected_names}",
+        )
 
     try:
         from PIL import Image
     except Exception as exc:
-        return item.label, f"could not inspect camera artifacts: {exc}"
+        return item.label, f"could not inspect camera_images artifacts: {exc}"
 
     images: list[dict[str, Any]] = []
-    for path in image_paths:
+    image_by_name = {path.name: path for path in image_paths}
+    for expected in expected_images:
+        path = image_by_name[expected["name"]]
         try:
             with Image.open(path) as image:
                 size = image.size
         except Exception as exc:
-            return item.label, f"invalid camera artifact {path}: {exc}"
-        images.append({"name": path.name, "width": size[0], "height": size[1]})
+            return item.label, f"invalid camera_images artifact {path}: {exc}"
+        if size != (expected["width"], expected["height"]):
+            return (
+                item.label,
+                f"{item.label} camera_images PNG {path.name} size {size} "
+                f"does not match report camera size {(expected['width'], expected['height'])}",
+            )
+        images.append(
+            {
+                "camera_id": expected["camera_id"],
+                "sim_name": expected["sim_name"],
+                "name": path.name,
+                "width": size[0],
+                "height": size[1],
+            }
+        )
     return item.label, {"images": images}
+
+
+def _expected_camera_images(
+    label: str,
+    cameras: Sequence[Any],
+) -> list[dict[str, Any]] | str:
+    expected_images: list[dict[str, Any]] = []
+    for index, camera in enumerate(cameras, start=1):
+        if not isinstance(camera, Mapping):
+            return f"{label} camera_images validation report camera[{index - 1}] must be an object"
+        camera_id = camera.get("camera_id")
+        sim_name = camera.get("sim_name")
+        width = camera.get("width")
+        height = camera.get("height")
+        if not isinstance(camera_id, str) or not camera_id.strip():
+            return f"{label} camera_images validation report camera[{index - 1}].camera_id must be a non-empty string"
+        if not isinstance(sim_name, str) or not sim_name.strip():
+            return f"{label} camera_images validation report camera[{index - 1}].sim_name must be a non-empty string"
+        if not isinstance(width, int) or isinstance(width, bool) or width <= 0:
+            return f"{label} camera_images validation report camera[{index - 1}].width must be a positive integer"
+        if not isinstance(height, int) or isinstance(height, bool) or height <= 0:
+            return f"{label} camera_images validation report camera[{index - 1}].height must be a positive integer"
+        expected_images.append(
+            {
+                "camera_id": camera_id,
+                "sim_name": sim_name,
+                "name": f"{index:02d}_{sim_name}.png",
+                "width": width,
+                "height": height,
+            }
+        )
+    return expected_images
