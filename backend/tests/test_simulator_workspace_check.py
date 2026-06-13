@@ -27,6 +27,7 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_pybullet_command,
     _report_has_camera_artifacts,
     _selected_simulator_ids_from_args,
+    _validate_file_artifacts,
     _workspace_request_from_args,
     main,
 )
@@ -267,8 +268,10 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
     assert command.expected_camera_count == 3
     assert "edit_session=" in command.extra_expected_markers
     assert command.expected_image_dirs == ()
+    assert command.expected_file_validators[0][0] == (
+        tmp_path / "artifacts" / "blender-edit-session.json"
+    )
     assert command.expected_file_paths == (
-        tmp_path / "artifacts" / "blender-edit-session.json",
         tmp_path / "artifacts" / "open_blender_scene.py",
         tmp_path / "artifacts" / "export_blender_changes.py",
         tmp_path / "artifacts" / "robot-reference.usda",
@@ -280,6 +283,26 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         "robot_usd_path",
     )
     assert command.expected_report_artifact_dir_keys == ()
+
+
+def test_workspace_check_runs_configured_file_validators(tmp_path) -> None:
+    edit_session_path = tmp_path / "blender-edit-session.json"
+    edit_session_path.write_text('{"schema": "bad"}\n', encoding="utf-8")
+
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=0",
+        expected_camera_log_marker="cameras=0",
+        expected_file_validators=(
+            (
+                edit_session_path,
+                lambda path: "invalid edit session" if path.read_text(encoding="utf-8") else None,
+            ),
+        ),
+    )
+
+    assert _validate_file_artifacts(command) == "invalid edit session"
 
 
 def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(

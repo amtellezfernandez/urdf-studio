@@ -29,6 +29,9 @@ from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_OPEN_SCRIPT_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
 )
+from backend.services.simulator_adapters.blender_edit_session import (
+    validate_blender_edit_session_artifact,
+)
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
@@ -71,6 +74,7 @@ class PreparedWorkspaceCommand:
     expected_image_paths: tuple[Path, ...] = ()
     expected_image_dirs: tuple[tuple[Path, int], ...] = ()
     expected_file_paths: tuple[Path, ...] = ()
+    expected_file_validators: tuple[tuple[Path, Callable[[Path], str | None]], ...] = ()
     expected_report_path: Path | None = None
     expected_simulator_id: SimulatorId | None = None
     expected_object_count: int | None = None
@@ -234,6 +238,7 @@ def _prepare_direct_urdf_command(
     expected_image_paths: tuple[Path, ...] = (),
     expected_image_dirs: tuple[tuple[Path, int], ...] = (),
     expected_file_paths: tuple[Path, ...] = (),
+    expected_file_validators: tuple[tuple[Path, Callable[[Path], str | None]], ...] = (),
     expected_report_path: Path | None = None,
     expected_report_artifact_file_keys: tuple[str, ...] = (),
     expected_report_artifact_dir_keys: tuple[str, ...] = (),
@@ -256,6 +261,7 @@ def _prepare_direct_urdf_command(
         expected_image_paths=expected_image_paths,
         expected_image_dirs=expected_image_dirs,
         expected_file_paths=expected_file_paths,
+        expected_file_validators=expected_file_validators,
         expected_report_path=expected_report_path,
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
@@ -412,10 +418,19 @@ def _prepare_blender_command(
         expectations=expectations,
         expected_image_dirs=expected_image_dirs,
         expected_file_paths=(
-            artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
             artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME,
             artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME,
             artifact_dir / BLENDER_ROBOT_USD_FILENAME,
+        ),
+        expected_file_validators=(
+            (
+                artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
+                lambda path: validate_blender_edit_session_artifact(
+                    path,
+                    expected_object_count=expectations.object_count,
+                    expected_camera_count=expectations.camera_count,
+                ),
+            ),
         ),
         expected_report_path=report_path,
         expected_report_artifact_file_keys=(
@@ -548,11 +563,18 @@ def _validate_image_artifacts(command: PreparedWorkspaceCommand) -> str | None:
 
 
 def _validate_file_artifacts(command: PreparedWorkspaceCommand) -> str | None:
-    for path in command.expected_file_paths:
+    for path in (
+        *command.expected_file_paths,
+        *(path for path, _validator in command.expected_file_validators),
+    ):
         if not path.is_file():
             return f"missing file artifact: {path}"
         if path.stat().st_size <= 0:
             return f"empty file artifact: {path}"
+    for _path, validator in command.expected_file_validators:
+        validation_error = validator(_path)
+        if validation_error:
+            return validation_error
     return None
 
 

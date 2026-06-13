@@ -24,10 +24,13 @@ from backend.services.simulator_adapters.blender_change_sets import (
     build_blender_change_set_source,
 )
 from backend.services.simulator_adapters.blender_workspace import (
-    BLENDER_EDIT_SESSION_SCHEMA,
     BLENDER_ROBOT_GLB_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
     write_blender_workspace_artifacts,
+)
+from backend.services.simulator_adapters.blender_edit_session import (
+    BLENDER_EDIT_SESSION_SCHEMA,
+    validate_blender_edit_session_artifact,
 )
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
@@ -162,6 +165,43 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert artifacts.robot_usd_path.read_text(encoding="utf-8").startswith("#usda")
     assert artifacts.open_script_path.exists()
     assert artifacts.export_script_path.exists()
+    assert (
+        validate_blender_edit_session_artifact(
+            artifacts.edit_session_path,
+            expected_object_count=1,
+            expected_camera_count=1,
+        )
+        is None
+    )
+
+
+def test_blender_edit_session_validation_rejects_missing_supported_change(
+    tmp_path: Path,
+) -> None:
+    _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["round_trip"]["supported_changes"].remove("world_object.color")
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
+        "Blender edit-session field 'round_trip.supported_changes' "
+        "missing value(s): world_object.color"
+    )
 
 
 def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> None:

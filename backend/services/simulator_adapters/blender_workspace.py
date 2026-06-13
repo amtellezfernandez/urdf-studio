@@ -13,9 +13,14 @@ from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SCHEMA,
     build_blender_change_set_source,
 )
+from backend.services.simulator_adapters.blender_edit_session import (
+    BLENDER_EDIT_SESSION_SCHEMA,
+    BLENDER_LOCKED_DOMAINS,
+    BLENDER_REVIEW_ONLY_CHANGES,
+    BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES,
+)
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 
-BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
 BLENDER_OPEN_SCRIPT_FILENAME = "open_blender_scene.py"
@@ -168,23 +173,9 @@ def build_blender_edit_session(
             "frame_convention": scene.layout.frame_convention,
         },
         "round_trip": {
-            "supported_changes": (
-                "world_object.position_xyz",
-                "world_object.rotation_rpy_rad",
-                "world_object.size_xyz",
-                "world_object.color",
-            ),
-            "review_only": (
-                "camera.pose",
-                "mesh.materials",
-                "new_world_object",
-            ),
-            "locked": (
-                "robot.kinematics",
-                "robot.inertials",
-                "robot.collisions",
-                "robot.transmissions",
-            ),
+            "supported_changes": tuple(sorted(BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES)),
+            "review_only": tuple(sorted(BLENDER_REVIEW_ONLY_CHANGES)),
+            "locked": tuple(sorted(BLENDER_LOCKED_DOMAINS)),
             "change_set_path": str(change_set_path),
             "export_script_path": str(export_script_path),
         },
