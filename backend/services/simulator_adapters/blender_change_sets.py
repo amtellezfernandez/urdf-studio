@@ -44,6 +44,7 @@ class BlenderNewWorldObject:
     quat_wxyz: tuple[float, float, float, float]
     size_xyz: tuple[float, float, float]
     rgba: tuple[float, float, float, float] | None
+    asset_ref: str | None
 
 
 @dataclass(frozen=True)
@@ -369,6 +370,7 @@ def _validate_new_world_object_import(value: Any, path: str) -> BlenderNewWorldO
         quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
         size_xyz=_required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz"),
         rgba=_optional_rgba(value.get("rgba"), f"{path}.rgba"),
+        asset_ref=_optional_asset_ref(value.get("asset_ref"), f"{path}.asset_ref"),
     )
 
 
@@ -386,6 +388,7 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
             "quat_wxyz",
             "size_xyz",
             "rgba",
+            "asset_ref",
             "reason",
         },
     )
@@ -411,6 +414,12 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
                 f"Blender change-set {path}.rgba is only supported for new_world_object."
             )
         _optional_rgba(value.get("rgba"), f"{path}.rgba")
+    if "asset_ref" in value:
+        if entity_type != "new_world_object":
+            raise ValueError(
+                f"Blender change-set {path}.asset_ref is only supported for new_world_object."
+            )
+        _optional_asset_ref(value.get("asset_ref"), f"{path}.asset_ref")
     if "reason" in value:
         _required_string(value.get("reason"), f"{path}.reason")
     return f"{entity_type}:{stable_id}"
@@ -518,22 +527,23 @@ def _new_world_object_fields(
     for item in new_world_objects:
         object_id = _next_blender_object_id(item.sim_name, used_ids)
         used_ids.add(object_id)
-        fields.append(
-            {
-                "id": object_id,
-                "name": item.sim_name,
-                "type": "cube",
-                "position_xyz": list(item.position_xyz),
-                "rotation_rpy_rad": list(_quat_wxyz_to_rpy(item.quat_wxyz)),
-                "size_xyz": list(item.size_xyz),
-                "color": _rgba_to_hex(item.rgba) if item.rgba else "#3b82f6",
-                "simulation": {
-                    "fixed": True,
-                    "collision": True,
-                    "semantic_role": "blender_import",
-                },
-            }
-        )
+        world_object = {
+            "id": object_id,
+            "name": item.sim_name,
+            "type": "mesh" if item.asset_ref else "cube",
+            "position_xyz": list(item.position_xyz),
+            "rotation_rpy_rad": list(_quat_wxyz_to_rpy(item.quat_wxyz)),
+            "size_xyz": list(item.size_xyz),
+            "color": _rgba_to_hex(item.rgba) if item.rgba else "#3b82f6",
+            "simulation": {
+                "fixed": True,
+                "collision": True,
+                "semantic_role": "blender_import",
+            },
+        }
+        if item.asset_ref:
+            world_object["asset_ref"] = item.asset_ref
+        fields.append(world_object)
     return fields
 
 
@@ -558,6 +568,25 @@ def _required_string(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Blender change-set {label} must be a non-empty string.")
     return value.strip()
+
+
+def _optional_asset_ref(value: Any, label: str) -> str | None:
+    if value is None:
+        return None
+    asset_ref = _required_string(value, label).replace("\\", "/")
+    while asset_ref.startswith("./"):
+        asset_ref = asset_ref[2:]
+    if (
+        not asset_ref
+        or asset_ref.startswith("/")
+        or asset_ref.startswith("../")
+        or "/../" in f"/{asset_ref}/"
+        or ":" in asset_ref
+    ):
+        raise ValueError(
+            f"Blender change-set {label} must be a portable relative asset reference."
+        )
+    return asset_ref
 
 
 def _reject_unknown_fields(value: Mapping[str, Any], path: str, allowed_fields: set[str]) -> None:

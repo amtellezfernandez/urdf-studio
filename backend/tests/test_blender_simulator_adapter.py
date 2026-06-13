@@ -412,6 +412,40 @@ def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
     }
 
 
+def test_blender_change_set_imports_new_mesh_world_objects(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[_crate_layout_change()],
+            review_only=[
+                _scene_camera_review(),
+                {
+                    "entity_type": "new_world_object",
+                    "sim_name": "Added mesh",
+                    "position_xyz": [0.2, 0.3, 0.4],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.1, 0.2, 0.3],
+                    "rgba": [0.1, 0.2, 0.3, 1.0],
+                    "asset_ref": "assets/added_mesh.obj",
+                    "reason": "new Blender mesh object will import as a Studio mesh world object",
+                },
+            ],
+        ),
+    )
+
+    added_object = result.world_package.world_snapshot.objects[1]
+    assert result.applied_change_count == 2
+    assert result.review_only_count == 1
+    assert added_object["id"] == "blender_added_mesh"
+    assert added_object["type"] == "mesh"
+    assert added_object["asset_ref"] == "assets/added_mesh.obj"
+    assert added_object["size_xyz"] == [0.1, 0.2, 0.3]
+    assert added_object["color"] == "#1a334c"
+
+
 def test_blender_change_set_assigns_unique_ids_to_imported_world_objects(
     tmp_path: Path,
 ) -> None:
@@ -516,6 +550,29 @@ def test_blender_change_set_rejects_invalid_new_world_object_rgba(tmp_path: Path
                         "size_xyz": [0.1, 0.2, 0.3],
                         "rgba": [1.2, 0.0, 0.0, 1.0],
                         "reason": "new Blender mesh object will import as a Studio cube world object",
+                    }
+                ],
+            ),
+        )
+
+
+def test_blender_change_set_rejects_nonportable_new_mesh_asset_ref(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    with pytest.raises(ValueError, match="portable relative asset reference"):
+        apply_blender_layout_change_set_with_summary(
+            world_package,
+            _blender_change_set(
+                world_package,
+                changes=[_crate_layout_change()],
+                review_only=[
+                    {
+                        "entity_type": "new_world_object",
+                        "sim_name": "Absolute mesh",
+                        "position_xyz": [0.2, 0.3, 0.4],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                        "size_xyz": [0.1, 0.2, 0.3],
+                        "asset_ref": "/tmp/absolute.obj",
                     }
                 ],
             ),
@@ -1044,6 +1101,63 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert result.world_package.world_snapshot.objects[1]["id"] == "blender_extra_box"
     assert result.world_package.world_snapshot.objects[1]["position_xyz"] == [2.0, 3.0, 4.0]
     assert result.world_package.world_snapshot.objects[1]["color"] == "#336699"
+
+
+def test_generated_blender_export_preserves_tagged_new_mesh_asset_ref(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+    fake_bpy = FakeBlenderModule()
+    monkeypatch.setitem(sys.modules, "bpy", fake_bpy)
+
+    runpy.run_path(str(artifacts.open_script_path), run_name="__main__")
+    fake_bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.0, 3.0, 4.0))
+    new_world_object = fake_bpy.context.object
+    new_world_object.name = "New Mesh"
+    new_world_object.scale = [0.4, 0.5, 0.6]
+    new_world_object.color = (0.2, 0.4, 0.6, 1.0)
+    new_world_object.rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
+    new_world_object["urdf_studio_asset_ref"] = "assets/new_mesh.obj"
+    runpy.run_path(str(artifacts.export_script_path), run_name="__main__")
+
+    change_set = json.loads(artifacts.change_set_path.read_text(encoding="utf-8"))
+    imported = [
+        entry
+        for entry in change_set["review_only"]
+        if entry["entity_type"] == "new_world_object"
+    ]
+    assert imported == [
+        {
+            "asset_ref": "assets/new_mesh.obj",
+            "entity_type": "new_world_object",
+            "position_xyz": [2.0, 3.0, 4.0],
+            "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "reason": "new Blender mesh object will import as a Studio mesh world object",
+            "rgba": [0.2, 0.4, 0.6, 1.0],
+            "sim_name": "New Mesh",
+            "size_xyz": [0.4, 0.5, 0.6],
+        }
+    ]
+
+    result = apply_blender_layout_change_set_with_summary(world_package, change_set)
+    added_object = result.world_package.world_snapshot.objects[1]
+    assert added_object["id"] == "blender_new_mesh"
+    assert added_object["type"] == "mesh"
+    assert added_object["asset_ref"] == "assets/new_mesh.obj"
+    assert added_object["position_xyz"] == [2.0, 3.0, 4.0]
 
 
 def test_generated_blender_scripts_import_mesh_world_objects(monkeypatch, tmp_path: Path) -> None:

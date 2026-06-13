@@ -567,6 +567,42 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                 return [max(0.0, min(1.0, value)) for value in values[:4]]
 
 
+            def custom_string(owner, key):
+                getter = getattr(owner, "get", None)
+                if getter is None:
+                    return ""
+                value = getter(key)
+                return str(value).strip() if isinstance(value, str) and value.strip() else ""
+
+
+            def portable_asset_ref_value(value):
+                normalized = value.replace("\\\\", "/").strip()
+                while normalized.startswith("./"):
+                    normalized = normalized[2:]
+                if (
+                    not normalized
+                    or normalized.startswith("/")
+                    or normalized.startswith("../")
+                    or "/../" in f"/{{normalized}}/"
+                    or ":" in normalized
+                ):
+                    return ""
+                return normalized
+
+
+            def portable_asset_ref(obj):
+                for key in ("urdf_studio_asset_ref", "asset_ref", "mesh_asset_ref"):
+                    value = portable_asset_ref_value(custom_string(obj, key))
+                    if value:
+                        return value
+                data = getattr(obj, "data", None)
+                for key in ("urdf_studio_asset_ref", "asset_ref", "mesh_asset_ref"):
+                    value = portable_asset_ref_value(custom_string(data, key))
+                    if value:
+                        return value
+                return ""
+
+
             def main():
                 changes = []
                 review_only = []
@@ -609,17 +645,20 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                             }}
                         )
                     elif kind is None and getattr(obj, "type", "") == "MESH":
-                        review_only.append(
-                            {{
-                                "entity_type": "new_world_object",
-                                "sim_name": str(obj.name),
-                                "position_xyz": vector3(obj.location),
-                                "quat_wxyz": quat_wxyz(obj),
-                                "size_xyz": local_size_xyz(obj),
-                                "rgba": rgba(obj),
-                                "reason": "new Blender mesh object will import as a Studio cube world object",
-                            }}
-                        )
+                        entry = {{
+                            "entity_type": "new_world_object",
+                            "sim_name": str(obj.name),
+                            "position_xyz": vector3(obj.location),
+                            "quat_wxyz": quat_wxyz(obj),
+                            "size_xyz": local_size_xyz(obj),
+                            "rgba": rgba(obj),
+                            "reason": "new Blender mesh object will import as a Studio cube world object",
+                        }}
+                        asset_ref = portable_asset_ref(obj)
+                        if asset_ref:
+                            entry["asset_ref"] = asset_ref
+                            entry["reason"] = "new Blender mesh object will import as a Studio mesh world object"
+                        review_only.append(entry)
                 for stable_id in source_camera_ids:
                     if stable_id not in exported_camera_ids:
                         review_only.append(
