@@ -45,6 +45,13 @@ def _report_camera(camera_id: str = "cam") -> dict:
         "width": 64,
         "height": 48,
         "fov_deg": 60.0,
+        "intrinsics": {
+            "matrix": [
+                [41.569219381653056, 0.0, 32.0],
+                [0.0, 41.569219381653056, 24.0],
+                [0.0, 0.0, 1.0],
+            ]
+        },
     }
 
 
@@ -371,7 +378,7 @@ def test_workspace_report_validation_rejects_missing_camera_fields(tmp_path) -> 
 
     assert _validate_report_artifact(command) == (
         "simulator validation report field 'cameras[0]' missing field(s): "
-        "sim_name, parent_link, position_xyz, quat_wxyz, width, height, fov_deg"
+        "sim_name, parent_link, position_xyz, quat_wxyz, width, height, fov_deg, intrinsics"
     )
 
 
@@ -442,4 +449,46 @@ def test_workspace_report_validation_rejects_invalid_camera_values(tmp_path) -> 
 
     assert _validate_report_artifact(command) == (
         "simulator validation report field 'cameras[0].width' must be a positive integer"
+    )
+
+
+def test_workspace_report_validation_rejects_invalid_camera_intrinsics(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    invalid_camera = _report_camera()
+    invalid_camera["intrinsics"] = {
+        "matrix": [
+            [0.0, 0.0, 32.0],
+            [0.0, 41.569219381653056, 24.0],
+            [0.0, 0.0, 1.0],
+        ]
+    }
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+                "package_id": "demo",
+                "frame_map": "identity",
+                "primitive_count": 1,
+                "camera_count": 1,
+                "objects": [_report_object()],
+                "cameras": [invalid_camera],
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=1",
+        expected_camera_log_marker="cameras=1",
+        expected_report_path=report_path,
+        expected_simulator_id=SIMULATOR_GENESIS_ID,
+        expected_object_count=1,
+        expected_camera_count=1,
+    )
+
+    assert _validate_report_artifact(command) == (
+        "simulator validation report field 'cameras[0].intrinsics.matrix' "
+        "must have positive focal lengths"
     )

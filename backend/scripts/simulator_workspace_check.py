@@ -649,6 +649,7 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             "width",
             "height",
             "fov_deg",
+            "intrinsics",
         ),
     )
 
@@ -747,7 +748,13 @@ def _validate_report_item_values(
             error = _validate_report_positive_int(item.get(field_name), f"{path}.{field_name}")
             if error:
                 return error
-        return _validate_report_positive_number(item.get("fov_deg"), f"{path}.fov_deg")
+        error = _validate_report_camera_fov(item.get("fov_deg"), f"{path}.fov_deg")
+        if error:
+            return error
+        return _validate_report_camera_intrinsics(
+            item.get("intrinsics"),
+            f"{path}.intrinsics",
+        )
     return None
 
 
@@ -800,6 +807,53 @@ def _validate_report_positive_number(value: Any, path: str) -> str | None:
     if not _is_finite_report_number(value) or float(value) <= 0.0:
         return f"simulator validation report field '{path}' must be a positive finite number"
     return None
+
+
+def _validate_report_camera_fov(value: Any, path: str) -> str | None:
+    if not _is_finite_report_number(value):
+        return f"simulator validation report field '{path}' must be a finite number"
+    parsed = float(value)
+    if parsed <= 0.0 or parsed >= 180.0:
+        return f"simulator validation report field '{path}' must be between 0 and 180 degrees"
+    return None
+
+
+def _validate_report_camera_intrinsics(value: Any, path: str) -> str | None:
+    if not isinstance(value, Mapping):
+        return f"simulator validation report field '{path}' must be an object"
+    matrix = value.get("matrix")
+    rows = _report_matrix3(matrix, f"{path}.matrix")
+    if isinstance(rows, str):
+        return rows
+    if rows[0][0] <= 0.0 or rows[1][1] <= 0.0:
+        return f"simulator validation report field '{path}.matrix' must have positive focal lengths"
+    bottom_row = rows[2]
+    if not (
+        math.isclose(bottom_row[0], 0.0, abs_tol=1e-9)
+        and math.isclose(bottom_row[1], 0.0, abs_tol=1e-9)
+        and math.isclose(bottom_row[2], 1.0, abs_tol=1e-9)
+    ):
+        return (
+            f"simulator validation report field '{path}.matrix' must have "
+            "homogeneous bottom row [0, 0, 1]"
+        )
+    return None
+
+
+def _report_matrix3(value: Any, path: str) -> tuple[tuple[float, float, float], ...] | str:
+    if not isinstance(value, list) or len(value) != 3:
+        return f"simulator validation report field '{path}' must be a 3x3 number matrix"
+    rows: list[tuple[float, float, float]] = []
+    for row_index, row in enumerate(value):
+        numbers = _report_number_tuple(
+            row,
+            f"{path}[{row_index}]",
+            expected_length=3,
+        )
+        if isinstance(numbers, str):
+            return f"simulator validation report field '{path}' must be a 3x3 number matrix"
+        rows.append((numbers[0], numbers[1], numbers[2]))
+    return tuple(rows)
 
 
 def _report_number_tuple(
