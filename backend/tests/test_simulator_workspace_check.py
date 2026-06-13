@@ -26,6 +26,7 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_mujoco_command,
     _prepare_pybullet_command,
     _report_has_camera_artifacts,
+    _selected_simulator_ids_from_args,
     _workspace_request_from_args,
     main,
 )
@@ -47,6 +48,35 @@ def test_workspace_request_from_args_rejects_partial_custom_inputs() -> None:
 
     with pytest.raises(SystemExit, match="--world-package and --robot-urdf"):
         _workspace_request_from_args(args)
+
+
+def test_workspace_check_selected_simulator_ids_accepts_positional_target() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "simulator": None,
+            "simulator_targets": [SIMULATOR_BLENDER_ID],
+        },
+    )()
+
+    assert _selected_simulator_ids_from_args(args) == (SIMULATOR_BLENDER_ID,)
+
+
+def test_workspace_check_selected_simulator_ids_deduplicates_flag_and_positional() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "simulator": [SIMULATOR_BLENDER_ID, SIMULATOR_GENESIS_ID],
+            "simulator_targets": [SIMULATOR_BLENDER_ID],
+        },
+    )()
+
+    assert _selected_simulator_ids_from_args(args) == (
+        SIMULATOR_BLENDER_ID,
+        SIMULATOR_GENESIS_ID,
+    )
 
 
 def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:

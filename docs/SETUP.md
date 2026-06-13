@@ -123,14 +123,26 @@ npm run start -- --help
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |
 
+Validate the Blender transfer contract without requiring Blender to be installed:
+
+```bash
+npm run simulator:workspace:check -- blender --artifact-only
+```
+
+Validate the local Blender runtime strictly:
+
+```bash
+npm run simulator:workspace:check -- blender --require-all
+```
+
 Validate a specific WSP/URDF package with the same simulator gates:
 
 ```bash
 npm run simulator:workspace:check -- \
+  genesis \
   --world-package path/to/world-package.json \
   --robot-source path/to/robot.urdf-or.xacro \
   --asset-root path/to/asset-root \
-  --simulator genesis \
   --artifact-only
 ```
 

@@ -115,6 +115,13 @@ def _parse_args() -> argparse.Namespace:
         help="Simulator to check. May be passed more than once. Defaults to every openable simulator.",
     )
     parser.add_argument(
+        "simulator_targets",
+        nargs="*",
+        choices=WORKSPACE_SIMULATORS,
+        metavar="simulator",
+        help="Simulator to check. Compact alias for --simulator.",
+    )
+    parser.add_argument(
         "--require-all",
         action="store_true",
         help=(
@@ -175,6 +182,14 @@ def _workspace_request_from_args(args: argparse.Namespace) -> SimulatorWorkspace
         robot_urdf_path=Path(args.robot_urdf),
         asset_roots=tuple(Path(root) for root in args.asset_root),
     )
+
+
+def _selected_simulator_ids_from_args(args: argparse.Namespace) -> tuple[SimulatorId, ...]:
+    selected_ids: list[SimulatorId] = []
+    for simulator_id in (*(args.simulator or ()), *args.simulator_targets):
+        if simulator_id not in selected_ids:
+            selected_ids.append(simulator_id)
+    return tuple(selected_ids)
 
 
 def _module_command(
@@ -663,7 +678,7 @@ def main() -> int:
     args = _parse_args()
     if args.artifact_only and args.require_all:
         raise SystemExit("--artifact-only cannot be combined with --require-all")
-    selected_ids = tuple(args.simulator or ())
+    selected_ids = _selected_simulator_ids_from_args(args)
     require_runtime = (
         (bool(selected_ids) and not args.artifact_only)
         or args.require_all
