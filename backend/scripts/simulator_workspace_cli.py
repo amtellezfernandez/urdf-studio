@@ -15,3 +15,4 @@ def add_common_workspace_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--duration-sec", type=float, default=0.0)
     parser.add_argument("--include-hidden", action="store_true")
     parser.add_argument("--no-viewer", action="store_true")
+    parser.add_argument("--report", default="")

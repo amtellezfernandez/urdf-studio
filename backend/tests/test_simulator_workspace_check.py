@@ -1,10 +1,22 @@
 from __future__ import annotations
 
+import json
+import sys
+
+from backend.models.simulator_runtime import (
+    SIMULATOR_GENESIS_ID,
+    SIMULATOR_MJLAB_ID,
+    SIMULATOR_PYBULLET_ID,
+)
 from backend.scripts.simulator_workspace_check import (
+    MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    PreparedWorkspaceCommand,
     WORKSPACE_SIMULATORS,
     _active_object_count,
     _prepare_genesis_command,
+    _prepare_mujoco_command,
     _prepare_pybullet_command,
+    _validate_report_artifact,
     build_demo_workspace_request,
 )
 
@@ -68,6 +80,11 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     assert "--screenshot" in command.command
     assert "--camera-screenshot-dir" in command.command
     assert "--sensor-screenshot-dir" in command.command
+    assert "--report" in command.command
+    assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
+    assert command.expected_simulator_id == SIMULATOR_GENESIS_ID
+    assert command.expected_object_count == 3
+    assert command.expected_camera_count == 3
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert "observation_cameras=3" in command.extra_expected_markers
     assert "sensor_reads=3" in command.extra_expected_markers
@@ -101,5 +118,119 @@ def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_pat
     )
 
     assert "--camera-screenshot-dir" in command.command
+    assert "--report" in command.command
+    assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
+    assert command.expected_simulator_id == SIMULATOR_PYBULLET_ID
+    assert command.expected_object_count == 3
+    assert command.expected_camera_count == 3
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
+
+
+def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path) -> None:
+    request = build_demo_workspace_request()
+
+    class _Shared:
+        workspace_dir = tmp_path
+        world_package_path = tmp_path / "world-package.json"
+        robot_urdf_path = tmp_path / "robot.urdf"
+
+    class _Prepared:
+        shared_workspace = _Shared()
+        mjcf_path = tmp_path / "robot.xml"
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.prepare_mujoco_workspace",
+        lambda _request, *, simulator_id: _Prepared(),
+    )
+    command = _prepare_mujoco_command(
+        request,
+        expectations=type(
+            "Expectations",
+            (),
+            {
+                "object_count": 3,
+                "camera_count": 3,
+                "duration_sec": 0.02,
+            },
+        )(),
+        simulator_id=SIMULATOR_MJLAB_ID,
+    )
+
+    assert command.command[:4] == [
+        sys.executable,
+        "-u",
+        "-m",
+        MUJOCO_WORKSPACE_PROCESS_PARAMS.module_name,
+    ]
+    assert "--simulator-id" in command.command
+    assert SIMULATOR_MJLAB_ID in command.command
+    assert "--report" in command.command
+    assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
+    assert command.expected_simulator_id == SIMULATOR_MJLAB_ID
+    assert command.expected_object_count == 3
+    assert command.expected_camera_count == 3
+
+
+def test_workspace_report_validation_accepts_matching_report(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+                "package_id": "demo",
+                "frame_map": "identity",
+                "primitive_count": 2,
+                "camera_count": 1,
+                "objects": [{}, {}],
+                "cameras": [{}],
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=2",
+        expected_camera_log_marker="cameras=1",
+        expected_report_path=report_path,
+        expected_simulator_id=SIMULATOR_GENESIS_ID,
+        expected_object_count=2,
+        expected_camera_count=1,
+    )
+
+    assert _validate_report_artifact(command) is None
+
+
+def test_workspace_report_validation_rejects_wrong_counts(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+                "package_id": "demo",
+                "frame_map": "identity",
+                "primitive_count": 1,
+                "camera_count": 1,
+                "objects": [{}],
+                "cameras": [{}],
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=2",
+        expected_camera_log_marker="cameras=1",
+        expected_report_path=report_path,
+        expected_simulator_id=SIMULATOR_GENESIS_ID,
+        expected_object_count=2,
+        expected_camera_count=1,
+    )
+
+    assert _validate_report_artifact(command) == (
+        "simulator validation report has primitive_count=1, expected 2"
+    )

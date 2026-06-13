@@ -70,6 +70,45 @@ class SimulatorSceneSpec:
         }
 
 
+def build_simulator_validation_report(
+    scene: SimulatorSceneSpec,
+    *,
+    simulator_id: str,
+    simulator_label: str,
+    runtime: Mapping[str, Any] | None = None,
+    artifacts: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    report = scene.validation_report()
+    report["simulator"] = {
+        "id": simulator_id,
+        "label": simulator_label,
+        "runtime": _json_safe(runtime or {}),
+    }
+    report["artifacts"] = _json_safe(artifacts or {})
+    return report
+
+
+def write_simulator_validation_report(
+    scene: SimulatorSceneSpec,
+    report_path: Path,
+    *,
+    simulator_id: str,
+    simulator_label: str,
+    runtime: Mapping[str, Any] | None = None,
+    artifacts: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    report = build_simulator_validation_report(
+        scene,
+        simulator_id=simulator_id,
+        simulator_label=simulator_label,
+        runtime=runtime,
+        artifacts=artifacts,
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(f"{json.dumps(report, indent=2, sort_keys=True)}\n", encoding="utf-8")
+    return report
+
+
 def load_world_package(path: Path) -> WorldScenePackageManifest:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -175,3 +214,13 @@ def _camera_report(camera: SimCameraSpec) -> dict[str, Any]:
         if camera.intrinsics is not None
         else None,
     }
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, tuple | list):
+        return [_json_safe(item) for item in value]
+    return value

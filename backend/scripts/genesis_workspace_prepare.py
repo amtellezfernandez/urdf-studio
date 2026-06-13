@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 
+from backend.models.simulator_runtime import SIMULATOR_GENESIS_ID
 from backend.scripts.simulator_workspace_cli import add_common_workspace_args
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 from backend.services.simulator_adapters.genesis_camera import (
@@ -42,7 +43,10 @@ from backend.services.simulator_adapters.params import (
 from backend.services.simulator_adapters.robot_repairs import (
     materialize_genesis_robot_urdf_report,
 )
-from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
+from backend.services.simulator_adapters.world_scene import (
+    prepare_simulator_scene,
+    write_simulator_validation_report,
+)
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 
 GENESIS_BACKEND_ENV = "URDF_STUDIO_GENESIS_BACKEND"
@@ -185,6 +189,7 @@ def prepare_genesis_workspace_scene(
     camera_screenshot_dir: Path | None,
     sensor_screenshot_dir: Path | None,
     show_camera_markers: bool,
+    report_path: Path | None,
 ) -> None:
     import genesis as gs
 
@@ -375,10 +380,11 @@ def prepare_genesis_workspace_scene(
     try:
         initial_step_done = False
         sensor_reads_reported = False
+        sensor_read_count = 0
         sensor_images: tuple[tuple[SimCameraSpec, np.ndarray], ...] = ()
 
         def ensure_initial_step() -> None:
-            nonlocal initial_step_done, sensor_reads_reported, sensor_images
+            nonlocal initial_step_done, sensor_reads_reported, sensor_images, sensor_read_count
             if not initial_step_done:
                 step_runtime()
                 initial_step_done = True
@@ -417,6 +423,37 @@ def prepare_genesis_workspace_scene(
                     f"[genesis-workspace] sensor_screenshots={sensor_screenshot_count}",
                     flush=True,
                 )
+
+        if report_path is not None:
+            write_simulator_validation_report(
+                simulator_scene,
+                report_path,
+                simulator_id=SIMULATOR_GENESIS_ID,
+                simulator_label="Genesis",
+                runtime={
+                    "backend_request": genesis_backend_label,
+                    "backend": str(getattr(gs, "backend", None)),
+                    "robot_repair": {
+                        "applied": robot_repair.applied,
+                        "repair_id": robot_repair.repair_id,
+                        "urdf_path": robot_repair.path,
+                    },
+                    "controlled_dofs": controlled_dof_count,
+                    "scene_cameras": len(scene_cameras),
+                    "attached_cameras": attached_camera_count,
+                    "observation_cameras": len(observation_camera_sensors),
+                    "sensor_reads": sensor_read_count,
+                    "camera_attachment_links": len(camera_attachment_links),
+                    "links_to_keep": len(attachment_links),
+                    "merge_fixed_links": GENESIS_SCENE_PARAMS.merge_fixed_links,
+                },
+                artifacts={
+                    "viewer_screenshot": screenshot_path,
+                    "camera_screenshot_dir": camera_screenshot_dir,
+                    "sensor_screenshot_dir": sensor_screenshot_dir,
+                },
+            )
+            print(f"[genesis-workspace] report written: {report_path}", flush=True)
 
         if no_viewer:
             ensure_initial_step()
@@ -460,6 +497,7 @@ def main() -> int:
         camera_screenshot_dir=Path(args.camera_screenshot_dir) if args.camera_screenshot_dir else None,
         sensor_screenshot_dir=Path(args.sensor_screenshot_dir) if args.sensor_screenshot_dir else None,
         show_camera_markers=args.show_camera_markers,
+        report_path=Path(args.report) if args.report else None,
     )
     return 0
 

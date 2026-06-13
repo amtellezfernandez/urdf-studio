@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
+from backend.services.simulator_adapters.world_scene import (
+    prepare_simulator_scene,
+    write_simulator_validation_report,
+)
 from backend.tests.simulator_adapter_test_utils import make_world_package
 
 
@@ -77,6 +80,25 @@ def test_prepare_simulator_scene_builds_canonical_scene_spec(tmp_path: Path) -> 
         [0.0, 510.0, 241.25],
         [0.0, 0.0, 1.0],
     ]
+
+    report_path = tmp_path / "report.json"
+    written_report = write_simulator_validation_report(
+        scene,
+        report_path,
+        simulator_id="pybullet",
+        simulator_label="PyBullet",
+        runtime={"camera_screenshots": 1},
+        artifacts={"camera_dir": tmp_path / "cameras"},
+    )
+    persisted_report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert written_report == persisted_report
+    assert persisted_report["simulator"] == {
+        "id": "pybullet",
+        "label": "PyBullet",
+        "runtime": {"camera_screenshots": 1},
+    }
+    assert persisted_report["artifacts"]["camera_dir"] == str(tmp_path / "cameras")
 
 
 def test_prepare_simulator_scene_combines_world_and_camera_warnings(tmp_path: Path) -> None:

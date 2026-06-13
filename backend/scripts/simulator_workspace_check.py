@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
@@ -68,6 +68,10 @@ class PreparedWorkspaceCommand:
     extra_expected_markers: tuple[str, ...] = ()
     expected_image_paths: tuple[Path, ...] = ()
     expected_image_dirs: tuple[tuple[Path, int], ...] = ()
+    expected_report_path: Path | None = None
+    expected_simulator_id: SimulatorId | None = None
+    expected_object_count: int | None = None
+    expected_camera_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -225,7 +229,9 @@ def _module_command(
     robot_asset_path: Path,
     duration_sec: float,
     extra_args: Sequence[str] = (),
+    report_path: Path | None = None,
 ) -> list[str]:
+    report_args = ("--report", str(report_path)) if report_path is not None else ()
     return [
         sys.executable,
         "-u",
@@ -236,6 +242,7 @@ def _module_command(
         robot_asset_flag,
         str(robot_asset_path),
         *extra_args,
+        *report_args,
         "--frame-map",
         "identity",
         "--no-viewer",
@@ -247,6 +254,7 @@ def _module_command(
 def _prepare_direct_urdf_command(
     prepared: PreparedSimulatorWorkspace,
     *,
+    simulator_id: SimulatorId,
     workspace_process: SimulatorWorkspaceProcessParams,
     object_marker: str,
     camera_log_marker: str | None = None,
@@ -254,6 +262,7 @@ def _prepare_direct_urdf_command(
     extra_args: Sequence[str] = (),
     expected_image_paths: tuple[Path, ...] = (),
     expected_image_dirs: tuple[tuple[Path, int], ...] = (),
+    expected_report_path: Path | None = None,
     expectations: WorkspaceExpectations,
 ) -> PreparedWorkspaceCommand:
     return PreparedWorkspaceCommand(
@@ -264,6 +273,7 @@ def _prepare_direct_urdf_command(
             robot_asset_path=prepared.robot_urdf_path,
             duration_sec=expectations.duration_sec,
             extra_args=extra_args,
+            report_path=expected_report_path,
         ),
         ready_marker=workspace_process.ready_log_marker,
         expected_object_marker=object_marker,
@@ -271,6 +281,10 @@ def _prepare_direct_urdf_command(
         extra_expected_markers=extra_expected_markers,
         expected_image_paths=expected_image_paths,
         expected_image_dirs=expected_image_dirs,
+        expected_report_path=expected_report_path,
+        expected_simulator_id=simulator_id,
+        expected_object_count=expectations.object_count,
+        expected_camera_count=expectations.camera_count,
     )
 
 
@@ -282,8 +296,10 @@ def _prepare_genesis_command(
     screenshot_dir = prepared.workspace_dir / "artifacts"
     camera_screenshot_dir = screenshot_dir / "cameras"
     sensor_screenshot_dir = screenshot_dir / "sensors"
+    report_path = screenshot_dir / "report.json"
     return _prepare_direct_urdf_command(
         prepared,
+        simulator_id=SIMULATOR_GENESIS_ID,
         workspace_process=GENESIS_WORKSPACE_PROCESS_PARAMS,
         object_marker=f"primitives={expectations.object_count}",
         camera_log_marker=f"attached_cameras={expectations.camera_count}",
@@ -308,6 +324,7 @@ def _prepare_genesis_command(
             (camera_screenshot_dir, expectations.camera_count),
             (sensor_screenshot_dir, expectations.camera_count),
         ),
+        expected_report_path=report_path,
     )
 
 
@@ -318,8 +335,10 @@ def _prepare_pybullet_command(
     prepared = prepare_pybullet_workspace(request)
     screenshot_dir = prepared.workspace_dir / "artifacts"
     camera_screenshot_dir = screenshot_dir / "cameras"
+    report_path = screenshot_dir / "report.json"
     return _prepare_direct_urdf_command(
         prepared,
+        simulator_id=SIMULATOR_PYBULLET_ID,
         workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
         object_marker=f"world_objects={expectations.object_count}",
         extra_expected_markers=(f"camera_screenshots={expectations.camera_count}",),
@@ -329,6 +348,7 @@ def _prepare_pybullet_command(
         ),
         expected_image_dirs=((camera_screenshot_dir, expectations.camera_count),),
         expectations=expectations,
+        expected_report_path=report_path,
     )
 
 
@@ -342,6 +362,7 @@ def _prepare_mujoco_command(
         request,
         simulator_id=simulator_id,
     )
+    report_path = prepared.shared_workspace.workspace_dir / "artifacts" / "report.json"
     return PreparedWorkspaceCommand(
         command=_module_command(
             MUJOCO_WORKSPACE_PROCESS_PARAMS,
@@ -349,11 +370,21 @@ def _prepare_mujoco_command(
             robot_asset_flag="--robot-mjcf",
             robot_asset_path=prepared.mjcf_path,
             duration_sec=expectations.duration_sec,
-            extra_args=("--robot-urdf", str(prepared.shared_workspace.robot_urdf_path)),
+            extra_args=(
+                "--robot-urdf",
+                str(prepared.shared_workspace.robot_urdf_path),
+                "--simulator-id",
+                simulator_id,
+            ),
+            report_path=report_path,
         ),
         ready_marker=MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker,
         expected_object_marker=f"world_objects={expectations.object_count}",
         expected_camera_log_marker=f"cameras={expectations.camera_count}",
+        expected_report_path=report_path,
+        expected_simulator_id=simulator_id,
+        expected_object_count=expectations.object_count,
+        expected_camera_count=expectations.camera_count,
     )
 
 
@@ -431,6 +462,9 @@ def _run_workspace_command(
     image_error = _validate_image_artifacts(command)
     if image_error:
         return False, f"{image_error}\n{output.strip()}"
+    report_error = _validate_report_artifact(command)
+    if report_error:
+        return False, f"{report_error}\n{output.strip()}"
     return True, output.strip()
 
 
@@ -460,6 +494,82 @@ def _validate_image_artifacts(command: PreparedWorkspaceCommand) -> str | None:
         channel_span = max(high - low for low, high in extrema)
         if channel_span <= 5:
             return f"blank image artifact: {path}"
+    return None
+
+
+def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
+    report_path = command.expected_report_path
+    if report_path is None:
+        return None
+    if not report_path.exists():
+        return f"missing simulator validation report: {report_path}"
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"invalid simulator validation report {report_path}: {exc}"
+    if not isinstance(payload, dict):
+        return f"invalid simulator validation report {report_path}: expected JSON object"
+
+    required_fields = (
+        "simulator",
+        "package_id",
+        "frame_map",
+        "primitive_count",
+        "camera_count",
+        "objects",
+        "cameras",
+        "artifacts",
+    )
+    missing_fields = [field for field in required_fields if field not in payload]
+    if missing_fields:
+        return f"simulator validation report missing field(s): {', '.join(missing_fields)}"
+
+    simulator = payload.get("simulator")
+    if not isinstance(simulator, Mapping):
+        return "simulator validation report field 'simulator' must be an object"
+    if command.expected_simulator_id is not None and simulator.get("id") != command.expected_simulator_id:
+        return (
+            "simulator validation report has wrong simulator id: "
+            f"{simulator.get('id')!r}, expected {command.expected_simulator_id!r}"
+        )
+
+    count_error = _validate_report_count(
+        payload,
+        field_name="primitive_count",
+        list_field_name="objects",
+        expected_count=command.expected_object_count,
+    )
+    if count_error:
+        return count_error
+    return _validate_report_count(
+        payload,
+        field_name="camera_count",
+        list_field_name="cameras",
+        expected_count=command.expected_camera_count,
+    )
+
+
+def _validate_report_count(
+    payload: Mapping[str, Any],
+    *,
+    field_name: str,
+    list_field_name: str,
+    expected_count: int | None,
+) -> str | None:
+    count = payload.get(field_name)
+    if expected_count is not None and count != expected_count:
+        return (
+            f"simulator validation report has {field_name}={count!r}, "
+            f"expected {expected_count}"
+        )
+    items = payload.get(list_field_name)
+    if not isinstance(items, list):
+        return f"simulator validation report field '{list_field_name}' must be a list"
+    if isinstance(count, int) and len(items) != count:
+        return (
+            f"simulator validation report field '{list_field_name}' has {len(items)} item(s), "
+            f"expected {count}"
+        )
     return None
 
 

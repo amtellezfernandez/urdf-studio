@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from backend.models.simulator_runtime import SIMULATOR_PYBULLET_ID
 from backend.scripts.simulator_workspace_cli import add_common_workspace_args
 from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
@@ -19,7 +20,10 @@ from backend.services.simulator_adapters.params import (
 from backend.services.simulator_adapters.pybullet_camera import (
     write_pybullet_camera_screenshots,
 )
-from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
+from backend.services.simulator_adapters.world_scene import (
+    prepare_simulator_scene,
+    write_simulator_validation_report,
+)
 from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
 from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutFrameMap
 
@@ -161,6 +165,7 @@ def prepare_pybullet_workspace_scene(
     free_base: bool,
     show_camera_markers: bool,
     camera_screenshot_dir: Path | None,
+    report_path: Path | None,
 ) -> None:
     import pybullet
     import pybullet_data
@@ -225,6 +230,30 @@ def prepare_pybullet_workspace_scene(
         )
         if camera_screenshot_dir is not None:
             print(f"[pybullet-workspace] camera_screenshots={camera_screenshot_count}", flush=True)
+        if report_path is not None:
+            write_simulator_validation_report(
+                simulator_scene,
+                report_path,
+                simulator_id=SIMULATOR_PYBULLET_ID,
+                simulator_label="PyBullet",
+                runtime={
+                    "connection_mode": "direct" if no_viewer else "gui",
+                    "client_id": client_id,
+                    "robot_id": robot_id,
+                    "robot_joints": pybullet.getNumJoints(robot_id),
+                    "world_objects": len(object_ids),
+                    "cameras": len(cameras),
+                    "camera_markers": len(camera_marker_ids),
+                    "camera_screenshots": camera_screenshot_count,
+                    "applied_initial_joints": applied_joints,
+                    "free_base": free_base,
+                    "floor": not no_floor,
+                },
+                artifacts={
+                    "camera_screenshot_dir": camera_screenshot_dir,
+                },
+            )
+            print(f"[pybullet-workspace] report written: {report_path}", flush=True)
         print(PYBULLET_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
 
         deadline = time.monotonic() + duration_sec if duration_sec > 0 else None
@@ -252,6 +281,7 @@ def main() -> int:
         free_base=args.free_base,
         show_camera_markers=args.show_camera_markers,
         camera_screenshot_dir=Path(args.camera_screenshot_dir) if args.camera_screenshot_dir else None,
+        report_path=Path(args.report) if args.report else None,
     )
     return 0
 
