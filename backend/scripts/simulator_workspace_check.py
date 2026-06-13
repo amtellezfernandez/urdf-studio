@@ -39,6 +39,11 @@ from backend.services.simulator_adapters.params import (
 )
 from backend.services.simulator_adapters.pybullet import prepare_pybullet_workspace
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
+from backend.services.simulator_adapters.workspace_parity import (
+    WORKSPACE_PARITY_ID,
+    WorkspaceParityInput,
+    check_simulator_workspace_parity,
+)
 from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
 
 
@@ -90,10 +95,11 @@ class WorkspaceTarget:
 
 @dataclass(frozen=True)
 class WorkspaceCheckResult:
-    simulator_id: SimulatorId
+    simulator_id: str
     label: str
     status: str
     detail: str = ""
+    report_path: str | None = None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -609,12 +615,35 @@ def _check_target(
         target.label,
         "passed" if ok else "failed",
         detail,
+        report_path=str(command.expected_report_path) if ok and command.expected_report_path else None,
     )
 
 
 def _selected_targets(simulator_ids: Sequence[SimulatorId] | None) -> tuple[WorkspaceTarget, ...]:
     selected_ids = tuple(simulator_ids or WORKSPACE_SIMULATORS)
     return tuple(WORKSPACE_TARGETS[simulator_id] for simulator_id in selected_ids)
+
+
+def _check_cross_simulator_parity(
+    results: Sequence[WorkspaceCheckResult],
+) -> WorkspaceCheckResult | None:
+    if any(result.status == "failed" for result in results):
+        return None
+    parity = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput(result.label, Path(result.report_path))
+            for result in results
+            if result.status == "passed" and result.report_path is not None
+        ]
+    )
+    if parity is None:
+        return None
+    return WorkspaceCheckResult(
+        WORKSPACE_PARITY_ID,
+        "Workspace parity",
+        "passed" if parity.passed else "failed",
+        parity.detail,
+    )
 
 
 def _active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
@@ -661,6 +690,9 @@ def main() -> int:
         )
         for target in _selected_targets(selected_ids or None)
     ]
+    parity_result = _check_cross_simulator_parity(results)
+    if parity_result is not None:
+        results.append(parity_result)
 
     if args.json:
         print(
@@ -671,6 +703,7 @@ def main() -> int:
                         "label": result.label,
                         "status": result.status,
                         "detail": result.detail,
+                        "report_path": result.report_path,
                     }
                     for result in results
                 ],
