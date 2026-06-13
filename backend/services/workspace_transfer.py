@@ -6,12 +6,10 @@ from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorWorkspacePrepareRequest,
     WorkspaceChangeSetApplyRequest as AdapterWorkspaceChangeSetApplyRequest,
-    WorkspaceChangeSetApplyResponse as AdapterWorkspaceChangeSetApplyResponse,
 )
 from backend.models.workspace_transfer import (
     WorkspaceChangeSetApplyRequest,
     WorkspaceChangeSetApplyResponse,
-    WorkspaceTransferDependency,
     WorkspaceOpenRequest,
     WorkspaceOpenResponse,
     WorkspaceTransferTargetDescriptor,
@@ -53,33 +51,6 @@ def _target_descriptor_for_spec(spec) -> WorkspaceTransferTargetDescriptor:
     return WorkspaceTransferTargetDescriptor.from_runtime_spec(spec)
 
 
-def _open_response_from_adapter(response) -> WorkspaceOpenResponse:
-    return WorkspaceOpenResponse(
-        targetId=response.simulator_id,
-        started=response.started,
-        pid=response.pid,
-        command=response.command,
-        logPath=response.log_path,
-        worldPackagePath=response.world_package_path,
-        robotUrdfPath=response.robot_urdf_path,
-        targetAssetPath=response.simulator_asset_path,
-        targetAssetFormat=response.simulator_asset_format,
-        bundledMeshCount=response.bundled_mesh_count,
-        unresolvedMeshRefs=response.unresolved_mesh_refs,
-    )
-
-
-def _change_set_response_from_adapter(
-    response: AdapterWorkspaceChangeSetApplyResponse,
-) -> WorkspaceChangeSetApplyResponse:
-    return WorkspaceChangeSetApplyResponse(
-        targetId=response.simulator_id,
-        world_package=response.world_package,
-        appliedChangeCount=response.applied_change_count,
-        reviewOnlyCount=response.review_only_count,
-    )
-
-
 def list_workspace_transfer_targets() -> WorkspaceTransferTargetListResponse:
     return WorkspaceTransferTargetListResponse(
         targets=[_target_descriptor_for_spec(spec) for spec in SIMULATOR_RUNTIME_SPECS],
@@ -90,22 +61,14 @@ def get_workspace_transfer_target_status(
     target_id: WorkspaceTransferTargetId,
 ) -> WorkspaceTransferTargetStatus:
     status = get_simulator_runtime_status(target_id)
-    return WorkspaceTransferTargetStatus(
-        targetId=target_id,
-        available=status.available,
-        status=status.status,
-        dependencies=[
-            WorkspaceTransferDependency.from_runtime_dependency(dependency)
-            for dependency in status.dependencies
-        ],
-    )
+    return WorkspaceTransferTargetStatus.from_runtime_status(target_id, status)
 
 
 def open_workspace_transfer_target(
     target_id: WorkspaceTransferTargetId,
     request: WorkspaceOpenRequest,
 ) -> WorkspaceOpenResponse:
-    return _open_response_from_adapter(
+    return WorkspaceOpenResponse.from_adapter_response(
         prepare_simulator_workspace(target_id, _workspace_open_request(request))
     )
 
@@ -122,7 +85,7 @@ def resolve_workspace_change_set_target(
 def apply_workspace_transfer_change_set(
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyResponse:
-    return _change_set_response_from_adapter(
+    return WorkspaceChangeSetApplyResponse.from_adapter_response(
         apply_simulator_workspace_change_set(
             resolve_workspace_change_set_target(request),
             _adapter_change_set_request(request),
@@ -134,6 +97,6 @@ def apply_workspace_transfer_target_change_set(
     target_id: WorkspaceTransferTargetId,
     request: WorkspaceChangeSetApplyRequest,
 ) -> WorkspaceChangeSetApplyResponse:
-    return _change_set_response_from_adapter(
+    return WorkspaceChangeSetApplyResponse.from_adapter_response(
         apply_simulator_workspace_change_set(target_id, _adapter_change_set_request(request))
     )

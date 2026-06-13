@@ -20,6 +20,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_CANONICAL_FRAME_CONVENTION,
     SIMULATOR_RUNTIME_SPECS,
     SimulatorId,
+    SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
     SimulatorWorkspacePrepareResponse,
 )
@@ -466,7 +467,7 @@ def test_workspace_transfer_status_delegates_to_target_registry(monkeypatch) -> 
             runtimeName=simulator_id,
             available=True,
             status="ready",
-            dependencies=[],
+            dependencies=[SimulatorRuntimeDependency(name="genesis", available=True)],
         )
 
     monkeypatch.setattr(
@@ -488,7 +489,7 @@ def test_workspace_transfer_status_delegates_to_target_registry(monkeypatch) -> 
         "targetId": "genesis",
         "available": True,
         "status": "ready",
-        "dependencies": [],
+        "dependencies": [{"name": "genesis", "available": True}],
     }
 
 

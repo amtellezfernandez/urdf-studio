@@ -12,11 +12,14 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
     SimulatorRuntimeSpec,
+    SimulatorRuntimeStatus,
     SimulatorRuntimeTransferPolicy,
     SimulatorTargetKind,
     SimulatorTransferStrategy,
     SimulatorWorkspaceAssetFormat,
     SimulatorWorkspacePrepareRequest,
+    SimulatorWorkspacePrepareResponse as AdapterWorkspaceOpenResponse,
+    WorkspaceChangeSetApplyResponse as AdapterWorkspaceChangeSetApplyResponse,
 )
 from backend.models.world_scene_package import WorldScenePackageManifest
 
@@ -110,6 +113,22 @@ class WorkspaceTransferTargetStatus(WorkspaceTransferCamelModel):
     status: str
     dependencies: list[WorkspaceTransferDependency] = Field(default_factory=list)
 
+    @classmethod
+    def from_runtime_status(
+        cls,
+        target_id: WorkspaceTransferTargetId,
+        status: SimulatorRuntimeStatus,
+    ) -> "WorkspaceTransferTargetStatus":
+        return cls(
+            targetId=target_id,
+            available=status.available,
+            status=status.status,
+            dependencies=[
+                WorkspaceTransferDependency.from_runtime_dependency(dependency)
+                for dependency in status.dependencies
+            ],
+        )
+
 
 class WorkspaceOpenRequest(SimulatorWorkspacePrepareRequest):
     pass
@@ -131,6 +150,25 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
     bundled_mesh_count: int = Field(default=0, alias="bundledMeshCount")
     unresolved_mesh_refs: list[str] = Field(default_factory=list, alias="unresolvedMeshRefs")
 
+    @classmethod
+    def from_adapter_response(
+        cls,
+        response: AdapterWorkspaceOpenResponse,
+    ) -> "WorkspaceOpenResponse":
+        return cls(
+            targetId=response.simulator_id,
+            started=response.started,
+            pid=response.pid,
+            command=response.command,
+            logPath=response.log_path,
+            worldPackagePath=response.world_package_path,
+            robotUrdfPath=response.robot_urdf_path,
+            targetAssetPath=response.simulator_asset_path,
+            targetAssetFormat=response.simulator_asset_format,
+            bundledMeshCount=response.bundled_mesh_count,
+            unresolvedMeshRefs=response.unresolved_mesh_refs,
+        )
+
 
 class WorkspaceChangeSetApplyRequest(BaseModel):
     world_package: WorldScenePackageManifest
@@ -142,3 +180,15 @@ class WorkspaceChangeSetApplyResponse(WorkspaceTransferCamelModel):
     world_package: WorldScenePackageManifest
     applied_change_count: int = Field(..., alias="appliedChangeCount")
     review_only_count: int = Field(..., alias="reviewOnlyCount")
+
+    @classmethod
+    def from_adapter_response(
+        cls,
+        response: AdapterWorkspaceChangeSetApplyResponse,
+    ) -> "WorkspaceChangeSetApplyResponse":
+        return cls(
+            targetId=response.simulator_id,
+            world_package=response.world_package,
+            appliedChangeCount=response.applied_change_count,
+            reviewOnlyCount=response.review_only_count,
+        )
