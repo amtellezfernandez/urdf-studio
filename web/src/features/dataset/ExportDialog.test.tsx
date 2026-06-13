@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import * as THREE from "three";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildRobotConversionDiagnosticsSidecar } from "./exportConversionDiagnostics";
 import { ExportDialog } from "./ExportDialog";
 
 vi.mock("@/shared/store/useCameraStore", () => ({
@@ -20,6 +21,44 @@ describe("ExportDialog", () => {
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  it("omits conversion diagnostics sidecars when conversion is clean", () => {
+    expect(
+      buildRobotConversionDiagnosticsSidecar("mujoco", "demo.xml", {
+        warnings: [],
+        diagnostics: [],
+        stats: { bodiesCreated: 1, jointsConverted: 0, geometriesConverted: 1 },
+      })
+    ).toBeNull();
+  });
+
+  it("builds deterministic conversion diagnostics sidecars for lossy USD exports", () => {
+    const sidecar = buildRobotConversionDiagnosticsSidecar("usd", "demo.usda", {
+      warnings: ["Skipped unsupported visual mesh meshes/base.stl on link base."],
+      diagnostics: [],
+      stats: {
+        linksConverted: 1,
+        visualsConverted: 0,
+        unsupportedMeshes: 1,
+      },
+    });
+
+    expect(sidecar?.filename).toBe("demo.usda.diagnostics.json");
+    const payload = JSON.parse(sidecar?.content ?? "{}");
+    expect(payload).toEqual({
+      schema: "urdf-studio.conversion-diagnostics.v1",
+      format: "usd",
+      sourceFile: "demo.usda",
+      warnings: ["Skipped unsupported visual mesh meshes/base.stl on link base."],
+      diagnostics: [],
+      stats: {
+        linksConverted: 1,
+        visualsConverted: 0,
+        unsupportedMeshes: 1,
+      },
+    });
+    expect(sidecar?.content.endsWith("\n")).toBe(true);
   });
 
   it("offers USD as a robot export format", async () => {

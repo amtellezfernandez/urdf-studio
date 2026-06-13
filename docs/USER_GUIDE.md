@@ -116,6 +116,10 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 2. Use the episode list to play the first or second episode.
 3. Watch the graph and 3D robot together. They should stay synchronized.
 
+### Export Robot Files
+
+Use `File` -> `Export` to write URDF, Xacro, MJCF, USD, meshes, and camera configs. When a simulator or interchange conversion reports dropped geometry, repaired inertials, or other transfer warnings, Studio writes a matching `*.diagnostics.json` file next to the exported simulator file.
+
 ### Edit A Layout In Blender
 
 1. Open the `Open In` panel and click `Blender`.

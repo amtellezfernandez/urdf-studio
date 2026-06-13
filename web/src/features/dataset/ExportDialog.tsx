@@ -31,6 +31,10 @@ import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { cn } from "@/shared/lib/utils";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { exportCamerasToJSON, exportCamerasToYAML } from "@/features/camera";
+import {
+  buildRobotConversionDiagnosticsSidecar,
+  type RobotConversionDiagnosticsSidecar,
+} from "@/features/dataset/exportConversionDiagnostics";
 import type { WindowWithViewerHandlers } from "@/shared/types/feature";
 
 interface ExportDialogProps {
@@ -444,12 +448,17 @@ export const ExportDialog = ({
           }
           const filename = robotExportFilename(baseName, key);
           let fileContent = content;
+          let diagnosticsSidecar: RobotConversionDiagnosticsSidecar | null = null;
           if (key === "xacro") {
             fileContent = convertUrdfToXacroCached(content).xacroContent;
           } else if (key === "mujoco") {
-            fileContent = convertUrdfToMjcfCached(content).mjcfContent;
+            const conversion = convertUrdfToMjcfCached(content);
+            fileContent = conversion.mjcfContent;
+            diagnosticsSidecar = buildRobotConversionDiagnosticsSidecar(key, filename, conversion);
           } else if (key === "usd") {
-            fileContent = convertUrdfToUsdCached(content).usdContent;
+            const conversion = convertUrdfToUsdCached(content);
+            fileContent = conversion.usdContent;
+            diagnosticsSidecar = buildRobotConversionDiagnosticsSidecar(key, filename, conversion);
           }
           await downloadFile(
             fileContent,
@@ -460,6 +469,17 @@ export const ExportDialog = ({
             robotExportMimeType(key)
           );
           exportedFiles.push(filename);
+          if (diagnosticsSidecar) {
+            await downloadFile(
+              diagnosticsSidecar.content,
+              diagnosticsSidecar.filename,
+              selectedFolder || undefined,
+              useSubfolder,
+              subfolderName,
+              "application/json"
+            );
+            exportedFiles.push(diagnosticsSidecar.filename);
+          }
         }
       };
 
