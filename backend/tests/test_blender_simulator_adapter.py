@@ -122,6 +122,22 @@ def _scene_camera_review() -> dict:
     }
 
 
+def _write_blender_edit_session_artifacts(tmp_path: Path):
+    _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    return write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+
+
 def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> None:
     _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
     scene = prepare_simulator_scene(
@@ -178,19 +194,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
 def test_blender_edit_session_validation_rejects_missing_supported_change(
     tmp_path: Path,
 ) -> None:
-    _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
-    scene = prepare_simulator_scene(
-        world_package_path=world_package_path,
-        robot_urdf_path=robot_urdf_path,
-        frame_map="identity",
-        include_hidden=False,
-    )
-    artifacts = write_blender_workspace_artifacts(
-        scene,
-        artifact_dir=tmp_path / "artifacts",
-        robot_urdf_path=robot_urdf_path,
-        blend_path=tmp_path / "layout.blend",
-    )
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
     edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
     edit_session["round_trip"]["supported_changes"].remove("world_object.color")
     artifacts.edit_session_path.write_text(
@@ -201,6 +205,39 @@ def test_blender_edit_session_validation_rejects_missing_supported_change(
     assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
         "Blender edit-session field 'round_trip.supported_changes' "
         "missing value(s): world_object.color"
+    )
+
+
+def test_blender_edit_session_validation_rejects_source_object_mismatch(
+    tmp_path: Path,
+) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["source"]["world_object_ids"] = ["missing-crate"]
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
+        "Blender edit-session field 'source.world_object_ids' references id(s) "
+        "missing from objects: missing-crate"
+    )
+
+
+def test_blender_edit_session_validation_rejects_duplicate_source_camera_id(
+    tmp_path: Path,
+) -> None:
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["source"]["camera_ids"] = ["cam-1", "cam-1"]
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
+        "Blender edit-session field 'source.camera_ids' contains duplicate id(s): cam-1"
     )
 
 

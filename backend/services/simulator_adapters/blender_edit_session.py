@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from backend.services.simulator_adapters.blender_change_sets import (
+    BLENDER_CHANGE_SET_SOURCE_SCHEMA,
+)
 
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
 BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES = frozenset(
@@ -53,10 +58,11 @@ def validate_blender_edit_session_artifact(
     error = _validate_blender_edit_session_robot(payload.get("robot"))
     if error:
         return error
-    error = _validate_blender_edit_session_entries(
+    object_error = _validate_blender_edit_session_entries(
         payload.get("objects"),
         "objects",
         expected_count=expected_object_count,
+        expected_kind="world_object",
         required_fields=(
             "kind",
             "stable_id",
@@ -67,12 +73,13 @@ def validate_blender_edit_session_artifact(
             "rgba",
         ),
     )
-    if error:
-        return error
-    return _validate_blender_edit_session_entries(
+    if object_error:
+        return object_error
+    camera_error = _validate_blender_edit_session_entries(
         payload.get("cameras"),
         "cameras",
         expected_count=expected_camera_count,
+        expected_kind="camera",
         required_fields=(
             "kind",
             "stable_id",
@@ -83,6 +90,14 @@ def validate_blender_edit_session_artifact(
             "height",
             "fov_deg",
         ),
+    )
+    if camera_error:
+        return camera_error
+    return _validate_blender_edit_session_source(
+        payload.get("source"),
+        package=payload.get("package"),
+        object_entries=payload.get("objects"),
+        camera_entries=payload.get("cameras"),
     )
 
 
@@ -162,6 +177,7 @@ def _validate_blender_edit_session_entries(
     field_name: str,
     *,
     expected_count: int | None,
+    expected_kind: str,
     required_fields: Sequence[str],
 ) -> str | None:
     if not isinstance(value, Sequence) or isinstance(value, str):
@@ -180,7 +196,130 @@ def _validate_blender_edit_session_entries(
                 f"Blender edit-session {field_name}[{index}] missing field(s): "
                 f"{', '.join(missing_fields)}"
             )
+        if entry.get("kind") != expected_kind:
+            return (
+                f"Blender edit-session {field_name}[{index}].kind must be "
+                f"{expected_kind!r}"
+            )
+        error = _validate_non_empty_string(
+            entry.get("stable_id"),
+            f"{field_name}[{index}].stable_id",
+        )
+        if error:
+            return error
     return None
+
+
+def _validate_blender_edit_session_source(
+    value: Any,
+    *,
+    package: Any,
+    object_entries: Any,
+    camera_entries: Any,
+) -> str | None:
+    if not isinstance(value, Mapping):
+        return "Blender edit-session field 'source' must be an object"
+    if not isinstance(package, Mapping):
+        return "Blender edit-session field 'package' must be an object"
+    if value.get("schema") != BLENDER_CHANGE_SET_SOURCE_SCHEMA:
+        return "Blender edit-session source has unsupported schema"
+    for source_key, package_key in (
+        ("package_id", "package_id"),
+        ("version", "version"),
+        ("frame_convention", "frame_convention"),
+        ("frame_map", "frame_map"),
+    ):
+        source_value = value.get(source_key)
+        package_value = package.get(package_key)
+        if source_value != package_value:
+            return (
+                f"Blender edit-session source.{source_key} does not match "
+                f"package.{package_key}"
+            )
+    for field_name in ("world_snapshot_digest_sha256",):
+        error = _validate_non_empty_string(value.get(field_name), f"source.{field_name}")
+        if error:
+            return error
+    object_ids = _validate_source_id_list(value.get("world_object_ids"), "source.world_object_ids")
+    if isinstance(object_ids, str):
+        return object_ids
+    camera_ids = _validate_source_id_list(value.get("camera_ids"), "source.camera_ids")
+    if isinstance(camera_ids, str):
+        return camera_ids
+    object_entry_ids = _entry_stable_ids(object_entries, "objects")
+    if isinstance(object_entry_ids, str):
+        return object_entry_ids
+    camera_entry_ids = _entry_stable_ids(camera_entries, "cameras")
+    if isinstance(camera_entry_ids, str):
+        return camera_entry_ids
+    return _validate_id_coverage(
+        source_ids=object_ids,
+        entry_ids=object_entry_ids,
+        source_name="source.world_object_ids",
+        entry_name="objects",
+    ) or _validate_id_coverage(
+        source_ids=camera_ids,
+        entry_ids=camera_entry_ids,
+        source_name="source.camera_ids",
+        entry_name="cameras",
+    )
+
+
+def _validate_source_id_list(value: Any, path_name: str) -> tuple[str, ...] | str:
+    error = _validate_contains_strings(value, path_name)
+    if error:
+        return error
+    values = tuple(str(item).strip() for item in value)
+    duplicate_ids = _duplicate_ids(values)
+    if duplicate_ids:
+        return (
+            f"Blender edit-session field '{path_name}' contains duplicate id(s): "
+            f"{', '.join(duplicate_ids)}"
+        )
+    return values
+
+
+def _entry_stable_ids(value: Any, field_name: str) -> tuple[str, ...] | str:
+    if not isinstance(value, Sequence) or isinstance(value, str):
+        return f"Blender edit-session field '{field_name}' must be a list"
+    stable_ids = tuple(
+        str(entry.get("stable_id", "")).strip()
+        for entry in value
+        if isinstance(entry, Mapping)
+    )
+    duplicate_ids = _duplicate_ids(stable_ids)
+    if duplicate_ids:
+        return (
+            f"Blender edit-session field '{field_name}' contains duplicate stable_id(s): "
+            f"{', '.join(duplicate_ids)}"
+        )
+    return stable_ids
+
+
+def _validate_id_coverage(
+    *,
+    source_ids: Sequence[str],
+    entry_ids: Sequence[str],
+    source_name: str,
+    entry_name: str,
+) -> str | None:
+    missing_ids = sorted(set(source_ids) - set(entry_ids))
+    if missing_ids:
+        return (
+            f"Blender edit-session field '{source_name}' references id(s) "
+            f"missing from {entry_name}: {', '.join(missing_ids)}"
+        )
+    extra_ids = sorted(set(entry_ids) - set(source_ids))
+    if extra_ids:
+        return (
+            f"Blender edit-session field '{entry_name}' contains id(s) "
+            f"missing from {source_name}: {', '.join(extra_ids)}"
+        )
+    return None
+
+
+def _duplicate_ids(values: Sequence[str]) -> tuple[str, ...]:
+    return tuple(sorted(value for value, count in Counter(values).items() if count > 1))
 
 
 def _validate_existing_file_string(value: Any, path_name: str) -> str | None:
