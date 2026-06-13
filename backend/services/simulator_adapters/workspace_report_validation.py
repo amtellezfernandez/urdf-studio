@@ -98,12 +98,22 @@ def validate_simulator_workspace_report(
         list_field_name="objects",
         required_fields=(
             "source_id",
+            "source_name",
             "sim_name",
+            "source_type",
             "sim_type",
             "position_xyz",
             "quat_wxyz",
             "size_xyz",
             "rgba",
+            "collision",
+            "fixed",
+            "mass_kg",
+            "friction",
+            "restitution",
+            "semantic_role",
+            "asset_ref",
+            "asset_scale_xyz",
         ),
     )
     if item_error:
@@ -113,7 +123,9 @@ def validate_simulator_workspace_report(
         list_field_name="cameras",
         required_fields=(
             "camera_id",
+            "name",
             "sim_name",
+            "parent_joint",
             "parent_link",
             "position_xyz",
             "quat_wxyz",
@@ -286,7 +298,7 @@ def _validate_report_item_values(
     list_field_name: str,
 ) -> str | None:
     if list_field_name == "objects":
-        for field_name in ("source_id", "sim_name", "sim_type"):
+        for field_name in ("source_id", "source_name", "sim_name", "source_type", "sim_type"):
             error = _validate_report_string(item.get(field_name), f"{path}.{field_name}")
             if error:
                 return error
@@ -301,10 +313,31 @@ def _validate_report_item_values(
         error = _validate_report_quat_wxyz(item.get("quat_wxyz"), f"{path}.quat_wxyz")
         if error:
             return error
-        return _validate_report_rgba(item.get("rgba"), f"{path}.rgba")
+        error = _validate_report_rgba(item.get("rgba"), f"{path}.rgba")
+        if error:
+            return error
+        for field_name in ("collision", "fixed"):
+            error = _validate_report_bool(item.get(field_name), f"{path}.{field_name}")
+            if error:
+                return error
+        for field_name in ("mass_kg", "friction", "restitution"):
+            error = _validate_report_optional_non_negative_number(
+                item.get(field_name),
+                f"{path}.{field_name}",
+            )
+            if error:
+                return error
+        for field_name in ("semantic_role", "asset_ref"):
+            error = _validate_report_optional_string(item.get(field_name), f"{path}.{field_name}")
+            if error:
+                return error
+        asset_scale = item.get("asset_scale_xyz")
+        if asset_scale is not None:
+            return _validate_report_vector3(asset_scale, f"{path}.asset_scale_xyz", positive=True)
+        return None
 
     if list_field_name == "cameras":
-        for field_name in ("camera_id", "sim_name", "parent_link"):
+        for field_name in ("camera_id", "name", "sim_name", "parent_joint", "parent_link"):
             error = _validate_report_string(item.get(field_name), f"{path}.{field_name}")
             if error:
                 return error
@@ -331,6 +364,18 @@ def _validate_report_item_values(
 def _validate_report_string(value: Any, path: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return f"simulator validation report field '{path}' must be a non-empty string"
+    return None
+
+
+def _validate_report_optional_string(value: Any, path: str) -> str | None:
+    if value is None:
+        return None
+    return _validate_report_string(value, path)
+
+
+def _validate_report_bool(value: Any, path: str) -> str | None:
+    if not isinstance(value, bool):
+        return f"simulator validation report field '{path}' must be a boolean"
     return None
 
 
@@ -393,6 +438,14 @@ def _validate_report_positive_int(value: Any, path: str) -> str | None:
 def _validate_report_non_negative_int(value: Any, path: str) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         return f"simulator validation report field '{path}' must be a non-negative integer"
+    return None
+
+
+def _validate_report_optional_non_negative_number(value: Any, path: str) -> str | None:
+    if value is None:
+        return None
+    if not _is_finite_report_number(value) or float(value) < 0.0:
+        return f"simulator validation report field '{path}' must be a non-negative finite number"
     return None
 
 

@@ -12,19 +12,31 @@ from backend.services.simulator_adapters.workspace_report_validation import (
 def _report_object(source_id: str = "crate") -> dict:
     return {
         "source_id": source_id,
+        "source_name": source_id.title(),
         "sim_name": f"wl_{source_id}",
+        "source_type": "cube",
         "sim_type": "box",
         "position_xyz": [0.0, 0.0, 0.0],
         "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
         "size_xyz": [0.1, 0.2, 0.3],
         "rgba": [1.0, 0.0, 0.0, 1.0],
+        "collision": True,
+        "fixed": True,
+        "mass_kg": None,
+        "friction": None,
+        "restitution": None,
+        "semantic_role": None,
+        "asset_ref": None,
+        "asset_scale_xyz": None,
     }
 
 
 def _report_camera(camera_id: str = "cam") -> dict:
     return {
         "camera_id": camera_id,
+        "name": camera_id.title(),
         "sim_name": f"{camera_id}_camera",
+        "parent_joint": "base_link",
         "parent_link": "base_link",
         "position_xyz": [0.0, 0.0, 1.0],
         "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
@@ -313,7 +325,9 @@ def test_workspace_report_validation_rejects_missing_object_fields(tmp_path) -> 
 
     assert validate_simulator_workspace_report(report_path, _expectations()) == (
         "simulator validation report field 'objects[0]' missing field(s): "
-        "sim_name, sim_type, position_xyz, quat_wxyz, size_xyz, rgba"
+        "source_name, sim_name, source_type, sim_type, position_xyz, quat_wxyz, "
+        "size_xyz, rgba, collision, fixed, mass_kg, friction, restitution, semantic_role, "
+        "asset_ref, asset_scale_xyz"
     )
 
 
@@ -334,7 +348,8 @@ def test_workspace_report_validation_rejects_missing_camera_fields(tmp_path) -> 
 
     assert validate_simulator_workspace_report(report_path, _expectations()) == (
         "simulator validation report field 'cameras[0]' missing field(s): "
-        "sim_name, parent_link, position_xyz, quat_wxyz, width, height, fov_deg, intrinsics"
+        "name, sim_name, parent_joint, parent_link, position_xyz, quat_wxyz, "
+        "width, height, fov_deg, intrinsics"
     )
 
 
@@ -380,6 +395,51 @@ def test_workspace_report_validation_rejects_invalid_object_color(tmp_path) -> N
     assert validate_simulator_workspace_report(report_path, _expectations()) == (
         "simulator validation report field 'objects[0].rgba' "
         "must contain numbers between 0 and 1"
+    )
+
+
+def test_workspace_report_validation_rejects_invalid_object_physics_metadata(tmp_path) -> None:
+    invalid_object = _report_object()
+    invalid_object["fixed"] = "yes"
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [invalid_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'objects[0].fixed' must be a boolean"
+    )
+
+
+def test_workspace_report_validation_rejects_invalid_object_asset_scale(tmp_path) -> None:
+    invalid_object = _report_object()
+    invalid_object["asset_scale_xyz"] = [1.0, 0.0, 1.0]
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [invalid_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'objects[0].asset_scale_xyz' "
+        "must contain positive numbers"
     )
 
 
