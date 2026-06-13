@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import math
 import os
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -20,15 +18,8 @@ from backend.models.simulator_runtime import (
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
     SimulatorId,
-    SimulatorMeshAssetUpload,
     SimulatorRuntimeStatus,
     SimulatorWorkspacePrepareRequest,
-)
-from backend.models.world_scene_package import (
-    WorldInterfaceSpec,
-    WorldRuntimeTarget,
-    WorldScenePackageManifest,
-    WorldSnapshot,
 )
 from backend.services.simulator_adapters import get_simulator_runtime_status
 from backend.services.simulator_adapters.blender import prepare_blender_workspace_package
@@ -56,35 +47,15 @@ from backend.services.simulator_adapters.workspace_parity import (
     check_simulator_workspace_parity,
 )
 from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
-
-
-WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
-    SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
-    SIMULATOR_MUJOCO_ID,
-    SIMULATOR_PYBULLET_ID,
-    SIMULATOR_BLENDER_ID,
+from backend.services.simulator_adapters.workspace_request_sources import (
+    WORKSPACE_SIMULATORS,
+    build_demo_workspace_request,
+    build_workspace_request_from_files,
 )
-DEMO_ROOT = BASE_DIR / "web" / "public" / "demo"
-SO101_MANIFEST_PATH = DEMO_ROOT / "so101" / "manifest.json"
-SO101_CAMERA_CONFIG_PATH = DEMO_ROOT / "so101" / "camera-config.json"
-STATIC_WORLD_LAYOUT_PATH = (
-    BASE_DIR / "web" / "public" / "world-layouts" / "static-transfer-smoke.world-layout.json"
-)
+
 REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
 DEFAULT_DURATION_SEC = 0.02
 DEFAULT_TIMEOUT_SEC = 180.0
-WORKSPACE_ASSET_IGNORED_DIR_NAMES = frozenset(
-    {
-        ".cache",
-        ".git",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        "__pycache__",
-        "node_modules",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -183,181 +154,6 @@ def _parse_args() -> argparse.Namespace:
 
 def _is_truthy_env(value: str | None) -> bool:
     return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _load_json(path: Path) -> dict:
-    with path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object: {path}")
-    return payload
-
-
-def _load_demo_mesh_assets() -> list[SimulatorMeshAssetUpload]:
-    manifest = _load_json(SO101_MANIFEST_PATH)
-    files = manifest.get("files")
-    if not isinstance(files, list):
-        raise ValueError(f"Invalid SO101 manifest: {SO101_MANIFEST_PATH}")
-
-    uploads: list[SimulatorMeshAssetUpload] = []
-    for entry in files:
-        if not isinstance(entry, dict):
-            continue
-        relative_path = entry.get("path")
-        if not isinstance(relative_path, str) or relative_path == "robot.urdf":
-            continue
-        url = entry.get("url")
-        source_path = (
-            (SO101_MANIFEST_PATH.parent / url).resolve()
-            if isinstance(url, str) and url
-            else (DEMO_ROOT / relative_path).resolve()
-        )
-        uploads.append(
-            SimulatorMeshAssetUpload(
-                path=relative_path,
-                aliases=[],
-                content_base64=base64.b64encode(source_path.read_bytes()).decode("ascii"),
-                mime=entry.get("mime") if isinstance(entry.get("mime"), str) else None,
-            )
-        )
-    return uploads
-
-
-def _load_demo_cameras() -> list[dict]:
-    payload = _load_json(SO101_CAMERA_CONFIG_PATH)
-    cameras = payload.get("cameras")
-    if not isinstance(cameras, list):
-        raise ValueError(f"Invalid SO101 camera config: {SO101_CAMERA_CONFIG_PATH}")
-    return [camera for camera in cameras if isinstance(camera, dict)]
-
-
-def _load_demo_objects() -> list[dict]:
-    payload = _load_json(STATIC_WORLD_LAYOUT_PATH)
-    world_layout = payload.get("world_layout")
-    if not isinstance(world_layout, dict):
-        raise ValueError(f"Invalid static world layout: {STATIC_WORLD_LAYOUT_PATH}")
-    objects = world_layout.get("objects")
-    if not isinstance(objects, list):
-        raise ValueError(f"Invalid object list in static world layout: {STATIC_WORLD_LAYOUT_PATH}")
-    return [item for item in objects if isinstance(item, dict)]
-
-
-def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
-    urdf_xml = (DEMO_ROOT / "robot.urdf").read_text(encoding="utf-8")
-    cameras = _load_demo_cameras()
-    objects = _load_demo_objects()
-    world_package = WorldScenePackageManifest(
-        package_id="so101-simulator-workspaces-check",
-        version="1.0.0",
-        title="SO101 Simulator Workspace Check",
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        runtime_targets=[
-            WorldRuntimeTarget(name=simulator_id, mode="python")
-            for simulator_id in WORKSPACE_SIMULATORS
-        ],
-        interface=WorldInterfaceSpec(
-            observation_modalities=["state", "rgb"],
-            action_semantics="joint_position",
-            timestep_ms=10,
-            frame_convention="ros-rep-103",
-        ),
-        world_snapshot=WorldSnapshot(
-            urdf_xml=urdf_xml,
-            joint_positions={},
-            cameras=cameras,
-            objects=objects,
-            scenario_time_ms=0,
-            scenario_duration_ms=0,
-        ),
-        provenance={
-            "robot": str((DEMO_ROOT / "robot.urdf").relative_to(BASE_DIR)),
-            "cameras": str(SO101_CAMERA_CONFIG_PATH.relative_to(BASE_DIR)),
-            "world_layout": str(STATIC_WORLD_LAYOUT_PATH.relative_to(BASE_DIR)),
-        },
-    )
-    return SimulatorWorkspacePrepareRequest(
-        world_package=world_package,
-        urdf_asset_path="robot.urdf",
-        mesh_assets=_load_demo_mesh_assets(),
-    )
-
-
-def build_workspace_request_from_files(
-    *,
-    world_package_path: Path,
-    robot_urdf_path: Path,
-    asset_roots: Sequence[Path] = (),
-) -> SimulatorWorkspacePrepareRequest:
-    world_package = WorldScenePackageManifest.model_validate(_load_json(world_package_path))
-    resolved_robot_urdf_path = robot_urdf_path.expanduser().resolve()
-    if not resolved_robot_urdf_path.is_file():
-        raise ValueError(f"Robot URDF does not exist: {robot_urdf_path}")
-    resolved_asset_roots = tuple(
-        dict.fromkeys(
-            root.expanduser().resolve()
-            for root in (asset_roots or (resolved_robot_urdf_path.parent,))
-        )
-    )
-    for root in resolved_asset_roots:
-        if not root.is_dir():
-            raise ValueError(f"Asset root does not exist or is not a directory: {root}")
-    return SimulatorWorkspacePrepareRequest(
-        world_package=world_package,
-        urdf_asset_path=_relative_to_asset_roots(
-            resolved_robot_urdf_path,
-            resolved_asset_roots,
-            fallback=resolved_robot_urdf_path.name,
-        ),
-        mesh_assets=_load_workspace_asset_uploads(
-            resolved_asset_roots,
-            skip_paths=(resolved_robot_urdf_path,),
-        ),
-    )
-
-
-def _relative_to_asset_roots(path: Path, roots: Sequence[Path], *, fallback: str) -> str:
-    resolved_path = path.resolve()
-    for root in roots:
-        try:
-            return resolved_path.relative_to(root.resolve()).as_posix()
-        except ValueError:
-            continue
-    return fallback
-
-
-def _load_workspace_asset_uploads(
-    asset_roots: Sequence[Path],
-    *,
-    skip_paths: Sequence[Path] = (),
-) -> list[SimulatorMeshAssetUpload]:
-    skipped = {path.resolve() for path in skip_paths}
-    content_by_path: dict[str, bytes] = {}
-    for root in asset_roots:
-        resolved_root = root.resolve()
-        for source_path in sorted(path for path in resolved_root.rglob("*") if path.is_file()):
-            resolved_source_path = source_path.resolve()
-            if resolved_source_path in skipped:
-                continue
-            relative_path = resolved_source_path.relative_to(resolved_root).as_posix()
-            if _is_ignored_workspace_asset_path(relative_path):
-                continue
-            content = resolved_source_path.read_bytes()
-            existing = content_by_path.get(relative_path)
-            if existing is not None and existing != content:
-                raise ValueError(f"Conflicting asset path across asset roots: {relative_path}")
-            content_by_path[relative_path] = content
-    return [
-        SimulatorMeshAssetUpload(
-            path=relative_path,
-            aliases=[],
-            content_base64=base64.b64encode(content).decode("ascii"),
-        )
-        for relative_path, content in sorted(content_by_path.items())
-    ]
-
-
-def _is_ignored_workspace_asset_path(relative_path: str) -> bool:
-    return any(part in WORKSPACE_ASSET_IGNORED_DIR_NAMES for part in Path(relative_path).parts)
 
 
 def _workspace_request_from_args(args: argparse.Namespace) -> SimulatorWorkspacePrepareRequest:

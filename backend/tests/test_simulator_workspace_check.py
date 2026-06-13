@@ -19,7 +19,6 @@ from backend.scripts.simulator_workspace_check import (
     WorkspaceCheckResult,
     WorkspaceExpectations,
     WorkspaceTarget,
-    WORKSPACE_SIMULATORS,
     _active_object_count,
     _check_target,
     _prepare_blender_command,
@@ -29,11 +28,11 @@ from backend.scripts.simulator_workspace_check import (
     _report_has_camera_artifacts,
     _workspace_request_from_args,
     _validate_report_artifact,
-    build_demo_workspace_request,
-    build_workspace_request_from_files,
     main,
 )
-from backend.tests.simulator_adapter_test_utils import make_world_package
+from backend.services.simulator_adapters.workspace_request_sources import (
+    build_demo_workspace_request,
+)
 
 
 def _report_object(source_id: str = "crate") -> dict:
@@ -66,91 +65,6 @@ def _report_camera(camera_id: str = "cam") -> dict:
             ]
         },
     }
-
-
-def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> None:
-    request = build_demo_workspace_request()
-
-    assert request.urdf_asset_path == "robot.urdf"
-    assert request.world_package.interface.frame_convention == "ros-rep-103"
-    assert len(request.mesh_assets) > 0
-    assert len(request.world_package.world_snapshot.objects) == 3
-    assert len(request.world_package.world_snapshot.cameras) == 3
-    assert [target.name for target in request.world_package.runtime_targets] == list(
-        WORKSPACE_SIMULATORS
-    )
-
-
-def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> None:
-    asset_root = tmp_path / "scene"
-    mesh_path = asset_root / "assets" / "box.stl"
-    robot_urdf_path = asset_root / "robot.urdf"
-    mesh_path.parent.mkdir(parents=True)
-    (asset_root / "__pycache__").mkdir()
-    (asset_root / "__pycache__" / "local.pyc").write_bytes(b"cache")
-    mesh_path.write_text("solid box\nendsolid box\n", encoding="utf-8")
-    urdf_xml = """
-<robot name="custom_robot">
-  <link name="base_link">
-    <visual>
-      <geometry>
-        <mesh filename="assets/box.stl"/>
-      </geometry>
-    </visual>
-  </link>
-</robot>
-""".strip()
-    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
-    world_package = make_world_package(
-        urdf_xml,
-        objects=[
-            {
-                "id": "crate",
-                "name": "Crate",
-                "type": "cube",
-                "position_xyz": [0.0, 0.0, 0.0],
-                "rotation_rpy_rad": [0.0, 0.0, 0.0],
-                "size_xyz": [0.1, 0.2, 0.3],
-                "color": "#ff0000",
-            }
-        ],
-    )
-    world_package_path = tmp_path / "world-package.json"
-    world_package_path.write_text(
-        json.dumps(world_package.model_dump(mode="json")),
-        encoding="utf-8",
-    )
-
-    request = build_workspace_request_from_files(
-        world_package_path=world_package_path,
-        robot_urdf_path=robot_urdf_path,
-        asset_roots=(asset_root,),
-    )
-
-    assert request.world_package.package_id == "demo_world"
-    assert request.urdf_asset_path == "robot.urdf"
-    assert [asset.path for asset in request.mesh_assets] == ["assets/box.stl"]
-
-
-def test_workspace_request_from_files_accepts_xacro_source_path(tmp_path) -> None:
-    asset_root = tmp_path / "scene"
-    robot_source_path = asset_root / "robot.urdf.xacro"
-    asset_root.mkdir()
-    urdf_xml = "<robot name=\"custom_robot\"><link name=\"base_link\"/></robot>"
-    robot_source_path.write_text(urdf_xml, encoding="utf-8")
-    world_package_path = tmp_path / "world-package.json"
-    world_package_path.write_text(
-        json.dumps(make_world_package(urdf_xml).model_dump(mode="json")),
-        encoding="utf-8",
-    )
-
-    request = build_workspace_request_from_files(
-        world_package_path=world_package_path,
-        robot_urdf_path=robot_source_path,
-        asset_roots=(asset_root,),
-    )
-
-    assert request.urdf_asset_path == "robot.urdf.xacro"
 
 
 def test_workspace_request_from_args_rejects_partial_custom_inputs() -> None:
