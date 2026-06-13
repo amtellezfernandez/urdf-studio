@@ -22,6 +22,11 @@
         { "$ref": "#/$defs/positiveVector3" }
       ]
     },
+    "portableAssetRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?!.*\\s$)(?!/)(?!.*(^|/)\\.\\.(/|$))(?!.*:).+"
+    },
     "worldObjectSimulation": {
       "type": "object",
       "additionalProperties": false,
@@ -46,10 +51,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "asset_ref": { "type": "string", "minLength": 1 },
-        "path": { "type": "string", "minLength": 1 },
-        "uri": { "type": "string", "minLength": 1 },
-        "filename": { "type": "string", "minLength": 1 },
+        "asset_ref": { "$ref": "#/$defs/portableAssetRef" },
+        "path": { "$ref": "#/$defs/portableAssetRef" },
+        "uri": { "$ref": "#/$defs/portableAssetRef" },
+        "filename": { "$ref": "#/$defs/portableAssetRef" },
         "scale": { "$ref": "#/$defs/positiveScale" },
         "scale_xyz": { "$ref": "#/$defs/positiveVector3" }
       }
@@ -94,7 +99,7 @@
           "enum": ["center", "primary", "secondary"]
         },
         "simulation": { "$ref": "#/$defs/worldObjectSimulation" },
-        "asset_ref": { "type": "string", "minLength": 1 },
+        "asset_ref": { "$ref": "#/$defs/portableAssetRef" },
         "asset_scale_xyz": { "$ref": "#/$defs/positiveVector3" },
         "mesh": { "$ref": "#/$defs/worldObjectMesh" }
       },

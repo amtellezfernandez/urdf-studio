@@ -10,6 +10,7 @@ from scipy.spatial.transform import Rotation
 
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters.numeric import is_finite_number
+from backend.services.world_asset_refs import normalize_portable_world_asset_ref
 from backend.services.world_scene_package_digest import computed_world_snapshot_digest
 from backend.services.world_scene_package_params import MAX_OBJECTS_PER_WORLD
 
@@ -573,20 +574,12 @@ def _required_string(value: Any, label: str) -> str:
 def _optional_asset_ref(value: Any, label: str) -> str | None:
     if value is None:
         return None
-    asset_ref = _required_string(value, label).replace("\\", "/")
-    while asset_ref.startswith("./"):
-        asset_ref = asset_ref[2:]
-    if (
-        not asset_ref
-        or asset_ref.startswith("/")
-        or asset_ref.startswith("../")
-        or "/../" in f"/{asset_ref}/"
-        or ":" in asset_ref
-    ):
+    try:
+        return normalize_portable_world_asset_ref(_required_string(value, label))
+    except ValueError as exc:
         raise ValueError(
             f"Blender change-set {label} must be a portable relative asset reference."
-        )
-    return asset_ref
+        ) from exc
 
 
 def _reject_unknown_fields(value: Mapping[str, Any], path: str, allowed_fields: set[str]) -> None:

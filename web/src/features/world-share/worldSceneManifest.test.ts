@@ -169,6 +169,53 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toEqual([]);
   });
 
+  it("accepts portable mesh asset refs with local relative syntax", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            id: "mesh-crate",
+            name: "Mesh crate",
+            type: "mesh",
+            asset_ref: "./assets\\crate.obj",
+          },
+        ],
+      })
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects non-portable mesh asset refs", () => {
+    const invalidRefs = [
+      "/tmp/crate.obj",
+      "../crate.obj",
+      "assets/../crate.obj",
+      "package://demo/crate.obj",
+      "https://example.test/crate.obj",
+      "C:\\tmp\\crate.obj",
+    ];
+
+    invalidRefs.forEach((assetRef) => {
+      const errors = validateLocalWorldSceneManifest(
+        createManifest({
+          objects: [
+            {
+              ...createWorldLayoutObject(),
+              id: `mesh-${assetRef}`,
+              name: "Mesh crate",
+              type: "mesh",
+              asset_ref: assetRef,
+            },
+          ],
+        })
+      );
+      expect(errors).toContain(
+        "world layout objects[0].asset_ref must be a portable relative asset reference"
+      );
+    });
+  });
+
   it("rejects malformed simulator metadata", () => {
     const malformedObject = {
       ...createWorldLayoutObject(),

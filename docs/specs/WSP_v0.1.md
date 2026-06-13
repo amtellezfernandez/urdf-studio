@@ -52,7 +52,7 @@ Each `world_snapshot.objects[]` entry is a simulator-transfer object with:
 - `type`: `cube`, `point`, `sphere`, `cylinder`, or `mesh`.
 - `rotation_rpy_rad` when orientation matters.
 - `simulation` for physics metadata: `fixed`, `collision`, `mass_kg`, `friction`, `restitution`, and `semantic_role`.
-- `asset_ref`, `asset_scale_xyz`, or `mesh` metadata when the object is backed by a mesh asset. Mesh objects must include an asset reference.
+- `asset_ref`, `asset_scale_xyz`, or `mesh` metadata when the object is backed by a mesh asset. Mesh objects must include a portable relative asset reference inside the package.
 
 Blender-added mesh objects enter Studio as `type = "mesh"` when the Blender object carries a portable relative `asset_ref`; otherwise they enter as cube world objects with `simulation.semantic_role = "blender_import"`. Existing object transforms, dimensions, and display colors can be applied automatically; camera edits and deletions still require review before they are applied to a package.
 

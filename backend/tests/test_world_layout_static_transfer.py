@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -293,6 +294,73 @@ def test_mesh_object_preserves_asset_metadata_and_uses_proxy_for_primitive_adapt
     assert geom is not None
     assert geom.get("type") == "mesh"
     assert geom.get("mesh") == "wl_crate_mesh"
+
+
+def test_mesh_asset_refs_are_normalized_to_portable_package_paths(tmp_path) -> None:
+    mesh_path = tmp_path / "assets" / "crate.obj"
+    mesh_path.parent.mkdir()
+    mesh_path.write_text("o crate\n", encoding="utf-8")
+    payload = {
+        "world_layout": {
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "mesh",
+                    "position_xyz": [0.0, 0.0, 0.1],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.3, 0.4],
+                    "color": "#22c55e",
+                    "asset_ref": "./assets\\crate.obj",
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, _warnings = build_sim_primitives(layout)
+
+    assert primitives[0].asset_ref == "assets/crate.obj"
+    assert resolve_world_layout_asset_path(primitives[0].asset_ref, (tmp_path,)) == mesh_path
+
+
+@pytest.mark.parametrize(
+    "asset_ref",
+    [
+        "/tmp/crate.obj",
+        "../crate.obj",
+        "assets/../crate.obj",
+        "package://demo/crate.obj",
+        "https://example.test/crate.obj",
+        "C:\\tmp\\crate.obj",
+    ],
+)
+def test_rejects_nonportable_mesh_asset_refs(asset_ref: str) -> None:
+    payload = {
+        "world_layout": {
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "mesh",
+                    "position_xyz": [0.0, 0.0, 0.1],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.3, 0.4],
+                    "color": "#22c55e",
+                    "asset_ref": asset_ref,
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    with pytest.raises(ValueError, match="portable relative asset reference"):
+        parse_static_world_layout_payload(payload)
+
+    assert resolve_world_layout_asset_path(asset_ref, (Path.cwd(),)) is None
 
 
 def test_rejects_non_static_layouts() -> None:

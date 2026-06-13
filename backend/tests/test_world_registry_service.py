@@ -143,6 +143,57 @@ def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:
         ]
 
 
+def test_validate_rejects_mesh_object_without_asset_ref() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = build_manifest("demo-world", "1.0.4")
+        manifest.world_snapshot.objects = [
+            {
+                "id": "crate",
+                "name": "Crate",
+                "type": "mesh",
+                "position_xyz": [0.0, 0.0, 0.1],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.2, 0.3, 0.4],
+                "color": "#22c55e",
+            }
+        ]
+
+        validation = service.validate(manifest)
+
+        assert validation.valid is False
+        assert validation.errors == [
+            "world_snapshot.objects[0].mesh asset reference is required for mesh objects."
+        ]
+
+
+def test_validate_rejects_nonportable_mesh_asset_ref() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = build_manifest("demo-world", "1.0.5")
+        manifest.world_snapshot.objects = [
+            {
+                "id": "crate",
+                "name": "Crate",
+                "type": "mesh",
+                "position_xyz": [0.0, 0.0, 0.1],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.2, 0.3, 0.4],
+                "color": "#22c55e",
+                "asset_ref": "/tmp/crate.obj",
+            }
+        ]
+
+        validation = service.validate(manifest)
+
+        assert validation.valid is False
+        assert validation.errors == [
+            "world_snapshot.objects[0].asset_ref must be a portable relative asset reference."
+        ]
+
+
 def test_validate_rejects_mismatched_world_snapshot_artifact_digest() -> None:
     with TemporaryDirectory() as temp_dir:
         registry_path = f"{temp_dir}/world-registry.json"

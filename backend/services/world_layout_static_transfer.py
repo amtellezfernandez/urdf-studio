@@ -26,6 +26,7 @@ from backend.services.world_layout_transfer_types import (
     WorldLayoutObject,
     WorldLayoutTransferError,
 )
+from backend.services.world_asset_refs import normalize_portable_world_asset_ref
 
 SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point", "mesh"}
 CONCRETE_WORLD_LAYOUT_FRAME_MAPS = {"identity", "studio-y-up-to-z-up"}
@@ -180,7 +181,7 @@ def _read_world_object(value: Any, index: int) -> WorldLayoutObject:
     semantic_role = _read_optional_string(
         simulation.get("semantic_role", value.get("semantic_role", value.get("role")))
     )
-    asset_ref = _read_object_asset_ref(value)
+    asset_ref = _read_object_asset_ref(value, index)
     asset_scale = _read_object_asset_scale(value, index)
     return WorldLayoutObject(
         id=raw_id.strip(),
@@ -208,17 +209,17 @@ def _read_optional_string(value: Any) -> str | None:
     return None
 
 
-def _read_object_asset_ref(value: dict[str, Any]) -> str | None:
+def _read_object_asset_ref(value: dict[str, Any], index: int) -> str | None:
     for key in ("asset_ref", "asset_path", "mesh_ref", "mesh_path", "meshReference"):
         asset_ref = _read_optional_string(value.get(key))
         if asset_ref is not None:
-            return asset_ref
+            return _read_portable_asset_ref(asset_ref, f"objects[{index}].{key}")
     mesh = value.get("mesh")
     if _is_record(mesh):
         for key in ("asset_ref", "path", "uri", "filename"):
             asset_ref = _read_optional_string(mesh.get(key))
             if asset_ref is not None:
-                return asset_ref
+                return _read_portable_asset_ref(asset_ref, f"objects[{index}].mesh.{key}")
     geometry = value.get("geometry")
     if _is_record(geometry):
         mesh = geometry.get("mesh")
@@ -226,8 +227,20 @@ def _read_object_asset_ref(value: dict[str, Any]) -> str | None:
             for key in ("asset_ref", "path", "uri", "filename"):
                 asset_ref = _read_optional_string(mesh.get(key))
                 if asset_ref is not None:
-                    return asset_ref
+                    return _read_portable_asset_ref(
+                        asset_ref,
+                        f"objects[{index}].geometry.mesh.{key}",
+                    )
     return None
+
+
+def _read_portable_asset_ref(value: str, field: str) -> str:
+    try:
+        return normalize_portable_world_asset_ref(value)
+    except ValueError as exc:
+        raise WorldLayoutTransferError(
+            f"{field} must be a portable relative asset reference"
+        ) from exc
 
 
 def _read_object_asset_scale(value: dict[str, Any], index: int) -> tuple[float, float, float] | None:
@@ -252,8 +265,9 @@ def _read_object_asset_scale(value: dict[str, Any], index: int) -> tuple[float, 
 def resolve_world_layout_asset_path(asset_ref: str | None, roots: Sequence[Path]) -> Path | None:
     if asset_ref is None:
         return None
-    normalized = asset_ref.replace("\\", "/").strip().lstrip("/")
-    if not normalized or "://" in normalized or normalized.startswith("package://"):
+    try:
+        normalized = normalize_portable_world_asset_ref(asset_ref)
+    except ValueError:
         return None
     for root in roots:
         root_path = root.resolve()

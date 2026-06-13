@@ -118,6 +118,32 @@ const validateOptionalFiniteNumber = (
   return [];
 };
 
+const normalizePortableWorldAssetRef = (value: string): string | null => {
+  let normalized = value.replace(/\\/g, "/").trim();
+  while (normalized.startsWith("./")) {
+    normalized = normalized.slice(2);
+  }
+  if (
+    normalized.length === 0 ||
+    normalized === "." ||
+    normalized === ".." ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("../") ||
+    `/${normalized}/`.includes("/../") ||
+    normalized.includes(":")
+  ) {
+    return null;
+  }
+  return normalized;
+};
+
+const validatePortableWorldAssetRef = (value: unknown, fieldLabel: string): string[] => {
+  if (!isNonEmptyString(value)) return [`${fieldLabel} must be a non-empty string`];
+  return normalizePortableWorldAssetRef(value) === null
+    ? [`${fieldLabel} must be a portable relative asset reference`]
+    : [];
+};
+
 const validateWorldObjectSimulation = (value: unknown, objectLabel: string): string[] => {
   if (value === undefined) return [];
   if (!isRecord(value)) return [`${objectLabel}.simulation must be an object`];
@@ -146,11 +172,13 @@ const validateWorldObjectSimulation = (value: unknown, objectLabel: string): str
 };
 
 const readWorldObjectMeshAssetRef = (value: Record<string, unknown>): string | null => {
-  if (isNonEmptyString(value.asset_ref)) return value.asset_ref.trim();
+  if (isNonEmptyString(value.asset_ref)) {
+    return normalizePortableWorldAssetRef(value.asset_ref);
+  }
   const mesh = value.mesh;
   if (!isRecord(mesh)) return null;
   const meshAssetRef = mesh.asset_ref ?? mesh.path ?? mesh.uri ?? mesh.filename;
-  return isNonEmptyString(meshAssetRef) ? meshAssetRef.trim() : null;
+  return isNonEmptyString(meshAssetRef) ? normalizePortableWorldAssetRef(meshAssetRef) : null;
 };
 
 const validateWorldObjectMeshMetadata = (
@@ -158,8 +186,8 @@ const validateWorldObjectMeshMetadata = (
   objectLabel: string
 ): string[] => {
   const errors: string[] = [];
-  if (value.asset_ref !== undefined && !isNonEmptyString(value.asset_ref)) {
-    errors.push(`${objectLabel}.asset_ref must be a non-empty string`);
+  if (value.asset_ref !== undefined) {
+    errors.push(...validatePortableWorldAssetRef(value.asset_ref, `${objectLabel}.asset_ref`));
   }
   if (value.asset_scale_xyz !== undefined) {
     errors.push(
@@ -175,8 +203,10 @@ const validateWorldObjectMeshMetadata = (
     } else {
       const mesh = value.mesh;
       for (const key of ["asset_ref", "path", "uri", "filename"] as const) {
-        if (mesh[key] !== undefined && !isNonEmptyString(mesh[key])) {
-          errors.push(`${objectLabel}.mesh.${key} must be a non-empty string`);
+        if (mesh[key] !== undefined) {
+          errors.push(
+            ...validatePortableWorldAssetRef(mesh[key], `${objectLabel}.mesh.${key}`)
+          );
         }
       }
       if (mesh.scale !== undefined) {
