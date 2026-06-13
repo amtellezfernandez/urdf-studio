@@ -189,7 +189,7 @@ def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> 
     assert updated.world_snapshot.cameras == world_package.world_snapshot.cameras
 
 
-def test_blender_change_set_reports_applied_and_review_only_counts(tmp_path: Path) -> None:
+def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
 
     result = apply_blender_layout_change_set_with_summary(
@@ -219,14 +219,115 @@ def test_blender_change_set_reports_applied_and_review_only_counts(tmp_path: Pat
                     "position_xyz": [0.2, 0.3, 0.4],
                     "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
                     "size_xyz": [0.1, 0.2, 0.3],
-                    "reason": "new Blender objects require Studio review before import",
+                    "reason": "new Blender mesh object will import as a Studio cube world object",
                 }
             ],
         ),
     )
+    added_object = result.world_package.world_snapshot.objects[1]
 
-    assert result.applied_change_count == 1
-    assert result.review_only_count == 2
+    assert result.applied_change_count == 2
+    assert result.review_only_count == 1
+    assert added_object == {
+        "id": "blender_added_cube",
+        "name": "Added cube",
+        "type": "cube",
+        "position_xyz": [0.2, 0.3, 0.4],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.1, 0.2, 0.3],
+        "color": "#3b82f6",
+        "simulation": {
+            "fixed": True,
+            "collision": True,
+            "semantic_role": "blender_import",
+        },
+    }
+
+
+def test_blender_change_set_assigns_unique_ids_to_imported_world_objects(
+    tmp_path: Path,
+) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    world_package.world_snapshot.objects.append(
+        {
+            "id": "blender_added_cube",
+            "name": "Existing imported cube",
+            "type": "cube",
+            "position_xyz": [0.0, 0.0, 0.0],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.1, 0.1, 0.1],
+            "color": "#ffffff",
+        }
+    )
+
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[
+                {
+                    "entity_type": "world_object",
+                    "stable_id": "crate",
+                    "position_xyz": [1.0, 2.0, 3.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.5, 0.6, 0.7],
+                },
+                {
+                    "entity_type": "world_object",
+                    "stable_id": "blender_added_cube",
+                    "position_xyz": [0.0, 0.0, 0.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.1, 0.1, 0.1],
+                },
+            ],
+            review_only=[
+                {
+                    "entity_type": "camera",
+                    "stable_id": "cam-1",
+                    "position_xyz": [0.0, 0.0, 1.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "reason": "camera round-trip requires camera-frame review before apply",
+                },
+                {
+                    "entity_type": "new_world_object",
+                    "sim_name": "Added cube",
+                    "position_xyz": [0.2, 0.3, 0.4],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.1, 0.2, 0.3],
+                    "reason": "new Blender mesh object will import as a Studio cube world object",
+                },
+            ],
+        ),
+    )
+
+    assert result.applied_change_count == 3
+    assert result.review_only_count == 1
+    assert [item["id"] for item in result.world_package.world_snapshot.objects] == [
+        "crate",
+        "blender_added_cube",
+        "blender_added_cube_2",
+    ]
+
+
+def test_blender_change_set_rejects_incomplete_new_world_object(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    with pytest.raises(ValueError, match="review_only\\[0\\]\\.size_xyz"):
+        apply_blender_layout_change_set_with_summary(
+            world_package,
+            _blender_change_set(
+                world_package,
+                changes=[_crate_layout_change()],
+                review_only=[
+                    {
+                        "entity_type": "new_world_object",
+                        "sim_name": "Incomplete cube",
+                        "position_xyz": [0.2, 0.3, 0.4],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    }
+                ],
+            ),
+        )
 
 
 def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Path) -> None:
@@ -697,6 +798,11 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     world_objects[0].location = [1.0, 2.0, 3.0]
     world_objects[0].scale = [0.5, 0.6, 0.7]
     world_objects[0].rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
+    fake_bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.0, 3.0, 4.0))
+    new_world_object = fake_bpy.context.object
+    new_world_object.name = "Extra Box"
+    new_world_object.scale = [0.4, 0.5, 0.6]
+    new_world_object.rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
     runpy.run_path(str(artifacts.export_script_path), run_name="__main__")
 
     change_set = json.loads(artifacts.change_set_path.read_text(encoding="utf-8"))
@@ -713,13 +819,17 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     ]
     assert change_set["review_only"][0]["entity_type"] == "camera"
     assert change_set["review_only"][0]["stable_id"] == "cam-1"
+    assert change_set["review_only"][1]["entity_type"] == "new_world_object"
+    assert change_set["review_only"][1]["sim_name"] == "Extra Box"
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
-    assert result.applied_change_count == 1
+    assert result.applied_change_count == 2
     assert result.review_only_count == 1
     assert result.world_package.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
     assert result.world_package.world_snapshot.objects[0]["size_xyz"] == [0.5, 0.6, 0.7]
+    assert result.world_package.world_snapshot.objects[1]["id"] == "blender_extra_box"
+    assert result.world_package.world_snapshot.objects[1]["position_xyz"] == [2.0, 3.0, 4.0]
 
 
 class _FakeBlenderProcess:

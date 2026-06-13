@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import textwrap
 from collections import Counter
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.ilu_urdf import convert_urdf_to_usd
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
+from backend.services.world_scene_package_params import MAX_OBJECTS_PER_WORLD
 from backend.services.world_scene_package_digest import computed_world_snapshot_digest
 
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
@@ -59,6 +61,14 @@ class BlenderLayoutChangeSetApplyResult:
 @dataclass(frozen=True)
 class BlenderWorldObjectChange:
     stable_id: str
+    position_xyz: tuple[float, float, float]
+    quat_wxyz: tuple[float, float, float, float]
+    size_xyz: tuple[float, float, float]
+
+
+@dataclass(frozen=True)
+class BlenderNewWorldObject:
+    sim_name: str
     position_xyz: tuple[float, float, float]
     quat_wxyz: tuple[float, float, float, float]
     size_xyz: tuple[float, float, float]
@@ -585,7 +595,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                                 "position_xyz": vector3(obj.location),
                                 "quat_wxyz": quat_wxyz(obj),
                                 "size_xyz": local_size_xyz(obj),
-                                "reason": "new Blender objects require Studio review before import",
+                                "reason": "new Blender mesh object will import as a Studio cube world object",
                             }}
                         )
                 for stable_id in source_camera_ids:
@@ -637,7 +647,10 @@ def apply_blender_layout_change_set_with_summary(
     world_package: WorldScenePackageManifest,
     change_set: Mapping[str, Any],
 ) -> BlenderLayoutChangeSetApplyResult:
-    object_updates, review_only_count = _validate_blender_change_set(change_set, world_package)
+    object_updates, new_world_objects, review_only_count = _validate_blender_change_set(
+        change_set,
+        world_package,
+    )
     updated = world_package.model_copy(deep=True)
     package_object_ids = _world_package_object_ids(updated)
     missing_object_ids = sorted(set(object_updates) - package_object_ids)
@@ -656,6 +669,13 @@ def apply_blender_layout_change_set_with_summary(
             next_item.update(_world_object_change_fields(change))
             applied_change_count += 1
         next_objects.append(next_item)
+    next_objects.extend(_new_world_object_fields(new_world_objects, package_object_ids))
+    applied_change_count += len(new_world_objects)
+    if len(next_objects) > MAX_OBJECTS_PER_WORLD:
+        raise ValueError(
+            "Blender change-set would exceed the maximum world object count "
+            f"({MAX_OBJECTS_PER_WORLD})."
+        )
     updated.world_snapshot.objects = next_objects
     return BlenderLayoutChangeSetApplyResult(
         world_package=updated,
@@ -667,7 +687,7 @@ def apply_blender_layout_change_set_with_summary(
 def _validate_blender_change_set(
     change_set: Mapping[str, Any],
     world_package: WorldScenePackageManifest,
-) -> tuple[dict[str, BlenderWorldObjectChange], int]:
+) -> tuple[dict[str, BlenderWorldObjectChange], tuple[BlenderNewWorldObject, ...], int]:
     if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
         raise ValueError("Unsupported Blender change-set schema.")
     source = _validate_change_set_source(
@@ -693,6 +713,7 @@ def _validate_blender_change_set(
     deleted_world_object_ids: set[str] = set()
     camera_review_ids: set[str] = set()
     deleted_camera_ids: set[str] = set()
+    new_world_objects: list[BlenderNewWorldObject] = []
     for index, entry in enumerate(review_only):
         review_key = _validate_review_only_entry(entry, f"review_only[{index}]")
         if review_key in seen_review_ids:
@@ -708,6 +729,10 @@ def _validate_blender_change_set(
             camera_review_ids.add(stable_id)
         if entity_type == "deleted_camera":
             deleted_camera_ids.add(stable_id)
+        if entity_type == "new_world_object":
+            new_world_objects.append(
+                _validate_new_world_object_import(entry, f"review_only[{index}]")
+            )
         seen_review_ids.add(review_key)
 
     deleted_and_reviewed_camera_ids = sorted(camera_review_ids & deleted_camera_ids)
@@ -728,7 +753,7 @@ def _validate_blender_change_set(
         deleted_camera_ids=deleted_camera_ids,
     )
 
-    return object_updates, len(review_only)
+    return object_updates, tuple(new_world_objects), len(review_only) - len(new_world_objects)
 
 
 def _validate_change_set_source(
@@ -887,6 +912,17 @@ def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectCh
     )
 
 
+def _validate_new_world_object_import(value: Any, path: str) -> BlenderNewWorldObject:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Blender change-set {path} must be an object.")
+    return BlenderNewWorldObject(
+        sim_name=_required_string(value.get("sim_name"), f"{path}.sim_name"),
+        position_xyz=_required_vector3(value.get("position_xyz"), f"{path}.position_xyz"),
+        quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
+        size_xyz=_required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz"),
+    )
+
+
 def _validate_review_only_entry(value: Any, path: str) -> str:
     if not isinstance(value, Mapping):
         raise ValueError(f"Blender change-set {path} must be an object.")
@@ -1012,6 +1048,45 @@ def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, A
         "rotation_rpy_rad": list(_quat_wxyz_to_rpy(change.quat_wxyz)),
         "size_xyz": list(change.size_xyz),
     }
+
+
+def _new_world_object_fields(
+    new_world_objects: Sequence[BlenderNewWorldObject],
+    existing_ids: set[str],
+) -> list[dict[str, Any]]:
+    used_ids = set(existing_ids)
+    fields: list[dict[str, Any]] = []
+    for item in new_world_objects:
+        object_id = _next_blender_object_id(item.sim_name, used_ids)
+        used_ids.add(object_id)
+        fields.append(
+            {
+                "id": object_id,
+                "name": item.sim_name,
+                "type": "cube",
+                "position_xyz": list(item.position_xyz),
+                "rotation_rpy_rad": list(_quat_wxyz_to_rpy(item.quat_wxyz)),
+                "size_xyz": list(item.size_xyz),
+                "color": "#3b82f6",
+                "simulation": {
+                    "fixed": True,
+                    "collision": True,
+                    "semantic_role": "blender_import",
+                },
+            }
+        )
+    return fields
+
+
+def _next_blender_object_id(name: str, used_ids: set[str]) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", name.strip()).strip("._").lower()
+    base = f"blender_{normalized or 'object'}"
+    candidate = base
+    suffix = 2
+    while candidate in used_ids:
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _blender_object_entry(primitive: Any) -> dict[str, Any]:
