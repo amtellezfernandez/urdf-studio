@@ -12,6 +12,7 @@ from backend.models.world_scene_package import WorldScenePackageManifest
 SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
 SimulatorWorkspaceAssetFormat = Literal["urdf", "mjcf", "usd", "native"]
 SimulatorTransferStrategy = Literal["direct", "convert", "planned"]
+SimulatorTargetKind = Literal["physics_simulator", "authoring_tool", "renderer"]
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",
@@ -190,6 +191,7 @@ class SimulatorRuntimeSpec:
     simulator_id: SimulatorId
     label: str
     transfer: SimulatorTransferSpec
+    target_kind: SimulatorTargetKind = "physics_simulator"
     workspace_target: bool = False
     motion_validation: bool = False
     layout_round_trip: bool = False
@@ -206,12 +208,17 @@ class SimulatorRuntimeSpec:
 class SimulatorRuntimeDescriptor(SimulatorRuntimeCamelModel):
     simulator_id: SimulatorId = Field(..., alias="simulatorId")
     label: str
+    target_kind: SimulatorTargetKind = Field(..., alias="targetKind")
     capabilities: SimulatorRuntimeCapabilities
     transfer_policy: SimulatorRuntimeTransferPolicy = Field(..., alias="transferPolicy")
 
 
 class SimulatorRuntimeListResponse(SimulatorRuntimeCamelModel):
     simulators: list[SimulatorRuntimeDescriptor] = Field(default_factory=list)
+
+
+class WorkspaceTransferTargetListResponse(SimulatorRuntimeCamelModel):
+    targets: list[SimulatorRuntimeDescriptor] = Field(default_factory=list)
 
 
 class SimulatorRuntimeStatus(SimulatorRuntimeCamelModel):
@@ -244,6 +251,7 @@ def _runtime(
     robot_asset_format: SimulatorAssetFormat,
     transfer_strategy: SimulatorTransferStrategy,
     *,
+    target_kind: SimulatorTargetKind = "physics_simulator",
     workspace_target: bool = False,
     motion_validation: bool = False,
     layout_round_trip: bool = False,
@@ -253,6 +261,7 @@ def _runtime(
         simulator_id=simulator_id,
         label=label,
         transfer=_transfer(robot_asset_format, transfer_strategy),
+        target_kind=target_kind,
         workspace_target=workspace_target,
         motion_validation=motion_validation,
         layout_round_trip=layout_round_trip,
@@ -348,6 +357,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "Blender",
         "native",
         "direct",
+        target_kind="authoring_tool",
         workspace_target=True,
         layout_round_trip=True,
         dependencies=(_dependency("blender", "bpy"),),
@@ -357,6 +367,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "RoboSplatter",
         "native",
         "planned",
+        target_kind="renderer",
         dependencies=(_dependency("robosplatter"),),
     ),
 )

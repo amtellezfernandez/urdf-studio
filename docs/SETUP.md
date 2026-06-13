@@ -37,9 +37,9 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. The first run can take several minutes.
 
-Setup also prepares supported simulator workspace adapters when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
+Setup also prepares supported workspace transfer targets when the platform packages are available. The base app remains usable if a local target runtime cannot be installed on the current laptop.
 
-Blender layout round-trip sessions use the local Blender executable. Install Blender on the machine or set `URDF_STUDIO_BLENDER_PATH=/path/to/blender` before opening Blender from the simulator panel.
+Blender layout round-trip sessions use the local Blender executable. Install Blender on the machine or set `URDF_STUDIO_BLENDER_PATH=/path/to/blender` before opening Blender from the `Open In` panel.
 
 Optional setup commands:
 
@@ -118,7 +118,7 @@ npm run start -- --help
 | `npm run team` | Start a trusted-network team session |
 | `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run release:check` | Run release-readiness checks |
-| `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed simulators |
+| `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed transfer targets |
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |

@@ -5,14 +5,14 @@ import type {
   SimulatorRuntimeTargetState,
 } from "@/features/layout/page/HealthActionPanelSimulatorRuntime";
 import {
-  fetchSimulatorRuntimes,
-  fetchSimulatorRuntimeStatus,
-  prepareSimulatorWorkspace,
+  fetchWorkspaceTransferTargets,
+  fetchWorkspaceTransferTargetStatus,
+  openWorkspaceTransferTarget,
   type SimulatorRuntimeDescriptor,
   type SimulatorRuntimeStatus,
 } from "@/features/world-share/simulatorRuntimeApi";
 import {
-  canOpenSimulatorWorkspace,
+  canOpenWorkspaceTarget,
   type SimulatorId,
 } from "@/features/world-share/simulatorRuntimeParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
@@ -43,10 +43,12 @@ const resolveSimulatorRuntimeDetail = (
   status?: SimulatorRuntimeStatus
 ): string => {
   const assetFormat = formatSimulatorAssetFormat(descriptor.transferPolicy.robotAssetFormat);
-  if (!canOpenSimulatorWorkspace(descriptor)) return `${assetFormat} support planned`;
+  if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} support planned`;
   if (status && !status.available) return `${assetFormat} runtime unavailable: ${status.status}`;
-  if (descriptor.capabilities.motionValidation) return `${assetFormat} open and validation`;
   if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
+  if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
+  if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
+  if (descriptor.targetKind === "renderer") return `${assetFormat} visual workspace`;
   return `${assetFormat} open`;
 };
 
@@ -68,7 +70,7 @@ export const useSimulatorRuntimeLauncher = ({
 
   useEffect(() => {
     let cancelled = false;
-    void fetchSimulatorRuntimes()
+    void fetchWorkspaceTransferTargets()
       .then((descriptors) => {
         if (cancelled) return;
         setRuntimeDescriptors(descriptors);
@@ -76,7 +78,7 @@ export const useSimulatorRuntimeLauncher = ({
       .catch((error) => {
         if (cancelled) return;
         setRuntimeDescriptors([]);
-        toast.error(error instanceof Error ? error.message : "Simulator runtimes unavailable.");
+        toast.error(error instanceof Error ? error.message : "Workspace targets unavailable.");
       });
     return () => {
       cancelled = true;
@@ -92,7 +94,10 @@ export const useSimulatorRuntimeLauncher = ({
     void Promise.all(
       runtimeDescriptors.map(async (descriptor) => {
         try {
-          return [descriptor.simulatorId, await fetchSimulatorRuntimeStatus(descriptor.simulatorId)] as const;
+          return [
+            descriptor.simulatorId,
+            await fetchWorkspaceTransferTargetStatus(descriptor.simulatorId),
+          ] as const;
         } catch (error) {
           return [
             descriptor.simulatorId,
@@ -120,7 +125,7 @@ export const useSimulatorRuntimeLauncher = ({
     async (descriptor: SimulatorRuntimeDescriptor) => {
       if (loadingSimulatorId !== null) return;
       const status = runtimeStatuses[descriptor.simulatorId];
-      if (!canOpenSimulatorWorkspace(descriptor) || status?.available === false) {
+      if (!canOpenWorkspaceTarget(descriptor) || status?.available === false) {
         toast.message(status?.status || `${descriptor.label} support is planned.`);
         return;
       }
@@ -131,7 +136,7 @@ export const useSimulatorRuntimeLauncher = ({
       setLoadingSimulatorId(descriptor.simulatorId);
       try {
         const worldPackage = await buildCurrentWorldScenePackageManifest();
-        const prepared = await prepareSimulatorWorkspace({
+        const prepared = await openWorkspaceTransferTarget({
           simulatorId: descriptor.simulatorId,
           worldPackage,
           urdfAssetPath: activeUrdfPath ?? undefined,
@@ -172,8 +177,8 @@ export const useSimulatorRuntimeLauncher = ({
       const isBusy = loadingSimulatorId === descriptor.simulatorId;
       const isActive = lastLoadedSimulatorId === descriptor.simulatorId;
       const status = runtimeStatuses[descriptor.simulatorId];
-      const canOpen = canOpenSimulatorWorkspace(descriptor) && status?.available !== false;
-      const plannedLabel = canOpenSimulatorWorkspace(descriptor)
+      const canOpen = canOpenWorkspaceTarget(descriptor) && status?.available !== false;
+      const plannedLabel = canOpenWorkspaceTarget(descriptor)
         ? `${descriptor.label} runtime unavailable`
         : `${descriptor.label} support planned`;
       return {

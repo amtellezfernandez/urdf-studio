@@ -1,5 +1,3 @@
-export const SIMULATOR_API_BASE_PATH = "/simulators";
-
 export type SimulatorRuntimeCapabilities = {
   workspaceTarget: boolean;
   motionValidation: boolean;
@@ -8,6 +6,7 @@ export type SimulatorRuntimeCapabilities = {
 
 export type SimulatorAssetFormat = "urdf" | "mjcf" | "mjx_mjcf" | "usd" | "native";
 export type SimulatorTransferStrategy = "direct" | "convert" | "planned";
+export type SimulatorTargetKind = "physics_simulator" | "authoring_tool" | "renderer";
 
 export type SimulatorRuntimeTransferPolicy = {
   robotAssetFormat: SimulatorAssetFormat;
@@ -19,6 +18,7 @@ export type SimulatorRuntimeTransferPolicy = {
 type SimulatorRuntimeSpecRow = readonly [
   simulatorId: string,
   label: string,
+  targetKind: SimulatorTargetKind,
   robotAssetFormat: SimulatorAssetFormat,
   transferStrategy: SimulatorTransferStrategy,
   workspaceTarget?: boolean,
@@ -37,18 +37,18 @@ const transfer = (
 });
 
 const SIMULATOR_RUNTIME_ROWS = [
-  ["genesis", "Genesis", "urdf", "direct", true],
-  ["mjlab", "MJLab", "mjcf", "convert", true, true],
-  ["mujoco", "MuJoCo", "mjcf", "convert", true],
-  ["mjx", "MJX", "mjx_mjcf", "planned"],
-  ["pybullet", "PyBullet", "urdf", "direct", true],
-  ["sapien2", "SAPIEN 2", "urdf", "planned"],
-  ["sapien3", "SAPIEN 3", "urdf", "planned"],
-  ["isaacsim", "Isaac Sim", "usd", "planned"],
-  ["isaacgym", "Isaac Gym", "urdf", "planned"],
-  ["newton", "Newton", "mjcf", "planned"],
-  ["blender", "Blender", "native", "direct", true, false, true],
-  ["robosplatter", "RoboSplatter", "native", "planned"],
+  ["genesis", "Genesis", "physics_simulator", "urdf", "direct", true],
+  ["mjlab", "MJLab", "physics_simulator", "mjcf", "convert", true, true],
+  ["mujoco", "MuJoCo", "physics_simulator", "mjcf", "convert", true],
+  ["mjx", "MJX", "physics_simulator", "mjx_mjcf", "planned"],
+  ["pybullet", "PyBullet", "physics_simulator", "urdf", "direct", true],
+  ["sapien2", "SAPIEN 2", "physics_simulator", "urdf", "planned"],
+  ["sapien3", "SAPIEN 3", "physics_simulator", "urdf", "planned"],
+  ["isaacsim", "Isaac Sim", "physics_simulator", "usd", "planned"],
+  ["isaacgym", "Isaac Gym", "physics_simulator", "urdf", "planned"],
+  ["newton", "Newton", "physics_simulator", "mjcf", "planned"],
+  ["blender", "Blender", "authoring_tool", "native", "direct", true, false, true],
+  ["robosplatter", "RoboSplatter", "renderer", "native", "planned"],
 ] as const satisfies readonly SimulatorRuntimeSpecRow[];
 
 export type SimulatorId = (typeof SIMULATOR_RUNTIME_ROWS)[number][0];
@@ -56,6 +56,7 @@ export type SimulatorId = (typeof SIMULATOR_RUNTIME_ROWS)[number][0];
 type SimulatorRuntimeSpecShape = {
   simulatorId: SimulatorId;
   label: string;
+  targetKind: SimulatorTargetKind;
   capabilities: SimulatorRuntimeCapabilities;
   transferPolicy: SimulatorRuntimeTransferPolicy;
 };
@@ -64,6 +65,7 @@ const SIMULATOR_RUNTIME_SPECS = SIMULATOR_RUNTIME_ROWS.map(
   ([
     simulatorId,
     label,
+    targetKind,
     robotAssetFormat,
     transferStrategy,
     workspaceTarget = false,
@@ -72,6 +74,7 @@ const SIMULATOR_RUNTIME_SPECS = SIMULATOR_RUNTIME_ROWS.map(
   ]): SimulatorRuntimeSpecShape => ({
     simulatorId,
     label,
+    targetKind,
     capabilities: {
       workspaceTarget,
       motionValidation,
@@ -83,11 +86,12 @@ const SIMULATOR_RUNTIME_SPECS = SIMULATOR_RUNTIME_ROWS.map(
 export type SimulatorRuntimeDescriptor = {
   simulatorId: SimulatorId;
   label: string;
+  targetKind: SimulatorTargetKind;
   capabilities: SimulatorRuntimeCapabilities;
   transferPolicy: SimulatorRuntimeTransferPolicy;
 };
 
-export const canOpenSimulatorWorkspace = (
+export const canOpenWorkspaceTarget = (
   descriptor: Pick<SimulatorRuntimeDescriptor, "capabilities">
 ): boolean => descriptor.capabilities.workspaceTarget;
 

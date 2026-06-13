@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from backend.app import create_app
 from backend.api import simulator_runtime as simulator_runtime_api
+from backend.api import workspace_transfer as workspace_transfer_api
 from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
 from backend.models.simulator_runtime import (
     SIMULATOR_CANONICAL_FRAME_CONVENTION,
@@ -140,8 +141,23 @@ def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
         "blender": "native",
         "robosplatter": "native",
     }
+    expected_target_kinds = {
+        "genesis": "physics_simulator",
+        "mjlab": "physics_simulator",
+        "mujoco": "physics_simulator",
+        "mjx": "physics_simulator",
+        "pybullet": "physics_simulator",
+        "sapien2": "physics_simulator",
+        "sapien3": "physics_simulator",
+        "isaacsim": "physics_simulator",
+        "isaacgym": "physics_simulator",
+        "newton": "physics_simulator",
+        "blender": "authoring_tool",
+        "robosplatter": "renderer",
+    }
 
     for spec in SIMULATOR_RUNTIME_SPECS:
+        assert spec.target_kind == expected_target_kinds[spec.simulator_id]
         assert spec.transfer.frame_convention == SIMULATOR_CANONICAL_FRAME_CONVENTION
         assert spec.transfer.robot_asset_format == expected_robot_asset_formats[spec.simulator_id]
         if spec.capabilities_model().workspace_target:
@@ -184,11 +200,13 @@ def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
         "motionValidation": False,
         "layoutRoundTrip": False,
     }
+    assert simulators[0]["targetKind"] == "physics_simulator"
     assert simulators[1]["capabilities"] == {
         "workspaceTarget": True,
         "motionValidation": True,
         "layoutRoundTrip": False,
     }
+    assert simulators[1]["targetKind"] == "physics_simulator"
     assert simulators[0]["transferPolicy"] == {
         "robotAssetFormat": "urdf",
         "sceneAssetFormat": "urdf",
@@ -201,7 +219,23 @@ def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     assert simulators[4]["capabilities"]["workspaceTarget"] is True
     assert simulators[4]["transferPolicy"]["transferStrategy"] == "direct"
     assert simulators[10]["simulatorId"] == "blender"
+    assert simulators[10]["targetKind"] == "authoring_tool"
     assert simulators[10]["capabilities"]["layoutRoundTrip"] is True
+
+
+def test_list_workspace_transfer_targets_returns_capability_descriptors() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json("GET", "/workspace-transfer/targets", headers=_operator_headers())
+        )
+
+    assert response.status_code == 200
+    targets = response.json()["targets"]
+    assert [target["simulatorId"] for target in targets] == list(SUPPORTED_SIMULATOR_IDS)
+    assert targets[0]["targetKind"] == "physics_simulator"
+    assert targets[10]["simulatorId"] == "blender"
+    assert targets[10]["targetKind"] == "authoring_tool"
+    assert targets[10]["capabilities"]["layoutRoundTrip"] is True
 
 
 def test_simulator_runtime_routes_require_token_for_remote_clients() -> None:
@@ -210,6 +244,20 @@ def test_simulator_runtime_routes_require_token_for_remote_clients() -> None:
             _request_json(
                 "GET",
                 "/simulators",
+                client_host="192.168.1.10",
+            )
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Simulator API token required for remote simulator access."
+
+
+def test_workspace_transfer_routes_require_token_for_remote_clients() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "GET",
+                "/workspace-transfer/targets",
                 client_host="192.168.1.10",
             )
         )
@@ -245,6 +293,47 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
             _request_json(
                 "POST",
                 "/simulators/genesis/workspace/prepare",
+                headers=_operator_headers(),
+                json=_open_request_payload(),
+            )
+        )
+
+    assert response.status_code == 200
+    assert response.json()["simulator_id"] == "genesis"
+    assert response.json()["pid"] == 1234
+    assert captured == {
+        "simulator_id": "genesis",
+        "request_title": "Demo World",
+    }
+
+
+def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_prepare_simulator_workspace(simulator_id, request):
+        captured["simulator_id"] = simulator_id
+        captured["request_title"] = request.world_package.title
+        return SimulatorWorkspacePrepareResponse(
+            simulator_id=simulator_id,
+            started=True,
+            pid=1234,
+            command=["python", "-m", "sim"],
+            log_path="/tmp/sim.log",
+            world_package_path="/tmp/world.json",
+            robot_urdf_path="/tmp/robot.urdf",
+        )
+
+    monkeypatch.setattr(
+        workspace_transfer_api,
+        "prepare_simulator_workspace",
+        fake_prepare_simulator_workspace,
+    )
+
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/workspace-transfer/targets/genesis/open",
                 headers=_operator_headers(),
                 json=_open_request_payload(),
             )
@@ -312,7 +401,7 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
         response = asyncio.run(
             _request_json(
                 "POST",
-                "/simulators/blender/workspace/change-set/apply",
+                "/workspace-transfer/change-set/apply",
                 headers=_operator_headers(),
                 json={
                     "world_package": _world_package_with_layout_object_payload(),
@@ -347,6 +436,27 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
     assert payload["applied_change_count"] == 1
     assert payload["review_only_count"] == 1
+
+
+def test_apply_workspace_change_set_rejects_unsupported_schema() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/workspace-transfer/change-set/apply",
+                headers=_operator_headers(),
+                json={
+                    "world_package": _world_package_with_layout_object_payload(),
+                    "change_set": {
+                        "schema": "not-blender",
+                        "changes": [],
+                    },
+                },
+            )
+        )
+
+    assert response.status_code == 501
+    assert "Unsupported workspace change-set schema" in response.json()["detail"]
 
 
 def test_apply_blender_layout_change_set_rejects_invalid_schema() -> None:

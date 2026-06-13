@@ -104,7 +104,7 @@ class WorkspaceCheckResult:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Headlessly prepare the SO101 demo workspace in installed simulator runtimes."
+        description="Headlessly prepare the SO101 demo workspace in installed transfer targets."
     )
     parser.add_argument(
         "--simulator",
@@ -116,7 +116,7 @@ def _parse_args() -> argparse.Namespace:
         "--require-all",
         action="store_true",
         help=(
-            "Fail when a simulator runtime is missing. "
+            "Fail when a transfer target runtime is missing. "
             f"Also enabled by {REQUIRE_SIMULATOR_WORKSPACE_ENV}=1."
         ),
     )

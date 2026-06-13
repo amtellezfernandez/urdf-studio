@@ -64,7 +64,7 @@ const createProps = (): TopNavBarProps => ({
   onImportWorldScenePackage: vi.fn(),
   onExportCurrentWorldSceneLayer: vi.fn(),
   onImportSceneLayerFromUrl: vi.fn(),
-  onImportBlenderLayoutChangeSet: vi.fn(),
+  onImportWorkspaceChangeSet: vi.fn(),
   onListWorldScenePackages: vi.fn(),
   onOpenWorldHubBrowser: vi.fn(),
   openObjectCreator: vi.fn(),
@@ -134,7 +134,7 @@ describe("TopNavBar", () => {
     expect(container.textContent).not.toContain("Physics Warning");
     expect(container.textContent).not.toContain("Credentials");
     expect(container.textContent).not.toContain("Browser token entry");
-    expect(container.textContent).toContain("Simulator");
+    expect(container.textContent).toContain("Open In");
     expect(container.textContent).not.toContain("Review");
 
     await act(async () => {
@@ -190,13 +190,13 @@ describe("TopNavBar", () => {
 
     await renderTopNavBar(root, props);
 
-    expect(container.textContent).toContain("Simulator");
+    expect(container.textContent).toContain("Open In");
     expect(container.textContent).not.toContain("Physics Warning");
     expect(container.textContent).not.toContain("Review");
 
-    const simulationPrepButton = container.querySelector('button[aria-label="Open simulator"]');
+    const simulationPrepButton = container.querySelector('button[aria-label="Open In"]');
     expect(simulationPrepButton).toBeTruthy();
-    expect(simulationPrepButton?.getAttribute("title")).toBe("Simulator: Physics Warning");
+    expect(simulationPrepButton?.getAttribute("title")).toBe("Open In: Physics Warning");
 
     await act(async () => {
       simulationPrepButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -306,13 +306,13 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("surfaces Blender layout import from the Worlds menu", async () => {
+  it("surfaces workspace change import from the Worlds menu", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const props = {
       ...createProps(),
       showMenus: true,
-      onImportBlenderLayoutChangeSet: vi.fn(),
+      onImportWorkspaceChangeSet: vi.fn(),
     };
 
     await renderTopNavBar(root, props);
@@ -326,15 +326,15 @@ describe("TopNavBar", () => {
       worldsButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
     });
 
-    const blenderMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
-      (item) => item.textContent === "Import Blender Layout"
+    const workspaceChangeMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
+      (item) => item.textContent === "Import Workspace Changes"
     );
-    expect(blenderMenuItem).toBeTruthy();
+    expect(workspaceChangeMenuItem).toBeTruthy();
 
     await act(async () => {
-      blenderMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      workspaceChangeMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(props.onImportBlenderLayoutChangeSet).toHaveBeenCalledTimes(1);
+    expect(props.onImportWorkspaceChangeSet).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

@@ -33,6 +33,7 @@ from backend.api.simulation_prep import router as simulation_prep_router
 from backend.api.world_bridge import router as world_bridge_router
 from backend.api.world_registry import router as world_registry_router
 from backend.api.world_rollouts import router as world_rollouts_router
+from backend.api.workspace_transfer import router as workspace_transfer_router
 from backend.core.request_audit import (
     REQUEST_ID_HEADER,
     get_request_id_for_http_request,
@@ -48,6 +49,7 @@ METRICS_PATH_PREFIXES = (
     "/lerobot/ik",
     "/datasets",
     "/world-bridge",
+    "/workspace-transfer",
     "/simulators",
     "/worlds/rollouts",
     "/ros-viz",
@@ -138,6 +140,7 @@ def create_app() -> FastAPI:
     app.include_router(samples_router)
     app.include_router(datasets_router)
     app.include_router(world_bridge_router)
+    app.include_router(workspace_transfer_router)
     app.include_router(simulator_runtime_router)
     app.include_router(world_registry_router)
     app.include_router(world_rollouts_router)

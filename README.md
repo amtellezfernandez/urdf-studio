@@ -83,9 +83,9 @@ npm run setup
 
 Setup installs the app dependencies and local runtime used by URDF Studio. It can take a while the first time.
 
-Setup also prepares supported simulator workspace adapters when the platform packages are available. The base app remains usable if a local simulator runtime cannot be installed on the current laptop.
+Setup also prepares supported workspace transfer targets when the platform packages are available. The base app remains usable if a local target runtime cannot be installed on the current laptop.
 
-Blender layout round-trip sessions use the local Blender executable. Install Blender on the machine or set `URDF_STUDIO_BLENDER_PATH=/path/to/blender` before opening Blender from the simulator panel.
+Blender layout round-trip sessions use the local Blender executable. Install Blender on the machine or set `URDF_STUDIO_BLENDER_PATH=/path/to/blender` before opening Blender from the `Open In` panel.
 
 Useful setup commands:
 

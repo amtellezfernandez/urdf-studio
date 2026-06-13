@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   applySimulatorWorkspaceChangeSet,
+  applyWorkspaceChangeSet,
   buildSimulatorMeshAssetUploads,
-  fetchSimulatorRuntimeStatus,
-  fetchSimulatorRuntimes,
-  prepareSimulatorWorkspace,
+  fetchWorkspaceTransferTargetStatus,
+  fetchWorkspaceTransferTargets,
+  openWorkspaceTransferTarget,
 } from "@/features/world-share/simulatorRuntimeApi";
 import {
   SIMULATOR_GENESIS_ID,
@@ -57,7 +58,7 @@ describe("simulatorRuntimeApi", () => {
     guardedFetchMock.mockReset();
   });
 
-  it("prepares a simulator workspace through the neutral simulator endpoint", async () => {
+  it("opens a workspace transfer target through the neutral endpoint", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -77,7 +78,7 @@ describe("simulatorRuntimeApi", () => {
       )
     );
 
-    const prepared = await prepareSimulatorWorkspace({
+    const prepared = await openWorkspaceTransferTarget({
       simulatorId: SIMULATOR_GENESIS_ID,
       worldPackage: createWorldPackage(),
       meshFiles: {},
@@ -86,7 +87,7 @@ describe("simulatorRuntimeApi", () => {
 
     expect(prepared.pid).toBe(1234);
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/simulators/genesis/workspace/prepare"),
+      expect.stringContaining("/workspace-transfer/targets/genesis/open"),
       expect.objectContaining({
         method: "POST",
       }),
@@ -118,7 +119,7 @@ describe("simulatorRuntimeApi", () => {
     expect(uploads[0].content_base64.length).toBeGreaterThan(0);
   });
 
-  it("applies a Blender layout change-set through the guarded backend", async () => {
+  it("applies a Blender layout change-set through the target endpoint", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -143,13 +144,44 @@ describe("simulatorRuntimeApi", () => {
     expect(response.applied_change_count).toBe(1);
     expect(response.simulator_id).toBe("blender");
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/simulators/blender/workspace/change-set/apply"),
+      expect.stringContaining("/workspace-transfer/targets/blender/change-set/apply"),
       expect.objectContaining({
         method: "POST",
       }),
       {
         requiredBackends: ["core-api"],
         context: "Import blender workspace changes",
+      }
+    );
+  });
+
+  it("applies a workspace change-set through schema-routed import", async () => {
+    guardedFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          world_package: createWorldPackage(),
+          simulator_id: "blender",
+          applied_change_count: 1,
+          review_only_count: 0,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const response = await applyWorkspaceChangeSet(createWorldPackage(), {
+      schema: "urdf-studio.blender-change-set.v1",
+      changes: [],
+    });
+
+    expect(response.simulator_id).toBe("blender");
+    expect(guardedFetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/workspace-transfer/change-set/apply"),
+      expect.objectContaining({
+        method: "POST",
+      }),
+      {
+        requiredBackends: ["core-api"],
+        context: "Import workspace changes",
       }
     );
   });
@@ -177,14 +209,15 @@ describe("simulatorRuntimeApi", () => {
     expect(demoAliasOwners).toHaveLength(1);
   });
 
-  it("fetches simulator runtime descriptors through the guarded backend", async () => {
+  it("fetches workspace transfer targets through the guarded backend", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          simulators: [
+          targets: [
             {
               simulatorId: "genesis",
               label: "Genesis",
+              targetKind: "physics_simulator",
               capabilities: {
                 workspaceTarget: true,
                 motionValidation: false,
@@ -200,6 +233,7 @@ describe("simulatorRuntimeApi", () => {
             {
               simulatorId: "mjlab",
               label: "MJLab",
+              targetKind: "physics_simulator",
               capabilities: {
                 workspaceTarget: true,
                 motionValidation: true,
@@ -218,16 +252,17 @@ describe("simulatorRuntimeApi", () => {
       )
     );
 
-    const descriptors = await fetchSimulatorRuntimes();
+    const descriptors = await fetchWorkspaceTransferTargets();
 
     expect(descriptors.map((descriptor) => descriptor.simulatorId)).toEqual([
       "genesis",
       "mjlab",
     ]);
+    expect(descriptors[0].targetKind).toBe("physics_simulator");
     expect(descriptors[0].capabilities.workspaceTarget).toBe(true);
     expect(descriptors[1].transferPolicy.robotAssetFormat).toBe("mjcf");
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/simulators"),
+      expect.stringContaining("/workspace-transfer/targets"),
       {
         method: "GET",
         headers: {
@@ -236,12 +271,12 @@ describe("simulatorRuntimeApi", () => {
       },
       {
         requiredBackends: ["core-api"],
-        context: "List simulator runtimes",
+        context: "List workspace transfer targets",
       }
     );
   });
 
-  it("fetches a simulator runtime status through the guarded backend", async () => {
+  it("fetches a workspace transfer target status through the guarded backend", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -254,12 +289,12 @@ describe("simulatorRuntimeApi", () => {
       )
     );
 
-    const status = await fetchSimulatorRuntimeStatus(SIMULATOR_MJLAB_ID);
+    const status = await fetchWorkspaceTransferTargetStatus(SIMULATOR_MJLAB_ID);
 
     expect(status.available).toBe(true);
     expect(status.runtimeName).toBe("mjlab");
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/simulators/mjlab/runtime"),
+      expect.stringContaining("/workspace-transfer/targets/mjlab/runtime"),
       {
         method: "GET",
         headers: {

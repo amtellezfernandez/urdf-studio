@@ -6,6 +6,7 @@ type HealthActionPanelHeaderProps = {
   isDragging: boolean;
   onClose?: () => void;
   onDragStart: MouseEventHandler<HTMLDivElement>;
+  panelLabel?: string;
   statusIcon: ComponentType<{ className?: string }>;
   title: string;
 };
@@ -14,6 +15,7 @@ export const HealthActionPanelHeader = ({
   isDragging,
   onClose,
   onDragStart,
+  panelLabel = "simulation prep",
   statusIcon: StatusIcon,
   title,
 }: HealthActionPanelHeaderProps) => (
@@ -23,7 +25,7 @@ export const HealthActionPanelHeader = ({
       isDragging ? "cursor-grabbing" : "cursor-grab"
     }`}
     onMouseDown={onDragStart}
-    title="Drag simulation prep panel"
+    title={`Drag ${panelLabel} panel`}
   >
     <StatusIcon className="mt-0.5 h-4 w-4 text-foreground" />
     <div className="min-w-0 flex-1 pr-2">
@@ -37,7 +39,7 @@ export const HealthActionPanelHeader = ({
           className="h-7 w-7 shrink-0"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={onClose}
-          aria-label="Close simulation prep panel"
+          aria-label={`Close ${panelLabel} panel`}
         >
           <X className="h-4 w-4" />
         </Button>

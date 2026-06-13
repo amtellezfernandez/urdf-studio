@@ -71,7 +71,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
               <WorldsMenu
                 onExportCurrentWorldSceneLayer={props.onExportCurrentWorldSceneLayer}
                 onImportSceneLayerFromUrl={props.onImportSceneLayerFromUrl}
-                onImportBlenderLayoutChangeSet={props.onImportBlenderLayoutChangeSet}
+                onImportWorkspaceChangeSet={props.onImportWorkspaceChangeSet}
                 onExportCurrentWorldScenePackage={props.onExportCurrentWorldScenePackage}
                 onImportWorldScenePackage={props.onImportWorldScenePackage}
                 onValidateCurrentWorldScenePackage={props.onValidateCurrentWorldScenePackage}
@@ -166,8 +166,8 @@ export const TopNavBar = (props: TopNavBarProps) => {
             type="button"
             className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/45 px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground sm:px-2"
             onClick={props.onOpenSimulationPrep}
-            aria-label="Open simulator"
-            title={`Simulator: ${props.simulationPrepStatusLabel}`}
+            aria-label="Open In"
+            title={`Open In: ${props.simulationPrepStatusLabel}`}
           >
             <span
               aria-hidden="true"
@@ -176,8 +176,8 @@ export const TopNavBar = (props: TopNavBarProps) => {
               }`}
             />
             <span className="font-medium text-foreground">
-              <span className="sm:hidden">Sim</span>
-              <span className="hidden sm:inline">Simulator</span>
+              <span className="sm:hidden">Open</span>
+              <span className="hidden sm:inline">Open In</span>
             </span>
           </button>
         ) : null}
