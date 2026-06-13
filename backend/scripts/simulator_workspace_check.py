@@ -163,8 +163,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--robot-urdf",
+        "--robot-source",
+        dest="robot_urdf",
         default="",
-        help="Path to the local robot URDF used to resolve mesh assets for --world-package.",
+        help="Path to the local robot URDF or Xacro source used to resolve mesh assets for --world-package.",
     )
     parser.add_argument(
         "--asset-root",

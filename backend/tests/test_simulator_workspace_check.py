@@ -132,6 +132,27 @@ def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> N
     assert [asset.path for asset in request.mesh_assets] == ["assets/box.stl"]
 
 
+def test_workspace_request_from_files_accepts_xacro_source_path(tmp_path) -> None:
+    asset_root = tmp_path / "scene"
+    robot_source_path = asset_root / "robot.urdf.xacro"
+    asset_root.mkdir()
+    urdf_xml = "<robot name=\"custom_robot\"><link name=\"base_link\"/></robot>"
+    robot_source_path.write_text(urdf_xml, encoding="utf-8")
+    world_package_path = tmp_path / "world-package.json"
+    world_package_path.write_text(
+        json.dumps(make_world_package(urdf_xml).model_dump(mode="json")),
+        encoding="utf-8",
+    )
+
+    request = build_workspace_request_from_files(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_source_path,
+        asset_roots=(asset_root,),
+    )
+
+    assert request.urdf_asset_path == "robot.urdf.xacro"
+
+
 def test_workspace_request_from_args_rejects_partial_custom_inputs() -> None:
     args = type(
         "Args",

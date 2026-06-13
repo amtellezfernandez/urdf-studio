@@ -128,7 +128,7 @@ Validate a specific WSP/URDF package with the same simulator gates:
 ```bash
 npm run simulator:workspace:check -- \
   --world-package path/to/world-package.json \
-  --robot-urdf path/to/robot.urdf \
+  --robot-source path/to/robot.urdf-or.xacro \
   --asset-root path/to/asset-root \
   --simulator genesis \
   --artifact-only

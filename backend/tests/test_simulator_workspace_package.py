@@ -32,3 +32,22 @@ def test_prepare_simulator_workspace_rejects_mismatched_world_snapshot_digest(
         )
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_prepare_simulator_workspace_normalizes_xacro_source_path(tmp_path) -> None:
+    urdf_xml = "<robot name=\"demo\"><link name=\"base\"/></robot>"
+    request = SimulatorWorkspacePrepareRequest(
+        world_package=make_world_package(urdf_xml),
+        urdf_asset_path="robot.urdf.xacro",
+    )
+
+    prepared = prepare_simulator_workspace_package(
+        request,
+        workspace_root=tmp_path,
+        error=ValueError,
+    )
+
+    assert (prepared.workspace_dir / "source" / "robot.urdf").read_text(
+        encoding="utf-8"
+    ) == urdf_xml
+    assert prepared.robot_urdf_path.name == "robot.urdf"
