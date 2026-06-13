@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -28,22 +27,18 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_TRUST_SIGNED_METADATA,
     WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
 )
+from backend.services.world_scene_package_digest import (
+    canonical_world_scene_package_json,
+    computed_world_snapshot_digest,
+    declared_world_snapshot_digest,
+    world_scene_package_digest,
+)
 
 logger = logging.getLogger("urdf.world_registry")
 
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _canonical_manifest_json(manifest: WorldScenePackageManifest) -> str:
-    payload = manifest.model_dump(mode="json")
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
-
-
-def _manifest_digest(manifest: WorldScenePackageManifest) -> str:
-    canonical_json = _canonical_manifest_json(manifest)
-    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
 
 def _ensure_parent(path: Path) -> None:
@@ -156,7 +151,7 @@ class WorldRegistryService:
     def validate(self, manifest: WorldScenePackageManifest) -> WorldScenePackageValidationResponse:
         errors: List[str] = []
         warnings: List[str] = []
-        digest = _manifest_digest(manifest)
+        digest = world_scene_package_digest(manifest)
 
         if manifest.schema_version != WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1:
             errors.append(
@@ -169,7 +164,14 @@ class WorldRegistryService:
             warnings.append("No external artifacts declared. Package is embedded-only.")
         if not manifest.security.signature_ref:
             warnings.append("No signature_ref present. Package remains metadata-only.")
-        manifest_bytes = len(_canonical_manifest_json(manifest).encode("utf-8"))
+        declared_snapshot_digest = declared_world_snapshot_digest(manifest)
+        if declared_snapshot_digest is not None:
+            actual_snapshot_digest = computed_world_snapshot_digest(manifest)
+            if declared_snapshot_digest != actual_snapshot_digest:
+                errors.append(
+                    "world_snapshot artifact digest does not match the embedded world_snapshot."
+                )
+        manifest_bytes = len(canonical_world_scene_package_json(manifest).encode("utf-8"))
         if manifest_bytes > MAX_WORLD_SCENE_PACKAGE_MANIFEST_BYTES:
             errors.append(
                 "World scene package manifest exceeds the allowed serialized size: "

@@ -24,11 +24,13 @@ from backend.models.simulator_runtime import (
     SimulatorWorkspacePrepareResponse,
 )
 from backend.models.workspace_transfer import WorkspaceOpenResponse
+from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters import (
     SUPPORTED_SIMULATOR_IDS,
     get_simulator_adapter,
     list_simulator_runtime_descriptors,
 )
+from backend.services.simulator_adapters.blender_workspace import build_blender_change_set_source
 from backend.services.simulator_adapters.params import (
     SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,
@@ -112,6 +114,26 @@ def _world_package_with_layout_object_payload() -> dict:
         }
     ]
     return payload
+
+
+def _blender_change_set_source_payload(world_package_payload: dict) -> dict:
+    return build_blender_change_set_source(
+        WorldScenePackageManifest.model_validate(world_package_payload)
+    )
+
+
+def _blender_change_set_payload(
+    world_package_payload: dict,
+    *,
+    changes: list[dict],
+    review_only: list[dict] | None = None,
+) -> dict:
+    return {
+        "schema": "urdf-studio.blender-change-set.v1",
+        "source": _blender_change_set_source_payload(world_package_payload),
+        "changes": changes,
+        "review_only": review_only or [],
+    }
 
 
 def test_simulator_registry_covers_literal_ids() -> None:
@@ -457,6 +479,7 @@ def test_non_workspace_target_simulators_are_registered_but_not_openable() -> No
 
 
 def test_apply_blender_layout_change_set_updates_world_objects() -> None:
+    world_package = _world_package_with_layout_object_payload()
     with _patch_security_settings():
         response = asyncio.run(
             _request_json(
@@ -464,10 +487,10 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
                 "/workspace-transfer/change-set/apply",
                 headers=_operator_headers(),
                 json={
-                    "world_package": _world_package_with_layout_object_payload(),
-                    "change_set": {
-                        "schema": "urdf-studio.blender-change-set.v1",
-                        "changes": [
+                    "world_package": world_package,
+                    "change_set": _blender_change_set_payload(
+                        world_package,
+                        changes=[
                             {
                                 "entity_type": "world_object",
                                 "stable_id": "crate",
@@ -476,13 +499,13 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
                                 "size_xyz": [0.5, 0.6, 0.7],
                             }
                         ],
-                        "review_only": [
+                        review_only=[
                             {
                                 "entity_type": "camera",
                                 "stable_id": "scene-camera",
                             }
                         ],
-                    },
+                    ),
                 },
             )
         )
@@ -541,6 +564,7 @@ def test_apply_blender_layout_change_set_rejects_invalid_schema() -> None:
 
 
 def test_apply_workspace_change_set_reports_unsupported_target() -> None:
+    world_package = _world_package_with_layout_object_payload()
     with _patch_security_settings():
         response = asyncio.run(
             _request_json(
@@ -548,11 +572,8 @@ def test_apply_workspace_change_set_reports_unsupported_target() -> None:
                 "/simulators/genesis/workspace/change-set/apply",
                 headers=_operator_headers(),
                 json={
-                    "world_package": _world_package_with_layout_object_payload(),
-                    "change_set": {
-                        "schema": "urdf-studio.blender-change-set.v1",
-                        "changes": [],
-                    },
+                    "world_package": world_package,
+                    "change_set": _blender_change_set_payload(world_package, changes=[]),
                 },
             )
         )

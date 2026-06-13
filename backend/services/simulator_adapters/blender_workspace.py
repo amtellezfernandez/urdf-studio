@@ -14,9 +14,11 @@ from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.ilu_urdf import convert_urdf_to_usd
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
+from backend.services.world_scene_package_digest import computed_world_snapshot_digest
 
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
 BLENDER_CHANGE_SET_SCHEMA = "urdf-studio.blender-change-set.v1"
+BLENDER_CHANGE_SET_SOURCE_SCHEMA = "urdf-studio.blender-change-set-source.v1"
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
 BLENDER_OPEN_SCRIPT_FILENAME = "open_blender_scene.py"
@@ -55,6 +57,23 @@ class BlenderWorldObjectChange:
     position_xyz: tuple[float, float, float]
     quat_wxyz: tuple[float, float, float, float]
     size_xyz: tuple[float, float, float]
+
+
+def build_blender_change_set_source(
+    world_package: WorldScenePackageManifest,
+    *,
+    frame_map: str | None = None,
+) -> dict[str, str]:
+    source = {
+        "schema": BLENDER_CHANGE_SET_SOURCE_SCHEMA,
+        "package_id": world_package.package_id,
+        "version": world_package.version,
+        "world_snapshot_digest_sha256": computed_world_snapshot_digest(world_package),
+        "frame_convention": world_package.interface.frame_convention,
+    }
+    if frame_map is not None:
+        source["frame_map"] = frame_map
+    return source
 
 
 def write_blender_workspace_artifacts(
@@ -107,7 +126,10 @@ def write_blender_workspace_artifacts(
         encoding="utf-8",
     )
     export_script_path.write_text(
-        build_blender_export_script(change_set_path=change_set_path),
+        build_blender_export_script(
+            change_set_path=change_set_path,
+            source=edit_session["source"],
+        ),
         encoding="utf-8",
     )
     return BlenderWorkspaceArtifacts(
@@ -160,9 +182,14 @@ def build_blender_edit_session(
     change_set_path: Path,
     export_script_path: Path,
 ) -> dict[str, Any]:
+    change_set_source = build_blender_change_set_source(
+        scene.world_package,
+        frame_map=scene.frame_map,
+    )
     return {
         "schema": BLENDER_EDIT_SESSION_SCHEMA,
         "mode": "visual-layout",
+        "source": change_set_source,
         "package": {
             "package_id": scene.world_package.package_id,
             "version": scene.world_package.version,
@@ -387,7 +414,8 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
     )
 
 
-def build_blender_export_script(*, change_set_path: Path) -> str:
+def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, str]) -> str:
+    source_json = json.dumps(dict(source), sort_keys=True)
     return (
         textwrap.dedent(
             f"""
@@ -397,6 +425,7 @@ def build_blender_export_script(*, change_set_path: Path) -> str:
             import bpy
 
             CHANGE_SET_PATH = Path({str(change_set_path)!r})
+            CHANGE_SET_SOURCE = json.loads({source_json!r})
 
 
             def quat_wxyz(obj):
@@ -454,6 +483,7 @@ def build_blender_export_script(*, change_set_path: Path) -> str:
                         )
                 payload = {{
                     "schema": "{BLENDER_CHANGE_SET_SCHEMA}",
+                    "source": CHANGE_SET_SOURCE,
                     "changes": changes,
                     "review_only": review_only,
                 }}
@@ -482,7 +512,7 @@ def apply_blender_layout_change_set_with_summary(
     world_package: WorldScenePackageManifest,
     change_set: Mapping[str, Any],
 ) -> BlenderLayoutChangeSetApplyResult:
-    object_updates, review_only_count = _validate_blender_change_set(change_set)
+    object_updates, review_only_count = _validate_blender_change_set(change_set, world_package)
     updated = world_package.model_copy(deep=True)
     package_object_ids = _world_package_object_ids(updated)
     missing_object_ids = sorted(set(object_updates) - package_object_ids)
@@ -511,9 +541,11 @@ def apply_blender_layout_change_set_with_summary(
 
 def _validate_blender_change_set(
     change_set: Mapping[str, Any],
+    world_package: WorldScenePackageManifest,
 ) -> tuple[dict[str, BlenderWorldObjectChange], int]:
     if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
         raise ValueError("Unsupported Blender change-set schema.")
+    _validate_change_set_source(change_set.get("source"), world_package)
     changes = _required_list(change_set.get("changes"), "Blender change-set changes")
     review_only = _required_list(
         change_set.get("review_only"),
@@ -537,6 +569,54 @@ def _validate_blender_change_set(
         seen_review_ids.add(stable_id)
 
     return object_updates, len(review_only)
+
+
+def _validate_change_set_source(
+    value: Any,
+    world_package: WorldScenePackageManifest,
+) -> None:
+    if not isinstance(value, Mapping):
+        raise ValueError("Blender change-set source must be an object.")
+    _reject_unknown_fields(
+        value,
+        "source",
+        {
+            "schema",
+            "package_id",
+            "version",
+            "world_snapshot_digest_sha256",
+            "frame_convention",
+            "frame_map",
+        },
+    )
+    schema = _required_string(value.get("schema"), "source.schema")
+    if schema != BLENDER_CHANGE_SET_SOURCE_SCHEMA:
+        raise ValueError("Unsupported Blender change-set source schema.")
+
+    expected = build_blender_change_set_source(world_package)
+    actual_package_id = _required_string(value.get("package_id"), "source.package_id")
+    actual_version = _required_string(value.get("version"), "source.version")
+    actual_digest = _required_string(
+        value.get("world_snapshot_digest_sha256"),
+        "source.world_snapshot_digest_sha256",
+    ).lower()
+    actual_frame_convention = _required_string(
+        value.get("frame_convention"),
+        "source.frame_convention",
+    )
+
+    if actual_package_id != expected["package_id"] or actual_version != expected["version"]:
+        raise ValueError(
+            "Blender change-set source package does not match the current world package."
+        )
+    if actual_frame_convention != expected["frame_convention"]:
+        raise ValueError(
+            "Blender change-set source frame convention does not match the current world package."
+        )
+    if actual_digest != expected["world_snapshot_digest_sha256"]:
+        raise ValueError(
+            "Blender change-set source world snapshot does not match the current world package."
+        )
 
 
 def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectChange:

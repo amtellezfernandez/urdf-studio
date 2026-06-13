@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 
 from backend.models.world_scene_package import (
+    WorldArtifactRef,
     WorldInterfaceSpec,
     WorldScenePackageManifest,
     WorldRuntimeTarget,
@@ -139,6 +140,27 @@ def test_validate_rejects_static_scene_snapshot_with_non_zero_time() -> None:
         assert validation.valid is False
         assert validation.errors == [
             "scenario_time_ms must be 0 when scenario_duration_ms is 0."
+        ]
+
+
+def test_validate_rejects_mismatched_world_snapshot_artifact_digest() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = build_manifest("demo-world", "1.0.4")
+        manifest.artifacts = [
+            WorldArtifactRef(
+                kind="world_snapshot",
+                digest_sha256="0" * 64,
+                uri="urdf-studio://world-snapshot",
+            )
+        ]
+
+        validation = service.validate(manifest)
+
+        assert validation.valid is False
+        assert validation.errors == [
+            "world_snapshot artifact digest does not match the embedded world_snapshot."
         ]
 
 
