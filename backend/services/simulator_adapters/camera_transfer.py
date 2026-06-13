@@ -259,6 +259,7 @@ def append_cameras_to_mujoco_mjcf(
     worldbody = root.find("worldbody")
     if worldbody is None:
         worldbody = ET.SubElement(root, "worldbody")
+    _ensure_mujoco_offscreen_framebuffer(root, cameras)
     for camera in cameras:
         parent, pose = _mujoco_camera_parent_and_pose(worldbody, camera)
         ET.SubElement(
@@ -286,6 +287,33 @@ def append_cameras_to_mujoco_mjcf(
             )
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode")
+
+
+def _ensure_mujoco_offscreen_framebuffer(
+    root: ET.Element,
+    cameras: Sequence[SimCameraSpec],
+) -> None:
+    width = max((camera.width for camera in cameras), default=0)
+    height = max((camera.height for camera in cameras), default=0)
+    if width <= 0 or height <= 0:
+        return
+    visual = root.find("visual")
+    if visual is None:
+        visual = ET.SubElement(root, "visual")
+    global_element = visual.find("global")
+    if global_element is None:
+        global_element = ET.SubElement(visual, "global")
+    _set_mujoco_dimension_min(global_element, "offwidth", width)
+    _set_mujoco_dimension_min(global_element, "offheight", height)
+
+
+def _set_mujoco_dimension_min(element: ET.Element, attr_name: str, minimum: int) -> None:
+    try:
+        current = int(element.get(attr_name) or "0")
+    except ValueError:
+        current = 0
+    if current < minimum:
+        element.set(attr_name, str(minimum))
 
 
 def _mujoco_camera_parent_and_pose(

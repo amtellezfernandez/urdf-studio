@@ -306,6 +306,10 @@ def test_append_cameras_to_mujoco_mjcf_adds_native_camera_without_marker_by_defa
     assert camera.get("pos") == "0.1 0.2 0.3"
     assert camera.get("fovy") == "45"
     assert root.find("./worldbody/site") is None
+    visual_global = root.find("./visual/global")
+    assert visual_global is not None
+    assert visual_global.get("offwidth") == "640"
+    assert visual_global.get("offheight") == "480"
 
 
 def test_append_cameras_to_mujoco_mjcf_can_add_debug_marker() -> None:

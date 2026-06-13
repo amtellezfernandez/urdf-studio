@@ -165,11 +165,14 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
     ]
     assert "--simulator-id" in command.command
     assert SIMULATOR_MJLAB_ID in command.command
+    assert "--camera-screenshot-dir" in command.command
     assert "--report" in command.command
     assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
     assert command.expected_simulator_id == SIMULATOR_MJLAB_ID
     assert command.expected_object_count == 3
     assert command.expected_camera_count == 3
+    assert "camera_screenshots=3" in command.extra_expected_markers
+    assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
 
 
 def test_workspace_report_validation_accepts_matching_report(tmp_path) -> None:

@@ -362,7 +362,9 @@ def _prepare_mujoco_command(
         request,
         simulator_id=simulator_id,
     )
-    report_path = prepared.shared_workspace.workspace_dir / "artifacts" / "report.json"
+    artifact_dir = prepared.shared_workspace.workspace_dir / "artifacts"
+    camera_screenshot_dir = artifact_dir / "cameras"
+    report_path = artifact_dir / "report.json"
     return PreparedWorkspaceCommand(
         command=_module_command(
             MUJOCO_WORKSPACE_PROCESS_PARAMS,
@@ -375,12 +377,16 @@ def _prepare_mujoco_command(
                 str(prepared.shared_workspace.robot_urdf_path),
                 "--simulator-id",
                 simulator_id,
+                "--camera-screenshot-dir",
+                str(camera_screenshot_dir),
             ),
             report_path=report_path,
         ),
         ready_marker=MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker,
         expected_object_marker=f"world_objects={expectations.object_count}",
         expected_camera_log_marker=f"cameras={expectations.camera_count}",
+        extra_expected_markers=(f"camera_screenshots={expectations.camera_count}",),
+        expected_image_dirs=((camera_screenshot_dir, expectations.camera_count),),
         expected_report_path=report_path,
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,

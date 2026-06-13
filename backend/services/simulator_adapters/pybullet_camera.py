@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
 
+from backend.services.simulator_adapters.camera_artifacts import (
+    camera_artifact_path,
+    write_rgb_image,
+)
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 
 
@@ -98,8 +101,6 @@ def write_pybullet_camera_screenshots(
     near_m: float,
     far_m: float,
 ) -> int:
-    from PIL import Image
-
     output_dir.mkdir(parents=True, exist_ok=True)
     written_count = 0
     for index, camera in enumerate(cameras, start=1):
@@ -109,12 +110,9 @@ def write_pybullet_camera_screenshots(
             near_m=near_m,
             far_m=far_m,
         )
-        file_name = f"{index:02d}_{_safe_artifact_name(camera.sim_name, default_name='camera')}.png"
-        Image.fromarray(image).save(output_dir / file_name)
+        write_rgb_image(
+            camera_artifact_path(output_dir, index=index, camera_name=camera.sim_name),
+            image,
+        )
         written_count += 1
     return written_count
-
-
-def _safe_artifact_name(value: str, *, default_name: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip()).strip("._")
-    return normalized or default_name

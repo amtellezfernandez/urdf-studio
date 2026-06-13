@@ -15,6 +15,9 @@ from backend.services.simulator_adapters.camera_transfer import (
     append_cameras_to_mujoco_mjcf,
 )
 from backend.services.simulator_adapters.mujoco import apply_mjcf_workspace_repairs
+from backend.services.simulator_adapters.mujoco_camera import (
+    write_mujoco_camera_screenshots,
+)
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import (
     MUJOCO_SCENE_PARAMS,
@@ -38,6 +41,7 @@ def _parse_args() -> argparse.Namespace:
         default=SIMULATOR_MUJOCO_ID,
     )
     add_common_workspace_args(parser)
+    parser.add_argument("--camera-screenshot-dir", default="")
     return parser.parse_args()
 
 
@@ -101,6 +105,7 @@ def prepare_mujoco_workspace_scene(
     duration_sec: float,
     include_hidden: bool,
     no_viewer: bool,
+    camera_screenshot_dir: Path | None,
     report_path: Path | None,
 ) -> None:
     import mujoco
@@ -137,6 +142,16 @@ def prepare_mujoco_workspace_scene(
         data,
         simulator_scene.robot.joint_positions,
     )
+    mujoco.mj_forward(model, data)
+    camera_screenshot_count = 0
+    if camera_screenshot_dir is not None:
+        camera_screenshot_count = write_mujoco_camera_screenshots(
+            mujoco,
+            model,
+            data,
+            cameras,
+            camera_screenshot_dir,
+        )
     print(
         "[mujoco-workspace] "
         f"package={simulator_scene.world_package.package_id}@{simulator_scene.world_package.version} "
@@ -145,6 +160,8 @@ def prepare_mujoco_workspace_scene(
         f"applied_initial_joints={applied_joints}",
         flush=True,
     )
+    if camera_screenshot_dir is not None:
+        print(f"[mujoco-workspace] camera_screenshots={camera_screenshot_count}", flush=True)
     if report_path is not None:
         write_simulator_validation_report(
             simulator_scene,
@@ -157,19 +174,20 @@ def prepare_mujoco_workspace_scene(
                 "model_joints": model.njnt,
                 "world_objects": len(simulator_scene.primitives),
                 "cameras": len(cameras),
+                "camera_screenshots": camera_screenshot_count,
                 "applied_initial_joints": applied_joints,
                 "mjcf_repair_warnings": mjcf_repair_warnings,
                 "viewer_step_hz": MUJOCO_SCENE_PARAMS.viewer_step_hz,
             },
             artifacts={
                 "mjcf_path": mjcf_path,
+                "camera_screenshot_dir": camera_screenshot_dir,
             },
         )
         print(f"[mujoco-workspace] report written: {report_path}", flush=True)
     print(MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
 
     if no_viewer:
-        mujoco.mj_forward(model, data)
         return
 
     import mujoco.viewer
@@ -194,6 +212,7 @@ def main() -> int:
         duration_sec=args.duration_sec,
         include_hidden=args.include_hidden,
         no_viewer=args.no_viewer,
+        camera_screenshot_dir=Path(args.camera_screenshot_dir) if args.camera_screenshot_dir else None,
         report_path=Path(args.report) if args.report else None,
     )
     return 0
