@@ -28,7 +28,7 @@ BLENDER_ROBOT_GLB_FILENAME = "robot-reference.glb"
 BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
 BLENDER_APPLY_FRAME_MAPS = frozenset({"identity"})
 BLENDER_REVIEW_ONLY_ENTITY_TYPES = frozenset(
-    {"camera", "new_world_object", "deleted_world_object"}
+    {"camera", "deleted_camera", "new_world_object", "deleted_world_object"}
 )
 
 
@@ -64,11 +64,18 @@ class BlenderWorldObjectChange:
     size_xyz: tuple[float, float, float]
 
 
+@dataclass(frozen=True)
+class BlenderChangeSetSource:
+    world_object_ids: tuple[str, ...] | None
+    camera_ids: tuple[str, ...] | None
+
+
 def build_blender_change_set_source(
     world_package: WorldScenePackageManifest,
     *,
     frame_map: str | None = None,
     world_object_ids: Sequence[str] | None = None,
+    camera_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     source: dict[str, Any] = {
         "schema": BLENDER_CHANGE_SET_SOURCE_SCHEMA,
@@ -81,6 +88,8 @@ def build_blender_change_set_source(
         source["frame_map"] = frame_map
     if world_object_ids is not None:
         source["world_object_ids"] = list(world_object_ids)
+    if camera_ids is not None:
+        source["camera_ids"] = list(camera_ids)
     return source
 
 
@@ -195,6 +204,7 @@ def build_blender_edit_session(
         scene.world_package,
         frame_map=scene.frame_map,
         world_object_ids=[str(entry["stable_id"]) for entry in objects],
+        camera_ids=[camera.camera_id for camera in scene.cameras],
     )
     return {
         "schema": BLENDER_EDIT_SESSION_SCHEMA,
@@ -486,7 +496,12 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                     str(stable_id)
                     for stable_id in CHANGE_SET_SOURCE.get("world_object_ids", [])
                 ]
+                source_camera_ids = [
+                    str(stable_id)
+                    for stable_id in CHANGE_SET_SOURCE.get("camera_ids", [])
+                ]
                 exported_world_object_ids = set()
+                exported_camera_ids = set()
                 for obj in bpy.data.objects:
                     kind = obj.get("urdf_studio_kind")
                     stable_id = obj.get("urdf_studio_stable_id")
@@ -503,6 +518,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                             }}
                         )
                     elif kind == "camera" and stable_id:
+                        exported_camera_ids.add(str(stable_id))
                         review_only.append(
                             {{
                                 "entity_type": "camera",
@@ -522,6 +538,15 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                                 "quat_wxyz": quat_wxyz(obj),
                                 "size_xyz": local_size_xyz(obj),
                                 "reason": "new Blender objects require Studio review before import",
+                            }}
+                        )
+                for stable_id in source_camera_ids:
+                    if stable_id not in exported_camera_ids:
+                        review_only.append(
+                            {{
+                                "entity_type": "deleted_camera",
+                                "stable_id": stable_id,
+                                "reason": "deleted Studio cameras require Studio review before removal",
                             }}
                         )
                 for stable_id in source_world_object_ids:
@@ -597,7 +622,7 @@ def _validate_blender_change_set(
 ) -> tuple[dict[str, BlenderWorldObjectChange], int]:
     if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
         raise ValueError("Unsupported Blender change-set schema.")
-    source_world_object_ids = _validate_change_set_source(
+    source = _validate_change_set_source(
         change_set.get("source"),
         world_package,
     )
@@ -618,6 +643,8 @@ def _validate_blender_change_set(
 
     seen_review_ids: set[str] = set()
     deleted_world_object_ids: set[str] = set()
+    camera_review_ids: set[str] = set()
+    deleted_camera_ids: set[str] = set()
     for index, entry in enumerate(review_only):
         review_key = _validate_review_only_entry(entry, f"review_only[{index}]")
         if review_key in seen_review_ids:
@@ -629,13 +656,30 @@ def _validate_blender_change_set(
             )
         if entity_type == "deleted_world_object":
             deleted_world_object_ids.add(stable_id)
+        if entity_type == "camera":
+            camera_review_ids.add(stable_id)
+        if entity_type == "deleted_camera":
+            deleted_camera_ids.add(stable_id)
         seen_review_ids.add(review_key)
 
-    if source_world_object_ids is not None:
+    deleted_and_reviewed_camera_ids = sorted(camera_review_ids & deleted_camera_ids)
+    if deleted_and_reviewed_camera_ids:
+        raise ValueError(
+            "Blender change-set cannot both review and delete camera id(s): "
+            f"{', '.join(deleted_and_reviewed_camera_ids)}."
+        )
+
+    if source.world_object_ids is not None:
         _validate_change_set_source_coverage(
-            source_world_object_ids,
+            source.world_object_ids,
             object_update_ids=set(object_updates),
             deleted_world_object_ids=deleted_world_object_ids,
+        )
+    if source.camera_ids is not None:
+        _validate_change_set_camera_coverage(
+            source.camera_ids,
+            camera_review_ids=camera_review_ids,
+            deleted_camera_ids=deleted_camera_ids,
         )
 
     return object_updates, len(review_only)
@@ -644,7 +688,7 @@ def _validate_blender_change_set(
 def _validate_change_set_source(
     value: Any,
     world_package: WorldScenePackageManifest,
-) -> tuple[str, ...] | None:
+) -> BlenderChangeSetSource:
     if not isinstance(value, Mapping):
         raise ValueError("Blender change-set source must be an object.")
     _reject_unknown_fields(
@@ -658,6 +702,7 @@ def _validate_change_set_source(
             "frame_convention",
             "frame_map",
             "world_object_ids",
+            "camera_ids",
         },
     )
     schema = _required_string(value.get("schema"), "source.schema")
@@ -682,6 +727,10 @@ def _validate_change_set_source(
         value.get("world_object_ids"),
         "source.world_object_ids",
     )
+    actual_camera_ids = _optional_string_list(
+        value.get("camera_ids"),
+        "source.camera_ids",
+    )
 
     if actual_package_id != expected["package_id"] or actual_version != expected["version"]:
         raise ValueError(
@@ -702,7 +751,12 @@ def _validate_change_set_source(
         )
     if actual_world_object_ids is not None:
         _validate_source_world_object_ids(actual_world_object_ids, world_package)
-    return actual_world_object_ids
+    if actual_camera_ids is not None:
+        _validate_source_camera_ids(actual_camera_ids, world_package)
+    return BlenderChangeSetSource(
+        world_object_ids=actual_world_object_ids,
+        camera_ids=actual_camera_ids,
+    )
 
 
 def _validate_change_set_source_coverage(
@@ -729,6 +783,33 @@ def _validate_change_set_source_coverage(
         raise ValueError(
             "Blender change-set is missing update or deletion review for source "
             f"world object id(s): {', '.join(missing_ids)}."
+        )
+
+
+def _validate_change_set_camera_coverage(
+    source_camera_ids: Sequence[str],
+    *,
+    camera_review_ids: set[str],
+    deleted_camera_ids: set[str],
+) -> None:
+    source_ids = set(source_camera_ids)
+    unexpected_reviews = sorted(camera_review_ids - source_ids)
+    if unexpected_reviews:
+        raise ValueError(
+            "Blender change-set review_only cameras reference id(s) outside source "
+            f"camera_ids: {', '.join(unexpected_reviews)}."
+        )
+    unexpected_deletions = sorted(deleted_camera_ids - source_ids)
+    if unexpected_deletions:
+        raise ValueError(
+            "Blender change-set review_only deletes camera id(s) outside source "
+            f"camera_ids: {', '.join(unexpected_deletions)}."
+        )
+    missing_ids = sorted(source_ids - camera_review_ids - deleted_camera_ids)
+    if missing_ids:
+        raise ValueError(
+            "Blender change-set is missing camera review or deletion review for "
+            f"source camera id(s): {', '.join(missing_ids)}."
         )
 
 
@@ -813,6 +894,20 @@ def _world_package_object_ids(world_package: WorldScenePackageManifest) -> set[s
     return object_ids
 
 
+def _world_package_camera_ids(world_package: WorldScenePackageManifest) -> set[str]:
+    camera_ids: set[str] = set()
+    for index, item in enumerate(world_package.world_snapshot.cameras):
+        if not isinstance(item, Mapping):
+            raise ValueError(f"World package camera at index {index} must be an object.")
+        camera_id = str(item.get("id", "")).strip()
+        if not camera_id:
+            raise ValueError(f"World package camera at index {index} is missing id.")
+        if camera_id in camera_ids:
+            raise ValueError(f"World package contains duplicate camera id {camera_id!r}.")
+        camera_ids.add(camera_id)
+    return camera_ids
+
+
 def _validate_source_world_object_ids(
     stable_ids: Sequence[str],
     world_package: WorldScenePackageManifest,
@@ -832,6 +927,29 @@ def _validate_source_world_object_ids(
     if unknown_ids:
         raise ValueError(
             "Blender change-set source world_object_ids references unknown world object id(s): "
+            f"{', '.join(unknown_ids)}."
+        )
+
+
+def _validate_source_camera_ids(
+    stable_ids: Sequence[str],
+    world_package: WorldScenePackageManifest,
+) -> None:
+    duplicate_ids = sorted(
+        stable_id
+        for stable_id, count in Counter(stable_ids).items()
+        if count > 1
+    )
+    if duplicate_ids:
+        raise ValueError(
+            "Blender change-set source camera_ids contains duplicate id(s): "
+            f"{', '.join(duplicate_ids)}."
+        )
+    package_camera_ids = _world_package_camera_ids(world_package)
+    unknown_ids = sorted(set(stable_ids) - package_camera_ids)
+    if unknown_ids:
+        raise ValueError(
+            "Blender change-set source camera_ids references unknown camera id(s): "
             f"{', '.join(unknown_ids)}."
         )
 

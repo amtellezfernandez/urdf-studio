@@ -103,6 +103,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
         _world_package,
         frame_map="identity",
         world_object_ids=("crate",),
+        camera_ids=("cam-1",),
     )
     assert edit_session["robot"]["locked"] is True
     assert Path(edit_session["robot"]["visual_glb_path"]).name == BLENDER_ROBOT_GLB_FILENAME
@@ -217,6 +218,50 @@ def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Pa
     assert result.review_only_count == 1
 
 
+def test_blender_change_set_accepts_source_camera_review(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "camera",
+                "stable_id": "cam-1",
+                "position_xyz": [0.0, 0.0, 1.0],
+                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                "reason": "camera round-trip requires camera-frame review before apply",
+            }
+        ],
+    )
+    change_set["source"]["camera_ids"] = ["cam-1"]
+
+    result = apply_blender_layout_change_set_with_summary(world_package, change_set)
+
+    assert result.applied_change_count == 0
+    assert result.review_only_count == 1
+
+
+def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "deleted_camera",
+                "stable_id": "cam-1",
+                "reason": "deleted Studio cameras require Studio review before removal",
+            }
+        ],
+    )
+    change_set["source"]["camera_ids"] = ["cam-1"]
+
+    result = apply_blender_layout_change_set_with_summary(world_package, change_set)
+
+    assert result.applied_change_count == 0
+    assert result.review_only_count == 1
+
+
 def test_blender_change_set_rejects_missing_source_object_coverage(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(world_package, changes=[])
@@ -262,6 +307,84 @@ def test_blender_change_set_rejects_deletions_outside_source_object_ids(tmp_path
     change_set["source"]["world_object_ids"] = []
 
     with pytest.raises(ValueError, match="deletes object id\\(s\\) outside source"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_missing_source_camera_coverage(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["camera_ids"] = ["cam-1"]
+
+    with pytest.raises(ValueError, match="missing camera review"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_camera_reviews_outside_source_camera_ids(
+    tmp_path: Path,
+) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "camera",
+                "stable_id": "cam-1",
+                "position_xyz": [0.0, 0.0, 1.0],
+                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                "reason": "camera round-trip requires camera-frame review before apply",
+            }
+        ],
+    )
+    change_set["source"]["camera_ids"] = []
+
+    with pytest.raises(ValueError, match="outside source camera_ids"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_deleted_cameras_outside_source_camera_ids(
+    tmp_path: Path,
+) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "deleted_camera",
+                "stable_id": "cam-1",
+                "reason": "deleted Studio cameras require Studio review before removal",
+            }
+        ],
+    )
+    change_set["source"]["camera_ids"] = []
+
+    with pytest.raises(ValueError, match="deletes camera id\\(s\\) outside source"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_review_and_delete_for_same_camera(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "camera",
+                "stable_id": "cam-1",
+                "position_xyz": [0.0, 0.0, 1.0],
+                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                "reason": "camera round-trip requires camera-frame review before apply",
+            },
+            {
+                "entity_type": "deleted_camera",
+                "stable_id": "cam-1",
+                "reason": "deleted Studio cameras require Studio review before removal",
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError, match="both review and delete camera"):
         apply_blender_layout_change_set(world_package, change_set)
 
 
@@ -434,6 +557,24 @@ def test_blender_change_set_rejects_duplicate_source_world_object_id(tmp_path: P
         apply_blender_layout_change_set(world_package, change_set)
 
 
+def test_blender_change_set_rejects_unknown_source_camera_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["camera_ids"] = ["cam-1", "missing"]
+
+    with pytest.raises(ValueError, match="unknown camera id"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_duplicate_source_camera_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["camera_ids"] = ["cam-1", "cam-1"]
+
+    with pytest.raises(ValueError, match="source camera_ids contains duplicate"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
 def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path: Path) -> None:
     _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
     report_path = tmp_path / "artifacts" / "report.json"
@@ -464,6 +605,7 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     ast.parse(export_script)
     assert "new_world_object" in export_script
     assert "deleted_world_object" in export_script
+    assert "deleted_camera" in export_script
 
 
 class _FakeBlenderProcess:
