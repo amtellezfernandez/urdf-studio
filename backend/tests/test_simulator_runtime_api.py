@@ -125,12 +125,30 @@ def _world_package_with_layout_object_payload() -> dict:
             "color": "#22c55e",
         }
     ]
+    payload["world_snapshot"]["cameras"] = [
+        {
+            "id": "scene-camera",
+            "name": "Scene camera",
+            "parent_joint": "base",
+            "pose": {"xyz": [0.0, 0.0, 1.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {"width": 640, "height": 480, "fov_deg": 60.0},
+        }
+    ]
     return payload
 
 
 def _blender_change_set_source_payload(world_package_payload: dict) -> dict:
+    world_package = WorldScenePackageManifest.model_validate(world_package_payload)
     return build_blender_change_set_source(
-        WorldScenePackageManifest.model_validate(world_package_payload)
+        world_package,
+        world_object_ids=[
+            str(item.get("id", ""))
+            for item in world_package_payload["world_snapshot"].get("objects", [])
+        ],
+        camera_ids=[
+            str(item.get("id", ""))
+            for item in world_package_payload["world_snapshot"].get("cameras", [])
+        ],
     )
 
 
