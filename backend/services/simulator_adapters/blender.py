@@ -18,7 +18,10 @@ from backend.models.simulator_runtime import (
     get_simulator_runtime_spec,
 )
 from backend.services.simulator_adapters.base import SimulatorAdapter, SimulatorAdapterError
-from backend.services.simulator_adapters.blender_runtime import resolve_blender_executable
+from backend.services.simulator_adapters.blender_runtime import (
+    BLENDER_PATH_ENV,
+    resolve_blender_executable,
+)
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_EDIT_SESSION_FILENAME,
     apply_blender_layout_change_set_with_summary,
@@ -58,7 +61,7 @@ def start_blender_workspace(
     blender_executable = resolve_blender_executable()
     if blender_executable is None:
         raise BlenderWorkspaceError(
-            "Blender executable was not found. Install Blender or set URDF_STUDIO_BLENDER_PATH."
+            f"Blender executable was not found. Install Blender or set {BLENDER_PATH_ENV}."
         )
     prepared = prepare_blender_workspace_package(request)
     log_path = prepared.workspace_dir / BLENDER_WORKSPACE_PROCESS_PARAMS.log_name
@@ -157,7 +160,9 @@ class BlenderSimulatorAdapter:
         return SimulatorRuntimeStatus(
             runtimeName=BLENDER_RUNTIME_SPEC.simulator_id,
             available=available,
-            status=f"ready: {executable}" if available else "Missing optional dependency: blender",
+            status=f"ready: {executable}"
+            if available
+            else f"Missing optional dependency: blender. Set {BLENDER_PATH_ENV} if Blender is installed outside the standard paths.",
             dependencies=[
                 SimulatorRuntimeDependency(name="blender", available=available),
             ],

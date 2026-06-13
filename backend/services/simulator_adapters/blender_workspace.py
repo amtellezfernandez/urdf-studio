@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any, Mapping, Sequence
 from scipy.spatial.transform import Rotation
 
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
@@ -32,6 +34,14 @@ class BlenderLayoutChangeSetApplyResult:
     world_package: WorldScenePackageManifest
     applied_change_count: int
     review_only_count: int
+
+
+@dataclass(frozen=True)
+class BlenderWorldObjectChange:
+    stable_id: str
+    position_xyz: tuple[float, float, float]
+    quat_wxyz: tuple[float, float, float, float]
+    size_xyz: tuple[float, float, float]
 
 
 def write_blender_workspace_artifacts(
@@ -156,6 +166,12 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             def material_for(name, rgba):
                 material = bpy.data.materials.new(name)
                 material.diffuse_color = tuple(rgba)
+                material.use_nodes = True
+                node = material.node_tree.nodes.get("Principled BSDF")
+                if node is not None:
+                    node.inputs["Base Color"].default_value = tuple(rgba)
+                    node.inputs["Alpha"].default_value = float(rgba[3])
+                material.blend_method = "BLEND" if float(rgba[3]) < 1.0 else "OPAQUE"
                 return material
 
 
@@ -166,24 +182,31 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 obj["urdf_studio_source_name"] = entry.get("source_name") or entry.get("name", "")
 
 
+            def vector3(entry, key, default):
+                value = entry.get(key, default)
+                return [float(value[0]), float(value[1]), float(value[2])]
+
+
             def add_object(entry):
                 sim_type = entry.get("sim_type")
                 position = entry.get("position_xyz", [0.0, 0.0, 0.0])
                 quat = entry.get("quat_wxyz", [1.0, 0.0, 0.0, 0.0])
-                size = entry.get("size_xyz", [1.0, 1.0, 1.0])
+                size = vector3(entry, "size_xyz", [1.0, 1.0, 1.0])
                 if sim_type == "sphere":
-                    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, location=position)
+                    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=0.5, location=position)
                 elif sim_type == "cylinder":
-                    bpy.ops.mesh.primitive_cylinder_add(vertices=48, location=position)
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.5, depth=1.0, location=position)
                 else:
                     bpy.ops.mesh.primitive_cube_add(size=1.0, location=position)
                 obj = bpy.context.object
                 obj.name = entry.get("sim_name") or entry.get("stable_id") or "world_object"
                 obj.rotation_mode = "QUATERNION"
                 obj.rotation_quaternion = quat
-                obj.dimensions = size
+                obj.scale = size
                 assign_metadata(obj, "world_object", entry)
+                obj["urdf_studio_base_size_xyz"] = [1.0, 1.0, 1.0]
                 rgba = entry.get("rgba", [0.8, 0.8, 0.8, 1.0])
+                obj.color = tuple(rgba)
                 obj.data.materials.append(material_for(f"mat_{{obj.name}}", rgba))
 
 
@@ -261,6 +284,21 @@ def build_blender_export_script(*, change_set_path: Path) -> str:
                 return [float(value[0]), float(value[1]), float(value[2])]
 
 
+            def local_size_xyz(obj):
+                bounds = getattr(obj, "bound_box", None)
+                if not bounds:
+                    return vector3(obj.dimensions)
+                xs = [float(corner[0]) for corner in bounds]
+                ys = [float(corner[1]) for corner in bounds]
+                zs = [float(corner[2]) for corner in bounds]
+                scale = vector3(obj.scale)
+                return [
+                    abs((max(xs) - min(xs)) * scale[0]),
+                    abs((max(ys) - min(ys)) * scale[1]),
+                    abs((max(zs) - min(zs)) * scale[2]),
+                ]
+
+
             def main():
                 changes = []
                 review_only = []
@@ -275,7 +313,7 @@ def build_blender_export_script(*, change_set_path: Path) -> str:
                                 "sim_name": str(obj.get("urdf_studio_sim_name", obj.name)),
                                 "position_xyz": vector3(obj.location),
                                 "quat_wxyz": quat_wxyz(obj),
-                                "size_xyz": vector3(obj.dimensions),
+                                "size_xyz": local_size_xyz(obj),
                             }}
                         )
                     elif kind == "camera" and stable_id:
@@ -319,20 +357,15 @@ def apply_blender_layout_change_set_with_summary(
     world_package: WorldScenePackageManifest,
     change_set: Mapping[str, Any],
 ) -> BlenderLayoutChangeSetApplyResult:
-    if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
-        raise ValueError("Unsupported Blender change-set schema.")
-    changes = change_set.get("changes")
-    if not isinstance(changes, Sequence) or isinstance(changes, str):
-        raise ValueError("Blender change-set changes must be a list.")
-    object_updates = {
-        str(change.get("stable_id")): change
-        for change in changes
-        if isinstance(change, Mapping)
-        and change.get("entity_type") == "world_object"
-        and str(change.get("stable_id", "")).strip()
-    }
-    review_only = change_set.get("review_only")
+    object_updates, review_only_count = _validate_blender_change_set(change_set)
     updated = world_package.model_copy(deep=True)
+    package_object_ids = _world_package_object_ids(updated)
+    missing_object_ids = sorted(set(object_updates) - package_object_ids)
+    if missing_object_ids:
+        raise ValueError(
+            "Blender change-set references unknown world object id(s): "
+            f"{', '.join(missing_object_ids)}."
+        )
     applied_change_count = 0
     next_objects: list[dict[str, Any]] = []
     for item in updated.world_snapshot.objects:
@@ -347,24 +380,120 @@ def apply_blender_layout_change_set_with_summary(
     return BlenderLayoutChangeSetApplyResult(
         world_package=updated,
         applied_change_count=applied_change_count,
-        review_only_count=len(review_only)
-        if isinstance(review_only, Sequence) and not isinstance(review_only, str)
-        else 0,
+        review_only_count=review_only_count,
     )
 
 
-def _world_object_change_fields(change: Mapping[str, Any]) -> dict[str, Any]:
-    fields: dict[str, Any] = {}
-    position = _read_vector3(change.get("position_xyz"))
-    if position is not None:
-        fields["position_xyz"] = list(position)
-    quat = _read_quat_wxyz(change.get("quat_wxyz"))
-    if quat is not None:
-        fields["rotation_rpy_rad"] = list(_quat_wxyz_to_rpy(quat))
-    size = _read_vector3(change.get("size_xyz"))
-    if size is not None:
-        fields["size_xyz"] = list(size)
-    return fields
+def _validate_blender_change_set(
+    change_set: Mapping[str, Any],
+) -> tuple[dict[str, BlenderWorldObjectChange], int]:
+    if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
+        raise ValueError("Unsupported Blender change-set schema.")
+    changes = _required_list(change_set.get("changes"), "Blender change-set changes")
+    review_only = _required_list(
+        change_set.get("review_only"),
+        "Blender change-set review_only",
+    )
+
+    object_updates: dict[str, BlenderWorldObjectChange] = {}
+    for index, change in enumerate(changes):
+        normalized = _validate_world_object_change(change, f"changes[{index}]")
+        if normalized.stable_id in object_updates:
+            raise ValueError(
+                f"Blender change-set changes duplicate stable_id {normalized.stable_id!r}."
+            )
+        object_updates[normalized.stable_id] = normalized
+
+    seen_review_ids: set[str] = set()
+    for index, entry in enumerate(review_only):
+        stable_id = _validate_review_only_entry(entry, f"review_only[{index}]")
+        if stable_id in seen_review_ids:
+            raise ValueError(f"Blender change-set review_only duplicates stable_id {stable_id!r}.")
+        seen_review_ids.add(stable_id)
+
+    return object_updates, len(review_only)
+
+
+def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectChange:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Blender change-set {path} must be an object.")
+    _reject_unknown_fields(
+        value,
+        path,
+        {
+            "entity_type",
+            "stable_id",
+            "sim_name",
+            "position_xyz",
+            "quat_wxyz",
+            "size_xyz",
+        },
+    )
+    entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
+    if entity_type != "world_object":
+        raise ValueError(
+            f"Blender change-set {path}.entity_type must be 'world_object'. "
+            "Camera, robot, material, and mesh edits must stay in review_only."
+        )
+    stable_id = _required_string(value.get("stable_id"), f"{path}.stable_id")
+    return BlenderWorldObjectChange(
+        stable_id=stable_id,
+        position_xyz=_required_vector3(value.get("position_xyz"), f"{path}.position_xyz"),
+        quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
+        size_xyz=_required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz"),
+    )
+
+
+def _validate_review_only_entry(value: Any, path: str) -> str:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Blender change-set {path} must be an object.")
+    _reject_unknown_fields(
+        value,
+        path,
+        {
+            "entity_type",
+            "stable_id",
+            "sim_name",
+            "position_xyz",
+            "quat_wxyz",
+            "reason",
+        },
+    )
+    entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
+    if entity_type != "camera":
+        raise ValueError(
+            f"Blender change-set {path}.entity_type must be 'camera' for review-only edits."
+        )
+    stable_id = _required_string(value.get("stable_id"), f"{path}.stable_id")
+    if "position_xyz" in value:
+        _required_vector3(value.get("position_xyz"), f"{path}.position_xyz")
+    if "quat_wxyz" in value:
+        _required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz")
+    if "reason" in value:
+        _required_string(value.get("reason"), f"{path}.reason")
+    return stable_id
+
+
+def _world_package_object_ids(world_package: WorldScenePackageManifest) -> set[str]:
+    object_ids: set[str] = set()
+    for index, item in enumerate(world_package.world_snapshot.objects):
+        if not isinstance(item, Mapping):
+            raise ValueError(f"World package object at index {index} must be an object.")
+        object_id = str(item.get("id", "")).strip()
+        if not object_id:
+            raise ValueError(f"World package object at index {index} is missing id.")
+        if object_id in object_ids:
+            raise ValueError(f"World package contains duplicate object id {object_id!r}.")
+        object_ids.add(object_id)
+    return object_ids
+
+
+def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, Any]:
+    return {
+        "position_xyz": list(change.position_xyz),
+        "rotation_rpy_rad": list(_quat_wxyz_to_rpy(change.quat_wxyz)),
+        "size_xyz": list(change.size_xyz),
+    }
 
 
 def _blender_object_entry(primitive: Any) -> dict[str, Any]:
@@ -388,22 +517,63 @@ def _blender_object_entry(primitive: Any) -> dict[str, Any]:
     }
 
 
-def _read_vector3(value: Any) -> tuple[float, float, float] | None:
-    if not isinstance(value, Sequence) or isinstance(value, str) or len(value) < 3:
-        return None
-    try:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    except (TypeError, ValueError):
-        return None
+def _required_list(value: Any, label: str) -> Sequence[Any]:
+    if not isinstance(value, Sequence) or isinstance(value, str):
+        raise ValueError(f"{label} must be a list.")
+    return value
 
 
-def _read_quat_wxyz(value: Any) -> tuple[float, float, float, float] | None:
-    if not isinstance(value, Sequence) or isinstance(value, str) or len(value) < 4:
-        return None
-    try:
-        return (float(value[0]), float(value[1]), float(value[2]), float(value[3]))
-    except (TypeError, ValueError):
-        return None
+def _required_string(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Blender change-set {label} must be a non-empty string.")
+    return value.strip()
+
+
+def _reject_unknown_fields(value: Mapping[str, Any], path: str, allowed_fields: set[str]) -> None:
+    unknown_fields = sorted(str(field) for field in value.keys() if field not in allowed_fields)
+    if unknown_fields:
+        raise ValueError(
+            f"Blender change-set {path} contains unsupported field(s): "
+            f"{', '.join(unknown_fields)}."
+        )
+
+
+def _required_vector(value: Any, label: str, expected_length: int) -> tuple[float, ...]:
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, str)
+        or len(value) != expected_length
+    ):
+        raise ValueError(f"Blender change-set {label} must be a {expected_length}-number list.")
+    if not all(is_finite_number(item) for item in value):
+        raise ValueError(f"Blender change-set {label} must contain only finite numbers.")
+    numbers = tuple(float(item) for item in value)
+    return numbers
+
+
+def _required_vector3(value: Any, label: str) -> tuple[float, float, float]:
+    numbers = _required_vector(value, label, 3)
+    return (numbers[0], numbers[1], numbers[2])
+
+
+def _required_positive_vector3(value: Any, label: str) -> tuple[float, float, float]:
+    numbers = _required_vector3(value, label)
+    if any(number <= 0.0 for number in numbers):
+        raise ValueError(f"Blender change-set {label} must contain positive dimensions.")
+    return numbers
+
+
+def _required_quat_wxyz(value: Any, label: str) -> tuple[float, float, float, float]:
+    numbers = _required_vector(value, label, 4)
+    norm = math.sqrt(sum(number * number for number in numbers))
+    if norm <= 0.0:
+        raise ValueError(f"Blender change-set {label} must be a non-zero quaternion.")
+    return (
+        numbers[0] / norm,
+        numbers[1] / norm,
+        numbers[2] / norm,
+        numbers[3] / norm,
+    )
 
 
 def _quat_wxyz_to_rpy(quat_wxyz: tuple[float, float, float, float]) -> tuple[float, float, float]:

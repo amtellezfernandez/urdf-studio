@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import ast
 import json
 import math
 from pathlib import Path
 
+import pytest
+
 from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
 from backend.services.simulator_adapters import blender as blender_adapter
+from backend.services.simulator_adapters.blender_runtime import resolve_blender_executable
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_CHANGE_SET_SCHEMA,
     BLENDER_EDIT_SESSION_SCHEMA,
     apply_blender_layout_change_set,
+    apply_blender_layout_change_set_with_summary,
     write_blender_workspace_artifacts,
 )
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
@@ -94,14 +99,16 @@ def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> 
                 "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
                 "size_xyz": [0.5, 0.6, 0.7],
             },
+        ],
+        "review_only": [
             {
                 "entity_type": "camera",
                 "stable_id": "cam-1",
                 "position_xyz": [9.0, 9.0, 9.0],
                 "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                "reason": "camera round-trip requires camera-frame review before apply",
             },
         ],
-        "review_only": [],
     }
 
     updated = apply_blender_layout_change_set(world_package, change_set)
@@ -111,6 +118,138 @@ def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> 
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
     assert all(math.isclose(value, 0.0, abs_tol=1e-9) for value in updated_object["rotation_rpy_rad"])
     assert updated.world_snapshot.cameras == world_package.world_snapshot.cameras
+
+
+def test_blender_change_set_reports_applied_and_review_only_counts(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        {
+            "schema": BLENDER_CHANGE_SET_SCHEMA,
+            "changes": [
+                {
+                    "entity_type": "world_object",
+                    "stable_id": "crate",
+                    "position_xyz": [1.0, 2.0, 3.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.5, 0.6, 0.7],
+                }
+            ],
+            "review_only": [
+                {
+                    "entity_type": "camera",
+                    "stable_id": "cam-1",
+                    "position_xyz": [0.0, 0.0, 1.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "reason": "camera round-trip requires camera-frame review before apply",
+                }
+            ],
+        },
+    )
+
+    assert result.applied_change_count == 1
+    assert result.review_only_count == 1
+
+
+def test_blender_change_set_rejects_camera_edits_in_apply_list(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    with pytest.raises(ValueError, match="must be 'world_object'"):
+        apply_blender_layout_change_set(
+            world_package,
+            {
+                "schema": BLENDER_CHANGE_SET_SCHEMA,
+                "changes": [
+                    {
+                        "entity_type": "camera",
+                        "stable_id": "cam-1",
+                        "position_xyz": [0.0, 0.0, 1.0],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    }
+                ],
+                "review_only": [],
+            },
+        )
+
+
+def test_blender_change_set_rejects_unknown_world_object_id(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    with pytest.raises(ValueError, match="unknown world object"):
+        apply_blender_layout_change_set(
+            world_package,
+            {
+                "schema": BLENDER_CHANGE_SET_SCHEMA,
+                "changes": [
+                    {
+                        "entity_type": "world_object",
+                        "stable_id": "missing",
+                        "position_xyz": [1.0, 2.0, 3.0],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                        "size_xyz": [0.5, 0.6, 0.7],
+                    }
+                ],
+                "review_only": [],
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "message"),
+    [
+        ("position_xyz", [1.0, 2.0], "3-number list"),
+        ("position_xyz", [1.0, True, 3.0], "finite numbers"),
+        ("quat_wxyz", [0.0, 0.0, 0.0, 0.0], "non-zero quaternion"),
+        ("size_xyz", [0.5, 0.0, 0.7], "positive dimensions"),
+    ],
+)
+def test_blender_change_set_rejects_invalid_transform_values(
+    tmp_path: Path,
+    field_name: str,
+    value: list[object],
+    message: str,
+) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change = {
+        "entity_type": "world_object",
+        "stable_id": "crate",
+        "position_xyz": [1.0, 2.0, 3.0],
+        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "size_xyz": [0.5, 0.6, 0.7],
+    }
+    change[field_name] = value
+
+    with pytest.raises(ValueError, match=message):
+        apply_blender_layout_change_set(
+            world_package,
+            {
+                "schema": BLENDER_CHANGE_SET_SCHEMA,
+                "changes": [change],
+                "review_only": [],
+            },
+        )
+
+
+def test_blender_change_set_rejects_duplicate_stable_ids(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change = {
+        "entity_type": "world_object",
+        "stable_id": "crate",
+        "position_xyz": [1.0, 2.0, 3.0],
+        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "size_xyz": [0.5, 0.6, 0.7],
+    }
+
+    with pytest.raises(ValueError, match="duplicate stable_id"):
+        apply_blender_layout_change_set(
+            world_package,
+            {
+                "schema": BLENDER_CHANGE_SET_SCHEMA,
+                "changes": [change, dict(change)],
+                "review_only": [],
+            },
+        )
 
 
 def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path: Path) -> None:
@@ -135,6 +274,8 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert Path(report["artifacts"]["edit_session_path"]).exists()
     assert Path(report["artifacts"]["open_script_path"]).exists()
     assert Path(report["artifacts"]["export_script_path"]).exists()
+    ast.parse(Path(report["artifacts"]["open_script_path"]).read_text(encoding="utf-8"))
+    ast.parse(Path(report["artifacts"]["export_script_path"]).read_text(encoding="utf-8"))
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
@@ -146,3 +287,12 @@ def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
     assert status.available is False
     assert status.dependencies[0].name == "blender"
     assert status.dependencies[0].available is False
+
+
+def test_blender_runtime_resolves_configured_app_bundle(tmp_path: Path) -> None:
+    app_binary = tmp_path / "Blender.app" / "Contents" / "MacOS" / "Blender"
+    app_binary.parent.mkdir(parents=True)
+    app_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    app_binary.chmod(0o755)
+
+    assert resolve_blender_executable(str(tmp_path / "Blender.app")) == str(app_binary)

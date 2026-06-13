@@ -4,6 +4,7 @@ import json
 import sys
 
 from backend.models.simulator_runtime import (
+    SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJLAB_ID,
     SIMULATOR_PYBULLET_ID,
@@ -13,6 +14,7 @@ from backend.scripts.simulator_workspace_check import (
     PreparedWorkspaceCommand,
     WORKSPACE_SIMULATORS,
     _active_object_count,
+    _prepare_blender_command,
     _prepare_genesis_command,
     _prepare_mujoco_command,
     _prepare_pybullet_command,
@@ -173,6 +175,45 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
     assert command.expected_camera_count == 3
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
+
+
+def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tmp_path) -> None:
+    request = build_demo_workspace_request()
+
+    class _Prepared:
+        workspace_dir = tmp_path
+        world_package_path = tmp_path / "world-package.json"
+        robot_urdf_path = tmp_path / "robot.urdf"
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.prepare_blender_workspace_package",
+        lambda _request: _Prepared(),
+    )
+    command = _prepare_blender_command(
+        request,
+        expectations=type(
+            "Expectations",
+            (),
+            {
+                "object_count": 3,
+                "camera_count": 3,
+                "duration_sec": 0.02,
+            },
+        )(),
+    )
+
+    assert "--no-viewer" in command.command
+    assert "--report" in command.command
+    assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
+    assert command.expected_simulator_id == SIMULATOR_BLENDER_ID
+    assert command.expected_object_count == 3
+    assert command.expected_camera_count == 3
+    assert "edit_session=" in command.extra_expected_markers
+    assert command.expected_file_paths == (
+        tmp_path / "artifacts" / "blender-edit-session.json",
+        tmp_path / "artifacts" / "open_blender_scene.py",
+        tmp_path / "artifacts" / "export_blender_changes.py",
+    )
 
 
 def test_workspace_report_validation_accepts_matching_report(tmp_path) -> None:

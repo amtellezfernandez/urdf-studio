@@ -123,7 +123,7 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 3. Run the generated `export_blender_changes.py` script from that Blender session.
 4. Back in Studio, use `Worlds` -> `Import Workspace Changes` and select `blender-change-set.json`.
 
-Studio applies only world object layout changes. Robot kinematics, inertials, collisions, transmissions, and camera edits stay under Studio review.
+Studio applies only validated world object layout changes. Robot kinematics, inertials, collisions, transmissions, and camera edits stay under Studio review.
 
 ### Replay Dataset Episodes
 

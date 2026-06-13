@@ -13,6 +13,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
+    SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
@@ -29,9 +30,16 @@ from backend.models.world_scene_package import (
     WorldSnapshot,
 )
 from backend.services.simulator_adapters import get_simulator_runtime_status
+from backend.services.simulator_adapters.blender import prepare_blender_workspace_package
+from backend.services.simulator_adapters.blender_workspace import (
+    BLENDER_EDIT_SESSION_FILENAME,
+    BLENDER_EXPORT_SCRIPT_FILENAME,
+    BLENDER_OPEN_SCRIPT_FILENAME,
+)
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
+    BLENDER_WORKSPACE_PROCESS_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
@@ -52,6 +60,7 @@ WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
+    SIMULATOR_BLENDER_ID,
 )
 DEMO_ROOT = BASE_DIR / "web" / "public" / "demo"
 SO101_MANIFEST_PATH = DEMO_ROOT / "so101" / "manifest.json"
@@ -73,6 +82,7 @@ class PreparedWorkspaceCommand:
     extra_expected_markers: tuple[str, ...] = ()
     expected_image_paths: tuple[Path, ...] = ()
     expected_image_dirs: tuple[tuple[Path, int], ...] = ()
+    expected_file_paths: tuple[Path, ...] = ()
     expected_report_path: Path | None = None
     expected_simulator_id: SimulatorId | None = None
     expected_object_count: int | None = None
@@ -91,6 +101,8 @@ class WorkspaceTarget:
     simulator_id: SimulatorId
     label: str
     prepare: Callable[[SimulatorWorkspacePrepareRequest, WorkspaceExpectations], PreparedWorkspaceCommand]
+    requires_runtime: bool = True
+    include_in_parity: bool = True
 
 
 @dataclass(frozen=True)
@@ -268,6 +280,7 @@ def _prepare_direct_urdf_command(
     extra_args: Sequence[str] = (),
     expected_image_paths: tuple[Path, ...] = (),
     expected_image_dirs: tuple[tuple[Path, int], ...] = (),
+    expected_file_paths: tuple[Path, ...] = (),
     expected_report_path: Path | None = None,
     expectations: WorkspaceExpectations,
 ) -> PreparedWorkspaceCommand:
@@ -287,6 +300,7 @@ def _prepare_direct_urdf_command(
         extra_expected_markers=extra_expected_markers,
         expected_image_paths=expected_image_paths,
         expected_image_dirs=expected_image_dirs,
+        expected_file_paths=expected_file_paths,
         expected_report_path=expected_report_path,
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
@@ -400,6 +414,29 @@ def _prepare_mujoco_command(
     )
 
 
+def _prepare_blender_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_blender_workspace_package(request)
+    artifact_dir = prepared.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return _prepare_direct_urdf_command(
+        prepared,
+        simulator_id=SIMULATOR_BLENDER_ID,
+        workspace_process=BLENDER_WORKSPACE_PROCESS_PARAMS,
+        object_marker=f"world_objects={expectations.object_count}",
+        extra_expected_markers=("edit_session=",),
+        expectations=expectations,
+        expected_file_paths=(
+            artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
+            artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME,
+            artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME,
+        ),
+        expected_report_path=report_path,
+    )
+
+
 WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
     SIMULATOR_GENESIS_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_GENESIS_ID,
@@ -428,6 +465,13 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         simulator_id=SIMULATOR_PYBULLET_ID,
         label="PyBullet",
         prepare=_prepare_pybullet_command,
+    ),
+    SIMULATOR_BLENDER_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_BLENDER_ID,
+        label="Blender",
+        prepare=_prepare_blender_command,
+        requires_runtime=False,
+        include_in_parity=False,
     ),
 }
 
@@ -474,6 +518,9 @@ def _run_workspace_command(
     image_error = _validate_image_artifacts(command)
     if image_error:
         return False, f"{image_error}\n{output.strip()}"
+    file_error = _validate_file_artifacts(command)
+    if file_error:
+        return False, f"{file_error}\n{output.strip()}"
     report_error = _validate_report_artifact(command)
     if report_error:
         return False, f"{report_error}\n{output.strip()}"
@@ -506,6 +553,15 @@ def _validate_image_artifacts(command: PreparedWorkspaceCommand) -> str | None:
         channel_span = max(high - low for low, high in extrema)
         if channel_span <= 5:
             return f"blank image artifact: {path}"
+    return None
+
+
+def _validate_file_artifacts(command: PreparedWorkspaceCommand) -> str | None:
+    for path in command.expected_file_paths:
+        if not path.is_file():
+            return f"missing file artifact: {path}"
+        if path.stat().st_size <= 0:
+            return f"empty file artifact: {path}"
     return None
 
 
@@ -594,7 +650,7 @@ def _check_target(
     require_runtime: bool,
 ) -> WorkspaceCheckResult:
     status = get_simulator_runtime_status(target.simulator_id)
-    if not status.available:
+    if target.requires_runtime and not status.available:
         detail = _format_missing_runtime(status)
         if require_runtime:
             return WorkspaceCheckResult(target.simulator_id, target.label, "failed", detail)
@@ -633,7 +689,9 @@ def _check_cross_simulator_parity(
         [
             WorkspaceParityInput(result.label, Path(result.report_path))
             for result in results
-            if result.status == "passed" and result.report_path is not None
+            if result.status == "passed"
+            and result.report_path is not None
+            and WORKSPACE_TARGETS[result.simulator_id].include_in_parity
         ]
     )
     if parity is None:
