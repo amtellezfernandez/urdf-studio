@@ -13,7 +13,10 @@ from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID
 from backend.scripts import blender_workspace_prepare as blender_prepare
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
 from backend.services.simulator_adapters import blender as blender_adapter
-from backend.services.simulator_adapters.blender_runtime import resolve_blender_executable
+from backend.services.simulator_adapters.blender_runtime import (
+    _windows_drive_path_to_wsl_path,
+    resolve_blender_executable,
+)
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_CHANGE_SET_SCHEMA,
@@ -954,3 +957,23 @@ def test_blender_runtime_resolves_configured_app_bundle(tmp_path: Path) -> None:
     app_binary.chmod(0o755)
 
     assert resolve_blender_executable(str(tmp_path / "Blender.app")) == str(app_binary)
+
+
+@pytest.mark.parametrize(
+    ("windows_path", "wsl_path"),
+    (
+        (
+            r"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe",
+            "/mnt/c/Program Files/Blender Foundation/Blender 4.3/blender.exe",
+        ),
+        (
+            "D:/Tools/Blender/blender.exe",
+            "/mnt/d/Tools/Blender/blender.exe",
+        ),
+    ),
+)
+def test_blender_runtime_normalizes_windows_drive_paths_for_wsl(
+    windows_path: str,
+    wsl_path: str,
+) -> None:
+    assert _windows_drive_path_to_wsl_path(windows_path) == wsl_path

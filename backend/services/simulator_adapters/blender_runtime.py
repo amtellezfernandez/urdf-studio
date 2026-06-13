@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Iterable
 
 BLENDER_PATH_ENV = "URDF_STUDIO_BLENDER_PATH"
+WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"^([A-Za-z]):[\\/](.+)$")
 
 
 def resolve_blender_executable(configured_path: str = "") -> str | None:
@@ -26,9 +28,29 @@ def _blender_executable_candidates(configured_path: str = "") -> Iterable[str]:
         *_common_macos_blender_candidates(),
         *_common_windows_blender_candidates(),
     ):
-        if candidate and candidate not in seen:
-            seen.add(candidate)
-            yield candidate
+        for variant in _candidate_path_variants(candidate):
+            if variant and variant not in seen:
+                seen.add(variant)
+                yield variant
+
+
+def _candidate_path_variants(candidate: str) -> tuple[str, ...]:
+    stripped = candidate.strip()
+    if not stripped:
+        return ()
+    wsl_path = _windows_drive_path_to_wsl_path(stripped)
+    if wsl_path == stripped:
+        return (stripped,)
+    return (stripped, wsl_path)
+
+
+def _windows_drive_path_to_wsl_path(candidate: str) -> str:
+    match = WINDOWS_DRIVE_PATH_PATTERN.match(candidate.strip())
+    if not match:
+        return candidate
+    drive, relative_path = match.groups()
+    normalized_relative_path = relative_path.replace("\\", "/").lstrip("/")
+    return f"/mnt/{drive.lower()}/{normalized_relative_path}"
 
 
 def _resolve_blender_candidate(candidate: str) -> str | None:
