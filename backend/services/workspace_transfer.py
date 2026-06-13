@@ -24,7 +24,7 @@ from backend.services.simulator_adapters import (
     get_simulator_runtime_status,
     prepare_simulator_workspace,
 )
-from backend.services.simulator_adapters.blender_workspace import BLENDER_CHANGE_SET_SCHEMA
+from backend.services.simulator_adapters.blender_change_sets import BLENDER_CHANGE_SET_SCHEMA
 
 
 def _adapter_change_set_request(

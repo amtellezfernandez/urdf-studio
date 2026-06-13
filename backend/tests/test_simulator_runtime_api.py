@@ -32,7 +32,7 @@ from backend.services.simulator_adapters import (
     get_simulator_adapter,
     list_simulator_runtime_descriptors,
 )
-from backend.services.simulator_adapters.blender_workspace import build_blender_change_set_source
+from backend.services.simulator_adapters.blender_change_sets import build_blender_change_set_source
 from backend.services.simulator_adapters.params import (
     SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,

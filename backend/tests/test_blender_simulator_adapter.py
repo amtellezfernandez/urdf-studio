@@ -17,17 +17,19 @@ from backend.services.simulator_adapters.blender_runtime import (
     _windows_drive_path_to_wsl_path,
     resolve_blender_executable,
 )
-from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
-from backend.services.simulator_adapters.blender_workspace import (
+from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SCHEMA,
-    BLENDER_EDIT_SESSION_SCHEMA,
-    BLENDER_ROBOT_GLB_FILENAME,
-    BLENDER_ROBOT_USD_FILENAME,
     apply_blender_layout_change_set,
     apply_blender_layout_change_set_with_summary,
     build_blender_change_set_source,
+)
+from backend.services.simulator_adapters.blender_workspace import (
+    BLENDER_EDIT_SESSION_SCHEMA,
+    BLENDER_ROBOT_GLB_FILENAME,
+    BLENDER_ROBOT_USD_FILENAME,
     write_blender_workspace_artifacts,
 )
+from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
 from backend.tests.fake_blender import FakeBlenderModule
 from backend.tests.simulator_adapter_test_utils import make_world_package

@@ -22,10 +22,10 @@ from backend.services.simulator_adapters.blender_runtime import (
     BLENDER_PATH_ENV,
     resolve_blender_executable,
 )
-from backend.services.simulator_adapters.blender_workspace import (
-    BLENDER_EDIT_SESSION_FILENAME,
+from backend.services.simulator_adapters.blender_change_sets import (
     apply_blender_layout_change_set_with_summary,
 )
+from backend.services.simulator_adapters.blender_workspace import BLENDER_EDIT_SESSION_FILENAME
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
