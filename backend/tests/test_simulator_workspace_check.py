@@ -27,10 +27,13 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_mujoco_command,
     _prepare_pybullet_command,
     _report_has_camera_artifacts,
+    _workspace_request_from_args,
     _validate_report_artifact,
     build_demo_workspace_request,
+    build_workspace_request_from_files,
     main,
 )
+from backend.tests.simulator_adapter_test_utils import make_world_package
 
 
 def _report_object(source_id: str = "crate") -> dict:
@@ -76,6 +79,72 @@ def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> N
     assert [target.name for target in request.world_package.runtime_targets] == list(
         WORKSPACE_SIMULATORS
     )
+
+
+def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> None:
+    asset_root = tmp_path / "scene"
+    mesh_path = asset_root / "assets" / "box.stl"
+    robot_urdf_path = asset_root / "robot.urdf"
+    mesh_path.parent.mkdir(parents=True)
+    (asset_root / "__pycache__").mkdir()
+    (asset_root / "__pycache__" / "local.pyc").write_bytes(b"cache")
+    mesh_path.write_text("solid box\nendsolid box\n", encoding="utf-8")
+    urdf_xml = """
+<robot name="custom_robot">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="assets/box.stl"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>
+""".strip()
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    world_package = make_world_package(
+        urdf_xml,
+        objects=[
+            {
+                "id": "crate",
+                "name": "Crate",
+                "type": "cube",
+                "position_xyz": [0.0, 0.0, 0.0],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.1, 0.2, 0.3],
+                "color": "#ff0000",
+            }
+        ],
+    )
+    world_package_path = tmp_path / "world-package.json"
+    world_package_path.write_text(
+        json.dumps(world_package.model_dump(mode="json")),
+        encoding="utf-8",
+    )
+
+    request = build_workspace_request_from_files(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        asset_roots=(asset_root,),
+    )
+
+    assert request.world_package.package_id == "demo_world"
+    assert request.urdf_asset_path == "robot.urdf"
+    assert [asset.path for asset in request.mesh_assets] == ["assets/box.stl"]
+
+
+def test_workspace_request_from_args_rejects_partial_custom_inputs() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "world_package": "world-package.json",
+            "robot_urdf": "",
+            "asset_root": [],
+        },
+    )()
+
+    with pytest.raises(SystemExit, match="--world-package and --robot-urdf"):
+        _workspace_request_from_args(args)
 
 
 def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:
@@ -261,7 +330,6 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         tmp_path / "artifacts" / "blender-edit-session.json",
         tmp_path / "artifacts" / "open_blender_scene.py",
         tmp_path / "artifacts" / "export_blender_changes.py",
-        tmp_path / "artifacts" / "robot-reference.glb",
         tmp_path / "artifacts" / "robot-reference.usda",
     )
 

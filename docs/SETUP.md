@@ -123,6 +123,17 @@ npm run start -- --help
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |
 
+Validate a specific WSP/URDF package with the same simulator gates:
+
+```bash
+npm run simulator:workspace:check -- \
+  --world-package path/to/world-package.json \
+  --robot-urdf path/to/robot.urdf \
+  --asset-root path/to/asset-root \
+  --simulator genesis \
+  --artifact-only
+```
+
 ## Troubleshooting
 
 ### Setup Fails Creating Python 3.12

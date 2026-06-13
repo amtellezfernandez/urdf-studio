@@ -37,7 +37,6 @@ from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_EDIT_SESSION_FILENAME,
     BLENDER_EXPORT_SCRIPT_FILENAME,
     BLENDER_OPEN_SCRIPT_FILENAME,
-    BLENDER_ROBOT_GLB_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
 )
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
@@ -75,6 +74,17 @@ STATIC_WORLD_LAYOUT_PATH = (
 REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
 DEFAULT_DURATION_SEC = 0.02
 DEFAULT_TIMEOUT_SEC = 180.0
+WORKSPACE_ASSET_IGNORED_DIR_NAMES = frozenset(
+    {
+        ".cache",
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "__pycache__",
+        "node_modules",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -120,7 +130,7 @@ class WorkspaceCheckResult:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Headlessly prepare the SO101 demo workspace in installed transfer targets."
+        description="Headlessly prepare a URDF Studio workspace in installed transfer targets."
     )
     parser.add_argument(
         "--simulator",
@@ -146,6 +156,25 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--duration-sec", type=float, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--timeout-sec", type=float, default=DEFAULT_TIMEOUT_SEC)
+    parser.add_argument(
+        "--world-package",
+        default="",
+        help="Path to a WSP manifest to validate instead of the built-in demo fixture.",
+    )
+    parser.add_argument(
+        "--robot-urdf",
+        default="",
+        help="Path to the local robot URDF used to resolve mesh assets for --world-package.",
+    )
+    parser.add_argument(
+        "--asset-root",
+        action="append",
+        default=[],
+        help=(
+            "Asset root copied into the simulator workspace for --world-package. "
+            "May be passed more than once. Defaults to the robot URDF directory."
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable results.")
     return parser.parse_args()
 
@@ -248,6 +277,100 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
         world_package=world_package,
         urdf_asset_path="robot.urdf",
         mesh_assets=_load_demo_mesh_assets(),
+    )
+
+
+def build_workspace_request_from_files(
+    *,
+    world_package_path: Path,
+    robot_urdf_path: Path,
+    asset_roots: Sequence[Path] = (),
+) -> SimulatorWorkspacePrepareRequest:
+    world_package = WorldScenePackageManifest.model_validate(_load_json(world_package_path))
+    resolved_robot_urdf_path = robot_urdf_path.expanduser().resolve()
+    if not resolved_robot_urdf_path.is_file():
+        raise ValueError(f"Robot URDF does not exist: {robot_urdf_path}")
+    resolved_asset_roots = tuple(
+        dict.fromkeys(
+            root.expanduser().resolve()
+            for root in (asset_roots or (resolved_robot_urdf_path.parent,))
+        )
+    )
+    for root in resolved_asset_roots:
+        if not root.is_dir():
+            raise ValueError(f"Asset root does not exist or is not a directory: {root}")
+    return SimulatorWorkspacePrepareRequest(
+        world_package=world_package,
+        urdf_asset_path=_relative_to_asset_roots(
+            resolved_robot_urdf_path,
+            resolved_asset_roots,
+            fallback=resolved_robot_urdf_path.name,
+        ),
+        mesh_assets=_load_workspace_asset_uploads(
+            resolved_asset_roots,
+            skip_paths=(resolved_robot_urdf_path,),
+        ),
+    )
+
+
+def _relative_to_asset_roots(path: Path, roots: Sequence[Path], *, fallback: str) -> str:
+    resolved_path = path.resolve()
+    for root in roots:
+        try:
+            return resolved_path.relative_to(root.resolve()).as_posix()
+        except ValueError:
+            continue
+    return fallback
+
+
+def _load_workspace_asset_uploads(
+    asset_roots: Sequence[Path],
+    *,
+    skip_paths: Sequence[Path] = (),
+) -> list[SimulatorMeshAssetUpload]:
+    skipped = {path.resolve() for path in skip_paths}
+    content_by_path: dict[str, bytes] = {}
+    for root in asset_roots:
+        resolved_root = root.resolve()
+        for source_path in sorted(path for path in resolved_root.rglob("*") if path.is_file()):
+            resolved_source_path = source_path.resolve()
+            if resolved_source_path in skipped:
+                continue
+            relative_path = resolved_source_path.relative_to(resolved_root).as_posix()
+            if _is_ignored_workspace_asset_path(relative_path):
+                continue
+            content = resolved_source_path.read_bytes()
+            existing = content_by_path.get(relative_path)
+            if existing is not None and existing != content:
+                raise ValueError(f"Conflicting asset path across asset roots: {relative_path}")
+            content_by_path[relative_path] = content
+    return [
+        SimulatorMeshAssetUpload(
+            path=relative_path,
+            aliases=[],
+            content_base64=base64.b64encode(content).decode("ascii"),
+        )
+        for relative_path, content in sorted(content_by_path.items())
+    ]
+
+
+def _is_ignored_workspace_asset_path(relative_path: str) -> bool:
+    return any(part in WORKSPACE_ASSET_IGNORED_DIR_NAMES for part in Path(relative_path).parts)
+
+
+def _workspace_request_from_args(args: argparse.Namespace) -> SimulatorWorkspacePrepareRequest:
+    has_custom_world_package = bool(args.world_package)
+    has_custom_robot_urdf = bool(args.robot_urdf)
+    if has_custom_world_package != has_custom_robot_urdf:
+        raise SystemExit("--world-package and --robot-urdf must be provided together")
+    if args.asset_root and not has_custom_world_package:
+        raise SystemExit("--asset-root can only be used with --world-package and --robot-urdf")
+    if not has_custom_world_package:
+        return build_demo_workspace_request()
+    return build_workspace_request_from_files(
+        world_package_path=Path(args.world_package),
+        robot_urdf_path=Path(args.robot_urdf),
+        asset_roots=tuple(Path(root) for root in args.asset_root),
     )
 
 
@@ -463,7 +586,6 @@ def _prepare_blender_command(
             artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
             artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME,
             artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME,
-            artifact_dir / BLENDER_ROBOT_GLB_FILENAME,
             artifact_dir / BLENDER_ROBOT_USD_FILENAME,
         ),
         expected_report_path=report_path,
@@ -1018,7 +1140,7 @@ def main() -> int:
         or args.require_all
         or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
     )
-    request = build_demo_workspace_request()
+    request = _workspace_request_from_args(args)
     expectations = WorkspaceExpectations(
         object_count=_active_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
