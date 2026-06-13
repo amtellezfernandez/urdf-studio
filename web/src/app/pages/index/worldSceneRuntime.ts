@@ -72,6 +72,13 @@ type WorldRolloutImportFileDraft = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isWorldSnapshotArtifact = (
+  value: unknown
+): value is { kind: string; digest_sha256: string } =>
+  isRecord(value) &&
+  typeof value.kind === "string" &&
+  typeof value.digest_sha256 === "string";
+
 const readRecord = (value: unknown): Record<string, unknown> =>
   isRecord(value) ? value : {};
 
@@ -331,8 +338,13 @@ export const resolveWorldRolloutImportPayload = (
 export const validateWorldScenePackageLocally = async (
   manifest: WorldScenePackageManifest
 ) => {
-  const { validateLocalWorldSceneManifest, validateWorldSceneLayerSnapshot } =
-    await loadWorldSceneManifestModule();
+  const [
+    { validateLocalWorldSceneManifest, validateWorldSceneLayerSnapshot },
+    { computeWorldSnapshotDigest },
+  ] = await Promise.all([
+    loadWorldSceneManifestModule(),
+    loadWorldScenePackageBuilderModule(),
+  ]);
   const localErrors = validateLocalWorldSceneManifest(manifest);
   const layerErrors = validateWorldSceneLayerSnapshot({
     objects: manifest.world_snapshot.objects,
@@ -340,7 +352,38 @@ export const validateWorldScenePackageLocally = async (
     scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
     environment: null,
   });
-  const combinedErrors = [...localErrors, ...layerErrors];
+  const artifactErrors: string[] = [];
+  const worldSnapshotArtifacts = Array.isArray(manifest.artifacts)
+    ? manifest.artifacts.filter(
+        (artifact) => isWorldSnapshotArtifact(artifact) && artifact.kind === "world_snapshot"
+      )
+    : [];
+  if (Array.isArray(manifest.artifacts)) {
+    manifest.artifacts.forEach((artifact, index) => {
+      if (
+        typeof artifact === "object" &&
+        artifact !== null &&
+        "kind" in artifact &&
+        (artifact as { kind?: unknown }).kind === "world_snapshot" &&
+        !isWorldSnapshotArtifact(artifact)
+      ) {
+        artifactErrors.push(
+          `artifacts[${index}].digest_sha256 is required for world_snapshot artifacts`
+        );
+      }
+    });
+  }
+  if (worldSnapshotArtifacts.length > 0 && localErrors.length === 0) {
+    const actualDigest = await computeWorldSnapshotDigest(manifest.world_snapshot);
+    worldSnapshotArtifacts.forEach((artifact, index) => {
+      if (artifact.digest_sha256.toLowerCase() !== actualDigest) {
+        artifactErrors.push(
+          `artifacts[world_snapshot:${index}].digest_sha256 does not match world_snapshot`
+        );
+      }
+    });
+  }
+  const combinedErrors = [...localErrors, ...layerErrors, ...artifactErrors];
   const isStaticScene = manifest.world_snapshot.scenario_duration_ms === 0;
   return {
     combinedErrors,

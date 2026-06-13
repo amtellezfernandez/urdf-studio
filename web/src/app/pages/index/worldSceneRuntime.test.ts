@@ -6,6 +6,8 @@ import {
   readWorldSceneManifestPayload,
   resolveWorldRolloutImportPayload,
 } from "@/app/pages/index/worldSceneRuntime";
+import { computeWorldSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
+import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 
 const TEST_ROLLOUT_FIXTURE = {
   batchSize: 4,
@@ -13,7 +15,9 @@ const TEST_ROLLOUT_FIXTURE = {
   traceTimeMs: 1,
 };
 
-const createManifestPayload = (overrides?: Record<string, unknown>) => ({
+const createManifestPayload = (
+  overrides?: Partial<WorldScenePackageManifest["world_snapshot"]>
+): WorldScenePackageManifest => ({
   schema_version: "1.0.0",
   package_id: "demo-scene",
   version: "0.1.0",
@@ -64,6 +68,36 @@ describe("worldSceneRuntime world package import", () => {
     );
     expect(manifest.package_id).toBe("demo-scene");
     expect(manifest.world_snapshot.objects[0]?.rotation_rpy_rad).toEqual([0.1, 0.2, 0.3]);
+  });
+
+  it("accepts static world packages with matching world snapshot digest artifacts", async () => {
+    const payload = createManifestPayload();
+    payload.artifacts = [
+      {
+        kind: "world_snapshot",
+        digest_sha256: await computeWorldSnapshotDigest(payload.world_snapshot),
+        uri: "inline://snapshot",
+      },
+    ];
+
+    const manifest = await parseWorldSceneManifestText(JSON.stringify(payload));
+
+    expect(manifest.artifacts[0]?.kind).toBe("world_snapshot");
+  });
+
+  it("rejects static world packages with mismatched world snapshot digest artifacts", async () => {
+    const payload = createManifestPayload();
+    payload.artifacts = [
+      {
+        kind: "world_snapshot",
+        digest_sha256: "0".repeat(64),
+        uri: "inline://snapshot",
+      },
+    ];
+
+    await expect(parseWorldSceneManifestText(JSON.stringify(payload))).rejects.toThrow(
+      "artifacts[world_snapshot:0].digest_sha256 does not match world_snapshot"
+    );
   });
 
   it("rejects timed world packages from text", async () => {

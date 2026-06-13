@@ -99,6 +99,10 @@ const digestSha256 = async (content: string): Promise<string> => {
   return toHex(new Uint8Array(digest));
 };
 
+export const computeWorldSnapshotDigest = (
+  snapshot: WorldScenePackageManifest["world_snapshot"]
+): Promise<string> => digestSha256(stableStringify(snapshot));
+
 export const toSerializableWorldObject = (object: CreatedObject): SerializableWorldObject => {
   const ikTargetType = object.ikTargetType === "orbit" ? "orbit" : "punctual";
   const geometry = resolveWorldObjectGeometry(object);
@@ -188,7 +192,7 @@ export const buildWorldScenePackageManifest = async ({
     scenario_duration_ms: scenarioDurationMs,
   };
 
-  const snapshotDigest = await digestSha256(stableStringify(snapshot));
+  const snapshotDigest = await computeWorldSnapshotDigest(snapshot);
   const artifactRefs: WorldArtifactRef[] = [
     {
       kind: "world_snapshot",
