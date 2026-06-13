@@ -59,6 +59,11 @@ def _resolve_blender_candidate(candidate: str) -> str | None:
         app_binary = path / "Contents" / "MacOS" / "Blender"
         if _is_executable_file(app_binary):
             return str(app_binary)
+    if path.is_dir():
+        for executable_name in ("blender", "blender.exe"):
+            executable_path = path / executable_name
+            if _is_executable_file(executable_path):
+                return str(executable_path)
     if _is_executable_file(path):
         return str(path)
     resolved = shutil.which(candidate)

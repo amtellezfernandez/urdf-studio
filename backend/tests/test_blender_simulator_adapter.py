@@ -961,6 +961,18 @@ def test_blender_runtime_resolves_configured_app_bundle(tmp_path: Path) -> None:
     assert resolve_blender_executable(str(tmp_path / "Blender.app")) == str(app_binary)
 
 
+@pytest.mark.parametrize("executable_name", ("blender", "blender.exe"))
+def test_blender_runtime_resolves_configured_install_directory(
+    tmp_path: Path,
+    executable_name: str,
+) -> None:
+    executable_path = tmp_path / executable_name
+    executable_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable_path.chmod(0o755)
+
+    assert resolve_blender_executable(str(tmp_path)) == str(executable_path)
+
+
 @pytest.mark.parametrize(
     ("windows_path", "wsl_path"),
     (

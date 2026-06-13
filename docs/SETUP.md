@@ -39,7 +39,7 @@ Setup installs the app dependencies and local runtime used by URDF Studio. The f
 
 Setup also prepares supported workspace transfer targets when the platform packages are available. The base app remains usable if a local target runtime cannot be installed on the current laptop.
 
-Blender layout round-trip sessions use the local Blender executable. Studio auto-detects common Linux, macOS, Windows, and WSL installs; set `URDF_STUDIO_BLENDER_PATH=/path/to/blender` only for custom locations.
+Blender layout round-trip sessions use the local Blender executable. Studio auto-detects common Linux, macOS, Windows, and WSL installs; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory only for custom locations.
 
 Optional setup commands:
 
