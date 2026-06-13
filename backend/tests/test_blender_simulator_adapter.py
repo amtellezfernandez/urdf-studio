@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import json
 import math
+import runpy
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,6 +26,7 @@ from backend.services.simulator_adapters.blender_workspace import (
     write_blender_workspace_artifacts,
 )
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
+from backend.tests.fake_blender import FakeBlenderModule
 from backend.tests.simulator_adapter_test_utils import make_world_package
 
 
@@ -653,6 +656,70 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert "deleted_camera" in export_script
     assert "camera_screenshots=" in open_script
     assert "bpy.ops.render.render" in open_script
+
+
+def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_path: Path) -> None:
+    world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    camera_screenshot_dir = tmp_path / "artifacts" / "cameras"
+    blend_path = tmp_path / "layout.blend"
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=blend_path,
+        camera_screenshot_dir=camera_screenshot_dir,
+    )
+    fake_bpy = FakeBlenderModule()
+    monkeypatch.setitem(sys.modules, "bpy", fake_bpy)
+
+    runpy.run_path(str(artifacts.open_script_path), run_name="__main__")
+
+    world_objects = [
+        obj for obj in fake_bpy.data.objects if obj.get("urdf_studio_kind") == "world_object"
+    ]
+    camera_objects = [
+        obj for obj in fake_bpy.data.objects if obj.get("urdf_studio_kind") == "camera"
+    ]
+    assert blend_path.exists()
+    assert [path.name for path in sorted(camera_screenshot_dir.glob("*.png"))] == [
+        "01_scene_camera.png"
+    ]
+    assert len(world_objects) == 1
+    assert len(camera_objects) == 1
+    assert camera_objects[0].data.angle > 0.0
+
+    world_objects[0].location = [1.0, 2.0, 3.0]
+    world_objects[0].scale = [0.5, 0.6, 0.7]
+    world_objects[0].rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
+    runpy.run_path(str(artifacts.export_script_path), run_name="__main__")
+
+    change_set = json.loads(artifacts.change_set_path.read_text(encoding="utf-8"))
+    assert change_set["schema"] == BLENDER_CHANGE_SET_SCHEMA
+    assert change_set["changes"] == [
+        {
+            "entity_type": "world_object",
+            "position_xyz": [1.0, 2.0, 3.0],
+            "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "sim_name": "wl_crate",
+            "size_xyz": [0.5, 0.6, 0.7],
+            "stable_id": "crate",
+        }
+    ]
+    assert change_set["review_only"][0]["entity_type"] == "camera"
+    assert change_set["review_only"][0]["stable_id"] == "cam-1"
+
+    result = apply_blender_layout_change_set_with_summary(world_package, change_set)
+
+    assert result.applied_change_count == 1
+    assert result.review_only_count == 1
+    assert result.world_package.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
+    assert result.world_package.world_snapshot.objects[0]["size_xyz"] == [0.5, 0.6, 0.7]
 
 
 class _FakeBlenderProcess:
