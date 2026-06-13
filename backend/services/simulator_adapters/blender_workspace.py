@@ -66,31 +66,35 @@ class BlenderWorldObjectChange:
 
 @dataclass(frozen=True)
 class BlenderChangeSetSource:
-    world_object_ids: tuple[str, ...] | None
-    camera_ids: tuple[str, ...] | None
+    world_object_ids: tuple[str, ...]
+    camera_ids: tuple[str, ...]
 
 
 def build_blender_change_set_source(
     world_package: WorldScenePackageManifest,
     *,
+    world_object_ids: Sequence[str],
+    camera_ids: Sequence[str],
     frame_map: str | None = None,
-    world_object_ids: Sequence[str] | None = None,
-    camera_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    source: dict[str, Any] = {
+    source = _blender_change_set_source_metadata(world_package)
+    if frame_map is not None:
+        source["frame_map"] = frame_map
+    source["world_object_ids"] = list(world_object_ids)
+    source["camera_ids"] = list(camera_ids)
+    return source
+
+
+def _blender_change_set_source_metadata(
+    world_package: WorldScenePackageManifest,
+) -> dict[str, Any]:
+    return {
         "schema": BLENDER_CHANGE_SET_SOURCE_SCHEMA,
         "package_id": world_package.package_id,
         "version": world_package.version,
         "world_snapshot_digest_sha256": computed_world_snapshot_digest(world_package),
         "frame_convention": world_package.interface.frame_convention,
     }
-    if frame_map is not None:
-        source["frame_map"] = frame_map
-    if world_object_ids is not None:
-        source["world_object_ids"] = list(world_object_ids)
-    if camera_ids is not None:
-        source["camera_ids"] = list(camera_ids)
-    return source
 
 
 def write_blender_workspace_artifacts(
@@ -494,11 +498,11 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                 review_only = []
                 source_world_object_ids = [
                     str(stable_id)
-                    for stable_id in CHANGE_SET_SOURCE.get("world_object_ids", [])
+                    for stable_id in CHANGE_SET_SOURCE["world_object_ids"]
                 ]
                 source_camera_ids = [
                     str(stable_id)
-                    for stable_id in CHANGE_SET_SOURCE.get("camera_ids", [])
+                    for stable_id in CHANGE_SET_SOURCE["camera_ids"]
                 ]
                 exported_world_object_ids = set()
                 exported_camera_ids = set()
@@ -669,18 +673,16 @@ def _validate_blender_change_set(
             f"{', '.join(deleted_and_reviewed_camera_ids)}."
         )
 
-    if source.world_object_ids is not None:
-        _validate_change_set_source_coverage(
-            source.world_object_ids,
-            object_update_ids=set(object_updates),
-            deleted_world_object_ids=deleted_world_object_ids,
-        )
-    if source.camera_ids is not None:
-        _validate_change_set_camera_coverage(
-            source.camera_ids,
-            camera_review_ids=camera_review_ids,
-            deleted_camera_ids=deleted_camera_ids,
-        )
+    _validate_change_set_source_coverage(
+        source.world_object_ids,
+        object_update_ids=set(object_updates),
+        deleted_world_object_ids=deleted_world_object_ids,
+    )
+    _validate_change_set_camera_coverage(
+        source.camera_ids,
+        camera_review_ids=camera_review_ids,
+        deleted_camera_ids=deleted_camera_ids,
+    )
 
     return object_updates, len(review_only)
 
@@ -709,7 +711,7 @@ def _validate_change_set_source(
     if schema != BLENDER_CHANGE_SET_SOURCE_SCHEMA:
         raise ValueError("Unsupported Blender change-set source schema.")
 
-    expected = build_blender_change_set_source(world_package)
+    expected = _blender_change_set_source_metadata(world_package)
     actual_package_id = _required_string(value.get("package_id"), "source.package_id")
     actual_version = _required_string(value.get("version"), "source.version")
     actual_digest = _required_string(
@@ -723,11 +725,11 @@ def _validate_change_set_source(
     actual_frame_map = value.get("frame_map")
     if actual_frame_map is not None:
         actual_frame_map = _required_string(actual_frame_map, "source.frame_map")
-    actual_world_object_ids = _optional_string_list(
+    actual_world_object_ids = _required_string_list(
         value.get("world_object_ids"),
         "source.world_object_ids",
     )
-    actual_camera_ids = _optional_string_list(
+    actual_camera_ids = _required_string_list(
         value.get("camera_ids"),
         "source.camera_ids",
     )
@@ -749,10 +751,8 @@ def _validate_change_set_source(
             "Blender change-set source frame_map is not supported for direct apply. "
             "Only identity frame_map sessions can be imported without coordinate conversion."
         )
-    if actual_world_object_ids is not None:
-        _validate_source_world_object_ids(actual_world_object_ids, world_package)
-    if actual_camera_ids is not None:
-        _validate_source_camera_ids(actual_camera_ids, world_package)
+    _validate_source_world_object_ids(actual_world_object_ids, world_package)
+    _validate_source_camera_ids(actual_camera_ids, world_package)
     return BlenderChangeSetSource(
         world_object_ids=actual_world_object_ids,
         camera_ids=actual_camera_ids,
@@ -954,9 +954,7 @@ def _validate_source_camera_ids(
         )
 
 
-def _optional_string_list(value: Any, label: str) -> tuple[str, ...] | None:
-    if value is None:
-        return None
+def _required_string_list(value: Any, label: str) -> tuple[str, ...]:
     values = _required_list(value, f"Blender change-set {label}")
     return tuple(
         _required_string(item, f"{label}[{index}]")

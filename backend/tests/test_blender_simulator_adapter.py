@@ -75,9 +75,39 @@ def _write_scene_inputs(tmp_path: Path):
 def _blender_change_set(world_package, *, changes, review_only=None):
     return {
         "schema": BLENDER_CHANGE_SET_SCHEMA,
-        "source": build_blender_change_set_source(world_package),
+        "source": build_blender_change_set_source(
+            world_package,
+            world_object_ids=[
+                str(item.get("id", ""))
+                for item in world_package.world_snapshot.objects
+            ],
+            camera_ids=[
+                str(item.get("id", ""))
+                for item in world_package.world_snapshot.cameras
+            ],
+        ),
         "changes": changes,
         "review_only": review_only or [],
+    }
+
+
+def _crate_layout_change() -> dict:
+    return {
+        "entity_type": "world_object",
+        "stable_id": "crate",
+        "position_xyz": [1.0, 2.0, 3.0],
+        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "size_xyz": [0.5, 0.6, 0.7],
+    }
+
+
+def _scene_camera_review() -> dict:
+    return {
+        "entity_type": "camera",
+        "stable_id": "cam-1",
+        "position_xyz": [0.0, 0.0, 1.0],
+        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "reason": "camera round-trip requires camera-frame review before apply",
     }
 
 
@@ -208,6 +238,7 @@ def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Pa
         ],
     )
     change_set["source"]["world_object_ids"] = ["crate"]
+    change_set["source"]["camera_ids"] = []
 
     result = apply_blender_layout_change_set_with_summary(
         world_package,
@@ -222,22 +253,14 @@ def test_blender_change_set_accepts_source_camera_review(tmp_path: Path) -> None
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
-        changes=[],
-        review_only=[
-            {
-                "entity_type": "camera",
-                "stable_id": "cam-1",
-                "position_xyz": [0.0, 0.0, 1.0],
-                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                "reason": "camera round-trip requires camera-frame review before apply",
-            }
-        ],
+        changes=[_crate_layout_change()],
+        review_only=[_scene_camera_review()],
     )
     change_set["source"]["camera_ids"] = ["cam-1"]
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
-    assert result.applied_change_count == 0
+    assert result.applied_change_count == 1
     assert result.review_only_count == 1
 
 
@@ -245,7 +268,7 @@ def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) ->
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
-        changes=[],
+        changes=[_crate_layout_change()],
         review_only=[
             {
                 "entity_type": "deleted_camera",
@@ -258,7 +281,7 @@ def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) ->
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
-    assert result.applied_change_count == 0
+    assert result.applied_change_count == 1
     assert result.review_only_count == 1
 
 
@@ -312,7 +335,7 @@ def test_blender_change_set_rejects_deletions_outside_source_object_ids(tmp_path
 
 def test_blender_change_set_rejects_missing_source_camera_coverage(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
-    change_set = _blender_change_set(world_package, changes=[])
+    change_set = _blender_change_set(world_package, changes=[_crate_layout_change()])
     change_set["source"]["camera_ids"] = ["cam-1"]
 
     with pytest.raises(ValueError, match="missing camera review"):
@@ -325,16 +348,8 @@ def test_blender_change_set_rejects_camera_reviews_outside_source_camera_ids(
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
-        changes=[],
-        review_only=[
-            {
-                "entity_type": "camera",
-                "stable_id": "cam-1",
-                "position_xyz": [0.0, 0.0, 1.0],
-                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                "reason": "camera round-trip requires camera-frame review before apply",
-            }
-        ],
+        changes=[_crate_layout_change()],
+        review_only=[_scene_camera_review()],
     )
     change_set["source"]["camera_ids"] = []
 
@@ -348,7 +363,7 @@ def test_blender_change_set_rejects_deleted_cameras_outside_source_camera_ids(
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
-        changes=[],
+        changes=[_crate_layout_change()],
         review_only=[
             {
                 "entity_type": "deleted_camera",
@@ -411,7 +426,7 @@ def test_blender_change_set_rejects_camera_edits_in_apply_list(tmp_path: Path) -
 def test_blender_change_set_rejects_unknown_world_object_id(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
 
-    with pytest.raises(ValueError, match="unknown world object"):
+    with pytest.raises(ValueError, match="outside source world_object_ids"):
         apply_blender_layout_change_set(
             world_package,
             _blender_change_set(
@@ -518,6 +533,32 @@ def test_blender_change_set_rejects_missing_source(tmp_path: Path) -> None:
                 "review_only": [],
             },
         )
+
+
+def test_blender_change_set_rejects_missing_source_world_object_ids(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[_crate_layout_change()],
+        review_only=[_scene_camera_review()],
+    )
+    del change_set["source"]["world_object_ids"]
+
+    with pytest.raises(ValueError, match="source\\.world_object_ids"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_missing_source_camera_ids(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[_crate_layout_change()],
+        review_only=[_scene_camera_review()],
+    )
+    del change_set["source"]["camera_ids"]
+
+    with pytest.raises(ValueError, match="source\\.camera_ids"):
+        apply_blender_layout_change_set(world_package, change_set)
 
 
 def test_blender_change_set_rejects_stale_world_snapshot_source(tmp_path: Path) -> None:
