@@ -112,6 +112,8 @@ class PyBulletSceneParams:
     gravity_xyz: tuple[float, float, float]
     robot_base_position_xyz: tuple[float, float, float]
     robot_base_orientation_xyzw: tuple[float, float, float, float]
+    camera_near_m: float
+    camera_far_m: float
 
 
 SimulatorSceneParams: TypeAlias = GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams
@@ -197,6 +199,8 @@ PYBULLET_SCENE_PARAMS = PyBulletSceneParams(
     gravity_xyz=(0.0, 0.0, -9.81),
     robot_base_position_xyz=(0.0, 0.0, 0.0),
     robot_base_orientation_xyzw=(0.0, 0.0, 0.0, 1.0),
+    camera_near_m=0.01,
+    camera_far_m=25.0,
 )
 
 SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[str, SimulatorWorkspaceProcessParams] = {

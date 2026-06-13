@@ -4,6 +4,7 @@ from backend.scripts.simulator_workspace_check import (
     WORKSPACE_SIMULATORS,
     _active_object_count,
     _prepare_genesis_command,
+    _prepare_pybullet_command,
     build_demo_workspace_request,
 )
 
@@ -72,3 +73,33 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     assert "sensor_reads=3" in command.extra_expected_markers
     assert "sensor_screenshots=3" in command.extra_expected_markers
     assert "merge_fixed_links=True" in command.extra_expected_markers
+
+
+def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_path) -> None:
+    request = build_demo_workspace_request()
+
+    class _Prepared:
+        workspace_dir = tmp_path
+        world_package_path = tmp_path / "world-package.json"
+        robot_urdf_path = tmp_path / "robot.urdf"
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.prepare_pybullet_workspace",
+        lambda _request: _Prepared(),
+    )
+    command = _prepare_pybullet_command(
+        request,
+        expectations=type(
+            "Expectations",
+            (),
+            {
+                "object_count": 3,
+                "camera_count": 3,
+                "duration_sec": 0.02,
+            },
+        )(),
+    )
+
+    assert "--camera-screenshot-dir" in command.command
+    assert "camera_screenshots=3" in command.extra_expected_markers
+    assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)

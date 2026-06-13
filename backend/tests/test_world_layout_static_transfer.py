@@ -203,6 +203,45 @@ def test_build_primitives_preserves_object_simulation_metadata() -> None:
     assert primitives[0].semantic_role == "manipulation_target"
 
 
+def test_build_primitives_warns_for_duplicate_object_ids_and_names() -> None:
+    payload = {
+        "world_layout": {
+            "name": "duplicate-objects",
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "cube",
+                    "position_xyz": [0.0, 0.0, 0.0],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.2, 0.2],
+                    "color": "#22c55e",
+                },
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "cube",
+                    "position_xyz": [0.3, 0.0, 0.0],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.2, 0.2],
+                    "color": "#22c55e",
+                },
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, warnings = build_sim_primitives(layout)
+
+    assert warnings == (
+        "Duplicate world object id 'crate' appears 2 times; simulator transfer may be ambiguous.",
+        "Duplicate world object name 'Crate' appears 2 times; simulator transfer may be ambiguous.",
+    )
+    assert [primitive.sim_name for primitive in primitives] == ["wl_crate", "wl_crate_2"]
+
+
 def test_mesh_object_preserves_asset_metadata_and_uses_proxy_for_primitive_adapters(tmp_path) -> None:
     mesh_path = tmp_path / "assets" / "crate.obj"
     mesh_path.parent.mkdir()

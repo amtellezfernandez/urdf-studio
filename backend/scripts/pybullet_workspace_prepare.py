@@ -17,6 +17,9 @@ from backend.services.simulator_adapters.params import (
     PYBULLET_SCENE_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
 )
+from backend.services.simulator_adapters.pybullet_camera import (
+    write_pybullet_camera_screenshots,
+)
 from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
 from backend.services.simulator_adapters.world_scene import prepare_world_scene
 from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
@@ -30,6 +33,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--no-floor", action="store_true")
     parser.add_argument("--free-base", action="store_true")
     parser.add_argument("--show-camera-markers", action="store_true")
+    parser.add_argument("--camera-screenshot-dir", default="")
     return parser.parse_args()
 
 
@@ -158,6 +162,7 @@ def prepare_pybullet_workspace_scene(
     no_viewer: bool,
     free_base: bool,
     show_camera_markers: bool,
+    camera_screenshot_dir: Path | None,
 ) -> None:
     import pybullet
     import pybullet_data
@@ -207,6 +212,15 @@ def prepare_pybullet_workspace_scene(
             else []
         )
         pybullet.stepSimulation()
+        camera_screenshot_count = 0
+        if camera_screenshot_dir is not None:
+            camera_screenshot_count = write_pybullet_camera_screenshots(
+                pybullet,
+                cameras,
+                camera_screenshot_dir,
+                near_m=PYBULLET_SCENE_PARAMS.camera_near_m,
+                far_m=PYBULLET_SCENE_PARAMS.camera_far_m,
+            )
         print(
             "[pybullet-workspace] "
             f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
@@ -216,6 +230,8 @@ def prepare_pybullet_workspace_scene(
             f"applied_initial_joints={applied_joints}",
             flush=True,
         )
+        if camera_screenshot_dir is not None:
+            print(f"[pybullet-workspace] camera_screenshots={camera_screenshot_count}", flush=True)
         print(PYBULLET_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
 
         deadline = time.monotonic() + duration_sec if duration_sec > 0 else None
@@ -242,6 +258,7 @@ def main() -> int:
         no_viewer=args.no_viewer,
         free_base=args.free_base,
         show_camera_markers=args.show_camera_markers,
+        camera_screenshot_dir=Path(args.camera_screenshot_dir) if args.camera_screenshot_dir else None,
     )
     return 0
 

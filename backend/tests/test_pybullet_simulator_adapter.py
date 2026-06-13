@@ -5,12 +5,20 @@ from dataclasses import replace
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+from scipy.spatial.transform import Rotation
+
 from backend.models.simulator_runtime import SimulatorMeshAssetUpload, SimulatorWorkspacePrepareRequest
 from backend.tests.simulator_adapter_test_utils import make_world_package
 from backend.services.ilu_urdf import BundleMeshAssetsResult, BundledMeshAsset
 from backend.services.simulator_adapters import workspace_package
 from backend.services.simulator_adapters import pybullet as pybullet_adapter
 from backend.services.simulator_adapters import workspace_process
+from backend.services.simulator_adapters.camera_intrinsics import PinholeCameraIntrinsics
+from backend.services.simulator_adapters.camera_transfer import SimCameraSpec, Transform
+from backend.services.simulator_adapters.pybullet_camera import (
+    pybullet_camera_projection_matrix,
+    pybullet_camera_view_matrix,
+)
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.world_layout_static_transfer import SimPrimitive
 from backend.scripts.pybullet_workspace_prepare import _add_primitive, _primitive_shape
@@ -144,6 +152,90 @@ def test_pybullet_primitive_uses_canonical_dynamic_material_fields() -> None:
         "link_id": -1,
         "lateralFriction": 0.7,
         "restitution": 0.2,
+    }
+
+
+def test_pybullet_camera_projection_uses_pinhole_intrinsics() -> None:
+    class _FakeRuntime:
+        projection_kwargs = None
+
+        @classmethod
+        def computeProjectionMatrix(cls, **kwargs):
+            cls.projection_kwargs = kwargs
+            return [1.0] * 16
+
+        @classmethod
+        def computeProjectionMatrixFOV(cls, **_kwargs):
+            raise AssertionError("fov-only projection should not be used")
+
+    pose = Transform(position_xyz=(0.0, 0.0, 0.0), rotation=Rotation.identity())
+    camera = SimCameraSpec(
+        camera_id="cam-1",
+        name="Calibrated camera",
+        sim_name="calibrated_camera",
+        parent_joint="base_link",
+        parent_link="base_link",
+        render_local_pose=pose,
+        render_world_pose=pose,
+        fov_deg=70.0,
+        width=640,
+        height=480,
+        intrinsics=PinholeCameraIntrinsics(
+            width=640,
+            height=480,
+            vertical_fov_deg=70.0,
+            matrix=((500.0, 0.0, 319.5), (0.0, 510.0, 241.25), (0.0, 0.0, 1.0)),
+        ),
+    )
+
+    projection = pybullet_camera_projection_matrix(
+        _FakeRuntime,
+        camera,
+        near_m=0.1,
+        far_m=12.0,
+    )
+
+    assert projection == [1.0] * 16
+    assert _FakeRuntime.projection_kwargs == {
+        "left": -319.5 * 0.1 / 500.0,
+        "right": (640.0 - 319.5) * 0.1 / 500.0,
+        "bottom": -(480.0 - 241.25) * 0.1 / 510.0,
+        "top": 241.25 * 0.1 / 510.0,
+        "nearVal": 0.1,
+        "farVal": 12.0,
+    }
+
+
+def test_pybullet_camera_view_uses_camera_forward_and_up_vectors() -> None:
+    class _FakeRuntime:
+        view_kwargs = None
+
+        @classmethod
+        def computeViewMatrix(cls, **kwargs):
+            cls.view_kwargs = kwargs
+            return [1.0] * 16
+
+    pose = Transform(position_xyz=(1.0, 2.0, 3.0), rotation=Rotation.identity())
+    camera = SimCameraSpec(
+        camera_id="cam-1",
+        name="Base camera",
+        sim_name="base_camera",
+        parent_joint="base_link",
+        parent_link="base_link",
+        render_local_pose=pose,
+        render_world_pose=pose,
+        fov_deg=70.0,
+        width=640,
+        height=480,
+    )
+
+    view = pybullet_camera_view_matrix(_FakeRuntime, camera)
+
+    assert view == [1.0] * 16
+    assert _FakeRuntime.view_kwargs == {
+        "cameraEyePosition": (1.0, 2.0, 3.0),
+        "cameraTargetPosition": (1.0, 2.0, 2.0),
+        "cameraUpVector": (0.0, 1.0, 0.0),
     }
 
 

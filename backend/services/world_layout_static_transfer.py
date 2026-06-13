@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import json
 import math
 import re
@@ -457,6 +458,21 @@ def _safe_sim_name(value: str, used_names: set[str], fallback: str) -> str:
     return candidate
 
 
+def _duplicate_world_object_warnings(objects: Sequence[WorldLayoutObject]) -> tuple[str, ...]:
+    warnings: list[str] = []
+    for label, values in (
+        ("id", [obj.id for obj in objects]),
+        ("name", [obj.name for obj in objects]),
+    ):
+        counts = Counter(values)
+        for value in sorted(item for item, count in counts.items() if count > 1):
+            warnings.append(
+                f"Duplicate world object {label} '{value}' appears {counts[value]} times; "
+                "simulator transfer may be ambiguous."
+            )
+    return tuple(warnings)
+
+
 def _primitive_simulation_fields(
     obj: WorldLayoutObject,
     *,
@@ -484,7 +500,7 @@ def build_sim_primitives(
     resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     used_names: set[str] = set()
     primitives: list[SimPrimitive] = []
-    warnings: list[str] = []
+    warnings: list[str] = list(_duplicate_world_object_warnings(layout.objects))
     for index, obj in enumerate(layout.objects):
         if obj.is_hidden and not include_hidden:
             warnings.append(f"Skipped hidden object: {obj.id}")

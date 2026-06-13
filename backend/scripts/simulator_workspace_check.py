@@ -316,10 +316,18 @@ def _prepare_pybullet_command(
     expectations: WorkspaceExpectations,
 ) -> PreparedWorkspaceCommand:
     prepared = prepare_pybullet_workspace(request)
+    screenshot_dir = prepared.workspace_dir / "artifacts"
+    camera_screenshot_dir = screenshot_dir / "cameras"
     return _prepare_direct_urdf_command(
         prepared,
         workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
         object_marker=f"world_objects={expectations.object_count}",
+        extra_expected_markers=(f"camera_screenshots={expectations.camera_count}",),
+        extra_args=(
+            "--camera-screenshot-dir",
+            str(camera_screenshot_dir),
+        ),
+        expected_image_dirs=((camera_screenshot_dir, expectations.camera_count),),
         expectations=expectations,
     )
 
