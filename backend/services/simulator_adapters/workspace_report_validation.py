@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from backend.models.simulator_runtime import SimulatorId
+from backend.services.world_layout_transfer_types import (
+    ConcreteWorldLayoutFrameMap,
+    WorldLayoutFrameMap,
+)
+
+VALID_REPORT_FRAME_MAPS = frozenset(("identity", "studio-y-up-to-z-up"))
+VALID_REPORT_REQUESTED_FRAME_MAPS = frozenset(("auto", *VALID_REPORT_FRAME_MAPS))
 
 
 @dataclass(frozen=True)
@@ -34,9 +41,17 @@ def validate_simulator_workspace_report(
     required_fields = (
         "simulator",
         "package_id",
+        "version",
+        "requested_frame_map",
         "frame_map",
+        "frame_convention",
+        "object_count",
         "primitive_count",
         "camera_count",
+        "joint_position_count",
+        "robot_urdf_path",
+        "asset_roots",
+        "warnings",
         "objects",
         "cameras",
         "artifacts",
@@ -53,6 +68,10 @@ def validate_simulator_workspace_report(
             "simulator validation report has wrong simulator id: "
             f"{simulator.get('id')!r}, expected {expectations.simulator_id!r}"
         )
+
+    header_error = _validate_report_header(payload)
+    if header_error:
+        return header_error
 
     artifact_error = _validate_report_artifacts(payload, expectations)
     if artifact_error:
@@ -104,6 +123,63 @@ def validate_simulator_workspace_report(
             "intrinsics",
         ),
     )
+
+
+def _validate_report_header(payload: Mapping[str, Any]) -> str | None:
+    for field_name in ("package_id", "version", "robot_urdf_path"):
+        error = _validate_report_string(payload.get(field_name), field_name)
+        if error:
+            return error
+    frame_map_error = _validate_report_frame_map(
+        payload.get("frame_map"),
+        "frame_map",
+        VALID_REPORT_FRAME_MAPS,
+    )
+    if frame_map_error:
+        return frame_map_error
+    requested_frame_map_error = _validate_report_frame_map(
+        payload.get("requested_frame_map"),
+        "requested_frame_map",
+        VALID_REPORT_REQUESTED_FRAME_MAPS,
+    )
+    if requested_frame_map_error:
+        return requested_frame_map_error
+    frame_convention = payload.get("frame_convention")
+    if frame_convention is not None:
+        error = _validate_report_string(frame_convention, "frame_convention")
+        if error:
+            return error
+    for field_name in ("object_count", "primitive_count", "camera_count", "joint_position_count"):
+        error = _validate_report_non_negative_int(payload.get(field_name), field_name)
+        if error:
+            return error
+    object_count = int(payload["object_count"])
+    primitive_count = int(payload["primitive_count"])
+    if object_count < primitive_count:
+        return (
+            "simulator validation report field 'object_count' must be greater than "
+            "or equal to primitive_count"
+        )
+    error = _validate_report_string_list(payload.get("asset_roots"), "asset_roots")
+    if error:
+        return error
+    return _validate_report_string_list(payload.get("warnings"), "warnings", allow_empty=True)
+
+
+def _validate_report_frame_map(
+    value: Any,
+    path: str,
+    valid_values: frozenset[ConcreteWorldLayoutFrameMap | WorldLayoutFrameMap],
+) -> str | None:
+    error = _validate_report_string(value, path)
+    if error:
+        return error
+    if value not in valid_values:
+        return (
+            f"simulator validation report field '{path}' must be one of: "
+            f"{', '.join(sorted(valid_values))}"
+        )
+    return None
 
 
 def _validate_report_artifacts(
@@ -258,6 +334,23 @@ def _validate_report_string(value: Any, path: str) -> str | None:
     return None
 
 
+def _validate_report_string_list(
+    value: Any,
+    path: str,
+    *,
+    allow_empty: bool = False,
+) -> str | None:
+    if not isinstance(value, list):
+        return f"simulator validation report field '{path}' must be a list"
+    if not allow_empty and not value:
+        return f"simulator validation report field '{path}' must be a non-empty list"
+    for index, item in enumerate(value):
+        error = _validate_report_string(item, f"{path}[{index}]")
+        if error:
+            return error
+    return None
+
+
 def _validate_report_vector3(
     value: Any,
     path: str,
@@ -294,6 +387,12 @@ def _validate_report_rgba(value: Any, path: str) -> str | None:
 def _validate_report_positive_int(value: Any, path: str) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         return f"simulator validation report field '{path}' must be a positive integer"
+    return None
+
+
+def _validate_report_non_negative_int(value: Any, path: str) -> str | None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        return f"simulator validation report field '{path}' must be a non-negative integer"
     return None
 
 

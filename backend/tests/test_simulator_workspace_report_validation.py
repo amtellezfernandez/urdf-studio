@@ -60,6 +60,24 @@ def _expectations(
 
 def _write_report(tmp_path, payload: dict):
     report_path = tmp_path / "report.json"
+    objects = payload.get("objects", [])
+    enriched_payload = {
+        "version": "1.0.0",
+        "requested_frame_map": "identity",
+        "frame_convention": "z-up",
+        "object_count": payload.get("primitive_count", len(objects)),
+        "joint_position_count": 0,
+        "robot_urdf_path": str(tmp_path / "robot.urdf"),
+        "asset_roots": [str(tmp_path)],
+        "warnings": [],
+        **payload,
+    }
+    report_path.write_text(json.dumps(enriched_payload), encoding="utf-8")
+    return report_path
+
+
+def _write_raw_report(tmp_path, payload: dict):
+    report_path = tmp_path / "report.json"
     report_path.write_text(json.dumps(payload), encoding="utf-8")
     return report_path
 
@@ -107,6 +125,72 @@ def test_workspace_report_validation_rejects_wrong_counts(tmp_path) -> None:
         report_path,
         _expectations(object_count=2, camera_count=1),
     ) == "simulator validation report has primitive_count=1, expected 2"
+
+
+def test_workspace_report_validation_rejects_missing_canonical_header(tmp_path) -> None:
+    report_path = _write_raw_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report missing field(s): "
+        "version, requested_frame_map, frame_convention, object_count, "
+        "joint_position_count, robot_urdf_path, asset_roots, warnings"
+    )
+
+
+def test_workspace_report_validation_rejects_invalid_frame_map(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "requested_frame_map": "sideways",
+            "frame_map": "sideways",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'frame_map' must be one of: "
+        "identity, studio-y-up-to-z-up"
+    )
+
+
+def test_workspace_report_validation_rejects_invalid_header_counts(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "object_count": 0,
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'object_count' must be greater than "
+        "or equal to primitive_count"
+    )
 
 
 def test_workspace_report_validation_accepts_required_artifact_paths(tmp_path) -> None:
