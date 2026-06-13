@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from backend.models.simulator_runtime import (
     SIMULATOR_GENESIS_ID,
+    SIMULATOR_BLENDER_ID,
     SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
@@ -19,6 +20,7 @@ from backend.services.simulator_adapters.base import (
     SimulatorAdapterError,
     SimulatorCapabilityError,
 )
+from backend.services.simulator_adapters.blender import BLENDER_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.genesis import (
     GENESIS_SIMULATOR_ADAPTER,
 )
@@ -33,6 +35,7 @@ WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = (
     SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
+    SIMULATOR_BLENDER_ID,
 )
 WORKSPACE_SIMULATOR_ID_SET = set(WORKSPACE_SIMULATOR_IDS)
 _OPTIONAL_SIMULATOR_ADAPTERS: dict[SimulatorId, SimulatorAdapter] = {
@@ -45,6 +48,7 @@ _SIMULATOR_ADAPTERS: dict[SimulatorId, SimulatorAdapter] = {
     MJLAB_SIMULATOR_ADAPTER.simulator_id: MJLAB_SIMULATOR_ADAPTER,
     MUJOCO_SIMULATOR_ADAPTER.simulator_id: MUJOCO_SIMULATOR_ADAPTER,
     PYBULLET_SIMULATOR_ADAPTER.simulator_id: PYBULLET_SIMULATOR_ADAPTER,
+    BLENDER_SIMULATOR_ADAPTER.simulator_id: BLENDER_SIMULATOR_ADAPTER,
     **_OPTIONAL_SIMULATOR_ADAPTERS,
 }
 

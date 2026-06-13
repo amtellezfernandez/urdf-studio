@@ -64,6 +64,7 @@ const createProps = (): TopNavBarProps => ({
   onImportWorldScenePackage: vi.fn(),
   onExportCurrentWorldSceneLayer: vi.fn(),
   onImportSceneLayerFromUrl: vi.fn(),
+  onImportBlenderLayoutChangeSet: vi.fn(),
   onListWorldScenePackages: vi.fn(),
   onOpenWorldHubBrowser: vi.fn(),
   openObjectCreator: vi.fn(),
@@ -299,6 +300,41 @@ describe("TopNavBar", () => {
       rolloutMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(props.onExportWorldRolloutCampaign).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("surfaces Blender layout import from the Worlds menu", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = {
+      ...createProps(),
+      showMenus: true,
+      onImportBlenderLayoutChangeSet: vi.fn(),
+    };
+
+    await renderTopNavBar(root, props);
+
+    const worldsButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Worlds"
+    );
+    expect(worldsButton).toBeTruthy();
+
+    await act(async () => {
+      worldsButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    });
+
+    const blenderMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
+      (item) => item.textContent === "Import Blender Layout"
+    );
+    expect(blenderMenuItem).toBeTruthy();
+
+    await act(async () => {
+      blenderMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onImportBlenderLayoutChangeSet).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -10,7 +10,7 @@ from backend.models.world_scene_package import WorldScenePackageManifest
 
 
 SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
-SimulatorWorkspaceAssetFormat = Literal["urdf", "mjcf", "usd"]
+SimulatorWorkspaceAssetFormat = Literal["urdf", "mjcf", "usd", "native"]
 SimulatorTransferStrategy = Literal["direct", "convert", "planned"]
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
@@ -119,6 +119,17 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
     unresolved_mesh_refs: list[str] = Field(default_factory=list)
 
 
+class BlenderLayoutChangeSetApplyRequest(BaseModel):
+    world_package: WorldScenePackageManifest
+    change_set: dict[str, Any]
+
+
+class BlenderLayoutChangeSetApplyResponse(BaseModel):
+    world_package: WorldScenePackageManifest
+    applied_change_count: int
+    review_only_count: int
+
+
 class SimulatorRuntimeCamelModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
@@ -165,7 +176,7 @@ class SimulatorTransferSpec:
         )
 
     def workspace_asset_format(self) -> SimulatorWorkspaceAssetFormat:
-        if self.robot_asset_format not in ("urdf", "mjcf", "usd"):
+        if self.robot_asset_format not in ("urdf", "mjcf", "usd", "native"):
             raise ValueError(
                 f"{self.robot_asset_format} is not a workspace simulator asset format"
             )
@@ -329,9 +340,10 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
     _runtime(
         SIMULATOR_BLENDER_ID,
         "Blender",
-        "usd",
-        "planned",
-        dependencies=(_dependency("bpy"),),
+        "native",
+        "direct",
+        workspace_target=True,
+        dependencies=(_dependency("blender", "bpy"),),
     ),
     _runtime(
         SIMULATOR_ROBOSPLATTER_ID,

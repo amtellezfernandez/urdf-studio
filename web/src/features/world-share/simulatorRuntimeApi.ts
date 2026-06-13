@@ -26,7 +26,7 @@ export type SimulatorWorkspacePrepareResponse = {
   world_package_path: string;
   robot_urdf_path: string;
   simulator_asset_path?: string | null;
-  simulator_asset_format?: "urdf" | "mjcf" | "usd" | null;
+  simulator_asset_format?: "urdf" | "mjcf" | "usd" | "native" | null;
   bundled_mesh_count: number;
   unresolved_mesh_refs: string[];
 };
@@ -40,6 +40,12 @@ export type SimulatorRuntimeStatus = {
 
 export type SimulatorRuntimeListResponse = {
   simulators: SimulatorRuntimeDescriptor[];
+};
+
+export type BlenderLayoutChangeSetApplyResponse = {
+  world_package: WorldScenePackageManifest;
+  applied_change_count: number;
+  review_only_count: number;
 };
 
 export type PrepareSimulatorWorkspaceParams = {
@@ -197,6 +203,35 @@ export const prepareSimulatorWorkspace = async ({
     throw new Error(detail || `${simulatorId} workspace preparation failed (${response.status})`);
   }
   return (await response.json()) as SimulatorWorkspacePrepareResponse;
+};
+
+export const applyBlenderLayoutChangeSet = async (
+  worldPackage: WorldScenePackageManifest,
+  changeSet: unknown
+): Promise<BlenderLayoutChangeSetApplyResponse> => {
+  const response = await guardedFetch(
+    `${API_BASE_URL}${SIMULATOR_API_BASE_PATH}/blender/layout-change-set/apply`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        world_package: worldPackage,
+        change_set: changeSet,
+      }),
+    },
+    {
+      requiredBackends: ["core-api"],
+      context: "Import Blender layout",
+    }
+  );
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new Error(detail || `Blender layout import failed (${response.status})`);
+  }
+  return (await response.json()) as BlenderLayoutChangeSetApplyResponse;
 };
 
 export const fetchSimulatorRuntimeStatus = async (

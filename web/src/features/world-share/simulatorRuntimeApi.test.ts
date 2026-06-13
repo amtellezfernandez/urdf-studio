@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  applyBlenderLayoutChangeSet,
   buildSimulatorMeshAssetUploads,
   fetchSimulatorRuntimeStatus,
   fetchSimulatorRuntimes,
@@ -10,6 +11,7 @@ import {
   SIMULATOR_GENESIS_ID,
   SIMULATOR_MJLAB_ID,
 } from "@/features/world-share/simulatorRuntimeParams";
+import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 
 const { guardedFetchMock } = vi.hoisted(() => ({
   guardedFetchMock: vi.fn(),
@@ -18,6 +20,37 @@ const { guardedFetchMock } = vi.hoisted(() => ({
 vi.mock("@/shared/lib/backendGuard", () => ({
   guardedFetch: guardedFetchMock,
 }));
+
+const createWorldPackage = (): WorldScenePackageManifest => ({
+  schema_version: "urdf-studio.world-scene-package.v1",
+  package_id: "demo_world",
+  version: "1.0.0",
+  title: "Demo World",
+  description: undefined,
+  created_at: "2026-01-01T00:00:00.000Z",
+  runtime_targets: [],
+  interface: {
+    observation_modalities: ["state"],
+    action_semantics: "joint_position",
+    timestep_ms: 10,
+    frame_convention: "ros-rep-103",
+  },
+  artifacts: [],
+  world_snapshot: {
+    urdf_xml: "<robot name=\"demo\"><link name=\"base\"/></robot>",
+    joint_positions: {},
+    cameras: [],
+    objects: [],
+    scenario_time_ms: 0,
+    scenario_duration_ms: 0,
+  },
+  provenance: {},
+  security: {
+    signature_ref: null,
+    attestation_refs: [],
+    sbom_ref: null,
+  },
+});
 
 describe("simulatorRuntimeApi", () => {
   beforeEach(() => {
@@ -46,36 +79,7 @@ describe("simulatorRuntimeApi", () => {
 
     const prepared = await prepareSimulatorWorkspace({
       simulatorId: SIMULATOR_GENESIS_ID,
-      worldPackage: {
-        schema_version: "urdf-studio.world-scene-package.v1",
-        package_id: "demo_world",
-        version: "1.0.0",
-        title: "Demo World",
-        description: undefined,
-        created_at: "2026-01-01T00:00:00.000Z",
-        runtime_targets: [],
-        interface: {
-          observation_modalities: ["state"],
-          action_semantics: "joint_position",
-          timestep_ms: 10,
-          frame_convention: "ros-rep-103",
-        },
-        artifacts: [],
-        world_snapshot: {
-          urdf_xml: "<robot name=\"demo\"><link name=\"base\"/></robot>",
-          joint_positions: {},
-          cameras: [],
-          objects: [],
-          scenario_time_ms: 0,
-          scenario_duration_ms: 0,
-        },
-        provenance: {},
-        security: {
-          signature_ref: null,
-          attestation_refs: [],
-          sbom_ref: null,
-        },
-      },
+      worldPackage: createWorldPackage(),
       meshFiles: {},
       simulatorLabel: "Genesis",
     });
@@ -112,6 +116,39 @@ describe("simulatorRuntimeApi", () => {
     );
     expect(uploads[0].mime).toBe("model/stl");
     expect(uploads[0].content_base64.length).toBeGreaterThan(0);
+  });
+
+  it("applies a Blender layout change-set through the guarded backend", async () => {
+    guardedFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          world_package: createWorldPackage(),
+          applied_change_count: 1,
+          review_only_count: 0,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const response = await applyBlenderLayoutChangeSet(
+      createWorldPackage(),
+      {
+        schema: "urdf-studio.blender-change-set.v1",
+        changes: [],
+      }
+    );
+
+    expect(response.applied_change_count).toBe(1);
+    expect(guardedFetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/simulators/blender/layout-change-set/apply"),
+      expect.objectContaining({
+        method: "POST",
+      }),
+      {
+        requiredBackends: ["core-api"],
+        context: "Import Blender layout",
+      }
+    );
   });
 
   it("does not assign the same alias to different mesh blobs", async () => {

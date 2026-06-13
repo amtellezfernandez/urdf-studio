@@ -96,6 +96,22 @@ def _open_request_payload() -> dict:
     }
 
 
+def _world_package_with_layout_object_payload() -> dict:
+    payload = _world_package_payload()
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "cube",
+            "position_xyz": [0.0, 0.0, 0.0],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+        }
+    ]
+    return payload
+
+
 def test_simulator_registry_covers_literal_ids() -> None:
     assert set(SUPPORTED_SIMULATOR_IDS) == set(get_args(SimulatorId))
     assert [spec.simulator_id for spec in SIMULATOR_RUNTIME_SPECS] == list(SUPPORTED_SIMULATOR_IDS)
@@ -121,7 +137,7 @@ def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
         "isaacsim": "usd",
         "isaacgym": "urdf",
         "newton": "mjcf",
-        "blender": "usd",
+        "blender": "native",
         "robosplatter": "native",
     }
 
@@ -269,7 +285,6 @@ def test_non_workspace_target_simulators_are_registered_but_not_openable() -> No
         "isaacsim",
         "isaacgym",
         "newton",
-        "blender",
         "robosplatter",
     ]
 
@@ -286,6 +301,68 @@ def test_non_workspace_target_simulators_are_registered_but_not_openable() -> No
 
             assert response.status_code == 501
             assert "workspace adapter is planned" in response.json()["detail"]
+
+
+def test_apply_blender_layout_change_set_updates_world_objects() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/blender/layout-change-set/apply",
+                headers=_operator_headers(),
+                json={
+                    "world_package": _world_package_with_layout_object_payload(),
+                    "change_set": {
+                        "schema": "urdf-studio.blender-change-set.v1",
+                        "changes": [
+                            {
+                                "entity_type": "world_object",
+                                "stable_id": "crate",
+                                "position_xyz": [1.0, 2.0, 3.0],
+                                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                                "size_xyz": [0.5, 0.6, 0.7],
+                            }
+                        ],
+                        "review_only": [
+                            {
+                                "entity_type": "camera",
+                                "stable_id": "scene-camera",
+                            }
+                        ],
+                    },
+                },
+            )
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    updated_object = payload["world_package"]["world_snapshot"]["objects"][0]
+    assert updated_object["position_xyz"] == [1.0, 2.0, 3.0]
+    assert updated_object["rotation_rpy_rad"] == [0.0, 0.0, 0.0]
+    assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
+    assert payload["applied_change_count"] == 1
+    assert payload["review_only_count"] == 1
+
+
+def test_apply_blender_layout_change_set_rejects_invalid_schema() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/blender/layout-change-set/apply",
+                headers=_operator_headers(),
+                json={
+                    "world_package": _world_package_with_layout_object_payload(),
+                    "change_set": {
+                        "schema": "not-blender",
+                        "changes": [],
+                    },
+                },
+            )
+        )
+
+    assert response.status_code == 422
+    assert "Unsupported Blender change-set schema" in response.json()["detail"]
 
 
 def test_simulator_runtime_status_uses_adapter_registry(monkeypatch) -> None:

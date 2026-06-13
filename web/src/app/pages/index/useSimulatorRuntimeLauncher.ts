@@ -6,8 +6,10 @@ import type {
 } from "@/features/layout/page/HealthActionPanelSimulatorRuntime";
 import {
   fetchSimulatorRuntimes,
+  fetchSimulatorRuntimeStatus,
   prepareSimulatorWorkspace,
   type SimulatorRuntimeDescriptor,
+  type SimulatorRuntimeStatus,
 } from "@/features/world-share/simulatorRuntimeApi";
 import {
   canOpenSimulatorWorkspace,
@@ -36,10 +38,15 @@ const SIMULATOR_ASSET_FORMAT_LABELS = new Map<string, string>([
 const formatSimulatorAssetFormat = (format: string): string =>
   SIMULATOR_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
 
-const resolveSimulatorRuntimeDetail = (descriptor: SimulatorRuntimeDescriptor): string => {
+const resolveSimulatorRuntimeDetail = (
+  descriptor: SimulatorRuntimeDescriptor,
+  status?: SimulatorRuntimeStatus
+): string => {
   const assetFormat = formatSimulatorAssetFormat(descriptor.transferPolicy.robotAssetFormat);
   if (!canOpenSimulatorWorkspace(descriptor)) return `${assetFormat} support planned`;
+  if (status && !status.available) return `${assetFormat} runtime unavailable: ${status.status}`;
   if (descriptor.capabilities.motionValidation) return `${assetFormat} open and validation`;
+  if (descriptor.simulatorId === "blender") return `${assetFormat} layout edit`;
   return `${assetFormat} open`;
 };
 
@@ -55,6 +62,9 @@ export const useSimulatorRuntimeLauncher = ({
   const [loadingSimulatorId, setLoadingSimulatorId] = useState<SimulatorId | null>(null);
   const [lastLoadedSimulatorId, setLastLoadedSimulatorId] = useState<SimulatorId | null>(null);
   const [runtimeDescriptors, setRuntimeDescriptors] = useState<SimulatorRuntimeDescriptor[]>([]);
+  const [runtimeStatuses, setRuntimeStatuses] = useState<
+    Partial<Record<SimulatorId, SimulatorRuntimeStatus>>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -73,11 +83,45 @@ export const useSimulatorRuntimeLauncher = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (runtimeDescriptors.length === 0) {
+      setRuntimeStatuses({});
+      return;
+    }
+    let cancelled = false;
+    void Promise.all(
+      runtimeDescriptors.map(async (descriptor) => {
+        try {
+          return [descriptor.simulatorId, await fetchSimulatorRuntimeStatus(descriptor.simulatorId)] as const;
+        } catch (error) {
+          return [
+            descriptor.simulatorId,
+            {
+              runtimeName: descriptor.simulatorId,
+              available: false,
+              status: error instanceof Error ? error.message : "runtime status unavailable",
+              dependencies: [],
+            },
+          ] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setRuntimeStatuses(
+        Object.fromEntries(entries) as Partial<Record<SimulatorId, SimulatorRuntimeStatus>>
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeDescriptors]);
+
   const handleOpenSimulator = useCallback(
     async (descriptor: SimulatorRuntimeDescriptor) => {
       if (loadingSimulatorId !== null) return;
-      if (!canOpenSimulatorWorkspace(descriptor)) {
-        toast.message(`${descriptor.label} support is planned.`);
+      const status = runtimeStatuses[descriptor.simulatorId];
+      if (!canOpenSimulatorWorkspace(descriptor) || status?.available === false) {
+        toast.message(status?.status || `${descriptor.label} support is planned.`);
         return;
       }
       if (!vizUrdfContent && !originalUrdfContent) {
@@ -118,6 +162,7 @@ export const useSimulatorRuntimeLauncher = ({
       loadingSimulatorId,
       originalUrdfContent,
       packageRoots,
+      runtimeStatuses,
       vizUrdfContent,
     ]
   );
@@ -126,22 +171,32 @@ export const useSimulatorRuntimeLauncher = ({
     const targets = runtimeDescriptors.map((descriptor): SimulatorRuntimeTargetState => {
       const isBusy = loadingSimulatorId === descriptor.simulatorId;
       const isActive = lastLoadedSimulatorId === descriptor.simulatorId;
-      const canOpen = canOpenSimulatorWorkspace(descriptor);
+      const status = runtimeStatuses[descriptor.simulatorId];
+      const canOpen = canOpenSimulatorWorkspace(descriptor) && status?.available !== false;
+      const plannedLabel = canOpenSimulatorWorkspace(descriptor)
+        ? `${descriptor.label} runtime unavailable`
+        : `${descriptor.label} support planned`;
       return {
         id: descriptor.simulatorId,
         label: descriptor.label,
-        detail: resolveSimulatorRuntimeDetail(descriptor),
+        detail: resolveSimulatorRuntimeDetail(descriptor, status),
         openLabel: `Open ${descriptor.label}`,
         openingLabel: `Opening ${descriptor.label}`,
         isBusy,
         isActive,
         canOpen,
-        plannedLabel: `${descriptor.label} support planned`,
+        plannedLabel: status?.available === false ? status.status : plannedLabel,
         onAction: () => handleOpenSimulator(descriptor),
       };
     });
     return { targets };
-  }, [handleOpenSimulator, lastLoadedSimulatorId, loadingSimulatorId, runtimeDescriptors]);
+  }, [
+    handleOpenSimulator,
+    lastLoadedSimulatorId,
+    loadingSimulatorId,
+    runtimeDescriptors,
+    runtimeStatuses,
+  ]);
 
   return {
     simulatorRuntime,

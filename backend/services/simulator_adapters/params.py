@@ -10,6 +10,7 @@ GENESIS_SIMULATOR_ID = "genesis"
 MJLAB_SIMULATOR_ID = "mjlab"
 MUJOCO_SIMULATOR_ID = "mujoco"
 PYBULLET_SIMULATOR_ID = "pybullet"
+BLENDER_SIMULATOR_ID = "blender"
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,12 @@ class PyBulletSceneParams:
     camera_far_m: float
 
 
-SimulatorSceneParams: TypeAlias = GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams
+@dataclass(frozen=True)
+class BlenderSceneParams:
+    workspace_mode: str
+
+
+SimulatorSceneParams: TypeAlias = GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams | BlenderSceneParams
 
 
 GENESIS_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
@@ -138,6 +144,13 @@ PYBULLET_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     module_name="backend.scripts.pybullet_workspace_prepare",
     log_name="pybullet.log",
     ready_log_marker="[pybullet-workspace] workspace ready.",
+)
+BLENDER_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "blender",
+    module_name="backend.scripts.blender_workspace_prepare",
+    log_name="blender.log",
+    ready_log_marker="[blender-workspace] workspace ready.",
+    ready_timeout_sec=120.0,
 )
 
 GENESIS_SCENE_PARAMS = GenesisSceneParams(
@@ -202,16 +215,21 @@ PYBULLET_SCENE_PARAMS = PyBulletSceneParams(
     camera_near_m=0.01,
     camera_far_m=25.0,
 )
+BLENDER_SCENE_PARAMS = BlenderSceneParams(
+    workspace_mode="visual-layout-round-trip-v1",
+)
 
 SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[str, SimulatorWorkspaceProcessParams] = {
     GENESIS_SIMULATOR_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
     MJLAB_SIMULATOR_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_SIMULATOR_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_SIMULATOR_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
+    BLENDER_SIMULATOR_ID: BLENDER_WORKSPACE_PROCESS_PARAMS,
 }
 SIMULATOR_SCENE_PARAMS_BY_ID: dict[str, SimulatorSceneParams] = {
     GENESIS_SIMULATOR_ID: GENESIS_SCENE_PARAMS,
     MJLAB_SIMULATOR_ID: MUJOCO_SCENE_PARAMS,
     MUJOCO_SIMULATOR_ID: MUJOCO_SCENE_PARAMS,
     PYBULLET_SIMULATOR_ID: PYBULLET_SCENE_PARAMS,
+    BLENDER_SIMULATOR_ID: BLENDER_SCENE_PARAMS,
 }

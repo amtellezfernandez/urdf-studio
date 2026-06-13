@@ -116,6 +116,15 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 2. Use the episode list to play the first or second episode.
 3. Watch the graph and 3D robot together. They should stay synchronized.
 
+### Edit A Layout In Blender
+
+1. Open the simulator panel and click `Blender`.
+2. In Blender, edit world object transforms and dimensions.
+3. Run the generated `export_blender_changes.py` script from that Blender session.
+4. Back in Studio, use `Worlds` -> `Import Blender Layout` and select `blender-change-set.json`.
+
+Studio applies only world object layout changes. Robot kinematics, inertials, collisions, transmissions, and camera edits stay under Studio review.
+
 ### Replay Dataset Episodes
 
 1. Load a dataset or sample motion.

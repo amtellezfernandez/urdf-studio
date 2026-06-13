@@ -45,7 +45,7 @@ const SIMULATOR_RUNTIME_ROWS = [
   ["isaacsim", "Isaac Sim", "usd", "planned"],
   ["isaacgym", "Isaac Gym", "urdf", "planned"],
   ["newton", "Newton", "mjcf", "planned"],
-  ["blender", "Blender", "usd", "planned"],
+  ["blender", "Blender", "native", "direct", true],
   ["robosplatter", "RoboSplatter", "native", "planned"],
 ] as const satisfies readonly SimulatorRuntimeSpecRow[];
 

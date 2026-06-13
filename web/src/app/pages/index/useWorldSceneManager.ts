@@ -22,6 +22,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
+import { applyBlenderLayoutChangeSet } from "@/features/world-share/simulatorRuntimeApi";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import { resolveWorldObjectGeometry, type CreatedObject } from "@/features/objects";
 import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjectGeometry";
@@ -516,6 +517,31 @@ export const useWorldSceneManager = ({
     input.click();
   }, [applyImportedWorldScenePackage]);
 
+  const handleImportBlenderLayoutChangeSet = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = WORLD_SCENE_PACKAGE_IMPORT_ACCEPT;
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const currentWorldPackage = await buildCurrentWorldScenePackageManifest();
+        const changeSet = JSON.parse(await file.text()) as unknown;
+        const applied = await applyBlenderLayoutChangeSet(currentWorldPackage, changeSet);
+        applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
+        setActiveWorldSnapshotRef(null);
+        const reviewOnly =
+          applied.review_only_count > 0 ? `, ${applied.review_only_count} review-only` : "";
+        toast.success(
+          `Imported Blender layout: ${applied.applied_change_count} object changes${reviewOnly}`
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to import Blender layout");
+      }
+    };
+    input.click();
+  }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest, setActiveWorldSnapshotRef]);
+
   const refreshWorldRegistry = useCallback(async () => {
     try {
       requireFeatureGate(FEATURE_GATES.worldsRegistry, "World registry refresh");
@@ -759,6 +785,7 @@ export const useWorldSceneManager = ({
     handleExportWorldRolloutCampaign,
     handleRunLocalWorldRollout,
     handleImportWorldRolloutResults,
+    handleImportBlenderLayoutChangeSet,
     setWorldRolloutReviewOpen,
     worldRolloutReview,
     worldRolloutReviewOpen,

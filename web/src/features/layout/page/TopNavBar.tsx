@@ -71,6 +71,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
               <WorldsMenu
                 onExportCurrentWorldSceneLayer={props.onExportCurrentWorldSceneLayer}
                 onImportSceneLayerFromUrl={props.onImportSceneLayerFromUrl}
+                onImportBlenderLayoutChangeSet={props.onImportBlenderLayoutChangeSet}
                 onExportCurrentWorldScenePackage={props.onExportCurrentWorldScenePackage}
                 onImportWorldScenePackage={props.onImportWorldScenePackage}
                 onValidateCurrentWorldScenePackage={props.onValidateCurrentWorldScenePackage}
