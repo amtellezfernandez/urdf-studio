@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 
 from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID
+from backend.scripts import blender_workspace_prepare as blender_prepare
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
 from backend.services.simulator_adapters import blender as blender_adapter
 from backend.services.simulator_adapters.blender_runtime import resolve_blender_executable
+from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_CHANGE_SET_SCHEMA,
     BLENDER_EDIT_SESSION_SCHEMA,
@@ -412,6 +414,75 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     ast.parse(export_script)
     assert "new_world_object" in export_script
     assert "deleted_world_object" in export_script
+
+
+class _FakeBlenderProcess:
+    def __init__(self, lines: list[str], returncode: int = 0):
+        self.stdout = iter(lines)
+        self.returncode = returncode
+        self.terminated = False
+
+    def wait(self) -> int:
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+
+def test_blender_workspace_runner_reports_ready_after_edit_session_load(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return _FakeBlenderProcess(
+            [
+                "Blender booting\n",
+                f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+                "[urdf-studio-blender] blend written: /tmp/layout.blend\n",
+            ]
+        )
+
+    monkeypatch.setattr(blender_prepare.subprocess, "Popen", fake_popen)
+
+    blender_prepare._run_blender_workspace_until_ready(
+        blender_executable="/usr/bin/blender",
+        open_script_path=tmp_path / "open_blender_scene.py",
+        cwd=tmp_path,
+    )
+
+    output = capsys.readouterr().out
+    assert captured["command"] == [
+        "/usr/bin/blender",
+        "--python",
+        str(tmp_path / "open_blender_scene.py"),
+    ]
+    assert blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER in output
+    assert BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker in output
+    assert output.index(blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER) < output.index(
+        BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker
+    )
+
+
+def test_blender_workspace_runner_rejects_exit_before_edit_session_load(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        blender_prepare.subprocess,
+        "Popen",
+        lambda _command, **_kwargs: _FakeBlenderProcess(["Blender booting\n"], returncode=0),
+    )
+
+    with pytest.raises(RuntimeError, match="before loading the URDF Studio edit session"):
+        blender_prepare._run_blender_workspace_until_ready(
+            blender_executable="/usr/bin/blender",
+            open_script_path=tmp_path / "open_blender_scene.py",
+            cwd=tmp_path,
+        )
+
+    assert BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker not in capsys.readouterr().out
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -23,6 +24,8 @@ from backend.services.simulator_adapters.world_scene import (
     write_simulator_validation_report,
 )
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
+
+BLENDER_EDIT_SESSION_LOADED_MARKER = "[urdf-studio-blender] edit session loaded:"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -107,21 +110,51 @@ def prepare_blender_workspace_scene(
         raise RuntimeError(
             f"Blender executable was not found. Install Blender or set {BLENDER_PATH_ENV}."
         )
+    _run_blender_workspace_until_ready(
+        blender_executable=blender_executable,
+        open_script_path=artifacts.open_script_path,
+        cwd=world_package_path.parent,
+    )
+
+
+def _run_blender_workspace_until_ready(
+    *,
+    blender_executable: str,
+    open_script_path: Path,
+    cwd: Path,
+) -> None:
     process = subprocess.Popen(
         [
             blender_executable,
             "--python",
-            str(artifacts.open_script_path),
+            str(open_script_path),
         ],
-        cwd=world_package_path.parent,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",
+        bufsize=1,
     )
-    print(BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
+    ready = False
     try:
-        while process.poll() is None:
-            time.sleep(0.5)
+        assert process.stdout is not None
+        for line in process.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            if not ready and BLENDER_EDIT_SESSION_LOADED_MARKER in line:
+                ready = True
+                print(BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
+        returncode = process.wait()
     except KeyboardInterrupt:
         process.terminate()
         raise
+    if not ready:
+        raise RuntimeError(
+            f"Blender exited before loading the URDF Studio edit session with code {returncode}."
+        )
+    if returncode != 0:
+        raise RuntimeError(f"Blender workspace process exited with code {returncode}.")
 
 
 def main() -> int:
