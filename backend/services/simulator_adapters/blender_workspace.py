@@ -20,6 +20,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
     BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES,
 )
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
+from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
 
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
@@ -155,7 +156,7 @@ def build_blender_edit_session(
     export_script_path: Path,
     camera_screenshot_dir: Path | None = None,
 ) -> dict[str, Any]:
-    objects = [_blender_object_entry(primitive) for primitive in scene.primitives]
+    objects = [_blender_object_entry(primitive, scene.robot.asset_roots) for primitive in scene.primitives]
     change_set_source = build_blender_change_set_source(
         scene.world_package,
         frame_map=scene.frame_map,
@@ -280,6 +281,11 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 position = entry.get("position_xyz", [0.0, 0.0, 0.0])
                 quat = entry.get("quat_wxyz", [1.0, 0.0, 0.0, 0.0])
                 size = vector3(entry, "size_xyz", [1.0, 1.0, 1.0])
+                rgba = entry.get("rgba", [0.8, 0.8, 0.8, 1.0])
+                if entry.get("asset_path"):
+                    imported = add_mesh_asset_object(entry, position, quat, size, rgba)
+                    if imported is not None:
+                        return imported
                 if sim_type == "sphere":
                     bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=0.5, location=position)
                 elif sim_type == "cylinder":
@@ -287,15 +293,81 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 else:
                     bpy.ops.mesh.primitive_cube_add(size=1.0, location=position)
                 obj = bpy.context.object
+                apply_world_object_transform(obj, entry, position, quat, size, rgba)
+                return obj
+
+
+            def apply_world_object_transform(obj, entry, position, quat, size, rgba):
                 obj.name = entry.get("sim_name") or entry.get("stable_id") or "world_object"
+                obj.location = position
                 obj.rotation_mode = "QUATERNION"
                 obj.rotation_quaternion = quat
                 obj.scale = size
                 assign_metadata(obj, "world_object", entry)
                 obj["urdf_studio_base_size_xyz"] = [1.0, 1.0, 1.0]
-                rgba = entry.get("rgba", [0.8, 0.8, 0.8, 1.0])
                 obj.color = tuple(rgba)
-                obj.data.materials.append(material_for(f"mat_{{obj.name}}", rgba))
+                data = getattr(obj, "data", None)
+                materials = getattr(data, "materials", None)
+                if materials is not None:
+                    materials.append(material_for(f"mat_{{obj.name}}", rgba))
+
+
+            def mesh_asset_importer(path):
+                suffix = path.suffix.lower()
+                if suffix in {{".glb", ".gltf"}}:
+                    return getattr(bpy.ops.import_scene, "gltf", None)
+                if suffix == ".obj":
+                    return getattr(bpy.ops.wm, "obj_import", None) or getattr(bpy.ops.import_scene, "obj", None)
+                if suffix == ".stl":
+                    return getattr(bpy.ops.wm, "stl_import", None) or getattr(getattr(bpy.ops, "import_mesh", None), "stl", None)
+                if suffix == ".ply":
+                    return getattr(bpy.ops.wm, "ply_import", None) or getattr(getattr(bpy.ops, "import_mesh", None), "ply", None)
+                if suffix == ".dae":
+                    return getattr(bpy.ops.wm, "collada_import", None)
+                if suffix in {{".usd", ".usda", ".usdc"}}:
+                    return getattr(bpy.ops.wm, "usd_import", None)
+                return None
+
+
+            def apply_material_to_unassigned_meshes(objects, rgba):
+                material = material_for("mat_imported_world_object", rgba)
+                for obj in objects:
+                    data = getattr(obj, "data", None)
+                    materials = getattr(data, "materials", None)
+                    if materials is not None and len(materials) == 0:
+                        materials.append(material)
+
+
+            def add_mesh_asset_object(entry, position, quat, size, rgba):
+                asset_path_value = entry.get("asset_path")
+                if not asset_path_value:
+                    return None
+                asset_path = Path(asset_path_value)
+                importer = mesh_asset_importer(asset_path)
+                if importer is None or not asset_path.is_file():
+                    print(f"[urdf-studio-blender] mesh asset unavailable: {{asset_path}}", flush=True)
+                    return None
+                before_import = set(bpy.data.objects)
+                try:
+                    importer(filepath=str(asset_path))
+                except Exception as exc:
+                    print(f"[urdf-studio-blender] mesh asset import failed: {{asset_path}}: {{exc}}", flush=True)
+                    return None
+                imported = [obj for obj in bpy.data.objects if obj not in before_import]
+                if not imported:
+                    print(f"[urdf-studio-blender] mesh asset import produced no objects: {{asset_path}}", flush=True)
+                    return None
+                bpy.ops.object.empty_add(type="PLAIN_AXES", location=position)
+                root = bpy.context.object
+                apply_world_object_transform(root, entry, position, quat, size, rgba)
+                root["urdf_studio_asset_path"] = str(asset_path)
+                apply_material_to_unassigned_meshes(imported, rgba)
+                for child in imported:
+                    child.parent = root
+                    child["urdf_studio_kind"] = "world_object_mesh_child"
+                    child["urdf_studio_parent_stable_id"] = entry.get("stable_id", "")
+                    child.hide_select = True
+                return root
 
 
             def add_camera(entry):
@@ -459,6 +531,14 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
 
 
             def local_size_xyz(obj):
+                base_size = obj.get("urdf_studio_base_size_xyz")
+                if isinstance(base_size, list) and len(base_size) == 3:
+                    scale = vector3(obj.scale)
+                    return [
+                        abs(float(base_size[0]) * scale[0]),
+                        abs(float(base_size[1]) * scale[1]),
+                        abs(float(base_size[2]) * scale[2]),
+                    ]
                 bounds = getattr(obj, "bound_box", None)
                 if not bounds:
                     return vector3(obj.dimensions)
@@ -575,7 +655,8 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
     )
 
 
-def _blender_object_entry(primitive: Any) -> dict[str, Any]:
+def _blender_object_entry(primitive: Any, asset_roots: Sequence[Path]) -> dict[str, Any]:
+    asset_path = resolve_world_layout_asset_path(primitive.asset_ref, asset_roots)
     return {
         "kind": "world_object",
         "stable_id": primitive.source_id,
@@ -592,5 +673,6 @@ def _blender_object_entry(primitive: Any) -> dict[str, Any]:
         "mass_kg": primitive.mass_kg,
         "semantic_role": primitive.semantic_role,
         "asset_ref": primitive.asset_ref,
+        "asset_path": str(asset_path) if asset_path is not None else None,
         "asset_scale_xyz": list(primitive.asset_scale_xyz) if primitive.asset_scale_xyz else None,
     }

@@ -135,8 +135,22 @@ class FakeBlenderModule(types.ModuleType):
                 primitive_cube_add=self._add_mesh,
             ),
             render=types.SimpleNamespace(render=self._render),
-            wm=types.SimpleNamespace(save_as_mainfile=self._save_as_mainfile),
-            import_scene=types.SimpleNamespace(),
+            wm=types.SimpleNamespace(
+                save_as_mainfile=self._save_as_mainfile,
+                obj_import=self._import_mesh_file,
+                stl_import=self._import_mesh_file,
+                ply_import=self._import_mesh_file,
+                collada_import=self._import_mesh_file,
+                usd_import=self._import_mesh_file,
+            ),
+            import_scene=types.SimpleNamespace(
+                gltf=self._import_mesh_file,
+                obj=self._import_mesh_file,
+            ),
+            import_mesh=types.SimpleNamespace(
+                stl=self._import_mesh_file,
+                ply=self._import_mesh_file,
+            ),
         )
 
     def _new_material(self, name: str):
@@ -168,6 +182,11 @@ class FakeBlenderModule(types.ModuleType):
     def _add_mesh(self, **kwargs):
         location = kwargs.get("location", (0.0, 0.0, 0.0))
         return self._append_object(_FakeObject("mesh", "MESH", location))
+
+    def _import_mesh_file(self, *, filepath: str):
+        obj = _FakeObject(Path(filepath).stem or "imported_mesh", "MESH")
+        obj["fake_import_path"] = filepath
+        return self._append_object(obj)
 
     def _render(self, *, write_still: bool):
         assert write_still is True

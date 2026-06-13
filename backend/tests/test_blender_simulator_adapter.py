@@ -1046,6 +1046,87 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert result.world_package.world_snapshot.objects[1]["color"] == "#336699"
 
 
+def test_generated_blender_scripts_import_mesh_world_objects(monkeypatch, tmp_path: Path) -> None:
+    urdf_xml = "<robot name=\"mesh_world\"><link name=\"base_link\"/></robot>"
+    mesh_path = tmp_path / "assets" / "crate.obj"
+    mesh_path.parent.mkdir(parents=True)
+    mesh_path.write_text("o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", encoding="utf-8")
+    world_package = make_world_package(
+        urdf_xml,
+        objects=[
+            {
+                "id": "crate",
+                "name": "Crate Mesh",
+                "type": "mesh",
+                "position_xyz": [0.1, 0.2, 0.3],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.4, 0.5, 0.6],
+                "color": "#22c55e",
+                "asset_ref": "assets/crate.obj",
+            }
+        ],
+    )
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    world_package_path.write_text(
+        json.dumps(world_package.model_dump(mode="json")),
+        encoding="utf-8",
+    )
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    assert edit_session["objects"][0]["asset_path"] == str(mesh_path)
+
+    fake_bpy = FakeBlenderModule()
+    monkeypatch.setitem(sys.modules, "bpy", fake_bpy)
+    runpy.run_path(str(artifacts.open_script_path), run_name="__main__")
+
+    world_roots = [
+        obj for obj in fake_bpy.data.objects if obj.get("urdf_studio_kind") == "world_object"
+    ]
+    mesh_children = [
+        obj
+        for obj in fake_bpy.data.objects
+        if obj.get("urdf_studio_kind") == "world_object_mesh_child"
+    ]
+    assert len(world_roots) == 1
+    assert len(mesh_children) == 1
+    assert world_roots[0].type == "EMPTY"
+    assert world_roots[0]["urdf_studio_asset_path"] == str(mesh_path)
+    assert world_roots[0].scale == [0.4, 0.5, 0.6]
+    assert mesh_children[0].parent is world_roots[0]
+    assert mesh_children[0]["fake_import_path"] == str(mesh_path)
+
+    world_roots[0].location = [1.0, 2.0, 3.0]
+    world_roots[0].scale = [0.7, 0.8, 0.9]
+    runpy.run_path(str(artifacts.export_script_path), run_name="__main__")
+
+    change_set = json.loads(artifacts.change_set_path.read_text(encoding="utf-8"))
+    assert change_set["changes"] == [
+        {
+            "entity_type": "world_object",
+            "position_xyz": [1.0, 2.0, 3.0],
+            "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "rgba": [0.13333333333333333, 0.7725490196078432, 0.3686274509803922, 1.0],
+            "sim_name": "wl_crate",
+            "size_xyz": [0.7, 0.8, 0.9],
+            "stable_id": "crate",
+        }
+    ]
+    assert change_set["review_only"] == []
+
+
 class _FakeBlenderProcess:
     def __init__(self, lines: list[str], returncode: int = 0):
         self.stdout = iter(lines)
