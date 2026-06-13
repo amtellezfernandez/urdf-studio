@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from fastapi import HTTPException
 from fastapi.responses import Response
@@ -20,6 +22,10 @@ from backend.models.robot_mastering import (
     RobotMasteringJobStatusResponse,
 )
 from backend.services.robot_mastering import RobotMasteringError
+
+
+def _run_api(coro):
+    return asyncio.run(coro)
 
 
 def test_robot_mastering_job_endpoints_expose_create_status_and_result(
@@ -73,10 +79,10 @@ def test_robot_mastering_job_endpoints_expose_create_status_and_result(
         linkNames=["arm_link"],
     )
 
-    created = robot_mastering_api.create_robot_mastering_job(request)
-    status = robot_mastering_api.get_robot_mastering_job_status("rm-123")
-    result = robot_mastering_api.get_robot_mastering_job_result("rm-123")
-    artifact = robot_mastering_api.get_robot_mastering_artifact("rm-123", "draft.urdf")
+    created = _run_api(robot_mastering_api.create_robot_mastering_job(request))
+    status = _run_api(robot_mastering_api.get_robot_mastering_job_status("rm-123"))
+    result = _run_api(robot_mastering_api.get_robot_mastering_job_result("rm-123"))
+    artifact = _run_api(robot_mastering_api.get_robot_mastering_artifact("rm-123", "draft.urdf"))
 
     assert created.job_id == "rm-123"
     assert status.status == "succeeded"
@@ -104,7 +110,7 @@ def test_robot_mastering_preflight_endpoint_maps_service_response(
         packageRoots={},
     )
 
-    response = robot_mastering_api.generate_physics_preflight(request)
+    response = _run_api(robot_mastering_api.generate_physics_preflight(request))
 
     assert response.audit_summary == {"totalLinkCount": 12}
     assert response.plausibility_summary == {"verdict": "plausible"}
@@ -126,7 +132,7 @@ def test_robot_mastering_frame_preflight_endpoint_maps_service_response(
         sourceUrdf="<robot name='demo'/>",
     )
 
-    response = robot_mastering_api.frame_preflight(request)
+    response = _run_api(robot_mastering_api.frame_preflight(request))
 
     assert response.orientation_card == {"isValid": True}
     assert response.frame_lint == {"verdict": "canonical", "rewriteSafe": True}
@@ -169,7 +175,7 @@ def test_robot_mastering_bake_export_endpoint_maps_service_response(
         packageRoots={},
     )
 
-    response = robot_mastering_api.bake_export_execute(request)
+    response = _run_api(robot_mastering_api.bake_export_execute(request))
 
     assert response.overrides[0].source_reference == "meshes/base.obj"
     assert response.overrides[0].blob.base64_content == "YmFrZWQ="
@@ -209,7 +215,7 @@ def test_robot_mastering_canonical_synthesis_endpoint_maps_service_response(
         },
     )
 
-    response = robot_mastering_api.canonical_synthesis(request)
+    response = _run_api(robot_mastering_api.canonical_synthesis(request))
 
     assert response.preview["rootLinkName"] == "base_link"
     assert response.draft_content == "<robot name='draft' />"
@@ -227,7 +233,7 @@ def test_robot_mastering_result_endpoint_maps_service_errors(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        robot_mastering_api.get_robot_mastering_job_result("rm-123")
+        _run_api(robot_mastering_api.get_robot_mastering_job_result("rm-123"))
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "Robot mastering job is not complete."

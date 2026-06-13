@@ -2997,14 +2997,16 @@ def test_lerobot_calibration_open_resolves_selected_file(
         lambda cmd: cmd if cmd == "cursor" else None,
     )
 
-    result = robot_gateway_api.open_robot_gateway_lerobot_calibration(
-        RobotGatewayLeRobotCalibrationStartRequest(
-            calibrationSource=RobotGatewayLeRobotCalibrationSource(
-                category="robots",
-                profileId="so100_follower",
-                calibrationId="mixed-arm",
-                calibrationDir=str(calibration_dir),
-                groupId="all",
+    result = _run_api(
+        robot_gateway_api.open_robot_gateway_lerobot_calibration(
+            RobotGatewayLeRobotCalibrationStartRequest(
+                calibrationSource=RobotGatewayLeRobotCalibrationSource(
+                    category="robots",
+                    profileId="so100_follower",
+                    calibrationId="mixed-arm",
+                    calibrationDir=str(calibration_dir),
+                    groupId="all",
+                )
             )
         )
     )
@@ -3039,19 +3041,21 @@ def test_lerobot_calibration_sync_releases_only_selected_leader_reader(
         fake_release,
     )
 
-    result = robot_gateway_api.sync_robot_gateway_lerobot_calibration_file(
-        RobotGatewayLeRobotCalibrationFileSyncRequest(
-            role="leader",
-            lastMtimeNs=0,
-            leaderPort="/dev/serial/by-id/openarm-right",
-            leaderMotorIds=[1, 2, 3, 4, 5, 6, 7, 8],
-            leaderMotorModel="sts3215",
-            calibrationSource=RobotGatewayLeRobotCalibrationSource(
-                category="teleoperators",
-                profileId="openarm_mini",
-                calibrationId="bimanual",
-                calibrationDir=str(calibration_dir),
-                groupId="right",
+    result = _run_api(
+        robot_gateway_api.sync_robot_gateway_lerobot_calibration_file(
+            RobotGatewayLeRobotCalibrationFileSyncRequest(
+                role="leader",
+                lastMtimeNs=0,
+                leaderPort="/dev/serial/by-id/openarm-right",
+                leaderMotorIds=[1, 2, 3, 4, 5, 6, 7, 8],
+                leaderMotorModel="sts3215",
+                calibrationSource=RobotGatewayLeRobotCalibrationSource(
+                    category="teleoperators",
+                    profileId="openarm_mini",
+                    calibrationId="bimanual",
+                    calibrationDir=str(calibration_dir),
+                    groupId="right",
+                ),
             ),
         )
     )
@@ -3098,19 +3102,21 @@ def test_lerobot_calibration_sync_reports_selected_group_motor_ids(
         lambda **_kwargs: robot_gateway_api.OpenArmLeaderReleaseResult(released=0),
     )
 
-    result = robot_gateway_api.sync_robot_gateway_lerobot_calibration_file(
-        RobotGatewayLeRobotCalibrationFileSyncRequest(
-            role="leader",
-            lastMtimeNs=0,
-            leaderPort="/dev/serial/by-id/so100-arm",
-            leaderMotorIds=[elbow_motor_id, shoulder_motor_id],
-            leaderMotorModel="sts3215",
-            calibrationSource=RobotGatewayLeRobotCalibrationSource(
-                category="teleoperators",
-                profileId="so100_leader",
-                calibrationId="arm",
-                calibrationDir=str(calibration_dir),
-                groupId="all",
+    result = _run_api(
+        robot_gateway_api.sync_robot_gateway_lerobot_calibration_file(
+            RobotGatewayLeRobotCalibrationFileSyncRequest(
+                role="leader",
+                lastMtimeNs=0,
+                leaderPort="/dev/serial/by-id/so100-arm",
+                leaderMotorIds=[elbow_motor_id, shoulder_motor_id],
+                leaderMotorModel="sts3215",
+                calibrationSource=RobotGatewayLeRobotCalibrationSource(
+                    category="teleoperators",
+                    profileId="so100_leader",
+                    calibrationId="arm",
+                    calibrationDir=str(calibration_dir),
+                    groupId="all",
+                ),
             ),
         )
     )
@@ -3314,7 +3320,7 @@ def test_lerobot_adapter_maps_model_joint_names_to_hardware_joint_names() -> Non
 
 
 def test_robot_gateway_public_manifest_redacts_direct_transport_origins() -> None:
-    payload = robot_gateway_api.get_robot_gateway_manifest().model_dump(
+    payload = _run_api(robot_gateway_api.get_robot_gateway_manifest()).model_dump(
         by_alias=False,
         mode="json",
     )
@@ -3465,7 +3471,7 @@ def test_robot_gateway_follower_calibration_route_releases_before_start() -> Non
             start_calibration,
         ),
     ):
-        result = robot_gateway_api.start_robot_gateway_follower_calibration()
+        result = _run_api(robot_gateway_api.start_robot_gateway_follower_calibration())
 
     assert result.model_dump(by_alias=False) == {
         "started": False,
@@ -3519,7 +3525,7 @@ def test_robot_gateway_leader_calibration_route_releases_before_start() -> None:
             start_leader_calibration,
         ),
     ):
-        result = robot_gateway_api.start_robot_gateway_leader_calibration(request)
+        result = _run_api(robot_gateway_api.start_robot_gateway_leader_calibration(request))
 
     assert result.model_dump(by_alias=False) == {
         "started": False,
@@ -3632,8 +3638,10 @@ def test_robot_gateway_control_rest_accepts_simulator_operator_token() -> None:
 
 
 def test_robot_gateway_api_exposes_point_cloud_frame() -> None:
-    frame = robot_gateway_api.get_robot_gateway_point_cloud(
-        ROBOT_GATEWAY_OPENARM_DEPTH_CAMERA_ID
+    frame = _run_api(
+        robot_gateway_api.get_robot_gateway_point_cloud(
+            ROBOT_GATEWAY_OPENARM_DEPTH_CAMERA_ID
+        )
     )
 
     payload = frame.model_dump(by_alias=False, mode="json")
@@ -3654,12 +3662,14 @@ def test_robot_gateway_api_prepares_can_dry_run_without_sending() -> None:
     )
 
     with patch("backend.api.robot_gateway.runtime", dry_run_runtime):
-        plan = robot_gateway_api.prepare_robot_gateway_joint_jog_can_dry_run(
-            RobotGatewayJointJogRequest(
-                operator_id=TEST_OPERATOR_ID,
-                joint_name=TEST_RIGHT_CAN_JOINT_NAME,
-                delta_rad=TEST_RIGHT_CAN_JOINT_DELTA_RAD,
-                sequence=TEST_COMMAND_SEQUENCE,
+        plan = _run_api(
+            robot_gateway_api.prepare_robot_gateway_joint_jog_can_dry_run(
+                RobotGatewayJointJogRequest(
+                    operator_id=TEST_OPERATOR_ID,
+                    joint_name=TEST_RIGHT_CAN_JOINT_NAME,
+                    delta_rad=TEST_RIGHT_CAN_JOINT_DELTA_RAD,
+                    sequence=TEST_COMMAND_SEQUENCE,
+                )
             )
         )
 

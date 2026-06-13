@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from http import HTTPStatus
 from types import SimpleNamespace
 
@@ -24,6 +25,10 @@ from backend.world_bridge.worldd_client import WorlddHttpError, WorlddUnavailabl
 TEST_RUNTIME_ACTIVE_SESSIONS = 1
 TEST_WORLDD_ACTIVE_SESSIONS = 2
 TEST_SCENARIO_DURATION_MS = 12_000
+
+
+def _run_api(coro):
+    return asyncio.run(coro)
 
 
 class RuntimeStub:
@@ -140,7 +145,7 @@ def test_status_uses_worldd_when_proxy_enabled(monkeypatch: pytest.MonkeyPatch) 
         WorlddStatusStub(active_sessions=TEST_WORLDD_ACTIVE_SESSIONS),
     )
 
-    status = world_bridge_api.get_world_bridge_status()
+    status = _run_api(world_bridge_api.get_world_bridge_status())
 
     assert status.active_sessions == TEST_WORLDD_ACTIVE_SESSIONS
     assert status.runtime_mode == "rust-data-plane"
@@ -161,7 +166,7 @@ def test_status_falls_back_to_runtime_when_worldd_unavailable(
         WorlddUnavailableStatusStub(),
     )
 
-    status = world_bridge_api.get_world_bridge_status()
+    status = _run_api(world_bridge_api.get_world_bridge_status())
 
     assert status.active_sessions == TEST_RUNTIME_ACTIVE_SESSIONS
     assert status.runtime_mode == "python-control-plane"
@@ -178,10 +183,12 @@ def test_proxy_maps_worldd_bad_request_to_unprocessable_entity(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        world_bridge_api.create_world_bridge_session(
-            WorldBridgeSessionCreateRequest(
-                robot_name="so101",
-                scenario_duration_ms=TEST_SCENARIO_DURATION_MS,
+        _run_api(
+            world_bridge_api.create_world_bridge_session(
+                WorldBridgeSessionCreateRequest(
+                    robot_name="so101",
+                    scenario_duration_ms=TEST_SCENARIO_DURATION_MS,
+                )
             )
         )
 
@@ -203,7 +210,7 @@ def test_proxy_disabled_uses_runtime_without_worldd(
         WorlddUnavailableStatusStub(),
     )
 
-    status = world_bridge_api.get_world_bridge_status()
+    status = _run_api(world_bridge_api.get_world_bridge_status())
 
     assert status.active_sessions == TEST_RUNTIME_ACTIVE_SESSIONS
 
@@ -224,10 +231,12 @@ def test_mutating_request_returns_503_when_worldd_unavailable(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        world_bridge_api.create_world_bridge_session(
-            WorldBridgeSessionCreateRequest(
-                robot_name="so101",
-                scenario_duration_ms=TEST_SCENARIO_DURATION_MS,
+        _run_api(
+            world_bridge_api.create_world_bridge_session(
+                WorldBridgeSessionCreateRequest(
+                    robot_name="so101",
+                    scenario_duration_ms=TEST_SCENARIO_DURATION_MS,
+                )
             )
         )
 
@@ -250,7 +259,7 @@ def test_list_sessions_returns_503_when_worldd_unavailable(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        world_bridge_api.list_world_bridge_sessions()
+        _run_api(world_bridge_api.list_world_bridge_sessions())
 
     assert exc_info.value.status_code == int(HTTPStatus.SERVICE_UNAVAILABLE)
 
@@ -265,7 +274,7 @@ def test_readiness_endpoint_reads_runtime_control_plane(
         RuntimeStub(active_sessions=TEST_RUNTIME_ACTIVE_SESSIONS),
     )
 
-    readiness = world_bridge_api.get_world_bridge_readiness()
+    readiness = _run_api(world_bridge_api.get_world_bridge_readiness())
 
     assert readiness.decision == WorldBridgeReadinessDecision.NO_GO
 
@@ -281,8 +290,10 @@ def test_readiness_assert_raises_conflict_when_minimum_not_met(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        world_bridge_api.assert_world_bridge_readiness(
-            WorldBridgeReadinessDecision.WATCH
+        _run_api(
+            world_bridge_api.assert_world_bridge_readiness(
+                WorldBridgeReadinessDecision.WATCH
+            )
         )
 
     assert exc_info.value.status_code == int(HTTPStatus.CONFLICT)
@@ -298,8 +309,10 @@ def test_readiness_assert_returns_payload_when_minimum_met(
         RuntimeStub(active_sessions=TEST_RUNTIME_ACTIVE_SESSIONS),
     )
 
-    readiness = world_bridge_api.assert_world_bridge_readiness(
-        WorldBridgeReadinessDecision.NO_GO
+    readiness = _run_api(
+        world_bridge_api.assert_world_bridge_readiness(
+            WorldBridgeReadinessDecision.NO_GO
+        )
     )
 
     assert readiness.decision == WorldBridgeReadinessDecision.NO_GO
@@ -316,9 +329,11 @@ def test_joint_command_requires_attestation_when_proxy_disabled(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        world_bridge_api.apply_world_bridge_joint_command(
-            "session-1",
-            WorldBridgeJointCommandRequest(joint_positions={"joint_a": 0.5}),
+        _run_api(
+            world_bridge_api.apply_world_bridge_joint_command(
+                "session-1",
+                WorldBridgeJointCommandRequest(joint_positions={"joint_a": 0.5}),
+            )
         )
 
     assert exc_info.value.status_code == 412
@@ -340,9 +355,11 @@ def test_joint_command_allows_verified_attestation_when_proxy_disabled(
         )
     )
 
-    ack = world_bridge_api.apply_world_bridge_joint_command(
-        "session-1",
-        WorldBridgeJointCommandRequest(joint_positions={"joint_a": 0.5}),
+    ack = _run_api(
+        world_bridge_api.apply_world_bridge_joint_command(
+            "session-1",
+            WorldBridgeJointCommandRequest(joint_positions={"joint_a": 0.5}),
+        )
     )
 
     assert ack.accepted is True

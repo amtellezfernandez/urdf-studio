@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from fastapi import HTTPException
 
@@ -12,6 +14,10 @@ from backend.models.datasets import (
     DatasetTreatmentSourceManifest,
     DatasetTreatmentStats,
 )
+
+
+def _run_api(coro):
+    return asyncio.run(coro)
 
 
 def test_analyze_dataset_treatments_returns_manifest(
@@ -54,20 +60,22 @@ def test_analyze_dataset_treatments_returns_manifest(
         ),
     )
 
-    result = datasets_api.analyze_dataset_treatments(
-        DatasetMixRequest(
-            local_paths=["../unsafe-demo"],
-            alignment={
-                "datasets": [
-                    {
-                        "dataset_id": "local:demo/train",
-                        "embodiment_id": "demo:robot",
-                        "representation_id": "semantic/joint-position/v1",
-                        "naming_status": "named",
-                    }
-                ],
-                "required_representation_id": "semantic/joint-position/v1",
-            },
+    result = _run_api(
+        datasets_api.analyze_dataset_treatments(
+            DatasetMixRequest(
+                local_paths=["../unsafe-demo"],
+                alignment={
+                    "datasets": [
+                        {
+                            "dataset_id": "local:demo/train",
+                            "embodiment_id": "demo:robot",
+                            "representation_id": "semantic/joint-position/v1",
+                            "naming_status": "named",
+                        }
+                    ],
+                    "required_representation_id": "semantic/joint-position/v1",
+                },
+            )
         )
     )
 
@@ -77,19 +85,21 @@ def test_analyze_dataset_treatments_returns_manifest(
 
 
 def test_analyze_dataset_treatments_supports_virtual_sources() -> None:
-    result = datasets_api.analyze_dataset_treatments(
-        DatasetMixRequest(
-            alignment={
-                "datasets": [
-                    {
-                        "dataset_id": "local-upload:demo",
-                        "embodiment_id": "demo:robot",
-                        "representation_id": "rep:joint_pos_abs:indexed:v1",
-                        "naming_status": "named",
-                    }
-                ],
-                "required_representation_id": "rep:joint_pos_abs:semantic:v1",
-            },
+    result = _run_api(
+        datasets_api.analyze_dataset_treatments(
+            DatasetMixRequest(
+                alignment={
+                    "datasets": [
+                        {
+                            "dataset_id": "local-upload:demo",
+                            "embodiment_id": "demo:robot",
+                            "representation_id": "rep:joint_pos_abs:indexed:v1",
+                            "naming_status": "named",
+                        }
+                    ],
+                    "required_representation_id": "rep:joint_pos_abs:semantic:v1",
+                },
+            )
         )
     )
 
@@ -100,7 +110,7 @@ def test_analyze_dataset_treatments_supports_virtual_sources() -> None:
 
 def test_hf_proxy_rejects_non_huggingface_hosts() -> None:
     with pytest.raises(HTTPException) as exc_info:
-        datasets_api.hf_proxy("https://example.com/data.json")
+        _run_api(datasets_api.hf_proxy("https://example.com/data.json"))
 
     assert exc_info.value.status_code == 400
 
@@ -130,9 +140,11 @@ def test_hf_proxy_forwards_allowed_huggingface_response(
 
     monkeypatch.setattr(datasets_api.urllib.request, "urlopen", fake_urlopen)
 
-    response = datasets_api.hf_proxy(
-        "https://huggingface.co/api/datasets/demo/repo",
-        authorization="Bearer hf_token",
+    response = _run_api(
+        datasets_api.hf_proxy(
+            "https://huggingface.co/api/datasets/demo/repo",
+            authorization="Bearer hf_token",
+        )
     )
 
     assert response.status_code == 200
