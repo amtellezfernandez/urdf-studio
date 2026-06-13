@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,7 @@ GENESIS_SO101_GRIPPER_COLLISION_VERSION = "so101-genesis-gripper-proxy-collision
 SO101_FIXED_GRIPPER_PAD_NAME = "fixed_gripper_pad_collision"
 SO101_FIXED_GRIPPER_BODY_NAME = "fixed_gripper_body_collision"
 SO101_MOVING_GRIPPER_PAD_NAME = "moving_gripper_pad_collision"
+SO101_IDENTITY_RE = re.compile(r"(^|[_\-.])so101([_\-.]|$)", re.IGNORECASE)
 
 _SO101_GRIPPER_PAD_COLLISIONS = (
     (
@@ -89,9 +91,22 @@ def _make_mesh_paths_absolute(root: ET.Element, *, urdf_path: Path) -> None:
 
 
 def _is_so101_gripper_urdf(root: ET.Element) -> bool:
+    if not _has_so101_identity(root):
+        return False
     return all(
         _find_link(root, link_name) is not None
         for link_name, *_rest in _SO101_GRIPPER_PAD_COLLISIONS
+    )
+
+
+def _has_so101_identity(root: ET.Element) -> bool:
+    robot_name = root.get("name", "")
+    if SO101_IDENTITY_RE.search(robot_name):
+        return True
+    return any(
+        SO101_IDENTITY_RE.search(Path(filename).name)
+        for mesh in root.iter("mesh")
+        if (filename := mesh.get("filename"))
     )
 
 
