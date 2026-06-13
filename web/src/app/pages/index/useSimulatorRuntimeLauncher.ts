@@ -46,7 +46,7 @@ const resolveSimulatorRuntimeDetail = (
   if (!canOpenSimulatorWorkspace(descriptor)) return `${assetFormat} support planned`;
   if (status && !status.available) return `${assetFormat} runtime unavailable: ${status.status}`;
   if (descriptor.capabilities.motionValidation) return `${assetFormat} open and validation`;
-  if (descriptor.simulatorId === "blender") return `${assetFormat} layout edit`;
+  if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
   return `${assetFormat} open`;
 };
 

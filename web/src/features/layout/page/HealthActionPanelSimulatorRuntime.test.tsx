@@ -58,7 +58,7 @@ describe("HealthActionPanelSimulatorRuntime", () => {
       );
     });
 
-    expect(textContent(container)).toContain("Sim");
+    expect(textContent(container)).toContain("Open");
     expect(textContent(container)).not.toContain("ready");
     expect(textContent(container)).not.toContain("Adapt");
     expect(textContent(container)).not.toContain("Simulation Prep");

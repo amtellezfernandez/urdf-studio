@@ -3,6 +3,7 @@ export const SIMULATOR_API_BASE_PATH = "/simulators";
 export type SimulatorRuntimeCapabilities = {
   workspaceTarget: boolean;
   motionValidation: boolean;
+  layoutRoundTrip: boolean;
 };
 
 export type SimulatorAssetFormat = "urdf" | "mjcf" | "mjx_mjcf" | "usd" | "native";
@@ -22,6 +23,7 @@ type SimulatorRuntimeSpecRow = readonly [
   transferStrategy: SimulatorTransferStrategy,
   workspaceTarget?: boolean,
   motionValidation?: boolean,
+  layoutRoundTrip?: boolean,
 ];
 
 const transfer = (
@@ -45,7 +47,7 @@ const SIMULATOR_RUNTIME_ROWS = [
   ["isaacsim", "Isaac Sim", "usd", "planned"],
   ["isaacgym", "Isaac Gym", "urdf", "planned"],
   ["newton", "Newton", "mjcf", "planned"],
-  ["blender", "Blender", "native", "direct", true],
+  ["blender", "Blender", "native", "direct", true, false, true],
   ["robosplatter", "RoboSplatter", "native", "planned"],
 ] as const satisfies readonly SimulatorRuntimeSpecRow[];
 
@@ -66,12 +68,14 @@ const SIMULATOR_RUNTIME_SPECS = SIMULATOR_RUNTIME_ROWS.map(
     transferStrategy,
     workspaceTarget = false,
     motionValidation = false,
+    layoutRoundTrip = false,
   ]): SimulatorRuntimeSpecShape => ({
     simulatorId,
     label,
     capabilities: {
       workspaceTarget,
       motionValidation,
+      layoutRoundTrip,
     },
     transferPolicy: transfer(robotAssetFormat, transferStrategy),
   })

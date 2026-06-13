@@ -1,6 +1,6 @@
 # URDF Studio
 
-URDF Studio is a local robotics workspace for loading URDF robots, inspecting scene structure, editing joints and keyframes, and replaying robot-learning episodes.
+URDF Studio is a local robotics workspace for authoring robot-world scenes once, then opening and validating the same scene in external tools such as Genesis, MuJoCo, PyBullet, and Blender.
 
 One command opens the app. The launcher manages the supporting local services for you.
 

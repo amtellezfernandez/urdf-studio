@@ -11,6 +11,8 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeCapabilities,
     SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
+    WorkspaceChangeSetApplyRequest,
+    WorkspaceChangeSetApplyResponse,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
     get_simulator_runtime_spec,
@@ -19,6 +21,7 @@ from backend.services.simulator_adapters.base import SimulatorAdapter, Simulator
 from backend.services.simulator_adapters.blender_runtime import resolve_blender_executable
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_EDIT_SESSION_FILENAME,
+    apply_blender_layout_change_set_with_summary,
 )
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.workspace_package import (
@@ -132,6 +135,21 @@ class BlenderSimulatorAdapter:
         request: SimulatorWorkspacePrepareRequest,
     ) -> SimulatorWorkspacePrepareResponse:
         return start_blender_workspace(request)
+
+    def apply_workspace_change_set(
+        self,
+        request: WorkspaceChangeSetApplyRequest,
+    ) -> WorkspaceChangeSetApplyResponse:
+        result = apply_blender_layout_change_set_with_summary(
+            request.world_package,
+            request.change_set,
+        )
+        return WorkspaceChangeSetApplyResponse(
+            simulator_id=BLENDER_RUNTIME_SPEC.simulator_id,
+            world_package=result.world_package,
+            applied_change_count=result.applied_change_count,
+            review_only_count=result.review_only_count,
+        )
 
     def runtime_status(self) -> SimulatorRuntimeStatus:
         executable = resolve_blender_executable()

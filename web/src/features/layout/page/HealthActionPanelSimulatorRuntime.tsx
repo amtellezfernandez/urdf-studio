@@ -106,7 +106,7 @@ export const HealthActionPanelSimulatorRuntime = ({
 }: HealthActionPanelSimulatorRuntimeProps) => {
   return (
     <div data-section="simulator-runtime" className={cn("space-y-1", className)}>
-      <SimulatorRuntimeRow label="Sim">
+      <SimulatorRuntimeRow label="Open">
         {targets.map((target) =>
           target.canOpen ? (
             <AvailableTargetButton key={target.id} target={target} />

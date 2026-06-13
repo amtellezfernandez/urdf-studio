@@ -12,6 +12,8 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeDescriptor,
     SimulatorRuntimeListResponse,
     SimulatorRuntimeStatus,
+    WorkspaceChangeSetApplyRequest,
+    WorkspaceChangeSetApplyResponse,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
 )
@@ -84,6 +86,19 @@ def prepare_simulator_workspace(
     return get_simulator_adapter(simulator_id).prepare_workspace(request)
 
 
+def apply_simulator_workspace_change_set(
+    simulator_id: SimulatorId,
+    request: WorkspaceChangeSetApplyRequest,
+) -> WorkspaceChangeSetApplyResponse:
+    adapter = get_simulator_adapter(simulator_id)
+    apply_change_set = getattr(adapter, "apply_workspace_change_set", None)
+    if not callable(apply_change_set):
+        raise SimulatorCapabilityError(
+            f"{adapter.label} workspace change-set import is not supported."
+        )
+    return apply_change_set(request)
+
+
 def get_simulator_runtime_status(simulator_id: SimulatorId) -> SimulatorRuntimeStatus:
     return get_simulator_adapter(simulator_id).runtime_status()
 
@@ -96,6 +111,7 @@ __all__ = [
     "SimulatorCapabilityError",
     "get_simulator_adapter",
     "get_simulator_runtime_status",
+    "apply_simulator_workspace_change_set",
     "list_simulator_runtime_descriptors",
     "prepare_simulator_workspace",
 ]

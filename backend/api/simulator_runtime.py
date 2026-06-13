@@ -4,19 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend.core.simulator_security import require_simulator_operator_access_async
 from backend.models.simulator_runtime import (
-    BlenderLayoutChangeSetApplyRequest,
-    BlenderLayoutChangeSetApplyResponse,
     SimulatorId,
     SimulatorRuntimeListResponse,
     SimulatorRuntimeStatus,
+    WorkspaceChangeSetApplyRequest,
+    WorkspaceChangeSetApplyResponse,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
 )
-from backend.services.simulator_adapters.blender_workspace import (
-    apply_blender_layout_change_set_with_summary,
-)
 from backend.services.simulator_adapters import (
     SimulatorAdapterError,
+    apply_simulator_workspace_change_set,
     get_simulator_runtime_status,
     list_simulator_runtime_descriptors,
     prepare_simulator_workspace,
@@ -54,22 +52,17 @@ async def prepare_simulator_workspace_route(
 
 
 @router.post(
-    "/blender/layout-change-set/apply",
-    response_model=BlenderLayoutChangeSetApplyResponse,
+    "/{simulator_id}/workspace/change-set/apply",
+    response_model=WorkspaceChangeSetApplyResponse,
 )
-async def apply_blender_layout_change_set_route(
-    request: BlenderLayoutChangeSetApplyRequest,
+async def apply_simulator_workspace_change_set_route(
+    simulator_id: SimulatorId,
+    request: WorkspaceChangeSetApplyRequest,
     _access: None = Depends(require_simulator_operator_access_async),
-) -> BlenderLayoutChangeSetApplyResponse:
+) -> WorkspaceChangeSetApplyResponse:
     try:
-        result = apply_blender_layout_change_set_with_summary(
-            request.world_package,
-            request.change_set,
-        )
+        return apply_simulator_workspace_change_set(simulator_id, request)
+    except SimulatorAdapterError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return BlenderLayoutChangeSetApplyResponse(
-        world_package=result.world_package,
-        applied_change_count=result.applied_change_count,
-        review_only_count=result.review_only_count,
-    )

@@ -119,12 +119,13 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
     unresolved_mesh_refs: list[str] = Field(default_factory=list)
 
 
-class BlenderLayoutChangeSetApplyRequest(BaseModel):
+class WorkspaceChangeSetApplyRequest(BaseModel):
     world_package: WorldScenePackageManifest
     change_set: dict[str, Any]
 
 
-class BlenderLayoutChangeSetApplyResponse(BaseModel):
+class WorkspaceChangeSetApplyResponse(BaseModel):
+    simulator_id: SimulatorId
     world_package: WorldScenePackageManifest
     applied_change_count: int
     review_only_count: int
@@ -142,6 +143,7 @@ class SimulatorRuntimeDependency(SimulatorRuntimeCamelModel):
 class SimulatorRuntimeCapabilities(SimulatorRuntimeCamelModel):
     workspace_target: bool = Field(default=False, alias="workspaceTarget")
     motion_validation: bool = Field(default=False, alias="motionValidation")
+    layout_round_trip: bool = Field(default=False, alias="layoutRoundTrip")
 
 
 class SimulatorRuntimeTransferPolicy(SimulatorRuntimeCamelModel):
@@ -190,12 +192,14 @@ class SimulatorRuntimeSpec:
     transfer: SimulatorTransferSpec
     workspace_target: bool = False
     motion_validation: bool = False
+    layout_round_trip: bool = False
     dependencies: tuple[SimulatorDependencySpec, ...] = ()
 
     def capabilities_model(self) -> SimulatorRuntimeCapabilities:
         return SimulatorRuntimeCapabilities(
             workspace_target=self.workspace_target,
             motion_validation=self.motion_validation,
+            layout_round_trip=self.layout_round_trip,
         )
 
 
@@ -242,6 +246,7 @@ def _runtime(
     *,
     workspace_target: bool = False,
     motion_validation: bool = False,
+    layout_round_trip: bool = False,
     dependencies: tuple[SimulatorDependencySpec, ...] = (),
 ) -> SimulatorRuntimeSpec:
     return SimulatorRuntimeSpec(
@@ -250,6 +255,7 @@ def _runtime(
         transfer=_transfer(robot_asset_format, transfer_strategy),
         workspace_target=workspace_target,
         motion_validation=motion_validation,
+        layout_round_trip=layout_round_trip,
         dependencies=dependencies,
     )
 
@@ -343,6 +349,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         "native",
         "direct",
         workspace_target=True,
+        layout_round_trip=True,
         dependencies=(_dependency("blender", "bpy"),),
     ),
     _runtime(

@@ -182,10 +182,12 @@ def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     assert simulators[0]["capabilities"] == {
         "workspaceTarget": True,
         "motionValidation": False,
+        "layoutRoundTrip": False,
     }
     assert simulators[1]["capabilities"] == {
         "workspaceTarget": True,
         "motionValidation": True,
+        "layoutRoundTrip": False,
     }
     assert simulators[0]["transferPolicy"] == {
         "robotAssetFormat": "urdf",
@@ -198,6 +200,8 @@ def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     assert simulators[4]["simulatorId"] == "pybullet"
     assert simulators[4]["capabilities"]["workspaceTarget"] is True
     assert simulators[4]["transferPolicy"]["transferStrategy"] == "direct"
+    assert simulators[10]["simulatorId"] == "blender"
+    assert simulators[10]["capabilities"]["layoutRoundTrip"] is True
 
 
 def test_simulator_runtime_routes_require_token_for_remote_clients() -> None:
@@ -308,7 +312,7 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
         response = asyncio.run(
             _request_json(
                 "POST",
-                "/simulators/blender/layout-change-set/apply",
+                "/simulators/blender/workspace/change-set/apply",
                 headers=_operator_headers(),
                 json={
                     "world_package": _world_package_with_layout_object_payload(),
@@ -337,6 +341,7 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
     assert response.status_code == 200
     payload = response.json()
     updated_object = payload["world_package"]["world_snapshot"]["objects"][0]
+    assert payload["simulator_id"] == "blender"
     assert updated_object["position_xyz"] == [1.0, 2.0, 3.0]
     assert updated_object["rotation_rpy_rad"] == [0.0, 0.0, 0.0]
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
@@ -349,7 +354,7 @@ def test_apply_blender_layout_change_set_rejects_invalid_schema() -> None:
         response = asyncio.run(
             _request_json(
                 "POST",
-                "/simulators/blender/layout-change-set/apply",
+                "/simulators/blender/workspace/change-set/apply",
                 headers=_operator_headers(),
                 json={
                     "world_package": _world_package_with_layout_object_payload(),
@@ -363,6 +368,27 @@ def test_apply_blender_layout_change_set_rejects_invalid_schema() -> None:
 
     assert response.status_code == 422
     assert "Unsupported Blender change-set schema" in response.json()["detail"]
+
+
+def test_apply_workspace_change_set_reports_unsupported_target() -> None:
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/simulators/genesis/workspace/change-set/apply",
+                headers=_operator_headers(),
+                json={
+                    "world_package": _world_package_with_layout_object_payload(),
+                    "change_set": {
+                        "schema": "urdf-studio.blender-change-set.v1",
+                        "changes": [],
+                    },
+                },
+            )
+        )
+
+    assert response.status_code == 501
+    assert "workspace change-set import is not supported" in response.json()["detail"]
 
 
 def test_simulator_runtime_status_uses_adapter_registry(monkeypatch) -> None:

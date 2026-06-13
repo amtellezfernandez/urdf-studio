@@ -22,7 +22,7 @@ import type {
   WorldScenePackageManifest,
   WorldScenePackageVersionRecord,
 } from "@/features/world-share/worldScenePackageTypes";
-import { applyBlenderLayoutChangeSet } from "@/features/world-share/simulatorRuntimeApi";
+import { applySimulatorWorkspaceChangeSet } from "@/features/world-share/simulatorRuntimeApi";
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import { resolveWorldObjectGeometry, type CreatedObject } from "@/features/objects";
 import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjectGeometry";
@@ -527,7 +527,11 @@ export const useWorldSceneManager = ({
       try {
         const currentWorldPackage = await buildCurrentWorldScenePackageManifest();
         const changeSet = JSON.parse(await file.text()) as unknown;
-        const applied = await applyBlenderLayoutChangeSet(currentWorldPackage, changeSet);
+        const applied = await applySimulatorWorkspaceChangeSet(
+          "blender",
+          currentWorldPackage,
+          changeSet
+        );
         applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
         setActiveWorldSnapshotRef(null);
         const reviewOnly =

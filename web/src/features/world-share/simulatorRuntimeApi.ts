@@ -42,7 +42,8 @@ export type SimulatorRuntimeListResponse = {
   simulators: SimulatorRuntimeDescriptor[];
 };
 
-export type BlenderLayoutChangeSetApplyResponse = {
+export type WorkspaceChangeSetApplyResponse = {
+  simulator_id: SimulatorId;
   world_package: WorldScenePackageManifest;
   applied_change_count: number;
   review_only_count: number;
@@ -205,12 +206,13 @@ export const prepareSimulatorWorkspace = async ({
   return (await response.json()) as SimulatorWorkspacePrepareResponse;
 };
 
-export const applyBlenderLayoutChangeSet = async (
+export const applySimulatorWorkspaceChangeSet = async (
+  simulatorId: SimulatorId,
   worldPackage: WorldScenePackageManifest,
   changeSet: unknown
-): Promise<BlenderLayoutChangeSetApplyResponse> => {
+): Promise<WorkspaceChangeSetApplyResponse> => {
   const response = await guardedFetch(
-    `${API_BASE_URL}${SIMULATOR_API_BASE_PATH}/blender/layout-change-set/apply`,
+    `${API_BASE_URL}${simulatorRuntimePath(simulatorId, "/workspace/change-set/apply")}`,
     {
       method: "POST",
       headers: {
@@ -224,14 +226,14 @@ export const applyBlenderLayoutChangeSet = async (
     },
     {
       requiredBackends: ["core-api"],
-      context: "Import Blender layout",
+      context: `Import ${formatSimulatorName(simulatorId)} workspace changes`,
     }
   );
   if (!response.ok) {
     const detail = await readErrorDetail(response);
-    throw new Error(detail || `Blender layout import failed (${response.status})`);
+    throw new Error(detail || `${simulatorId} workspace change import failed (${response.status})`);
   }
-  return (await response.json()) as BlenderLayoutChangeSetApplyResponse;
+  return (await response.json()) as WorkspaceChangeSetApplyResponse;
 };
 
 export const fetchSimulatorRuntimeStatus = async (

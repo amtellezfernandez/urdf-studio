@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  applyBlenderLayoutChangeSet,
+  applySimulatorWorkspaceChangeSet,
   buildSimulatorMeshAssetUploads,
   fetchSimulatorRuntimeStatus,
   fetchSimulatorRuntimes,
@@ -123,6 +123,7 @@ describe("simulatorRuntimeApi", () => {
       new Response(
         JSON.stringify({
           world_package: createWorldPackage(),
+          simulator_id: "blender",
           applied_change_count: 1,
           review_only_count: 0,
         }),
@@ -130,7 +131,8 @@ describe("simulatorRuntimeApi", () => {
       )
     );
 
-    const response = await applyBlenderLayoutChangeSet(
+    const response = await applySimulatorWorkspaceChangeSet(
+      "blender",
       createWorldPackage(),
       {
         schema: "urdf-studio.blender-change-set.v1",
@@ -139,14 +141,15 @@ describe("simulatorRuntimeApi", () => {
     );
 
     expect(response.applied_change_count).toBe(1);
+    expect(response.simulator_id).toBe("blender");
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/simulators/blender/layout-change-set/apply"),
+      expect.stringContaining("/simulators/blender/workspace/change-set/apply"),
       expect.objectContaining({
         method: "POST",
       }),
       {
         requiredBackends: ["core-api"],
-        context: "Import Blender layout",
+        context: "Import blender workspace changes",
       }
     );
   });
@@ -185,6 +188,7 @@ describe("simulatorRuntimeApi", () => {
               capabilities: {
                 workspaceTarget: true,
                 motionValidation: false,
+                layoutRoundTrip: false,
               },
               transferPolicy: {
                 robotAssetFormat: "urdf",
@@ -199,6 +203,7 @@ describe("simulatorRuntimeApi", () => {
               capabilities: {
                 workspaceTarget: true,
                 motionValidation: true,
+                layoutRoundTrip: false,
               },
               transferPolicy: {
                 robotAssetFormat: "mjcf",
