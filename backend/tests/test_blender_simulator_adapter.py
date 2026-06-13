@@ -195,24 +195,74 @@ def test_blender_change_set_reports_applied_and_review_only_counts(tmp_path: Pat
 
 def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "deleted_world_object",
+                "stable_id": "crate",
+                "reason": "deleted Studio world objects require Studio review before removal",
+            }
+        ],
+    )
+    change_set["source"]["world_object_ids"] = ["crate"]
 
     result = apply_blender_layout_change_set_with_summary(
         world_package,
-        _blender_change_set(
-            world_package,
-            changes=[],
-            review_only=[
-                {
-                    "entity_type": "deleted_world_object",
-                    "stable_id": "crate",
-                    "reason": "deleted Studio world objects require Studio review before removal",
-                }
-            ],
-        ),
+        change_set,
     )
 
     assert result.applied_change_count == 0
     assert result.review_only_count == 1
+
+
+def test_blender_change_set_rejects_missing_source_object_coverage(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(world_package, changes=[])
+    change_set["source"]["world_object_ids"] = ["crate"]
+
+    with pytest.raises(ValueError, match="missing update or deletion review"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_updates_outside_source_object_ids(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[
+            {
+                "entity_type": "world_object",
+                "stable_id": "crate",
+                "position_xyz": [1.0, 2.0, 3.0],
+                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                "size_xyz": [0.5, 0.6, 0.7],
+            },
+        ],
+    )
+    change_set["source"]["world_object_ids"] = []
+
+    with pytest.raises(ValueError, match="outside source world_object_ids"):
+        apply_blender_layout_change_set(world_package, change_set)
+
+
+def test_blender_change_set_rejects_deletions_outside_source_object_ids(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change_set = _blender_change_set(
+        world_package,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "deleted_world_object",
+                "stable_id": "crate",
+                "reason": "deleted Studio world objects require Studio review before removal",
+            }
+        ],
+    )
+    change_set["source"]["world_object_ids"] = []
+
+    with pytest.raises(ValueError, match="deletes object id\\(s\\) outside source"):
+        apply_blender_layout_change_set(world_package, change_set)
 
 
 def test_blender_change_set_rejects_camera_edits_in_apply_list(tmp_path: Path) -> None:

@@ -597,7 +597,10 @@ def _validate_blender_change_set(
 ) -> tuple[dict[str, BlenderWorldObjectChange], int]:
     if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
         raise ValueError("Unsupported Blender change-set schema.")
-    _validate_change_set_source(change_set.get("source"), world_package)
+    source_world_object_ids = _validate_change_set_source(
+        change_set.get("source"),
+        world_package,
+    )
     changes = _required_list(change_set.get("changes"), "Blender change-set changes")
     review_only = _required_list(
         change_set.get("review_only"),
@@ -614,6 +617,7 @@ def _validate_blender_change_set(
         object_updates[normalized.stable_id] = normalized
 
     seen_review_ids: set[str] = set()
+    deleted_world_object_ids: set[str] = set()
     for index, entry in enumerate(review_only):
         review_key = _validate_review_only_entry(entry, f"review_only[{index}]")
         if review_key in seen_review_ids:
@@ -623,7 +627,16 @@ def _validate_blender_change_set(
             raise ValueError(
                 f"Blender change-set cannot both update and delete world object {stable_id!r}."
             )
+        if entity_type == "deleted_world_object":
+            deleted_world_object_ids.add(stable_id)
         seen_review_ids.add(review_key)
+
+    if source_world_object_ids is not None:
+        _validate_change_set_source_coverage(
+            source_world_object_ids,
+            object_update_ids=set(object_updates),
+            deleted_world_object_ids=deleted_world_object_ids,
+        )
 
     return object_updates, len(review_only)
 
@@ -631,7 +644,7 @@ def _validate_blender_change_set(
 def _validate_change_set_source(
     value: Any,
     world_package: WorldScenePackageManifest,
-) -> None:
+) -> tuple[str, ...] | None:
     if not isinstance(value, Mapping):
         raise ValueError("Blender change-set source must be an object.")
     _reject_unknown_fields(
@@ -689,6 +702,34 @@ def _validate_change_set_source(
         )
     if actual_world_object_ids is not None:
         _validate_source_world_object_ids(actual_world_object_ids, world_package)
+    return actual_world_object_ids
+
+
+def _validate_change_set_source_coverage(
+    source_world_object_ids: Sequence[str],
+    *,
+    object_update_ids: set[str],
+    deleted_world_object_ids: set[str],
+) -> None:
+    source_ids = set(source_world_object_ids)
+    unexpected_updates = sorted(object_update_ids - source_ids)
+    if unexpected_updates:
+        raise ValueError(
+            "Blender change-set changes reference object id(s) outside source "
+            f"world_object_ids: {', '.join(unexpected_updates)}."
+        )
+    unexpected_deletions = sorted(deleted_world_object_ids - source_ids)
+    if unexpected_deletions:
+        raise ValueError(
+            "Blender change-set review_only deletes object id(s) outside source "
+            f"world_object_ids: {', '.join(unexpected_deletions)}."
+        )
+    missing_ids = sorted(source_ids - object_update_ids - deleted_world_object_ids)
+    if missing_ids:
+        raise ValueError(
+            "Blender change-set is missing update or deletion review for source "
+            f"world object id(s): {', '.join(missing_ids)}."
+        )
 
 
 def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectChange:
