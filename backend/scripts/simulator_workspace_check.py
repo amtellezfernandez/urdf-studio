@@ -135,6 +135,14 @@ def _parse_args() -> argparse.Namespace:
             f"Also enabled by {REQUIRE_SIMULATOR_WORKSPACE_ENV}=1."
         ),
     )
+    parser.add_argument(
+        "--artifact-only",
+        action="store_true",
+        help=(
+            "Validate workspace transfer artifacts without requiring optional opener "
+            "applications such as Blender. This cannot be combined with --require-all."
+        ),
+    )
     parser.add_argument("--duration-sec", type=float, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--timeout-sec", type=float, default=DEFAULT_TIMEOUT_SEC)
     parser.add_argument("--json", action="store_true", help="Print machine-readable results.")
@@ -887,15 +895,21 @@ def _check_target(
     require_runtime: bool,
 ) -> WorkspaceCheckResult:
     status = get_simulator_runtime_status(target.simulator_id)
-    if target.requires_runtime and not status.available:
+    runtime_notice: str | None = None
+    if not status.available:
         detail = _format_missing_runtime(status)
         if require_runtime:
             return WorkspaceCheckResult(target.simulator_id, target.label, "failed", detail)
-        return WorkspaceCheckResult(target.simulator_id, target.label, "skipped", detail)
+        if not target.requires_runtime:
+            runtime_notice = f"{detail}; validating transfer artifacts without opening runtime"
+        else:
+            return WorkspaceCheckResult(target.simulator_id, target.label, "skipped", detail)
 
     try:
         command = target.prepare(request, expectations)
         ok, detail = _run_workspace_command(command, timeout_sec=timeout_sec)
+        if runtime_notice:
+            detail = f"{runtime_notice}\n{detail}" if detail else runtime_notice
     except Exception as exc:
         return WorkspaceCheckResult(
             target.simulator_id,
@@ -963,9 +977,11 @@ def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
 
 def main() -> int:
     args = _parse_args()
+    if args.artifact_only and args.require_all:
+        raise SystemExit("--artifact-only cannot be combined with --require-all")
     selected_ids = tuple(args.simulator or ())
     require_runtime = (
-        bool(selected_ids)
+        (bool(selected_ids) and not args.artifact_only)
         or args.require_all
         or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
     )

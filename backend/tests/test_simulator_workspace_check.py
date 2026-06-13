@@ -3,23 +3,32 @@ from __future__ import annotations
 import json
 import sys
 
+import pytest
+
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJLAB_ID,
     SIMULATOR_PYBULLET_ID,
+    SimulatorRuntimeDependency,
+    SimulatorRuntimeStatus,
 )
 from backend.scripts.simulator_workspace_check import (
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PreparedWorkspaceCommand,
+    WorkspaceCheckResult,
+    WorkspaceExpectations,
+    WorkspaceTarget,
     WORKSPACE_SIMULATORS,
     _active_object_count,
+    _check_target,
     _prepare_blender_command,
     _prepare_genesis_command,
     _prepare_mujoco_command,
     _prepare_pybullet_command,
     _validate_report_artifact,
     build_demo_workspace_request,
+    main,
 )
 
 
@@ -248,6 +257,143 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         tmp_path / "artifacts" / "robot-reference.glb",
         tmp_path / "artifacts" / "robot-reference.usda",
     )
+
+
+def test_blender_workspace_check_fails_missing_runtime_when_required(monkeypatch) -> None:
+    called = False
+
+    def prepare(_request, _expectations):
+        nonlocal called
+        called = True
+        raise AssertionError("prepare should not run when runtime is required")
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.get_simulator_runtime_status",
+        lambda _simulator_id: SimulatorRuntimeStatus(
+            runtimeName=SIMULATOR_BLENDER_ID,
+            available=False,
+            status="missing blender",
+            dependencies=[
+                SimulatorRuntimeDependency(name="blender", available=False),
+            ],
+        ),
+    )
+
+    result = _check_target(
+        WorkspaceTarget(
+            simulator_id=SIMULATOR_BLENDER_ID,
+            label="Blender",
+            prepare=prepare,
+            requires_runtime=False,
+            include_in_parity=False,
+        ),
+        request=build_demo_workspace_request(),
+        expectations=WorkspaceExpectations(object_count=3, camera_count=3, duration_sec=0.0),
+        timeout_sec=1.0,
+        require_runtime=True,
+    )
+
+    assert result.status == "failed"
+    assert result.detail == "missing runtime dependency: blender"
+    assert called is False
+
+
+def test_blender_workspace_check_validates_artifacts_without_runtime(monkeypatch) -> None:
+    def prepare(_request, _expectations):
+        return PreparedWorkspaceCommand(
+            command=[],
+            ready_marker="ready",
+            expected_object_marker="objects=3",
+            expected_camera_log_marker="cameras=3",
+            expected_simulator_id=SIMULATOR_BLENDER_ID,
+        )
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.get_simulator_runtime_status",
+        lambda _simulator_id: SimulatorRuntimeStatus(
+            runtimeName=SIMULATOR_BLENDER_ID,
+            available=False,
+            status="missing blender",
+            dependencies=[
+                SimulatorRuntimeDependency(name="blender", available=False),
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check._run_workspace_command",
+        lambda _command, *, timeout_sec: (True, "workspace artifacts ready"),
+    )
+
+    result = _check_target(
+        WorkspaceTarget(
+            simulator_id=SIMULATOR_BLENDER_ID,
+            label="Blender",
+            prepare=prepare,
+            requires_runtime=False,
+            include_in_parity=False,
+        ),
+        request=build_demo_workspace_request(),
+        expectations=WorkspaceExpectations(object_count=3, camera_count=3, duration_sec=0.0),
+        timeout_sec=1.0,
+        require_runtime=False,
+    )
+
+    assert result.status == "passed"
+    assert "missing runtime dependency: blender" in result.detail
+    assert "validating transfer artifacts without opening runtime" in result.detail
+    assert "workspace artifacts ready" in result.detail
+
+
+def test_workspace_check_artifact_only_selected_target_does_not_require_runtime(
+    monkeypatch, capsys
+) -> None:
+    captured: dict[str, bool] = {}
+
+    def fake_check_target(
+        target,
+        *,
+        request,
+        expectations,
+        timeout_sec,
+        require_runtime,
+    ):
+        captured["require_runtime"] = require_runtime
+        return WorkspaceCheckResult(target.simulator_id, target.label, "passed", "ok")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "simulator_workspace_check.py",
+            "--simulator",
+            "blender",
+            "--artifact-only",
+            "--json",
+        ],
+    )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check._check_target",
+        fake_check_target,
+    )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check._check_cross_simulator_parity",
+        lambda _results: None,
+    )
+
+    assert main() == 0
+    assert captured == {"require_runtime": False}
+    assert '"status": "passed"' in capsys.readouterr().out
+
+
+def test_workspace_check_rejects_artifact_only_with_require_all(monkeypatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["simulator_workspace_check.py", "--artifact-only", "--require-all"],
+    )
+
+    with pytest.raises(SystemExit, match="--artifact-only cannot be combined with --require-all"):
+        main()
 
 
 def test_workspace_report_validation_accepts_matching_report(tmp_path) -> None:
