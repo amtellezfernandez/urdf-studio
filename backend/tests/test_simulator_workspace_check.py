@@ -23,6 +23,31 @@ from backend.scripts.simulator_workspace_check import (
 )
 
 
+def _report_object(source_id: str = "crate") -> dict:
+    return {
+        "source_id": source_id,
+        "sim_name": f"wl_{source_id}",
+        "sim_type": "box",
+        "position_xyz": [0.0, 0.0, 0.0],
+        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "size_xyz": [0.1, 0.2, 0.3],
+        "rgba": [1.0, 0.0, 0.0, 1.0],
+    }
+
+
+def _report_camera(camera_id: str = "cam") -> dict:
+    return {
+        "camera_id": camera_id,
+        "sim_name": f"{camera_id}_camera",
+        "parent_link": "base_link",
+        "position_xyz": [0.0, 0.0, 1.0],
+        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "width": 64,
+        "height": 48,
+        "fov_deg": 60.0,
+    }
+
+
 def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> None:
     request = build_demo_workspace_request()
 
@@ -228,8 +253,8 @@ def test_workspace_report_validation_accepts_matching_report(tmp_path) -> None:
                 "frame_map": "identity",
                 "primitive_count": 2,
                 "camera_count": 1,
-                "objects": [{}, {}],
-                "cameras": [{}],
+                "objects": [_report_object("crate-a"), _report_object("crate-b")],
+                "cameras": [_report_camera()],
                 "artifacts": {},
             }
         ),
@@ -259,8 +284,8 @@ def test_workspace_report_validation_rejects_wrong_counts(tmp_path) -> None:
                 "frame_map": "identity",
                 "primitive_count": 1,
                 "camera_count": 1,
-                "objects": [{}],
-                "cameras": [{}],
+                "objects": [_report_object()],
+                "cameras": [_report_camera()],
                 "artifacts": {},
             }
         ),
@@ -279,4 +304,72 @@ def test_workspace_report_validation_rejects_wrong_counts(tmp_path) -> None:
 
     assert _validate_report_artifact(command) == (
         "simulator validation report has primitive_count=1, expected 2"
+    )
+
+
+def test_workspace_report_validation_rejects_missing_object_fields(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+                "package_id": "demo",
+                "frame_map": "identity",
+                "primitive_count": 1,
+                "camera_count": 1,
+                "objects": [{"source_id": "crate"}],
+                "cameras": [_report_camera()],
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=1",
+        expected_camera_log_marker="cameras=1",
+        expected_report_path=report_path,
+        expected_simulator_id=SIMULATOR_GENESIS_ID,
+        expected_object_count=1,
+        expected_camera_count=1,
+    )
+
+    assert _validate_report_artifact(command) == (
+        "simulator validation report field 'objects[0]' missing field(s): "
+        "sim_name, sim_type, position_xyz, quat_wxyz, size_xyz, rgba"
+    )
+
+
+def test_workspace_report_validation_rejects_missing_camera_fields(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+                "package_id": "demo",
+                "frame_map": "identity",
+                "primitive_count": 1,
+                "camera_count": 1,
+                "objects": [_report_object()],
+                "cameras": [{"camera_id": "cam"}],
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=1",
+        expected_camera_log_marker="cameras=1",
+        expected_report_path=report_path,
+        expected_simulator_id=SIMULATOR_GENESIS_ID,
+        expected_object_count=1,
+        expected_camera_count=1,
+    )
+
+    assert _validate_report_artifact(command) == (
+        "simulator validation report field 'cameras[0]' missing field(s): "
+        "sim_name, parent_link, position_xyz, quat_wxyz, width, height, fov_deg"
     )

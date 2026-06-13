@@ -613,11 +613,42 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
     )
     if count_error:
         return count_error
-    return _validate_report_count(
+    count_error = _validate_report_count(
         payload,
         field_name="camera_count",
         list_field_name="cameras",
         expected_count=command.expected_camera_count,
+    )
+    if count_error:
+        return count_error
+    item_error = _validate_report_item_fields(
+        payload,
+        list_field_name="objects",
+        required_fields=(
+            "source_id",
+            "sim_name",
+            "sim_type",
+            "position_xyz",
+            "quat_wxyz",
+            "size_xyz",
+            "rgba",
+        ),
+    )
+    if item_error:
+        return item_error
+    return _validate_report_item_fields(
+        payload,
+        list_field_name="cameras",
+        required_fields=(
+            "camera_id",
+            "sim_name",
+            "parent_link",
+            "position_xyz",
+            "quat_wxyz",
+            "width",
+            "height",
+            "fov_deg",
+        ),
     )
 
 
@@ -642,6 +673,30 @@ def _validate_report_count(
             f"simulator validation report field '{list_field_name}' has {len(items)} item(s), "
             f"expected {count}"
         )
+    return None
+
+
+def _validate_report_item_fields(
+    payload: Mapping[str, Any],
+    *,
+    list_field_name: str,
+    required_fields: tuple[str, ...],
+) -> str | None:
+    items = payload.get(list_field_name)
+    if not isinstance(items, list):
+        return f"simulator validation report field '{list_field_name}' must be a list"
+    for index, item in enumerate(items):
+        if not isinstance(item, Mapping):
+            return (
+                f"simulator validation report field '{list_field_name}[{index}]' "
+                "must be an object"
+            )
+        missing_fields = [field for field in required_fields if field not in item]
+        if missing_fields:
+            return (
+                f"simulator validation report field '{list_field_name}[{index}]' "
+                f"missing field(s): {', '.join(missing_fields)}"
+            )
     return None
 
 
