@@ -224,6 +224,7 @@ def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
                     "position_xyz": [0.2, 0.3, 0.4],
                     "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
                     "size_xyz": [0.1, 0.2, 0.3],
+                    "rgba": [1.0, 0.82, 0.0, 1.0],
                     "reason": "new Blender mesh object will import as a Studio cube world object",
                 }
             ],
@@ -240,7 +241,7 @@ def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
         "position_xyz": [0.2, 0.3, 0.4],
         "rotation_rpy_rad": [0.0, 0.0, 0.0],
         "size_xyz": [0.1, 0.2, 0.3],
-        "color": "#3b82f6",
+        "color": "#ffd100",
         "simulation": {
             "fixed": True,
             "collision": True,
@@ -329,6 +330,30 @@ def test_blender_change_set_rejects_incomplete_new_world_object(tmp_path: Path) 
                         "sim_name": "Incomplete cube",
                         "position_xyz": [0.2, 0.3, 0.4],
                         "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    }
+                ],
+            ),
+        )
+
+
+def test_blender_change_set_rejects_invalid_new_world_object_rgba(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    with pytest.raises(ValueError, match="review_only\\[0\\]\\.rgba"):
+        apply_blender_layout_change_set_with_summary(
+            world_package,
+            _blender_change_set(
+                world_package,
+                changes=[_crate_layout_change()],
+                review_only=[
+                    {
+                        "entity_type": "new_world_object",
+                        "sim_name": "Invalid color cube",
+                        "position_xyz": [0.2, 0.3, 0.4],
+                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                        "size_xyz": [0.1, 0.2, 0.3],
+                        "rgba": [1.2, 0.0, 0.0, 1.0],
+                        "reason": "new Blender mesh object will import as a Studio cube world object",
                     }
                 ],
             ),
@@ -807,6 +832,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     new_world_object = fake_bpy.context.object
     new_world_object.name = "Extra Box"
     new_world_object.scale = [0.4, 0.5, 0.6]
+    new_world_object.color = (0.2, 0.4, 0.6, 1.0)
     new_world_object.rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
     runpy.run_path(str(artifacts.export_script_path), run_name="__main__")
 
@@ -826,6 +852,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert change_set["review_only"][0]["stable_id"] == "cam-1"
     assert change_set["review_only"][1]["entity_type"] == "new_world_object"
     assert change_set["review_only"][1]["sim_name"] == "Extra Box"
+    assert change_set["review_only"][1]["rgba"] == [0.2, 0.4, 0.6, 1.0]
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
@@ -835,6 +862,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert result.world_package.world_snapshot.objects[0]["size_xyz"] == [0.5, 0.6, 0.7]
     assert result.world_package.world_snapshot.objects[1]["id"] == "blender_extra_box"
     assert result.world_package.world_snapshot.objects[1]["position_xyz"] == [2.0, 3.0, 4.0]
+    assert result.world_package.world_snapshot.objects[1]["color"] == "#336699"
 
 
 class _FakeBlenderProcess:

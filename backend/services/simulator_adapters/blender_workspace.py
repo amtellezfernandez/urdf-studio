@@ -72,6 +72,7 @@ class BlenderNewWorldObject:
     position_xyz: tuple[float, float, float]
     quat_wxyz: tuple[float, float, float, float]
     size_xyz: tuple[float, float, float]
+    rgba: tuple[float, float, float, float] | None
 
 
 @dataclass(frozen=True)
@@ -547,6 +548,20 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                 ]
 
 
+            def rgba(obj):
+                material = getattr(obj, "active_material", None)
+                if material is None:
+                    materials = getattr(getattr(obj, "data", None), "materials", [])
+                    material = materials[0] if materials else None
+                color = getattr(material, "diffuse_color", None) if material is not None else None
+                if color is None:
+                    color = getattr(obj, "color", [1.0, 1.0, 1.0, 1.0])
+                values = [float(color[index]) for index in range(min(len(color), 4))]
+                while len(values) < 4:
+                    values.append(1.0)
+                return [max(0.0, min(1.0, value)) for value in values[:4]]
+
+
             def main():
                 changes = []
                 review_only = []
@@ -595,6 +610,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                                 "position_xyz": vector3(obj.location),
                                 "quat_wxyz": quat_wxyz(obj),
                                 "size_xyz": local_size_xyz(obj),
+                                "rgba": rgba(obj),
                                 "reason": "new Blender mesh object will import as a Studio cube world object",
                             }}
                         )
@@ -920,6 +936,7 @@ def _validate_new_world_object_import(value: Any, path: str) -> BlenderNewWorldO
         position_xyz=_required_vector3(value.get("position_xyz"), f"{path}.position_xyz"),
         quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
         size_xyz=_required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz"),
+        rgba=_optional_rgba(value.get("rgba"), f"{path}.rgba"),
     )
 
 
@@ -936,6 +953,7 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
             "position_xyz",
             "quat_wxyz",
             "size_xyz",
+            "rgba",
             "reason",
         },
     )
@@ -955,6 +973,12 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
         _required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz")
     if "size_xyz" in value:
         _required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz")
+    if "rgba" in value:
+        if entity_type != "new_world_object":
+            raise ValueError(
+                f"Blender change-set {path}.rgba is only supported for new_world_object."
+            )
+        _optional_rgba(value.get("rgba"), f"{path}.rgba")
     if "reason" in value:
         _required_string(value.get("reason"), f"{path}.reason")
     return f"{entity_type}:{stable_id}"
@@ -1067,7 +1091,7 @@ def _new_world_object_fields(
                 "position_xyz": list(item.position_xyz),
                 "rotation_rpy_rad": list(_quat_wxyz_to_rpy(item.quat_wxyz)),
                 "size_xyz": list(item.size_xyz),
-                "color": "#3b82f6",
+                "color": _rgba_to_hex(item.rgba) if item.rgba else "#3b82f6",
                 "simulation": {
                     "fixed": True,
                     "collision": True,
@@ -1156,6 +1180,15 @@ def _required_positive_vector3(value: Any, label: str) -> tuple[float, float, fl
     return numbers
 
 
+def _optional_rgba(value: Any, label: str) -> tuple[float, float, float, float] | None:
+    if value is None:
+        return None
+    numbers = _required_vector(value, label, 4)
+    if any(number < 0.0 or number > 1.0 for number in numbers):
+        raise ValueError(f"Blender change-set {label} must contain numbers between 0 and 1.")
+    return (numbers[0], numbers[1], numbers[2], numbers[3])
+
+
 def _required_quat_wxyz(value: Any, label: str) -> tuple[float, float, float, float]:
     numbers = _required_vector(value, label, 4)
     norm = math.sqrt(sum(number * number for number in numbers))
@@ -1173,3 +1206,12 @@ def _quat_wxyz_to_rpy(quat_wxyz: tuple[float, float, float, float]) -> tuple[flo
     rotation = Rotation.from_quat((quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]))
     rpy = rotation.as_euler("xyz")
     return (float(rpy[0]), float(rpy[1]), float(rpy[2]))
+
+
+def _rgba_to_hex(rgba: tuple[float, float, float, float]) -> str:
+    red, green, blue, _alpha = rgba
+    return "#{:02x}{:02x}{:02x}".format(
+        round(red * 255.0),
+        round(green * 255.0),
+        round(blue * 255.0),
+    )
