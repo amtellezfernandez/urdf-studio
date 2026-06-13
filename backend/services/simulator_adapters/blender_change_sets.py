@@ -34,6 +34,7 @@ class BlenderWorldObjectChange:
     position_xyz: tuple[float, float, float]
     quat_wxyz: tuple[float, float, float, float]
     size_xyz: tuple[float, float, float]
+    rgba: tuple[float, float, float, float] | None
 
 
 @dataclass(frozen=True)
@@ -340,6 +341,7 @@ def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectCh
             "position_xyz",
             "quat_wxyz",
             "size_xyz",
+            "rgba",
         },
     )
     entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
@@ -354,6 +356,7 @@ def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectCh
         position_xyz=_required_vector3(value.get("position_xyz"), f"{path}.position_xyz"),
         quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
         size_xyz=_required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz"),
+        rgba=_optional_rgba(value.get("rgba"), f"{path}.rgba"),
     )
 
 
@@ -496,11 +499,14 @@ def _required_string_list(value: Any, label: str) -> tuple[str, ...]:
 
 
 def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, Any]:
-    return {
+    fields: dict[str, Any] = {
         "position_xyz": list(change.position_xyz),
         "rotation_rpy_rad": list(_quat_wxyz_to_rpy(change.quat_wxyz)),
         "size_xyz": list(change.size_xyz),
     }
+    if change.rgba is not None:
+        fields["color"] = _rgba_to_hex(change.rgba)
+    return fields
 
 
 def _new_world_object_fields(

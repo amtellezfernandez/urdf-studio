@@ -152,6 +152,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert edit_session["objects"][0]["stable_id"] == "crate"
     assert edit_session["cameras"][0]["stable_id"] == "cam-1"
     assert edit_session["camera_screenshot_dir"] == str(tmp_path / "artifacts" / "cameras")
+    assert "world_object.color" in edit_session["round_trip"]["supported_changes"]
     assert "new_world_object" in edit_session["round_trip"]["review_only"]
     assert "new_static_props" not in edit_session["round_trip"]["review_only"]
     assert "robot.kinematics" in edit_session["round_trip"]["locked"]
@@ -192,8 +193,26 @@ def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> 
 
     assert updated_object["position_xyz"] == [1.0, 2.0, 3.0]
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
+    assert updated_object["color"] == "#22c55e"
     assert all(math.isclose(value, 0.0, abs_tol=1e-9) for value in updated_object["rotation_rpy_rad"])
     assert updated.world_snapshot.cameras == world_package.world_snapshot.cameras
+
+
+def test_blender_change_set_applies_world_object_color(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change = _crate_layout_change()
+    change["rgba"] = [0.8, 0.1, 0.2, 1.0]
+
+    updated = apply_blender_layout_change_set(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[change],
+            review_only=[_scene_camera_review()],
+        ),
+    )
+
+    assert updated.world_snapshot.objects[0]["color"] == "#cc1a33"
 
 
 def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
@@ -358,6 +377,22 @@ def test_blender_change_set_rejects_invalid_new_world_object_rgba(tmp_path: Path
                         "reason": "new Blender mesh object will import as a Studio cube world object",
                     }
                 ],
+            ),
+        )
+
+
+def test_blender_change_set_rejects_invalid_world_object_rgba(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    change = _crate_layout_change()
+    change["rgba"] = [1.2, 0.0, 0.0, 1.0]
+
+    with pytest.raises(ValueError, match="changes\\[0\\]\\.rgba"):
+        apply_blender_layout_change_set_with_summary(
+            world_package,
+            _blender_change_set(
+                world_package,
+                changes=[change],
+                review_only=[_scene_camera_review()],
             ),
         )
 
@@ -830,6 +865,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     world_objects[0].location = [1.0, 2.0, 3.0]
     world_objects[0].scale = [0.5, 0.6, 0.7]
     world_objects[0].rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
+    world_objects[0].data.materials[0].diffuse_color = (0.9, 0.1, 0.2, 1.0)
     fake_bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.0, 3.0, 4.0))
     new_world_object = fake_bpy.context.object
     new_world_object.name = "Extra Box"
@@ -845,6 +881,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
             "entity_type": "world_object",
             "position_xyz": [1.0, 2.0, 3.0],
             "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "rgba": [0.9, 0.1, 0.2, 1.0],
             "sim_name": "wl_crate",
             "size_xyz": [0.5, 0.6, 0.7],
             "stable_id": "crate",
@@ -862,6 +899,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert result.review_only_count == 1
     assert result.world_package.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
     assert result.world_package.world_snapshot.objects[0]["size_xyz"] == [0.5, 0.6, 0.7]
+    assert result.world_package.world_snapshot.objects[0]["color"] == "#e61a33"
     assert result.world_package.world_snapshot.objects[1]["id"] == "blender_extra_box"
     assert result.world_package.world_snapshot.objects[1]["position_xyz"] == [2.0, 3.0, 4.0]
     assert result.world_package.world_snapshot.objects[1]["color"] == "#336699"

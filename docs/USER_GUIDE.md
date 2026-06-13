@@ -127,7 +127,7 @@ Use `File` -> `Export` to write URDF, Xacro, MJCF, USD, meshes, and camera confi
 3. Run the generated `export_blender_changes.py` script from that Blender session.
 4. Back in Studio, use `Worlds` -> `Import Workspace Changes` and select `blender-change-set.json`.
 
-Studio writes `robot-reference.glb` for Blender-native robot visuals and `robot-reference.usda` for interchange metadata. Studio applies validated world object layout changes from the same source scene, and complete new Blender mesh objects import as colored Studio cube world objects. Robot kinematics, inertials, collisions, transmissions, camera edits or deletions, and deleted Studio objects stay under Studio review.
+Studio writes `robot-reference.glb` for Blender-native robot visuals and `robot-reference.usda` for interchange metadata. Studio applies validated world object transforms, dimensions, and display colors from the same source scene, and complete new Blender mesh objects import as colored Studio cube world objects. Robot kinematics, inertials, collisions, transmissions, camera edits or deletions, and deleted Studio objects stay under Studio review.
 
 ### Replay Dataset Episodes
 

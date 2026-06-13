@@ -172,6 +172,7 @@ def build_blender_edit_session(
                 "world_object.position_xyz",
                 "world_object.rotation_rpy_rad",
                 "world_object.size_xyz",
+                "world_object.color",
             ),
             "review_only": (
                 "camera.pose",
@@ -521,6 +522,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                                 "position_xyz": vector3(obj.location),
                                 "quat_wxyz": quat_wxyz(obj),
                                 "size_xyz": local_size_xyz(obj),
+                                "rgba": rgba(obj),
                             }}
                         )
                     elif kind == "camera" and stable_id:
