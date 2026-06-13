@@ -3,6 +3,129 @@
   "$id": "https://urdf.studio/specs/wsp/manifest-1.0.0.schema.json",
   "title": "World Scene Package Manifest",
   "type": "object",
+  "$defs": {
+    "vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    },
+    "positiveVector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number", "exclusiveMinimum": 0 }
+    },
+    "positiveScale": {
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "$ref": "#/$defs/positiveVector3" }
+      ]
+    },
+    "worldObjectSimulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fixed": { "type": "boolean" },
+        "collision": { "type": "boolean" },
+        "mass_kg": { "type": ["number", "null"], "minimum": 0 },
+        "friction": {
+          "type": ["number", "null"],
+          "minimum": 0.01,
+          "maximum": 5
+        },
+        "restitution": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "semantic_role": { "type": ["string", "null"] }
+      }
+    },
+    "worldObjectMesh": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asset_ref": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "uri": { "type": "string", "minLength": 1 },
+        "filename": { "type": "string", "minLength": 1 },
+        "scale": { "$ref": "#/$defs/positiveScale" },
+        "scale_xyz": { "$ref": "#/$defs/positiveVector3" }
+      }
+    },
+    "worldObject": {
+      "type": "object",
+      "required": ["id", "name", "type", "position_xyz", "size_xyz", "color"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": ["cube", "point", "sphere", "cylinder", "mesh"]
+        },
+        "position_xyz": { "$ref": "#/$defs/vector3" },
+        "rotation_rpy_rad": { "$ref": "#/$defs/vector3" },
+        "size_xyz": { "$ref": "#/$defs/positiveVector3" },
+        "color": { "type": "string", "minLength": 1 },
+        "is_hidden": { "type": "boolean" },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "world-scenario",
+            "demo-world",
+            "runtime-detection",
+            "runtime-demo",
+            "runtime-restricted-area",
+            "runtime-trajectory"
+          ]
+        },
+        "tracked_joint_name": { "type": ["string", "null"] },
+        "is_ik_target": { "type": "boolean" },
+        "ik_target_type": { "type": "string", "enum": ["punctual", "orbit"] },
+        "orbit_radius": { "type": "number", "exclusiveMinimum": 0 },
+        "orbit_inclination_deg": { "type": "number" },
+        "orbit_phase_deg": { "type": "number" },
+        "orbit_secondary_offset_deg": { "type": "number" },
+        "orbit_target_point": {
+          "type": "string",
+          "enum": ["center", "primary", "secondary"]
+        },
+        "simulation": { "$ref": "#/$defs/worldObjectSimulation" },
+        "asset_ref": { "type": "string", "minLength": 1 },
+        "asset_scale_xyz": { "$ref": "#/$defs/positiveVector3" },
+        "mesh": { "$ref": "#/$defs/worldObjectMesh" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "mesh" } },
+            "required": ["type"]
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["asset_ref"] },
+              {
+                "required": ["mesh"],
+                "properties": {
+                  "mesh": {
+                    "anyOf": [
+                      { "required": ["asset_ref"] },
+                      { "required": ["path"] },
+                      { "required": ["uri"] },
+                      { "required": ["filename"] }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
   "required": [
     "schema_version",
     "package_id",
@@ -118,7 +241,7 @@
         "objects": {
           "type": "array",
           "maxItems": 256,
-          "items": { "type": "object" }
+          "items": { "$ref": "#/$defs/worldObject" }
         },
         "scenario_time_ms": { "type": "integer", "minimum": 0 },
         "scenario_duration_ms": {

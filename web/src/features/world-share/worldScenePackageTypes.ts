@@ -27,15 +27,37 @@ export type WorldSecuritySpec = {
   sbom_ref: string | null;
 };
 
+export type SerializableWorldObjectSimulationSpec = {
+  fixed?: boolean;
+  collision?: boolean;
+  mass_kg?: number | null;
+  friction?: number | null;
+  restitution?: number | null;
+  semantic_role?: string | null;
+};
+
+export type SerializableWorldObjectMeshSpec = {
+  asset_ref?: string;
+  path?: string;
+  uri?: string;
+  filename?: string;
+  scale?: number | [number, number, number];
+  scale_xyz?: [number, number, number];
+};
+
 export type SerializableWorldObject = {
   id: string;
   name: string;
-  type: "cube" | "point" | "sphere" | "cylinder";
+  type: "cube" | "point" | "sphere" | "cylinder" | "mesh";
   position_xyz: [number, number, number];
   rotation_rpy_rad?: [number, number, number];
   size_xyz: [number, number, number];
   color: string;
   is_hidden?: boolean;
+  simulation?: SerializableWorldObjectSimulationSpec;
+  asset_ref?: string;
+  asset_scale_xyz?: [number, number, number];
+  mesh?: SerializableWorldObjectMeshSpec;
   source?:
     | "user"
     | "world-scenario"

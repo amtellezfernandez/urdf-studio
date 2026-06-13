@@ -14,7 +14,7 @@ import {
 
 const WORLD_LAYOUT_VECTOR_COMPONENT_COUNT = 3 as const;
 const WORLD_LAYOUT_VECTOR_COMPONENT_LABELS = ["x", "y", "z"] as const;
-const WORLD_LAYOUT_SUPPORTED_OBJECT_TYPES = ["cube", "point", "sphere", "cylinder"] as const;
+const WORLD_LAYOUT_SUPPORTED_OBJECT_TYPES = ["cube", "point", "sphere", "cylinder", "mesh"] as const;
 const WORLD_LAYOUT_SUPPORTED_OBJECT_SOURCES = [
   "user",
   "world-scenario",
@@ -63,6 +63,8 @@ const isOneOf = <TValue extends string>(
 
 const isNullableString = (value: unknown): value is string | null => value === null || isString(value);
 
+const isNonEmptyString = (value: unknown): value is string => isString(value) && value.trim().length > 0;
+
 const validateFiniteVector = (
   value: unknown,
   fieldLabel: string,
@@ -87,6 +89,120 @@ const validateFiniteVector = (
     }
   });
 
+  return errors;
+};
+
+const validateOptionalBoolean = (value: unknown, fieldLabel: string): string[] => {
+  if (value === undefined) return [];
+  return isBoolean(value) ? [] : [`${fieldLabel} must be a boolean`];
+};
+
+const validateOptionalString = (value: unknown, fieldLabel: string): string[] => {
+  if (value === undefined || value === null) return [];
+  return isString(value) ? [] : [`${fieldLabel} must be a string or null`];
+};
+
+const validateOptionalFiniteNumber = (
+  value: unknown,
+  fieldLabel: string,
+  options?: { minimum?: number; maximum?: number }
+): string[] => {
+  if (value === undefined || value === null) return [];
+  if (!isNumber(value)) return [`${fieldLabel} must be a finite number or null`];
+  if (options?.minimum !== undefined && value < options.minimum) {
+    return [`${fieldLabel} must be >= ${options.minimum}`];
+  }
+  if (options?.maximum !== undefined && value > options.maximum) {
+    return [`${fieldLabel} must be <= ${options.maximum}`];
+  }
+  return [];
+};
+
+const validateWorldObjectSimulation = (value: unknown, objectLabel: string): string[] => {
+  if (value === undefined) return [];
+  if (!isRecord(value)) return [`${objectLabel}.simulation must be an object`];
+  const errors: string[] = [];
+  errors.push(...validateOptionalBoolean(value.fixed, `${objectLabel}.simulation.fixed`));
+  errors.push(...validateOptionalBoolean(value.collision, `${objectLabel}.simulation.collision`));
+  errors.push(
+    ...validateOptionalFiniteNumber(value.mass_kg, `${objectLabel}.simulation.mass_kg`, {
+      minimum: 0,
+    })
+  );
+  errors.push(
+    ...validateOptionalFiniteNumber(value.friction, `${objectLabel}.simulation.friction`, {
+      minimum: 0.01,
+      maximum: 5,
+    })
+  );
+  errors.push(
+    ...validateOptionalFiniteNumber(value.restitution, `${objectLabel}.simulation.restitution`, {
+      minimum: 0,
+      maximum: 1,
+    })
+  );
+  errors.push(...validateOptionalString(value.semantic_role, `${objectLabel}.simulation.semantic_role`));
+  return errors;
+};
+
+const readWorldObjectMeshAssetRef = (value: Record<string, unknown>): string | null => {
+  if (isNonEmptyString(value.asset_ref)) return value.asset_ref.trim();
+  const mesh = value.mesh;
+  if (!isRecord(mesh)) return null;
+  const meshAssetRef = mesh.asset_ref ?? mesh.path ?? mesh.uri ?? mesh.filename;
+  return isNonEmptyString(meshAssetRef) ? meshAssetRef.trim() : null;
+};
+
+const validateWorldObjectMeshMetadata = (
+  value: Record<string, unknown>,
+  objectLabel: string
+): string[] => {
+  const errors: string[] = [];
+  if (value.asset_ref !== undefined && !isNonEmptyString(value.asset_ref)) {
+    errors.push(`${objectLabel}.asset_ref must be a non-empty string`);
+  }
+  if (value.asset_scale_xyz !== undefined) {
+    errors.push(
+      ...validateFiniteVector(value.asset_scale_xyz, `${objectLabel}.asset_scale_xyz`, {
+        requirePositive: true,
+      })
+    );
+  }
+
+  if (value.mesh !== undefined) {
+    if (!isRecord(value.mesh)) {
+      errors.push(`${objectLabel}.mesh must be an object`);
+    } else {
+      const mesh = value.mesh;
+      for (const key of ["asset_ref", "path", "uri", "filename"] as const) {
+        if (mesh[key] !== undefined && !isNonEmptyString(mesh[key])) {
+          errors.push(`${objectLabel}.mesh.${key} must be a non-empty string`);
+        }
+      }
+      if (mesh.scale !== undefined) {
+        if (isNumber(mesh.scale)) {
+          if (mesh.scale <= 0) errors.push(`${objectLabel}.mesh.scale must be > 0`);
+        } else {
+          errors.push(
+            ...validateFiniteVector(mesh.scale, `${objectLabel}.mesh.scale`, {
+              requirePositive: true,
+            })
+          );
+        }
+      }
+      if (mesh.scale_xyz !== undefined) {
+        errors.push(
+          ...validateFiniteVector(mesh.scale_xyz, `${objectLabel}.mesh.scale_xyz`, {
+            requirePositive: true,
+          })
+        );
+      }
+    }
+  }
+
+  if (value.type === "mesh" && readWorldObjectMeshAssetRef(value) === null) {
+    errors.push(`${objectLabel}.mesh asset reference is required for mesh objects`);
+  }
   return errors;
 };
 
@@ -176,6 +292,8 @@ const validateSerializableWorldObject = (value: unknown, objectIndex: number): s
   if (value.is_ik_target !== undefined && !isBoolean(value.is_ik_target)) {
     errors.push(`${objectLabel}.is_ik_target must be a boolean`);
   }
+  errors.push(...validateWorldObjectSimulation(value.simulation, objectLabel));
+  errors.push(...validateWorldObjectMeshMetadata(value, objectLabel));
 
   const ikTargetType = value.ik_target_type ?? "punctual";
   if (!isOneOf(ikTargetType, WORLD_LAYOUT_SUPPORTED_IK_TARGET_TYPES)) {

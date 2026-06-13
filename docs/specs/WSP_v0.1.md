@@ -44,6 +44,18 @@ It standardizes:
 - `world_snapshot.scenario_time_ms` and `scenario_duration_ms` store scenario clock state.
 - Static scene packages use `scenario_duration_ms = 0` and must set `scenario_time_ms = 0`.
 
+## World Objects
+
+Each `world_snapshot.objects[]` entry is a simulator-transfer object with:
+
+- `id`, `name`, `type`, `position_xyz`, `size_xyz`, and `color`.
+- `type`: `cube`, `point`, `sphere`, `cylinder`, or `mesh`.
+- `rotation_rpy_rad` when orientation matters.
+- `simulation` for physics metadata: `fixed`, `collision`, `mass_kg`, `friction`, `restitution`, and `semantic_role`.
+- `asset_ref`, `asset_scale_xyz`, or `mesh` metadata when the object is backed by a mesh asset. Mesh objects must include an asset reference.
+
+Blender-imported complete mesh additions currently enter Studio as cube world objects with `simulation.semantic_role = "blender_import"`. Existing object transforms can be applied automatically; camera edits and deletions still require review before they are applied to a package.
+
 ## Model Separation
 
 - `WSP` does not define world-model rollout semantics.

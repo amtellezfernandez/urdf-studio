@@ -124,6 +124,110 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toEqual([]);
   });
 
+  it("accepts Blender-imported world objects with simulator metadata", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            id: "blender_added_cube",
+            name: "Added cube",
+            simulation: {
+              fixed: true,
+              collision: true,
+              mass_kg: null,
+              friction: 0.8,
+              restitution: 0.1,
+              semantic_role: "blender_import",
+            },
+          },
+        ],
+      })
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("accepts mesh world objects with explicit asset metadata", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            id: "mesh-crate",
+            name: "Mesh crate",
+            type: "mesh",
+            asset_ref: "assets/crate.obj",
+            asset_scale_xyz: [1, 1.2, 1.4],
+            mesh: {
+              path: "assets/crate.obj",
+              scale: [1, 1.2, 1.4],
+            },
+          },
+        ],
+      })
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects malformed simulator metadata", () => {
+    const malformedObject = {
+      ...createWorldLayoutObject(),
+      simulation: {
+        fixed: "yes",
+        mass_kg: -1,
+        friction: 0,
+        restitution: 1.1,
+        semantic_role: 3,
+      },
+    } as unknown as WorldScenePackageManifest["world_snapshot"]["objects"][number];
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [malformedObject],
+      })
+    );
+    expect(errors).toContain("world layout objects[0].simulation.fixed must be a boolean");
+    expect(errors).toContain("world layout objects[0].simulation.mass_kg must be >= 0");
+    expect(errors).toContain("world layout objects[0].simulation.friction must be >= 0.01");
+    expect(errors).toContain("world layout objects[0].simulation.restitution must be <= 1");
+    expect(errors).toContain(
+      "world layout objects[0].simulation.semantic_role must be a string or null"
+    );
+  });
+
+  it("rejects mesh world objects without an asset reference", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            type: "mesh",
+          },
+        ],
+      })
+    );
+    expect(errors).toContain(
+      "world layout objects[0].mesh asset reference is required for mesh objects"
+    );
+  });
+
+  it("rejects malformed mesh asset scales", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            type: "mesh",
+            mesh: {
+              path: "assets/crate.obj",
+              scale: [1, 0, 1],
+            },
+          },
+        ],
+      })
+    );
+    expect(errors).toContain("world layout objects[0].mesh.scale[y] must be > 0");
+  });
+
   it("accepts static world layout snapshots", () => {
     const snapshot = createStaticWorldSceneLayerSnapshot({
       name: "Desk setup",

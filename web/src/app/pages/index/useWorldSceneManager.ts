@@ -410,13 +410,14 @@ export const useWorldSceneManager = ({
     (object: WorldScenePackageManifest["world_snapshot"]["objects"][number]): Omit<CreatedObject, "id"> => {
       const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
         object.ik_target_type === "orbit" ? "orbit" : "punctual";
+      const editableObjectType = object.type === "mesh" ? "cube" : object.type;
       const geometry = resolveWorldObjectGeometry({
-        type: object.type,
+        type: editableObjectType,
         position: { x: object.position_xyz[0], y: object.position_xyz[1], z: object.position_xyz[2] },
         size: { x: object.size_xyz[0], y: object.size_xyz[1], z: object.size_xyz[2] },
       });
       const importedObject: Omit<CreatedObject, "id"> = {
-        type: object.type,
+        type: editableObjectType,
         position: geometry.position,
         rotation: normalizeWorldObjectRotationEuler(
           object.rotation_rpy_rad
