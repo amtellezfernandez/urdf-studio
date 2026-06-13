@@ -349,6 +349,65 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
     }
 
 
+def test_workspace_transfer_status_delegates_to_target_registry(monkeypatch) -> None:
+    def fake_get_simulator_runtime_status(simulator_id):
+        return SimulatorRuntimeStatus(
+            runtimeName=simulator_id,
+            available=True,
+            status="ready",
+            dependencies=[],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.workspace_transfer.get_simulator_runtime_status",
+        fake_get_simulator_runtime_status,
+    )
+
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "GET",
+                "/workspace-transfer/targets/genesis/status",
+                headers=_operator_headers(),
+            )
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "targetId": "genesis",
+        "available": True,
+        "status": "ready",
+        "dependencies": [],
+    }
+
+
+def test_workspace_transfer_runtime_route_remains_compatible(monkeypatch) -> None:
+    def fake_get_simulator_runtime_status(simulator_id):
+        return SimulatorRuntimeStatus(
+            runtimeName=simulator_id,
+            available=True,
+            status="ready",
+            dependencies=[],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.workspace_transfer.get_simulator_runtime_status",
+        fake_get_simulator_runtime_status,
+    )
+
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "GET",
+                "/workspace-transfer/targets/genesis/runtime",
+                headers=_operator_headers(),
+            )
+        )
+
+    assert response.status_code == 200
+    assert response.json()["targetId"] == "genesis"
+
+
 def test_optional_simulator_workspace_prepare_reports_missing_adapter() -> None:
     with _patch_security_settings():
         response = asyncio.run(

@@ -44,7 +44,7 @@ const resolveWorkspaceTransferTargetDetail = (
 ): string => {
   const assetFormat = formatWorkspaceAssetFormat(descriptor.transferPolicy.robotAssetFormat);
   if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} support planned`;
-  if (status && !status.available) return `${assetFormat} runtime unavailable: ${status.status}`;
+  if (status && !status.available) return `${assetFormat} target unavailable: ${status.status}`;
   if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
   if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
   if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
@@ -107,7 +107,7 @@ export const useWorkspaceTransferLauncher = ({
             {
               targetId: descriptor.targetId,
               available: false,
-              status: error instanceof Error ? error.message : "runtime status unavailable",
+              status: error instanceof Error ? error.message : "target status unavailable",
               dependencies: [],
             },
           ] as const;
@@ -184,7 +184,7 @@ export const useWorkspaceTransferLauncher = ({
       const status = targetStatuses[descriptor.targetId];
       const canOpen = canOpenWorkspaceTarget(descriptor) && status?.available !== false;
       const plannedLabel = canOpenWorkspaceTarget(descriptor)
-        ? `${descriptor.label} runtime unavailable`
+        ? `${descriptor.label} target unavailable`
         : `${descriptor.label} support planned`;
       return {
         id: descriptor.targetId,

@@ -291,7 +291,7 @@ describe("workspaceTransferApi", () => {
     expect(status.available).toBe(true);
     expect(status.targetId).toBe("mjlab");
     expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/workspace-transfer/targets/mjlab/runtime"),
+      expect.stringContaining("/workspace-transfer/targets/mjlab/status"),
       {
         method: "GET",
         headers: {
@@ -300,7 +300,7 @@ describe("workspaceTransferApi", () => {
       },
       {
         requiredBackends: ["core-api"],
-        context: "Check mjlab runtime",
+        context: "Check mjlab availability",
       }
     );
   });

@@ -274,7 +274,7 @@ export const fetchWorkspaceTransferTargetStatus = async (
   targetId: WorkspaceTransferTargetId
 ): Promise<WorkspaceTransferTargetStatus> => {
   const response = await guardedFetch(
-    `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/runtime")}`,
+    `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/status")}`,
     {
       method: "GET",
       headers: {
@@ -283,12 +283,12 @@ export const fetchWorkspaceTransferTargetStatus = async (
     },
     {
       requiredBackends: ["core-api"],
-      context: `Check ${formatTargetName(targetId)} runtime`,
+      context: `Check ${formatTargetName(targetId)} availability`,
     }
   );
   if (!response.ok) {
     const detail = await readErrorDetail(response);
-    throw new Error(detail || `${targetId} runtime check failed (${response.status})`);
+    throw new Error(detail || `${targetId} availability check failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceTransferTargetStatus;
 };

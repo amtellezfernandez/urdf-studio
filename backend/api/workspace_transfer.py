@@ -34,8 +34,13 @@ async def list_workspace_transfer_targets_route(
     return list_workspace_transfer_targets()
 
 
-@router.get("/targets/{target_id}/runtime", response_model=WorkspaceTransferTargetStatus)
-async def get_workspace_transfer_target_runtime_route(
+@router.get(
+    "/targets/{target_id}/runtime",
+    response_model=WorkspaceTransferTargetStatus,
+    include_in_schema=False,
+)
+@router.get("/targets/{target_id}/status", response_model=WorkspaceTransferTargetStatus)
+async def get_workspace_transfer_target_status_route(
     target_id: WorkspaceTransferTargetId,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorkspaceTransferTargetStatus:
