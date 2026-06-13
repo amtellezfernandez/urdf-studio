@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SOURCE_SCHEMA,
 )
+from backend.services.simulator_adapters.numeric import is_finite_number
 
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
 BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES = frozenset(
@@ -207,6 +208,18 @@ def _validate_blender_edit_session_entries(
         )
         if error:
             return error
+        error = _validate_non_empty_string(
+            entry.get("sim_name"),
+            f"{field_name}[{index}].sim_name",
+        )
+        if error:
+            return error
+        error = _validate_blender_edit_session_entry_numbers(
+            entry,
+            f"{field_name}[{index}]",
+        )
+        if error:
+            return error
     return None
 
 
@@ -320,6 +333,87 @@ def _validate_id_coverage(
 
 def _duplicate_ids(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(sorted(value for value, count in Counter(values).items() if count > 1))
+
+
+def _validate_blender_edit_session_entry_numbers(
+    entry: Mapping[str, Any],
+    path_name: str,
+) -> str | None:
+    validators = (
+        ("position_xyz", _validate_vector3),
+        ("quat_wxyz", _validate_quat_wxyz),
+        ("size_xyz", _validate_positive_vector3),
+        ("rgba", _validate_rgba),
+        ("width", _validate_positive_int),
+        ("height", _validate_positive_int),
+        ("fov_deg", _validate_fov_deg),
+    )
+    for field_name, validator in validators:
+        if field_name in entry:
+            error = validator(entry[field_name], f"{path_name}.{field_name}")
+            if error:
+                return error
+    return None
+
+
+def _validate_vector(
+    value: Any,
+    path_name: str,
+    *,
+    expected_length: int,
+) -> tuple[float, ...] | str:
+    if not isinstance(value, Sequence) or isinstance(value, str) or len(value) != expected_length:
+        return (
+            f"Blender edit-session field '{path_name}' must be a "
+            f"{expected_length}-number list"
+        )
+    if not all(is_finite_number(item) for item in value):
+        return f"Blender edit-session field '{path_name}' must contain only finite numbers"
+    return tuple(float(item) for item in value)
+
+
+def _validate_vector3(value: Any, path_name: str) -> str | None:
+    result = _validate_vector(value, path_name, expected_length=3)
+    return result if isinstance(result, str) else None
+
+
+def _validate_positive_vector3(value: Any, path_name: str) -> str | None:
+    result = _validate_vector(value, path_name, expected_length=3)
+    if isinstance(result, str):
+        return result
+    if any(number <= 0.0 for number in result):
+        return f"Blender edit-session field '{path_name}' must contain positive dimensions"
+    return None
+
+
+def _validate_quat_wxyz(value: Any, path_name: str) -> str | None:
+    result = _validate_vector(value, path_name, expected_length=4)
+    if isinstance(result, str):
+        return result
+    if sum(number * number for number in result) <= 0.0:
+        return f"Blender edit-session field '{path_name}' must be a non-zero quaternion"
+    return None
+
+
+def _validate_rgba(value: Any, path_name: str) -> str | None:
+    result = _validate_vector(value, path_name, expected_length=4)
+    if isinstance(result, str):
+        return result
+    if any(number < 0.0 or number > 1.0 for number in result):
+        return f"Blender edit-session field '{path_name}' must contain numbers between 0 and 1"
+    return None
+
+
+def _validate_positive_int(value: Any, path_name: str) -> str | None:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        return f"Blender edit-session field '{path_name}' must be a positive integer"
+    return None
+
+
+def _validate_fov_deg(value: Any, path_name: str) -> str | None:
+    if not is_finite_number(value) or float(value) <= 0.0 or float(value) >= 180.0:
+        return f"Blender edit-session field '{path_name}' must be between 0 and 180 degrees"
+    return None
 
 
 def _validate_existing_file_string(value: Any, path_name: str) -> str | None:

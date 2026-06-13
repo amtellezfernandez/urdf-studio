@@ -138,6 +138,24 @@ def _write_blender_edit_session_artifacts(tmp_path: Path):
     )
 
 
+def _write_mutated_blender_edit_session_artifact(
+    tmp_path: Path,
+    path: tuple[object, ...],
+    value,
+):
+    artifacts = _write_blender_edit_session_artifacts(tmp_path)
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    target = edit_session
+    for segment in path[:-1]:
+        target = target[segment]
+    target[path[-1]] = value
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+    return artifacts
+
+
 def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> None:
     _world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
     scene = prepare_simulator_scene(
@@ -239,6 +257,52 @@ def test_blender_edit_session_validation_rejects_duplicate_source_camera_id(
     assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == (
         "Blender edit-session field 'source.camera_ids' contains duplicate id(s): cam-1"
     )
+
+
+@pytest.mark.parametrize(
+    ("path", "value", "expected_error"),
+    (
+        (
+            ("objects", 0, "position_xyz"),
+            [0.0, "bad", 0.0],
+            "Blender edit-session field 'objects[0].position_xyz' must contain only finite numbers",
+        ),
+        (
+            ("objects", 0, "size_xyz"),
+            [0.0, 1.0, 1.0],
+            "Blender edit-session field 'objects[0].size_xyz' must contain positive dimensions",
+        ),
+        (
+            ("objects", 0, "rgba"),
+            [1.2, 0.0, 0.0, 1.0],
+            "Blender edit-session field 'objects[0].rgba' must contain numbers between 0 and 1",
+        ),
+        (
+            ("objects", 0, "quat_wxyz"),
+            [0.0, 0.0, 0.0, 0.0],
+            "Blender edit-session field 'objects[0].quat_wxyz' must be a non-zero quaternion",
+        ),
+        (
+            ("cameras", 0, "width"),
+            0,
+            "Blender edit-session field 'cameras[0].width' must be a positive integer",
+        ),
+        (
+            ("cameras", 0, "fov_deg"),
+            180.0,
+            "Blender edit-session field 'cameras[0].fov_deg' must be between 0 and 180 degrees",
+        ),
+    ),
+)
+def test_blender_edit_session_validation_rejects_bad_numeric_fields(
+    tmp_path: Path,
+    path: tuple[object, ...],
+    value,
+    expected_error: str,
+) -> None:
+    artifacts = _write_mutated_blender_edit_session_artifact(tmp_path, path, value)
+
+    assert validate_blender_edit_session_artifact(artifacts.edit_session_path) == expected_error
 
 
 def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> None:
