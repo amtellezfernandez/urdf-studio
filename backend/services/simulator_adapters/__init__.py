@@ -1,11 +1,6 @@
 from __future__ import annotations
 
 from backend.models.simulator_runtime import (
-    SIMULATOR_GENESIS_ID,
-    SIMULATOR_BLENDER_ID,
-    SIMULATOR_MJLAB_ID,
-    SIMULATOR_MUJOCO_ID,
-    SIMULATOR_PYBULLET_ID,
     SIMULATOR_RUNTIME_SPECS,
     SUPPORTED_SIMULATOR_IDS,
     SimulatorId,
@@ -32,25 +27,46 @@ from backend.services.simulator_adapters.optional_runtime import make_optional_s
 from backend.services.simulator_adapters.pybullet import PYBULLET_SIMULATOR_ADAPTER
 
 
-WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = (
-    SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
-    SIMULATOR_MUJOCO_ID,
-    SIMULATOR_PYBULLET_ID,
-    SIMULATOR_BLENDER_ID,
+def _build_adapter_map(adapters: tuple[SimulatorAdapter, ...]) -> dict[SimulatorId, SimulatorAdapter]:
+    adapter_map: dict[SimulatorId, SimulatorAdapter] = {}
+    for adapter in adapters:
+        if adapter.simulator_id in adapter_map:
+            raise RuntimeError(f"Duplicate simulator adapter id: {adapter.simulator_id}")
+        adapter_map[adapter.simulator_id] = adapter
+    return adapter_map
+
+
+_WORKSPACE_SIMULATOR_ADAPTERS = _build_adapter_map(
+    (
+        GENESIS_SIMULATOR_ADAPTER,
+        MJLAB_SIMULATOR_ADAPTER,
+        MUJOCO_SIMULATOR_ADAPTER,
+        PYBULLET_SIMULATOR_ADAPTER,
+        BLENDER_SIMULATOR_ADAPTER,
+    )
+)
+WORKSPACE_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
+    spec.simulator_id
+    for spec in SIMULATOR_RUNTIME_SPECS
+    if spec.workspace_target and spec.transfer.transfer_strategy != "planned"
 )
 WORKSPACE_SIMULATOR_ID_SET = set(WORKSPACE_SIMULATOR_IDS)
+
+if set(_WORKSPACE_SIMULATOR_ADAPTERS) != WORKSPACE_SIMULATOR_ID_SET:
+    missing = sorted(WORKSPACE_SIMULATOR_ID_SET - set(_WORKSPACE_SIMULATOR_ADAPTERS))
+    extra = sorted(set(_WORKSPACE_SIMULATOR_ADAPTERS) - WORKSPACE_SIMULATOR_ID_SET)
+    raise RuntimeError(
+        "Workspace simulator adapter registry does not match runtime specs "
+        f"(missing={missing}, extra={extra})."
+    )
+
 _OPTIONAL_SIMULATOR_ADAPTERS: dict[SimulatorId, SimulatorAdapter] = {
     spec.simulator_id: make_optional_simulator_adapter(spec=spec)
     for spec in SIMULATOR_RUNTIME_SPECS
     if spec.simulator_id not in WORKSPACE_SIMULATOR_ID_SET
 }
 _SIMULATOR_ADAPTERS: dict[SimulatorId, SimulatorAdapter] = {
-    GENESIS_SIMULATOR_ADAPTER.simulator_id: GENESIS_SIMULATOR_ADAPTER,
-    MJLAB_SIMULATOR_ADAPTER.simulator_id: MJLAB_SIMULATOR_ADAPTER,
-    MUJOCO_SIMULATOR_ADAPTER.simulator_id: MUJOCO_SIMULATOR_ADAPTER,
-    PYBULLET_SIMULATOR_ADAPTER.simulator_id: PYBULLET_SIMULATOR_ADAPTER,
-    BLENDER_SIMULATOR_ADAPTER.simulator_id: BLENDER_SIMULATOR_ADAPTER,
+    **_WORKSPACE_SIMULATOR_ADAPTERS,
     **_OPTIONAL_SIMULATOR_ADAPTERS,
 }
 

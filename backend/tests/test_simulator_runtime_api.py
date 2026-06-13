@@ -27,6 +27,7 @@ from backend.models.workspace_transfer import WorkspaceOpenResponse
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters import (
     SUPPORTED_SIMULATOR_IDS,
+    WORKSPACE_SIMULATOR_IDS,
     get_simulator_adapter,
     list_simulator_runtime_descriptors,
 )
@@ -226,10 +227,12 @@ def test_openable_simulator_runtime_params_are_centralized() -> None:
         if spec.capabilities_model().workspace_target and spec.transfer.transfer_strategy != "planned"
     }
 
+    assert openable_simulator_ids == set(WORKSPACE_SIMULATOR_IDS)
     assert openable_simulator_ids == set(SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID)
     assert openable_simulator_ids == set(SIMULATOR_SCENE_PARAMS_BY_ID)
 
     for simulator_id in openable_simulator_ids:
+        assert get_simulator_adapter(simulator_id).capabilities.workspace_target
         workspace_process = SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID[simulator_id]
         scene_params = SIMULATOR_SCENE_PARAMS_BY_ID[simulator_id]
 
