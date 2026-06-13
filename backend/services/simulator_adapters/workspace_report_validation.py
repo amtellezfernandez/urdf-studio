@@ -14,6 +14,8 @@ class SimulatorWorkspaceReportExpectations:
     simulator_id: SimulatorId | None = None
     object_count: int | None = None
     camera_count: int | None = None
+    required_artifact_file_keys: tuple[str, ...] = ()
+    required_artifact_dir_keys: tuple[str, ...] = ()
 
 
 def validate_simulator_workspace_report(
@@ -51,6 +53,10 @@ def validate_simulator_workspace_report(
             "simulator validation report has wrong simulator id: "
             f"{simulator.get('id')!r}, expected {expectations.simulator_id!r}"
         )
+
+    artifact_error = _validate_report_artifacts(payload, expectations)
+    if artifact_error:
+        return artifact_error
 
     count_error = _validate_report_count(
         payload,
@@ -98,6 +104,48 @@ def validate_simulator_workspace_report(
             "intrinsics",
         ),
     )
+
+
+def _validate_report_artifacts(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        return "simulator validation report field 'artifacts' must be an object"
+    for key in expectations.required_artifact_file_keys:
+        error = _validate_report_artifact_path(artifacts, key, kind="file")
+        if error:
+            return error
+    for key in expectations.required_artifact_dir_keys:
+        error = _validate_report_artifact_path(artifacts, key, kind="directory")
+        if error:
+            return error
+    return None
+
+
+def _validate_report_artifact_path(
+    artifacts: Mapping[str, Any],
+    key: str,
+    *,
+    kind: str,
+) -> str | None:
+    value = artifacts.get(key)
+    path_error = _validate_report_string(value, f"artifacts.{key}")
+    if path_error:
+        return path_error
+    path = Path(value)
+    if kind == "file":
+        if not path.is_file():
+            return f"simulator validation report artifact '{key}' is not a file: {path}"
+        if path.stat().st_size <= 0:
+            return f"simulator validation report artifact '{key}' is empty: {path}"
+        return None
+    if kind == "directory":
+        if not path.is_dir():
+            return f"simulator validation report artifact '{key}' is not a directory: {path}"
+        return None
+    return f"simulator validation report artifact '{key}' has unsupported kind: {kind}"
 
 
 def _validate_report_count(

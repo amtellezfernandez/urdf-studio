@@ -75,6 +75,8 @@ class PreparedWorkspaceCommand:
     expected_simulator_id: SimulatorId | None = None
     expected_object_count: int | None = None
     expected_camera_count: int | None = None
+    expected_report_artifact_file_keys: tuple[str, ...] = ()
+    expected_report_artifact_dir_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,6 +220,8 @@ def _prepare_direct_urdf_command(
     expected_image_dirs: tuple[tuple[Path, int], ...] = (),
     expected_file_paths: tuple[Path, ...] = (),
     expected_report_path: Path | None = None,
+    expected_report_artifact_file_keys: tuple[str, ...] = (),
+    expected_report_artifact_dir_keys: tuple[str, ...] = (),
     expectations: WorkspaceExpectations,
 ) -> PreparedWorkspaceCommand:
     return PreparedWorkspaceCommand(
@@ -241,6 +245,8 @@ def _prepare_direct_urdf_command(
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
         expected_camera_count=expectations.camera_count,
+        expected_report_artifact_file_keys=expected_report_artifact_file_keys,
+        expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
 
 
@@ -281,6 +287,8 @@ def _prepare_genesis_command(
             (sensor_screenshot_dir, expectations.camera_count),
         ),
         expected_report_path=report_path,
+        expected_report_artifact_file_keys=("viewer_screenshot",),
+        expected_report_artifact_dir_keys=("camera_screenshot_dir", "sensor_screenshot_dir"),
     )
 
 
@@ -305,6 +313,7 @@ def _prepare_pybullet_command(
         expected_image_dirs=((camera_screenshot_dir, expectations.camera_count),),
         expectations=expectations,
         expected_report_path=report_path,
+        expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
 
 
@@ -347,6 +356,8 @@ def _prepare_mujoco_command(
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
         expected_camera_count=expectations.camera_count,
+        expected_report_artifact_file_keys=("mjcf_path",),
+        expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
 
 
@@ -362,6 +373,7 @@ def _prepare_blender_command(
     extra_args: tuple[str, ...] = ()
     extra_expected_markers = ("edit_session=",)
     expected_image_dirs: tuple[tuple[Path, int], ...] = ()
+    expected_report_artifact_dir_keys: tuple[str, ...] = ()
     if blender_executable is not None:
         extra_args = (
             "--blender",
@@ -374,6 +386,7 @@ def _prepare_blender_command(
             f"camera_screenshots={expectations.camera_count}",
         )
         expected_image_dirs = ((camera_screenshot_dir, expectations.camera_count),)
+        expected_report_artifact_dir_keys = ("camera_screenshot_dir",)
     return _prepare_direct_urdf_command(
         prepared,
         simulator_id=SIMULATOR_BLENDER_ID,
@@ -390,6 +403,13 @@ def _prepare_blender_command(
             artifact_dir / BLENDER_ROBOT_USD_FILENAME,
         ),
         expected_report_path=report_path,
+        expected_report_artifact_file_keys=(
+            "edit_session_path",
+            "open_script_path",
+            "export_script_path",
+            "robot_usd_path",
+        ),
+        expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
 
 
@@ -531,6 +551,8 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             simulator_id=command.expected_simulator_id,
             object_count=command.expected_object_count,
             camera_count=command.expected_camera_count,
+            required_artifact_file_keys=command.expected_report_artifact_file_keys,
+            required_artifact_dir_keys=command.expected_report_artifact_dir_keys,
         ),
     )
 

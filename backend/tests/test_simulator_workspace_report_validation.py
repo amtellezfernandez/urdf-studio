@@ -46,11 +46,15 @@ def _expectations(
     object_count: int = 1,
     camera_count: int = 1,
     simulator_id: str = SIMULATOR_GENESIS_ID,
+    required_artifact_file_keys: tuple[str, ...] = (),
+    required_artifact_dir_keys: tuple[str, ...] = (),
 ) -> SimulatorWorkspaceReportExpectations:
     return SimulatorWorkspaceReportExpectations(
         simulator_id=simulator_id,
         object_count=object_count,
         camera_count=camera_count,
+        required_artifact_file_keys=required_artifact_file_keys,
+        required_artifact_dir_keys=required_artifact_dir_keys,
     )
 
 
@@ -103,6 +107,88 @@ def test_workspace_report_validation_rejects_wrong_counts(tmp_path) -> None:
         report_path,
         _expectations(object_count=2, camera_count=1),
     ) == "simulator validation report has primitive_count=1, expected 2"
+
+
+def test_workspace_report_validation_accepts_required_artifact_paths(tmp_path) -> None:
+    edit_session_path = tmp_path / "blender-edit-session.json"
+    edit_session_path.write_text("{}", encoding="utf-8")
+    camera_dir = tmp_path / "cameras"
+    camera_dir.mkdir()
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {
+                "edit_session_path": str(edit_session_path),
+                "camera_screenshot_dir": str(camera_dir),
+            },
+        },
+    )
+
+    assert (
+        validate_simulator_workspace_report(
+            report_path,
+            _expectations(
+                required_artifact_file_keys=("edit_session_path",),
+                required_artifact_dir_keys=("camera_screenshot_dir",),
+            ),
+        )
+        is None
+    )
+
+
+def test_workspace_report_validation_rejects_missing_required_artifact_path(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(required_artifact_file_keys=("edit_session_path",)),
+    ) == (
+        "simulator validation report field 'artifacts.edit_session_path' "
+        "must be a non-empty string"
+    )
+
+
+def test_workspace_report_validation_rejects_wrong_artifact_kind(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {"camera_screenshot_dir": str(tmp_path / "missing-cameras")},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(required_artifact_dir_keys=("camera_screenshot_dir",)),
+    ) == (
+        "simulator validation report artifact 'camera_screenshot_dir' "
+        f"is not a directory: {tmp_path / 'missing-cameras'}"
+    )
 
 
 def test_workspace_report_validation_rejects_wrong_simulator_id(tmp_path) -> None:

@@ -105,6 +105,11 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     assert "sensor_reads=3" in command.extra_expected_markers
     assert "sensor_screenshots=3" in command.extra_expected_markers
     assert "merge_fixed_links=True" in command.extra_expected_markers
+    assert command.expected_report_artifact_file_keys == ("viewer_screenshot",)
+    assert command.expected_report_artifact_dir_keys == (
+        "camera_screenshot_dir",
+        "sensor_screenshot_dir",
+    )
 
 
 def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_path) -> None:
@@ -140,6 +145,8 @@ def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_pat
     assert command.expected_camera_count == 3
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
+    assert command.expected_report_artifact_file_keys == ()
+    assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
 
 
 def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path) -> None:
@@ -188,6 +195,8 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
     assert command.expected_camera_count == 3
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
+    assert command.expected_report_artifact_file_keys == ("mjcf_path",)
+    assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
 
 
 def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tmp_path) -> None:
@@ -234,6 +243,13 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         tmp_path / "artifacts" / "export_blender_changes.py",
         tmp_path / "artifacts" / "robot-reference.usda",
     )
+    assert command.expected_report_artifact_file_keys == (
+        "edit_session_path",
+        "open_script_path",
+        "export_script_path",
+        "robot_usd_path",
+    )
+    assert command.expected_report_artifact_dir_keys == ()
 
 
 def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
@@ -265,6 +281,7 @@ def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
     assert "--camera-screenshot-dir" in command.command
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
     assert "camera_screenshots=3" in command.extra_expected_markers
+    assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
 
 
 def test_workspace_parity_requires_camera_artifacts(tmp_path) -> None:
