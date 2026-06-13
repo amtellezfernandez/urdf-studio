@@ -11,10 +11,7 @@ from typing import Any
 import numpy as np
 
 from backend.scripts.simulator_workspace_cli import add_common_workspace_args
-from backend.services.simulator_adapters.camera_transfer import (
-    SimCameraSpec,
-    build_sim_camera_specs,
-)
+from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 from backend.services.simulator_adapters.genesis_camera import (
     add_camera_marker_entity,
     add_observation_camera_sensor,
@@ -42,11 +39,10 @@ from backend.services.simulator_adapters.params import (
     GENESIS_SCENE_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
 )
-from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
-from backend.services.simulator_adapters.world_scene import prepare_world_scene
 from backend.services.simulator_adapters.robot_repairs import (
     materialize_genesis_robot_urdf_report,
 )
+from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 
 GENESIS_BACKEND_ENV = "URDF_STUDIO_GENESIS_BACKEND"
@@ -192,26 +188,22 @@ def prepare_genesis_workspace_scene(
 ) -> None:
     import genesis as gs
 
-    prepared_scene = prepare_world_scene(
+    simulator_scene = prepare_simulator_scene(
         world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
         frame_map=frame_map,
         include_hidden=include_hidden,
     )
     print(
         "[genesis-workspace] "
-        f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
-        f"objects={len(prepared_scene.layout.objects)} primitives={len(prepared_scene.primitives)} "
-        f"frame_map={prepared_scene.frame_map} requested_frame_map={frame_map}",
+        f"package={simulator_scene.world_package.package_id}@{simulator_scene.world_package.version} "
+        f"objects={len(simulator_scene.layout.objects)} primitives={len(simulator_scene.primitives)} "
+        f"frame_map={simulator_scene.frame_map} requested_frame_map={simulator_scene.requested_frame_map}",
         flush=True,
     )
-    for warning in prepared_scene.warnings:
+    for warning in simulator_scene.warnings:
         print(f"[genesis-workspace] warning: {warning}", flush=True)
-    cameras, camera_warnings = build_sim_camera_specs(
-        prepared_scene.world_package,
-        robot_urdf_path=robot_urdf_path,
-    )
-    for warning in camera_warnings:
-        print(f"[genesis-workspace] warning: {warning}", flush=True)
+    cameras = simulator_scene.cameras
 
     genesis_backend, genesis_backend_label = _resolve_genesis_backend(gs)
     gs.init(backend=genesis_backend, logging_level="warning")
@@ -220,7 +212,7 @@ def prepare_genesis_workspace_scene(
         f"genesis_backend_request={genesis_backend_label} genesis_backend={getattr(gs, 'backend', None)}",
         flush=True,
     )
-    center, radius = scene_center_and_radius(prepared_scene.primitives)
+    center, radius = scene_center_and_radius(simulator_scene.primitives)
     viewer_camera_spec = cameras[0] if cameras and not no_viewer else None
     camera_pos = (
         center[0] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[0],
@@ -263,8 +255,8 @@ def prepare_genesis_workspace_scene(
     )
     if include_floor:
         add_floor_entity(gs, scene)
-    asset_roots = workspace_asset_roots(world_package_path, robot_urdf_path)
-    for primitive in prepared_scene.primitives:
+    asset_roots = simulator_scene.robot.asset_roots
+    for primitive in simulator_scene.primitives:
         add_primitive_entity(gs, scene, primitive, asset_roots=asset_roots)
     if show_camera_markers:
         for camera_spec in cameras:
@@ -327,7 +319,7 @@ def prepare_genesis_workspace_scene(
     apply_joint_values(
         robot_entity,
         joint_dof_indices,
-        prepared_scene.world_package.world_snapshot.joint_positions,
+        simulator_scene.robot.joint_positions,
     )
     print(GENESIS_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
     print(

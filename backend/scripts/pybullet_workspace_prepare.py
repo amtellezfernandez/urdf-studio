@@ -10,7 +10,6 @@ from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
     CAMERA_MARKER_SIZE_XYZ,
     SimCameraSpec,
-    build_sim_camera_specs,
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import (
@@ -20,8 +19,7 @@ from backend.services.simulator_adapters.params import (
 from backend.services.simulator_adapters.pybullet_camera import (
     write_pybullet_camera_screenshots,
 )
-from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
-from backend.services.simulator_adapters.world_scene import prepare_world_scene
+from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
 from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
 from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutFrameMap
 
@@ -167,19 +165,15 @@ def prepare_pybullet_workspace_scene(
     import pybullet
     import pybullet_data
 
-    prepared_scene = prepare_world_scene(
+    simulator_scene = prepare_simulator_scene(
         world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
         frame_map=frame_map,
         include_hidden=include_hidden,
     )
-    for warning in prepared_scene.warnings:
+    for warning in simulator_scene.warnings:
         print(f"[pybullet-workspace] warning: {warning}", flush=True)
-    cameras, camera_warnings = build_sim_camera_specs(
-        prepared_scene.world_package,
-        robot_urdf_path=robot_urdf_path,
-    )
-    for warning in camera_warnings:
-        print(f"[pybullet-workspace] warning: {warning}", flush=True)
+    cameras = simulator_scene.cameras
 
     connection_mode = pybullet.DIRECT if no_viewer else pybullet.GUI
     client_id = pybullet.connect(connection_mode)
@@ -199,12 +193,11 @@ def prepare_pybullet_workspace_scene(
         applied_joints = _apply_initial_joint_positions(
             pybullet,
             robot_id,
-            prepared_scene.world_package.world_snapshot.joint_positions,
+            simulator_scene.robot.joint_positions,
         )
-        asset_roots = workspace_asset_roots(world_package_path, robot_urdf_path)
         object_ids = [
-            _add_primitive(pybullet, primitive, asset_roots=asset_roots)
-            for primitive in prepared_scene.primitives
+            _add_primitive(pybullet, primitive, asset_roots=simulator_scene.robot.asset_roots)
+            for primitive in simulator_scene.primitives
         ]
         camera_marker_ids = (
             [_add_camera_marker(pybullet, camera) for camera in cameras]
@@ -223,10 +216,10 @@ def prepare_pybullet_workspace_scene(
             )
         print(
             "[pybullet-workspace] "
-            f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
+            f"package={simulator_scene.world_package.package_id}@{simulator_scene.world_package.version} "
             f"robot_joints={pybullet.getNumJoints(robot_id)} world_objects={len(object_ids)} "
             f"cameras={len(cameras)} camera_markers={len(camera_marker_ids)} "
-            f"frame_map={prepared_scene.frame_map} requested_frame_map={frame_map} "
+            f"frame_map={simulator_scene.frame_map} requested_frame_map={simulator_scene.requested_frame_map} "
             f"applied_initial_joints={applied_joints}",
             flush=True,
         )

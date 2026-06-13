@@ -8,7 +8,6 @@ from typing import Any
 from backend.scripts.simulator_workspace_cli import add_common_workspace_args
 from backend.services.simulator_adapters.camera_transfer import (
     append_cameras_to_mujoco_mjcf,
-    build_sim_camera_specs,
 )
 from backend.services.simulator_adapters.mujoco import apply_mjcf_workspace_repairs
 from backend.services.simulator_adapters.numeric import is_finite_number
@@ -16,8 +15,7 @@ from backend.services.simulator_adapters.params import (
     MUJOCO_SCENE_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
 )
-from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
-from backend.services.simulator_adapters.world_scene import prepare_world_scene
+from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
 from backend.services.world_layout_static_transfer import append_primitives_to_mujoco_mjcf
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 
@@ -86,28 +84,24 @@ def prepare_mujoco_workspace_scene(
 ) -> None:
     import mujoco
 
-    prepared_scene = prepare_world_scene(
+    simulator_scene = prepare_simulator_scene(
         world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
         frame_map=frame_map,
         include_hidden=include_hidden,
     )
-    for warning in prepared_scene.warnings:
+    for warning in simulator_scene.warnings:
         print(f"[mujoco-workspace] warning: {warning}", flush=True)
-    cameras, camera_warnings = build_sim_camera_specs(
-        prepared_scene.world_package,
-        robot_urdf_path=robot_urdf_path,
-    )
-    for warning in camera_warnings:
-        print(f"[mujoco-workspace] warning: {warning}", flush=True)
+    cameras = simulator_scene.cameras
 
     mjcf_path = robot_mjcf_path
-    if prepared_scene.primitives or cameras:
+    if simulator_scene.primitives or cameras:
         combined_mjcf = robot_mjcf_path.read_text(encoding="utf-8")
-        if prepared_scene.primitives:
+        if simulator_scene.primitives:
             combined_mjcf = append_primitives_to_mujoco_mjcf(
                 combined_mjcf,
-                prepared_scene.primitives,
-                asset_roots=workspace_asset_roots(world_package_path, robot_urdf_path),
+                simulator_scene.primitives,
+                asset_roots=simulator_scene.robot.asset_roots,
             )
         combined_mjcf = append_cameras_to_mujoco_mjcf(combined_mjcf, cameras)
         mjcf_path = robot_mjcf_path.with_name("robot.world.xml")
@@ -120,13 +114,13 @@ def prepare_mujoco_workspace_scene(
     applied_joints = _apply_initial_joint_positions(
         model,
         data,
-        prepared_scene.world_package.world_snapshot.joint_positions,
+        simulator_scene.robot.joint_positions,
     )
     print(
         "[mujoco-workspace] "
-        f"package={prepared_scene.world_package.package_id}@{prepared_scene.world_package.version} "
-        f"joints={model.njnt} world_objects={len(prepared_scene.primitives)} cameras={len(cameras)} "
-        f"frame_map={prepared_scene.frame_map} requested_frame_map={frame_map} "
+        f"package={simulator_scene.world_package.package_id}@{simulator_scene.world_package.version} "
+        f"joints={model.njnt} world_objects={len(simulator_scene.primitives)} cameras={len(cameras)} "
+        f"frame_map={simulator_scene.frame_map} requested_frame_map={simulator_scene.requested_frame_map} "
         f"applied_initial_joints={applied_joints}",
         flush=True,
     )
