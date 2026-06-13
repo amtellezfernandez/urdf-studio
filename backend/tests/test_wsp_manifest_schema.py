@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import copy
+import json
+from pathlib import Path
+
+import pytest
+from jsonschema import Draft202012Validator
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WSP_SCHEMA_PATH = REPO_ROOT / "docs" / "specs" / "WSP_manifest.schema.json"
+
+
+def _validator() -> Draft202012Validator:
+    schema = json.loads(WSP_SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def _manifest() -> dict:
+    return {
+        "schema_version": "1.0.0",
+        "package_id": "schema-demo",
+        "version": "0.1.0",
+        "title": "Schema Demo",
+        "created_at": "2026-01-01T00:00:00Z",
+        "runtime_targets": [],
+        "interface": {
+            "observation_modalities": ["proprio"],
+            "action_semantics": "joint_position_rad",
+            "timestep_ms": 33,
+            "frame_convention": "ros-rep-103",
+        },
+        "artifacts": [],
+        "world_snapshot": {
+            "urdf_xml": "<robot name='demo'/>",
+            "joint_positions": {},
+            "cameras": [],
+            "objects": [],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+        "provenance": {},
+        "security": {
+            "signature_ref": None,
+            "attestation_refs": [],
+            "sbom_ref": None,
+        },
+    }
+
+
+def _schema_errors(payload: dict) -> list[str]:
+    validator = _validator()
+    return [
+        error.message
+        for error in sorted(validator.iter_errors(payload), key=lambda item: list(item.path))
+    ]
+
+
+def _manifest_with_mesh_asset_ref(asset_ref: str) -> dict:
+    payload = copy.deepcopy(_manifest())
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "mesh",
+            "position_xyz": [0.0, 0.0, 0.1],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+            "asset_ref": asset_ref,
+        }
+    ]
+    return payload
+
+
+def test_wsp_manifest_schema_accepts_portable_mesh_asset_refs() -> None:
+    payload = _manifest_with_mesh_asset_ref("assets/crate.obj")
+
+    assert _schema_errors(payload) == []
+
+
+def test_wsp_manifest_schema_accepts_local_relative_mesh_asset_refs() -> None:
+    payload = _manifest_with_mesh_asset_ref("./assets/crate.obj")
+
+    assert _schema_errors(payload) == []
+
+
+@pytest.mark.parametrize(
+    "asset_ref",
+    [
+        ".",
+        "./",
+        " assets/crate.obj",
+        "assets/crate.obj ",
+        "/tmp/crate.obj",
+        "../crate.obj",
+        "assets/../crate.obj",
+        "assets/./crate.obj",
+        "assets//crate.obj",
+        "package://demo/crate.obj",
+        "https://example.test/crate.obj",
+        "C:\\tmp\\crate.obj",
+    ],
+)
+def test_wsp_manifest_schema_rejects_nonportable_mesh_asset_refs(asset_ref: str) -> None:
+    payload = _manifest_with_mesh_asset_ref(asset_ref)
+
+    errors = _schema_errors(payload)
+
+    assert errors == [
+        f"{asset_ref!r} does not match "
+        r"'^(?!\\s)(?!.*\\s$)(?!.*:)(?:\\./)*(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*$'"
+    ]
+
+
+def test_wsp_manifest_schema_requires_mesh_asset_reference() -> None:
+    payload = copy.deepcopy(_manifest())
+    payload["world_snapshot"]["objects"] = [
+        {
+            "id": "crate",
+            "name": "Crate",
+            "type": "mesh",
+            "position_xyz": [0.0, 0.0, 0.1],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+        }
+    ]
+
+    errors = _schema_errors(payload)
+
+    assert errors == [
+        "{'id': 'crate', 'name': 'Crate', 'type': 'mesh', 'position_xyz': [0.0, 0.0, 0.1], "
+        "'rotation_rpy_rad': [0.0, 0.0, 0.0], 'size_xyz': [0.2, 0.3, 0.4], "
+        "'color': '#22c55e'} is not valid under any of the given schemas"
+    ]
