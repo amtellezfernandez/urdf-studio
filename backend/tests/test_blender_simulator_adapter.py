@@ -150,6 +150,8 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert edit_session["objects"][0]["stable_id"] == "crate"
     assert edit_session["cameras"][0]["stable_id"] == "cam-1"
     assert edit_session["camera_screenshot_dir"] == str(tmp_path / "artifacts" / "cameras")
+    assert "new_world_object" in edit_session["round_trip"]["review_only"]
+    assert "new_static_props" not in edit_session["round_trip"]["review_only"]
     assert "robot.kinematics" in edit_session["round_trip"]["locked"]
     assert artifacts.robot_glb_path is not None
     assert artifacts.robot_glb_path.exists()

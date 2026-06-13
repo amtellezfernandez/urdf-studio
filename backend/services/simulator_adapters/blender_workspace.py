@@ -242,7 +242,7 @@ def build_blender_edit_session(
             "review_only": (
                 "camera.pose",
                 "mesh.materials",
-                "new_static_props",
+                "new_world_object",
             ),
             "locked": (
                 "robot.kinematics",
