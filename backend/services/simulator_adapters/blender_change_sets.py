@@ -574,8 +574,10 @@ def _required_string(value: Any, label: str) -> str:
 def _optional_asset_ref(value: Any, label: str) -> str | None:
     if value is None:
         return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Blender change-set {label} must be a non-empty string.")
     try:
-        return normalize_portable_world_asset_ref(_required_string(value, label))
+        return normalize_portable_world_asset_ref(value)
     except ValueError as exc:
         raise ValueError(
             f"Blender change-set {label} must be a portable relative asset reference."

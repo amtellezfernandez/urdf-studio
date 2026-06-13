@@ -194,6 +194,32 @@ def test_validate_rejects_nonportable_mesh_asset_ref() -> None:
         ]
 
 
+def test_validate_reports_nested_nonportable_mesh_asset_ref_field() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = build_manifest("demo-world", "1.0.6")
+        manifest.world_snapshot.objects = [
+            {
+                "id": "crate",
+                "name": "Crate",
+                "type": "mesh",
+                "position_xyz": [0.0, 0.0, 0.1],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.2, 0.3, 0.4],
+                "color": "#22c55e",
+                "mesh": {"path": "assets/./crate.obj"},
+            }
+        ]
+
+        validation = service.validate(manifest)
+
+        assert validation.valid is False
+        assert validation.errors == [
+            "world_snapshot.objects[0].mesh.path must be a portable relative asset reference."
+        ]
+
+
 def test_validate_rejects_mismatched_world_snapshot_artifact_digest() -> None:
     with TemporaryDirectory() as temp_dir:
         registry_path = f"{temp_dir}/world-registry.json"

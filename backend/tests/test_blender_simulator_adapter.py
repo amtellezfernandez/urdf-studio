@@ -572,7 +572,7 @@ def test_blender_change_set_rejects_nonportable_new_mesh_asset_ref(tmp_path: Pat
                         "position_xyz": [0.2, 0.3, 0.4],
                         "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
                         "size_xyz": [0.1, 0.2, 0.3],
-                        "asset_ref": "/tmp/absolute.obj",
+                        "asset_ref": "assets/./crate.obj",
                     }
                 ],
             ),

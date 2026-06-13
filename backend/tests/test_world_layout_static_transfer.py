@@ -329,9 +329,15 @@ def test_mesh_asset_refs_are_normalized_to_portable_package_paths(tmp_path) -> N
 @pytest.mark.parametrize(
     "asset_ref",
     [
+        ".",
+        "./",
+        " assets/crate.obj",
+        "assets/crate.obj ",
         "/tmp/crate.obj",
         "../crate.obj",
         "assets/../crate.obj",
+        "assets/./crate.obj",
+        "assets//crate.obj",
         "package://demo/crate.obj",
         "https://example.test/crate.obj",
         "C:\\tmp\\crate.obj",

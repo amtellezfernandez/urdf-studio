@@ -188,9 +188,15 @@ describe("worldSceneManifest static scene validation", () => {
 
   it("rejects non-portable mesh asset refs", () => {
     const invalidRefs = [
+      ".",
+      "./",
+      " assets/crate.obj",
+      "assets/crate.obj ",
       "/tmp/crate.obj",
       "../crate.obj",
       "assets/../crate.obj",
+      "assets/./crate.obj",
+      "assets//crate.obj",
       "package://demo/crate.obj",
       "https://example.test/crate.obj",
       "C:\\tmp\\crate.obj",

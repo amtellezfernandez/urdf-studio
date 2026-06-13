@@ -579,8 +579,10 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                 normalized = value.replace("\\\\", "/").strip()
                 while normalized.startswith("./"):
                     normalized = normalized[2:]
+                segments = normalized.split("/") if normalized else []
                 if (
                     not normalized
+                    or any(segment in {{"", ".", ".."}} for segment in segments)
                     or normalized.startswith("/")
                     or normalized.startswith("../")
                     or "/../" in f"/{{normalized}}/"

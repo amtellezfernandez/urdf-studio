@@ -26,7 +26,10 @@ from backend.services.world_layout_transfer_types import (
     WorldLayoutObject,
     WorldLayoutTransferError,
 )
-from backend.services.world_asset_refs import normalize_portable_world_asset_ref
+from backend.services.world_asset_refs import (
+    normalize_portable_world_asset_ref,
+    read_world_object_asset_ref,
+)
 
 SUPPORTED_WORLD_OBJECT_TYPES = {"cube", "sphere", "cylinder", "point", "mesh"}
 CONCRETE_WORLD_LAYOUT_FRAME_MAPS = {"identity", "studio-y-up-to-z-up"}
@@ -210,28 +213,13 @@ def _read_optional_string(value: Any) -> str | None:
 
 
 def _read_object_asset_ref(value: dict[str, Any], index: int) -> str | None:
-    for key in ("asset_ref", "asset_path", "mesh_ref", "mesh_path", "meshReference"):
-        asset_ref = _read_optional_string(value.get(key))
-        if asset_ref is not None:
-            return _read_portable_asset_ref(asset_ref, f"objects[{index}].{key}")
-    mesh = value.get("mesh")
-    if _is_record(mesh):
-        for key in ("asset_ref", "path", "uri", "filename"):
-            asset_ref = _read_optional_string(mesh.get(key))
-            if asset_ref is not None:
-                return _read_portable_asset_ref(asset_ref, f"objects[{index}].mesh.{key}")
-    geometry = value.get("geometry")
-    if _is_record(geometry):
-        mesh = geometry.get("mesh")
-        if _is_record(mesh):
-            for key in ("asset_ref", "path", "uri", "filename"):
-                asset_ref = _read_optional_string(mesh.get(key))
-                if asset_ref is not None:
-                    return _read_portable_asset_ref(
-                        asset_ref,
-                        f"objects[{index}].geometry.mesh.{key}",
-                    )
-    return None
+    asset_ref_entry = read_world_object_asset_ref(value)
+    if asset_ref_entry is None:
+        return None
+    return _read_portable_asset_ref(
+        asset_ref_entry.value,
+        f"objects[{index}].{asset_ref_entry.field_path}",
+    )
 
 
 def _read_portable_asset_ref(value: str, field: str) -> str:

@@ -32,7 +32,10 @@ from backend.services.world_scene_package_digest import (
     validate_world_snapshot_artifact_digests,
     world_scene_package_digest,
 )
-from backend.services.world_asset_refs import normalize_portable_world_asset_ref
+from backend.services.world_asset_refs import (
+    normalize_portable_world_asset_ref,
+    read_world_object_asset_ref,
+)
 
 logger = logging.getLogger("urdf.world_registry")
 
@@ -138,45 +141,23 @@ def _validate_world_snapshot_timing(manifest: WorldScenePackageManifest) -> list
     return []
 
 
-def _world_object_asset_ref(value: dict) -> str | None:
-    for key in ("asset_ref", "asset_path", "mesh_ref", "mesh_path", "meshReference"):
-        asset_ref = value.get(key)
-        if isinstance(asset_ref, str) and asset_ref.strip():
-            return asset_ref
-    mesh = value.get("mesh")
-    if isinstance(mesh, dict):
-        for key in ("asset_ref", "path", "uri", "filename"):
-            asset_ref = mesh.get(key)
-            if isinstance(asset_ref, str) and asset_ref.strip():
-                return asset_ref
-    geometry = value.get("geometry")
-    if isinstance(geometry, dict):
-        geometry_mesh = geometry.get("mesh")
-        if isinstance(geometry_mesh, dict):
-            for key in ("asset_ref", "path", "uri", "filename"):
-                asset_ref = geometry_mesh.get(key)
-                if isinstance(asset_ref, str) and asset_ref.strip():
-                    return asset_ref
-    return None
-
-
 def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> list[str]:
     errors: list[str] = []
     for index, item in enumerate(manifest.world_snapshot.objects):
         object_type = item.get("type")
-        asset_ref = _world_object_asset_ref(item)
-        if object_type == "mesh" and asset_ref is None:
+        asset_ref_entry = read_world_object_asset_ref(item)
+        if object_type == "mesh" and asset_ref_entry is None:
             errors.append(
                 f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
             )
             continue
-        if asset_ref is None:
+        if asset_ref_entry is None:
             continue
         try:
-            normalize_portable_world_asset_ref(asset_ref)
+            normalize_portable_world_asset_ref(asset_ref_entry.value)
         except ValueError:
             errors.append(
-                f"world_snapshot.objects[{index}].asset_ref must be a portable relative asset reference."
+                f"world_snapshot.objects[{index}].{asset_ref_entry.field_path} must be a portable relative asset reference."
             )
     return errors
 

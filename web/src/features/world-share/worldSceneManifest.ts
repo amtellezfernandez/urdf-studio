@@ -119,14 +119,15 @@ const validateOptionalFiniteNumber = (
 };
 
 const normalizePortableWorldAssetRef = (value: string): string | null => {
-  let normalized = value.replace(/\\/g, "/").trim();
+  if (value !== value.trim()) return null;
+  let normalized = value.replace(/\\/g, "/");
   while (normalized.startsWith("./")) {
     normalized = normalized.slice(2);
   }
+  const segments = normalized.length > 0 ? normalized.split("/") : [];
   if (
     normalized.length === 0 ||
-    normalized === "." ||
-    normalized === ".." ||
+    segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") ||
     normalized.startsWith("/") ||
     normalized.startsWith("../") ||
     `/${normalized}/`.includes("/../") ||

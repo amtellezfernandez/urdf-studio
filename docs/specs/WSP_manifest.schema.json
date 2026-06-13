@@ -25,7 +25,7 @@
     "portableAssetRef": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!\\s)(?!.*\\s$)(?!/)(?!.*(^|/)\\.\\.(/|$))(?!.*:).+"
+      "pattern": "^(?!\\s)(?!.*\\s$)(?!.*:)(?:\\./)*(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*$"
     },
     "worldObjectSimulation": {
       "type": "object",
