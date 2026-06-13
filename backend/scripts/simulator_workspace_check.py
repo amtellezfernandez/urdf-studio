@@ -625,10 +625,13 @@ def _check_target(
             "failed",
             f"{type(exc).__name__}: {exc}",
         )
+    result_status = "failed"
+    if ok:
+        result_status = "artifact-only" if runtime_notice else "passed"
     return WorkspaceCheckResult(
         target.simulator_id,
         target.label,
-        "passed" if ok else "failed",
+        result_status,
         detail,
         report_path=str(command.expected_report_path) if ok and command.expected_report_path else None,
     )
@@ -688,6 +691,9 @@ def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
     for result in results:
         if result.status == "passed":
             print(f"[simulator-workspaces-check] {result.label}: passed", flush=True)
+        elif result.status == "artifact-only":
+            detail = f" ({result.detail.splitlines()[0]})" if result.detail else ""
+            print(f"[simulator-workspaces-check] {result.label}: artifact-only{detail}", flush=True)
         elif result.status == "skipped":
             print(f"[simulator-workspaces-check] {result.label}: skipped ({result.detail})", flush=True)
         else:

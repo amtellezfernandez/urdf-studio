@@ -305,6 +305,44 @@ def _validate_report_item_fields(
         )
         if value_error:
             return value_error
+    if list_field_name == "objects":
+        identity_fields = ("source_id", "sim_name")
+    else:
+        identity_fields = ("camera_id", "sim_name")
+    identity_error = _validate_report_unique_item_values(
+        items,
+        list_field_name=list_field_name,
+        field_names=identity_fields,
+    )
+    if identity_error:
+        return identity_error
+    return None
+
+
+def _validate_report_unique_item_values(
+    items: list[Any],
+    *,
+    list_field_name: str,
+    field_names: tuple[str, ...],
+) -> str | None:
+    for field_name in field_names:
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for item in items:
+            if not isinstance(item, Mapping):
+                continue
+            value = item.get(field_name)
+            if not isinstance(value, str):
+                continue
+            normalized = value.strip()
+            if normalized in seen:
+                duplicates.add(normalized)
+            seen.add(normalized)
+        if duplicates:
+            return (
+                f"simulator validation report field '{list_field_name}.{field_name}' "
+                f"contains duplicate value(s): {', '.join(sorted(duplicates))}"
+            )
     return None
 
 

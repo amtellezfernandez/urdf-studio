@@ -36,6 +36,7 @@
     "world:bridge:benchmark": "if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.world_bridge_benchmark --assert-targets; else python3 -m backend.scripts.world_bridge_benchmark --assert-targets; fi",
     "world:layout:transfer:check": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.world_layout_transfer_check \"$@\"; else python3 -m backend.scripts.world_layout_transfer_check \"$@\"; fi' --",
     "simulator:workspace:check": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.simulator_workspace_check \"$@\"; else python3 -m backend.scripts.simulator_workspace_check \"$@\"; fi' --",
+    "simulator:blender:check": "npm run simulator:workspace:check -- blender --require-all",
     "simulator:genesis:prepare": "sh -c 'if [ -x .venv-lerobot/bin/python3 ]; then .venv-lerobot/bin/python3 -m backend.scripts.genesis_workspace_prepare \"$@\"; else python3 -m backend.scripts.genesis_workspace_prepare \"$@\"; fi' --",
     "openarm:doctor": "node tools/scripts/openArmHardware.js --doctor",
     "openarm:install": "node tools/scripts/openArmHardware.js --install",

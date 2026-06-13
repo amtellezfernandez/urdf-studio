@@ -25,6 +25,7 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_genesis_command,
     _prepare_mujoco_command,
     _prepare_pybullet_command,
+    _print_human_results,
     _report_has_camera_artifacts,
     _selected_simulator_ids_from_args,
     _validate_file_artifacts,
@@ -443,10 +444,28 @@ def test_blender_workspace_check_validates_artifacts_without_runtime(monkeypatch
         require_runtime=False,
     )
 
-    assert result.status == "passed"
+    assert result.status == "artifact-only"
     assert "missing runtime dependency: blender" in result.detail
     assert "validating transfer artifacts without opening runtime" in result.detail
     assert "workspace artifacts ready" in result.detail
+
+
+def test_workspace_check_prints_artifact_only_status(capsys) -> None:
+    _print_human_results(
+        (
+            WorkspaceCheckResult(
+                SIMULATOR_BLENDER_ID,
+                "Blender",
+                "artifact-only",
+                "missing runtime dependency: blender; validating transfer artifacts without opening runtime\nworkspace artifacts ready",
+            ),
+        )
+    )
+
+    assert capsys.readouterr().out == (
+        "[simulator-workspaces-check] Blender: artifact-only "
+        "(missing runtime dependency: blender; validating transfer artifacts without opening runtime)\n"
+    )
 
 
 def test_workspace_check_artifact_only_selected_target_does_not_require_runtime(

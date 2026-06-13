@@ -415,6 +415,30 @@ def test_workspace_report_validation_rejects_invalid_object_values(tmp_path) -> 
     )
 
 
+def test_workspace_report_validation_rejects_duplicate_object_source_id(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 2,
+            "camera_count": 1,
+            "objects": [_report_object("crate"), _report_object("crate")],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(object_count=2),
+    ) == (
+        "simulator validation report field 'objects.source_id' "
+        "contains duplicate value(s): crate"
+    )
+
+
 def test_workspace_report_validation_rejects_invalid_object_color(tmp_path) -> None:
     invalid_object = _report_object()
     invalid_object["rgba"] = [1.0, 0.0, 1.5, 1.0]
@@ -502,6 +526,33 @@ def test_workspace_report_validation_rejects_invalid_camera_values(tmp_path) -> 
 
     assert validate_simulator_workspace_report(report_path, _expectations()) == (
         "simulator validation report field 'cameras[0].width' must be a positive integer"
+    )
+
+
+def test_workspace_report_validation_rejects_duplicate_camera_sim_name(tmp_path) -> None:
+    first_camera = _report_camera("front")
+    second_camera = _report_camera("rear")
+    second_camera["sim_name"] = first_camera["sim_name"]
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 2,
+            "objects": [_report_object()],
+            "cameras": [first_camera, second_camera],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(camera_count=2),
+    ) == (
+        "simulator validation report field 'cameras.sim_name' "
+        "contains duplicate value(s): front_camera"
     )
 
 

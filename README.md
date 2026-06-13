@@ -216,7 +216,7 @@ npm run data -- --ack-public-tunnel
 ```bash
 npm run release:check
 npm run simulator:workspace:check
-npm run simulator:workspace:check -- blender --artifact-only
+npm run simulator:blender:check
 npm run lint
 npm run typecheck
 npm run test

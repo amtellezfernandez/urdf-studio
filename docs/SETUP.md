@@ -119,6 +119,7 @@ npm run start -- --help
 | `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run release:check` | Run release-readiness checks |
 | `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed transfer targets |
+| `npm run simulator:blender:check` | Strictly validate the local Blender runtime and camera renders |
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |
