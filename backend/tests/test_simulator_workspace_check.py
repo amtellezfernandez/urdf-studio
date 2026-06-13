@@ -26,6 +26,7 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_genesis_command,
     _prepare_mujoco_command,
     _prepare_pybullet_command,
+    _report_has_camera_artifacts,
     _validate_report_artifact,
     build_demo_workspace_request,
     main,
@@ -230,6 +231,10 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         "backend.scripts.simulator_workspace_check.prepare_blender_workspace_package",
         lambda _request: _Prepared(),
     )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.resolve_blender_executable",
+        lambda: None,
+    )
     command = _prepare_blender_command(
         request,
         expectations=type(
@@ -244,12 +249,14 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
     )
 
     assert "--no-viewer" in command.command
+    assert "--camera-screenshot-dir" not in command.command
     assert "--report" in command.command
     assert command.expected_report_path == tmp_path / "artifacts" / "report.json"
     assert command.expected_simulator_id == SIMULATOR_BLENDER_ID
     assert command.expected_object_count == 3
     assert command.expected_camera_count == 3
     assert "edit_session=" in command.extra_expected_markers
+    assert command.expected_image_dirs == ()
     assert command.expected_file_paths == (
         tmp_path / "artifacts" / "blender-edit-session.json",
         tmp_path / "artifacts" / "open_blender_scene.py",
@@ -257,6 +264,64 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
         tmp_path / "artifacts" / "robot-reference.glb",
         tmp_path / "artifacts" / "robot-reference.usda",
     )
+
+
+def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
+    monkeypatch, tmp_path
+) -> None:
+    request = build_demo_workspace_request()
+
+    class _Prepared:
+        workspace_dir = tmp_path
+        world_package_path = tmp_path / "world-package.json"
+        robot_urdf_path = tmp_path / "robot.urdf"
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.prepare_blender_workspace_package",
+        lambda _request: _Prepared(),
+    )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.resolve_blender_executable",
+        lambda: "/usr/bin/blender",
+    )
+
+    command = _prepare_blender_command(
+        request,
+        expectations=WorkspaceExpectations(object_count=3, camera_count=3, duration_sec=0.02),
+    )
+
+    assert "--blender" in command.command
+    assert "/usr/bin/blender" in command.command
+    assert "--camera-screenshot-dir" in command.command
+    assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
+    assert "camera_screenshots=3" in command.extra_expected_markers
+
+
+def test_workspace_parity_requires_camera_artifacts(tmp_path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_BLENDER_ID, "label": "Blender"},
+                "artifacts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _report_has_camera_artifacts(report_path) is False
+
+    report_path.write_text(
+        json.dumps(
+            {
+                "simulator": {"id": SIMULATOR_BLENDER_ID, "label": "Blender"},
+                "artifacts": {"camera_screenshot_dir": str(tmp_path / "cameras")},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _report_has_camera_artifacts(report_path) is True
 
 
 def test_blender_workspace_check_fails_missing_runtime_when_required(monkeypatch) -> None:

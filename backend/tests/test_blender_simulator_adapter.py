@@ -125,6 +125,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
         artifact_dir=tmp_path / "artifacts",
         robot_urdf_path=robot_urdf_path,
         blend_path=tmp_path / "layout.blend",
+        camera_screenshot_dir=tmp_path / "artifacts" / "cameras",
     )
     edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
 
@@ -142,6 +143,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert edit_session["robot"]["visual_usd_stats"]["links_converted"] == 1
     assert edit_session["objects"][0]["stable_id"] == "crate"
     assert edit_session["cameras"][0]["stable_id"] == "cam-1"
+    assert edit_session["camera_screenshot_dir"] == str(tmp_path / "artifacts" / "cameras")
     assert "robot.kinematics" in edit_session["round_trip"]["locked"]
     assert artifacts.robot_glb_path is not None
     assert artifacts.robot_glb_path.exists()
@@ -629,6 +631,7 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
         no_viewer=True,
         report_path=report_path,
         blender_executable=None,
+        camera_screenshot_dir=tmp_path / "artifacts" / "cameras",
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
@@ -640,6 +643,7 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert Path(report["artifacts"]["export_script_path"]).exists()
     assert Path(report["artifacts"]["robot_glb_path"]).exists()
     assert Path(report["artifacts"]["robot_usd_path"]).exists()
+    assert report["artifacts"]["camera_screenshot_dir"] == str(tmp_path / "artifacts" / "cameras")
     open_script = Path(report["artifacts"]["open_script_path"]).read_text(encoding="utf-8")
     export_script = Path(report["artifacts"]["export_script_path"]).read_text(encoding="utf-8")
     ast.parse(open_script)
@@ -647,6 +651,8 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert "new_world_object" in export_script
     assert "deleted_world_object" in export_script
     assert "deleted_camera" in export_script
+    assert "camera_screenshots=" in open_script
+    assert "bpy.ops.render.render" in open_script
 
 
 class _FakeBlenderProcess:
@@ -689,6 +695,8 @@ def test_blender_workspace_runner_reports_ready_after_edit_session_load(
     output = capsys.readouterr().out
     assert captured["command"] == [
         "/usr/bin/blender",
+        "--python-exit-code",
+        "1",
         "--python",
         str(tmp_path / "open_blender_scene.py"),
     ]
@@ -713,9 +721,42 @@ def test_blender_workspace_runner_rejects_exit_before_edit_session_load(
             blender_executable="/usr/bin/blender",
             open_script_path=tmp_path / "open_blender_scene.py",
             cwd=tmp_path,
+            background=True,
         )
 
     assert BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker not in capsys.readouterr().out
+
+
+def test_blender_workspace_runner_uses_background_flag_for_headless_load(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        return _FakeBlenderProcess(
+            [
+                f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+            ]
+        )
+
+    monkeypatch.setattr(blender_prepare.subprocess, "Popen", fake_popen)
+
+    blender_prepare._run_blender_workspace_until_ready(
+        blender_executable="/usr/bin/blender",
+        open_script_path=tmp_path / "open_blender_scene.py",
+        cwd=tmp_path,
+        background=True,
+    )
+
+    assert captured["command"] == [
+        "/usr/bin/blender",
+        "--background",
+        "--python-exit-code",
+        "1",
+        "--python",
+        str(tmp_path / "open_blender_scene.py"),
+    ]
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:

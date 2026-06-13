@@ -103,6 +103,7 @@ def write_blender_workspace_artifacts(
     artifact_dir: Path,
     robot_urdf_path: Path,
     blend_path: Path,
+    camera_screenshot_dir: Path | None = None,
 ) -> BlenderWorkspaceArtifacts:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     edit_session_path = artifact_dir / BLENDER_EDIT_SESSION_FILENAME
@@ -137,6 +138,7 @@ def write_blender_workspace_artifacts(
         blend_path=blend_path,
         change_set_path=change_set_path,
         export_script_path=export_script_path,
+        camera_screenshot_dir=camera_screenshot_dir,
     )
     edit_session_path.write_text(
         f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
@@ -202,6 +204,7 @@ def build_blender_edit_session(
     blend_path: Path,
     change_set_path: Path,
     export_script_path: Path,
+    camera_screenshot_dir: Path | None = None,
 ) -> dict[str, Any]:
     objects = [_blender_object_entry(primitive) for primitive in scene.primitives]
     change_set_source = build_blender_change_set_source(
@@ -267,6 +270,7 @@ def build_blender_edit_session(
             for camera in scene.cameras
         ],
         "blend_path": str(blend_path),
+        "camera_screenshot_dir": str(camera_screenshot_dir) if camera_screenshot_dir else None,
     }
 
 
@@ -276,6 +280,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             f"""
             import json
             import math
+            import re
             from pathlib import Path
 
             import bpy
@@ -298,6 +303,16 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     scene.render.engine = "BLENDER_EEVEE"
                 if scene.world is not None:
                     scene.world.color = (0.03, 0.035, 0.04)
+                scene.render.image_settings.file_format = "PNG"
+                scene.render.resolution_percentage = 100
+
+
+            def add_default_lighting():
+                bpy.ops.object.light_add(type="AREA", location=(0.0, -2.0, 3.0))
+                light = bpy.context.object
+                light.name = "urdf_studio_key_light"
+                light.data.energy = 500.0
+                light.data.size = 5.0
 
 
             def material_for(name, rgba):
@@ -360,6 +375,33 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 obj.data.clip_end = 25.0
                 obj.data.display_size = 0.08
                 assign_metadata(obj, "camera", entry)
+                return obj
+
+
+            def safe_artifact_name(value, default_name):
+                normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value).strip()).strip("._")
+                return normalized or default_name
+
+
+            def render_camera_views(session, camera_entries, camera_objects):
+                output_dir_value = session.get("camera_screenshot_dir")
+                if not output_dir_value:
+                    return 0
+                output_dir = Path(output_dir_value)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                scene = bpy.context.scene
+                rendered = 0
+                for index, pair in enumerate(zip(camera_entries, camera_objects), start=1):
+                    entry, obj = pair
+                    scene.camera = obj
+                    scene.render.resolution_x = int(entry.get("width", 640))
+                    scene.render.resolution_y = int(entry.get("height", 480))
+                    image_path = output_dir / f"{{index:02d}}_{{safe_artifact_name(obj.name, 'camera')}}.png"
+                    scene.render.filepath = str(image_path)
+                    bpy.ops.render.render(write_still=True)
+                    rendered += 1
+                print(f"[urdf-studio-blender] camera_screenshots={{rendered}}", flush=True)
+                return rendered
 
 
             def lock_robot_object(obj, root=None):
@@ -435,11 +477,13 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 session = json.loads(SESSION_PATH.read_text(encoding="utf-8"))
                 clear_scene()
                 configure_scene()
+                add_default_lighting()
                 add_robot_reference(session)
                 for entry in session.get("objects", []):
                     add_object(entry)
-                for entry in session.get("cameras", []):
-                    add_camera(entry)
+                camera_entries = session.get("cameras", [])
+                camera_objects = [add_camera(entry) for entry in camera_entries]
+                render_camera_views(session, camera_entries, camera_objects)
                 add_session_notes(session)
                 blend_path = Path(session["blend_path"])
                 blend_path.parent.mkdir(parents=True, exist_ok=True)

@@ -35,6 +35,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--robot-urdf", required=True)
     parser.add_argument("--blender", default="")
     add_common_workspace_args(parser)
+    parser.add_argument("--camera-screenshot-dir", default="")
     return parser.parse_args()
 
 
@@ -48,6 +49,7 @@ def prepare_blender_workspace_scene(
     no_viewer: bool,
     report_path: Path | None,
     blender_executable: str | None,
+    camera_screenshot_dir: Path | None = None,
 ) -> None:
     simulator_scene = prepare_simulator_scene(
         world_package_path=world_package_path,
@@ -62,6 +64,7 @@ def prepare_blender_workspace_scene(
         artifact_dir=artifact_dir,
         robot_urdf_path=robot_urdf_path,
         blend_path=blend_path,
+        camera_screenshot_dir=camera_screenshot_dir,
     )
     for warning in simulator_scene.warnings:
         print(f"[blender-workspace] warning: {warning}", flush=True)
@@ -87,6 +90,7 @@ def prepare_blender_workspace_scene(
                 "change_set_path": artifacts.change_set_path,
                 "robot_glb_path": artifacts.robot_glb_path,
                 "robot_usd_path": artifacts.robot_usd_path,
+                "camera_screenshot_dir": camera_screenshot_dir,
             },
             artifacts={
                 "edit_session_path": artifacts.edit_session_path,
@@ -96,12 +100,13 @@ def prepare_blender_workspace_scene(
                 "robot_glb_path": artifacts.robot_glb_path,
                 "robot_usd_path": artifacts.robot_usd_path,
                 "blend_path": blend_path,
+                "camera_screenshot_dir": camera_screenshot_dir,
             },
         )
         print(f"[blender-workspace] report written: {report_path}", flush=True)
     print(f"[blender-workspace] edit_session={artifacts.edit_session_path}", flush=True)
 
-    if no_viewer:
+    if no_viewer and blender_executable is None:
         print(BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
         if duration_sec > 0:
             time.sleep(duration_sec)
@@ -114,6 +119,7 @@ def prepare_blender_workspace_scene(
         blender_executable=blender_executable,
         open_script_path=artifacts.open_script_path,
         cwd=world_package_path.parent,
+        background=no_viewer,
     )
 
 
@@ -122,13 +128,21 @@ def _run_blender_workspace_until_ready(
     blender_executable: str,
     open_script_path: Path,
     cwd: Path,
+    background: bool = False,
 ) -> None:
-    process = subprocess.Popen(
+    command = [blender_executable]
+    if background:
+        command.append("--background")
+    command.extend(
         [
-            blender_executable,
+            "--python-exit-code",
+            "1",
             "--python",
             str(open_script_path),
-        ],
+        ]
+    )
+    process = subprocess.Popen(
+        command,
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -169,6 +183,9 @@ def main() -> int:
         no_viewer=args.no_viewer,
         report_path=Path(args.report) if args.report else None,
         blender_executable=blender_executable,
+        camera_screenshot_dir=(
+            Path(args.camera_screenshot_dir) if args.camera_screenshot_dir else None
+        ),
     )
     return 0
 

@@ -32,6 +32,7 @@ from backend.models.world_scene_package import (
 )
 from backend.services.simulator_adapters import get_simulator_runtime_status
 from backend.services.simulator_adapters.blender import prepare_blender_workspace_package
+from backend.services.simulator_adapters.blender_runtime import resolve_blender_executable
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_EDIT_SESSION_FILENAME,
     BLENDER_EXPORT_SCRIPT_FILENAME,
@@ -431,14 +432,33 @@ def _prepare_blender_command(
 ) -> PreparedWorkspaceCommand:
     prepared = prepare_blender_workspace_package(request)
     artifact_dir = prepared.workspace_dir / "artifacts"
+    camera_screenshot_dir = artifact_dir / "cameras"
     report_path = artifact_dir / "report.json"
+    blender_executable = resolve_blender_executable()
+    extra_args: tuple[str, ...] = ()
+    extra_expected_markers = ("edit_session=",)
+    expected_image_dirs: tuple[tuple[Path, int], ...] = ()
+    if blender_executable is not None:
+        extra_args = (
+            "--blender",
+            blender_executable,
+            "--camera-screenshot-dir",
+            str(camera_screenshot_dir),
+        )
+        extra_expected_markers = (
+            *extra_expected_markers,
+            f"camera_screenshots={expectations.camera_count}",
+        )
+        expected_image_dirs = ((camera_screenshot_dir, expectations.camera_count),)
     return _prepare_direct_urdf_command(
         prepared,
         simulator_id=SIMULATOR_BLENDER_ID,
         workspace_process=BLENDER_WORKSPACE_PROCESS_PARAMS,
         object_marker=f"world_objects={expectations.object_count}",
-        extra_expected_markers=("edit_session=",),
+        extra_args=extra_args,
+        extra_expected_markers=extra_expected_markers,
         expectations=expectations,
+        expected_image_dirs=expected_image_dirs,
         expected_file_paths=(
             artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
             artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME,
@@ -484,7 +504,7 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         label="Blender",
         prepare=_prepare_blender_command,
         requires_runtime=False,
-        include_in_parity=False,
+        include_in_parity=True,
     ),
 }
 
@@ -943,6 +963,7 @@ def _check_cross_simulator_parity(
             if result.status == "passed"
             and result.report_path is not None
             and WORKSPACE_TARGETS[result.simulator_id].include_in_parity
+            and _report_has_camera_artifacts(Path(result.report_path))
         ]
     )
     if parity is None:
@@ -953,6 +974,18 @@ def _check_cross_simulator_parity(
         "passed" if parity.passed else "failed",
         parity.detail,
     )
+
+
+def _report_has_camera_artifacts(report_path: Path) -> bool:
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    artifacts = payload.get("artifacts") if isinstance(payload, Mapping) else None
+    if not isinstance(artifacts, Mapping):
+        return False
+    directory = artifacts.get("camera_screenshot_dir")
+    return isinstance(directory, str) and bool(directory.strip())
 
 
 def _active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
