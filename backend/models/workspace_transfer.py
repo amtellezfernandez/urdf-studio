@@ -9,6 +9,10 @@ from backend.models.simulator_runtime import (
     SimulatorAssetFormat,
     SimulatorId,
     SimulatorMeshAssetUpload,
+    SimulatorRuntimeCapabilities,
+    SimulatorRuntimeDependency,
+    SimulatorRuntimeSpec,
+    SimulatorRuntimeTransferPolicy,
     SimulatorTargetKind,
     SimulatorTransferStrategy,
     SimulatorWorkspaceAssetFormat,
@@ -33,11 +37,25 @@ class WorkspaceTransferDependency(WorkspaceTransferCamelModel):
     name: str
     available: bool
 
+    @classmethod
+    def from_runtime_dependency(
+        cls,
+        dependency: SimulatorRuntimeDependency,
+    ) -> "WorkspaceTransferDependency":
+        return cls(name=dependency.name, available=dependency.available)
+
 
 class WorkspaceTransferCapabilities(WorkspaceTransferCamelModel):
     workspace_target: bool = Field(default=False, alias="workspaceTarget")
     motion_validation: bool = Field(default=False, alias="motionValidation")
     layout_round_trip: bool = Field(default=False, alias="layoutRoundTrip")
+
+    @classmethod
+    def from_runtime_capabilities(
+        cls,
+        capabilities: SimulatorRuntimeCapabilities,
+    ) -> "WorkspaceTransferCapabilities":
+        return cls.model_validate(capabilities.model_dump(by_alias=True))
 
 
 class WorkspaceTransferPolicy(WorkspaceTransferCamelModel):
@@ -49,6 +67,13 @@ class WorkspaceTransferPolicy(WorkspaceTransferCamelModel):
     )
     transfer_strategy: WorkspaceTransferStrategy = Field(..., alias="transferStrategy")
 
+    @classmethod
+    def from_runtime_policy(
+        cls,
+        policy: SimulatorRuntimeTransferPolicy,
+    ) -> "WorkspaceTransferPolicy":
+        return cls.model_validate(policy.model_dump(by_alias=True))
+
 
 class WorkspaceTransferTargetDescriptor(WorkspaceTransferCamelModel):
     target_id: WorkspaceTransferTargetId = Field(..., alias="targetId")
@@ -56,6 +81,23 @@ class WorkspaceTransferTargetDescriptor(WorkspaceTransferCamelModel):
     target_kind: WorkspaceTransferTargetKind = Field(..., alias="targetKind")
     capabilities: WorkspaceTransferCapabilities
     transfer_policy: WorkspaceTransferPolicy = Field(..., alias="transferPolicy")
+
+    @classmethod
+    def from_runtime_spec(
+        cls,
+        spec: SimulatorRuntimeSpec,
+    ) -> "WorkspaceTransferTargetDescriptor":
+        return cls(
+            targetId=spec.simulator_id,
+            label=spec.label,
+            targetKind=spec.target_kind,
+            capabilities=WorkspaceTransferCapabilities.from_runtime_capabilities(
+                spec.capabilities_model()
+            ),
+            transferPolicy=WorkspaceTransferPolicy.from_runtime_policy(
+                spec.transfer.runtime_model()
+            ),
+        )
 
 
 class WorkspaceTransferTargetListResponse(WorkspaceTransferCamelModel):

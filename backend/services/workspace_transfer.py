@@ -11,9 +11,7 @@ from backend.models.simulator_runtime import (
 from backend.models.workspace_transfer import (
     WorkspaceChangeSetApplyRequest,
     WorkspaceChangeSetApplyResponse,
-    WorkspaceTransferCapabilities,
     WorkspaceTransferDependency,
-    WorkspaceTransferPolicy,
     WorkspaceOpenRequest,
     WorkspaceOpenResponse,
     WorkspaceTransferTargetDescriptor,
@@ -52,22 +50,7 @@ def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspace
 
 def _target_descriptor_for_spec(spec) -> WorkspaceTransferTargetDescriptor:
     get_simulator_adapter(spec.simulator_id)
-    return WorkspaceTransferTargetDescriptor(
-        targetId=spec.simulator_id,
-        label=spec.label,
-        targetKind=spec.target_kind,
-        capabilities=WorkspaceTransferCapabilities(
-            workspaceTarget=spec.workspace_target,
-            motionValidation=spec.motion_validation,
-            layoutRoundTrip=spec.layout_round_trip,
-        ),
-        transferPolicy=WorkspaceTransferPolicy(
-            robotAssetFormat=spec.transfer.robot_asset_format,
-            sceneAssetFormat=spec.transfer.scene_asset_format,
-            frameConvention=spec.transfer.frame_convention,
-            transferStrategy=spec.transfer.transfer_strategy,
-        ),
-    )
+    return WorkspaceTransferTargetDescriptor.from_runtime_spec(spec)
 
 
 def _open_response_from_adapter(response) -> WorkspaceOpenResponse:
@@ -112,7 +95,7 @@ def get_workspace_transfer_target_status(
         available=status.available,
         status=status.status,
         dependencies=[
-            WorkspaceTransferDependency(name=dependency.name, available=dependency.available)
+            WorkspaceTransferDependency.from_runtime_dependency(dependency)
             for dependency in status.dependencies
         ],
     )

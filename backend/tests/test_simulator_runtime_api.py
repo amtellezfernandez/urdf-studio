@@ -294,6 +294,32 @@ def test_list_workspace_transfer_targets_returns_capability_descriptors() -> Non
     assert targets[10]["capabilities"]["layoutRoundTrip"] is True
 
 
+def test_workspace_transfer_targets_match_simulator_runtime_descriptors() -> None:
+    with _patch_security_settings():
+        simulator_response = asyncio.run(
+            _request_json("GET", "/simulators", headers=_operator_headers())
+        )
+        transfer_response = asyncio.run(
+            _request_json("GET", "/workspace-transfer/targets", headers=_operator_headers())
+        )
+
+    assert simulator_response.status_code == 200
+    assert transfer_response.status_code == 200
+    simulators = simulator_response.json()["simulators"]
+    targets = transfer_response.json()["targets"]
+
+    assert [
+        {
+            "targetId": simulator["simulatorId"],
+            "label": simulator["label"],
+            "targetKind": simulator["targetKind"],
+            "capabilities": simulator["capabilities"],
+            "transferPolicy": simulator["transferPolicy"],
+        }
+        for simulator in simulators
+    ] == targets
+
+
 def test_simulator_runtime_routes_require_token_for_remote_clients() -> None:
     with _patch_security_settings():
         response = asyncio.run(
