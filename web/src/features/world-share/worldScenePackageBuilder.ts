@@ -59,18 +59,31 @@ const toHex = (bytes: Uint8Array) =>
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
 
-const stableStringify = (value: unknown): string => {
+const stableStringifyValue = (value: unknown): string | undefined => {
+  if (value === undefined || typeof value === "function" || typeof value === "symbol") {
+    return undefined;
+  }
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+    return `[${value.map((item) => stableStringifyValue(item) ?? "null").join(",")}]`;
   }
   const objectValue = value as Record<string, unknown>;
   const sortedKeys = Object.keys(objectValue).sort();
-  return `{${sortedKeys
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(objectValue[key])}`)
-    .join(",")}}`;
+  const fields = sortedKeys.flatMap((key) => {
+    const serializedValue = stableStringifyValue(objectValue[key]);
+    return serializedValue === undefined ? [] : `${JSON.stringify(key)}:${serializedValue}`;
+  });
+  return `{${fields.join(",")}}`;
+};
+
+export const stableStringify = (value: unknown): string => {
+  const serialized = stableStringifyValue(value);
+  if (serialized === undefined) {
+    throw new Error("Cannot canonicalize an undefined world scene package value.");
+  }
+  return serialized;
 };
 
 const digestSha256 = async (content: string): Promise<string> => {

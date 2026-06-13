@@ -3,12 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildWorldScenePackageManifest,
+  stableStringify,
   toSerializableWorldObject,
   toWorldSceneLayerDownloadName,
   toWorldScenePackageDownloadName,
 } from "@/features/world-share/worldScenePackageBuilder";
 import type { CreatedObject } from "@/features/objects";
-import { WORLD_SCENE_PACKAGE_CRYPTO_UNAVAILABLE_ERROR_CODE } from "@/features/world-share/worldScenePackageParams";
+import {
+  WORLD_SCENE_PACKAGE_CRYPTO_UNAVAILABLE_ERROR_CODE,
+  WORLD_SCENE_PACKAGE_URI_SCHEME,
+} from "@/features/world-share/worldScenePackageParams";
 import type { Camera } from "@/shared/types/camera";
 import { WORLD_OBJECT_GEOMETRY_PARAMS } from "@/features/objects/worldObjectGeometryParams";
 import { WORLD_OBJECT_RENDER_PARAMS } from "@/features/objects/worldObjectRenderParams";
@@ -20,6 +24,9 @@ const TEST_OBJECT_ORBIT_RADIUS = 0.45;
 const TEST_OBJECT_ORBIT_INCLINATION_DEG = 30;
 const TEST_OBJECT_ORBIT_PHASE_DEG = 20;
 const TEST_OBJECT_ORBIT_SECONDARY_OFFSET_DEG = 160;
+const WORLD_SCENE_PACKAGE_BUILDER_TEST_FIXTURES = {
+  expectedWorldSnapshotDigest: "d8dbd551c2b41b1311022aa1e522c58ccc9062e6b9f729786f4427e84d7c8102",
+};
 
 const TEST_CAMERA: Camera = {
   id: "cam-1",
@@ -95,6 +102,16 @@ const TEST_INVALID_GEOMETRY_OBJECT: CreatedObject = {
 };
 
 describe("buildWorldScenePackageManifest", () => {
+  it("canonicalizes JSON like backend world snapshot hashing", () => {
+    expect(
+      stableStringify({
+        b: undefined,
+        a: 1,
+        c: [undefined, { z: undefined, y: "ok" }],
+      })
+    ).toBe('{"a":1,"c":[null,{"y":"ok"}]}');
+  });
+
   it("emits a scene-first world manifest without model-planning coupling", async () => {
     const manifest = await buildWorldScenePackageManifest({
       packageId: "Demo World",
@@ -221,6 +238,25 @@ describe("buildWorldScenePackageManifest", () => {
 
     expect(manifest.package_id).toBe("demo-world");
     expect(manifest.interface.observation_modalities).toEqual(["proprio"]);
+  });
+
+  it("emits a backend-compatible world snapshot digest artifact", async () => {
+    const manifest = await buildWorldScenePackageManifest({
+      packageId: "Demo World",
+      version: "1.0.0",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [TEST_CAMERA],
+      objects: [],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+    });
+
+    expect(manifest.artifacts).toContainEqual({
+      kind: "world_snapshot",
+      digest_sha256: WORLD_SCENE_PACKAGE_BUILDER_TEST_FIXTURES.expectedWorldSnapshotDigest,
+      uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+    });
   });
 
   it("emits stable download filenames for world packages and world layouts", () => {
