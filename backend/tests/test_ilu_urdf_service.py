@@ -7,6 +7,7 @@ from backend.models.xacro import GitHubXacroExpandRequest
 from backend.services.ilu_urdf import (
     bundle_mesh_assets_for_urdf_file,
     convert_urdf_to_mjcf,
+    convert_urdf_to_usd,
     expand_github_xacro,
 )
 
@@ -113,3 +114,31 @@ def test_convert_urdf_to_mjcf_maps_bridge_response(monkeypatch) -> None:
     assert result.diagnostics[0].link_name == "arm_link"
     assert result.stats.bodies_created == 1
     assert result.stats.geometries_converted == 2
+
+
+def test_convert_urdf_to_usd_maps_bridge_response(monkeypatch) -> None:
+    def _fake_run_bridge(command, payload):
+        assert command == "convert-usd"
+        assert payload["urdfXml"] == "<robot name=\"demo\"/>"
+        return {
+            "usdContent": "#usda 1.0\n",
+            "warnings": ["Skipped unsupported visual mesh meshes/base.stl on link base."],
+            "stats": {
+                "linksConverted": 1,
+                "jointsConverted": 0,
+                "visualsConverted": 1,
+                "collisionsConverted": 0,
+                "inlineMeshesConverted": 0,
+                "unsupportedMeshes": 1,
+            },
+        }
+
+    monkeypatch.setattr("backend.services.ilu_urdf._run_bridge", _fake_run_bridge)
+
+    result = convert_urdf_to_usd("<robot name=\"demo\"/>")
+
+    assert result.usd_content == "#usda 1.0\n"
+    assert result.warnings == ("Skipped unsupported visual mesh meshes/base.stl on link base.",)
+    assert result.stats.links_converted == 1
+    assert result.stats.visuals_converted == 1
+    assert result.stats.unsupported_meshes == 1

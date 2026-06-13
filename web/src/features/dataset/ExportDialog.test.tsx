@@ -22,6 +22,30 @@ describe("ExportDialog", () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
+  it("offers USD as a robot export format", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ExportDialog, {
+          isOpen: true,
+          onClose: vi.fn(),
+          urdfContent: '<robot name="demo"><link name="base"/></robot>',
+          meshFiles: {},
+          robotName: "demo_robot",
+        })
+      );
+    });
+
+    expect(container.textContent).toContain("USD");
+    expect(container.querySelector("#usd")).toBeTruthy();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("shows staged bake details and keeps export enabled for a conflict-free bake session", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);

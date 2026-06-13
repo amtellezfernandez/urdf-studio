@@ -17,6 +17,7 @@ export {
   buildXacroExpandRequestPayload,
   buildXacroFilenameCandidates,
   convertURDFToMJCF,
+  convertURDFToUSD,
   convertURDFToXacro,
   createAssemblySpec,
   createXacroFilePayloadFromText,

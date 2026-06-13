@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import {
   convertUrdfToMjcfCached,
+  convertUrdfToUsdCached,
   convertUrdfToXacroCached,
 } from "@/features/urdf/convert/urdfProcessing";
 import {
@@ -44,6 +45,44 @@ interface ExportDialogProps {
   stagedBakeSession?: UrdfBakePreviewSession | null;
 }
 
+type RobotExportFormat = "urdf" | "xacro" | "mujoco" | "usd";
+
+type FormatSelections = Record<
+  RobotExportFormat | "meshes" | "cameraJson" | "cameraYaml",
+  boolean
+>;
+
+const robotExportFormats = [
+  { key: "urdf", label: "URDF" },
+  { key: "xacro", label: "XACRO" },
+  { key: "mujoco", label: "MJCF" },
+  { key: "usd", label: "USD" },
+] as const satisfies readonly { key: RobotExportFormat; label: string }[];
+
+const robotExportFilename = (baseName: string, format: RobotExportFormat): string => {
+  switch (format) {
+    case "urdf":
+      return `${baseName}.urdf`;
+    case "xacro":
+      return `${baseName}.urdf.xacro`;
+    case "mujoco":
+      return `${baseName}.xml`;
+    case "usd":
+      return `${baseName}.usda`;
+  }
+};
+
+const robotExportMimeType = (format: RobotExportFormat): string => {
+  switch (format) {
+    case "usd":
+      return "model/vnd.usda";
+    case "urdf":
+    case "xacro":
+    case "mujoco":
+      return "application/xml";
+  }
+};
+
 export const ExportDialog = ({
   isOpen,
   onClose,
@@ -65,10 +104,11 @@ export const ExportDialog = ({
   const [subfolderName, setSubfolderName] = useState("");
 
   // Format selections
-  const [formatSelections, setFormatSelections] = useState({
+  const [formatSelections, setFormatSelections] = useState<FormatSelections>({
     urdf: true,
     xacro: false,
     mujoco: false,
+    usd: false,
     meshes: true,
     cameraJson: false,
     cameraYaml: false,
@@ -264,28 +304,20 @@ export const ExportDialog = ({
       basePath = `${subfolderName}/`;
     }
     
+    const addRobotPreview = (baseName: string) => {
+      robotExportFormats.forEach(({ key }) => {
+        if (formatSelections[key]) {
+          structure.push({ path: `${basePath}${robotExportFilename(baseName, key)}`, type: "file" });
+        }
+      });
+    };
+
     if (exportCurrent) {
-      if (formatSelections.urdf) {
-        structure.push({ path: `${basePath}${currentBaseName}.urdf`, type: "file" });
-      }
-      if (formatSelections.xacro) {
-        structure.push({ path: `${basePath}${currentBaseName}.urdf.xacro`, type: "file" });
-      }
-      if (formatSelections.mujoco) {
-        structure.push({ path: `${basePath}${currentBaseName}.xml`, type: "file" });
-      }
+      addRobotPreview(currentBaseName);
     }
 
     if (exportOriginal && originalUrdfContent) {
-      if (formatSelections.urdf) {
-        structure.push({ path: `${basePath}${originalBaseName}.urdf`, type: "file" });
-      }
-      if (formatSelections.xacro) {
-        structure.push({ path: `${basePath}${originalBaseName}.urdf.xacro`, type: "file" });
-      }
-      if (formatSelections.mujoco) {
-        structure.push({ path: `${basePath}${originalBaseName}.xml`, type: "file" });
-      }
+      addRobotPreview(originalBaseName);
     }
 
     if (hasCameras) {
@@ -405,56 +437,40 @@ export const ExportDialog = ({
         );
       }
 
-      // Export current version if selected
-      if (exportCurrent) {
-        if (formatSelections.urdf) {
-          const filename = `${currentBaseName}.urdf`;
+      const exportRobotFileSet = async (baseName: string, content: string) => {
+        for (const { key } of robotExportFormats) {
+          if (!formatSelections[key]) {
+            continue;
+          }
+          const filename = robotExportFilename(baseName, key);
+          let fileContent = content;
+          if (key === "xacro") {
+            fileContent = convertUrdfToXacroCached(content).xacroContent;
+          } else if (key === "mujoco") {
+            fileContent = convertUrdfToMjcfCached(content).mjcfContent;
+          } else if (key === "usd") {
+            fileContent = convertUrdfToUsdCached(content).usdContent;
+          }
           await downloadFile(
-            currentExportUrdfContent,
+            fileContent,
             filename,
             selectedFolder || undefined,
             useSubfolder,
-            subfolderName
+            subfolderName,
+            robotExportMimeType(key)
           );
           exportedFiles.push(filename);
         }
+      };
 
-        if (formatSelections.xacro) {
-          const xacroResult = convertUrdfToXacroCached(currentExportUrdfContent);
-          const filename = `${currentBaseName}.urdf.xacro`;
-          await downloadFile(xacroResult.xacroContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
-          exportedFiles.push(filename);
-        }
-
-        if (formatSelections.mujoco) {
-          const mjcfResult = convertUrdfToMjcfCached(currentExportUrdfContent);
-          const filename = `${currentBaseName}.xml`;
-          await downloadFile(mjcfResult.mjcfContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
-          exportedFiles.push(filename);
-        }
+      // Export current version if selected
+      if (exportCurrent) {
+        await exportRobotFileSet(currentBaseName, currentExportUrdfContent);
       }
 
       // Export original version if selected
       if (exportOriginal && originalUrdfContent) {
-        if (formatSelections.urdf) {
-          const filename = `${originalBaseName}.urdf`;
-          await downloadFile(originalUrdfContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
-          exportedFiles.push(filename);
-        }
-
-        if (formatSelections.xacro) {
-          const xacroResult = convertUrdfToXacroCached(originalUrdfContent);
-          const filename = `${originalBaseName}.urdf.xacro`;
-          await downloadFile(xacroResult.xacroContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
-          exportedFiles.push(filename);
-        }
-
-        if (formatSelections.mujoco) {
-          const mjcfResult = convertUrdfToMjcfCached(originalUrdfContent);
-          const filename = `${originalBaseName}.xml`;
-          await downloadFile(mjcfResult.mjcfContent, filename, selectedFolder || undefined, useSubfolder, subfolderName);
-          exportedFiles.push(filename);
-        }
+        await exportRobotFileSet(originalBaseName, originalUrdfContent);
       }
 
       // Export meshes (only the ones actually referenced in URDF)
@@ -626,54 +642,24 @@ export const ExportDialog = ({
           {/* Format Selection */}
           <BlenderPanel title="Formats" defaultOpen={true}>
             <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5 py-0.5">
-                <Checkbox
-                  id="urdf"
-                  checked={formatSelections.urdf}
-                  onCheckedChange={(checked) =>
-                    setFormatSelections((prev) => ({ ...prev, urdf: checked as boolean }))
-                  }
-                  className="h-3 w-3 border-border data-[state=checked]:bg-muted data-[state=checked]:border-muted-foreground/50 data-[state=checked]:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <label htmlFor="urdf" className={cn(
-                  "text-[10px] cursor-pointer select-none",
-                  !formatSelections.urdf && "text-muted-foreground/60"
-                )}>
-                  URDF
-                </label>
-              </div>
-              <div className="flex items-center gap-1.5 py-0.5">
-                <Checkbox
-                  id="xacro"
-                  checked={formatSelections.xacro}
-                  onCheckedChange={(checked) =>
-                    setFormatSelections((prev) => ({ ...prev, xacro: checked as boolean }))
-                  }
-                  className="h-3 w-3 border-border data-[state=checked]:bg-muted data-[state=checked]:border-muted-foreground/50 data-[state=checked]:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <label htmlFor="xacro" className={cn(
-                  "text-[10px] cursor-pointer select-none",
-                  !formatSelections.xacro && "text-muted-foreground/60"
-                )}>
-                  XACRO
-                </label>
-              </div>
-              <div className="flex items-center gap-1.5 py-0.5">
-                <Checkbox
-                  id="mujoco"
-                  checked={formatSelections.mujoco}
-                  onCheckedChange={(checked) =>
-                    setFormatSelections((prev) => ({ ...prev, mujoco: checked as boolean }))
-                  }
-                  className="h-3 w-3 border-border data-[state=checked]:bg-muted data-[state=checked]:border-muted-foreground/50 data-[state=checked]:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <label htmlFor="mujoco" className={cn(
-                  "text-[10px] cursor-pointer select-none",
-                  !formatSelections.mujoco && "text-muted-foreground/60"
-                )}>
-                  MUJOCO
-                </label>
-              </div>
+              {robotExportFormats.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-1.5 py-0.5">
+                  <Checkbox
+                    id={key}
+                    checked={formatSelections[key]}
+                    onCheckedChange={(checked) =>
+                      setFormatSelections((prev) => ({ ...prev, [key]: checked as boolean }))
+                    }
+                    className="h-3 w-3 border-border data-[state=checked]:bg-muted data-[state=checked]:border-muted-foreground/50 data-[state=checked]:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                  <label htmlFor={key} className={cn(
+                    "text-[10px] cursor-pointer select-none",
+                    !formatSelections[key] && "text-muted-foreground/60"
+                  )}>
+                    {label}
+                  </label>
+                </div>
+              ))}
               <div className="flex items-center gap-1.5 py-0.5">
                 <Checkbox
                   id="meshes"

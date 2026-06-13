@@ -222,6 +222,9 @@ function assertIluRuntimeContract(
   if (typeof urdfCore?.convertURDFToMJCF !== 'function') {
     missingApis.push('convertURDFToMJCF');
   }
+  if (typeof urdfCore?.convertURDFToUSD !== 'function') {
+    missingApis.push('convertURDFToUSD');
+  }
   if (typeof urdfCoreBundleMeshAssetsNode?.bundleMeshAssetsForUrdfFile !== 'function') {
     missingApis.push('bundleMeshAssetsForUrdfFile');
   }
@@ -243,6 +246,13 @@ function assertIluRuntimeContract(
   );
   if (typeof conversion?.mjcfContent !== 'string' || !conversion.mjcfContent.includes('<mujoco')) {
     throw new Error('i-love-urdf MJCF conversion check failed.');
+  }
+
+  const usdConversion = urdfCore.convertURDFToUSD(
+    '<robot name="setup_check"><link name="base"/></robot>'
+  );
+  if (typeof usdConversion?.usdContent !== 'string' || !usdConversion.usdContent.includes('#usda')) {
+    throw new Error('i-love-urdf USD conversion check failed.');
   }
 }
 

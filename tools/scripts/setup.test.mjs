@@ -13,6 +13,7 @@ test('setup validates the i-love-urdf simulator transfer contract', () => {
       {
         urdfCore: {
           convertURDFToMJCF: () => ({ mjcfContent: '<mujoco model="demo"/>' }),
+          convertURDFToUSD: () => ({ usdContent: '#usda 1.0' }),
         },
         urdfCoreBundleMeshAssetsNode: {
           bundleMeshAssetsForUrdfFile: () => ({}),

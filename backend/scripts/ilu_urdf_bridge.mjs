@@ -15,6 +15,7 @@ const {
   analyzeRobotMorphology,
   analyzeUrdf,
   convertURDFToMJCF,
+  convertURDFToUSD,
 } = urdfCore;
 const {
   computeKinematicFingerprint,
@@ -94,6 +95,12 @@ const main = async () => {
   if (command === "convert-mjcf") {
     const urdfXml = String(payload.urdfXml || "");
     process.stdout.write(JSON.stringify(convertURDFToMJCF(urdfXml)));
+    return;
+  }
+
+  if (command === "convert-usd") {
+    const urdfXml = String(payload.urdfXml || "");
+    process.stdout.write(JSON.stringify(convertURDFToUSD(urdfXml)));
     return;
   }
 

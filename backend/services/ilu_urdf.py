@@ -93,6 +93,23 @@ class MjcfConversionResult:
     stats: MjcfConversionStats
 
 
+@dataclass(frozen=True)
+class UsdConversionStats:
+    links_converted: int
+    joints_converted: int
+    visuals_converted: int
+    collisions_converted: int
+    inline_meshes_converted: int
+    unsupported_meshes: int
+
+
+@dataclass(frozen=True)
+class UsdConversionResult:
+    usd_content: str
+    warnings: tuple[str, ...]
+    stats: UsdConversionStats
+
+
 def _map_bridge_error(command: str, detail: str) -> IluUrdfBridgeError:
     lowered = detail.lower()
     if "target xacro file not found" in lowered:
@@ -351,6 +368,39 @@ def convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
             bodies_created=_read_count("bodiesCreated"),
             joints_converted=_read_count("jointsConverted"),
             geometries_converted=_read_count("geometriesConverted"),
+        ),
+    )
+
+
+def convert_urdf_to_usd(urdf_xml: str) -> UsdConversionResult:
+    response = _run_bridge("convert-usd", {"urdfXml": urdf_xml})
+    usd_content = response.get("usdContent")
+    raw_warnings = response.get("warnings")
+    raw_stats = response.get("stats")
+    if not isinstance(usd_content, str) or not isinstance(raw_warnings, list):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid USD conversion response.")
+    if not isinstance(raw_stats, dict):
+        raise IluUrdfBridgeError(502, "ilu bridge returned invalid USD conversion stats.")
+
+    def _read_count(key: str) -> int:
+        value = raw_stats.get(key)
+        if not isinstance(value, int) or value < 0:
+            raise IluUrdfBridgeError(502, f"ilu bridge returned invalid USD conversion stat: {key}.")
+        return value
+
+    warnings = tuple(item for item in raw_warnings if isinstance(item, str))
+    if len(warnings) != len(raw_warnings):
+        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid USD conversion warning.")
+    return UsdConversionResult(
+        usd_content=usd_content,
+        warnings=warnings,
+        stats=UsdConversionStats(
+            links_converted=_read_count("linksConverted"),
+            joints_converted=_read_count("jointsConverted"),
+            visuals_converted=_read_count("visualsConverted"),
+            collisions_converted=_read_count("collisionsConverted"),
+            inline_meshes_converted=_read_count("inlineMeshesConverted"),
+            unsupported_meshes=_read_count("unsupportedMeshes"),
         ),
     )
 

@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 import {
   convertURDFToMJCF as convertURDFToMJCFShared,
+  convertURDFToUSD as convertURDFToUSDShared,
   convertURDFToXacro as convertURDFToXacroShared,
   convertURDFToMJCF,
+  convertURDFToUSD,
   convertURDFToXacro,
 } from "@/shared/lib/urdfCore";
 
@@ -32,5 +34,13 @@ describe("shared URDF converters", () => {
     const result = convertURDFToXacro(SAMPLE_URDF);
     expect(result.xacroContent).toContain("xmlns:xacro=");
     expect(result.xacroContent).toContain("<robot");
+  });
+
+  it("re-exports USD converter from shared package", () => {
+    expect(convertURDFToUSD).toBe(convertURDFToUSDShared);
+    const result = convertURDFToUSD(SAMPLE_URDF);
+    expect(result.usdContent).toContain("#usda");
+    expect(result.usdContent).toContain('def Xform "demo_robot"');
+    expect(result.stats.linksConverted).toBe(1);
   });
 });
