@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import os
 import subprocess
 import sys
@@ -697,7 +698,130 @@ def _validate_report_item_fields(
                 f"simulator validation report field '{list_field_name}[{index}]' "
                 f"missing field(s): {', '.join(missing_fields)}"
             )
+        value_error = _validate_report_item_values(
+            item,
+            path=f"{list_field_name}[{index}]",
+            list_field_name=list_field_name,
+        )
+        if value_error:
+            return value_error
     return None
+
+
+def _validate_report_item_values(
+    item: Mapping[str, Any],
+    *,
+    path: str,
+    list_field_name: str,
+) -> str | None:
+    if list_field_name == "objects":
+        for field_name in ("source_id", "sim_name", "sim_type"):
+            error = _validate_report_string(item.get(field_name), f"{path}.{field_name}")
+            if error:
+                return error
+        for field_name in ("position_xyz", "size_xyz"):
+            error = _validate_report_vector3(
+                item.get(field_name),
+                f"{path}.{field_name}",
+                positive=field_name == "size_xyz",
+            )
+            if error:
+                return error
+        error = _validate_report_quat_wxyz(item.get("quat_wxyz"), f"{path}.quat_wxyz")
+        if error:
+            return error
+        return _validate_report_rgba(item.get("rgba"), f"{path}.rgba")
+
+    if list_field_name == "cameras":
+        for field_name in ("camera_id", "sim_name", "parent_link"):
+            error = _validate_report_string(item.get(field_name), f"{path}.{field_name}")
+            if error:
+                return error
+        error = _validate_report_vector3(item.get("position_xyz"), f"{path}.position_xyz")
+        if error:
+            return error
+        error = _validate_report_quat_wxyz(item.get("quat_wxyz"), f"{path}.quat_wxyz")
+        if error:
+            return error
+        for field_name in ("width", "height"):
+            error = _validate_report_positive_int(item.get(field_name), f"{path}.{field_name}")
+            if error:
+                return error
+        return _validate_report_positive_number(item.get("fov_deg"), f"{path}.fov_deg")
+    return None
+
+
+def _validate_report_string(value: Any, path: str) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return f"simulator validation report field '{path}' must be a non-empty string"
+    return None
+
+
+def _validate_report_vector3(
+    value: Any,
+    path: str,
+    *,
+    positive: bool = False,
+) -> str | None:
+    numbers = _report_number_tuple(value, path, expected_length=3)
+    if isinstance(numbers, str):
+        return numbers
+    if positive and any(number <= 0.0 for number in numbers):
+        return f"simulator validation report field '{path}' must contain positive numbers"
+    return None
+
+
+def _validate_report_quat_wxyz(value: Any, path: str) -> str | None:
+    numbers = _report_number_tuple(value, path, expected_length=4)
+    if isinstance(numbers, str):
+        return numbers
+    norm = math.sqrt(sum(number * number for number in numbers))
+    if norm <= 0.0:
+        return f"simulator validation report field '{path}' must be a non-zero quaternion"
+    return None
+
+
+def _validate_report_rgba(value: Any, path: str) -> str | None:
+    numbers = _report_number_tuple(value, path, expected_length=4)
+    if isinstance(numbers, str):
+        return numbers
+    if any(number < 0.0 or number > 1.0 for number in numbers):
+        return f"simulator validation report field '{path}' must contain numbers between 0 and 1"
+    return None
+
+
+def _validate_report_positive_int(value: Any, path: str) -> str | None:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        return f"simulator validation report field '{path}' must be a positive integer"
+    return None
+
+
+def _validate_report_positive_number(value: Any, path: str) -> str | None:
+    if not _is_finite_report_number(value) or float(value) <= 0.0:
+        return f"simulator validation report field '{path}' must be a positive finite number"
+    return None
+
+
+def _report_number_tuple(
+    value: Any,
+    path: str,
+    *,
+    expected_length: int,
+) -> tuple[float, ...] | str:
+    if (
+        not isinstance(value, list)
+        or len(value) != expected_length
+        or not all(_is_finite_report_number(component) for component in value)
+    ):
+        return (
+            f"simulator validation report field '{path}' must be a "
+            f"{expected_length}-number list"
+        )
+    return tuple(float(component) for component in value)
+
+
+def _is_finite_report_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _check_target(
