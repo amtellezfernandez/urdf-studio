@@ -106,6 +106,15 @@ def normalize_simulator_workspace_prepare_request(
     )
 
 
+def normalize_simulator_workspace_change_set_request(
+    request: WorkspaceChangeSetApplyRequest,
+) -> WorkspaceChangeSetApplyRequest:
+    return request.model_copy(
+        update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
+        deep=True,
+    )
+
+
 def prepare_simulator_workspace(
     simulator_id: SimulatorId,
     request: SimulatorWorkspacePrepareRequest,
@@ -124,7 +133,7 @@ def apply_simulator_workspace_change_set(
         raise SimulatorCapabilityError(
             f"{adapter.label} workspace change-set import is not supported."
         )
-    return apply_change_set(request)
+    return apply_change_set(normalize_simulator_workspace_change_set_request(request))
 
 
 def get_simulator_runtime_status(simulator_id: SimulatorId) -> SimulatorRuntimeStatus:
@@ -141,6 +150,7 @@ __all__ = [
     "get_simulator_runtime_status",
     "apply_simulator_workspace_change_set",
     "list_simulator_runtime_descriptors",
+    "normalize_simulator_workspace_change_set_request",
     "normalize_simulator_workspace_prepare_request",
     "prepare_simulator_workspace",
 ]

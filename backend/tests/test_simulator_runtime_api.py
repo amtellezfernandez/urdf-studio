@@ -23,6 +23,7 @@ from backend.models.simulator_runtime import (
     SimulatorId,
     SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
+    WorkspaceChangeSetApplyRequest,
     SimulatorWorkspacePrepareResponse,
 )
 from backend.models.workspace_transfer import WorkspaceOpenResponse
@@ -32,6 +33,7 @@ from backend.services.simulator_adapters import (
     WORKSPACE_SIMULATOR_IDS,
     get_simulator_adapter,
     list_simulator_runtime_descriptors,
+    normalize_simulator_workspace_change_set_request,
 )
 from backend.services.simulator_adapters.blender_change_sets import build_blender_change_set_source
 from backend.services.simulator_adapters.params import (
@@ -479,6 +481,37 @@ def test_blender_workspace_prepare_refreshes_stale_world_snapshot_digest(
 
     assert response.status_code == 200
     assert response.json()["simulator_id"] == "blender"
+
+
+def test_simulator_workspace_change_set_request_refreshes_stale_world_snapshot_digest() -> None:
+    world_package_payload = _world_package_with_layout_object_payload()
+    change_set = _blender_change_set_payload(
+        world_package_payload,
+        changes=[],
+        review_only=[
+            {
+                "entity_type": "camera",
+                "stable_id": "scene-camera",
+            }
+        ],
+    )
+    world_package_payload["artifacts"] = [
+        {
+            "kind": "world_snapshot",
+            "digest_sha256": "0" * 64,
+            "uri": "inline://snapshot",
+        }
+    ]
+    request = WorkspaceChangeSetApplyRequest(
+        world_package=WorldScenePackageManifest.model_validate(world_package_payload),
+        change_set=change_set,
+    )
+
+    normalized = normalize_simulator_workspace_change_set_request(request)
+
+    assert declared_world_snapshot_digests(normalized.world_package) == (
+        computed_world_snapshot_digest(normalized.world_package),
+    )
 
 
 def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:
