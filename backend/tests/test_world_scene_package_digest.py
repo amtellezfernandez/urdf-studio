@@ -7,10 +7,16 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
-from backend.services.world_scene_package_digest import computed_world_snapshot_digest
+from backend.services.world_scene_package_digest import (
+    canonical_world_snapshot_json,
+    computed_world_snapshot_digest,
+)
 
 
 TEST_WORLD_SNAPSHOT_DIGEST = "d8dbd551c2b41b1311022aa1e522c58ccc9062e6b9f729786f4427e84d7c8102"
+TEST_NEUTRAL_JOINT_WORLD_SNAPSHOT_DIGEST = (
+    "507d0be9228098918bc51f28af8cb0338ece94ad7507bc77a00ac30b8ef50ea1"
+)
 
 
 def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> None:
@@ -53,3 +59,31 @@ def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> N
     )
 
     assert computed_world_snapshot_digest(manifest) == TEST_WORLD_SNAPSHOT_DIGEST
+
+
+def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract() -> None:
+    manifest = WorldScenePackageManifest(
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[],
+        world_snapshot=WorldSnapshot(
+            urdf_xml='<robot name="demo"/>',
+            joint_positions={"joint_1": 0},
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+    )
+
+    assert '"joint_1":0.0' not in canonical_world_snapshot_json(manifest)
+    assert computed_world_snapshot_digest(manifest) == TEST_NEUTRAL_JOINT_WORLD_SNAPSHOT_DIGEST
