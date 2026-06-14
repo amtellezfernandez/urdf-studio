@@ -87,3 +87,38 @@ def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract()
 
     assert '"joint_1":0.0' not in canonical_world_snapshot_json(manifest)
     assert computed_world_snapshot_digest(manifest) == TEST_NEUTRAL_JOINT_WORLD_SNAPSHOT_DIGEST
+
+
+def test_canonical_world_snapshot_json_matches_browser_number_and_string_contract() -> None:
+    manifest = WorldScenePackageManifest(
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[],
+        world_snapshot=WorldSnapshot(
+            urdf_xml="<robot name='café'/>",
+            joint_positions={
+                "large": 1e20,
+                "micro": 1e-6,
+                "tiny": 1e-7,
+            },
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+    )
+
+    assert canonical_world_snapshot_json(manifest) == (
+        '{"cameras":[],"joint_positions":{"large":100000000000000000000,'
+        '"micro":0.000001,"tiny":1e-7},"objects":[],"scenario_duration_ms":0,'
+        '"scenario_time_ms":0,"urdf_xml":"<robot name=\'café\'/>"}'
+    )

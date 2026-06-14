@@ -112,6 +112,21 @@ describe("buildWorldScenePackageManifest", () => {
     ).toBe('{"a":1,"c":[null,{"y":"ok"}]}');
   });
 
+  it("canonicalizes exponent numbers and unicode like backend world snapshot hashing", () => {
+    expect(
+      stableStringify({
+        urdf_xml: "<robot name='café'/>",
+        joint_positions: {
+          tiny: 1e-7,
+          micro: 1e-6,
+          large: 1e20,
+        },
+      })
+    ).toBe(
+      '{"joint_positions":{"large":100000000000000000000,"micro":0.000001,"tiny":1e-7},"urdf_xml":"<robot name=\'café\'/>"}'
+    );
+  });
+
   it("rejects non-finite numbers before hashing a world snapshot", () => {
     expect(() => stableStringify({ position_xyz: [0, Number.NaN, 1] })).toThrow(
       "Cannot canonicalize a non-finite world scene package number."

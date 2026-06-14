@@ -8,25 +8,76 @@ from typing import Any
 from backend.models.world_scene_package import WorldScenePackageManifest
 
 
-def _canonical_json_payload(value: Any) -> Any:
-    if isinstance(value, float):
-        if math.isfinite(value) and value.is_integer():
-            return int(value)
-        return value
-    if isinstance(value, dict):
-        return {key: _canonical_json_payload(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_canonical_json_payload(item) for item in value]
-    return value
+def _expand_exponent_notation(number_text: str) -> str:
+    sign = ""
+    unsigned = number_text
+    if unsigned.startswith("-"):
+        sign = "-"
+        unsigned = unsigned[1:]
+    coefficient, exponent_text = unsigned.lower().split("e", 1)
+    exponent = int(exponent_text)
+    integer_part, _, fractional_part = coefficient.partition(".")
+    digits = f"{integer_part}{fractional_part}".lstrip("0") or "0"
+    decimal_position = len(integer_part) + exponent
+    if decimal_position <= 0:
+        expanded = f"0.{'0' * abs(decimal_position)}{digits}"
+    elif decimal_position >= len(digits):
+        expanded = f"{digits}{'0' * (decimal_position - len(digits))}"
+    else:
+        expanded = f"{digits[:decimal_position]}.{digits[decimal_position:]}"
+    if "." in expanded:
+        expanded = expanded.rstrip("0").rstrip(".")
+    return f"{sign}{expanded}"
+
+
+def _normalize_exponent_notation(number_text: str) -> str:
+    if "e" not in number_text and "E" not in number_text:
+        return number_text
+    coefficient, exponent_text = number_text.lower().split("e", 1)
+    exponent = int(exponent_text)
+    sign = "+" if exponent >= 0 else "-"
+    return f"{coefficient}e{sign}{abs(exponent)}"
+
+
+def _canonical_json_number(value: int | float) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if not math.isfinite(value):
+        raise ValueError("Cannot canonicalize a non-finite world scene package number.")
+    if value == 0:
+        return "0"
+    magnitude = abs(value)
+    number_text = repr(value)
+    if value.is_integer() and magnitude < 1e21:
+        return str(int(value))
+    if 1e-6 <= magnitude < 1e21 and ("e" in number_text or "E" in number_text):
+        return _expand_exponent_notation(number_text)
+    return _normalize_exponent_notation(number_text)
 
 
 def _canonical_json_dump(payload: Any) -> str:
-    return json.dumps(
-        _canonical_json_payload(payload),
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
+    if payload is None:
+        return "null"
+    if isinstance(payload, bool):
+        return "true" if payload else "false"
+    if isinstance(payload, int | float):
+        return _canonical_json_number(payload)
+    if isinstance(payload, str):
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(payload, list):
+        return f"[{','.join(_canonical_json_dump(item) for item in payload)}]"
+    if isinstance(payload, dict):
+        fields = (
+            (
+                f"{json.dumps(key, ensure_ascii=False, separators=(',', ':'))}:"
+                f"{_canonical_json_dump(payload[key])}"
+            )
+            for key in sorted(payload)
+        )
+        return f"{{{','.join(fields)}}}"
+    raise TypeError(f"Cannot canonicalize {type(payload).__name__} in world scene package JSON.")
 
 
 def canonical_world_scene_package_json(manifest: WorldScenePackageManifest) -> str:

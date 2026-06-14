@@ -66,6 +66,9 @@ const stableStringifyValue = (value: unknown): string | undefined => {
   if (typeof value === "number" && !Number.isFinite(value)) {
     throw new Error("Cannot canonicalize a non-finite world scene package number.");
   }
+  if (typeof value === "number") {
+    return JSON.stringify(value);
+  }
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
