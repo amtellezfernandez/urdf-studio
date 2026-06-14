@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -51,6 +52,14 @@ def prepare_blender_workspace_scene(
     blender_executable: str | None,
     camera_screenshot_dir: Path | None = None,
 ) -> None:
+    world_package_path = world_package_path.expanduser().resolve()
+    robot_urdf_path = robot_urdf_path.expanduser().resolve()
+    report_path = report_path.expanduser().resolve() if report_path is not None else None
+    camera_screenshot_dir = (
+        camera_screenshot_dir.expanduser().resolve()
+        if camera_screenshot_dir is not None
+        else None
+    )
     simulator_scene = prepare_simulator_scene(
         world_package_path=world_package_path,
         robot_urdf_path=robot_urdf_path,
@@ -130,9 +139,13 @@ def _run_blender_workspace_until_ready(
     cwd: Path,
     background: bool = False,
 ) -> None:
+    open_script_path = open_script_path.expanduser().resolve()
+    cwd = cwd.expanduser().resolve()
     command = [blender_executable]
     if background:
         command.append("--background")
+    else:
+        command.extend(["--window-geometry", "80", "80", "1440", "900"])
     command.extend(
         [
             "--python-exit-code",
@@ -144,6 +157,7 @@ def _run_blender_workspace_until_ready(
     process = subprocess.Popen(
         command,
         cwd=cwd,
+        env=_blender_process_env(background=background),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -169,6 +183,25 @@ def _run_blender_workspace_until_ready(
         )
     if returncode != 0:
         raise RuntimeError(f"Blender workspace process exited with code {returncode}.")
+
+
+def _blender_process_env(*, background: bool) -> dict[str, str]:
+    env = os.environ.copy()
+    if background or not _is_wsl_environment():
+        return env
+    env["GDK_BACKEND"] = "x11"
+    env["QT_QPA_PLATFORM"] = "xcb"
+    env.pop("WAYLAND_DISPLAY", None)
+    return env
+
+
+def _is_wsl_environment() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
 
 
 def main() -> int:

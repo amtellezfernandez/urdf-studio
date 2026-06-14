@@ -224,7 +224,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 except TypeError:
                     scene.render.engine = "BLENDER_EEVEE"
                 if scene.world is not None:
-                    scene.world.color = (0.03, 0.035, 0.04)
+                    scene.world.color = (0.12, 0.13, 0.14)
                 scene.render.image_settings.file_format = "PNG"
                 scene.render.resolution_percentage = 100
 
@@ -235,6 +235,120 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 light.name = "urdf_studio_key_light"
                 light.data.energy = 500.0
                 light.data.size = 5.0
+
+
+            def scene_edit_objects():
+                return [
+                    obj for obj in bpy.data.objects
+                    if getattr(obj, "type", "") not in {{"CAMERA", "LIGHT"}}
+                ]
+
+
+            def object_location_xyz(obj):
+                value = getattr(obj, "location", None)
+                if value is None:
+                    return None
+                try:
+                    return [float(value[0]), float(value[1]), float(value[2])]
+                except Exception:
+                    return None
+
+
+            def scene_edit_bounds():
+                points = [
+                    point
+                    for point in (object_location_xyz(obj) for obj in scene_edit_objects())
+                    if point is not None
+                ]
+                if not points:
+                    return [0.0, 0.0, 0.35], 1.0
+                mins = [min(point[index] for point in points) for index in range(3)]
+                maxs = [max(point[index] for point in points) for index in range(3)]
+                center = [(mins[index] + maxs[index]) * 0.5 for index in range(3)]
+                radius = max(maxs[index] - mins[index] for index in range(3)) * 0.5
+                return center, max(radius, 0.75)
+
+
+            def set_active_camera(camera_objects):
+                if camera_objects:
+                    bpy.context.scene.camera = camera_objects[0]
+
+
+            def safe_select(obj, selected):
+                select_set = getattr(obj, "select_set", None)
+                if select_set is None:
+                    return
+                try:
+                    select_set(bool(selected))
+                except Exception:
+                    return
+
+
+            def select_edit_roots(robot_root, world_objects):
+                try:
+                    bpy.ops.object.select_all(action="DESELECT")
+                except Exception:
+                    pass
+                selectable = list(world_objects) or ([robot_root] if robot_root is not None else [])
+                for obj in selectable:
+                    safe_select(obj, True)
+                if selectable and getattr(bpy.context, "view_layer", None) is not None:
+                    try:
+                        bpy.context.view_layer.objects.active = selectable[0]
+                    except Exception:
+                        pass
+
+
+            def active_view3d_spaces():
+                screen = getattr(bpy.context, "screen", None)
+                if screen is None:
+                    return []
+                spaces = []
+                for area in getattr(screen, "areas", []):
+                    if getattr(area, "type", "") != "VIEW_3D":
+                        continue
+                    area_spaces = getattr(area, "spaces", [])
+                    active_space = getattr(area_spaces, "active", None)
+                    if active_space is not None:
+                        spaces.append(active_space)
+                        continue
+                    for candidate in area_spaces:
+                        if getattr(candidate, "type", "") == "VIEW_3D":
+                            spaces.append(candidate)
+                return spaces
+
+
+            def configure_view3d_space(space, camera_objects):
+                shading = getattr(space, "shading", None)
+                if shading is not None:
+                    try:
+                        shading.type = "MATERIAL"
+                        shading.background_type = "VIEWPORT"
+                        shading.background_color = (0.12, 0.13, 0.14)
+                    except Exception:
+                        pass
+                for attr, value in (("clip_start", 0.01), ("clip_end", 100.0)):
+                    try:
+                        setattr(space, attr, value)
+                    except Exception:
+                        pass
+                region_3d = getattr(space, "region_3d", None)
+                if region_3d is None:
+                    return
+                center, radius = scene_edit_bounds()
+                try:
+                    region_3d.view_location = center
+                    region_3d.view_distance = max(radius * 2.6, 1.0)
+                    region_3d.view_perspective = "CAMERA" if camera_objects else "PERSP"
+                except Exception:
+                    pass
+
+
+            def initialize_edit_view(robot_root, world_objects, camera_objects):
+                set_active_camera(camera_objects)
+                select_edit_roots(robot_root, world_objects)
+                for space in active_view3d_spaces():
+                    configure_view3d_space(space, camera_objects)
 
 
             def material_for(name, rgba):
@@ -486,12 +600,12 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 clear_scene()
                 configure_scene()
                 add_default_lighting()
-                add_robot_reference(session)
-                for entry in session.get("objects", []):
-                    add_object(entry)
+                robot_root = add_robot_reference(session)
+                world_objects = [add_object(entry) for entry in session.get("objects", [])]
                 camera_entries = session.get("cameras", [])
                 camera_objects = [add_camera(entry) for entry in camera_entries]
                 render_camera_views(session, camera_entries, camera_objects)
+                initialize_edit_view(robot_root, world_objects, camera_objects)
                 add_session_notes(session)
                 blend_path = Path(session["blend_path"])
                 blend_path.parent.mkdir(parents=True, exist_ok=True)

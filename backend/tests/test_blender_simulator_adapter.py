@@ -1118,6 +1118,8 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert "deleted_camera" in export_script
     assert "camera_screenshots=" in open_script
     assert "bpy.ops.render.render" in open_script
+    assert "initialize_edit_view" in open_script
+    assert "view_perspective = \"CAMERA\"" in open_script
 
 
 def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_path: Path) -> None:
@@ -1441,6 +1443,11 @@ def test_blender_workspace_runner_reports_ready_after_edit_session_load(
     output = capsys.readouterr().out
     assert captured["command"] == [
         "/usr/bin/blender",
+        "--window-geometry",
+        "80",
+        "80",
+        "1440",
+        "900",
         "--python-exit-code",
         "1",
         "--python",
@@ -1503,6 +1510,36 @@ def test_blender_workspace_runner_uses_background_flag_for_headless_load(
         "--python",
         str(tmp_path / "open_blender_scene.py"),
     ]
+
+
+def test_blender_workspace_runner_prefers_x11_on_wsl_gui(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return _FakeBlenderProcess(
+            [
+                f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+            ]
+        )
+
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    monkeypatch.setattr(blender_prepare, "_is_wsl_environment", lambda: True)
+    monkeypatch.setattr(blender_prepare.subprocess, "Popen", fake_popen)
+
+    blender_prepare._run_blender_workspace_until_ready(
+        blender_executable="/usr/bin/blender",
+        open_script_path=tmp_path / "open_blender_scene.py",
+        cwd=tmp_path,
+    )
+
+    env = captured["kwargs"]["env"]
+    assert env["GDK_BACKEND"] == "x11"
+    assert env["QT_QPA_PLATFORM"] == "xcb"
+    assert "WAYLAND_DISPLAY" not in env
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
