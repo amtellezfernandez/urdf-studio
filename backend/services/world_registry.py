@@ -30,6 +30,7 @@ from backend.services.world_scene_package_params import (
 from backend.services.world_scene_package_digest import (
     canonical_world_scene_package_json,
     validate_world_snapshot_artifact_digests,
+    world_scene_package_json_payload,
     world_scene_package_digest,
 )
 from backend.services.world_asset_refs import (
@@ -370,7 +371,7 @@ class WorldRegistryService:
             "updated_at": _now_utc().isoformat(),
             "packages": {
                 package_id: {
-                    version: record.model_dump(mode="json")
+                    version: _world_scene_package_version_record_json_payload(record)
                     for version, record in version_map.items()
                 }
                 for package_id, version_map in state.packages.items()
@@ -380,6 +381,14 @@ class WorldRegistryService:
         temp_path = self._path.with_suffix(f"{self._path.suffix}.tmp")
         temp_path.write_text(serialized, encoding="utf-8")
         temp_path.replace(self._path)
+
+
+def _world_scene_package_version_record_json_payload(
+    record: WorldScenePackageVersionRecord,
+) -> dict:
+    payload = record.model_dump(mode="json")
+    payload["manifest"] = world_scene_package_json_payload(record.manifest)
+    return payload
 
 
 world_registry_service = WorldRegistryService(settings.world_registry_path)

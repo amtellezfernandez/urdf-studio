@@ -24,7 +24,11 @@ from backend.services.ilu_urdf import (
     IluUrdfBridgeError,
     bundle_mesh_assets_for_urdf_file,
 )
-from backend.services.world_scene_package_digest import validate_world_snapshot_artifact_digests
+from backend.services.world_scene_package_digest import (
+    normalize_world_snapshot_artifact_digests,
+    validate_world_snapshot_artifact_digests,
+    world_scene_package_json_payload,
+)
 
 
 @dataclass(frozen=True)
@@ -88,6 +92,20 @@ def validate_simulator_workspace_package_request(
         raise SimulatorWorkspacePackageValidationError(
             f"Simulator workspace world package invalid: {'; '.join(errors)}"
         )
+
+
+def normalize_simulator_workspace_package_request(
+    request: SimulatorWorkspacePrepareRequest,
+) -> SimulatorWorkspacePrepareRequest:
+    normalized_world_package = normalize_world_snapshot_artifact_digests(request.world_package)
+    normalized_request = request
+    if normalized_world_package is not request.world_package:
+        normalized_request = request.model_copy(
+            update={"world_package": normalized_world_package},
+            deep=True,
+        )
+    validate_simulator_workspace_package_request(normalized_request)
+    return normalized_request
 
 
 def _write_asset_file(
@@ -256,7 +274,7 @@ def prepare_simulator_workspace_package(
     workspace_root: Path,
     error: Callable[[str], Exception],
 ) -> PreparedSimulatorWorkspace:
-    validate_simulator_workspace_package_request(request)
+    request = normalize_simulator_workspace_package_request(request)
     workspace_dir = _timestamped_workspace_dir(workspace_root)
     source_root = workspace_dir / "source"
     source_root.mkdir(parents=True, exist_ok=True)
@@ -265,7 +283,7 @@ def prepare_simulator_workspace_package(
 
     world_package_path = workspace_dir / "world-package.json"
     world_package_path.write_text(
-        f"{json.dumps(request.world_package.model_dump(mode='json'), indent=2)}\n",
+        f"{json.dumps(world_scene_package_json_payload(request.world_package), indent=2)}\n",
         encoding="utf-8",
     )
 

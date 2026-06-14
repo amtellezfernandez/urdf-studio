@@ -395,7 +395,27 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
     }
 
 
-def test_simulator_workspace_prepare_rejects_mismatched_world_snapshot_digest() -> None:
+def test_simulator_workspace_prepare_delegates_stale_world_snapshot_digest(
+    monkeypatch,
+) -> None:
+    def fake_prepare_simulator_workspace(simulator_id, request):
+        assert declared_world_snapshot_digests(request.world_package) == ("0" * 64,)
+        return SimulatorWorkspacePrepareResponse(
+            simulator_id=simulator_id,
+            started=True,
+            pid=1234,
+            command=["python", "-m", "sim"],
+            log_path="/tmp/sim.log",
+            world_package_path="/tmp/world.json",
+            robot_urdf_path="/tmp/robot.urdf",
+        )
+
+    monkeypatch.setattr(
+        simulator_runtime_api,
+        "prepare_simulator_workspace",
+        fake_prepare_simulator_workspace,
+    )
+
     with _patch_security_settings():
         response = asyncio.run(
             _request_json(
@@ -406,11 +426,32 @@ def test_simulator_workspace_prepare_rejects_mismatched_world_snapshot_digest() 
             )
         )
 
-    assert response.status_code == 422
-    assert "world_snapshot" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["simulator_id"] == "genesis"
 
 
-def test_blender_workspace_prepare_validates_package_before_runtime_detection() -> None:
+def test_blender_workspace_prepare_delegates_stale_world_snapshot_digest(
+    monkeypatch,
+) -> None:
+    def fake_prepare_simulator_workspace(simulator_id, request):
+        assert simulator_id == "blender"
+        assert declared_world_snapshot_digests(request.world_package) == ("0" * 64,)
+        return SimulatorWorkspacePrepareResponse(
+            simulator_id=simulator_id,
+            started=True,
+            pid=1234,
+            command=["python", "-m", "sim"],
+            log_path="/tmp/blender.log",
+            world_package_path="/tmp/world.json",
+            robot_urdf_path="/tmp/robot.urdf",
+        )
+
+    monkeypatch.setattr(
+        simulator_runtime_api,
+        "prepare_simulator_workspace",
+        fake_prepare_simulator_workspace,
+    )
+
     with _patch_security_settings():
         response = asyncio.run(
             _request_json(
@@ -421,8 +462,8 @@ def test_blender_workspace_prepare_validates_package_before_runtime_detection() 
             )
         )
 
-    assert response.status_code == 422
-    assert "world_snapshot" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["simulator_id"] == "blender"
 
 
 def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> None:

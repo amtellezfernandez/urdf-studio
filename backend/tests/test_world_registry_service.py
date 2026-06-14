@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 
@@ -75,6 +76,22 @@ def test_publish_list_and_get_version_roundtrip() -> None:
         assert version.package_id == "demo-world"
         assert version.version == "1.0.0"
         assert version.manifest.world_snapshot.joint_positions["joint_1"] == TEST_WORLD_JOINT_VALUE_RAD
+
+
+def test_publish_writes_schema_compatible_manifest_payload() -> None:
+    with TemporaryDirectory() as temp_dir:
+        registry_path = f"{temp_dir}/world-registry.json"
+        service = WorldRegistryService(registry_path)
+        manifest = build_manifest("demo-world", "1.0.0")
+        manifest.description = None
+        manifest.runtime_targets = [WorldRuntimeTarget(name="blender", mode="python")]
+
+        service.publish(manifest)
+        payload = json.loads(open(registry_path, encoding="utf-8").read())
+
+        stored_manifest = payload["packages"]["demo-world"]["1.0.0"]["manifest"]
+        assert "description" not in stored_manifest
+        assert stored_manifest["runtime_targets"] == [{"name": "blender", "mode": "python"}]
 
 
 def test_duplicate_version_is_rejected() -> None:

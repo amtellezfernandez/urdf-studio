@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from backend.models.world_scene_package import (
     WorldArtifactRef,
     WorldInterfaceSpec,
+    WorldRuntimeTarget,
     WorldScenePackageManifest,
     WorldSnapshot,
 )
@@ -13,6 +14,7 @@ from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
     declared_world_snapshot_digests,
     normalize_world_snapshot_artifact_digests,
+    world_scene_package_json_payload,
 )
 
 
@@ -105,6 +107,41 @@ def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
         computed_world_snapshot_digest(normalized),
     )
     assert len(normalized.artifacts) == 1
+
+
+def test_world_scene_package_json_payload_omits_schema_invalid_null_optionals() -> None:
+    manifest = WorldScenePackageManifest(
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[WorldRuntimeTarget(name="blender", mode="python")],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[],
+        world_snapshot=WorldSnapshot(
+            urdf_xml="<robot name='demo'/>",
+            joint_positions={},
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+    )
+
+    payload = world_scene_package_json_payload(manifest)
+
+    assert "description" not in payload
+    assert payload["runtime_targets"] == [{"name": "blender", "mode": "python"}]
+    assert payload["security"] == {
+        "signature_ref": None,
+        "attestation_refs": [],
+        "sbom_ref": None,
+    }
 
 
 def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract() -> None:

@@ -87,8 +87,18 @@ def _canonical_json_dump(payload: Any) -> str:
 
 
 def canonical_world_scene_package_json(manifest: WorldScenePackageManifest) -> str:
-    payload = manifest.model_dump(mode="json")
+    payload = world_scene_package_json_payload(manifest)
     return _canonical_json_dump(payload)
+
+
+def world_scene_package_json_payload(manifest: WorldScenePackageManifest) -> dict[str, Any]:
+    payload = manifest.model_dump(mode="json")
+    if payload.get("description") is None:
+        payload.pop("description", None)
+    for runtime_target in payload.get("runtime_targets", []):
+        if isinstance(runtime_target, dict) and runtime_target.get("min_version") is None:
+            runtime_target.pop("min_version", None)
+    return payload
 
 
 def world_scene_package_digest(manifest: WorldScenePackageManifest) -> str:
