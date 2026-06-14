@@ -110,6 +110,75 @@ def test_world_snapshot_accepts_valid_world_object_contract() -> None:
     assert manifest.world_snapshot.objects[0]["id"] == "crate"
 
 
+def test_world_interface_preserves_extension_metadata() -> None:
+    payload = _manifest_payload()
+    payload["interface"]["planning"] = {
+        "representation_space": "latent",
+        "planning_horizon_steps": 128,
+    }
+
+    manifest = WorldScenePackageManifest.model_validate(payload)
+
+    assert manifest.model_dump(mode="json")["interface"]["planning"] == {
+        "representation_space": "latent",
+        "planning_horizon_steps": 128,
+    }
+
+
+def test_world_scene_package_model_rejects_unsupported_schema_version() -> None:
+    payload = _manifest_payload()
+    payload["schema_version"] = "2.0.0"
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert exc_info.value.errors()[0]["loc"] == ("schema_version",)
+    assert exc_info.value.errors()[0]["type"] == "literal_error"
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_path"),
+    [
+        (lambda payload: payload.update({"debug": True}), "debug"),
+        (
+            lambda payload: payload["runtime_targets"].append(
+                {"name": "worldd", "mode": "native", "debug": True}
+            ),
+            "runtime_targets.0.debug",
+        ),
+        (
+            lambda payload: payload["artifacts"].append(
+                {
+                    "kind": "world_snapshot",
+                    "digest_sha256": "0" * 64,
+                    "uri": "inline://snapshot",
+                    "debug": True,
+                }
+            ),
+            "artifacts.0.debug",
+        ),
+        (lambda payload: payload["world_snapshot"].update({"debug": True}), "world_snapshot.debug"),
+        (lambda payload: payload["security"].update({"debug": True}), "security.debug"),
+    ],
+)
+def test_world_scene_package_model_rejects_schema_level_extra_fields(
+    mutator,
+    expected_path: str,
+) -> None:
+    payload = _manifest_payload()
+    mutator(payload)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    errors = exc_info.value.errors()
+    assert any(
+        ".".join(str(part) for part in error["loc"]) == expected_path
+        and error["type"] == "extra_forbidden"
+        for error in errors
+    )
+
+
 @pytest.mark.parametrize(
     ("mutator", "expected_message"),
     [

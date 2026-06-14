@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
 
@@ -28,12 +28,16 @@ from backend.services.world_scene_package_params import (
 
 
 class WorldRuntimeTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(..., min_length=1)
     mode: Literal["native", "python", "container"]
     min_version: Optional[str] = None
 
 
 class WorldInterfaceSpec(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     observation_modalities: List[str] = Field(
         default_factory=list, max_length=MAX_INTERFACE_MODALITIES
     )
@@ -43,6 +47,8 @@ class WorldInterfaceSpec(BaseModel):
 
 
 class WorldArtifactRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     kind: str = Field(..., min_length=1)
     digest_sha256: str = Field(
         ...,
@@ -54,12 +60,16 @@ class WorldArtifactRef(BaseModel):
 
 
 class WorldSecuritySpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     signature_ref: Optional[str] = None
     attestation_refs: List[str] = Field(default_factory=list)
     sbom_ref: Optional[str] = None
 
 
 class WorldSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     urdf_xml: str = Field(..., min_length=1, max_length=MAX_WORLD_SNAPSHOT_URDF_CHARS)
     joint_positions: Dict[str, float] = Field(
         default_factory=dict, max_length=MAX_JOINTS_PER_WORLD
@@ -414,7 +424,11 @@ def _raise_for_extra_fields(value: Dict[str, Any], allowed_fields: set[str], pat
 
 
 class WorldScenePackageManifest(BaseModel):
-    schema_version: str = Field(default=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1)
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1] = (
+        WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
+    )
     package_id: str = Field(..., min_length=1)
     version: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1)
