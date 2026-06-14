@@ -493,6 +493,18 @@ export const coerceWorldSceneSnapshot = (
   if (!isRecord(value)) return null;
   if (!isString(value.urdf_xml) || !isRecord(value.joint_positions)) return null;
   if (!Array.isArray(value.cameras) || !Array.isArray(value.objects)) return null;
+  if (!isIntegerNumber(value.scenario_time_ms) || !isIntegerNumber(value.scenario_duration_ms)) {
+    return null;
+  }
+  return value as WorldScenePackageManifest["world_snapshot"];
+};
+
+const coerceWorldSceneSnapshotCandidate = (
+  value: unknown
+): WorldScenePackageManifest["world_snapshot"] | null => {
+  if (!isRecord(value)) return null;
+  if (!isString(value.urdf_xml) || !isRecord(value.joint_positions)) return null;
+  if (!Array.isArray(value.cameras) || !Array.isArray(value.objects)) return null;
   if (!isNumber(value.scenario_time_ms) || !isNumber(value.scenario_duration_ms)) return null;
   return value as WorldScenePackageManifest["world_snapshot"];
 };
@@ -505,12 +517,26 @@ export const isWorldSceneManifest = (
   return coerceWorldSceneSnapshot(payload.world_snapshot) !== null;
 };
 
+const readWorldSceneManifestCandidate = (
+  payload: unknown
+): WorldScenePackageManifest | null => {
+  if (!isRecord(payload)) return null;
+  if (!isString(payload.package_id) || !isString(payload.version)) return null;
+  const snapshot = coerceWorldSceneSnapshotCandidate(payload.world_snapshot);
+  if (!snapshot) return null;
+  return {
+    ...payload,
+    world_snapshot: snapshot,
+  } as WorldScenePackageManifest;
+};
+
 export const readWorldSceneManifestFromUnknown = (
   payload: unknown
 ): WorldScenePackageManifest | null => {
-  if (isWorldSceneManifest(payload)) return payload;
-  if (isRecord(payload) && isWorldSceneManifest(payload.manifest)) {
-    return payload.manifest;
+  const manifest = readWorldSceneManifestCandidate(payload);
+  if (manifest) return manifest;
+  if (isRecord(payload)) {
+    return readWorldSceneManifestCandidate(payload.manifest);
   }
   return null;
 };
@@ -584,28 +610,32 @@ const toParsedWorldSceneLayerSnapshot = (
 export const readWorldSceneLayerFromUnknown = (
   payload: unknown
 ): ParsedWorldSceneLayerSnapshot | null => {
-  if (isWorldSceneManifest(payload)) {
+  const manifest = readWorldSceneManifestCandidate(payload);
+  if (manifest) {
     return {
-      name: payload.title,
-      objects: payload.world_snapshot.objects,
-      scenario_time_ms: payload.world_snapshot.scenario_time_ms,
-      scenario_duration_ms: payload.world_snapshot.scenario_duration_ms,
-      environment: isRecord(payload.provenance?.environment)
-        ? (payload.provenance.environment as Record<string, unknown>)
+      name: manifest.title,
+      objects: manifest.world_snapshot.objects,
+      scenario_time_ms: manifest.world_snapshot.scenario_time_ms,
+      scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
+      environment: isRecord(manifest.provenance?.environment)
+        ? (manifest.provenance.environment as Record<string, unknown>)
         : null,
     };
   }
 
-  if (isRecord(payload) && isWorldSceneManifest(payload.manifest)) {
-    return {
-      name: payload.manifest.title,
-      objects: payload.manifest.world_snapshot.objects,
-      scenario_time_ms: payload.manifest.world_snapshot.scenario_time_ms,
-      scenario_duration_ms: payload.manifest.world_snapshot.scenario_duration_ms,
-      environment: isRecord(payload.manifest.provenance?.environment)
-        ? (payload.manifest.provenance.environment as Record<string, unknown>)
-        : null,
-    };
+  if (isRecord(payload)) {
+    const nestedManifest = readWorldSceneManifestCandidate(payload.manifest);
+    if (nestedManifest) {
+      return {
+        name: nestedManifest.title,
+        objects: nestedManifest.world_snapshot.objects,
+        scenario_time_ms: nestedManifest.world_snapshot.scenario_time_ms,
+        scenario_duration_ms: nestedManifest.world_snapshot.scenario_duration_ms,
+        environment: isRecord(nestedManifest.provenance?.environment)
+          ? (nestedManifest.provenance.environment as Record<string, unknown>)
+          : null,
+      };
+    }
   }
 
   if (isRecord(payload) && isRecord(payload.world_snapshot)) {

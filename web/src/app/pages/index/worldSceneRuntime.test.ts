@@ -127,6 +127,19 @@ describe("worldSceneRuntime world package import", () => {
       "Invalid world package: Non-static world layouts are not supported yet. scenario_time_ms and scenario_duration_ms must both be 0."
     );
   });
+
+  it("rejects fractional world package timing with validation detail", async () => {
+    await expect(
+      parseWorldSceneManifestText(
+        JSON.stringify(
+          createManifestPayload({
+            scenario_time_ms: 0.5,
+            scenario_duration_ms: 1.5,
+          })
+        )
+      )
+    ).rejects.toThrow("world_snapshot.scenario_time_ms must be an integer");
+  });
 });
 
 describe("worldSceneRuntime rollout config", () => {

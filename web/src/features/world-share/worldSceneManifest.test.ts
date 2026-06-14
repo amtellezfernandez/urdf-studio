@@ -6,6 +6,7 @@ import {
 
 import {
   createStaticWorldSceneLayerSnapshot,
+  isWorldSceneManifest,
   parseStaticWorldSceneLayerSnapshot,
   readWorldSceneLayerFromUnknown,
   validateLocalWorldSceneManifest,
@@ -108,15 +109,15 @@ describe("worldSceneManifest static scene validation", () => {
   });
 
   it("rejects fractional scene package timing", () => {
-    const errors = validateLocalWorldSceneManifest(
-      createManifest({
-        scenario_time_ms: 0.5,
-        scenario_duration_ms: 1.5,
-      })
-    );
+    const manifest = createManifest({
+      scenario_time_ms: 0.5,
+      scenario_duration_ms: 1.5,
+    });
+    const errors = validateLocalWorldSceneManifest(manifest);
 
     expect(errors).toContain("world_snapshot.scenario_time_ms must be an integer");
     expect(errors).toContain("world_snapshot.scenario_duration_ms must be an integer");
+    expect(isWorldSceneManifest(manifest)).toBe(false);
   });
 
   it("rejects malformed package world objects", () => {
