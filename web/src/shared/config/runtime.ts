@@ -57,11 +57,11 @@ const FALLBACK_IK: IkRuntimeConfig = {
 };
 
 const FALLBACKS: ResolvedRuntimeConfig = {
-  apiBaseUrl: "http://localhost:8000",
+  apiBaseUrl: "http://127.0.0.1:8000",
   urdfOpsWebUrl: "http://127.0.0.1:5174",
-  ikdBaseUrl: "http://localhost:8088",
-  ikdWsUrl: "ws://localhost:8088/telemetry",
-  ikdApproachWsUrl: "ws://localhost:8088/approach/ws",
+  ikdBaseUrl: "http://127.0.0.1:8088",
+  ikdWsUrl: "ws://127.0.0.1:8088/telemetry",
+  ikdApproachWsUrl: "ws://127.0.0.1:8088/approach/ws",
   teleopHttpBaseUrl: "http://127.0.0.1:8091",
   ikd: {
     enabled: false,

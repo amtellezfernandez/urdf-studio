@@ -449,6 +449,11 @@ test('runtime env overrides propagate effective hosts and ports', () => {
     URDF_TELEOP_HTTP_PORT: '8091',
     URDF_TELEOP_WEBTRANSPORT_PORT: '8092',
     URDF_TELEOP_NATIVE_QUIC_PORT: '8093',
+    VITE_API_BASE_URL: 'http://127.0.0.1:8000',
+    VITE_IKD_BASE_URL: 'http://127.0.0.1:8088',
+    VITE_IKD_WS_URL: 'ws://127.0.0.1:8088/telemetry',
+    VITE_IKD_APPROACH_WS_URL: 'ws://127.0.0.1:8088/approach/ws',
+    VITE_TELEOP_HTTP_BASE_URL: 'http://127.0.0.1:8091',
   });
 });
 

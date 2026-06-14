@@ -598,6 +598,8 @@ export function formatStartupSecurityViolationsMessage(violations) {
 }
 
 export function applyRuntimeEnvOverrides(env, runtimeConfig) {
+  const runtimeUrls = buildRuntimeUrls(runtimeConfig);
+  const ikdApproachWsUrl = `ws://${formatHostForUrl(runtimeConfig.ikd.host)}:${runtimeConfig.ikd.port}/approach/ws`;
   return {
     ...env,
     URDF_WEB_HOST: runtimeConfig.web.host,
@@ -612,6 +614,11 @@ export function applyRuntimeEnvOverrides(env, runtimeConfig) {
     URDF_TELEOP_HTTP_PORT: String(runtimeConfig.teleop.httpPort),
     URDF_TELEOP_WEBTRANSPORT_PORT: String(runtimeConfig.teleop.webtransportPort),
     URDF_TELEOP_NATIVE_QUIC_PORT: String(runtimeConfig.teleop.nativeQuicPort),
+    VITE_API_BASE_URL: runtimeUrls.apiBaseUrl,
+    VITE_IKD_BASE_URL: runtimeUrls.ikdBaseUrl,
+    VITE_IKD_WS_URL: runtimeUrls.ikdWsUrl,
+    VITE_IKD_APPROACH_WS_URL: ikdApproachWsUrl,
+    VITE_TELEOP_HTTP_BASE_URL: runtimeUrls.teleopHttpBaseUrl,
   };
 }
 
