@@ -18,7 +18,7 @@
     "scalar-constants:report": "node tools/scripts/topLevelScalarConstantAudit.js --report",
     "scalar-constants:test": "node --test tools/scripts/topLevelScalarConstantAudit.test.mjs",
     "smoke": "npm run lint && npm run typecheck && npm run setup:check && npm run scalar-constants:test && npm run scalar-constants:check && node tools/scripts/ilu-cli-smoke.js && npm run demo:mode:check",
-    "release:check": "npm run smoke && npm run dead-code -- --report --no-fail && npm run architecture-check && npm run test:backend && npm run simulator:workspace:check && npm run simulator:blender:check && npm run test && npm run build",
+    "release:check": "npm run smoke && npm run policy-check && npm run dead-code -- --report --no-fail && npm run architecture-check && npm run test:backend && npm run simulator:workspace:check && npm run simulator:blender:check && npm run test && npm run build",
     "postinstall": "node scripts/twin.js",
     "preview": "vite preview --config config/vite.config.ts",
     "setup": "node tools/scripts/setup.js",
