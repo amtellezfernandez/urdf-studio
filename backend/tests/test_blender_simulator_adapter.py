@@ -1359,22 +1359,38 @@ def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
 def test_blender_runtime_resolves_configured_app_bundle(tmp_path: Path) -> None:
     app_binary = tmp_path / "Blender.app" / "Contents" / "MacOS" / "Blender"
     app_binary.parent.mkdir(parents=True)
-    app_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    app_binary.write_text(
+        "#!/bin/sh\nprintf 'blender python runtime ok\\n'\n",
+        encoding="utf-8",
+    )
     app_binary.chmod(0o755)
 
     assert resolve_blender_executable(str(tmp_path / "Blender.app")) == str(app_binary)
 
 
-@pytest.mark.parametrize("executable_name", ("blender", "blender.exe"))
 def test_blender_runtime_resolves_configured_install_directory(
     tmp_path: Path,
-    executable_name: str,
 ) -> None:
+    executable_name = "blender.exe" if sys.platform == "win32" else "blender"
     executable_path = tmp_path / executable_name
-    executable_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable_path.write_text(
+        "#!/bin/sh\nprintf 'blender python runtime ok\\n'\n",
+        encoding="utf-8",
+    )
     executable_path.chmod(0o755)
 
     assert resolve_blender_executable(str(tmp_path)) == str(executable_path)
+
+
+def test_blender_runtime_rejects_windows_executable_on_posix(tmp_path: Path) -> None:
+    if sys.platform == "win32":
+        pytest.skip("Windows hosts can use blender.exe directly.")
+    executable_path = tmp_path / "blender.exe"
+    executable_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable_path.chmod(0o755)
+
+    assert resolve_blender_executable(str(executable_path)) is None
+    assert resolve_blender_executable(str(tmp_path)) is None
 
 
 @pytest.mark.parametrize(

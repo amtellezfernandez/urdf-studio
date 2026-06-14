@@ -50,7 +50,7 @@ export function buildSetupRoadmapSections() {
         'Unified Python backend/training runtime',
         'LeRobot training runtime',
         'OpenArm hardware runtime',
-        'Simulator runtimes: Genesis, PyBullet, and MJLab',
+        'Simulator runtimes: Genesis, PyBullet, MJLab, and Blender',
         'Hugging Face and GitHub access',
       ],
     },
@@ -86,6 +86,7 @@ export function buildSetupSummarySections({
   genesisRuntimeResult = null,
   mjlabRuntimeResult = null,
   pybulletRuntimeResult = null,
+  blenderRuntimeResult = null,
 } = {}) {
   const iluLines = [`Local i-love-urdf CLI: ${LOCAL_ILU_COMMAND}`];
 
@@ -116,6 +117,13 @@ export function buildSetupSummarySections({
     installedLine: 'PyBullet workspace adapter runtime is available.',
     unavailableLine: 'PyBullet workspace adapter runtime is unavailable.',
     fallbackLine: 'PyBullet installs into the unified Python runtime for direct URDF world viewing.',
+  });
+  const blenderLines = buildSimulatorRuntimeLines({
+    result: blenderRuntimeResult,
+    skippedLine: 'Blender install was skipped for this run.',
+    installedLine: 'Blender workspace runtime is available.',
+    unavailableLine: 'Blender workspace runtime is unavailable.',
+    fallbackLine: 'Blender installs as a managed local runtime when supported.',
   });
 
   return [
@@ -152,6 +160,10 @@ export function buildSetupSummarySections({
     {
       heading: 'MJLab',
       lines: mjlabLines,
+    },
+    {
+      heading: 'Blender',
+      lines: blenderLines,
     },
   ];
 }

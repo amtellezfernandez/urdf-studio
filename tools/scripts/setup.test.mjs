@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   assertIluRuntimeContract,
+  resolveBlenderExecutableForSetup,
   resolvePythonForLeRobotVenv,
   runSetupSequence,
 } from './setup.js';
@@ -78,6 +79,23 @@ test('setup rejects an invalid explicit Python override', () => {
   }
 });
 
+test('setup ignores Windows Blender executables on non-Windows hosts', () => {
+  if (process.platform === 'win32') return;
+  const originalBlenderPath = process.env.URDF_STUDIO_BLENDER_PATH;
+  process.env.URDF_STUDIO_BLENDER_PATH =
+    'C:\\Program Files\\Blender Foundation\\Blender 4.5\\blender.exe';
+
+  try {
+    assert.equal(resolveBlenderExecutableForSetup(), null);
+  } finally {
+    if (originalBlenderPath === undefined) {
+      delete process.env.URDF_STUDIO_BLENDER_PATH;
+    } else {
+      process.env.URDF_STUDIO_BLENDER_PATH = originalBlenderPath;
+    }
+  }
+});
+
 test('setup stops before backend dependency installation when unified Python setup fails', async () => {
   const calls = [];
   const record = (name, result) => async () => {
@@ -98,6 +116,7 @@ test('setup stops before backend dependency installation when unified Python set
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
+      installBlenderRuntime: unreachable('installBlenderRuntime'),
       installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),
@@ -138,6 +157,7 @@ test('setup stops before workspace setup when i-love-urdf runtime check fails', 
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
+      installBlenderRuntime: unreachable('installBlenderRuntime'),
       installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),
@@ -181,6 +201,12 @@ test('setup continues when optional simulator adapters are unavailable', async (
       skipped: false,
       fatal: false,
     }),
+    installBlenderRuntime: record('installBlenderRuntime', {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    }),
     installOfficialLeRobotToolchain: record('installOfficialLeRobotToolchain', true),
     installOpenArmHardwareRuntime: record('installOpenArmHardwareRuntime', true),
     installMjlabRuntime: record('installMjlabRuntime', {
@@ -202,6 +228,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
   assert.equal(result.genesisRuntimeResult.ok, false);
   assert.equal(result.pybulletRuntimeResult.ok, false);
   assert.equal(result.mjlabRuntimeResult.ok, false);
+  assert.equal(result.blenderRuntimeResult.ok, false);
   assert.deepEqual(calls, [
     'installDependencies',
     'verifyIluRuntimeContract',
@@ -210,6 +237,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
     'installBackendDeps',
     'installGenesisRuntime',
     'installPybulletRuntime',
+    'installBlenderRuntime',
     'installOfficialLeRobotToolchain',
     'installOpenArmHardwareRuntime',
     'installMjlabRuntime',
@@ -246,6 +274,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
         fatal: true,
       }),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
+      installBlenderRuntime: unreachable('installBlenderRuntime'),
       installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),

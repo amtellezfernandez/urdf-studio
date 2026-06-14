@@ -17,6 +17,10 @@ import {
   BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT,
   BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES,
   BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT,
+  BLENDER_FORCE_INSTALL_ENV,
+  BLENDER_PATH_ENV,
+  BLENDER_SETUP,
+  BLENDER_SKIP_AUTO_INSTALL_ENV,
   COLLISION_STACK_SETUP,
   GENESIS_FORCE_INSTALL_ENV,
   GENESIS_PYTHON_DEPENDENCIES,
@@ -134,6 +138,19 @@ test('Genesis workspace adapter runtime is pinned separately from portable backe
   assert.doesNotMatch(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"imgui_bundle"/);
   assert.match(GENESIS_VERIFY_IMPORT_SCRIPT, /import genesis/);
   assert.match(GENESIS_VERIFY_IMPORT_SCRIPT, /import imgui_bundle/);
+});
+
+test('Blender setup pins a managed LTS runtime for Linux WSL release checks', () => {
+  assert.equal(BLENDER_SKIP_AUTO_INSTALL_ENV, 'URDF_STUDIO_SKIP_BLENDER_AUTO_INSTALL');
+  assert.equal(BLENDER_FORCE_INSTALL_ENV, 'URDF_STUDIO_INSTALL_BLENDER');
+  assert.equal(BLENDER_PATH_ENV, 'URDF_STUDIO_BLENDER_PATH');
+  assert.equal(BLENDER_SETUP.portableVersion, '4.5.10');
+  assert.equal(BLENDER_SETUP.portablePlatform, 'linux-x64');
+  assert.match(
+    BLENDER_SETUP.portableDownloadUrl,
+    /download\.blender\.org\/release\/Blender4\.5/
+  );
+  assert.match(BLENDER_SETUP.portableArchive, /blender-4\.5\.10-linux-x64\.tar\.xz/);
 });
 
 test('setup npm installs suppress funding and audit noise', () => {

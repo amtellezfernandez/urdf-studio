@@ -39,7 +39,7 @@ Setup installs the app dependencies and local runtime used by URDF Studio. The f
 
 Setup also prepares supported workspace transfer targets when the platform packages are available. The base app remains usable if a local target runtime cannot be installed on the current laptop.
 
-Blender layout round-trip sessions use the local Blender executable. Studio auto-detects common Linux, macOS, Windows, and WSL installs; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory only for custom locations.
+Blender layout round-trip sessions use a local Blender runtime. On Linux and WSL x64, setup installs a managed Blender 4.5 LTS runtime under `.cache/blender-runtime` when Blender is not already on PATH. On macOS or Windows, Studio uses the native Blender app/executable; set `URDF_STUDIO_BLENDER_PATH` to a Blender executable, `.app` bundle, or install directory only for custom locations.
 
 Optional setup commands:
 
@@ -133,7 +133,7 @@ npm run simulator:workspace:check -- blender --artifact-only
 Validate the local Blender runtime strictly:
 
 ```bash
-npm run simulator:workspace:check -- blender --require-all
+npm run simulator:blender:check
 ```
 
 Validate a specific WSP/URDF package with the same simulator gates:

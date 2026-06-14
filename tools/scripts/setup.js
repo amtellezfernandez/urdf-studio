@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 
-import { appendFileSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join, resolve } from 'path';
 import { execFileSync, execSync, spawnSync } from 'child_process';
@@ -32,6 +42,10 @@ import {
   BACKEND_NATIVE_SIM_FORCE_ENV,
   BACKEND_NATIVE_SIM_SKIP_ENV,
   BACKEND_PYTHON_SUPERSEDED_DEPENDENCIES,
+  BLENDER_FORCE_INSTALL_ENV,
+  BLENDER_PATH_ENV,
+  BLENDER_SETUP,
+  BLENDER_SKIP_AUTO_INSTALL_ENV,
   GENESIS_FORCE_INSTALL_ENV,
   GENESIS_PYTHON_DEPENDENCIES,
   GENESIS_SKIP_AUTO_INSTALL_ENV,
@@ -614,6 +628,7 @@ function printSetupSummary({
   genesisRuntimeResult,
   mjlabRuntimeResult,
   pybulletRuntimeResult,
+  blenderRuntimeResult,
 } = {}) {
   const sections = buildSetupSummarySections({
     globalIluAttempted: Boolean(globalIluResult?.attempted),
@@ -621,6 +636,7 @@ function printSetupSummary({
     genesisRuntimeResult,
     mjlabRuntimeResult,
     pybulletRuntimeResult,
+    blenderRuntimeResult,
   });
   log('');
   logArrow('Setup summary');
@@ -1086,6 +1102,205 @@ function getPybulletRuntimeSkipMessage() {
   return `PyBullet workspace adapter runtime skipped. Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`;
 }
 
+function getManagedBlenderRuntimeRoot() {
+  return join(rootDir, '.cache', 'blender-runtime');
+}
+
+function getManagedBlenderExecutablePath() {
+  return join(
+    getManagedBlenderRuntimeRoot(),
+    `blender-${BLENDER_SETUP.portableVersion}-${BLENDER_SETUP.portablePlatform}`,
+    process.platform === 'win32' ? 'blender.exe' : 'blender'
+  );
+}
+
+function isExecutableFile(path) {
+  try {
+    const stats = statSync(path);
+    if (!stats.isFile()) return false;
+    if (stats.size <= 0) return false;
+    return process.platform === 'win32' || (stats.mode & 0o111) !== 0;
+  } catch {
+    return false;
+  }
+}
+
+function findExecutableInPath(name) {
+  const pathDelimiter = process.platform === 'win32' ? ';' : ':';
+  for (const directory of (process.env.PATH || '').split(pathDelimiter)) {
+    if (!directory) continue;
+    const candidate = join(directory, name);
+    if (isExecutableFile(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveBlenderCandidate(candidate) {
+  const trimmed = typeof candidate === 'string' ? candidate.trim() : '';
+  if (!trimmed) return null;
+  if (process.platform !== 'win32' && trimmed.toLowerCase().endsWith('.exe')) {
+    return null;
+  }
+  if (trimmed.endsWith('.app')) {
+    const appBinary = join(trimmed, 'Contents', 'MacOS', 'Blender');
+    return isExecutableFile(appBinary) ? appBinary : null;
+  }
+  try {
+    const stats = statSync(trimmed);
+    if (stats.isDirectory()) {
+      const executableName = process.platform === 'win32' ? 'blender.exe' : 'blender';
+      const executablePath = join(trimmed, executableName);
+      return isExecutableFile(executablePath) ? executablePath : null;
+    }
+  } catch {
+    // Try direct file and PATH resolution below.
+  }
+  if (isExecutableFile(trimmed)) return trimmed;
+  return findExecutableInPath(trimmed);
+}
+
+function verifyBlenderExecutable(executablePath) {
+  const result = spawnSync(
+    executablePath,
+    ['--background', '--python-expr', 'import bpy; print("blender python runtime ok")'],
+    {
+      cwd: rootDir,
+      encoding: 'utf-8',
+      timeout: 15000,
+    }
+  );
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+  return result.status === 0 && output.includes('blender python runtime ok');
+}
+
+function resolveBlenderExecutableForSetup() {
+  const executableName = process.platform === 'win32' ? 'blender.exe' : 'blender';
+  const configuredPath = typeof process.env[BLENDER_PATH_ENV] === 'string'
+    ? process.env[BLENDER_PATH_ENV].trim()
+    : '';
+  if (configuredPath) {
+    const resolved = resolveBlenderCandidate(configuredPath);
+    return resolved && verifyBlenderExecutable(resolved) ? resolved : null;
+  }
+  const candidates = [
+    getManagedBlenderExecutablePath(),
+    executableName,
+    process.platform === 'darwin' ? '/Applications/Blender.app' : '',
+  ];
+  for (const candidate of candidates) {
+    const resolved = resolveBlenderCandidate(candidate);
+    if (resolved && verifyBlenderExecutable(resolved)) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function shouldInstallBlenderRuntime() {
+  if (isTruthyEnvValue(process.env[BLENDER_SKIP_AUTO_INSTALL_ENV])) {
+    return false;
+  }
+  if (isTruthyEnvValue(process.env[BLENDER_FORCE_INSTALL_ENV])) {
+    return true;
+  }
+  return true;
+}
+
+function getBlenderRuntimeSkipMessage() {
+  if (isTruthyEnvValue(process.env[BLENDER_SKIP_AUTO_INSTALL_ENV])) {
+    return `Blender workspace runtime skipped by ${BLENDER_SKIP_AUTO_INSTALL_ENV}.`;
+  }
+  return `Blender workspace runtime skipped. Set ${BLENDER_FORCE_INSTALL_ENV}=1 to force install.`;
+}
+
+function installManagedLinuxBlenderRuntime() {
+  if (process.platform !== 'linux' || process.arch !== 'x64') {
+    throw new Error('Managed Blender install is currently available for Linux x64 only.');
+  }
+
+  const runtimeRoot = getManagedBlenderRuntimeRoot();
+  const executablePath = getManagedBlenderExecutablePath();
+  const runtimeDir = dirname(executablePath);
+  if (verifyBlenderExecutable(executablePath)) {
+    return executablePath;
+  }
+
+  const downloadsDir = join(runtimeRoot, 'downloads');
+  const archivePath = join(downloadsDir, BLENDER_SETUP.portableArchive);
+  const archiveTempPath = `${archivePath}.tmp`;
+  mkdirSync(downloadsDir, { recursive: true });
+  if (!existsSync(archivePath)) {
+    rmSync(archiveTempPath, { force: true });
+    logInfo(`Downloading Blender ${BLENDER_SETUP.portableVersion} LTS for Linux x64...`);
+    execFileSync(
+      'curl',
+      [
+        '-fL',
+        '--retry',
+        '3',
+        '--connect-timeout',
+        '20',
+        '--output',
+        archiveTempPath,
+        BLENDER_SETUP.portableDownloadUrl,
+      ],
+      {
+        cwd: rootDir,
+        stdio: 'inherit',
+      }
+    );
+    renameSync(archiveTempPath, archivePath);
+  }
+
+  rmSync(runtimeDir, { recursive: true, force: true });
+  logInfo(`Extracting Blender into ${runtimeRoot}...`);
+  execFileSync('tar', ['-xJf', archivePath, '-C', runtimeRoot], {
+    cwd: rootDir,
+    stdio: 'inherit',
+  });
+  chmodSync(executablePath, 0o755);
+  if (!verifyBlenderExecutable(executablePath)) {
+    throw new Error('Managed Blender executable failed its version check after extraction.');
+  }
+  return executablePath;
+}
+
+async function installBlenderRuntime() {
+  log('');
+  logArrow('🎨 Installing Blender workspace runtime');
+  log('');
+
+  const existingExecutable = resolveBlenderExecutableForSetup();
+  if (existingExecutable) {
+    logSuccess(`Blender workspace runtime ready: ${existingExecutable}`);
+    return { ok: true, installed: true, skipped: false, executable: existingExecutable };
+  }
+
+  if (!shouldInstallBlenderRuntime()) {
+    logInfo(getBlenderRuntimeSkipMessage());
+    return { ok: true, installed: false, skipped: true };
+  }
+
+  try {
+    const executable = installManagedLinuxBlenderRuntime();
+    logSuccess(`Blender workspace runtime installed: ${executable}`);
+    return { ok: true, installed: true, skipped: false, executable };
+  } catch (error) {
+    log('✗ Failed to install Blender workspace runtime', colors.yellow);
+    logInfo(error?.message || String(error));
+    logInfo(`Set ${BLENDER_PATH_ENV}=/path/to/blender if Blender is already installed.`);
+    if (!isTruthyEnvValue(process.env[BLENDER_FORCE_INSTALL_ENV])) {
+      logInfo(`Continuing without Blender. Set ${BLENDER_FORCE_INSTALL_ENV}=1 to require it during setup.`);
+    }
+    return buildOptionalRuntimeInstallFailure({
+      forceInstallEnv: BLENDER_FORCE_INSTALL_ENV,
+      error,
+    });
+  }
+}
+
 function shouldInstallOptionalPythonRuntime({
   skipAutoInstallEnv,
   forceInstallEnv,
@@ -1520,6 +1735,7 @@ async function runSetupSequence(overrides = {}) {
     installBackendDeps,
     installGenesisRuntime,
     installPybulletRuntime,
+    installBlenderRuntime,
     installOfficialLeRobotToolchain,
     installOpenArmHardwareRuntime,
     installMjlabRuntime,
@@ -1556,6 +1772,10 @@ async function runSetupSequence(overrides = {}) {
   if (shouldFailSetupForRuntimeResult(pybulletRuntimeResult)) {
     throw new Error('PyBullet workspace adapter runtime installation failed');
   }
+  const blenderRuntimeResult = await steps.installBlenderRuntime();
+  if (shouldFailSetupForRuntimeResult(blenderRuntimeResult)) {
+    throw new Error('Blender workspace runtime installation failed');
+  }
   const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
   if (!lerobotToolchainInstalled) {
     throw new Error('Official LeRobot dataset toolchain installation failed');
@@ -1573,7 +1793,13 @@ async function runSetupSequence(overrides = {}) {
   await steps.setupHuggingFace();
   await steps.setupGitHub();
   const globalIluResult = await steps.installOptionalGlobalIlu();
-  return { globalIluResult, genesisRuntimeResult, mjlabRuntimeResult, pybulletRuntimeResult };
+  return {
+    globalIluResult,
+    genesisRuntimeResult,
+    mjlabRuntimeResult,
+    pybulletRuntimeResult,
+    blenderRuntimeResult,
+  };
 }
 
 async function main() {
@@ -1585,9 +1811,16 @@ async function main() {
       genesisRuntimeResult,
       mjlabRuntimeResult,
       pybulletRuntimeResult,
+      blenderRuntimeResult,
     } = await runSetupSequence();
     logSuccess('Setup complete');
-    printSetupSummary({ globalIluResult, genesisRuntimeResult, mjlabRuntimeResult, pybulletRuntimeResult });
+    printSetupSummary({
+      globalIluResult,
+      genesisRuntimeResult,
+      mjlabRuntimeResult,
+      pybulletRuntimeResult,
+      blenderRuntimeResult,
+    });
   } catch (error) {
     log('');
     log('✗ Setup failed', colors.yellow);
@@ -1609,6 +1842,8 @@ if (isMainModule()) {
 export {
   assertIluRuntimeContract,
   findPythonForLeRobot,
+  installBlenderRuntime,
+  resolveBlenderExecutableForSetup,
   resolvePythonForLeRobotVenv,
   runSetupSequence,
   verifyIluRuntimeContract,
