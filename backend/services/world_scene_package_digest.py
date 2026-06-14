@@ -50,8 +50,8 @@ def _canonical_json_number(value: int | float) -> str:
         return "0"
     magnitude = abs(value)
     number_text = repr(value)
-    if value.is_integer() and magnitude < 1e21:
-        return str(int(value))
+    if "e" not in number_text and "E" not in number_text and number_text.endswith(".0"):
+        return number_text[:-2]
     if 1e-6 <= magnitude < 1e21 and ("e" in number_text or "E" in number_text):
         return _expand_exponent_notation(number_text)
     return _normalize_exponent_notation(number_text)
