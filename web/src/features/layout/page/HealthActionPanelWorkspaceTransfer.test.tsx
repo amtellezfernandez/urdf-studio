@@ -27,7 +27,7 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
               openingLabel: "Opening Genesis",
               isBusy: false,
               canOpen: true,
-              plannedLabel: "Genesis support planned",
+              disabledLabel: "Genesis soon",
               onAction: prepareGenesis,
             },
             {
@@ -39,18 +39,18 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
               isBusy: false,
               isActive: true,
               canOpen: true,
-              plannedLabel: "MJLab support planned",
+              disabledLabel: "MJLab soon",
               onAction: prepareMjlab,
             },
             {
               id: "sapien2",
               label: "SAPIEN 2",
-              detail: "URDF support planned",
+              detail: "URDF soon",
               openLabel: "Open SAPIEN 2",
               openingLabel: "Opening SAPIEN 2",
               isBusy: false,
               canOpen: false,
-              plannedLabel: "SAPIEN 2 support planned",
+              disabledLabel: "SAPIEN 2 soon",
               onAction: prepareSapien,
             },
           ],
@@ -75,12 +75,12 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const unavailableButton = container.querySelector(
-      'button[aria-label="SAPIEN 2 support planned"]'
+    const disabledButton = container.querySelector(
+      'button[aria-label="SAPIEN 2 soon"]'
     );
-    expect(unavailableButton?.hasAttribute("disabled")).toBe(true);
-    expect(unavailableButton?.getAttribute("class")).toContain("bg-neutral-950");
-    expect(unavailableButton?.getAttribute("class")).toContain("text-neutral-500");
+    expect(disabledButton?.hasAttribute("disabled")).toBe(true);
+    expect(disabledButton?.getAttribute("class")).toContain("bg-neutral-950");
+    expect(disabledButton?.getAttribute("class")).toContain("text-neutral-500");
     expect(prepareGenesis).toHaveBeenCalledTimes(1);
     expect(prepareMjlab).toHaveBeenCalledTimes(1);
     expect(prepareSapien).not.toHaveBeenCalled();

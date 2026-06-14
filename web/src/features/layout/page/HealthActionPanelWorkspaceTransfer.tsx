@@ -13,7 +13,7 @@ export type WorkspaceTransferTargetState = {
   isBusy: boolean;
   isActive?: boolean;
   canOpen: boolean;
-  plannedLabel: string;
+  disabledLabel: string;
   onAction: () => void;
 };
 
@@ -30,7 +30,7 @@ const getAvailableTargetIcon = (target: WorkspaceTransferTargetState) => {
   return <Cuboid className="h-2.5 w-2.5" />;
 };
 
-const getUnavailableTargetIcon = () => <Minus className="h-2.5 w-2.5" />;
+const getDisabledTargetIcon = () => <Minus className="h-2.5 w-2.5" />;
 
 const getAvailableTargetButtonClassName = (target: WorkspaceTransferTargetState) =>
   cn(
@@ -39,7 +39,7 @@ const getAvailableTargetButtonClassName = (target: WorkspaceTransferTargetState)
     target.isActive && "border-slate-500/70 bg-slate-700/35 text-slate-100 hover:bg-slate-700/45"
   );
 
-const getUnavailableTargetButtonClassName = () =>
+const getDisabledTargetButtonClassName = () =>
   cn(
     "h-6 min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
     "border-neutral-800/80 bg-neutral-950/65 text-neutral-500 shadow-none",
@@ -67,19 +67,19 @@ const AvailableTargetButton = ({ target }: { target: WorkspaceTransferTargetStat
   </Button>
 );
 
-const UnavailableTargetButton = ({ target }: { target: WorkspaceTransferTargetState }) => (
+const DisabledTargetButton = ({ target }: { target: WorkspaceTransferTargetState }) => (
   <Button
     type="button"
     variant="outline"
     size="sm"
-    className={getUnavailableTargetButtonClassName()}
+    className={getDisabledTargetButtonClassName()}
     onMouseDown={(event) => event.stopPropagation()}
     onClick={target.onAction}
     disabled
-    aria-label={target.plannedLabel}
-    title={target.plannedLabel}
+    aria-label={target.disabledLabel}
+    title={target.disabledLabel}
   >
-    {getUnavailableTargetIcon()}
+    {getDisabledTargetIcon()}
     <span className="min-w-0 truncate">{target.label}</span>
   </Button>
 );
@@ -109,7 +109,7 @@ export const HealthActionPanelWorkspaceTransfer = ({
           target.canOpen ? (
             <AvailableTargetButton key={target.id} target={target} />
           ) : (
-            <UnavailableTargetButton key={target.id} target={target} />
+            <DisabledTargetButton key={target.id} target={target} />
           )
         )}
       </WorkspaceTransferRow>
