@@ -7,6 +7,7 @@ import {
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
   STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS,
   STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS,
+  WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
   WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS,
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_DURATION_MS,
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_TIME_MS,
@@ -38,6 +39,11 @@ const WORLD_CAMERA_INTRINSIC_FIELDS = [
   "cy",
   "distortion",
 ] as const;
+const WORLD_RUNTIME_TARGET_FIELDS = ["name", "mode", "min_version"] as const;
+const WORLD_RUNTIME_TARGET_MODES = ["native", "python", "container"] as const;
+const WORLD_ARTIFACT_FIELDS = ["kind", "digest_sha256", "uri"] as const;
+const WORLD_SECURITY_FIELDS = ["signature_ref", "attestation_refs", "sbom_ref"] as const;
+const WORLD_ARTIFACT_DIGEST_SHA256_PATTERN = /^[a-fA-F0-9]{64}$/;
 
 type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
@@ -122,6 +128,13 @@ const validateAllowedFields = (
 const validatePositiveInteger = (value: unknown, fieldLabel: string): string[] => {
   if (!isNumber(value) || !Number.isInteger(value) || value < 1) {
     return [`${fieldLabel} must be a positive integer`];
+  }
+  return [];
+};
+
+const validateNonEmptyString = (value: unknown, fieldLabel: string): string[] => {
+  if (!isNonEmptyString(value)) {
+    return [`${fieldLabel} must be a non-empty string`];
   }
   return [];
 };
@@ -476,6 +489,83 @@ const validateSerializableWorldCamera = (value: unknown, cameraIndex: number): s
 const validateSerializableWorldCameras = (cameras: unknown[]): string[] =>
   cameras.flatMap((camera, index) => validateSerializableWorldCamera(camera, index));
 
+const validateWorldRuntimeTargets = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return ["runtime_targets must be an array"];
+  return value.flatMap((target, index) => {
+    const targetLabel = `runtime_targets[${index}]`;
+    if (!isRecord(target)) return [`${targetLabel} must be an object`];
+    const errors: string[] = [];
+    errors.push(...validateAllowedFields(target, WORLD_RUNTIME_TARGET_FIELDS, targetLabel));
+    errors.push(...validateNonEmptyString(target.name, `${targetLabel}.name`));
+    if (!isOneOf(target.mode, WORLD_RUNTIME_TARGET_MODES)) {
+      errors.push(`${targetLabel}.mode must be one of: ${WORLD_RUNTIME_TARGET_MODES.join(", ")}`);
+    }
+    if (target.min_version !== undefined && !isString(target.min_version)) {
+      errors.push(`${targetLabel}.min_version must be a string`);
+    }
+    return errors;
+  });
+};
+
+const validateWorldInterface = (value: unknown): string[] => {
+  if (!isRecord(value)) return ["interface must be an object"];
+  const errors: string[] = [];
+  if (!Array.isArray(value.observation_modalities)) {
+    errors.push("interface.observation_modalities must be an array");
+  } else {
+    value.observation_modalities.forEach((modality, index) => {
+      errors.push(
+        ...validateNonEmptyString(modality, `interface.observation_modalities[${index}]`)
+      );
+    });
+  }
+  errors.push(...validateNonEmptyString(value.action_semantics, "interface.action_semantics"));
+  errors.push(...validatePositiveInteger(value.timestep_ms, "interface.timestep_ms"));
+  errors.push(...validateNonEmptyString(value.frame_convention, "interface.frame_convention"));
+  return errors;
+};
+
+const validateWorldArtifacts = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return ["artifacts must be an array"];
+  return value.flatMap((artifact, index) => {
+    const artifactLabel = `artifacts[${index}]`;
+    if (!isRecord(artifact)) return [`${artifactLabel} must be an object`];
+    const errors: string[] = [];
+    errors.push(...validateAllowedFields(artifact, WORLD_ARTIFACT_FIELDS, artifactLabel));
+    errors.push(...validateNonEmptyString(artifact.kind, `${artifactLabel}.kind`));
+    if (
+      !isString(artifact.digest_sha256) ||
+      !WORLD_ARTIFACT_DIGEST_SHA256_PATTERN.test(artifact.digest_sha256)
+    ) {
+      errors.push(`${artifactLabel}.digest_sha256 must be a SHA-256 hex digest`);
+    }
+    errors.push(...validateNonEmptyString(artifact.uri, `${artifactLabel}.uri`));
+    return errors;
+  });
+};
+
+const validateWorldSecurity = (value: unknown): string[] => {
+  if (!isRecord(value)) return ["security must be an object"];
+  const errors: string[] = [];
+  errors.push(...validateAllowedFields(value, WORLD_SECURITY_FIELDS, "security"));
+  if (value.signature_ref !== undefined && !isNullableString(value.signature_ref)) {
+    errors.push("security.signature_ref must be a string or null");
+  }
+  if (!Array.isArray(value.attestation_refs)) {
+    errors.push("security.attestation_refs must be an array");
+  } else {
+    value.attestation_refs.forEach((ref, index) => {
+      if (!isString(ref)) {
+        errors.push(`security.attestation_refs[${index}] must be a string`);
+      }
+    });
+  }
+  if (value.sbom_ref !== undefined && !isNullableString(value.sbom_ref)) {
+    errors.push("security.sbom_ref must be a string or null");
+  }
+  return errors;
+};
+
 const toStaticWorldSceneLayerSnapshot = (
   snapshot: ParsedWorldSceneLayerSnapshot
 ): StaticWorldSceneLayerSnapshot => ({
@@ -545,8 +635,21 @@ export const validateLocalWorldSceneManifest = (
   manifest: WorldScenePackageManifest
 ): string[] => {
   const errors: string[] = [];
+  if (manifest.schema_version !== WORLD_SCENE_PACKAGE_SCHEMA_VERSION) {
+    errors.push(`schema_version must be ${WORLD_SCENE_PACKAGE_SCHEMA_VERSION}`);
+  }
   if (!manifest.package_id?.trim()) errors.push("package_id is required");
   if (!manifest.version?.trim()) errors.push("version is required");
+  if (!manifest.title?.trim()) errors.push("title is required");
+  if (manifest.description !== undefined && !isString(manifest.description)) {
+    errors.push("description must be a string");
+  }
+  if (!isString(manifest.created_at) || Number.isNaN(Date.parse(manifest.created_at))) {
+    errors.push("created_at must be an ISO date-time string");
+  }
+  errors.push(...validateWorldRuntimeTargets(manifest.runtime_targets));
+  errors.push(...validateWorldInterface(manifest.interface));
+  errors.push(...validateWorldArtifacts(manifest.artifacts));
   if (!manifest.world_snapshot?.urdf_xml?.trim()) {
     errors.push("world_snapshot.urdf_xml is required");
   }
@@ -588,6 +691,10 @@ export const validateLocalWorldSceneManifest = (
       )
     );
   }
+  if (!isRecord(manifest.provenance)) {
+    errors.push("provenance must be an object");
+  }
+  errors.push(...validateWorldSecurity(manifest.security));
   return errors;
 };
 

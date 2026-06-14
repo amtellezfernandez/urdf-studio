@@ -120,6 +120,82 @@ describe("worldSceneManifest static scene validation", () => {
     expect(isWorldSceneManifest(manifest)).toBe(false);
   });
 
+  it("rejects malformed top-level WSP metadata locally", () => {
+    const errors = validateLocalWorldSceneManifest({
+      ...createManifest(),
+      schema_version: "0.0.1",
+      title: "",
+      description: 7,
+      created_at: "not-a-date",
+      runtime_targets: [
+        {
+          name: "",
+          mode: "docker",
+          min_version: 1,
+          debug: true,
+        },
+      ],
+      interface: {
+        observation_modalities: ["", 3],
+        action_semantics: "",
+        timestep_ms: 0.5,
+        frame_convention: "",
+      },
+      artifacts: [
+        {
+          kind: "",
+          digest_sha256: "abc",
+          uri: "",
+          extra: true,
+        },
+      ],
+      provenance: [],
+      security: {
+        signature_ref: 1,
+        attestation_refs: ["ok", 2],
+        sbom_ref: 3,
+        extra: true,
+      },
+    } as unknown as WorldScenePackageManifest);
+
+    expect(errors).toContain("schema_version must be 1.0.0");
+    expect(errors).toContain("title is required");
+    expect(errors).toContain("description must be a string");
+    expect(errors).toContain("created_at must be an ISO date-time string");
+    expect(errors).toContain("runtime_targets[0] has unsupported field(s): debug");
+    expect(errors).toContain("runtime_targets[0].name must be a non-empty string");
+    expect(errors).toContain("runtime_targets[0].mode must be one of: native, python, container");
+    expect(errors).toContain("runtime_targets[0].min_version must be a string");
+    expect(errors).toContain("interface.observation_modalities[0] must be a non-empty string");
+    expect(errors).toContain("interface.observation_modalities[1] must be a non-empty string");
+    expect(errors).toContain("interface.action_semantics must be a non-empty string");
+    expect(errors).toContain("interface.timestep_ms must be a positive integer");
+    expect(errors).toContain("interface.frame_convention must be a non-empty string");
+    expect(errors).toContain("artifacts[0] has unsupported field(s): extra");
+    expect(errors).toContain("artifacts[0].kind must be a non-empty string");
+    expect(errors).toContain("artifacts[0].digest_sha256 must be a SHA-256 hex digest");
+    expect(errors).toContain("artifacts[0].uri must be a non-empty string");
+    expect(errors).toContain("provenance must be an object");
+    expect(errors).toContain("security has unsupported field(s): extra");
+    expect(errors).toContain("security.signature_ref must be a string or null");
+    expect(errors).toContain("security.attestation_refs[1] must be a string");
+    expect(errors).toContain("security.sbom_ref must be a string or null");
+  });
+
+  it("keeps interface extension metadata importable", () => {
+    const errors = validateLocalWorldSceneManifest({
+      ...createManifest(),
+      interface: {
+        ...createManifest().interface,
+        planning: {
+          representation_space: "latent",
+        },
+      },
+    } as unknown as WorldScenePackageManifest);
+
+    expect(errors).toEqual([]);
+  });
+
   it("rejects malformed package world objects", () => {
     const errors = validateLocalWorldSceneManifest(
       createManifest({
