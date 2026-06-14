@@ -29,7 +29,6 @@ from backend.services.simulator_adapters.blender_workspace import BLENDER_EDIT_S
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
-    normalize_simulator_workspace_package_request,
     prepare_simulator_workspace_package,
     wait_for_workspace_readiness,
 )
@@ -59,7 +58,6 @@ def prepare_blender_workspace_package(
 def start_blender_workspace(
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareResponse:
-    request = normalize_simulator_workspace_package_request(request)
     blender_executable = resolve_blender_executable()
     if blender_executable is None:
         raise BlenderWorkspaceError(

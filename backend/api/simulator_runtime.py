@@ -17,6 +17,7 @@ from backend.services.simulator_adapters import (
     apply_simulator_workspace_change_set,
     get_simulator_runtime_status,
     list_simulator_runtime_descriptors,
+    normalize_simulator_workspace_prepare_request,
     prepare_simulator_workspace,
 )
 
@@ -46,7 +47,10 @@ async def prepare_simulator_workspace_route(
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> SimulatorWorkspacePrepareResponse:
     try:
-        return prepare_simulator_workspace(simulator_id, request)
+        return prepare_simulator_workspace(
+            simulator_id,
+            normalize_simulator_workspace_prepare_request(request),
+        )
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 

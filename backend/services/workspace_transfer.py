@@ -22,10 +22,10 @@ from backend.services.simulator_adapters import (
     apply_simulator_workspace_change_set,
     get_simulator_adapter,
     get_simulator_runtime_status,
+    normalize_simulator_workspace_prepare_request,
     prepare_simulator_workspace,
 )
 from backend.services.simulator_adapters.blender_change_sets import BLENDER_CHANGE_SET_SCHEMA
-from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
 
 
 def _adapter_change_set_request(
@@ -38,12 +38,14 @@ def _adapter_change_set_request(
 
 
 def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspacePrepareRequest:
-    return SimulatorWorkspacePrepareRequest(
-        world_package=normalize_world_snapshot_artifact_digests(request.world_package),
-        urdf_asset_path=request.urdf_asset_path,
-        mesh_assets=request.mesh_assets,
-        package_roots=request.package_roots,
-        ilu_session_id=request.ilu_session_id,
+    return normalize_simulator_workspace_prepare_request(
+        SimulatorWorkspacePrepareRequest(
+            world_package=request.world_package,
+            urdf_asset_path=request.urdf_asset_path,
+            mesh_assets=request.mesh_assets,
+            package_roots=request.package_roots,
+            ilu_session_id=request.ilu_session_id,
+        )
     )
 
 

@@ -406,11 +406,13 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
     }
 
 
-def test_simulator_workspace_prepare_delegates_stale_world_snapshot_digest(
+def test_simulator_workspace_prepare_refreshes_stale_world_snapshot_digest(
     monkeypatch,
 ) -> None:
     def fake_prepare_simulator_workspace(simulator_id, request):
-        assert declared_world_snapshot_digests(request.world_package) == ("0" * 64,)
+        assert declared_world_snapshot_digests(request.world_package) == (
+            computed_world_snapshot_digest(request.world_package),
+        )
         return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
             started=True,
@@ -441,12 +443,14 @@ def test_simulator_workspace_prepare_delegates_stale_world_snapshot_digest(
     assert response.json()["simulator_id"] == "genesis"
 
 
-def test_blender_workspace_prepare_delegates_stale_world_snapshot_digest(
+def test_blender_workspace_prepare_refreshes_stale_world_snapshot_digest(
     monkeypatch,
 ) -> None:
     def fake_prepare_simulator_workspace(simulator_id, request):
         assert simulator_id == "blender"
-        assert declared_world_snapshot_digests(request.world_package) == ("0" * 64,)
+        assert declared_world_snapshot_digests(request.world_package) == (
+            computed_world_snapshot_digest(request.world_package),
+        )
         return SimulatorWorkspacePrepareResponse(
             simulator_id=simulator_id,
             started=True,

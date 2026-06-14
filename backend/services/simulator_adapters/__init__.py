@@ -25,6 +25,7 @@ from backend.services.simulator_adapters.mjlab import MJLAB_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.mujoco import MUJOCO_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.optional_runtime import make_optional_simulator_adapter
 from backend.services.simulator_adapters.pybullet import PYBULLET_SIMULATOR_ADAPTER
+from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
 
 
 def _build_adapter_map(adapters: tuple[SimulatorAdapter, ...]) -> dict[SimulatorId, SimulatorAdapter]:
@@ -96,11 +97,21 @@ def list_simulator_runtime_descriptors() -> SimulatorRuntimeListResponse:
     )
 
 
+def normalize_simulator_workspace_prepare_request(
+    request: SimulatorWorkspacePrepareRequest,
+) -> SimulatorWorkspacePrepareRequest:
+    return request.model_copy(
+        update={"world_package": normalize_world_snapshot_artifact_digests(request.world_package)},
+        deep=True,
+    )
+
+
 def prepare_simulator_workspace(
     simulator_id: SimulatorId,
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareResponse:
-    return get_simulator_adapter(simulator_id).prepare_workspace(request)
+    normalized_request = normalize_simulator_workspace_prepare_request(request)
+    return get_simulator_adapter(simulator_id).prepare_workspace(normalized_request)
 
 
 def apply_simulator_workspace_change_set(
@@ -130,5 +141,6 @@ __all__ = [
     "get_simulator_runtime_status",
     "apply_simulator_workspace_change_set",
     "list_simulator_runtime_descriptors",
+    "normalize_simulator_workspace_prepare_request",
     "prepare_simulator_workspace",
 ]
