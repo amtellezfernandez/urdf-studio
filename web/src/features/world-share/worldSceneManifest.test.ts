@@ -183,6 +183,35 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toContain("world snapshot cameras[0].intrinsics must include fov_deg, fx, or fy");
   });
 
+  it("rejects arrays where WSP requires object records", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        joint_positions: [] as unknown as WorldScenePackageManifest["world_snapshot"]["joint_positions"],
+        cameras: [
+          {
+            ...createWorldCamera(),
+            intrinsics: {
+              ...createWorldCamera().intrinsics,
+              distortion: [],
+            },
+          } as unknown as WorldScenePackageManifest["world_snapshot"]["cameras"][number],
+        ],
+        objects: [
+          {
+            ...createWorldLayoutObject(),
+            simulation: [],
+            mesh: [],
+          } as unknown as WorldScenePackageManifest["world_snapshot"]["objects"][number],
+        ],
+      })
+    );
+
+    expect(errors).toContain("world_snapshot.joint_positions must be an object");
+    expect(errors).toContain("world snapshot cameras[0].intrinsics.distortion must be an object");
+    expect(errors).toContain("world layout objects[0].simulation must be an object");
+    expect(errors).toContain("world layout objects[0].mesh must be an object");
+  });
+
   it("accepts Blender-imported world objects with simulator metadata", () => {
     const errors = validateLocalWorldSceneManifest(
       createManifest({
