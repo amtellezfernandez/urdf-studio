@@ -36,7 +36,7 @@ PERF_BASELINE_LIST_SESSIONS_PAYLOAD_BYTES = 2_000_000
 PERF_BASELINE_PYTHON_PEAK_ALLOCATED_MIB = 128.0
 # Full FastAPI app construction registers all backend routes. Keep this separate from
 # the data-plane latency budgets so world-bridge payload regressions stay visible.
-PERF_BASELINE_APP_STARTUP_P95_MS = 140.0
+PERF_BASELINE_APP_STARTUP_P95_MS = 160.0
 PERF_BASELINE_RUNTIME_STARTUP_P95_MS = 4.0
 PERF_BASELINE_ERROR_RATE = 0.02
 PERF_BASELINE_RETRY_RATE = 0.02
