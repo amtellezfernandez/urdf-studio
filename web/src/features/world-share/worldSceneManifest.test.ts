@@ -195,6 +195,23 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toContain("security.sbom_ref must be a string or null");
   });
 
+  it("rejects null WSP optionals that must be omitted when unset", () => {
+    const errors = validateLocalWorldSceneManifest({
+      ...createManifest(),
+      description: null,
+      runtime_targets: [
+        {
+          name: "blender",
+          mode: "python",
+          min_version: null,
+        },
+      ],
+    } as unknown as WorldScenePackageManifest);
+
+    expect(errors).toContain("description must be a string");
+    expect(errors).toContain("runtime_targets[0].min_version must be a string");
+  });
+
   it("rejects WSP payloads that exceed schema size limits locally", () => {
     const manifest = createManifest();
     const errors = validateLocalWorldSceneManifest({

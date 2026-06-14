@@ -106,6 +106,31 @@ def test_wsp_manifest_schema_accepts_world_cameras() -> None:
 @pytest.mark.parametrize(
     ("mutator", "expected_message"),
     [
+        (
+            lambda payload: payload.update({"description": None}),
+            "None is not of type 'string'",
+        ),
+        (
+            lambda payload: payload["runtime_targets"].append(
+                {"name": "blender", "mode": "python", "min_version": None}
+            ),
+            "None is not of type 'string'",
+        ),
+    ],
+)
+def test_wsp_manifest_schema_rejects_null_manifest_optionals(
+    mutator,
+    expected_message: str,
+) -> None:
+    payload = _manifest()
+    mutator(payload)
+
+    assert expected_message in _schema_errors(payload)
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_message"),
+    [
         (lambda camera: camera.pop("parent_joint"), "'parent_joint' is a required property"),
         (lambda camera: camera["pose"].pop("rpy"), "'rpy' is a required property"),
         (lambda camera: camera["intrinsics"].update({"width": 0}), "0 is less than the minimum of 1"),

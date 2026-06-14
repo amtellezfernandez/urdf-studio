@@ -34,6 +34,13 @@ class WorldRuntimeTarget(BaseModel):
     mode: Literal["native", "python", "container"]
     min_version: Optional[str] = None
 
+    @field_validator("min_version", mode="before")
+    @classmethod
+    def _validate_min_version_is_not_null(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("min_version must be omitted or a string.")
+        return value
+
 
 class WorldInterfaceSpec(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -457,6 +464,13 @@ class WorldScenePackageManifest(BaseModel):
     world_snapshot: WorldSnapshot
     provenance: Dict[str, Any] = Field(default_factory=dict)
     security: WorldSecuritySpec = Field(default_factory=WorldSecuritySpec)
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def _validate_description_is_not_null(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("description must be omitted or a string.")
+        return value
 
 
 class WorldScenePackageValidationResponse(BaseModel):

@@ -136,6 +136,52 @@ def test_world_scene_package_model_rejects_unsupported_schema_version() -> None:
     assert exc_info.value.errors()[0]["type"] == "literal_error"
 
 
+def test_world_scene_package_model_accepts_omitted_manifest_optionals() -> None:
+    payload = _manifest_payload()
+    payload["runtime_targets"] = [{"name": "blender", "mode": "python"}]
+
+    manifest = WorldScenePackageManifest.model_validate(payload)
+
+    assert manifest.description is None
+    assert manifest.runtime_targets[0].min_version is None
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_path", "expected_message"),
+    [
+        (
+            lambda payload: payload.update({"description": None}),
+            "description",
+            "description must be omitted or a string",
+        ),
+        (
+            lambda payload: payload["runtime_targets"].append(
+                {"name": "blender", "mode": "python", "min_version": None}
+            ),
+            "runtime_targets.0.min_version",
+            "min_version must be omitted or a string",
+        ),
+    ],
+)
+def test_world_scene_package_model_rejects_null_manifest_optionals(
+    mutator,
+    expected_path: str,
+    expected_message: str,
+) -> None:
+    payload = _manifest_payload()
+    mutator(payload)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    errors = exc_info.value.errors()
+    assert any(
+        ".".join(str(part) for part in error["loc"]) == expected_path
+        and expected_message in error["msg"]
+        for error in errors
+    )
+
+
 @pytest.mark.parametrize(
     ("mutator", "expected_path"),
     [
