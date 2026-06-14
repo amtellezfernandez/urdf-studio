@@ -83,6 +83,25 @@ class WorldSnapshot(BaseModel):
                 raise ValueError(f"joint_positions[{joint_name!r}] must be finite.")
         return value
 
+    @field_validator("cameras", "objects")
+    @classmethod
+    def _validate_finite_payload_numbers(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        _raise_for_non_finite_payload_numbers(value)
+        return value
+
+
+def _raise_for_non_finite_payload_numbers(value: Any, path: str = "") -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{path or 'payload'} must not contain non-finite numbers.")
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _raise_for_non_finite_payload_numbers(item, f"{path}[{index}]" if path else f"[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            field_path = f"{path}.{key}" if path else str(key)
+            _raise_for_non_finite_payload_numbers(item, field_path)
+
 
 class WorldScenePackageManifest(BaseModel):
     schema_version: str = Field(default=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1)

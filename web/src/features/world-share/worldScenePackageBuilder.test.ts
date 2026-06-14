@@ -112,6 +112,38 @@ describe("buildWorldScenePackageManifest", () => {
     ).toBe('{"a":1,"c":[null,{"y":"ok"}]}');
   });
 
+  it("rejects non-finite numbers before hashing a world snapshot", () => {
+    expect(() => stableStringify({ position_xyz: [0, Number.NaN, 1] })).toThrow(
+      "Cannot canonicalize a non-finite world scene package number."
+    );
+    expect(() => stableStringify({ position_xyz: [0, Number.POSITIVE_INFINITY, 1] })).toThrow(
+      "Cannot canonicalize a non-finite world scene package number."
+    );
+  });
+
+  it("rejects camera payloads with non-finite numbers before package export", async () => {
+    const invalidCamera: Camera = {
+      ...TEST_CAMERA,
+      pose: {
+        xyz: [0, Number.NaN, 0],
+        rpy: [0, 0, 0],
+      },
+    };
+
+    await expect(
+      buildWorldScenePackageManifest({
+        packageId: "Demo World",
+        version: "1.0.0",
+        urdfXml: "<robot name='demo'/>",
+        jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+        cameras: [invalidCamera],
+        objects: [],
+        scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+        scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+      })
+    ).rejects.toThrow("Cannot canonicalize a non-finite world scene package number.");
+  });
+
   it("emits a scene-first world manifest without model-planning coupling", async () => {
     const manifest = await buildWorldScenePackageManifest({
       packageId: "Demo World",
