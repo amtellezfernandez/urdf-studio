@@ -375,6 +375,27 @@ def test_world_snapshot_rejects_string_joint_position_before_digest_validation()
         WorldScenePackageManifest.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "joint_positions",
+        "cameras",
+        "objects",
+        "scenario_time_ms",
+        "scenario_duration_ms",
+    ],
+)
+def test_world_snapshot_requires_schema_level_fields(field_name: str) -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"].pop(field_name)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert exc_info.value.errors()[0]["loc"] == ("world_snapshot", field_name)
+    assert exc_info.value.errors()[0]["type"] == "missing"
+
+
 @pytest.mark.parametrize("field_name", ["scenario_time_ms", "scenario_duration_ms"])
 def test_world_snapshot_rejects_non_integer_scenario_timing(field_name: str) -> None:
     payload = _manifest_payload()

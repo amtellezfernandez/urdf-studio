@@ -78,18 +78,12 @@ class WorldSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     urdf_xml: str = Field(..., min_length=1, max_length=MAX_WORLD_SNAPSHOT_URDF_CHARS)
-    joint_positions: Dict[str, float] = Field(
-        default_factory=dict, max_length=MAX_JOINTS_PER_WORLD
-    )
-    cameras: List[Dict[str, Any]] = Field(
-        default_factory=list, max_length=MAX_CAMERAS_PER_WORLD
-    )
-    objects: List[Dict[str, Any]] = Field(
-        default_factory=list, max_length=MAX_OBJECTS_PER_WORLD
-    )
-    scenario_time_ms: int = Field(default=MIN_SCENARIO_TIME_MS, ge=MIN_SCENARIO_TIME_MS)
+    joint_positions: Dict[str, float] = Field(..., max_length=MAX_JOINTS_PER_WORLD)
+    cameras: List[Dict[str, Any]] = Field(..., max_length=MAX_CAMERAS_PER_WORLD)
+    objects: List[Dict[str, Any]] = Field(..., max_length=MAX_OBJECTS_PER_WORLD)
+    scenario_time_ms: int = Field(..., ge=MIN_SCENARIO_TIME_MS)
     scenario_duration_ms: int = Field(
-        default=MIN_SCENARIO_DURATION_MS,
+        ...,
         ge=MIN_SCENARIO_DURATION_MS,
         le=MAX_SCENARIO_DURATION_MS,
     )

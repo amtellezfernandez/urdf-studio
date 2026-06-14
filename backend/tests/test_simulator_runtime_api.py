@@ -95,6 +95,7 @@ def _world_package_payload() -> dict:
         "world_snapshot": {
             "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>",
             "joint_positions": {},
+            "cameras": [],
             "objects": [],
             "scenario_time_ms": 0,
             "scenario_duration_ms": 0,

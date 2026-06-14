@@ -34,6 +34,7 @@ def make_world_package(
         world_snapshot=WorldSnapshot(
             urdf_xml=urdf_xml,
             joint_positions=joint_positions or {},
+            cameras=[],
             objects=objects or [],
             scenario_time_ms=0,
             scenario_duration_ms=0,

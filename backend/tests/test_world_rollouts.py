@@ -71,6 +71,8 @@ def _build_world_package() -> WorldScenePackageManifest:
             joint_positions={"joint": TEST_WORLD_JOINT_VALUE_RAD},
             cameras=[],
             objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
         ),
         provenance={},
         security={},
