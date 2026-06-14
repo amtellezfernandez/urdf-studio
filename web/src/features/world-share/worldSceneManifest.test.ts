@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
   WORLD_SCENE_PACKAGE_LIMITS,
@@ -82,6 +83,21 @@ const createManifest = (
 });
 
 describe("worldSceneManifest static scene validation", () => {
+  it("keeps the bundled default world layout non-empty for simulator transfer", () => {
+    const payload = JSON.parse(
+      readFileSync(
+        new URL("../../../public/world-layouts/default.world-layout.json", import.meta.url),
+        "utf-8"
+      )
+    );
+
+    const { snapshot, errors } = parseStaticWorldSceneLayerSnapshot(payload);
+
+    expect(errors).toEqual([]);
+    expect(snapshot?.objects.length).toBeGreaterThan(0);
+    expect(snapshot?.environment?.preset).toBe("default");
+  });
+
   it("accepts static scene package snapshots (duration 0, time 0)", () => {
     const errors = validateLocalWorldSceneManifest(createManifest());
     expect(errors).toEqual([]);

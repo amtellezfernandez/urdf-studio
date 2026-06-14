@@ -1,10 +1,61 @@
 {
   "world_layout": {
-    "objects": [],
+    "name": "default",
+    "objects": [
+      {
+        "id": "default-workbench",
+        "name": "default-workbench",
+        "type": "cube",
+        "position_xyz": [0.55, -0.05, 0.03],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.5, 0.3, 0.06],
+        "color": "#ef4444",
+        "source": "user",
+        "tracked_joint_name": null,
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      },
+      {
+        "id": "default-target",
+        "name": "default-target",
+        "type": "sphere",
+        "position_xyz": [0.25, 0.25, 0.12],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.2, 0.2, 0.2],
+        "color": "#3b82f6",
+        "simulation": {
+          "fixed": false,
+          "collision": true,
+          "mass_kg": 0.35,
+          "friction": 0.7,
+          "restitution": 0.0,
+          "semantic_role": "manipulation_target"
+        },
+        "source": "user",
+        "tracked_joint_name": null,
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      },
+      {
+        "id": "default-column",
+        "name": "default-column",
+        "type": "cylinder",
+        "position_xyz": [-0.45, 0.3, 0.175],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.12, 0.12, 0.35],
+        "color": "#22c55e",
+        "source": "user",
+        "tracked_joint_name": null,
+        "is_ik_target": false,
+        "ik_target_type": "punctual"
+      }
+    ],
     "scenario_time_ms": 0,
     "scenario_duration_ms": 0
   },
   "environment": {
-    "preset": "default"
+    "preset": "default",
+    "frame_convention": "ros-rep-103",
+    "frame_map": "identity"
   }
 }
