@@ -11,7 +11,10 @@ from scipy.spatial.transform import Rotation
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
-from backend.services.world_scene_package_digest import computed_world_snapshot_digest
+from backend.services.world_scene_package_digest import (
+    computed_world_snapshot_digest,
+    normalize_world_snapshot_artifact_digests,
+)
 from backend.services.world_scene_package_params import MAX_OBJECTS_PER_WORLD
 
 BLENDER_CHANGE_SET_SCHEMA = "urdf-studio.blender-change-set.v1"
@@ -113,8 +116,9 @@ def apply_blender_layout_change_set_with_summary(
             f"({MAX_OBJECTS_PER_WORLD})."
         )
     updated.world_snapshot.objects = next_objects
+    normalized = normalize_world_snapshot_artifact_digests(updated)
     return BlenderLayoutChangeSetApplyResult(
-        world_package=updated,
+        world_package=normalized,
         applied_change_count=applied_change_count,
         review_only_count=review_only_count,
     )

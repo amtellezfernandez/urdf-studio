@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID
+from backend.models.world_scene_package import WorldArtifactRef
 from backend.scripts import blender_workspace_prepare as blender_prepare
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
 from backend.services.simulator_adapters import blender as blender_adapter
@@ -34,6 +35,10 @@ from backend.services.simulator_adapters.blender_edit_session import (
 )
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
+from backend.services.world_scene_package_digest import (
+    computed_world_snapshot_digest,
+    declared_world_snapshot_digests,
+)
 from backend.tests.fake_blender import FakeBlenderModule
 from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
@@ -351,6 +356,31 @@ def test_blender_change_set_applies_world_object_color(tmp_path: Path) -> None:
     )
 
     assert updated.world_snapshot.objects[0]["color"] == "#cc1a33"
+
+
+def test_blender_change_set_refreshes_world_snapshot_artifact_digest(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    original_digest = computed_world_snapshot_digest(world_package)
+    world_package.artifacts = [
+        WorldArtifactRef(
+            kind="world_snapshot",
+            digest_sha256=original_digest,
+            uri="inline://snapshot",
+        )
+    ]
+
+    updated = apply_blender_layout_change_set(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[_crate_layout_change()],
+            review_only=[_scene_camera_review()],
+        ),
+    )
+
+    updated_digest = computed_world_snapshot_digest(updated)
+    assert updated_digest != original_digest
+    assert declared_world_snapshot_digests(updated) == (updated_digest,)
 
 
 def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
