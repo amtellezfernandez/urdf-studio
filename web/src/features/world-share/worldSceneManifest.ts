@@ -719,6 +719,19 @@ const readWorldSceneManifestCandidate = (
   } as WorldScenePackageManifest;
 };
 
+const isWorldSceneManifestEnvelope = (payload: unknown): boolean =>
+  isRecord(payload) &&
+  isRecord(payload.world_snapshot) &&
+  "package_id" in payload &&
+  "version" in payload;
+
+const readValidWorldSceneManifestCandidate = (
+  payload: unknown
+): WorldScenePackageManifest | null => {
+  const manifest = readWorldSceneManifestCandidate(payload);
+  return manifest && isWorldSceneManifest(manifest) ? manifest : null;
+};
+
 export const readWorldSceneManifestFromUnknown = (
   payload: unknown
 ): WorldScenePackageManifest | null => {
@@ -846,34 +859,36 @@ const toParsedWorldSceneLayerSnapshot = (
   };
 };
 
+const worldSceneManifestToLayerSnapshot = (
+  manifest: WorldScenePackageManifest
+): ParsedWorldSceneLayerSnapshot => ({
+  name: manifest.title,
+  objects: manifest.world_snapshot.objects,
+  scenario_time_ms: manifest.world_snapshot.scenario_time_ms,
+  scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
+  environment: isRecord(manifest.provenance?.environment)
+    ? (manifest.provenance.environment as Record<string, unknown>)
+    : null,
+});
+
 export const readWorldSceneLayerFromUnknown = (
   payload: unknown
 ): ParsedWorldSceneLayerSnapshot | null => {
-  const manifest = readWorldSceneManifestCandidate(payload);
+  const manifest = readValidWorldSceneManifestCandidate(payload);
   if (manifest) {
-    return {
-      name: manifest.title,
-      objects: manifest.world_snapshot.objects,
-      scenario_time_ms: manifest.world_snapshot.scenario_time_ms,
-      scenario_duration_ms: manifest.world_snapshot.scenario_duration_ms,
-      environment: isRecord(manifest.provenance?.environment)
-        ? (manifest.provenance.environment as Record<string, unknown>)
-        : null,
-    };
+    return worldSceneManifestToLayerSnapshot(manifest);
+  }
+  if (isWorldSceneManifestEnvelope(payload)) {
+    return null;
   }
 
   if (isRecord(payload)) {
-    const nestedManifest = readWorldSceneManifestCandidate(payload.manifest);
+    const nestedManifest = readValidWorldSceneManifestCandidate(payload.manifest);
     if (nestedManifest) {
-      return {
-        name: nestedManifest.title,
-        objects: nestedManifest.world_snapshot.objects,
-        scenario_time_ms: nestedManifest.world_snapshot.scenario_time_ms,
-        scenario_duration_ms: nestedManifest.world_snapshot.scenario_duration_ms,
-        environment: isRecord(nestedManifest.provenance?.environment)
-          ? (nestedManifest.provenance.environment as Record<string, unknown>)
-          : null,
-      };
+      return worldSceneManifestToLayerSnapshot(nestedManifest);
+    }
+    if (isWorldSceneManifestEnvelope(payload.manifest)) {
+      return null;
     }
   }
 

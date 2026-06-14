@@ -623,6 +623,45 @@ describe("worldSceneManifest static scene validation", () => {
     expect(parsed?.name).toBe("Desk setup");
   });
 
+  it("reads world layout fields from valid WSP envelopes", () => {
+    const parsed = readWorldSceneLayerFromUnknown({
+      ...createManifest(),
+      title: "Desk WSP",
+      world_snapshot: {
+        ...createManifest().world_snapshot,
+        objects: [createWorldLayoutObject()],
+      },
+    });
+
+    expect(parsed?.name).toBe("Desk WSP");
+    expect(parsed?.objects).toHaveLength(1);
+  });
+
+  it("does not read world layout fields from invalid WSP envelopes", () => {
+    const parsed = readWorldSceneLayerFromUnknown({
+      ...createManifest(),
+      schema_version: "0.0.1",
+      world_snapshot: {
+        ...createManifest().world_snapshot,
+        objects: [createWorldLayoutObject()],
+      },
+    });
+
+    expect(parsed).toBeNull();
+  });
+
+  it("keeps plain world_snapshot layout payload compatibility", () => {
+    const parsed = readWorldSceneLayerFromUnknown({
+      world_snapshot: {
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0,
+        scenario_duration_ms: 0,
+      },
+    });
+
+    expect(parsed?.objects).toHaveLength(1);
+  });
+
   it("rejects non-static world layout snapshots for now", () => {
     const payload = {
       world_layout: {
