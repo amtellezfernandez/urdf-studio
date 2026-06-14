@@ -127,6 +127,22 @@ describe("buildWorldScenePackageManifest", () => {
     );
   });
 
+  it("sorts object keys with browser UTF-16 ordering for backend hashing", () => {
+    expect(
+      stableStringify({
+        joint_positions: {
+          a: 1,
+          z: 2,
+          é: 3,
+          "𝌆": 4,
+          "😀": 5,
+          "\ue000": 6,
+          "\uffff": 7,
+        },
+      })
+    ).toBe('{"joint_positions":{"a":1,"z":2,"é":3,"𝌆":4,"😀":5,"\ue000":6,"\uffff":7}}');
+  });
+
   it("rejects non-finite numbers before hashing a world snapshot", () => {
     expect(() => stableStringify({ position_xyz: [0, Number.NaN, 1] })).toThrow(
       "Cannot canonicalize a non-finite world scene package number."

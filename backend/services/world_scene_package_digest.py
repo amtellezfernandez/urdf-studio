@@ -57,6 +57,10 @@ def _canonical_json_number(value: int | float) -> str:
     return _normalize_exponent_notation(number_text)
 
 
+def _json_object_sort_key(key: str) -> bytes:
+    return key.encode("utf-16-be")
+
+
 def _canonical_json_dump(payload: Any) -> str:
     if payload is None:
         return "null"
@@ -69,12 +73,14 @@ def _canonical_json_dump(payload: Any) -> str:
     if isinstance(payload, list):
         return f"[{','.join(_canonical_json_dump(item) for item in payload)}]"
     if isinstance(payload, dict):
+        if not all(isinstance(key, str) for key in payload):
+            raise TypeError("World scene package JSON object keys must be strings.")
         fields = (
             (
                 f"{json.dumps(key, ensure_ascii=False, separators=(',', ':'))}:"
                 f"{_canonical_json_dump(payload[key])}"
             )
-            for key in sorted(payload)
+            for key in sorted(payload, key=_json_object_sort_key)
         )
         return f"{{{','.join(fields)}}}"
     raise TypeError(f"Cannot canonicalize {type(payload).__name__} in world scene package JSON.")

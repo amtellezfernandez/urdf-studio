@@ -156,3 +156,42 @@ def test_canonical_world_snapshot_json_matches_browser_large_float_contract() ->
         '"positive":782386496147631600},"objects":[],"scenario_duration_ms":0,'
         '"scenario_time_ms":0,"urdf_xml":"<robot name=\'demo\'/>"}'
     )
+
+
+def test_canonical_world_snapshot_json_sorts_keys_like_browser_utf16_contract() -> None:
+    manifest = WorldScenePackageManifest(
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[],
+        world_snapshot=WorldSnapshot(
+            urdf_xml="<robot name='demo'/>",
+            joint_positions={
+                "a": 1,
+                "z": 2,
+                "é": 3,
+                "𝌆": 4,
+                "😀": 5,
+                "\ue000": 6,
+                "\uffff": 7,
+            },
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+    )
+
+    assert canonical_world_snapshot_json(manifest) == (
+        '{"cameras":[],"joint_positions":{"a":1,"z":2,"é":3,"𝌆":4,'
+        '"😀":5,"\ue000":6,"\uffff":7},"objects":[],"scenario_duration_ms":0,'
+        '"scenario_time_ms":0,"urdf_xml":"<robot name=\'demo\'/>"}'
+    )
