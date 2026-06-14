@@ -14,6 +14,9 @@ from backend.models.world_scene_package import WorldArtifactRef
 from backend.scripts import blender_workspace_prepare as blender_prepare
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
 from backend.services.simulator_adapters import blender as blender_adapter
+from backend.services.simulator_adapters.camera_conventions import (
+    world_camera_to_opengl_camera_rotation,
+)
 from backend.services.simulator_adapters.blender_runtime import (
     _windows_drive_path_to_wsl_path,
     resolve_blender_executable,
@@ -85,7 +88,34 @@ def _write_scene_inputs(tmp_path: Path):
     return world_package, world_package_path, robot_urdf_path
 
 
-def _blender_change_set(world_package, *, changes, review_only=None):
+def _blender_change_set(
+    world_package,
+    *,
+    changes,
+    review_only=None,
+    include_camera_changes=True,
+):
+    next_changes = list(changes)
+    review_only_entries = list(review_only or [])
+    if include_camera_changes:
+        changed_camera_ids = {
+            str(change.get("stable_id", ""))
+            for change in next_changes
+            if change.get("entity_type") == "camera"
+        }
+        deleted_camera_ids = {
+            str(entry.get("stable_id", ""))
+            for entry in review_only_entries
+            if entry.get("entity_type") == "deleted_camera"
+        }
+        for camera in world_package.world_snapshot.cameras:
+            camera_id = str(camera.get("id", ""))
+            if (
+                camera_id
+                and camera_id not in changed_camera_ids
+                and camera_id not in deleted_camera_ids
+            ):
+                next_changes.append(_scene_camera_change(stable_id=camera_id))
     return {
         "schema": BLENDER_CHANGE_SET_SCHEMA,
         "source": build_blender_change_set_source(
@@ -99,8 +129,8 @@ def _blender_change_set(world_package, *, changes, review_only=None):
                 for item in world_package.world_snapshot.cameras
             ],
         ),
-        "changes": changes,
-        "review_only": review_only or [],
+        "changes": next_changes,
+        "review_only": review_only_entries,
     }
 
 
@@ -114,14 +144,24 @@ def _crate_layout_change() -> dict:
     }
 
 
-def _scene_camera_review() -> dict:
+def _scene_camera_change(stable_id="cam-1", position_xyz=None) -> dict:
     return {
         "entity_type": "camera",
-        "stable_id": "cam-1",
-        "position_xyz": [0.0, 0.0, 1.0],
-        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-        "reason": "camera round-trip requires camera-frame review before apply",
+        "stable_id": stable_id,
+        "position_xyz": position_xyz or [0.0, 0.0, 1.0],
+        "quat_wxyz": _studio_zero_camera_render_quat_wxyz(),
+        "pose_frame": "opengl_render_local",
     }
+
+
+def _studio_zero_camera_render_quat_wxyz() -> list[float]:
+    quat_xyzw = world_camera_to_opengl_camera_rotation().as_quat()
+    return [
+        float(quat_xyzw[3]),
+        float(quat_xyzw[0]),
+        float(quat_xyzw[1]),
+        float(quat_xyzw[2]),
+    ]
 
 
 def _write_blender_edit_session_artifacts(tmp_path: Path):
@@ -320,15 +360,6 @@ def test_blender_change_set_applies_world_object_layout_only(tmp_path: Path) -> 
                 "size_xyz": [0.5, 0.6, 0.7],
             },
         ],
-        review_only=[
-            {
-                "entity_type": "camera",
-                "stable_id": "cam-1",
-                "position_xyz": [9.0, 9.0, 9.0],
-                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                "reason": "camera round-trip requires camera-frame review before apply",
-            },
-        ],
     )
 
     updated = apply_blender_layout_change_set(world_package, change_set)
@@ -351,11 +382,34 @@ def test_blender_change_set_applies_world_object_color(tmp_path: Path) -> None:
         _blender_change_set(
             world_package,
             changes=[change],
-            review_only=[_scene_camera_review()],
         ),
     )
 
     assert updated.world_snapshot.objects[0]["color"] == "#cc1a33"
+
+
+def test_blender_change_set_applies_camera_pose(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[
+                _crate_layout_change(),
+                _scene_camera_change(position_xyz=[0.2, 0.3, 1.4]),
+            ],
+        ),
+    )
+
+    updated_camera = result.world_package.world_snapshot.cameras[0]
+    assert result.applied_change_count == 2
+    assert result.review_only_count == 0
+    assert updated_camera["pose"]["xyz"] == [0.2, 0.3, 1.4]
+    assert all(
+        math.isclose(value, 0.0, abs_tol=1e-9)
+        for value in updated_camera["pose"]["rpy"]
+    )
 
 
 def test_blender_change_set_refreshes_world_snapshot_artifact_digest(tmp_path: Path) -> None:
@@ -374,7 +428,6 @@ def test_blender_change_set_refreshes_world_snapshot_artifact_digest(tmp_path: P
         _blender_change_set(
             world_package,
             changes=[_crate_layout_change()],
-            review_only=[_scene_camera_review()],
         ),
     )
 
@@ -401,13 +454,6 @@ def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
             ],
             review_only=[
                 {
-                    "entity_type": "camera",
-                    "stable_id": "cam-1",
-                    "position_xyz": [0.0, 0.0, 1.0],
-                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                    "reason": "camera round-trip requires camera-frame review before apply",
-                },
-                {
                     "entity_type": "new_world_object",
                     "sim_name": "Added cube",
                     "position_xyz": [0.2, 0.3, 0.4],
@@ -421,8 +467,8 @@ def test_blender_change_set_imports_new_world_objects(tmp_path: Path) -> None:
     )
     added_object = result.world_package.world_snapshot.objects[1]
 
-    assert result.applied_change_count == 2
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 3
+    assert result.review_only_count == 0
     assert added_object == {
         "id": "blender_added_cube",
         "name": "Added cube",
@@ -448,7 +494,6 @@ def test_blender_change_set_imports_new_mesh_world_objects(tmp_path: Path) -> No
             world_package,
             changes=[_crate_layout_change()],
             review_only=[
-                _scene_camera_review(),
                 {
                     "entity_type": "new_world_object",
                     "sim_name": "Added mesh",
@@ -464,8 +509,8 @@ def test_blender_change_set_imports_new_mesh_world_objects(tmp_path: Path) -> No
     )
 
     added_object = result.world_package.world_snapshot.objects[1]
-    assert result.applied_change_count == 2
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 3
+    assert result.review_only_count == 0
     assert added_object["id"] == "blender_added_mesh"
     assert added_object["type"] == "mesh"
     assert added_object["asset_ref"] == "assets/added_mesh.obj"
@@ -511,13 +556,6 @@ def test_blender_change_set_assigns_unique_ids_to_imported_world_objects(
             ],
             review_only=[
                 {
-                    "entity_type": "camera",
-                    "stable_id": "cam-1",
-                    "position_xyz": [0.0, 0.0, 1.0],
-                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                    "reason": "camera round-trip requires camera-frame review before apply",
-                },
-                {
                     "entity_type": "new_world_object",
                     "sim_name": "Added cube",
                     "position_xyz": [0.2, 0.3, 0.4],
@@ -529,8 +567,8 @@ def test_blender_change_set_assigns_unique_ids_to_imported_world_objects(
         ),
     )
 
-    assert result.applied_change_count == 3
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 4
+    assert result.review_only_count == 0
     assert [item["id"] for item in result.world_package.world_snapshot.objects] == [
         "crate",
         "blender_added_cube",
@@ -617,7 +655,6 @@ def test_blender_change_set_rejects_invalid_world_object_rgba(tmp_path: Path) ->
             _blender_change_set(
                 world_package,
                 changes=[change],
-                review_only=[_scene_camera_review()],
             ),
         )
 
@@ -634,6 +671,7 @@ def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Pa
                 "reason": "deleted Studio world objects require Studio review before removal",
             }
         ],
+        include_camera_changes=False,
     )
     change_set["source"]["world_object_ids"] = ["crate"]
     change_set["source"]["camera_ids"] = []
@@ -647,19 +685,18 @@ def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Pa
     assert result.review_only_count == 1
 
 
-def test_blender_change_set_accepts_source_camera_review(tmp_path: Path) -> None:
+def test_blender_change_set_accepts_source_camera_update(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
         changes=[_crate_layout_change()],
-        review_only=[_scene_camera_review()],
     )
     change_set["source"]["camera_ids"] = ["cam-1"]
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
-    assert result.applied_change_count == 1
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 2
+    assert result.review_only_count == 0
 
 
 def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) -> None:
@@ -733,25 +770,28 @@ def test_blender_change_set_rejects_deletions_outside_source_object_ids(tmp_path
 
 def test_blender_change_set_rejects_missing_source_camera_coverage(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
-    change_set = _blender_change_set(world_package, changes=[_crate_layout_change()])
+    change_set = _blender_change_set(
+        world_package,
+        changes=[_crate_layout_change()],
+        include_camera_changes=False,
+    )
     change_set["source"]["camera_ids"] = ["cam-1"]
 
-    with pytest.raises(ValueError, match="missing camera review"):
+    with pytest.raises(ValueError, match="missing camera update"):
         apply_blender_layout_change_set(world_package, change_set)
 
 
-def test_blender_change_set_rejects_camera_reviews_outside_source_camera_ids(
+def test_blender_change_set_rejects_camera_updates_outside_source_camera_ids(
     tmp_path: Path,
 ) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
-        changes=[_crate_layout_change()],
-        review_only=[_scene_camera_review()],
+        changes=[_crate_layout_change(), _scene_camera_change()],
     )
     change_set["source"]["camera_ids"] = []
 
-    with pytest.raises(ValueError, match="outside source camera_ids"):
+    with pytest.raises(ValueError, match="changes reference camera id\\(s\\) outside source"):
         apply_blender_layout_change_set(world_package, change_set)
 
 
@@ -776,19 +816,12 @@ def test_blender_change_set_rejects_deleted_cameras_outside_source_camera_ids(
         apply_blender_layout_change_set(world_package, change_set)
 
 
-def test_blender_change_set_rejects_review_and_delete_for_same_camera(tmp_path: Path) -> None:
+def test_blender_change_set_rejects_update_and_delete_for_same_camera(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
-        changes=[],
+        changes=[_scene_camera_change()],
         review_only=[
-            {
-                "entity_type": "camera",
-                "stable_id": "cam-1",
-                "position_xyz": [0.0, 0.0, 1.0],
-                "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                "reason": "camera round-trip requires camera-frame review before apply",
-            },
             {
                 "entity_type": "deleted_camera",
                 "stable_id": "cam-1",
@@ -797,14 +830,14 @@ def test_blender_change_set_rejects_review_and_delete_for_same_camera(tmp_path: 
         ],
     )
 
-    with pytest.raises(ValueError, match="both review and delete camera"):
+    with pytest.raises(ValueError, match="both update and delete camera"):
         apply_blender_layout_change_set(world_package, change_set)
 
 
-def test_blender_change_set_rejects_camera_edits_in_apply_list(tmp_path: Path) -> None:
+def test_blender_change_set_rejects_camera_edits_without_explicit_pose_frame(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
 
-    with pytest.raises(ValueError, match="must be 'world_object'"):
+    with pytest.raises(ValueError, match="pose_frame"):
         apply_blender_layout_change_set(
             world_package,
             _blender_change_set(
@@ -938,7 +971,6 @@ def test_blender_change_set_rejects_missing_source_world_object_ids(tmp_path: Pa
     change_set = _blender_change_set(
         world_package,
         changes=[_crate_layout_change()],
-        review_only=[_scene_camera_review()],
     )
     del change_set["source"]["world_object_ids"]
 
@@ -951,7 +983,6 @@ def test_blender_change_set_rejects_missing_source_camera_ids(tmp_path: Path) ->
     change_set = _blender_change_set(
         world_package,
         changes=[_crate_layout_change()],
-        review_only=[_scene_camera_review()],
     )
     del change_set["source"]["camera_ids"]
 
@@ -1091,6 +1122,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     world_objects[0].scale = [0.5, 0.6, 0.7]
     world_objects[0].rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
     world_objects[0].data.materials[0].diffuse_color = (0.9, 0.1, 0.2, 1.0)
+    camera_objects[0].location = [0.2, 0.4, 1.6]
     fake_bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.0, 3.0, 4.0))
     new_world_object = fake_bpy.context.object
     new_world_object.name = "Extra Box"
@@ -1110,24 +1142,35 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
             "sim_name": "wl_crate",
             "size_xyz": [0.5, 0.6, 0.7],
             "stable_id": "crate",
-        }
+        },
+        {
+            "entity_type": "camera",
+            "pose_frame": "opengl_render_local",
+            "position_xyz": [0.2, 0.4, 1.6],
+            "quat_wxyz": _studio_zero_camera_render_quat_wxyz(),
+            "sim_name": "scene_camera",
+            "stable_id": "cam-1",
+        },
     ]
-    assert change_set["review_only"][0]["entity_type"] == "camera"
-    assert change_set["review_only"][0]["stable_id"] == "cam-1"
-    assert change_set["review_only"][1]["entity_type"] == "new_world_object"
-    assert change_set["review_only"][1]["sim_name"] == "Extra Box"
-    assert change_set["review_only"][1]["rgba"] == [0.2, 0.4, 0.6, 1.0]
+    assert change_set["review_only"][0]["entity_type"] == "new_world_object"
+    assert change_set["review_only"][0]["sim_name"] == "Extra Box"
+    assert change_set["review_only"][0]["rgba"] == [0.2, 0.4, 0.6, 1.0]
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
-    assert result.applied_change_count == 2
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 3
+    assert result.review_only_count == 0
     assert result.world_package.world_snapshot.objects[0]["position_xyz"] == [1.0, 2.0, 3.0]
     assert result.world_package.world_snapshot.objects[0]["size_xyz"] == [0.5, 0.6, 0.7]
     assert result.world_package.world_snapshot.objects[0]["color"] == "#e61a33"
     assert result.world_package.world_snapshot.objects[1]["id"] == "blender_extra_box"
     assert result.world_package.world_snapshot.objects[1]["position_xyz"] == [2.0, 3.0, 4.0]
     assert result.world_package.world_snapshot.objects[1]["color"] == "#336699"
+    assert result.world_package.world_snapshot.cameras[0]["pose"]["xyz"] == [0.2, 0.4, 1.6]
+    assert all(
+        math.isclose(value, 0.0, abs_tol=1e-9)
+        for value in result.world_package.world_snapshot.cameras[0]["pose"]["rpy"]
+    )
 
 
 def test_generated_blender_export_preserves_tagged_new_mesh_asset_ref(

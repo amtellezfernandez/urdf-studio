@@ -9,6 +9,9 @@ from typing import Any, Mapping, Sequence
 from scipy.spatial.transform import Rotation
 
 from backend.models.world_scene_package import WorldScenePackageManifest
+from backend.services.simulator_adapters.camera_conventions import (
+    world_camera_to_opengl_camera_rotation,
+)
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
 from backend.services.world_scene_package_digest import (
@@ -20,8 +23,9 @@ from backend.services.world_scene_package_params import MAX_OBJECTS_PER_WORLD
 BLENDER_CHANGE_SET_SCHEMA = "urdf-studio.blender-change-set.v1"
 BLENDER_CHANGE_SET_SOURCE_SCHEMA = "urdf-studio.blender-change-set-source.v1"
 BLENDER_APPLY_FRAME_MAPS = frozenset({"identity"})
+BLENDER_CAMERA_CHANGE_POSE_FRAME = "opengl_render_local"
 BLENDER_REVIEW_ONLY_ENTITY_TYPES = frozenset(
-    {"camera", "deleted_camera", "new_world_object", "deleted_world_object"}
+    {"deleted_camera", "new_world_object", "deleted_world_object"}
 )
 
 
@@ -49,6 +53,14 @@ class BlenderNewWorldObject:
     size_xyz: tuple[float, float, float]
     rgba: tuple[float, float, float, float] | None
     asset_ref: str | None
+
+
+@dataclass(frozen=True)
+class BlenderCameraChange:
+    stable_id: str
+    position_xyz: tuple[float, float, float]
+    quat_wxyz: tuple[float, float, float, float]
+    pose_frame: str
 
 
 @dataclass(frozen=True)
@@ -86,10 +98,12 @@ def apply_blender_layout_change_set_with_summary(
     world_package: WorldScenePackageManifest,
     change_set: Mapping[str, Any],
 ) -> BlenderLayoutChangeSetApplyResult:
-    object_updates, new_world_objects, review_only_count = _validate_blender_change_set(
-        change_set,
-        world_package,
-    )
+    (
+        object_updates,
+        camera_updates,
+        new_world_objects,
+        review_only_count,
+    ) = _validate_blender_change_set(change_set, world_package)
     updated = world_package.model_copy(deep=True)
     package_object_ids = _world_package_object_ids(updated)
     missing_object_ids = sorted(set(object_updates) - package_object_ids)
@@ -116,6 +130,11 @@ def apply_blender_layout_change_set_with_summary(
             f"({MAX_OBJECTS_PER_WORLD})."
         )
     updated.world_snapshot.objects = next_objects
+    updated.world_snapshot.cameras = _updated_camera_fields(
+        updated.world_snapshot.cameras,
+        camera_updates,
+    )
+    applied_change_count += len(camera_updates)
     normalized = normalize_world_snapshot_artifact_digests(updated)
     return BlenderLayoutChangeSetApplyResult(
         world_package=normalized,
@@ -139,7 +158,12 @@ def _blender_change_set_source_metadata(
 def _validate_blender_change_set(
     change_set: Mapping[str, Any],
     world_package: WorldScenePackageManifest,
-) -> tuple[dict[str, BlenderWorldObjectChange], tuple[BlenderNewWorldObject, ...], int]:
+) -> tuple[
+    dict[str, BlenderWorldObjectChange],
+    dict[str, BlenderCameraChange],
+    tuple[BlenderNewWorldObject, ...],
+    int,
+]:
     if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
         raise ValueError("Unsupported Blender change-set schema.")
     source = _validate_change_set_source(
@@ -153,17 +177,31 @@ def _validate_blender_change_set(
     )
 
     object_updates: dict[str, BlenderWorldObjectChange] = {}
+    camera_updates: dict[str, BlenderCameraChange] = {}
     for index, change in enumerate(changes):
-        normalized = _validate_world_object_change(change, f"changes[{index}]")
-        if normalized.stable_id in object_updates:
-            raise ValueError(
-                f"Blender change-set changes duplicate stable_id {normalized.stable_id!r}."
-            )
-        object_updates[normalized.stable_id] = normalized
+        entity_type = _change_entity_type(change, f"changes[{index}]")
+        if entity_type == "world_object":
+            normalized = _validate_world_object_change(change, f"changes[{index}]")
+            if normalized.stable_id in object_updates:
+                raise ValueError(
+                    f"Blender change-set changes duplicate stable_id {normalized.stable_id!r}."
+                )
+            object_updates[normalized.stable_id] = normalized
+            continue
+        if entity_type == "camera":
+            camera_change = _validate_camera_change(change, f"changes[{index}]")
+            if camera_change.stable_id in camera_updates:
+                raise ValueError(
+                    f"Blender change-set changes duplicate stable_id {camera_change.stable_id!r}."
+                )
+            camera_updates[camera_change.stable_id] = camera_change
+            continue
+        raise ValueError(
+            f"Blender change-set changes[{index}].entity_type must be 'world_object' or 'camera'."
+        )
 
     seen_review_ids: set[str] = set()
     deleted_world_object_ids: set[str] = set()
-    camera_review_ids: set[str] = set()
     deleted_camera_ids: set[str] = set()
     new_world_objects: list[BlenderNewWorldObject] = []
     for index, entry in enumerate(review_only):
@@ -177,22 +215,17 @@ def _validate_blender_change_set(
             )
         if entity_type == "deleted_world_object":
             deleted_world_object_ids.add(stable_id)
-        if entity_type == "camera":
-            camera_review_ids.add(stable_id)
         if entity_type == "deleted_camera":
+            if stable_id in camera_updates:
+                raise ValueError(
+                    f"Blender change-set cannot both update and delete camera {stable_id!r}."
+                )
             deleted_camera_ids.add(stable_id)
         if entity_type == "new_world_object":
             new_world_objects.append(
                 _validate_new_world_object_import(entry, f"review_only[{index}]")
             )
         seen_review_ids.add(review_key)
-
-    deleted_and_reviewed_camera_ids = sorted(camera_review_ids & deleted_camera_ids)
-    if deleted_and_reviewed_camera_ids:
-        raise ValueError(
-            "Blender change-set cannot both review and delete camera id(s): "
-            f"{', '.join(deleted_and_reviewed_camera_ids)}."
-        )
 
     _validate_change_set_source_coverage(
         source.world_object_ids,
@@ -201,11 +234,16 @@ def _validate_blender_change_set(
     )
     _validate_change_set_camera_coverage(
         source.camera_ids,
-        camera_review_ids=camera_review_ids,
+        camera_update_ids=set(camera_updates),
         deleted_camera_ids=deleted_camera_ids,
     )
 
-    return object_updates, tuple(new_world_objects), len(review_only) - len(new_world_objects)
+    return (
+        object_updates,
+        camera_updates,
+        tuple(new_world_objects),
+        len(review_only) - len(new_world_objects),
+    )
 
 
 def _validate_change_set_source(
@@ -310,15 +348,15 @@ def _validate_change_set_source_coverage(
 def _validate_change_set_camera_coverage(
     source_camera_ids: Sequence[str],
     *,
-    camera_review_ids: set[str],
+    camera_update_ids: set[str],
     deleted_camera_ids: set[str],
 ) -> None:
     source_ids = set(source_camera_ids)
-    unexpected_reviews = sorted(camera_review_ids - source_ids)
-    if unexpected_reviews:
+    unexpected_updates = sorted(camera_update_ids - source_ids)
+    if unexpected_updates:
         raise ValueError(
-            "Blender change-set review_only cameras reference id(s) outside source "
-            f"camera_ids: {', '.join(unexpected_reviews)}."
+            "Blender change-set changes reference camera id(s) outside source "
+            f"camera_ids: {', '.join(unexpected_updates)}."
         )
     unexpected_deletions = sorted(deleted_camera_ids - source_ids)
     if unexpected_deletions:
@@ -326,12 +364,18 @@ def _validate_change_set_camera_coverage(
             "Blender change-set review_only deletes camera id(s) outside source "
             f"camera_ids: {', '.join(unexpected_deletions)}."
         )
-    missing_ids = sorted(source_ids - camera_review_ids - deleted_camera_ids)
+    missing_ids = sorted(source_ids - camera_update_ids - deleted_camera_ids)
     if missing_ids:
         raise ValueError(
-            "Blender change-set is missing camera review or deletion review for "
+            "Blender change-set is missing camera update or deletion review for "
             f"source camera id(s): {', '.join(missing_ids)}."
         )
+
+
+def _change_entity_type(value: Any, path: str) -> str:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Blender change-set {path} must be an object.")
+    return _required_string(value.get("entity_type"), f"{path}.entity_type")
 
 
 def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectChange:
@@ -363,6 +407,37 @@ def _validate_world_object_change(value: Any, path: str) -> BlenderWorldObjectCh
         quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
         size_xyz=_required_positive_vector3(value.get("size_xyz"), f"{path}.size_xyz"),
         rgba=_optional_rgba(value.get("rgba"), f"{path}.rgba"),
+    )
+
+
+def _validate_camera_change(value: Any, path: str) -> BlenderCameraChange:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Blender change-set {path} must be an object.")
+    _reject_unknown_fields(
+        value,
+        path,
+        {
+            "entity_type",
+            "stable_id",
+            "sim_name",
+            "position_xyz",
+            "quat_wxyz",
+            "pose_frame",
+        },
+    )
+    entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
+    if entity_type != "camera":
+        raise ValueError(f"Blender change-set {path}.entity_type must be 'camera'.")
+    pose_frame = _required_string(value.get("pose_frame"), f"{path}.pose_frame")
+    if pose_frame != BLENDER_CAMERA_CHANGE_POSE_FRAME:
+        raise ValueError(
+            f"Blender change-set {path}.pose_frame must be {BLENDER_CAMERA_CHANGE_POSE_FRAME!r}."
+        )
+    return BlenderCameraChange(
+        stable_id=_required_string(value.get("stable_id"), f"{path}.stable_id"),
+        position_xyz=_required_vector3(value.get("position_xyz"), f"{path}.position_xyz"),
+        quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
+        pose_frame=pose_frame,
     )
 
 
@@ -458,6 +533,34 @@ def _world_package_camera_ids(world_package: WorldScenePackageManifest) -> set[s
     return camera_ids
 
 
+def _updated_camera_fields(
+    cameras: Sequence[dict[str, Any]],
+    camera_updates: Mapping[str, BlenderCameraChange],
+) -> list[dict[str, Any]]:
+    if not camera_updates:
+        return [dict(camera) for camera in cameras]
+    package_camera_ids = {
+        str(camera.get("id", "")).strip()
+        for camera in cameras
+        if isinstance(camera, Mapping)
+    }
+    missing_camera_ids = sorted(set(camera_updates) - package_camera_ids)
+    if missing_camera_ids:
+        raise ValueError(
+            "Blender change-set references unknown camera id(s): "
+            f"{', '.join(missing_camera_ids)}."
+        )
+    next_cameras: list[dict[str, Any]] = []
+    for camera in cameras:
+        next_camera = dict(camera)
+        camera_id = str(next_camera.get("id", "")).strip()
+        change = camera_updates.get(camera_id)
+        if change is not None:
+            next_camera.update(_world_camera_change_fields(change))
+        next_cameras.append(next_camera)
+    return next_cameras
+
+
 def _validate_source_world_object_ids(
     stable_ids: Sequence[str],
     world_package: WorldScenePackageManifest,
@@ -521,6 +624,24 @@ def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, A
     if change.rgba is not None:
         fields["color"] = _rgba_to_hex(change.rgba)
     return fields
+
+
+def _world_camera_change_fields(change: BlenderCameraChange) -> dict[str, Any]:
+    studio_rotation = _render_local_quat_to_studio_rotation(change.quat_wxyz)
+    rpy = studio_rotation.as_euler("xyz")
+    return {
+        "pose": {
+            "xyz": list(change.position_xyz),
+            "rpy": [float(rpy[0]), float(rpy[1]), float(rpy[2])],
+        },
+    }
+
+
+def _render_local_quat_to_studio_rotation(
+    quat_wxyz: tuple[float, float, float, float],
+) -> Rotation:
+    render_rotation = Rotation.from_quat((quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]))
+    return render_rotation * world_camera_to_opengl_camera_rotation().inv()
 
 
 def _new_world_object_fields(

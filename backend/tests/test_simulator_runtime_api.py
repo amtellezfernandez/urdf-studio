@@ -36,6 +36,9 @@ from backend.services.simulator_adapters import (
     normalize_simulator_workspace_change_set_request,
 )
 from backend.services.simulator_adapters.blender_change_sets import build_blender_change_set_source
+from backend.services.simulator_adapters.camera_conventions import (
+    world_camera_to_opengl_camera_rotation,
+)
 from backend.services.simulator_adapters.params import (
     SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,
@@ -178,11 +181,47 @@ def _blender_change_set_payload(
     changes: list[dict],
     review_only: list[dict] | None = None,
 ) -> dict:
+    next_changes = list(changes)
+    review_only_entries = list(review_only or [])
+    changed_camera_ids = {
+        str(change.get("stable_id", ""))
+        for change in next_changes
+        if change.get("entity_type") == "camera"
+    }
+    deleted_camera_ids = {
+        str(entry.get("stable_id", ""))
+        for entry in review_only_entries
+        if entry.get("entity_type") == "deleted_camera"
+    }
+    for camera in world_package_payload["world_snapshot"].get("cameras", []):
+        camera_id = str(camera.get("id", ""))
+        if (
+            camera_id
+            and camera_id not in changed_camera_ids
+            and camera_id not in deleted_camera_ids
+        ):
+            next_changes.append(_blender_camera_change_payload(camera_id))
     return {
         "schema": "urdf-studio.blender-change-set.v1",
         "source": _blender_change_set_source_payload(world_package_payload),
-        "changes": changes,
-        "review_only": review_only or [],
+        "changes": next_changes,
+        "review_only": review_only_entries,
+    }
+
+
+def _blender_camera_change_payload(stable_id: str) -> dict:
+    quat_xyzw = world_camera_to_opengl_camera_rotation().as_quat()
+    return {
+        "entity_type": "camera",
+        "stable_id": stable_id,
+        "position_xyz": [0.0, 0.0, 1.0],
+        "quat_wxyz": [
+            float(quat_xyzw[3]),
+            float(quat_xyzw[0]),
+            float(quat_xyzw[1]),
+            float(quat_xyzw[2]),
+        ],
+        "pose_frame": "opengl_render_local",
     }
 
 
@@ -488,12 +527,6 @@ def test_simulator_workspace_change_set_request_refreshes_stale_world_snapshot_d
     change_set = _blender_change_set_payload(
         world_package_payload,
         changes=[],
-        review_only=[
-            {
-                "entity_type": "camera",
-                "stable_id": "scene-camera",
-            }
-        ],
     )
     world_package_payload["artifacts"] = [
         {
@@ -721,12 +754,6 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
                                 "size_xyz": [0.5, 0.6, 0.7],
                             }
                         ],
-                        review_only=[
-                            {
-                                "entity_type": "camera",
-                                "stable_id": "scene-camera",
-                            }
-                        ],
                     ),
                 },
             )
@@ -739,8 +766,8 @@ def test_apply_blender_layout_change_set_updates_world_objects() -> None:
     assert updated_object["position_xyz"] == [1.0, 2.0, 3.0]
     assert updated_object["rotation_rpy_rad"] == [0.0, 0.0, 0.0]
     assert updated_object["size_xyz"] == [0.5, 0.6, 0.7]
-    assert payload["appliedChangeCount"] == 1
-    assert payload["reviewOnlyCount"] == 1
+    assert payload["appliedChangeCount"] == 2
+    assert payload["reviewOnlyCount"] == 0
 
 
 def test_apply_workspace_change_set_rejects_unsupported_schema() -> None:
@@ -777,12 +804,6 @@ def test_schema_routed_change_set_import_is_not_exposed_under_simulators() -> No
                     "change_set": _blender_change_set_payload(
                         world_package,
                         changes=[],
-                        review_only=[
-                            {
-                                "entity_type": "camera",
-                                "stable_id": "scene-camera",
-                            }
-                        ],
                     ),
                 },
             )

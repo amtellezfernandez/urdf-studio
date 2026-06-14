@@ -17,7 +17,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
     BLENDER_EDIT_SESSION_SCHEMA,
     BLENDER_LOCKED_DOMAINS,
     BLENDER_REVIEW_ONLY_CHANGES,
-    BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES,
+    BLENDER_SUPPORTED_LAYOUT_CHANGES,
 )
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
@@ -174,7 +174,7 @@ def build_blender_edit_session(
             "frame_convention": scene.layout.frame_convention,
         },
         "round_trip": {
-            "supported_changes": tuple(sorted(BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES)),
+            "supported_changes": tuple(sorted(BLENDER_SUPPORTED_LAYOUT_CHANGES)),
             "review_only": tuple(sorted(BLENDER_REVIEW_ONLY_CHANGES)),
             "locked": tuple(sorted(BLENDER_LOCKED_DOMAINS)),
             "change_set_path": str(change_set_path),
@@ -190,22 +190,7 @@ def build_blender_edit_session(
             "locked": True,
         },
         "objects": objects,
-        "cameras": [
-            {
-                "kind": "camera",
-                "stable_id": camera.camera_id,
-                "name": camera.name,
-                "sim_name": camera.sim_name,
-                "parent_joint": camera.parent_joint,
-                "parent_link": camera.parent_link,
-                "position_xyz": list(camera.position_xyz),
-                "quat_wxyz": list(camera.quat_wxyz),
-                "width": camera.width,
-                "height": camera.height,
-                "fov_deg": camera.fov_deg,
-            }
-            for camera in scene.cameras
-        ],
+        "cameras": [_blender_camera_entry(camera) for camera in scene.cameras],
         "blend_path": str(blend_path),
         "camera_screenshot_dir": str(camera_screenshot_dir) if camera_screenshot_dir else None,
     }
@@ -274,6 +259,11 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             def vector3(entry, key, default):
                 value = entry.get(key, default)
                 return [float(value[0]), float(value[1]), float(value[2])]
+
+
+            def vector4(entry, key, default):
+                value = entry.get(key, default)
+                return [float(value[0]), float(value[1]), float(value[2]), float(value[3])]
 
 
             def add_object(entry):
@@ -383,6 +373,16 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 obj.data.clip_end = 25.0
                 obj.data.display_size = 0.08
                 assign_metadata(obj, "camera", entry)
+                obj["urdf_studio_parent_position_xyz"] = vector3(
+                    entry,
+                    "parent_position_xyz",
+                    [0.0, 0.0, 0.0],
+                )
+                obj["urdf_studio_parent_quat_wxyz"] = vector4(
+                    entry,
+                    "parent_quat_wxyz",
+                    [1.0, 0.0, 0.0, 0.0],
+                )
                 return obj
 
 
@@ -530,6 +530,67 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                 return [float(value[0]), float(value[1]), float(value[2])]
 
 
+            def require_vector(owner, key, length):
+                value = owner.get(key)
+                if not isinstance(value, list) or len(value) != length:
+                    raise ValueError(f"{{owner.name}} is missing {{key}} metadata")
+                return [float(value[index]) for index in range(length)]
+
+
+            def quat_normalize(quat):
+                norm = sum(float(value) * float(value) for value in quat) ** 0.5
+                if norm <= 0.0:
+                    raise ValueError("camera quaternion must be non-zero")
+                return [float(value) / norm for value in quat]
+
+
+            def quat_conjugate(quat):
+                normalized = quat_normalize(quat)
+                return [normalized[0], -normalized[1], -normalized[2], -normalized[3]]
+
+
+            def quat_product(left, right):
+                lw, lx, ly, lz = left
+                rw, rx, ry, rz = right
+                return [
+                    lw * rw - lx * rx - ly * ry - lz * rz,
+                    lw * rx + lx * rw + ly * rz - lz * ry,
+                    lw * ry - lx * rz + ly * rw + lz * rx,
+                    lw * rz + lx * ry - ly * rx + lz * rw,
+                ]
+
+
+            def quat_multiply(left, right):
+                return quat_normalize(quat_product(quat_normalize(left), quat_normalize(right)))
+
+
+            def quat_rotate_vector(quat, vector):
+                normalized = quat_normalize(quat)
+                rotated = quat_product(
+                    quat_product(normalized, [0.0, vector[0], vector[1], vector[2]]),
+                    quat_conjugate(normalized),
+                )
+                return [rotated[1], rotated[2], rotated[3]]
+
+
+            def camera_local_pose(obj):
+                parent_position = require_vector(obj, "urdf_studio_parent_position_xyz", 3)
+                parent_quat = require_vector(obj, "urdf_studio_parent_quat_wxyz", 4)
+                inverse_parent_quat = quat_conjugate(parent_quat)
+                world_position = vector3(obj.location)
+                world_quat = quat_wxyz(obj)
+                local_position = quat_rotate_vector(
+                    inverse_parent_quat,
+                    [
+                        world_position[0] - parent_position[0],
+                        world_position[1] - parent_position[1],
+                        world_position[2] - parent_position[2],
+                    ],
+                )
+                local_quat = quat_multiply(inverse_parent_quat, world_quat)
+                return local_position, local_quat
+
+
             def local_size_xyz(obj):
                 base_size = obj.get("urdf_studio_base_size_xyz")
                 if isinstance(base_size, list) and len(base_size) == 3:
@@ -636,14 +697,15 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                         )
                     elif kind == "camera" and stable_id:
                         exported_camera_ids.add(str(stable_id))
-                        review_only.append(
+                        local_position, local_quat = camera_local_pose(obj)
+                        changes.append(
                             {{
                                 "entity_type": "camera",
                                 "stable_id": str(stable_id),
                                 "sim_name": str(obj.get("urdf_studio_sim_name", obj.name)),
-                                "position_xyz": vector3(obj.location),
-                                "quat_wxyz": quat_wxyz(obj),
-                                "reason": "camera round-trip requires camera-frame review before apply",
+                                "position_xyz": local_position,
+                                "quat_wxyz": local_quat,
+                                "pose_frame": "opengl_render_local",
                             }}
                         )
                     elif kind is None and getattr(obj, "type", "") == "MESH":
@@ -717,3 +779,37 @@ def _blender_object_entry(primitive: Any, asset_roots: Sequence[Path]) -> dict[s
         "asset_path": str(asset_path) if asset_path is not None else None,
         "asset_scale_xyz": list(primitive.asset_scale_xyz) if primitive.asset_scale_xyz else None,
     }
+
+
+def _blender_camera_entry(camera: Any) -> dict[str, Any]:
+    parent_rotation = camera.render_world_pose.rotation * camera.render_local_pose.rotation.inv()
+    parent_offset = parent_rotation.apply(camera.render_local_pose.position_xyz)
+    parent_position = tuple(
+        float(camera.position_xyz[index] - parent_offset[index])
+        for index in range(3)
+    )
+    return {
+        "kind": "camera",
+        "stable_id": camera.camera_id,
+        "name": camera.name,
+        "sim_name": camera.sim_name,
+        "parent_joint": camera.parent_joint,
+        "parent_link": camera.parent_link,
+        "parent_position_xyz": list(parent_position),
+        "parent_quat_wxyz": list(_quat_wxyz(parent_rotation)),
+        "position_xyz": list(camera.position_xyz),
+        "quat_wxyz": list(camera.quat_wxyz),
+        "width": camera.width,
+        "height": camera.height,
+        "fov_deg": camera.fov_deg,
+    }
+
+
+def _quat_wxyz(rotation: Any) -> tuple[float, float, float, float]:
+    quat_xyzw = rotation.as_quat()
+    return (
+        float(quat_xyzw[3]),
+        float(quat_xyzw[0]),
+        float(quat_xyzw[1]),
+        float(quat_xyzw[2]),
+    )

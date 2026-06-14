@@ -11,8 +11,9 @@ from backend.services.simulator_adapters.blender_change_sets import (
 from backend.services.simulator_adapters.numeric import is_finite_number
 
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
-BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES = frozenset(
+BLENDER_SUPPORTED_LAYOUT_CHANGES = frozenset(
     (
+        "camera.pose",
         "world_object.position_xyz",
         "world_object.rotation_rpy_rad",
         "world_object.size_xyz",
@@ -21,7 +22,6 @@ BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES = frozenset(
 )
 BLENDER_REVIEW_ONLY_CHANGES = frozenset(
     (
-        "camera.pose",
         "mesh.materials",
         "new_world_object",
     )
@@ -131,7 +131,7 @@ def _validate_blender_edit_session_round_trip(value: Any) -> str | None:
     if not isinstance(value, Mapping):
         return "Blender edit-session field 'round_trip' must be an object"
     for field_name, expected_values in (
-        ("supported_changes", BLENDER_SUPPORTED_WORLD_OBJECT_CHANGES),
+        ("supported_changes", BLENDER_SUPPORTED_LAYOUT_CHANGES),
         ("review_only", BLENDER_REVIEW_ONLY_CHANGES),
         ("locked", BLENDER_LOCKED_DOMAINS),
     ):
