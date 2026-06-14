@@ -107,6 +107,18 @@ describe("worldSceneManifest static scene validation", () => {
     );
   });
 
+  it("rejects fractional scene package timing", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        scenario_time_ms: 0.5,
+        scenario_duration_ms: 1.5,
+      })
+    );
+
+    expect(errors).toContain("world_snapshot.scenario_time_ms must be an integer");
+    expect(errors).toContain("world_snapshot.scenario_duration_ms must be an integer");
+  });
+
   it("rejects malformed package world objects", () => {
     const errors = validateLocalWorldSceneManifest(
       createManifest({
@@ -405,6 +417,25 @@ describe("worldSceneManifest static scene validation", () => {
     expect(validateWorldSceneLayerSnapshot(parsed)).toContain(
       STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR
     );
+    expect(parseStaticWorldSceneLayerSnapshot(payload).snapshot).toBeNull();
+  });
+
+  it("rejects fractional world layout timing before application", () => {
+    const payload = {
+      world_layout: {
+        name: "Fractional timeline",
+        objects: [createWorldLayoutObject()],
+        scenario_time_ms: 0.5,
+        scenario_duration_ms: 1.5,
+      },
+    };
+    const parsed = readWorldSceneLayerFromUnknown(payload);
+    expect(parsed).not.toBeNull();
+    if (!parsed) return;
+    expect(validateWorldSceneLayerSnapshot(parsed)).toEqual([
+      "world layout scenario_time_ms must be an integer",
+      "world layout scenario_duration_ms must be an integer",
+    ]);
     expect(parseStaticWorldSceneLayerSnapshot(payload).snapshot).toBeNull();
   });
 

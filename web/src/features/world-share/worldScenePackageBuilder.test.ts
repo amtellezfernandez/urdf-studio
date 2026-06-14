@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildWorldScenePackageManifest,
+  computeWorldSnapshotDigest,
+  refreshWorldScenePackageSnapshotDigest,
   stableStringify,
   toSerializableWorldObject,
   toWorldSceneLayerDownloadName,
@@ -172,7 +174,7 @@ describe("buildWorldScenePackageManifest", () => {
         scenarioTimeMs: TEST_SCENARIO_TIME_MS,
         scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
       })
-    ).rejects.toThrow("Cannot canonicalize a non-finite world scene package number.");
+    ).rejects.toThrow("cameras.cam-1.pose.xyz[1] must be a finite number.");
   });
 
   it("emits a scene-first world manifest without model-planning coupling", async () => {
@@ -318,6 +320,71 @@ describe("buildWorldScenePackageManifest", () => {
     expect(manifest.artifacts).toContainEqual({
       kind: "world_snapshot",
       digest_sha256: WORLD_SCENE_PACKAGE_BUILDER_TEST_FIXTURES.expectedWorldSnapshotDigest,
+      uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+    });
+  });
+
+  it("detaches camera state before hashing the manifest", async () => {
+    const cameras = [TEST_CAMERA];
+    const manifest = await buildWorldScenePackageManifest({
+      packageId: "Demo World",
+      version: "1.0.0",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras,
+      objects: [],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+    });
+
+    cameras[0].pose.xyz[0] = 99;
+
+    expect(manifest.world_snapshot.cameras[0].pose.xyz[0]).toBe(0);
+    expect(manifest.artifacts[0].digest_sha256).toBe(
+      await computeWorldSnapshotDigest(manifest.world_snapshot)
+    );
+  });
+
+  it("rejects non-numeric joint positions before hashing the manifest", async () => {
+    await expect(
+      buildWorldScenePackageManifest({
+        packageId: "Demo World",
+        version: "1.0.0",
+        urdfXml: "<robot name='demo'/>",
+        jointPositions: {
+          joint_1: "0.5" as unknown as number,
+        },
+        cameras: [],
+        objects: [],
+        scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+        scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+      })
+    ).rejects.toThrow("joint_positions.joint_1 must be a finite number.");
+  });
+
+  it("refreshes stale world snapshot digest artifacts for transfer", async () => {
+    const manifest = await buildWorldScenePackageManifest({
+      packageId: "Demo World",
+      version: "1.0.0",
+      urdfXml: "<robot name='demo'/>",
+      jointPositions: { joint_1: TEST_JOINT_POSITION_RAD },
+      cameras: [],
+      objects: [],
+      scenarioTimeMs: TEST_SCENARIO_TIME_MS,
+      scenarioDurationMs: TEST_SCENARIO_DURATION_MS,
+    });
+    manifest.artifacts[0].digest_sha256 = "0".repeat(64);
+
+    const refreshed = await refreshWorldScenePackageSnapshotDigest(manifest);
+
+    expect(refreshed.artifacts).toContainEqual({
+      kind: "world_snapshot",
+      digest_sha256: await computeWorldSnapshotDigest(refreshed.world_snapshot),
+      uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+    });
+    expect(refreshed.artifacts).not.toContainEqual({
+      kind: "world_snapshot",
+      digest_sha256: "0".repeat(64),
       uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
     });
   });

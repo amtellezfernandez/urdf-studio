@@ -221,3 +221,20 @@ def test_world_snapshot_rejects_non_finite_camera_and_object_numbers(
 
     with pytest.raises(ValidationError, match="must not contain non-finite numbers"):
         WorldScenePackageManifest.model_validate(payload)
+
+
+def test_world_snapshot_rejects_string_joint_position_before_digest_validation() -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"]["joint_positions"] = {"joint_1": "0.5"}
+
+    with pytest.raises(ValidationError, match="joint_positions\\['joint_1'\\] must be a finite number"):
+        WorldScenePackageManifest.model_validate(payload)
+
+
+@pytest.mark.parametrize("field_name", ["scenario_time_ms", "scenario_duration_ms"])
+def test_world_snapshot_rejects_non_integer_scenario_timing(field_name: str) -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"][field_name] = 0.5
+
+    with pytest.raises(ValidationError, match="must be an integer millisecond value"):
+        WorldScenePackageManifest.model_validate(payload)

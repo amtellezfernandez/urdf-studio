@@ -77,12 +77,29 @@ class WorldSnapshot(BaseModel):
         le=MAX_SCENARIO_DURATION_MS,
     )
 
+    @field_validator("joint_positions", mode="before")
+    @classmethod
+    def _validate_joint_positions_are_numbers(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        for joint_name, joint_position in value.items():
+            if not _is_finite_number(joint_position):
+                raise ValueError(f"joint_positions[{joint_name!r}] must be a finite number.")
+        return value
+
     @field_validator("joint_positions")
     @classmethod
     def _validate_finite_joint_positions(cls, value: Dict[str, float]) -> Dict[str, float]:
         for joint_name, joint_position in value.items():
             if not math.isfinite(joint_position):
                 raise ValueError(f"joint_positions[{joint_name!r}] must be finite.")
+        return value
+
+    @field_validator("scenario_time_ms", "scenario_duration_ms", mode="before")
+    @classmethod
+    def _validate_scenario_timing_is_integer(cls, value: Any) -> Any:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("must be an integer millisecond value.")
         return value
 
     @field_validator("cameras", "objects")

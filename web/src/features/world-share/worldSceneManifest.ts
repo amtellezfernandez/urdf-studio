@@ -66,6 +66,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isString = (value: unknown): value is string => typeof value === "string";
 const isNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
+const isIntegerNumber = (value: unknown): value is number =>
+  isNumber(value) && Number.isInteger(value);
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 
 const isOneOf = <TValue extends string>(
@@ -531,11 +533,11 @@ export const validateLocalWorldSceneManifest = (
   if (!Array.isArray(manifest.world_snapshot?.objects)) {
     errors.push("world_snapshot.objects must be an array");
   }
-  if (!isNumber(manifest.world_snapshot?.scenario_time_ms)) {
-    errors.push("world_snapshot.scenario_time_ms must be a finite number");
+  if (!isIntegerNumber(manifest.world_snapshot?.scenario_time_ms)) {
+    errors.push("world_snapshot.scenario_time_ms must be an integer");
   }
-  if (!isNumber(manifest.world_snapshot?.scenario_duration_ms)) {
-    errors.push("world_snapshot.scenario_duration_ms must be a finite number");
+  if (!isIntegerNumber(manifest.world_snapshot?.scenario_duration_ms)) {
+    errors.push("world_snapshot.scenario_duration_ms must be an integer");
   }
   if (Array.isArray(manifest.world_snapshot?.objects)) {
     errors.push(...validateSerializableWorldObjects(manifest.world_snapshot.objects));
@@ -544,8 +546,8 @@ export const validateLocalWorldSceneManifest = (
     errors.push(...validateSerializableWorldCameras(manifest.world_snapshot.cameras));
   }
   if (
-    isNumber(manifest.world_snapshot?.scenario_time_ms) &&
-    isNumber(manifest.world_snapshot?.scenario_duration_ms)
+    isIntegerNumber(manifest.world_snapshot?.scenario_time_ms) &&
+    isIntegerNumber(manifest.world_snapshot?.scenario_duration_ms)
   ) {
     errors.push(
       ...validateScenarioTiming(
@@ -627,11 +629,22 @@ export const validateWorldSceneLayerSnapshot = (
 ): string[] => {
   const errors: string[] = [];
   errors.push(...validateSerializableWorldObjects(snapshot.objects));
+  const timingErrors: string[] = [];
+  if (!isIntegerNumber(snapshot.scenario_time_ms)) {
+    timingErrors.push("world layout scenario_time_ms must be an integer");
+  }
+  if (!isIntegerNumber(snapshot.scenario_duration_ms)) {
+    timingErrors.push("world layout scenario_duration_ms must be an integer");
+  }
+  if (timingErrors.length > 0) {
+    errors.push(...timingErrors);
+    return errors;
+  }
   if (snapshot.scenario_time_ms < 0) {
-    errors.push("world layout scenario_time_ms must be a finite number >= 0");
+    errors.push("world layout scenario_time_ms must be an integer >= 0");
   }
   if (snapshot.scenario_duration_ms < 0) {
-    errors.push("world layout scenario_duration_ms must be a finite number >= 0");
+    errors.push("world layout scenario_duration_ms must be an integer >= 0");
   }
   if (
     snapshot.scenario_time_ms !== STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS ||

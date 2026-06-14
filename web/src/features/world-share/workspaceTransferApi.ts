@@ -65,6 +65,17 @@ const workspaceTransferTargetPath = (
 
 const workspaceTransferBasePath = (): string => "/workspace-transfer";
 
+const loadWorldScenePackageBuilderModule = () =>
+  import("@/features/world-share/worldScenePackageBuilder");
+
+const refreshWorkspaceWorldPackageDigest = async (
+  worldPackage: WorldScenePackageManifest
+): Promise<WorldScenePackageManifest> => {
+  const { refreshWorldScenePackageSnapshotDigest } =
+    await loadWorldScenePackageBuilderModule();
+  return refreshWorldScenePackageSnapshotDigest(worldPackage);
+};
+
 const formatTargetName = (
   targetId: WorkspaceTransferTargetId,
   targetLabel?: string | null
@@ -183,6 +194,7 @@ export const openWorkspaceTransferTarget = async ({
   targetLabel,
 }: OpenWorkspaceTransferTargetParams): Promise<WorkspaceOpenResponse> => {
   const meshAssets = await buildWorkspaceTransferMeshAssetUploads(meshFiles, packageRoots);
+  const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
   const response = await guardedFetch(
     `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/open")}`,
     {
@@ -192,7 +204,7 @@ export const openWorkspaceTransferTarget = async ({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: worldPackage,
+        world_package: transferWorldPackage,
         urdf_asset_path: urdfAssetPath || undefined,
         mesh_assets: meshAssets,
         package_roots: packageRoots ?? {},
@@ -216,6 +228,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
   worldPackage: WorldScenePackageManifest,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
+  const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
   const response = await guardedFetch(
     `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/change-set/apply")}`,
     {
@@ -225,7 +238,7 @@ export const applyWorkspaceTransferTargetChangeSet = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: worldPackage,
+        world_package: transferWorldPackage,
         change_set: changeSet,
       }),
     },
@@ -245,6 +258,7 @@ export const applyWorkspaceChangeSet = async (
   worldPackage: WorldScenePackageManifest,
   changeSet: unknown
 ): Promise<WorkspaceChangeSetApplyResponse> => {
+  const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
   const response = await guardedFetch(
     `${API_BASE_URL}${workspaceTransferBasePath()}/change-set/apply`,
     {
@@ -254,7 +268,7 @@ export const applyWorkspaceChangeSet = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        world_package: worldPackage,
+        world_package: transferWorldPackage,
         change_set: changeSet,
       }),
     },

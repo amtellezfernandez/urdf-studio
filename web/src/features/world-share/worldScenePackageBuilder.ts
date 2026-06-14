@@ -109,6 +109,136 @@ export const computeWorldSnapshotDigest = (
   snapshot: WorldScenePackageManifest["world_snapshot"]
 ): Promise<string> => digestSha256(stableStringify(snapshot));
 
+const normalizeSnapshotNumber = (value: unknown, fieldLabel: string): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${fieldLabel} must be a finite number.`);
+  }
+  return value;
+};
+
+const normalizeSnapshotInteger = (value: unknown, fieldLabel: string): number => {
+  const normalized = normalizeSnapshotNumber(value, fieldLabel);
+  if (!Number.isInteger(normalized)) {
+    throw new Error(`${fieldLabel} must be an integer millisecond value.`);
+  }
+  return normalized;
+};
+
+const cloneVector3 = (
+  value: readonly [number, number, number],
+  fieldLabel: string
+): [number, number, number] => [
+  normalizeSnapshotNumber(value[0], `${fieldLabel}[0]`),
+  normalizeSnapshotNumber(value[1], `${fieldLabel}[1]`),
+  normalizeSnapshotNumber(value[2], `${fieldLabel}[2]`),
+];
+
+const cloneJointPositions = (jointPositions: Record<string, number>): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(jointPositions).map(([jointName, position]) => [
+      jointName,
+      normalizeSnapshotNumber(position, `joint_positions.${jointName}`),
+    ])
+  );
+
+const cloneCamera = (camera: Camera): Camera => {
+  const intrinsics = { ...camera.intrinsics };
+  if (camera.intrinsics.distortion) {
+    intrinsics.distortion = { ...camera.intrinsics.distortion };
+  }
+  return {
+    id: camera.id,
+    name: camera.name,
+    parent_joint: camera.parent_joint,
+    pose: {
+      xyz: cloneVector3(camera.pose.xyz, `cameras.${camera.id}.pose.xyz`),
+      rpy: cloneVector3(camera.pose.rpy, `cameras.${camera.id}.pose.rpy`),
+    },
+    intrinsics,
+  };
+};
+
+const cloneSnapshotValue = (value: unknown, fieldLabel: string): unknown => {
+  if (
+    value === undefined ||
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    return normalizeSnapshotNumber(value, fieldLabel);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, index) => cloneSnapshotValue(item, `${fieldLabel}[${index}]`));
+  }
+  if (typeof value === "object") {
+    const cloned: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([key, item]) => {
+      const clonedValue = cloneSnapshotValue(item, `${fieldLabel}.${key}`);
+      if (clonedValue !== undefined) {
+        cloned[key] = clonedValue;
+      }
+    });
+    return cloned;
+  }
+  throw new Error(`${fieldLabel} must be JSON-compatible.`);
+};
+
+const cloneWorldSnapshot = (
+  snapshot: WorldScenePackageManifest["world_snapshot"]
+): WorldScenePackageManifest["world_snapshot"] => ({
+  urdf_xml: snapshot.urdf_xml,
+  joint_positions: cloneJointPositions(snapshot.joint_positions),
+  cameras: snapshot.cameras.map(cloneCamera),
+  objects: snapshot.objects.map(
+    (object, index) => cloneSnapshotValue(object, `objects[${index}]`) as SerializableWorldObject
+  ),
+  scenario_time_ms: normalizeSnapshotInteger(
+    snapshot.scenario_time_ms,
+    "scenario_time_ms"
+  ),
+  scenario_duration_ms: normalizeSnapshotInteger(
+    snapshot.scenario_duration_ms,
+    "scenario_duration_ms"
+  ),
+});
+
+const worldSnapshotArtifactRef = (digest: string): WorldArtifactRef => ({
+  kind: "world_snapshot",
+  digest_sha256: digest,
+  uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
+});
+
+export const refreshWorldScenePackageSnapshotDigest = async (
+  manifest: WorldScenePackageManifest
+): Promise<WorldScenePackageManifest> => {
+  const worldSnapshot = cloneWorldSnapshot(manifest.world_snapshot);
+  const snapshotDigest = await computeWorldSnapshotDigest(worldSnapshot);
+  return {
+    ...manifest,
+    runtime_targets: manifest.runtime_targets.map((target) => ({ ...target })),
+    interface: {
+      ...manifest.interface,
+      observation_modalities: [...manifest.interface.observation_modalities],
+    },
+    artifacts: [
+      ...manifest.artifacts
+        .filter((artifact) => artifact.kind !== "world_snapshot")
+        .map((artifact) => ({ ...artifact })),
+      worldSnapshotArtifactRef(snapshotDigest),
+    ],
+    world_snapshot: worldSnapshot,
+    provenance: { ...manifest.provenance },
+    security: {
+      signature_ref: manifest.security.signature_ref,
+      attestation_refs: [...manifest.security.attestation_refs],
+      sbom_ref: manifest.security.sbom_ref,
+    },
+  };
+};
+
 export const toSerializableWorldObject = (object: CreatedObject): SerializableWorldObject => {
   const ikTargetType = object.ikTargetType === "orbit" ? "orbit" : "punctual";
   const geometry = resolveWorldObjectGeometry(object);
@@ -191,21 +321,18 @@ export const buildWorldScenePackageManifest = async ({
 
   const snapshot = {
     urdf_xml: urdfXml,
-    joint_positions: jointPositions,
-    cameras,
+    joint_positions: cloneJointPositions(jointPositions),
+    cameras: cameras.map(cloneCamera),
     objects: serializeWorldSceneObjects(objects),
-    scenario_time_ms: scenarioTimeMs,
-    scenario_duration_ms: scenarioDurationMs,
+    scenario_time_ms: normalizeSnapshotInteger(scenarioTimeMs, "scenario_time_ms"),
+    scenario_duration_ms: normalizeSnapshotInteger(
+      scenarioDurationMs,
+      "scenario_duration_ms"
+    ),
   };
 
   const snapshotDigest = await computeWorldSnapshotDigest(snapshot);
-  const artifactRefs: WorldArtifactRef[] = [
-    {
-      kind: "world_snapshot",
-      digest_sha256: snapshotDigest,
-      uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
-    },
-  ];
+  const artifactRefs: WorldArtifactRef[] = [worldSnapshotArtifactRef(snapshotDigest)];
 
   const observationModalities = cameras.length > 0 ? ["rgb", "proprio"] : ["proprio"];
 

@@ -8,6 +8,7 @@ import {
   fetchWorkspaceTransferTargets,
   openWorkspaceTransferTarget,
 } from "@/features/world-share/workspaceTransferApi";
+import { computeWorldSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 
 const { guardedFetchMock } = vi.hoisted(() => ({
@@ -83,6 +84,13 @@ describe("workspaceTransferApi", () => {
 
     expect(prepared.pid).toBe(1234);
     expect(prepared.targetId).toBe("genesis");
+    const requestBody = JSON.parse(
+      guardedFetchMock.mock.calls[0][1].body as string
+    ) as { world_package: WorldScenePackageManifest };
+    expect(requestBody.world_package.artifacts).toContainEqual(expect.objectContaining({
+      kind: "world_snapshot",
+      digest_sha256: await computeWorldSnapshotDigest(requestBody.world_package.world_snapshot),
+    }));
     expect(guardedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/workspace-transfer/targets/genesis/open"),
       expect.objectContaining({
