@@ -64,7 +64,7 @@ def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> N
             scenario_duration_ms=12000,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     assert computed_world_snapshot_digest(manifest) == TEST_WORLD_SNAPSHOT_DIGEST
@@ -105,7 +105,7 @@ def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     normalized = normalize_world_snapshot_artifact_digests(manifest)
@@ -140,7 +140,7 @@ def test_world_scene_package_json_payload_omits_schema_invalid_null_optionals() 
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     payload = world_scene_package_json_payload(manifest)
@@ -178,7 +178,7 @@ def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract()
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     assert '"joint_1":0.0' not in canonical_world_snapshot_json(manifest)
@@ -213,7 +213,7 @@ def test_canonical_world_snapshot_json_matches_browser_number_and_string_contrac
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     assert canonical_world_snapshot_json(manifest) == (
@@ -250,7 +250,7 @@ def test_canonical_world_snapshot_json_matches_browser_large_float_contract() ->
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     assert canonical_world_snapshot_json(manifest) == (
@@ -292,7 +292,7 @@ def test_canonical_world_snapshot_json_sorts_keys_like_browser_utf16_contract() 
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
     assert canonical_world_snapshot_json(manifest) == (

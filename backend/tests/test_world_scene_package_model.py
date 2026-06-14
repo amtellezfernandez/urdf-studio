@@ -157,6 +157,33 @@ def test_world_scene_package_model_requires_schema_level_fields(field_name: str)
     assert exc_info.value.errors()[0]["type"] == "missing"
 
 
+@pytest.mark.parametrize(
+    ("mutator", "expected_path"),
+    [
+        (
+            lambda payload: payload["interface"].pop("observation_modalities"),
+            ("interface", "observation_modalities"),
+        ),
+        (
+            lambda payload: payload["security"].pop("attestation_refs"),
+            ("security", "attestation_refs"),
+        ),
+    ],
+)
+def test_world_scene_package_model_requires_nested_schema_fields(
+    mutator,
+    expected_path: tuple[str, str],
+) -> None:
+    payload = _manifest_payload()
+    mutator(payload)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert exc_info.value.errors()[0]["loc"] == expected_path
+    assert exc_info.value.errors()[0]["type"] == "missing"
+
+
 def test_world_scene_package_model_accepts_omitted_manifest_optionals() -> None:
     payload = _manifest_payload()
     payload["runtime_targets"] = [{"name": "blender", "mode": "python"}]

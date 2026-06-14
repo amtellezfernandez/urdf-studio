@@ -108,7 +108,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
             "cameras": str(SO101_CAMERA_CONFIG_PATH.relative_to(BASE_DIR)),
             "world_layout": str(STATIC_WORLD_LAYOUT_PATH.relative_to(BASE_DIR)),
         },
-        security={},
+        security={"attestation_refs": []},
     )
     return SimulatorWorkspacePrepareRequest(
         world_package=world_package,

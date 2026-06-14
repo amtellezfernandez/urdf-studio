@@ -45,9 +45,7 @@ class WorldRuntimeTarget(BaseModel):
 class WorldInterfaceSpec(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    observation_modalities: List[str] = Field(
-        default_factory=list, max_length=MAX_INTERFACE_MODALITIES
-    )
+    observation_modalities: List[str] = Field(..., max_length=MAX_INTERFACE_MODALITIES)
     action_semantics: str = Field(..., min_length=1)
     timestep_ms: int = Field(..., ge=1)
     frame_convention: str = Field(..., min_length=1)
@@ -70,7 +68,7 @@ class WorldSecuritySpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     signature_ref: Optional[str] = None
-    attestation_refs: List[str] = Field(default_factory=list)
+    attestation_refs: List[str]
     sbom_ref: Optional[str] = None
 
 

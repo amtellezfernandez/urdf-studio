@@ -53,7 +53,7 @@ def build_manifest(package_id: str, version: str) -> WorldScenePackageManifest:
             scenario_duration_ms=TEST_WORLD_SCENARIO_DURATION_MS,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
 

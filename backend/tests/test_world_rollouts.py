@@ -75,7 +75,7 @@ def _build_world_package() -> WorldScenePackageManifest:
             scenario_duration_ms=0,
         ),
         provenance={},
-        security={},
+        security={"attestation_refs": []},
     )
 
 
