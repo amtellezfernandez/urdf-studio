@@ -131,3 +131,30 @@ def validate_world_snapshot_artifact_digests(
         for index, digest in enumerate(declared_digests)
         if digest != actual_digest
     ]
+
+
+def normalize_world_snapshot_artifact_digests(
+    manifest: WorldScenePackageManifest,
+) -> WorldScenePackageManifest:
+    actual_digest = computed_world_snapshot_digest(manifest)
+    updated_artifacts = []
+    snapshot_artifact_seen = False
+    changed = False
+
+    for artifact in manifest.artifacts:
+        if artifact.kind != "world_snapshot":
+            updated_artifacts.append(artifact)
+            continue
+        if snapshot_artifact_seen:
+            changed = True
+            continue
+        snapshot_artifact_seen = True
+        if artifact.digest_sha256.lower() == actual_digest:
+            updated_artifacts.append(artifact)
+            continue
+        updated_artifacts.append(artifact.model_copy(update={"digest_sha256": actual_digest}))
+        changed = True
+
+    if not changed:
+        return manifest
+    return manifest.model_copy(update={"artifacts": updated_artifacts}, deep=True)

@@ -16,6 +16,7 @@ from backend.app import create_app
 from backend.api import simulator_runtime as simulator_runtime_api
 from backend.api import workspace_transfer as workspace_transfer_api
 from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
+from backend.services import workspace_transfer as workspace_transfer_service
 from backend.models.simulator_runtime import (
     SIMULATOR_CANONICAL_FRAME_CONVENTION,
     SIMULATOR_RUNTIME_SPECS,
@@ -36,6 +37,10 @@ from backend.services.simulator_adapters.blender_change_sets import build_blende
 from backend.services.simulator_adapters.params import (
     SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,
+)
+from backend.services.world_scene_package_digest import (
+    computed_world_snapshot_digest,
+    declared_world_snapshot_digests,
 )
 
 
@@ -459,6 +464,44 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
         "target_id": "genesis",
         "request_title": "Demo World",
     }
+
+
+def test_workspace_transfer_open_refreshes_stale_world_snapshot_digest(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_prepare_simulator_workspace(simulator_id, request):
+        captured["simulator_id"] = simulator_id
+        captured["declared_digests"] = declared_world_snapshot_digests(request.world_package)
+        captured["actual_digest"] = computed_world_snapshot_digest(request.world_package)
+        return SimulatorWorkspacePrepareResponse(
+            simulator_id=simulator_id,
+            started=True,
+            pid=1234,
+            command=["python", "-m", "sim"],
+            log_path="/tmp/sim.log",
+            world_package_path="/tmp/world.json",
+            robot_urdf_path="/tmp/robot.urdf",
+        )
+
+    monkeypatch.setattr(
+        workspace_transfer_service,
+        "prepare_simulator_workspace",
+        fake_prepare_simulator_workspace,
+    )
+
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/workspace-transfer/targets/blender/open",
+                headers=_operator_headers(),
+                json=_open_request_payload_with_bad_world_snapshot_digest(),
+            )
+        )
+
+    assert response.status_code == 200
+    assert captured["simulator_id"] == "blender"
+    assert captured["declared_digests"] == (captured["actual_digest"],)
 
 
 def test_workspace_transfer_status_delegates_to_target_registry(monkeypatch) -> None:

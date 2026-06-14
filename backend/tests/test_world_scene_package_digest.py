@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from backend.models.world_scene_package import (
+    WorldArtifactRef,
     WorldInterfaceSpec,
     WorldScenePackageManifest,
     WorldSnapshot,
@@ -10,6 +11,8 @@ from backend.models.world_scene_package import (
 from backend.services.world_scene_package_digest import (
     canonical_world_snapshot_json,
     computed_world_snapshot_digest,
+    declared_world_snapshot_digests,
+    normalize_world_snapshot_artifact_digests,
 )
 
 
@@ -59,6 +62,49 @@ def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> N
     )
 
     assert computed_world_snapshot_digest(manifest) == TEST_WORLD_SNAPSHOT_DIGEST
+
+
+def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
+    manifest = WorldScenePackageManifest(
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[
+            WorldArtifactRef(
+                kind="world_snapshot",
+                digest_sha256="0" * 64,
+                uri="inline://snapshot",
+            ),
+            WorldArtifactRef(
+                kind="world_snapshot",
+                digest_sha256="1" * 64,
+                uri="inline://snapshot",
+            ),
+        ],
+        world_snapshot=WorldSnapshot(
+            urdf_xml="<robot name='demo'/>",
+            joint_positions={"joint_1": 0.5},
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+    )
+
+    normalized = normalize_world_snapshot_artifact_digests(manifest)
+
+    assert declared_world_snapshot_digests(normalized) == (
+        computed_world_snapshot_digest(normalized),
+    )
+    assert len(normalized.artifacts) == 1
 
 
 def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract() -> None:

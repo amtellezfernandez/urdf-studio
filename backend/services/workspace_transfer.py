@@ -25,6 +25,7 @@ from backend.services.simulator_adapters import (
     prepare_simulator_workspace,
 )
 from backend.services.simulator_adapters.blender_change_sets import BLENDER_CHANGE_SET_SCHEMA
+from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
 
 
 def _adapter_change_set_request(
@@ -38,7 +39,7 @@ def _adapter_change_set_request(
 
 def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspacePrepareRequest:
     return SimulatorWorkspacePrepareRequest(
-        world_package=request.world_package,
+        world_package=normalize_world_snapshot_artifact_digests(request.world_package),
         urdf_asset_path=request.urdf_asset_path,
         mesh_assets=request.mesh_assets,
         package_roots=request.package_roots,
