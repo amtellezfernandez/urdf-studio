@@ -3,6 +3,7 @@ import {
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
   WORLD_SCENE_PACKAGE_LIMITS,
   WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS,
+  WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
 } from "@/features/world-share/worldScenePackageParams";
 
 import {
@@ -50,7 +51,7 @@ const createWorldCamera = () => ({
 const createManifest = (
   overrides?: Partial<WorldScenePackageManifest["world_snapshot"]>
 ): WorldScenePackageManifest => ({
-  schema_version: "1.0.0",
+  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
   package_id: "demo-scene",
   version: "0.1.0",
   title: "Demo Scene",

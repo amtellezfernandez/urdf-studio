@@ -1,4 +1,5 @@
 import type { Camera } from "@/shared/types/camera";
+import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
 
 export type WorldRuntimeTargetMode = "native" | "python" | "container";
 
@@ -86,7 +87,7 @@ export type WorldSnapshot = {
 };
 
 export type WorldScenePackageManifest = {
-  schema_version: string;
+  schema_version: typeof WORLD_SCENE_PACKAGE_SCHEMA_VERSION;
   package_id: string;
   version: string;
   title: string;

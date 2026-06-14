@@ -9,6 +9,7 @@ import {
   openWorkspaceTransferTarget,
 } from "@/features/world-share/workspaceTransferApi";
 import { computeWorldSnapshotDigest } from "@/features/world-share/worldScenePackageBuilder";
+import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 
 const { guardedFetchMock } = vi.hoisted(() => ({
@@ -20,7 +21,7 @@ vi.mock("@/shared/lib/backendGuard", () => ({
 }));
 
 const createWorldPackage = (): WorldScenePackageManifest => ({
-  schema_version: "urdf-studio.world-scene-package.v1",
+  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
   package_id: "demo_world",
   version: "1.0.0",
   title: "Demo World",
