@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-WorldLayoutBackend = Literal["mujoco", "genesis"]
+StaticTransferValidationBackend = Literal["mujoco", "genesis"]
 ConcreteWorldLayoutFrameMap = Literal["identity", "studio-y-up-to-z-up"]
 WorldLayoutFrameMap = Literal["auto", "identity", "studio-y-up-to-z-up"]
 

@@ -13,7 +13,7 @@ from backend.services.world_layout_static_transfer import (
     SIZE_TOLERANCE_M,
     check_static_world_layout_file,
 )
-from backend.services.world_layout_transfer_types import WorldLayoutBackend
+from backend.services.world_layout_transfer_types import StaticTransferValidationBackend
 
 
 DEFAULT_LAYOUT_PATH = Path("web/public/world-layouts/static-transfer-smoke.world-layout.json")
@@ -22,7 +22,7 @@ TRANSFER_CHECK_CACHE_ROOT = BASE_DIR / ".cache" / "simulator-workspaces" / "runt
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check static URDF Studio world-layout transfer into MuJoCo and Genesis."
+        description="Check static primitive layout parity in MuJoCo and Genesis."
     )
     parser.add_argument(
         "layout",
@@ -73,7 +73,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _selected_backends(value: str) -> tuple[WorldLayoutBackend, ...]:
+def _selected_backends(value: str) -> tuple[StaticTransferValidationBackend, ...]:
     if value == "all":
         return ("mujoco", "genesis")
     return (value,)  # type: ignore[return-value]

@@ -20,8 +20,8 @@ from backend.services.world_layout_transfer_constants import (
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     SimPrimitive,
+    StaticTransferValidationBackend,
     StaticWorldLayout,
-    WorldLayoutBackend,
     WorldLayoutFrameMap,
     WorldLayoutObject,
     WorldLayoutTransferError,
@@ -691,7 +691,7 @@ def check_genesis_transfer(
 def build_static_transfer_report(
     layout: StaticWorldLayout,
     *,
-    backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
+    backends: Sequence[StaticTransferValidationBackend] = ("mujoco", "genesis"),
     frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
     write_mjcf_path: Path | None = None,
@@ -786,7 +786,7 @@ def build_static_transfer_report(
 def check_static_world_layout_file(
     layout_path: Path,
     *,
-    backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
+    backends: Sequence[StaticTransferValidationBackend] = ("mujoco", "genesis"),
     frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
     write_mjcf_path: Path | None = None,
@@ -810,7 +810,7 @@ def check_static_world_layout_file(
 def check_static_world_layout_text(
     raw_json: str,
     *,
-    backends: Sequence[WorldLayoutBackend] = ("mujoco", "genesis"),
+    backends: Sequence[StaticTransferValidationBackend] = ("mujoco", "genesis"),
     frame_map: WorldLayoutFrameMap = "identity",
     include_hidden: bool = False,
     position_tolerance_m: float = POSITION_TOLERANCE_M,
