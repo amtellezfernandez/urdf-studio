@@ -731,7 +731,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                             {{
                                 "entity_type": "deleted_camera",
                                 "stable_id": stable_id,
-                                "reason": "deleted Studio cameras require Studio review before removal",
+                                "reason": "deleted Blender camera removes the Studio camera",
                             }}
                         )
                 for stable_id in source_world_object_ids:
@@ -740,7 +740,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                             {{
                                 "entity_type": "deleted_world_object",
                                 "stable_id": stable_id,
-                                "reason": "deleted Studio world objects require Studio review before removal",
+                                "reason": "deleted Blender world object removes the Studio world object",
                             }}
                         )
                 payload = {{

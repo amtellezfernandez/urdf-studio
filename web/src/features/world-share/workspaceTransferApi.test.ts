@@ -104,6 +104,67 @@ describe("workspaceTransferApi", () => {
     );
   });
 
+  it("refreshes stale world snapshot artifacts before opening Blender", async () => {
+    guardedFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          targetId: "blender",
+          started: true,
+          pid: 1234,
+          command: ["python", "-m", "backend.scripts.blender_workspace_prepare"],
+          logPath: "/tmp/blender.log",
+          worldPackagePath: "/tmp/world-package.json",
+          robotUrdfPath: "/tmp/robot.urdf",
+          targetAssetPath: "/tmp/robot.urdf",
+          targetAssetFormat: "native",
+          bundledMeshCount: 0,
+          unresolvedMeshRefs: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const worldPackage = createWorldPackage();
+    worldPackage.artifacts = [
+      {
+        kind: "world_snapshot",
+        digest_sha256: "0".repeat(64),
+        uri: "inline://snapshot",
+      },
+    ];
+    worldPackage.world_snapshot.objects = [
+      {
+        id: "crate",
+        name: "Crate",
+        type: "cube",
+        position_xyz: [0.1, 0.2, 0.3],
+        rotation_rpy_rad: [0.0, 0.0, 0.0],
+        size_xyz: [0.2, 0.3, 0.4],
+        color: "#22c55e",
+      },
+    ];
+
+    await openWorkspaceTransferTarget({
+      targetId: "blender",
+      worldPackage,
+      meshFiles: {},
+      targetLabel: "Blender",
+    });
+
+    const requestBody = JSON.parse(
+      guardedFetchMock.mock.calls[0][1].body as string
+    ) as { world_package: WorldScenePackageManifest };
+    const expectedDigest = await computeWorldSnapshotDigest(
+      requestBody.world_package.world_snapshot
+    );
+    expect(requestBody.world_package.artifacts).toEqual([
+      {
+        kind: "world_snapshot",
+        digest_sha256: expectedDigest,
+        uri: "inline://snapshot",
+      },
+    ]);
+  });
+
   it("builds package-root aliases for browser mesh uploads", async () => {
     const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
 

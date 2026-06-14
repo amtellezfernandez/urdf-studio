@@ -695,7 +695,7 @@ def test_blender_change_set_rejects_invalid_world_object_rgba(tmp_path: Path) ->
         )
 
 
-def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Path) -> None:
+def test_blender_change_set_applies_deleted_world_object(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
@@ -704,7 +704,7 @@ def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Pa
             {
                 "entity_type": "deleted_world_object",
                 "stable_id": "crate",
-                "reason": "deleted Studio world objects require Studio review before removal",
+                "reason": "deleted Blender world object removes the Studio world object",
             }
         ],
         include_camera_changes=False,
@@ -717,8 +717,9 @@ def test_blender_change_set_counts_deleted_world_object_review_only(tmp_path: Pa
         change_set,
     )
 
-    assert result.applied_change_count == 0
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 1
+    assert result.review_only_count == 0
+    assert result.world_package.world_snapshot.objects == []
 
 
 def test_blender_change_set_accepts_source_camera_update(tmp_path: Path) -> None:
@@ -735,7 +736,7 @@ def test_blender_change_set_accepts_source_camera_update(tmp_path: Path) -> None
     assert result.review_only_count == 0
 
 
-def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) -> None:
+def test_blender_change_set_applies_deleted_camera(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
     change_set = _blender_change_set(
         world_package,
@@ -744,7 +745,7 @@ def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) ->
             {
                 "entity_type": "deleted_camera",
                 "stable_id": "cam-1",
-                "reason": "deleted Studio cameras require Studio review before removal",
+                "reason": "deleted Blender camera removes the Studio camera",
             }
         ],
     )
@@ -752,8 +753,9 @@ def test_blender_change_set_counts_deleted_camera_review_only(tmp_path: Path) ->
 
     result = apply_blender_layout_change_set_with_summary(world_package, change_set)
 
-    assert result.applied_change_count == 1
-    assert result.review_only_count == 1
+    assert result.applied_change_count == 2
+    assert result.review_only_count == 0
+    assert result.world_package.world_snapshot.cameras == []
 
 
 def test_blender_change_set_rejects_missing_source_object_coverage(tmp_path: Path) -> None:
@@ -761,7 +763,7 @@ def test_blender_change_set_rejects_missing_source_object_coverage(tmp_path: Pat
     change_set = _blender_change_set(world_package, changes=[])
     change_set["source"]["world_object_ids"] = ["crate"]
 
-    with pytest.raises(ValueError, match="missing update or deletion review"):
+    with pytest.raises(ValueError, match="missing update or delete"):
         apply_blender_layout_change_set(world_package, change_set)
 
 
@@ -794,7 +796,7 @@ def test_blender_change_set_rejects_deletions_outside_source_object_ids(tmp_path
             {
                 "entity_type": "deleted_world_object",
                 "stable_id": "crate",
-                "reason": "deleted Studio world objects require Studio review before removal",
+                "reason": "deleted Blender world object removes the Studio world object",
             }
         ],
     )
@@ -842,7 +844,7 @@ def test_blender_change_set_rejects_deleted_cameras_outside_source_camera_ids(
             {
                 "entity_type": "deleted_camera",
                 "stable_id": "cam-1",
-                "reason": "deleted Studio cameras require Studio review before removal",
+                "reason": "deleted Blender camera removes the Studio camera",
             }
         ],
     )
@@ -861,7 +863,7 @@ def test_blender_change_set_rejects_update_and_delete_for_same_camera(tmp_path: 
             {
                 "entity_type": "deleted_camera",
                 "stable_id": "cam-1",
-                "reason": "deleted Studio cameras require Studio review before removal",
+                "reason": "deleted Blender camera removes the Studio camera",
             },
         ],
     )
@@ -981,7 +983,7 @@ def test_blender_change_set_rejects_update_and_delete_for_same_object(tmp_path: 
                     {
                         "entity_type": "deleted_world_object",
                         "stable_id": "crate",
-                        "reason": "deleted Studio world objects require Studio review before removal",
+                        "reason": "deleted Blender world object removes the Studio world object",
                     }
                 ],
             ),
@@ -1210,6 +1212,58 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
         math.isclose(value, 0.0, abs_tol=1e-9)
         for value in result.world_package.world_snapshot.cameras[0]["pose"]["rpy"]
     )
+
+
+def test_generated_blender_export_applies_deleted_studio_entities(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    world_package, world_package_path, robot_urdf_path = _write_scene_inputs(tmp_path)
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+    fake_bpy = FakeBlenderModule()
+    monkeypatch.setitem(sys.modules, "bpy", fake_bpy)
+
+    runpy.run_path(str(artifacts.open_script_path), run_name="__main__")
+
+    fake_bpy.data.objects[:] = [
+        obj
+        for obj in fake_bpy.data.objects
+        if obj.get("urdf_studio_kind") not in {"world_object", "camera"}
+    ]
+    runpy.run_path(str(artifacts.export_script_path), run_name="__main__")
+
+    change_set = json.loads(artifacts.change_set_path.read_text(encoding="utf-8"))
+    assert change_set["changes"] == []
+    assert change_set["review_only"] == [
+        {
+            "entity_type": "deleted_camera",
+            "reason": "deleted Blender camera removes the Studio camera",
+            "stable_id": "cam-1",
+        },
+        {
+            "entity_type": "deleted_world_object",
+            "reason": "deleted Blender world object removes the Studio world object",
+            "stable_id": "crate",
+        },
+    ]
+
+    result = apply_blender_layout_change_set_with_summary(world_package, change_set)
+
+    assert result.applied_change_count == 2
+    assert result.review_only_count == 0
+    assert result.world_package.world_snapshot.objects == []
+    assert result.world_package.world_snapshot.cameras == []
 
 
 def test_generated_blender_export_preserves_tagged_new_mesh_asset_ref(

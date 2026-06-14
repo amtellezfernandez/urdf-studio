@@ -27,7 +27,7 @@ BLENDER_CHANGE_SET_SCHEMA = "urdf-studio.blender-change-set.v1"
 BLENDER_CHANGE_SET_SOURCE_SCHEMA = "urdf-studio.blender-change-set-source.v1"
 BLENDER_APPLY_FRAME_MAPS = frozenset({"identity"})
 BLENDER_CAMERA_CHANGE_POSE_FRAME = "opengl_render_local"
-BLENDER_REVIEW_ONLY_ENTITY_TYPES = frozenset(
+BLENDER_AUXILIARY_ENTITY_TYPES = frozenset(
     {"deleted_camera", "new_world_object", "deleted_world_object"}
 )
 
@@ -106,6 +106,8 @@ def apply_blender_layout_change_set_with_summary(
         object_updates,
         camera_updates,
         new_world_objects,
+        deleted_world_object_ids,
+        deleted_camera_ids,
         review_only_count,
     ) = _validate_blender_change_set(change_set, world_package)
     updated = world_package.model_copy(deep=True)
@@ -121,6 +123,9 @@ def apply_blender_layout_change_set_with_summary(
     for item in updated.world_snapshot.objects:
         next_item = dict(item)
         object_id = str(next_item.get("id", "")).strip()
+        if object_id in deleted_world_object_ids:
+            applied_change_count += 1
+            continue
         change = object_updates.get(object_id)
         if change is not None:
             next_item.update(_world_object_change_fields(change))
@@ -137,8 +142,9 @@ def apply_blender_layout_change_set_with_summary(
     updated.world_snapshot.cameras = _updated_camera_fields(
         updated.world_snapshot.cameras,
         camera_updates,
+        deleted_camera_ids,
     )
-    applied_change_count += len(camera_updates)
+    applied_change_count += len(camera_updates) + len(deleted_camera_ids)
     normalized = normalize_world_snapshot_artifact_digests(updated)
     return BlenderLayoutChangeSetApplyResult(
         world_package=normalized,
@@ -166,6 +172,8 @@ def _validate_blender_change_set(
     dict[str, BlenderWorldObjectChange],
     dict[str, BlenderCameraChange],
     tuple[BlenderNewWorldObject, ...],
+    frozenset[str],
+    frozenset[str],
     int,
 ]:
     if change_set.get("schema") != BLENDER_CHANGE_SET_SCHEMA:
@@ -242,11 +250,16 @@ def _validate_blender_change_set(
         deleted_camera_ids=deleted_camera_ids,
     )
 
+    applied_auxiliary_entry_count = (
+        len(new_world_objects) + len(deleted_world_object_ids) + len(deleted_camera_ids)
+    )
     return (
         object_updates,
         camera_updates,
         tuple(new_world_objects),
-        len(review_only) - len(new_world_objects),
+        frozenset(deleted_world_object_ids),
+        frozenset(deleted_camera_ids),
+        len(review_only) - applied_auxiliary_entry_count,
     )
 
 
@@ -344,7 +357,7 @@ def _validate_change_set_source_coverage(
     missing_ids = sorted(source_ids - object_update_ids - deleted_world_object_ids)
     if missing_ids:
         raise ValueError(
-            "Blender change-set is missing update or deletion review for source "
+            "Blender change-set is missing update or delete for source "
             f"world object id(s): {', '.join(missing_ids)}."
         )
 
@@ -371,7 +384,7 @@ def _validate_change_set_camera_coverage(
     missing_ids = sorted(source_ids - camera_update_ids - deleted_camera_ids)
     if missing_ids:
         raise ValueError(
-            "Blender change-set is missing camera update or deletion review for "
+            "Blender change-set is missing camera update or delete for "
             f"source camera id(s): {', '.join(missing_ids)}."
         )
 
@@ -479,10 +492,10 @@ def _validate_review_only_entry(value: Any, path: str) -> str:
         },
     )
     entity_type = _required_string(value.get("entity_type"), f"{path}.entity_type")
-    if entity_type not in BLENDER_REVIEW_ONLY_ENTITY_TYPES:
+    if entity_type not in BLENDER_AUXILIARY_ENTITY_TYPES:
         raise ValueError(
             f"Blender change-set {path}.entity_type must be one of: "
-            f"{', '.join(sorted(BLENDER_REVIEW_ONLY_ENTITY_TYPES))}."
+            f"{', '.join(sorted(BLENDER_AUXILIARY_ENTITY_TYPES))}."
         )
     if entity_type == "new_world_object":
         stable_id = _required_string(value.get("sim_name"), f"{path}.sim_name")
@@ -542,8 +555,9 @@ def _world_package_camera_ids(world_package: WorldScenePackageManifest) -> set[s
 def _updated_camera_fields(
     cameras: Sequence[dict[str, Any]],
     camera_updates: Mapping[str, BlenderCameraChange],
+    deleted_camera_ids: frozenset[str],
 ) -> list[dict[str, Any]]:
-    if not camera_updates:
+    if not camera_updates and not deleted_camera_ids:
         return [dict(camera) for camera in cameras]
     package_camera_ids = {
         str(camera.get("id", "")).strip()
@@ -560,6 +574,8 @@ def _updated_camera_fields(
     for camera in cameras:
         next_camera = dict(camera)
         camera_id = str(next_camera.get("id", "")).strip()
+        if camera_id in deleted_camera_ids:
+            continue
         change = camera_updates.get(camera_id)
         if change is not None:
             next_camera.update(_world_camera_change_fields(change, next_camera))
