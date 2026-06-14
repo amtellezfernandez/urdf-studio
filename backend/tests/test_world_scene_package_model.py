@@ -61,6 +61,18 @@ def _camera_payload() -> dict:
     }
 
 
+def _world_object_payload() -> dict:
+    return {
+        "id": "crate",
+        "name": "Crate",
+        "type": "cube",
+        "position_xyz": [0.0, 0.0, 0.1],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.2, 0.3, 0.4],
+        "color": "#22c55e",
+    }
+
+
 def test_world_snapshot_accepts_valid_world_camera_contract() -> None:
     payload = _manifest_payload()
     payload["world_snapshot"]["cameras"] = [_camera_payload()]
@@ -68,6 +80,78 @@ def test_world_snapshot_accepts_valid_world_camera_contract() -> None:
     manifest = WorldScenePackageManifest.model_validate(payload)
 
     assert manifest.world_snapshot.cameras[0]["id"] == "cam"
+
+
+def test_world_snapshot_accepts_valid_world_object_contract() -> None:
+    payload = _manifest_payload()
+    payload["world_snapshot"]["objects"] = [
+        {
+            **_world_object_payload(),
+            "type": "mesh",
+            "asset_ref": "assets/crate.obj",
+            "asset_scale_xyz": [1.0, 1.0, 1.0],
+            "mesh": {
+                "path": "assets/crate.obj",
+                "scale": 1.2,
+            },
+            "simulation": {
+                "fixed": True,
+                "collision": True,
+                "mass_kg": 1.5,
+                "friction": 0.8,
+                "restitution": 0.1,
+                "semantic_role": "fixture",
+            },
+        }
+    ]
+
+    manifest = WorldScenePackageManifest.model_validate(payload)
+
+    assert manifest.world_snapshot.objects[0]["id"] == "crate"
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_message"),
+    [
+        (lambda world_object: world_object.update({"id": ""}), "objects\\[0\\].id"),
+        (lambda world_object: world_object.update({"type": "box"}), "objects\\[0\\].type"),
+        (lambda world_object: world_object.update({"size_xyz": [0.2, 0.0, 0.4]}), "size_xyz\\[1\\]"),
+        (lambda world_object: world_object.update({"is_hidden": "yes"}), "is_hidden must be a boolean"),
+        (
+            lambda world_object: world_object.update({"ik_target_type": "orbit"}),
+            "orbit_radius must be a finite number > 0",
+        ),
+        (
+            lambda world_object: world_object.update({"simulation": {"friction": 0.0}}),
+            "simulation.friction must be >= 0.01",
+        ),
+        (
+            lambda world_object: world_object.update({"mesh": []}),
+            "objects\\[0\\].mesh must be an object",
+        ),
+        (
+            lambda world_object: world_object.update({"type": "mesh"}),
+            "mesh asset reference is required for mesh objects",
+        ),
+        (
+            lambda world_object: world_object.update(
+                {"type": "mesh", "asset_ref": "/tmp/crate.obj"}
+            ),
+            "asset_ref must be a portable relative asset reference",
+        ),
+    ],
+)
+def test_world_snapshot_rejects_invalid_world_object_contract(
+    mutator,
+    expected_message: str,
+) -> None:
+    payload = _manifest_payload()
+    world_object = _world_object_payload()
+    mutator(world_object)
+    payload["world_snapshot"]["objects"] = [world_object]
+
+    with pytest.raises(ValidationError, match=expected_message):
+        WorldScenePackageManifest.model_validate(payload)
 
 
 @pytest.mark.parametrize(

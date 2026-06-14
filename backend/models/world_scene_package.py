@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.services.world_asset_refs import normalize_portable_world_asset_ref
+
 from backend.services.world_scene_package_params import (
     MAX_ARTIFACT_REFS,
     MAX_CAMERAS_PER_WORLD,
@@ -95,6 +97,12 @@ class WorldSnapshot(BaseModel):
         _raise_for_invalid_camera_payloads(value)
         return value
 
+    @field_validator("objects")
+    @classmethod
+    def _validate_object_payloads(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        _raise_for_invalid_object_payloads(value)
+        return value
+
 
 def _raise_for_non_finite_payload_numbers(value: Any, path: str = "") -> None:
     if isinstance(value, float) and not math.isfinite(value):
@@ -134,6 +142,10 @@ def _is_positive_number(value: Any) -> bool:
 
 def _is_valid_fov_deg(value: Any) -> bool:
     return _is_finite_number(value) and 1.0 <= float(value) <= 179.0
+
+
+def _is_boolean(value: Any) -> bool:
+    return isinstance(value, bool)
 
 
 def _raise_for_invalid_camera_payloads(cameras: List[Dict[str, Any]]) -> None:
@@ -194,6 +206,187 @@ def _raise_for_invalid_vector3(value: Any, path: str) -> None:
     for axis, component in enumerate(value):
         if not _is_finite_number(component):
             raise ValueError(f"{path}[{axis}] must be a finite number.")
+
+
+WORLD_OBJECT_TYPES = {"cube", "point", "sphere", "cylinder", "mesh"}
+WORLD_OBJECT_SOURCES = {
+    "user",
+    "world-scenario",
+    "demo-world",
+    "runtime-detection",
+    "runtime-demo",
+    "runtime-restricted-area",
+    "runtime-trajectory",
+}
+WORLD_OBJECT_IK_TARGET_TYPES = {"punctual", "orbit"}
+WORLD_OBJECT_ORBIT_TARGET_POINTS = {"center", "primary", "secondary"}
+WORLD_OBJECT_MESH_ASSET_KEYS = ("asset_ref", "path", "uri", "filename")
+
+
+def _raise_for_invalid_object_payloads(objects: List[Dict[str, Any]]) -> None:
+    for index, world_object in enumerate(objects):
+        _raise_for_invalid_object_payload(world_object, index)
+
+
+def _raise_for_invalid_object_payload(world_object: Dict[str, Any], index: int) -> None:
+    object_path = f"objects[{index}]"
+    if not _is_record(world_object):
+        raise ValueError(f"{object_path} must be an object.")
+    for field_name in ("id", "name", "color"):
+        if not _is_non_empty_string(world_object.get(field_name)):
+            raise ValueError(f"{object_path}.{field_name} must be a non-empty string.")
+    object_type = world_object.get("type")
+    if object_type not in WORLD_OBJECT_TYPES:
+        allowed = ", ".join(sorted(WORLD_OBJECT_TYPES))
+        raise ValueError(f"{object_path}.type must be one of: {allowed}.")
+    _raise_for_invalid_vector3(world_object.get("position_xyz"), f"{object_path}.position_xyz")
+    _raise_for_positive_vector3(world_object.get("size_xyz"), f"{object_path}.size_xyz")
+    if "rotation_rpy_rad" in world_object:
+        _raise_for_invalid_vector3(
+            world_object.get("rotation_rpy_rad"),
+            f"{object_path}.rotation_rpy_rad",
+        )
+    _raise_for_invalid_object_optional_fields(world_object, object_path)
+    _raise_for_invalid_object_simulation(world_object.get("simulation"), object_path)
+    _raise_for_invalid_object_mesh_metadata(world_object, object_path)
+
+
+def _raise_for_invalid_object_optional_fields(world_object: Dict[str, Any], object_path: str) -> None:
+    if "source" in world_object and world_object.get("source") not in WORLD_OBJECT_SOURCES:
+        allowed = ", ".join(sorted(WORLD_OBJECT_SOURCES))
+        raise ValueError(f"{object_path}.source must be one of: {allowed}.")
+    if "tracked_joint_name" in world_object and world_object.get("tracked_joint_name") is not None:
+        if not isinstance(world_object.get("tracked_joint_name"), str):
+            raise ValueError(f"{object_path}.tracked_joint_name must be a string or null.")
+    for field_name in ("is_hidden", "is_ik_target"):
+        if field_name in world_object and not _is_boolean(world_object.get(field_name)):
+            raise ValueError(f"{object_path}.{field_name} must be a boolean.")
+    ik_target_type = world_object.get("ik_target_type", "punctual")
+    if ik_target_type not in WORLD_OBJECT_IK_TARGET_TYPES:
+        allowed = ", ".join(sorted(WORLD_OBJECT_IK_TARGET_TYPES))
+        raise ValueError(f"{object_path}.ik_target_type must be one of: {allowed}.")
+    if ik_target_type == "orbit":
+        _raise_for_positive_number_field(world_object.get("orbit_radius"), f"{object_path}.orbit_radius")
+        for field_name in ("orbit_inclination_deg", "orbit_phase_deg", "orbit_secondary_offset_deg"):
+            if not _is_finite_number(world_object.get(field_name)):
+                raise ValueError(f"{object_path}.{field_name} must be a finite number.")
+        if "orbit_target_point" in world_object:
+            if world_object.get("orbit_target_point") not in WORLD_OBJECT_ORBIT_TARGET_POINTS:
+                allowed = ", ".join(sorted(WORLD_OBJECT_ORBIT_TARGET_POINTS))
+                raise ValueError(f"{object_path}.orbit_target_point must be one of: {allowed}.")
+
+
+def _raise_for_invalid_object_simulation(value: Any, object_path: str) -> None:
+    if value is None:
+        return
+    if not _is_record(value):
+        raise ValueError(f"{object_path}.simulation must be an object.")
+    for field_name in ("fixed", "collision"):
+        if field_name in value and not _is_boolean(value.get(field_name)):
+            raise ValueError(f"{object_path}.simulation.{field_name} must be a boolean.")
+    _raise_for_optional_finite_number(
+        value.get("mass_kg"),
+        f"{object_path}.simulation.mass_kg",
+        minimum=0.0,
+    )
+    _raise_for_optional_finite_number(
+        value.get("friction"),
+        f"{object_path}.simulation.friction",
+        minimum=0.01,
+        maximum=5.0,
+    )
+    _raise_for_optional_finite_number(
+        value.get("restitution"),
+        f"{object_path}.simulation.restitution",
+        minimum=0.0,
+        maximum=1.0,
+    )
+    if "semantic_role" in value and value.get("semantic_role") is not None:
+        if not isinstance(value.get("semantic_role"), str):
+            raise ValueError(f"{object_path}.simulation.semantic_role must be a string or null.")
+
+
+def _raise_for_invalid_object_mesh_metadata(world_object: Dict[str, Any], object_path: str) -> None:
+    if "asset_ref" in world_object:
+        _raise_for_portable_asset_ref(world_object.get("asset_ref"), f"{object_path}.asset_ref")
+    if "asset_scale_xyz" in world_object:
+        _raise_for_positive_vector3(world_object.get("asset_scale_xyz"), f"{object_path}.asset_scale_xyz")
+    mesh = world_object.get("mesh")
+    if mesh is not None and not _is_record(mesh):
+        raise ValueError(f"{object_path}.mesh must be an object.")
+    if _is_record(mesh):
+        for field_name in WORLD_OBJECT_MESH_ASSET_KEYS:
+            if field_name in mesh:
+                _raise_for_portable_asset_ref(mesh.get(field_name), f"{object_path}.mesh.{field_name}")
+        if "scale" in mesh:
+            scale = mesh.get("scale")
+            if _is_finite_number(scale):
+                _raise_for_positive_number_field(scale, f"{object_path}.mesh.scale")
+            else:
+                _raise_for_positive_vector3(scale, f"{object_path}.mesh.scale")
+        if "scale_xyz" in mesh:
+            _raise_for_positive_vector3(mesh.get("scale_xyz"), f"{object_path}.mesh.scale_xyz")
+    if world_object.get("type") == "mesh" and not _has_wsp_mesh_asset_ref(world_object):
+        raise ValueError(f"{object_path}.mesh asset reference is required for mesh objects.")
+
+
+def _has_wsp_mesh_asset_ref(world_object: Dict[str, Any]) -> bool:
+    if _is_non_empty_string(world_object.get("asset_ref")):
+        return _is_portable_asset_ref(world_object.get("asset_ref"))
+    mesh = world_object.get("mesh")
+    if not _is_record(mesh):
+        return False
+    return any(
+        _is_non_empty_string(mesh.get(field_name)) and _is_portable_asset_ref(mesh.get(field_name))
+        for field_name in WORLD_OBJECT_MESH_ASSET_KEYS
+    )
+
+
+def _is_portable_asset_ref(value: Any) -> bool:
+    if not _is_non_empty_string(value):
+        return False
+    try:
+        normalize_portable_world_asset_ref(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _raise_for_portable_asset_ref(value: Any, path: str) -> None:
+    if not _is_non_empty_string(value):
+        raise ValueError(f"{path} must be a non-empty string.")
+    if not _is_portable_asset_ref(value):
+        raise ValueError(f"{path} must be a portable relative asset reference.")
+
+
+def _raise_for_positive_vector3(value: Any, path: str) -> None:
+    _raise_for_invalid_vector3(value, path)
+    for axis, component in enumerate(value):
+        if component <= 0:
+            raise ValueError(f"{path}[{axis}] must be > 0.")
+
+
+def _raise_for_positive_number_field(value: Any, path: str) -> None:
+    if not _is_positive_number(value):
+        raise ValueError(f"{path} must be a finite number > 0.")
+
+
+def _raise_for_optional_finite_number(
+    value: Any,
+    path: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> None:
+    if value is None:
+        return
+    if not _is_finite_number(value):
+        raise ValueError(f"{path} must be a finite number or null.")
+    parsed = float(value)
+    if minimum is not None and parsed < minimum:
+        raise ValueError(f"{path} must be >= {minimum:g}.")
+    if maximum is not None and parsed > maximum:
+        raise ValueError(f"{path} must be <= {maximum:g}.")
 
 
 def _raise_for_extra_fields(value: Dict[str, Any], allowed_fields: set[str], path: str) -> None:
