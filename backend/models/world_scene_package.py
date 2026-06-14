@@ -448,22 +448,18 @@ def _raise_for_extra_fields(value: Dict[str, Any], allowed_fields: set[str], pat
 class WorldScenePackageManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1] = (
-        WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
-    )
+    schema_version: Literal[WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1]
     package_id: str = Field(..., min_length=1)
     version: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
     created_at: datetime
-    runtime_targets: List[WorldRuntimeTarget] = Field(
-        default_factory=list, max_length=MAX_RUNTIME_TARGETS
-    )
+    runtime_targets: List[WorldRuntimeTarget] = Field(..., max_length=MAX_RUNTIME_TARGETS)
     interface: WorldInterfaceSpec
-    artifacts: List[WorldArtifactRef] = Field(default_factory=list, max_length=MAX_ARTIFACT_REFS)
+    artifacts: List[WorldArtifactRef] = Field(..., max_length=MAX_ARTIFACT_REFS)
     world_snapshot: WorldSnapshot
-    provenance: Dict[str, Any] = Field(default_factory=dict)
-    security: WorldSecuritySpec = Field(default_factory=WorldSecuritySpec)
+    provenance: Dict[str, Any]
+    security: WorldSecuritySpec
 
     @field_validator("description", mode="before")
     @classmethod

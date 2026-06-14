@@ -24,6 +24,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 
 WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_GENESIS_ID,
@@ -78,6 +79,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
     cameras = _load_demo_cameras()
     objects = _load_demo_objects()
     world_package = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="so101-simulator-workspaces-check",
         version="1.0.0",
         title="SO101 Simulator Workspace Check",
@@ -92,6 +94,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
             timestep_ms=10,
             frame_convention="ros-rep-103",
         ),
+        artifacts=[],
         world_snapshot=WorldSnapshot(
             urdf_xml=urdf_xml,
             joint_positions={},
@@ -105,6 +108,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
             "cameras": str(SO101_CAMERA_CONFIG_PATH.relative_to(BASE_DIR)),
             "world_layout": str(STATIC_WORLD_LAYOUT_PATH.relative_to(BASE_DIR)),
         },
+        security={},
     )
     return SimulatorWorkspacePrepareRequest(
         world_package=world_package,

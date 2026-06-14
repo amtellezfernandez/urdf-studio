@@ -136,6 +136,27 @@ def test_world_scene_package_model_rejects_unsupported_schema_version() -> None:
     assert exc_info.value.errors()[0]["type"] == "literal_error"
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "schema_version",
+        "runtime_targets",
+        "artifacts",
+        "provenance",
+        "security",
+    ],
+)
+def test_world_scene_package_model_requires_schema_level_fields(field_name: str) -> None:
+    payload = _manifest_payload()
+    payload.pop(field_name)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorldScenePackageManifest.model_validate(payload)
+
+    assert exc_info.value.errors()[0]["loc"] == (field_name,)
+    assert exc_info.value.errors()[0]["type"] == "missing"
+
+
 def test_world_scene_package_model_accepts_omitted_manifest_optionals() -> None:
     payload = _manifest_payload()
     payload["runtime_targets"] = [{"name": "blender", "mode": "python"}]

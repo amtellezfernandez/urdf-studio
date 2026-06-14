@@ -42,6 +42,7 @@ from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
     declared_world_snapshot_digests,
 )
+from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 
 
 TEST_SIMULATOR_TOKEN = "sim-token"
@@ -78,22 +79,31 @@ async def _request_json(
 
 def _world_package_payload() -> dict:
     return {
+        "schema_version": WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         "package_id": "demo_world",
         "version": "1.0.0",
         "title": "Demo World",
         "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+        "runtime_targets": [],
         "interface": {
             "observation_modalities": ["state"],
             "action_semantics": "joint_position",
             "timestep_ms": 10,
             "frame_convention": "ros-rep-103",
         },
+        "artifacts": [],
         "world_snapshot": {
             "urdf_xml": "<robot name=\"demo\"><link name=\"base\"/></robot>",
             "joint_positions": {},
             "objects": [],
             "scenario_time_ms": 0,
             "scenario_duration_ms": 0,
+        },
+        "provenance": {},
+        "security": {
+            "signature_ref": None,
+            "attestation_refs": [],
+            "sbom_ref": None,
         },
     }
 

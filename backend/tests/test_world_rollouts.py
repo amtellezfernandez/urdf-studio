@@ -18,6 +18,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_rollouts import (
     WorldRolloutCliConfig,
     WorldRolloutError,
@@ -52,6 +53,7 @@ TEST_MAX_QUEUED_JOBS = 0
 
 def _build_world_package() -> WorldScenePackageManifest:
     return WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -63,12 +65,15 @@ def _build_world_package() -> WorldScenePackageManifest:
             timestep_ms=TEST_WORLD_TIMESTEP_MS,
             frame_convention="world",
         ),
+        artifacts=[],
         world_snapshot=WorldSnapshot(
             urdf_xml="<robot name='demo'/>",
             joint_positions={"joint": TEST_WORLD_JOINT_VALUE_RAD},
             cameras=[],
             objects=[],
         ),
+        provenance={},
+        security={},
     )
 
 

@@ -9,6 +9,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_scene_package_digest import (
     canonical_world_snapshot_json,
     computed_world_snapshot_digest,
@@ -26,6 +27,7 @@ TEST_NEUTRAL_JOINT_WORLD_SNAPSHOT_DIGEST = (
 
 def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -61,6 +63,8 @@ def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> N
             scenario_time_ms=200,
             scenario_duration_ms=12000,
         ),
+        provenance={},
+        security={},
     )
 
     assert computed_world_snapshot_digest(manifest) == TEST_WORLD_SNAPSHOT_DIGEST
@@ -68,6 +72,7 @@ def test_computed_world_snapshot_digest_matches_frontend_builder_contract() -> N
 
 def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -99,6 +104,8 @@ def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
+        provenance={},
+        security={},
     )
 
     normalized = normalize_world_snapshot_artifact_digests(manifest)
@@ -111,6 +118,7 @@ def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
 
 def test_world_scene_package_json_payload_omits_schema_invalid_null_optionals() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -131,6 +139,8 @@ def test_world_scene_package_json_payload_omits_schema_invalid_null_optionals() 
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
+        provenance={},
+        security={},
     )
 
     payload = world_scene_package_json_payload(manifest)
@@ -146,6 +156,7 @@ def test_world_scene_package_json_payload_omits_schema_invalid_null_optionals() 
 
 def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -166,6 +177,8 @@ def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract()
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
+        provenance={},
+        security={},
     )
 
     assert '"joint_1":0.0' not in canonical_world_snapshot_json(manifest)
@@ -174,6 +187,7 @@ def test_computed_world_snapshot_digest_matches_browser_integer_joint_contract()
 
 def test_canonical_world_snapshot_json_matches_browser_number_and_string_contract() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -198,6 +212,8 @@ def test_canonical_world_snapshot_json_matches_browser_number_and_string_contrac
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
+        provenance={},
+        security={},
     )
 
     assert canonical_world_snapshot_json(manifest) == (
@@ -209,6 +225,7 @@ def test_canonical_world_snapshot_json_matches_browser_number_and_string_contrac
 
 def test_canonical_world_snapshot_json_matches_browser_large_float_contract() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -232,6 +249,8 @@ def test_canonical_world_snapshot_json_matches_browser_large_float_contract() ->
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
+        provenance={},
+        security={},
     )
 
     assert canonical_world_snapshot_json(manifest) == (
@@ -243,6 +262,7 @@ def test_canonical_world_snapshot_json_matches_browser_large_float_contract() ->
 
 def test_canonical_world_snapshot_json_sorts_keys_like_browser_utf16_contract() -> None:
     manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
         package_id="demo-world",
         version="1.0.0",
         title="Demo World",
@@ -271,6 +291,8 @@ def test_canonical_world_snapshot_json_sorts_keys_like_browser_utf16_contract() 
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
+        provenance={},
+        security={},
     )
 
     assert canonical_world_snapshot_json(manifest) == (
