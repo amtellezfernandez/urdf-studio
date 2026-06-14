@@ -21,6 +21,7 @@ from backend.scripts.simulator_workspace_check import (
     WorkspaceTarget,
     _active_object_count,
     _check_target,
+    _module_command,
     _prepare_blender_command,
     _prepare_genesis_command,
     _prepare_mujoco_command,
@@ -97,6 +98,20 @@ def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:
     )
 
     assert _active_object_count(request) == 3
+
+
+def test_workspace_check_module_command_writes_report_argument_once(tmp_path) -> None:
+    command = _module_command(
+        MUJOCO_WORKSPACE_PROCESS_PARAMS,
+        world_package_path=tmp_path / "world-package.json",
+        robot_asset_flag="--robot-urdf",
+        robot_asset_path=tmp_path / "robot.urdf",
+        duration_sec=0.02,
+        report_path=tmp_path / "report.json",
+    )
+
+    assert command.count("--report") == 1
+    assert command[command.index("--report") + 1] == str(tmp_path / "report.json")
 
 
 def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatch, tmp_path) -> None:
