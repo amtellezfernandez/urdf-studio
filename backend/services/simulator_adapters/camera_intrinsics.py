@@ -25,8 +25,10 @@ def pinhole_camera_intrinsics_from_record(value: Any) -> PinholeCameraIntrinsics
     if width is None or height is None:
         return None
 
-    fx = _read_positive_float(value.get("fx"))
-    fy = _read_positive_float(value.get("fy"))
+    fx = _read_optional_positive_float(value, "fx")
+    fy = _read_optional_positive_float(value, "fy")
+    if fx is _INVALID_OPTIONAL_NUMBER or fy is _INVALID_OPTIONAL_NUMBER:
+        return None
     if fx is None and fy is not None:
         fx = fy * (width / height)
     if fy is None and fx is not None:
@@ -43,8 +45,10 @@ def pinhole_camera_intrinsics_from_record(value: Any) -> PinholeCameraIntrinsics
         if fx is None:
             return None
 
-    cx = _read_finite_float(value.get("cx"), fallback=width * 0.5)
-    cy = _read_finite_float(value.get("cy"), fallback=height * 0.5)
+    cx = _read_optional_finite_float(value, "cx", fallback=width * 0.5)
+    cy = _read_optional_finite_float(value, "cy", fallback=height * 0.5)
+    if cx is _INVALID_OPTIONAL_NUMBER or cy is _INVALID_OPTIONAL_NUMBER:
+        return None
     return PinholeCameraIntrinsics(
         width=width,
         height=height,
@@ -55,6 +59,9 @@ def pinhole_camera_intrinsics_from_record(value: Any) -> PinholeCameraIntrinsics
             (0.0, 0.0, 1.0),
         ),
     )
+
+
+_INVALID_OPTIONAL_NUMBER = object()
 
 
 def focal_length_px_from_vertical_fov_deg(fov_deg: float, height_px: int) -> float:
@@ -92,5 +99,19 @@ def _read_positive_float(value: Any) -> float | None:
     return parsed if parsed > 0.0 else None
 
 
-def _read_finite_float(value: Any, *, fallback: float) -> float:
-    return float(value) if is_finite_number(value) else fallback
+def _read_optional_positive_float(record: dict[str, Any], key: str) -> float | None | object:
+    if key not in record:
+        return None
+    return _read_positive_float(record.get(key)) or _INVALID_OPTIONAL_NUMBER
+
+
+def _read_optional_finite_float(
+    record: dict[str, Any],
+    key: str,
+    *,
+    fallback: float,
+) -> float | object:
+    if key not in record:
+        return fallback
+    value = record.get(key)
+    return float(value) if is_finite_number(value) else _INVALID_OPTIONAL_NUMBER

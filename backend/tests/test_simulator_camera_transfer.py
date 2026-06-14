@@ -157,6 +157,85 @@ def test_build_sim_camera_specs_preserves_explicit_pinhole_intrinsics(tmp_path: 
     )
 
 
+def test_build_sim_camera_specs_defaults_absent_principal_point_to_image_center(
+    tmp_path: Path,
+) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text(
+        "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "scene camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": {
+                "width": 640,
+                "height": 480,
+                "fov_deg": 60,
+            },
+        }
+    ]
+
+    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    assert warnings == ()
+    assert len(cameras) == 1
+    assert cameras[0].intrinsics is not None
+    assert cameras[0].intrinsics.matrix[0][2] == 320.0
+    assert cameras[0].intrinsics.matrix[1][2] == 240.0
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("fx", -1.0),
+        ("fy", 0.0),
+        ("cx", None),
+        ("cy", "not-a-number"),
+    ],
+)
+def test_build_sim_camera_specs_rejects_invalid_explicit_intrinsics_fields(
+    tmp_path: Path,
+    field: str,
+    invalid_value: object,
+) -> None:
+    robot_urdf = tmp_path / "robot.urdf"
+    robot_urdf.write_text(
+        "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
+        encoding="utf-8",
+    )
+    world_package = make_world_package(robot_urdf.read_text(encoding="utf-8"))
+    intrinsics = {
+        "width": 640,
+        "height": 480,
+        "fov_deg": 60,
+        "fx": 501.0,
+        "fy": 502.0,
+        "cx": 319.5,
+        "cy": 241.25,
+    }
+    intrinsics[field] = invalid_value
+    world_package.world_snapshot.cameras = [
+        {
+            "id": "cam-1",
+            "name": "calibrated camera",
+            "parent_joint": "base_link",
+            "pose": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            "intrinsics": intrinsics,
+        }
+    ]
+
+    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    assert cameras == ()
+    assert len(warnings) == 1
+    assert "invalid pinhole intrinsics" in warnings[0]
+
+
 def test_studio_camera_frame_maps_to_render_camera_frame() -> None:
     rotation = studio_camera_to_render_view_rotation()
 
