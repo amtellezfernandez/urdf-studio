@@ -122,11 +122,11 @@ def test_auto_frame_map_preserves_ros_rep_103_world_package_axes() -> None:
     assert primitives[0].size_xyz == (0.2, 0.4, 0.8)
 
 
-def test_auto_frame_map_converts_legacy_studio_y_up_package_axes() -> None:
+def test_auto_frame_map_converts_studio_y_up_package_axes() -> None:
     payload = {
-        "package_id": "legacy_axis_probe",
+        "package_id": "studio_y_up_axis_probe",
         "version": "1.0.0",
-        "title": "Legacy Axis Probe",
+        "title": "Studio Y-Up Axis Probe",
         "interface": {
             "observation_modalities": ["state"],
             "action_semantics": "joint_position",

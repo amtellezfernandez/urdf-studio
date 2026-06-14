@@ -384,7 +384,7 @@ def resolve_world_layout_frame_map(
         return "studio-y-up-to-z-up"
     raise WorldLayoutTransferError(
         f"Unsupported world frame convention: {layout.frame_convention}. "
-        "Use ros-rep-103 for Z-up packages, studio-y-up for legacy Y-up layouts, "
+        "Use ros-rep-103 for Z-up packages, studio-y-up for Studio Y-up packages, "
         "or set environment.frame_map explicitly."
     )
 
