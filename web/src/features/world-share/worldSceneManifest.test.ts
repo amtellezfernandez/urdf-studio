@@ -26,6 +26,25 @@ const createWorldLayoutObject = () => ({
   ik_target_type: "punctual" as const,
 });
 
+const createWorldCamera = () => ({
+  id: "cam",
+  name: "Scene camera",
+  parent_joint: "base_link",
+  pose: {
+    xyz: [0, 0, 0] as [number, number, number],
+    rpy: [0, 0, 0] as [number, number, number],
+  },
+  intrinsics: {
+    width: 640,
+    height: 480,
+    fov_deg: 60,
+    fx: 501,
+    fy: 502,
+    cx: 319.5,
+    cy: 241.25,
+  },
+});
+
 const createManifest = (
   overrides?: Partial<WorldScenePackageManifest["world_snapshot"]>
 ): WorldScenePackageManifest => ({
@@ -122,6 +141,46 @@ describe("worldSceneManifest static scene validation", () => {
       })
     );
     expect(errors).toEqual([]);
+  });
+
+  it("accepts valid world cameras", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        cameras: [createWorldCamera()],
+      })
+    );
+
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects malformed world cameras", () => {
+    const errors = validateLocalWorldSceneManifest(
+      createManifest({
+        cameras: [
+          {
+            ...createWorldCamera(),
+            parent_joint: "",
+            pose: {
+              xyz: [0, 0],
+              rpy: [0, 0, 0],
+            },
+            intrinsics: {
+              width: 0,
+              height: 480,
+              cx: null,
+            },
+          } as unknown as WorldScenePackageManifest["world_snapshot"]["cameras"][number],
+        ],
+      })
+    );
+
+    expect(errors).toContain("world snapshot cameras[0].parent_joint must be a non-empty string");
+    expect(errors).toContain(
+      "world snapshot cameras[0].pose.xyz must be an array of 3 finite numbers"
+    );
+    expect(errors).toContain("world snapshot cameras[0].intrinsics.width must be a positive integer");
+    expect(errors).toContain("world snapshot cameras[0].intrinsics.cx must be a finite number");
+    expect(errors).toContain("world snapshot cameras[0].intrinsics must include fov_deg, fx, or fy");
   });
 
   it("accepts Blender-imported world objects with simulator metadata", () => {

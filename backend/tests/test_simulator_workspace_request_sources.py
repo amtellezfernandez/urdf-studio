@@ -20,6 +20,15 @@ def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> N
     assert len(request.mesh_assets) > 0
     assert len(request.world_package.world_snapshot.objects) == 3
     assert len(request.world_package.world_snapshot.cameras) == 3
+    assert [camera["id"] for camera in request.world_package.world_snapshot.cameras] == [
+        "so101_overhead_scene",
+        "so101_gripper_down",
+        "so101_port_oblique",
+    ]
+    assert request.world_package.world_snapshot.cameras[0]["pose"] == {
+        "xyz": [0.2, 0.02, 0.75],
+        "rpy": [0.0, 1.3909428270024187, 0.0],
+    }
     assert [target.name for target in request.world_package.runtime_targets] == list(
         WORKSPACE_SIMULATORS
     )

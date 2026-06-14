@@ -16,6 +16,47 @@
       "maxItems": 3,
       "items": { "type": "number", "exclusiveMinimum": 0 }
     },
+    "cameraPose": {
+      "type": "object",
+      "required": ["xyz", "rpy"],
+      "additionalProperties": false,
+      "properties": {
+        "xyz": { "$ref": "#/$defs/vector3" },
+        "rpy": { "$ref": "#/$defs/vector3" }
+      }
+    },
+    "cameraIntrinsics": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fov_deg": { "type": "number", "minimum": 1, "maximum": 179 },
+        "fx": { "type": "number", "exclusiveMinimum": 0 },
+        "fy": { "type": "number", "exclusiveMinimum": 0 },
+        "cx": { "type": "number" },
+        "cy": { "type": "number" },
+        "distortion": { "type": "object" }
+      },
+      "anyOf": [
+        { "required": ["fov_deg"] },
+        { "required": ["fx"] },
+        { "required": ["fy"] }
+      ]
+    },
+    "worldCamera": {
+      "type": "object",
+      "required": ["id", "name", "parent_joint", "pose", "intrinsics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "parent_joint": { "type": "string", "minLength": 1 },
+        "pose": { "$ref": "#/$defs/cameraPose" },
+        "intrinsics": { "$ref": "#/$defs/cameraIntrinsics" }
+      }
+    },
     "positiveScale": {
       "oneOf": [
         { "type": "number", "exclusiveMinimum": 0 },
@@ -252,7 +293,7 @@
         "cameras": {
           "type": "array",
           "maxItems": 64,
-          "items": { "type": "object" }
+          "items": { "$ref": "#/$defs/worldCamera" }
         },
         "objects": {
           "type": "array",

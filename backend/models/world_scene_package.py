@@ -89,6 +89,12 @@ class WorldSnapshot(BaseModel):
         _raise_for_non_finite_payload_numbers(value)
         return value
 
+    @field_validator("cameras")
+    @classmethod
+    def _validate_camera_payloads(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        _raise_for_invalid_camera_payloads(value)
+        return value
+
 
 def _raise_for_non_finite_payload_numbers(value: Any, path: str = "") -> None:
     if isinstance(value, float) and not math.isfinite(value):
@@ -101,6 +107,100 @@ def _raise_for_non_finite_payload_numbers(value: Any, path: str = "") -> None:
         for key, item in value.items():
             field_path = f"{path}.{key}" if path else str(key)
             _raise_for_non_finite_payload_numbers(item, field_path)
+
+
+def _is_record(value: Any) -> bool:
+    return isinstance(value, dict)
+
+
+def _is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_finite_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _is_positive_integer_number(value: Any) -> bool:
+    if not _is_finite_number(value):
+        return False
+    parsed = float(value)
+    return parsed >= 1.0 and parsed.is_integer()
+
+
+def _is_positive_number(value: Any) -> bool:
+    return _is_finite_number(value) and float(value) > 0.0
+
+
+def _is_valid_fov_deg(value: Any) -> bool:
+    return _is_finite_number(value) and 1.0 <= float(value) <= 179.0
+
+
+def _raise_for_invalid_camera_payloads(cameras: List[Dict[str, Any]]) -> None:
+    for index, camera in enumerate(cameras):
+        _raise_for_invalid_camera_payload(camera, index)
+
+
+def _raise_for_invalid_camera_payload(camera: Dict[str, Any], index: int) -> None:
+    camera_path = f"cameras[{index}]"
+    if not _is_record(camera):
+        raise ValueError(f"{camera_path} must be an object.")
+    allowed_camera_fields = {"id", "name", "parent_joint", "pose", "intrinsics"}
+    _raise_for_extra_fields(camera, allowed_camera_fields, camera_path)
+    for field_name in ("id", "name", "parent_joint"):
+        if not _is_non_empty_string(camera.get(field_name)):
+            raise ValueError(f"{camera_path}.{field_name} must be a non-empty string.")
+    _raise_for_invalid_camera_pose(camera.get("pose"), f"{camera_path}.pose")
+    _raise_for_invalid_camera_intrinsics(camera.get("intrinsics"), f"{camera_path}.intrinsics")
+
+
+def _raise_for_invalid_camera_pose(value: Any, path: str) -> None:
+    if not _is_record(value):
+        raise ValueError(f"{path} must be an object.")
+    _raise_for_extra_fields(value, {"xyz", "rpy"}, path)
+    _raise_for_invalid_vector3(value.get("xyz"), f"{path}.xyz")
+    _raise_for_invalid_vector3(value.get("rpy"), f"{path}.rpy")
+
+
+def _raise_for_invalid_camera_intrinsics(value: Any, path: str) -> None:
+    if not _is_record(value):
+        raise ValueError(f"{path} must be an object.")
+    _raise_for_extra_fields(
+        value,
+        {"width", "height", "fov_deg", "fx", "fy", "cx", "cy", "distortion"},
+        path,
+    )
+    if not _is_positive_integer_number(value.get("width")):
+        raise ValueError(f"{path}.width must be a positive integer.")
+    if not _is_positive_integer_number(value.get("height")):
+        raise ValueError(f"{path}.height must be a positive integer.")
+    if "fov_deg" in value and not _is_valid_fov_deg(value.get("fov_deg")):
+        raise ValueError(f"{path}.fov_deg must be between 1 and 179 degrees.")
+    for field_name in ("fx", "fy"):
+        if field_name in value and not _is_positive_number(value.get(field_name)):
+            raise ValueError(f"{path}.{field_name} must be a finite number > 0.")
+    for field_name in ("cx", "cy"):
+        if field_name in value and not _is_finite_number(value.get(field_name)):
+            raise ValueError(f"{path}.{field_name} must be a finite number.")
+    if not any(field_name in value for field_name in ("fov_deg", "fx", "fy")):
+        raise ValueError(f"{path} must include fov_deg, fx, or fy.")
+    if "distortion" in value and not _is_record(value.get("distortion")):
+        raise ValueError(f"{path}.distortion must be an object.")
+
+
+def _raise_for_invalid_vector3(value: Any, path: str) -> None:
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        raise ValueError(f"{path} must be an array of 3 finite numbers.")
+    for axis, component in enumerate(value):
+        if not _is_finite_number(component):
+            raise ValueError(f"{path}[{axis}] must be a finite number.")
+
+
+def _raise_for_extra_fields(value: Dict[str, Any], allowed_fields: set[str], path: str) -> None:
+    extra_fields = sorted(set(value) - allowed_fields)
+    if extra_fields:
+        joined = ", ".join(extra_fields)
+        raise ValueError(f"{path} has unsupported field(s): {joined}.")
 
 
 class WorldScenePackageManifest(BaseModel):

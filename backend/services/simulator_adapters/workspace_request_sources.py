@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -188,7 +189,33 @@ def _load_demo_cameras() -> list[dict]:
     cameras = payload.get("cameras")
     if not isinstance(cameras, list):
         raise ValueError(f"Invalid SO101 camera config: {SO101_CAMERA_CONFIG_PATH}")
-    return [camera for camera in cameras if isinstance(camera, dict)]
+    return [
+        _normalize_demo_camera(camera, index)
+        for index, camera in enumerate(cameras)
+        if isinstance(camera, dict)
+    ]
+
+
+def _normalize_demo_camera(camera: dict, index: int) -> dict:
+    normalized = dict(camera)
+    camera_name = normalized.get("name")
+    normalized["id"] = (
+        normalized.get("id")
+        if isinstance(normalized.get("id"), str) and normalized.get("id")
+        else _camera_id_from_name(camera_name if isinstance(camera_name, str) else "", index)
+    )
+    pose = normalized.get("pose")
+    if isinstance(pose, list) and len(pose) == 6:
+        normalized["pose"] = {
+            "xyz": pose[:3],
+            "rpy": pose[3:],
+        }
+    return normalized
+
+
+def _camera_id_from_name(name: str, index: int) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", name.strip()).strip("_")
+    return normalized or f"camera_{index + 1}"
 
 
 def _load_demo_objects() -> list[dict]:

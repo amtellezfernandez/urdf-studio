@@ -75,6 +75,66 @@ def _manifest_with_mesh_asset_ref(asset_ref: str) -> dict:
     return payload
 
 
+def _camera() -> dict:
+    return {
+        "id": "cam",
+        "name": "Scene camera",
+        "parent_joint": "base_link",
+        "pose": {
+            "xyz": [0.0, 0.0, 0.0],
+            "rpy": [0.0, 0.0, 0.0],
+        },
+        "intrinsics": {
+            "width": 640,
+            "height": 480,
+            "fov_deg": 60.0,
+            "fx": 501.0,
+            "fy": 502.0,
+            "cx": 319.5,
+            "cy": 241.25,
+        },
+    }
+
+
+def test_wsp_manifest_schema_accepts_world_cameras() -> None:
+    payload = _manifest()
+    payload["world_snapshot"]["cameras"] = [_camera()]
+
+    assert _schema_errors(payload) == []
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_message"),
+    [
+        (lambda camera: camera.pop("parent_joint"), "'parent_joint' is a required property"),
+        (lambda camera: camera["pose"].pop("rpy"), "'rpy' is a required property"),
+        (lambda camera: camera["intrinsics"].update({"width": 0}), "0 is less than the minimum of 1"),
+        (
+            lambda camera: camera["intrinsics"].update({"fx": -1.0}),
+            "-1.0 is less than or equal to the minimum of 0",
+        ),
+        (
+            lambda camera: camera["intrinsics"].update({"cx": None}),
+            "None is not of type 'number'",
+        ),
+        (
+            lambda camera: camera.update({"debug": True}),
+            "Additional properties are not allowed ('debug' was unexpected)",
+        ),
+    ],
+)
+def test_wsp_manifest_schema_rejects_invalid_world_cameras(
+    mutator,
+    expected_message: str,
+) -> None:
+    payload = _manifest()
+    camera = _camera()
+    mutator(camera)
+    payload["world_snapshot"]["cameras"] = [camera]
+
+    assert expected_message in _schema_errors(payload)
+
+
 def test_wsp_manifest_schema_accepts_portable_mesh_asset_refs() -> None:
     payload = _manifest_with_mesh_asset_ref("assets/crate.obj")
 
