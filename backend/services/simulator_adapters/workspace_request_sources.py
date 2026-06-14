@@ -24,6 +24,10 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.simulator_adapters.robot_repairs import (
+    GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY,
+    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+)
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 
 WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
@@ -107,6 +111,11 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
             "robot": str((DEMO_ROOT / "robot.urdf").relative_to(BASE_DIR)),
             "cameras": str(SO101_CAMERA_CONFIG_PATH.relative_to(BASE_DIR)),
             "world_layout": str(STATIC_WORLD_LAYOUT_PATH.relative_to(BASE_DIR)),
+            GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY: {
+                "genesis": [
+                    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+                ],
+            },
         },
         security={"attestation_refs": []},
     )

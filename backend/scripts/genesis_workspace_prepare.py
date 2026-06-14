@@ -41,6 +41,7 @@ from backend.services.simulator_adapters.params import (
     GENESIS_WORKSPACE_PROCESS_PARAMS,
 )
 from backend.services.simulator_adapters.robot_repairs import (
+    genesis_robot_compatibility_patch_ids_from_world_package,
     materialize_genesis_robot_urdf_report,
 )
 from backend.services.simulator_adapters.world_scene import (
@@ -267,7 +268,13 @@ def prepare_genesis_workspace_scene(
         for camera_spec in cameras:
             add_camera_marker_entity(gs, scene, camera_spec)
 
-    robot_repair = materialize_genesis_robot_urdf_report(robot_urdf_path)
+    requested_robot_patch_ids = genesis_robot_compatibility_patch_ids_from_world_package(
+        simulator_scene.world_package
+    )
+    robot_repair = materialize_genesis_robot_urdf_report(
+        robot_urdf_path,
+        requested_patch_ids=requested_robot_patch_ids,
+    )
     if robot_repair.applied:
         print(
             "[genesis-workspace] "
@@ -275,7 +282,10 @@ def prepare_genesis_workspace_scene(
             flush=True,
         )
     else:
-        print("[genesis-workspace] robot_repair=none", flush=True)
+        print(
+            f"[genesis-workspace] robot_repair=none requested_patches={len(requested_robot_patch_ids)}",
+            flush=True,
+        )
     camera_attachment_links = links_to_keep_for_camera_attachment(cameras)
     attachment_links = links_to_keep_for_workspace_attachments(
         cameras,
@@ -437,6 +447,7 @@ def prepare_genesis_workspace_scene(
                         "applied": robot_repair.applied,
                         "repair_id": robot_repair.repair_id,
                         "urdf_path": robot_repair.path,
+                        "requested_patch_ids": requested_robot_patch_ids,
                     },
                     "controlled_dofs": controlled_dof_count,
                     "scene_cameras": len(scene_cameras),

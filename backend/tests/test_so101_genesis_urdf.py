@@ -3,9 +3,19 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
+
+from backend.services.simulator_adapters.robot_repairs import (
+    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+    genesis_robot_compatibility_patch_ids_from_world_package,
+    materialize_genesis_robot_urdf_report,
+)
 from backend.services.so101_genesis_urdf import (
     SO101_FIXED_GRIPPER_PAD_NAME,
     materialize_so101_genesis_urdf_report,
+)
+from backend.services.simulator_adapters.workspace_request_sources import (
+    build_demo_workspace_request,
 )
 
 
@@ -62,3 +72,57 @@ def test_so101_genesis_repair_applies_to_identified_so101(tmp_path: Path) -> Non
     gripper_link = root.find("./link[@name='gripper_link']")
     assert gripper_link is not None
     assert gripper_link.find(f"./collision[@name='{SO101_FIXED_GRIPPER_PAD_NAME}']") is not None
+
+
+def test_genesis_robot_repair_requires_explicit_patch_request(tmp_path: Path) -> None:
+    urdf_path = _write_gripper_urdf(
+        tmp_path,
+        robot_name="so101_new_calib",
+        mesh_filename="assets/moving_jaw_so101_v1.stl",
+    )
+
+    result = materialize_genesis_robot_urdf_report(urdf_path)
+
+    assert result.applied is False
+    assert result.path == urdf_path.resolve()
+
+
+def test_genesis_robot_repair_applies_explicit_so101_patch(tmp_path: Path) -> None:
+    urdf_path = _write_gripper_urdf(
+        tmp_path,
+        robot_name="so101_new_calib",
+        mesh_filename="assets/moving_jaw_so101_v1.stl",
+    )
+
+    result = materialize_genesis_robot_urdf_report(
+        urdf_path,
+        requested_patch_ids=(GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,),
+    )
+
+    assert result.applied is True
+    root = ET.parse(result.path).getroot()
+    gripper_link = root.find("./link[@name='gripper_link']")
+    assert gripper_link is not None
+    assert gripper_link.find(f"./collision[@name='{SO101_FIXED_GRIPPER_PAD_NAME}']") is not None
+
+
+def test_genesis_robot_repair_rejects_unknown_explicit_patch(tmp_path: Path) -> None:
+    urdf_path = _write_gripper_urdf(
+        tmp_path,
+        robot_name="so101_new_calib",
+        mesh_filename="assets/moving_jaw_so101_v1.stl",
+    )
+
+    with pytest.raises(ValueError, match="Unknown Genesis robot compatibility patch"):
+        materialize_genesis_robot_urdf_report(
+            urdf_path,
+            requested_patch_ids=("unknown_patch",),
+        )
+
+
+def test_demo_workspace_request_declares_genesis_so101_patch() -> None:
+    request = build_demo_workspace_request()
+
+    assert genesis_robot_compatibility_patch_ids_from_world_package(request.world_package) == (
+        GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+    )
