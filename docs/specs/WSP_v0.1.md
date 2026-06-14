@@ -70,6 +70,9 @@ Blender-added mesh objects enter Studio as `type = "mesh"` when the Blender obje
 ## Integrity and Trust
 
 - Every artifact reference uses `digest_sha256` computed with cryptographic SHA-256 (no weak fallback digests).
+- A `world_snapshot` artifact digest is the lowercase SHA-256 hex digest of the UTF-8 bytes of the canonical JSON serialization of the `world_snapshot` object.
+- Canonical JSON uses valid JSON values only. Object keys are sorted with ECMAScript default string ordering (UTF-16 code units), arrays preserve order, and strings use standard JSON string escaping.
+- Numbers must be finite and serialize exactly as ECMAScript `JSON.stringify(number)` would serialize them. `-0` canonicalizes to `0`; `NaN`, `Infinity`, and `-Infinity` are invalid.
 - `security.signature_ref`, `security.attestation_refs`, and `security.sbom_ref` provide trust metadata.
 - Verification policy is handled by registry services and CI, not by manifest shape alone.
 
