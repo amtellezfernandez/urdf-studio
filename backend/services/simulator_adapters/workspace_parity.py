@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from backend.services.simulator_adapters.camera_artifacts import inspect_rgb_image
+
 WORKSPACE_PARITY_ID = "workspace-parity"
 PARITY_REPORT_FIELDS = (
     "package_id",
@@ -203,33 +205,29 @@ def _camera_image_manifest(
             f"actual={actual_names}, expected={expected_names}",
         )
 
-    try:
-        from PIL import Image
-    except Exception as exc:
-        return item.label, f"could not inspect camera_images artifacts: {exc}"
-
     images: list[dict[str, Any]] = []
     image_by_name = {path.name: path for path in image_paths}
     for expected in expected_images:
         path = image_by_name[expected["name"]]
         try:
-            with Image.open(path) as image:
-                size = image.size
+            image_stats = inspect_rgb_image(path)
         except Exception as exc:
             return item.label, f"invalid camera_images artifact {path}: {exc}"
-        if size != (expected["width"], expected["height"]):
+        if image_stats.size != (expected["width"], expected["height"]):
             return (
                 item.label,
-                f"{item.label} camera_images PNG {path.name} size {size} "
+                f"{item.label} camera_images PNG {path.name} size {image_stats.size} "
                 f"does not match report camera size {(expected['width'], expected['height'])}",
             )
+        if image_stats.channel_span <= 5:
+            return item.label, f"{item.label} camera_images PNG {path.name} is blank"
         images.append(
             {
                 "camera_id": expected["camera_id"],
                 "sim_name": expected["sim_name"],
                 "name": path.name,
-                "width": size[0],
-                "height": size[1],
+                "width": image_stats.size[0],
+                "height": image_stats.size[1],
             }
         )
     return item.label, {"images": images}

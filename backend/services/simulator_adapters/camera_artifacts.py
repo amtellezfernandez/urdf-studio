@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
+MIN_VISIBLE_CHANNEL_SPAN = 5
+
+
+@dataclass(frozen=True)
+class ImageArtifactStats:
+    size: tuple[int, int]
+    channel_span: int
 
 
 def camera_artifact_path(output_dir: Path, *, index: int, camera_name: str) -> Path:
@@ -22,3 +31,28 @@ def write_rgb_image(path: Path, image: np.ndarray) -> None:
         raise ValueError(f"Expected RGB image array, got shape {image.shape}.")
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(np.clip(image[..., :3], 0, 255).astype(np.uint8)).save(path)
+
+
+def inspect_rgb_image(path: Path) -> ImageArtifactStats:
+    from PIL import Image
+
+    with Image.open(path) as image:
+        rgb_image = image.convert("RGB")
+        extrema = rgb_image.getextrema()
+        channel_span = max(high - low for low, high in extrema)
+        return ImageArtifactStats(
+            size=rgb_image.size,
+            channel_span=int(channel_span),
+        )
+
+
+def validate_visible_rgb_image(path: Path) -> str | None:
+    if not path.exists():
+        return f"missing image artifact: {path}"
+    try:
+        stats = inspect_rgb_image(path)
+    except Exception as exc:
+        return f"invalid image artifact {path}: {exc}"
+    if stats.channel_span <= MIN_VISIBLE_CHANNEL_SPAN:
+        return f"blank image artifact: {path}"
+    return None

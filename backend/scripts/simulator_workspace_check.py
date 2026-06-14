@@ -32,6 +32,7 @@ from backend.services.simulator_adapters.blender_workspace import (
 from backend.services.simulator_adapters.blender_edit_session import (
     validate_blender_edit_session_artifact,
 )
+from backend.services.simulator_adapters.camera_artifacts import validate_visible_rgb_image
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
@@ -543,22 +544,10 @@ def _validate_image_artifacts(command: PreparedWorkspaceCommand) -> str | None:
     if not image_paths:
         return None
 
-    try:
-        from PIL import Image
-    except Exception as exc:
-        return f"could not validate image artifacts: {exc}"
-
     for path in image_paths:
-        if not path.exists():
-            return f"missing image artifact: {path}"
-        try:
-            image = Image.open(path).convert("RGB")
-        except Exception as exc:
-            return f"invalid image artifact {path}: {exc}"
-        extrema = image.getextrema()
-        channel_span = max(high - low for low, high in extrema)
-        if channel_span <= 5:
-            return f"blank image artifact: {path}"
+        error = validate_visible_rgb_image(path)
+        if error:
+            return error
     return None
 
 

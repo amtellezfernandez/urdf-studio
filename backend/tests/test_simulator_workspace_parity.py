@@ -108,6 +108,31 @@ def test_simulator_workspace_parity_rejects_camera_image_name_mismatch(tmp_path:
     assert "PNG names do not match report cameras" in result.detail
 
 
+def test_simulator_workspace_parity_rejects_blank_camera_image(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+        image_variant="blank",
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "is blank" in result.detail
+
+
 def _write_parity_report(
     root: Path,
     *,
@@ -115,12 +140,18 @@ def _write_parity_report(
     object_x: float,
     image_size: tuple[int, int] = (64, 48),
     image_name: str = "01_scene_camera.png",
+    image_variant: str = "visible",
 ) -> Path:
     from PIL import Image
 
     camera_dir = root / "cameras"
     camera_dir.mkdir(parents=True)
-    Image.new("RGB", image_size, (255, 0, 0)).save(camera_dir / image_name)
+    image = Image.new("RGB", image_size, (255, 0, 0))
+    if image_variant == "visible" and image_size[0] > 1 and image_size[1] > 1:
+        image.putpixel((image_size[0] - 1, image_size[1] - 1), (0, 255, 0))
+    elif image_variant != "blank":
+        raise ValueError(f"unknown image_variant: {image_variant}")
+    image.save(camera_dir / image_name)
     report_path = root / "report.json"
     report_path.write_text(
         json.dumps(
