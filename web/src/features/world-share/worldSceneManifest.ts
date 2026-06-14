@@ -702,7 +702,8 @@ export const isWorldSceneManifest = (
 ): payload is WorldScenePackageManifest => {
   if (!isRecord(payload)) return false;
   if (!isString(payload.package_id) || !isString(payload.version)) return false;
-  return coerceWorldSceneSnapshot(payload.world_snapshot) !== null;
+  if (coerceWorldSceneSnapshot(payload.world_snapshot) === null) return false;
+  return validateLocalWorldSceneManifest(payload as WorldScenePackageManifest).length === 0;
 };
 
 const readWorldSceneManifestCandidate = (
@@ -739,9 +740,15 @@ export const validateLocalWorldSceneManifest = (
   if (manifest.schema_version !== WORLD_SCENE_PACKAGE_SCHEMA_VERSION) {
     errors.push(`schema_version must be ${WORLD_SCENE_PACKAGE_SCHEMA_VERSION}`);
   }
-  if (!manifest.package_id?.trim()) errors.push("package_id is required");
-  if (!manifest.version?.trim()) errors.push("version is required");
-  if (!manifest.title?.trim()) errors.push("title is required");
+  if (!isString(manifest.package_id) || !manifest.package_id.trim()) {
+    errors.push("package_id is required");
+  }
+  if (!isString(manifest.version) || !manifest.version.trim()) {
+    errors.push("version is required");
+  }
+  if (!isString(manifest.title) || !manifest.title.trim()) {
+    errors.push("title is required");
+  }
   if (manifest.description !== undefined && !isString(manifest.description)) {
     errors.push("description must be a string");
   }

@@ -85,6 +85,7 @@ describe("worldSceneManifest static scene validation", () => {
   it("accepts static scene package snapshots (duration 0, time 0)", () => {
     const errors = validateLocalWorldSceneManifest(createManifest());
     expect(errors).toEqual([]);
+    expect(isWorldSceneManifest(createManifest())).toBe(true);
   });
 
   it("rejects static scene snapshots when time is not zero", () => {
@@ -193,6 +194,40 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toContain("security.signature_ref must be a string or null");
     expect(errors).toContain("security.attestation_refs[1] must be a string");
     expect(errors).toContain("security.sbom_ref must be a string or null");
+  });
+
+  it("does not type-guard malformed WSP envelopes as manifests", () => {
+    expect(
+      isWorldSceneManifest({
+        ...createManifest(),
+        schema_version: "0.0.1",
+      })
+    ).toBe(false);
+    expect(
+      isWorldSceneManifest({
+        ...createManifest(),
+        title: 7,
+      })
+    ).toBe(false);
+    expect(
+      isWorldSceneManifest({
+        ...createManifest(),
+        runtime_targets: [{ name: "blender", mode: "python", min_version: null }],
+      })
+    ).toBe(false);
+  });
+
+  it("reports malformed WSP string fields without throwing", () => {
+    const errors = validateLocalWorldSceneManifest({
+      ...createManifest(),
+      package_id: 7,
+      version: {},
+      title: [],
+    } as unknown as WorldScenePackageManifest);
+
+    expect(errors).toContain("package_id is required");
+    expect(errors).toContain("version is required");
+    expect(errors).toContain("title is required");
   });
 
   it("rejects null WSP optionals that must be omitted when unset", () => {
