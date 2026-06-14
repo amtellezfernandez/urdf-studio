@@ -123,6 +123,7 @@ describe("worldSceneManifest static scene validation", () => {
   it("rejects malformed top-level WSP metadata locally", () => {
     const errors = validateLocalWorldSceneManifest({
       ...createManifest(),
+      debug: true,
       schema_version: "0.0.1",
       title: "",
       description: 7,
@@ -149,6 +150,13 @@ describe("worldSceneManifest static scene validation", () => {
           extra: true,
         },
       ],
+      world_snapshot: {
+        ...createManifest().world_snapshot,
+        debug: true,
+        joint_positions: {
+          joint_1: "0.1",
+        },
+      },
       provenance: [],
       security: {
         signature_ref: 1,
@@ -158,6 +166,7 @@ describe("worldSceneManifest static scene validation", () => {
       },
     } as unknown as WorldScenePackageManifest);
 
+    expect(errors).toContain("manifest has unsupported field(s): debug");
     expect(errors).toContain("schema_version must be 1.0.0");
     expect(errors).toContain("title is required");
     expect(errors).toContain("description must be a string");
@@ -175,11 +184,56 @@ describe("worldSceneManifest static scene validation", () => {
     expect(errors).toContain("artifacts[0].kind must be a non-empty string");
     expect(errors).toContain("artifacts[0].digest_sha256 must be a SHA-256 hex digest");
     expect(errors).toContain("artifacts[0].uri must be a non-empty string");
+    expect(errors).toContain("world_snapshot has unsupported field(s): debug");
+    expect(errors).toContain("world_snapshot.joint_positions.joint_1 must be a finite number");
     expect(errors).toContain("provenance must be an object");
     expect(errors).toContain("security has unsupported field(s): extra");
     expect(errors).toContain("security.signature_ref must be a string or null");
     expect(errors).toContain("security.attestation_refs[1] must be a string");
     expect(errors).toContain("security.sbom_ref must be a string or null");
+  });
+
+  it("rejects WSP payloads that exceed schema size limits locally", () => {
+    const manifest = createManifest();
+    const errors = validateLocalWorldSceneManifest({
+      ...manifest,
+      runtime_targets: Array.from({ length: 17 }, (_, index) => ({
+        name: `target-${index}`,
+        mode: "native",
+      })),
+      interface: {
+        ...manifest.interface,
+        observation_modalities: Array.from({ length: 33 }, (_, index) => `modality-${index}`),
+      },
+      artifacts: Array.from({ length: 129 }, (_, index) => ({
+        kind: `artifact-${index}`,
+        digest_sha256: "a".repeat(64),
+        uri: `inline://artifact-${index}`,
+      })),
+      world_snapshot: {
+        ...manifest.world_snapshot,
+        urdf_xml: "x".repeat(500_001),
+        joint_positions: Object.fromEntries(
+          Array.from({ length: 513 }, (_, index) => [`joint_${index}`, index])
+        ),
+        cameras: Array.from({ length: 65 }, (_, index) => ({
+          ...createWorldCamera(),
+          id: `cam-${index}`,
+        })),
+        objects: Array.from({ length: 257 }, (_, index) => ({
+          ...createWorldLayoutObject(),
+          id: `object-${index}`,
+        })),
+      },
+    } as unknown as WorldScenePackageManifest);
+
+    expect(errors).toContain("runtime_targets must contain at most 16 entries");
+    expect(errors).toContain("interface.observation_modalities must contain at most 32 entries");
+    expect(errors).toContain("artifacts must contain at most 128 entries");
+    expect(errors).toContain("world_snapshot.urdf_xml must contain at most 500000 characters");
+    expect(errors).toContain("world_snapshot.joint_positions must contain at most 512 entries");
+    expect(errors).toContain("world_snapshot.cameras must contain at most 64 entries");
+    expect(errors).toContain("world_snapshot.objects must contain at most 256 entries");
   });
 
   it("keeps interface extension metadata importable", () => {

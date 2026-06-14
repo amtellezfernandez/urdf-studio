@@ -39,11 +39,42 @@ const WORLD_CAMERA_INTRINSIC_FIELDS = [
   "cy",
   "distortion",
 ] as const;
+const WORLD_SCENE_PACKAGE_FIELDS = [
+  "schema_version",
+  "package_id",
+  "version",
+  "title",
+  "description",
+  "created_at",
+  "runtime_targets",
+  "interface",
+  "artifacts",
+  "world_snapshot",
+  "provenance",
+  "security",
+] as const;
+const WORLD_SNAPSHOT_FIELDS = [
+  "urdf_xml",
+  "joint_positions",
+  "cameras",
+  "objects",
+  "scenario_time_ms",
+  "scenario_duration_ms",
+] as const;
 const WORLD_RUNTIME_TARGET_FIELDS = ["name", "mode", "min_version"] as const;
 const WORLD_RUNTIME_TARGET_MODES = ["native", "python", "container"] as const;
 const WORLD_ARTIFACT_FIELDS = ["kind", "digest_sha256", "uri"] as const;
 const WORLD_SECURITY_FIELDS = ["signature_ref", "attestation_refs", "sbom_ref"] as const;
 const WORLD_ARTIFACT_DIGEST_SHA256_PATTERN = /^[a-fA-F0-9]{64}$/;
+const WORLD_SCENE_PACKAGE_LIMITS = {
+  maxRuntimeTargets: 16,
+  maxInterfaceModalities: 32,
+  maxArtifactRefs: 128,
+  maxCamerasPerWorld: 64,
+  maxObjectsPerWorld: 256,
+  maxJointsPerWorld: 512,
+  maxWorldSnapshotUrdfChars: 500_000,
+} as const;
 
 type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
@@ -138,6 +169,13 @@ const validateNonEmptyString = (value: unknown, fieldLabel: string): string[] =>
   }
   return [];
 };
+
+const validateMaxLength = (
+  value: unknown[],
+  fieldLabel: string,
+  maxLength: number
+): string[] =>
+  value.length > maxLength ? [`${fieldLabel} must contain at most ${maxLength} entries`] : [];
 
 const validatePositiveNumber = (value: unknown, fieldLabel: string): string[] => {
   if (!isNumber(value) || value <= 0) {
@@ -491,6 +529,12 @@ const validateSerializableWorldCameras = (cameras: unknown[]): string[] =>
 
 const validateWorldRuntimeTargets = (value: unknown): string[] => {
   if (!Array.isArray(value)) return ["runtime_targets must be an array"];
+  const errors = validateMaxLength(
+    value,
+    "runtime_targets",
+    WORLD_SCENE_PACKAGE_LIMITS.maxRuntimeTargets
+  );
+  if (errors.length > 0) return errors;
   return value.flatMap((target, index) => {
     const targetLabel = `runtime_targets[${index}]`;
     if (!isRecord(target)) return [`${targetLabel} must be an object`];
@@ -513,6 +557,13 @@ const validateWorldInterface = (value: unknown): string[] => {
   if (!Array.isArray(value.observation_modalities)) {
     errors.push("interface.observation_modalities must be an array");
   } else {
+    errors.push(
+      ...validateMaxLength(
+        value.observation_modalities,
+        "interface.observation_modalities",
+        WORLD_SCENE_PACKAGE_LIMITS.maxInterfaceModalities
+      )
+    );
     value.observation_modalities.forEach((modality, index) => {
       errors.push(
         ...validateNonEmptyString(modality, `interface.observation_modalities[${index}]`)
@@ -527,6 +578,12 @@ const validateWorldInterface = (value: unknown): string[] => {
 
 const validateWorldArtifacts = (value: unknown): string[] => {
   if (!Array.isArray(value)) return ["artifacts must be an array"];
+  const errors = validateMaxLength(
+    value,
+    "artifacts",
+    WORLD_SCENE_PACKAGE_LIMITS.maxArtifactRefs
+  );
+  if (errors.length > 0) return errors;
   return value.flatMap((artifact, index) => {
     const artifactLabel = `artifacts[${index}]`;
     if (!isRecord(artifact)) return [`${artifactLabel} must be an object`];
@@ -563,6 +620,29 @@ const validateWorldSecurity = (value: unknown): string[] => {
   if (value.sbom_ref !== undefined && !isNullableString(value.sbom_ref)) {
     errors.push("security.sbom_ref must be a string or null");
   }
+  return errors;
+};
+
+const validateWorldSnapshotShape = (value: unknown): string[] => {
+  if (!isRecord(value)) return ["world_snapshot must be an object"];
+  return validateAllowedFields(value, WORLD_SNAPSHOT_FIELDS, "world_snapshot");
+};
+
+const validateWorldJointPositions = (value: unknown): string[] => {
+  if (!isRecord(value)) return ["world_snapshot.joint_positions must be an object"];
+  const entries = Object.entries(value);
+  const errors: string[] = [];
+  if (entries.length > WORLD_SCENE_PACKAGE_LIMITS.maxJointsPerWorld) {
+    errors.push(
+      `world_snapshot.joint_positions must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxJointsPerWorld} entries`
+    );
+    return errors;
+  }
+  entries.forEach(([jointName, jointValue]) => {
+    if (!isNumber(jointValue)) {
+      errors.push(`world_snapshot.joint_positions.${jointName} must be a finite number`);
+    }
+  });
   return errors;
 };
 
@@ -635,6 +715,9 @@ export const validateLocalWorldSceneManifest = (
   manifest: WorldScenePackageManifest
 ): string[] => {
   const errors: string[] = [];
+  if (isRecord(manifest)) {
+    errors.push(...validateAllowedFields(manifest, WORLD_SCENE_PACKAGE_FIELDS, "manifest"));
+  }
   if (manifest.schema_version !== WORLD_SCENE_PACKAGE_SCHEMA_VERSION) {
     errors.push(`schema_version must be ${WORLD_SCENE_PACKAGE_SCHEMA_VERSION}`);
   }
@@ -650,17 +733,41 @@ export const validateLocalWorldSceneManifest = (
   errors.push(...validateWorldRuntimeTargets(manifest.runtime_targets));
   errors.push(...validateWorldInterface(manifest.interface));
   errors.push(...validateWorldArtifacts(manifest.artifacts));
+  errors.push(...validateWorldSnapshotShape(manifest.world_snapshot));
   if (!manifest.world_snapshot?.urdf_xml?.trim()) {
     errors.push("world_snapshot.urdf_xml is required");
+  } else if (
+    manifest.world_snapshot.urdf_xml.length >
+    WORLD_SCENE_PACKAGE_LIMITS.maxWorldSnapshotUrdfChars
+  ) {
+    errors.push(
+      `world_snapshot.urdf_xml must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxWorldSnapshotUrdfChars} characters`
+    );
   }
-  if (!manifest.world_snapshot || !isRecord(manifest.world_snapshot.joint_positions)) {
-    errors.push("world_snapshot.joint_positions must be an object");
+  if (manifest.world_snapshot) {
+    errors.push(...validateWorldJointPositions(manifest.world_snapshot.joint_positions));
   }
   if (!Array.isArray(manifest.world_snapshot?.cameras)) {
     errors.push("world_snapshot.cameras must be an array");
+  } else {
+    errors.push(
+      ...validateMaxLength(
+        manifest.world_snapshot.cameras,
+        "world_snapshot.cameras",
+        WORLD_SCENE_PACKAGE_LIMITS.maxCamerasPerWorld
+      )
+    );
   }
   if (!Array.isArray(manifest.world_snapshot?.objects)) {
     errors.push("world_snapshot.objects must be an array");
+  } else {
+    errors.push(
+      ...validateMaxLength(
+        manifest.world_snapshot.objects,
+        "world_snapshot.objects",
+        WORLD_SCENE_PACKAGE_LIMITS.maxObjectsPerWorld
+      )
+    );
   }
   if (!isIntegerNumber(manifest.world_snapshot?.scenario_time_ms)) {
     errors.push("world_snapshot.scenario_time_ms must be an integer");
