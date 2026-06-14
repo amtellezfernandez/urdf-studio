@@ -231,6 +231,17 @@
         "scenario_duration_ms"
       ],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "scenario_duration_ms": { "const": 0 } },
+            "required": ["scenario_duration_ms"]
+          },
+          "then": {
+            "properties": { "scenario_time_ms": { "const": 0 } }
+          }
+        }
+      ],
       "properties": {
         "urdf_xml": { "type": "string", "minLength": 1 },
         "joint_positions": {

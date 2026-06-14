@@ -136,3 +136,19 @@ def test_wsp_manifest_schema_requires_mesh_asset_reference() -> None:
         "'rotation_rpy_rad': [0.0, 0.0, 0.0], 'size_xyz': [0.2, 0.3, 0.4], "
         "'color': '#22c55e'} is not valid under any of the given schemas"
     ]
+
+
+def test_wsp_manifest_schema_rejects_static_snapshot_with_nonzero_time() -> None:
+    payload = _manifest()
+    payload["world_snapshot"]["scenario_duration_ms"] = 0
+    payload["world_snapshot"]["scenario_time_ms"] = 100
+
+    assert _schema_errors(payload) == ["0 was expected"]
+
+
+def test_wsp_manifest_schema_accepts_nonstatic_snapshot_time() -> None:
+    payload = _manifest()
+    payload["world_snapshot"]["scenario_duration_ms"] = 1000
+    payload["world_snapshot"]["scenario_time_ms"] = 100
+
+    assert _schema_errors(payload) == []
