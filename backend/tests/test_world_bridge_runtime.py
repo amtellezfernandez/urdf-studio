@@ -91,6 +91,45 @@ def test_apply_joint_command_updates_joint_state_and_sequence() -> None:
     assert transition.planner_id == TEST_PLANNER_ID
 
 
+def test_get_session_can_omit_trace_for_compact_transfer() -> None:
+    runtime = WorldBridgeRuntime()
+    session = runtime.create_session(WorldBridgeSessionCreateRequest(robot_name="so101"))
+    runtime.apply_joint_command(
+        session_id=session.session_id,
+        req=WorldBridgeJointCommandRequest(
+            joint_positions={"joint_a": TEST_JOINT_A_POSITION},
+            source="test-suite",
+        ),
+    )
+
+    full_snapshot = runtime.get_session(session.session_id)
+    compact_snapshot = runtime.get_session(session.session_id, include_trace=False)
+
+    assert len(full_snapshot.recent_events) == 2
+    assert len(full_snapshot.recent_transitions) == 1
+    assert compact_snapshot.joint_state == full_snapshot.joint_state
+    assert compact_snapshot.recent_events == []
+    assert compact_snapshot.recent_transitions == []
+
+
+def test_list_sessions_omits_trace_by_default() -> None:
+    runtime = WorldBridgeRuntime()
+    session = runtime.create_session(WorldBridgeSessionCreateRequest(robot_name="so101"))
+    runtime.apply_joint_command(
+        session_id=session.session_id,
+        req=WorldBridgeJointCommandRequest(joint_positions={"joint_a": TEST_JOINT_A_POSITION}),
+    )
+
+    listed = runtime.list_sessions()
+    listed_with_trace = runtime.list_sessions(include_trace=True)
+
+    assert [snapshot.session_id for snapshot in listed] == [session.session_id]
+    assert listed[0].recent_events == []
+    assert listed[0].recent_transitions == []
+    assert len(listed_with_trace[0].recent_events) == 2
+    assert len(listed_with_trace[0].recent_transitions) == 1
+
+
 def test_update_scenario_time_is_clamped_to_session_duration() -> None:
     runtime = WorldBridgeRuntime()
     session = runtime.create_session(

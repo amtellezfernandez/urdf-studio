@@ -10,6 +10,7 @@ from fastapi import HTTPException
 import backend.api.world_bridge as world_bridge_api
 from backend.models.attestation import AttestationStatusUpsertRequest, AttestationTrustState
 from backend.services.attestation import attestation_status_store
+from backend.world_bridge.runtime import WorldBridgeRuntime
 from backend.world_bridge.types import (
     WorldBridgeCommandAck,
     WorldBridgeReadinessDecision,
@@ -213,6 +214,35 @@ def test_proxy_disabled_uses_runtime_without_worldd(
     status = _run_api(world_bridge_api.get_world_bridge_status())
 
     assert status.active_sessions == TEST_RUNTIME_ACTIVE_SESSIONS
+
+
+def test_session_routes_omit_trace_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_proxy_state(monkeypatch, enabled=False)
+    runtime = WorldBridgeRuntime()
+    created = runtime.create_session(
+        WorldBridgeSessionCreateRequest(
+            robot_name="so101",
+            scenario_duration_ms=TEST_SCENARIO_DURATION_MS,
+        )
+    )
+    runtime.apply_joint_command(
+        created.session_id,
+        WorldBridgeJointCommandRequest(joint_positions={"joint_a": 0.5}),
+    )
+    monkeypatch.setattr(world_bridge_api, "runtime", runtime)
+
+    compact_list = _run_api(world_bridge_api.list_world_bridge_sessions())
+    compact_get = _run_api(world_bridge_api.get_world_bridge_session(created.session_id))
+    traced_get = _run_api(
+        world_bridge_api.get_world_bridge_session(created.session_id, include_trace=True)
+    )
+
+    assert compact_list[0].recent_events == []
+    assert compact_list[0].recent_transitions == []
+    assert compact_get.recent_events == []
+    assert compact_get.recent_transitions == []
+    assert len(traced_get.recent_events) == 2
+    assert len(traced_get.recent_transitions) == 1
 
 
 def test_mutating_request_returns_503_when_worldd_unavailable(

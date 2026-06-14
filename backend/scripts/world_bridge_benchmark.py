@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import tracemalloc
 from dataclasses import asdict, dataclass
@@ -181,9 +182,16 @@ def _build_joint_positions(joints_per_command: int) -> dict[str, float]:
     return {f"joint_{index + 1}": (index + 1) * 0.01 for index in range(joints_per_command)}
 
 
-def _measure_call_latency_ms(call: Callable[[], object], *, iterations: int) -> list[float]:
+def _measure_call_latency_ms(
+    call: Callable[[], object],
+    *,
+    iterations: int,
+    collect_gc_before_sample: bool = False,
+) -> list[float]:
     samples_ms: list[float] = []
     for _ in range(iterations):
+        if collect_gc_before_sample:
+            gc.collect()
         start_ns = perf_counter_ns()
         call()
         samples_ms.append(_ns_to_ms(perf_counter_ns() - start_ns))
@@ -232,6 +240,7 @@ def run_world_bridge_benchmark(
             _measure_call_latency_ms(
                 create_app,
                 iterations=PERF_STARTUP_APP_MEASURE_ITERATIONS,
+                collect_gc_before_sample=True,
             ),
             PERCENTILE_95,
         ),
@@ -322,7 +331,9 @@ def run_world_bridge_benchmark(
     for session_id in session_ids:
         get_result: dict[str, WorldBridgeSessionSnapshot | None] = {"value": None}
         execution = _run_with_retry(
-            lambda: get_result.update(value=runtime.get_session(session_id)),
+            lambda: get_result.update(
+                value=runtime.get_session(session_id, include_trace=False)
+            ),
             max_retries=PERF_OPERATION_MAX_RETRIES,
         )
         operation_total_count += 1
@@ -337,7 +348,7 @@ def run_world_bridge_benchmark(
     listed_result: dict[str, list[WorldBridgeSessionSnapshot] | None] = {"value": None}
     for _ in range(PERF_LIST_SESSIONS_MEASURE_ITERATIONS):
         execution = _run_with_retry(
-            lambda: listed_result.update(value=runtime.list_sessions()),
+            lambda: listed_result.update(value=runtime.list_sessions(include_trace=False)),
             max_retries=PERF_OPERATION_MAX_RETRIES,
         )
         operation_total_count += 1

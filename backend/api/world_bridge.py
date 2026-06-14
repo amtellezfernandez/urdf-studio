@@ -94,9 +94,30 @@ def _runtime_create_session(req: WorldBridgeSessionCreateRequest) -> WorldBridge
         raise HTTPException(status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
-def _runtime_get_session(session_id: str) -> WorldBridgeSessionSnapshot:
+def _compact_session_snapshot(snapshot: WorldBridgeSessionSnapshot) -> WorldBridgeSessionSnapshot:
+    if not snapshot.recent_events and not snapshot.recent_transitions:
+        return snapshot
+    return snapshot.model_copy(
+        update={
+            "recent_events": [],
+            "recent_transitions": [],
+        },
+    )
+
+
+def _compact_session_snapshots(
+    snapshots: list[WorldBridgeSessionSnapshot],
+) -> list[WorldBridgeSessionSnapshot]:
+    return [_compact_session_snapshot(snapshot) for snapshot in snapshots]
+
+
+def _runtime_get_session(
+    session_id: str,
+    *,
+    include_trace: bool,
+) -> WorldBridgeSessionSnapshot:
     try:
-        return runtime.get_session(session_id)
+        return runtime.get_session(session_id, include_trace=include_trace)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -161,13 +182,15 @@ async def get_world_bridge_status(
 
 @router.get("/sessions", response_model=list[WorldBridgeSessionSnapshot])
 async def list_world_bridge_sessions(
+    include_trace: bool = False,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> list[WorldBridgeSessionSnapshot]:
-    return _dispatch_world_bridge_call(
+    snapshots = _dispatch_world_bridge_call(
         worldd_call=worldd_client.list_sessions,
-        runtime_call=runtime.list_sessions,
+        runtime_call=lambda: runtime.list_sessions(include_trace=include_trace),
         allow_runtime_fallback_on_unavailable=False,
     )
+    return snapshots if include_trace else _compact_session_snapshots(snapshots)
 
 
 @router.get("/readiness", response_model=WorldBridgeReadinessResponse)
@@ -214,13 +237,15 @@ async def create_world_bridge_session(
 @router.get("/sessions/{session_id}", response_model=WorldBridgeSessionSnapshot)
 async def get_world_bridge_session(
     session_id: str,
+    include_trace: bool = False,
     _access: None = Depends(require_simulator_operator_access_async),
 ) -> WorldBridgeSessionSnapshot:
-    return _dispatch_world_bridge_call(
+    snapshot = _dispatch_world_bridge_call(
         worldd_call=lambda: worldd_client.get_session(session_id),
-        runtime_call=lambda: _runtime_get_session(session_id),
+        runtime_call=lambda: _runtime_get_session(session_id, include_trace=include_trace),
         allow_runtime_fallback_on_unavailable=False,
     )
+    return snapshot if include_trace else _compact_session_snapshot(snapshot)
 
 
 @router.post("/sessions/{session_id}/joint-command", response_model=WorldBridgeCommandAck)
@@ -231,7 +256,7 @@ async def apply_world_bridge_joint_command(
 ) -> WorldBridgeCommandAck:
     robot_name = runtime.resolve_robot_name(session_id)
     if robot_name is None and not settings.world_bridge_use_worldd_proxy:
-        robot_name = _runtime_get_session(session_id).robot_name
+        robot_name = _runtime_get_session(session_id, include_trace=False).robot_name
     if robot_name is not None:
         _require_attestation_control_allowed(robot_name)
     if not settings.world_bridge_use_worldd_proxy:
@@ -249,7 +274,7 @@ async def update_world_bridge_scenario_time(
 ) -> WorldBridgeSessionSnapshot:
     robot_name = runtime.resolve_robot_name(session_id)
     if robot_name is None and not settings.world_bridge_use_worldd_proxy:
-        robot_name = _runtime_get_session(session_id).robot_name
+        robot_name = _runtime_get_session(session_id, include_trace=False).robot_name
     if robot_name is not None:
         _require_attestation_control_allowed(robot_name)
     if not settings.world_bridge_use_worldd_proxy:

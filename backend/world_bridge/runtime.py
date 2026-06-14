@@ -272,7 +272,12 @@ class WorldBridgeRuntime:
             live_rollout_transition_count=self._readiness.live_rollout_transition_count,
         )
 
-    def _to_snapshot(self, session: WorldBridgeSessionState) -> WorldBridgeSessionSnapshot:
+    def _to_snapshot(
+        self,
+        session: WorldBridgeSessionState,
+        *,
+        include_trace: bool,
+    ) -> WorldBridgeSessionSnapshot:
         return WorldBridgeSessionSnapshot(
             session_id=session.session_id,
             robot_name=session.robot_name,
@@ -284,8 +289,8 @@ class WorldBridgeRuntime:
             scenario_time_ms=session.scenario_time_ms,
             joint_state=dict(session.joint_state),
             last_command_sequence=session.last_command_sequence,
-            recent_events=list(session.recent_events),
-            recent_transitions=list(session.recent_transitions),
+            recent_events=list(session.recent_events) if include_trace else [],
+            recent_transitions=list(session.recent_transitions) if include_trace else [],
             attestation=attestation_status_store.summary(session.robot_name),
         )
 
@@ -377,10 +382,17 @@ class WorldBridgeRuntime:
                 return session.robot_name
             return self._readiness.external_robot_by_session_id.get(session_id)
 
-    def list_sessions(self) -> List[WorldBridgeSessionSnapshot]:
+    def list_sessions(
+        self,
+        *,
+        include_trace: bool = False,
+    ) -> List[WorldBridgeSessionSnapshot]:
         with self._lock:
             self._prune_idle_sessions_locked(_now_ms())
-            return [self._to_snapshot(session) for session in self._sessions.values()]
+            return [
+                self._to_snapshot(session, include_trace=include_trace)
+                for session in self._sessions.values()
+            ]
 
     def create_session(
         self, req: WorldBridgeSessionCreateRequest
@@ -424,15 +436,20 @@ class WorldBridgeRuntime:
                 adapter_id=req.adapter_id,
             )
             self._sessions[session.session_id] = session
-            return self._to_snapshot(session)
+            return self._to_snapshot(session, include_trace=True)
 
-    def get_session(self, session_id: str) -> WorldBridgeSessionSnapshot:
+    def get_session(
+        self,
+        session_id: str,
+        *,
+        include_trace: bool = True,
+    ) -> WorldBridgeSessionSnapshot:
         with self._lock:
             self._prune_idle_sessions_locked(_now_ms())
             session = self._sessions.get(session_id)
             if session is None:
                 raise KeyError(f"unknown session: {session_id}")
-            return self._to_snapshot(session)
+            return self._to_snapshot(session, include_trace=include_trace)
 
     def apply_joint_command(
         self, session_id: str, req: WorldBridgeJointCommandRequest
@@ -550,4 +567,4 @@ class WorldBridgeRuntime:
                 adapter_id=req.adapter_id,
                 rollout_mode=req.rollout_mode,
             )
-            return self._to_snapshot(session)
+            return self._to_snapshot(session, include_trace=True)
