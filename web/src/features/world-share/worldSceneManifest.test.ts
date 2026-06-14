@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
+  WORLD_SCENE_PACKAGE_LIMITS,
   WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS,
 } from "@/features/world-share/worldScenePackageParams";
 
@@ -197,43 +198,75 @@ describe("worldSceneManifest static scene validation", () => {
     const manifest = createManifest();
     const errors = validateLocalWorldSceneManifest({
       ...manifest,
-      runtime_targets: Array.from({ length: 17 }, (_, index) => ({
-        name: `target-${index}`,
-        mode: "native",
-      })),
+      runtime_targets: Array.from(
+        { length: WORLD_SCENE_PACKAGE_LIMITS.maxRuntimeTargets + 1 },
+        (_, index) => ({
+          name: `target-${index}`,
+          mode: "native",
+        })
+      ),
       interface: {
         ...manifest.interface,
-        observation_modalities: Array.from({ length: 33 }, (_, index) => `modality-${index}`),
+        observation_modalities: Array.from(
+          { length: WORLD_SCENE_PACKAGE_LIMITS.maxInterfaceModalities + 1 },
+          (_, index) => `modality-${index}`
+        ),
       },
-      artifacts: Array.from({ length: 129 }, (_, index) => ({
-        kind: `artifact-${index}`,
-        digest_sha256: "a".repeat(64),
-        uri: `inline://artifact-${index}`,
-      })),
+      artifacts: Array.from(
+        { length: WORLD_SCENE_PACKAGE_LIMITS.maxArtifactRefs + 1 },
+        (_, index) => ({
+          kind: `artifact-${index}`,
+          digest_sha256: "a".repeat(64),
+          uri: `inline://artifact-${index}`,
+        })
+      ),
       world_snapshot: {
         ...manifest.world_snapshot,
-        urdf_xml: "x".repeat(500_001),
+        urdf_xml: "x".repeat(WORLD_SCENE_PACKAGE_LIMITS.maxWorldSnapshotUrdfChars + 1),
         joint_positions: Object.fromEntries(
-          Array.from({ length: 513 }, (_, index) => [`joint_${index}`, index])
+          Array.from(
+            { length: WORLD_SCENE_PACKAGE_LIMITS.maxJointsPerWorld + 1 },
+            (_, index) => [`joint_${index}`, index]
+          )
         ),
-        cameras: Array.from({ length: 65 }, (_, index) => ({
-          ...createWorldCamera(),
-          id: `cam-${index}`,
-        })),
-        objects: Array.from({ length: 257 }, (_, index) => ({
-          ...createWorldLayoutObject(),
-          id: `object-${index}`,
-        })),
+        cameras: Array.from(
+          { length: WORLD_SCENE_PACKAGE_LIMITS.maxCamerasPerWorld + 1 },
+          (_, index) => ({
+            ...createWorldCamera(),
+            id: `cam-${index}`,
+          })
+        ),
+        objects: Array.from(
+          { length: WORLD_SCENE_PACKAGE_LIMITS.maxObjectsPerWorld + 1 },
+          (_, index) => ({
+            ...createWorldLayoutObject(),
+            id: `object-${index}`,
+          })
+        ),
       },
     } as unknown as WorldScenePackageManifest);
 
-    expect(errors).toContain("runtime_targets must contain at most 16 entries");
-    expect(errors).toContain("interface.observation_modalities must contain at most 32 entries");
-    expect(errors).toContain("artifacts must contain at most 128 entries");
-    expect(errors).toContain("world_snapshot.urdf_xml must contain at most 500000 characters");
-    expect(errors).toContain("world_snapshot.joint_positions must contain at most 512 entries");
-    expect(errors).toContain("world_snapshot.cameras must contain at most 64 entries");
-    expect(errors).toContain("world_snapshot.objects must contain at most 256 entries");
+    expect(errors).toContain(
+      `runtime_targets must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxRuntimeTargets} entries`
+    );
+    expect(errors).toContain(
+      `interface.observation_modalities must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxInterfaceModalities} entries`
+    );
+    expect(errors).toContain(
+      `artifacts must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxArtifactRefs} entries`
+    );
+    expect(errors).toContain(
+      `world_snapshot.urdf_xml must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxWorldSnapshotUrdfChars} characters`
+    );
+    expect(errors).toContain(
+      `world_snapshot.joint_positions must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxJointsPerWorld} entries`
+    );
+    expect(errors).toContain(
+      `world_snapshot.cameras must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxCamerasPerWorld} entries`
+    );
+    expect(errors).toContain(
+      `world_snapshot.objects must contain at most ${WORLD_SCENE_PACKAGE_LIMITS.maxObjectsPerWorld} entries`
+    );
   });
 
   it("keeps interface extension metadata importable", () => {

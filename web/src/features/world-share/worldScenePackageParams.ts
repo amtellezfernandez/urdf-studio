@@ -7,6 +7,18 @@ export const WORLD_SCENE_PACKAGE_DEFAULT_SCENARIO_DURATION_MS = 12_000 as const;
 export const WORLD_SCENE_PACKAGE_MIN_SCENARIO_TIME_MS = 0 as const;
 export const WORLD_SCENE_PACKAGE_MIN_SCENARIO_DURATION_MS = 0 as const;
 export const WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS = 600_000 as const;
+export const WORLD_SCENE_PACKAGE_LIMITS = {
+  maxRuntimeTargets: 16,
+  maxInterfaceModalities: 32,
+  maxArtifactRefs: 128,
+  maxCamerasPerWorld: 64,
+  maxObjectsPerWorld: 256,
+  maxJointsPerWorld: 512,
+  maxWorldSnapshotUrdfChars: 500_000,
+} as const;
+export const WORLD_SCENE_PACKAGE_PATTERNS = {
+  digestSha256Hex: /^[a-fA-F0-9]{64}$/,
+} as const;
 export const STATIC_WORLD_LAYOUT_KIND = "static" as const;
 export const STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS = 0 as const;
 export const STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS = 0 as const;

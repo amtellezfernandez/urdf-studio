@@ -7,7 +7,9 @@ import {
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
   STATIC_WORLD_LAYOUT_SCENARIO_DURATION_MS,
   STATIC_WORLD_LAYOUT_SCENARIO_TIME_MS,
+  WORLD_SCENE_PACKAGE_LIMITS,
   WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
+  WORLD_SCENE_PACKAGE_PATTERNS,
   WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS,
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_DURATION_MS,
   WORLD_SCENE_PACKAGE_MIN_SCENARIO_TIME_MS,
@@ -65,16 +67,6 @@ const WORLD_RUNTIME_TARGET_FIELDS = ["name", "mode", "min_version"] as const;
 const WORLD_RUNTIME_TARGET_MODES = ["native", "python", "container"] as const;
 const WORLD_ARTIFACT_FIELDS = ["kind", "digest_sha256", "uri"] as const;
 const WORLD_SECURITY_FIELDS = ["signature_ref", "attestation_refs", "sbom_ref"] as const;
-const WORLD_ARTIFACT_DIGEST_SHA256_PATTERN = /^[a-fA-F0-9]{64}$/;
-const WORLD_SCENE_PACKAGE_LIMITS = {
-  maxRuntimeTargets: 16,
-  maxInterfaceModalities: 32,
-  maxArtifactRefs: 128,
-  maxCamerasPerWorld: 64,
-  maxObjectsPerWorld: 256,
-  maxJointsPerWorld: 512,
-  maxWorldSnapshotUrdfChars: 500_000,
-} as const;
 
 type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
@@ -592,7 +584,7 @@ const validateWorldArtifacts = (value: unknown): string[] => {
     errors.push(...validateNonEmptyString(artifact.kind, `${artifactLabel}.kind`));
     if (
       !isString(artifact.digest_sha256) ||
-      !WORLD_ARTIFACT_DIGEST_SHA256_PATTERN.test(artifact.digest_sha256)
+      !WORLD_SCENE_PACKAGE_PATTERNS.digestSha256Hex.test(artifact.digest_sha256)
     ) {
       errors.push(`${artifactLabel}.digest_sha256 must be a SHA-256 hex digest`);
     }
