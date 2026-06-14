@@ -512,6 +512,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
         textwrap.dedent(
             f"""
             import json
+            import math
             from pathlib import Path
 
             import bpy
@@ -705,6 +706,7 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
                                 "sim_name": str(obj.get("urdf_studio_sim_name", obj.name)),
                                 "position_xyz": local_position,
                                 "quat_wxyz": local_quat,
+                                "fov_deg": math.degrees(float(obj.data.angle)),
                                 "pose_frame": "opengl_render_local",
                             }}
                         )

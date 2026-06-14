@@ -12,6 +12,9 @@ from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters.camera_conventions import (
     world_camera_to_opengl_camera_rotation,
 )
+from backend.services.simulator_adapters.camera_intrinsics import (
+    focal_length_px_from_vertical_fov_deg,
+)
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
 from backend.services.world_scene_package_digest import (
@@ -60,6 +63,7 @@ class BlenderCameraChange:
     stable_id: str
     position_xyz: tuple[float, float, float]
     quat_wxyz: tuple[float, float, float, float]
+    fov_deg: float | None
     pose_frame: str
 
 
@@ -422,6 +426,7 @@ def _validate_camera_change(value: Any, path: str) -> BlenderCameraChange:
             "sim_name",
             "position_xyz",
             "quat_wxyz",
+            "fov_deg",
             "pose_frame",
         },
     )
@@ -437,6 +442,7 @@ def _validate_camera_change(value: Any, path: str) -> BlenderCameraChange:
         stable_id=_required_string(value.get("stable_id"), f"{path}.stable_id"),
         position_xyz=_required_vector3(value.get("position_xyz"), f"{path}.position_xyz"),
         quat_wxyz=_required_quat_wxyz(value.get("quat_wxyz"), f"{path}.quat_wxyz"),
+        fov_deg=_optional_camera_fov_deg(value.get("fov_deg"), f"{path}.fov_deg"),
         pose_frame=pose_frame,
     )
 
@@ -556,7 +562,7 @@ def _updated_camera_fields(
         camera_id = str(next_camera.get("id", "")).strip()
         change = camera_updates.get(camera_id)
         if change is not None:
-            next_camera.update(_world_camera_change_fields(change))
+            next_camera.update(_world_camera_change_fields(change, next_camera))
         next_cameras.append(next_camera)
     return next_cameras
 
@@ -626,15 +632,42 @@ def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, A
     return fields
 
 
-def _world_camera_change_fields(change: BlenderCameraChange) -> dict[str, Any]:
+def _world_camera_change_fields(
+    change: BlenderCameraChange,
+    camera: Mapping[str, Any],
+) -> dict[str, Any]:
     studio_rotation = _render_local_quat_to_studio_rotation(change.quat_wxyz)
     rpy = studio_rotation.as_euler("xyz")
-    return {
+    fields: dict[str, Any] = {
         "pose": {
             "xyz": list(change.position_xyz),
             "rpy": [float(rpy[0]), float(rpy[1]), float(rpy[2])],
         },
     }
+    if change.fov_deg is not None:
+        fields["intrinsics"] = _camera_intrinsics_with_fov(
+            camera.get("intrinsics"),
+            change.fov_deg,
+        )
+    return fields
+
+
+def _camera_intrinsics_with_fov(value: Any, fov_deg: float) -> dict[str, Any]:
+    intrinsics = dict(value) if isinstance(value, Mapping) else {}
+    intrinsics["fov_deg"] = fov_deg
+    width = intrinsics.get("width")
+    height = intrinsics.get("height")
+    if (
+        is_finite_number(width)
+        and is_finite_number(height)
+        and float(width) > 0.0
+        and float(height) > 0.0
+        and ("fx" in intrinsics or "fy" in intrinsics)
+    ):
+        fy = focal_length_px_from_vertical_fov_deg(fov_deg, int(float(height)))
+        intrinsics["fy"] = fy
+        intrinsics["fx"] = fy * (float(width) / float(height))
+    return intrinsics
 
 
 def _render_local_quat_to_studio_rotation(
@@ -750,6 +783,17 @@ def _optional_rgba(value: Any, label: str) -> tuple[float, float, float, float] 
     if any(number < 0.0 or number > 1.0 for number in numbers):
         raise ValueError(f"Blender change-set {label} must contain numbers between 0 and 1.")
     return (numbers[0], numbers[1], numbers[2], numbers[3])
+
+
+def _optional_camera_fov_deg(value: Any, label: str) -> float | None:
+    if value is None:
+        return None
+    if not is_finite_number(value):
+        raise ValueError(f"Blender change-set {label} must be a finite number.")
+    parsed = float(value)
+    if not 1.0 <= parsed <= 179.0:
+        raise ValueError(f"Blender change-set {label} must be between 1 and 179 degrees.")
+    return parsed
 
 
 def _required_quat_wxyz(value: Any, label: str) -> tuple[float, float, float, float]:

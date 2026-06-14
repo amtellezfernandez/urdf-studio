@@ -150,6 +150,7 @@ def _scene_camera_change(stable_id="cam-1", position_xyz=None) -> dict:
         "stable_id": stable_id,
         "position_xyz": position_xyz or [0.0, 0.0, 1.0],
         "quat_wxyz": _studio_zero_camera_render_quat_wxyz(),
+        "fov_deg": 60.0,
         "pose_frame": "opengl_render_local",
     }
 
@@ -231,6 +232,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert edit_session["objects"][0]["stable_id"] == "crate"
     assert edit_session["cameras"][0]["stable_id"] == "cam-1"
     assert edit_session["camera_screenshot_dir"] == str(tmp_path / "artifacts" / "cameras")
+    assert "camera.intrinsics.fov_deg" in edit_session["round_trip"]["supported_changes"]
     assert "world_object.color" in edit_session["round_trip"]["supported_changes"]
     assert "new_world_object" in edit_session["round_trip"]["review_only"]
     assert "new_static_props" not in edit_session["round_trip"]["review_only"]
@@ -406,10 +408,44 @@ def test_blender_change_set_applies_camera_pose(tmp_path: Path) -> None:
     assert result.applied_change_count == 2
     assert result.review_only_count == 0
     assert updated_camera["pose"]["xyz"] == [0.2, 0.3, 1.4]
+    assert updated_camera["intrinsics"]["fov_deg"] == 60.0
     assert all(
         math.isclose(value, 0.0, abs_tol=1e-9)
         for value in updated_camera["pose"]["rpy"]
     )
+
+
+def test_blender_change_set_applies_camera_fov_to_calibrated_intrinsics(tmp_path: Path) -> None:
+    world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
+    world_package.world_snapshot.cameras[0]["intrinsics"] = {
+        "width": 640,
+        "height": 480,
+        "fx": 500.0,
+        "fy": 500.0,
+        "cx": 319.5,
+        "cy": 239.5,
+    }
+    camera_change = _scene_camera_change(position_xyz=[0.0, 0.0, 1.0])
+    camera_change["fov_deg"] = 72.0
+
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        _blender_change_set(
+            world_package,
+            changes=[
+                _crate_layout_change(),
+                camera_change,
+            ],
+        ),
+    )
+
+    intrinsics = result.world_package.world_snapshot.cameras[0]["intrinsics"]
+    expected_fy = 480 / (2.0 * math.tan(math.radians(72.0) * 0.5))
+    assert intrinsics["fov_deg"] == 72.0
+    assert intrinsics["fy"] == pytest.approx(expected_fy)
+    assert intrinsics["fx"] == pytest.approx(expected_fy * (640 / 480))
+    assert intrinsics["cx"] == 319.5
+    assert intrinsics["cy"] == 239.5
 
 
 def test_blender_change_set_refreshes_world_snapshot_artifact_digest(tmp_path: Path) -> None:
@@ -1123,6 +1159,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     world_objects[0].rotation_quaternion = [1.0, 0.0, 0.0, 0.0]
     world_objects[0].data.materials[0].diffuse_color = (0.9, 0.1, 0.2, 1.0)
     camera_objects[0].location = [0.2, 0.4, 1.6]
+    camera_objects[0].data.angle = math.radians(72.0)
     fake_bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.0, 3.0, 4.0))
     new_world_object = fake_bpy.context.object
     new_world_object.name = "Extra Box"
@@ -1145,6 +1182,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
         },
         {
             "entity_type": "camera",
+            "fov_deg": 72.0,
             "pose_frame": "opengl_render_local",
             "position_xyz": [0.2, 0.4, 1.6],
             "quat_wxyz": _studio_zero_camera_render_quat_wxyz(),
@@ -1167,6 +1205,7 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert result.world_package.world_snapshot.objects[1]["position_xyz"] == [2.0, 3.0, 4.0]
     assert result.world_package.world_snapshot.objects[1]["color"] == "#336699"
     assert result.world_package.world_snapshot.cameras[0]["pose"]["xyz"] == [0.2, 0.4, 1.6]
+    assert result.world_package.world_snapshot.cameras[0]["intrinsics"]["fov_deg"] == 72.0
     assert all(
         math.isclose(value, 0.0, abs_tol=1e-9)
         for value in result.world_package.world_snapshot.cameras[0]["pose"]["rpy"]

@@ -221,6 +221,7 @@ def _blender_camera_change_payload(stable_id: str) -> dict:
             float(quat_xyzw[1]),
             float(quat_xyzw[2]),
         ],
+        "fov_deg": 60.0,
         "pose_frame": "opengl_render_local",
     }
 

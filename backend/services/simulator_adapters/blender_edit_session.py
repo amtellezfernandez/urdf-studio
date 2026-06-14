@@ -13,6 +13,7 @@ from backend.services.simulator_adapters.numeric import is_finite_number
 BLENDER_EDIT_SESSION_SCHEMA = "urdf-studio.blender-edit-session.v1"
 BLENDER_SUPPORTED_LAYOUT_CHANGES = frozenset(
     (
+        "camera.intrinsics.fov_deg",
         "camera.pose",
         "world_object.position_xyz",
         "world_object.rotation_rpy_rad",
