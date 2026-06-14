@@ -195,8 +195,16 @@ def test_world_scene_package_model_rejects_schema_level_extra_fields(
             "simulation.friction must be >= 0.01",
         ),
         (
+            lambda world_object: world_object.update({"simulation": {"debug": True}}),
+            "objects\\[0\\].simulation has unsupported field",
+        ),
+        (
             lambda world_object: world_object.update({"mesh": []}),
             "objects\\[0\\].mesh must be an object",
+        ),
+        (
+            lambda world_object: world_object.update({"mesh": {"debug": True}}),
+            "objects\\[0\\].mesh has unsupported field",
         ),
         (
             lambda world_object: world_object.update({"type": "mesh"}),

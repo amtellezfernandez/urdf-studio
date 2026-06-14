@@ -248,6 +248,19 @@ WORLD_OBJECT_SOURCES = {
 WORLD_OBJECT_IK_TARGET_TYPES = {"punctual", "orbit"}
 WORLD_OBJECT_ORBIT_TARGET_POINTS = {"center", "primary", "secondary"}
 WORLD_OBJECT_MESH_ASSET_KEYS = ("asset_ref", "path", "uri", "filename")
+WORLD_OBJECT_SIMULATION_FIELDS = {
+    "fixed",
+    "collision",
+    "mass_kg",
+    "friction",
+    "restitution",
+    "semantic_role",
+}
+WORLD_OBJECT_MESH_FIELDS = {
+    *WORLD_OBJECT_MESH_ASSET_KEYS,
+    "scale",
+    "scale_xyz",
+}
 
 
 def _raise_for_invalid_object_payloads(objects: List[Dict[str, Any]]) -> None:
@@ -308,6 +321,7 @@ def _raise_for_invalid_object_simulation(value: Any, object_path: str) -> None:
         return
     if not _is_record(value):
         raise ValueError(f"{object_path}.simulation must be an object.")
+    _raise_for_extra_fields(value, WORLD_OBJECT_SIMULATION_FIELDS, f"{object_path}.simulation")
     for field_name in ("fixed", "collision"):
         if field_name in value and not _is_boolean(value.get(field_name)):
             raise ValueError(f"{object_path}.simulation.{field_name} must be a boolean.")
@@ -342,6 +356,7 @@ def _raise_for_invalid_object_mesh_metadata(world_object: Dict[str, Any], object
     if mesh is not None and not _is_record(mesh):
         raise ValueError(f"{object_path}.mesh must be an object.")
     if _is_record(mesh):
+        _raise_for_extra_fields(mesh, WORLD_OBJECT_MESH_FIELDS, f"{object_path}.mesh")
         for field_name in WORLD_OBJECT_MESH_ASSET_KEYS:
             if field_name in mesh:
                 _raise_for_portable_asset_ref(mesh.get(field_name), f"{object_path}.mesh.{field_name}")

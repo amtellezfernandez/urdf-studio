@@ -198,6 +198,18 @@ def test_wsp_manifest_schema_requires_mesh_asset_reference() -> None:
     ]
 
 
+def test_wsp_manifest_schema_rejects_unknown_simulator_metadata_fields() -> None:
+    payload = _manifest_with_mesh_asset_ref("assets/crate.obj")
+    world_object = payload["world_snapshot"]["objects"][0]
+    world_object["simulation"] = {"fixed": True, "debug": True}
+    world_object["mesh"] = {"path": "assets/crate.obj", "debug": True}
+
+    errors = _schema_errors(payload)
+
+    assert "Additional properties are not allowed ('debug' was unexpected)" in errors
+    assert errors.count("Additional properties are not allowed ('debug' was unexpected)") == 2
+
+
 def test_wsp_manifest_schema_rejects_static_snapshot_with_nonzero_time() -> None:
     payload = _manifest()
     payload["world_snapshot"]["scenario_duration_ms"] = 0

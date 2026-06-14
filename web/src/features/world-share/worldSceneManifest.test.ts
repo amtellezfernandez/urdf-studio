@@ -495,6 +495,7 @@ describe("worldSceneManifest static scene validation", () => {
         friction: 0,
         restitution: 1.1,
         semantic_role: 3,
+        debug: true,
       },
     } as unknown as WorldScenePackageManifest["world_snapshot"]["objects"][number];
     const errors = validateLocalWorldSceneManifest(
@@ -503,6 +504,7 @@ describe("worldSceneManifest static scene validation", () => {
       })
     );
     expect(errors).toContain("world layout objects[0].simulation.fixed must be a boolean");
+    expect(errors).toContain("world layout objects[0].simulation has unsupported field(s): debug");
     expect(errors).toContain("world layout objects[0].simulation.mass_kg must be >= 0");
     expect(errors).toContain("world layout objects[0].simulation.friction must be >= 0.01");
     expect(errors).toContain("world layout objects[0].simulation.restitution must be <= 1");
@@ -531,18 +533,20 @@ describe("worldSceneManifest static scene validation", () => {
     const errors = validateLocalWorldSceneManifest(
       createManifest({
         objects: [
-          {
+          ({
             ...createWorldLayoutObject(),
             type: "mesh",
             mesh: {
               path: "assets/crate.obj",
               scale: [1, 0, 1],
+              debug: true,
             },
-          },
+          } as unknown as WorldScenePackageManifest["world_snapshot"]["objects"][number]),
         ],
       })
     );
     expect(errors).toContain("world layout objects[0].mesh.scale[y] must be > 0");
+    expect(errors).toContain("world layout objects[0].mesh has unsupported field(s): debug");
   });
 
   it("accepts static world layout snapshots", () => {

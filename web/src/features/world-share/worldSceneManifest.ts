@@ -67,6 +67,22 @@ const WORLD_RUNTIME_TARGET_FIELDS = ["name", "mode", "min_version"] as const;
 const WORLD_RUNTIME_TARGET_MODES = ["native", "python", "container"] as const;
 const WORLD_ARTIFACT_FIELDS = ["kind", "digest_sha256", "uri"] as const;
 const WORLD_SECURITY_FIELDS = ["signature_ref", "attestation_refs", "sbom_ref"] as const;
+const WORLD_OBJECT_SIMULATION_FIELDS = [
+  "fixed",
+  "collision",
+  "mass_kg",
+  "friction",
+  "restitution",
+  "semantic_role",
+] as const;
+const WORLD_OBJECT_MESH_FIELDS = [
+  "asset_ref",
+  "path",
+  "uri",
+  "filename",
+  "scale",
+  "scale_xyz",
+] as const;
 
 type WorldSceneLayerEnvironment = Record<string, unknown> | null;
 
@@ -240,6 +256,13 @@ const validateWorldObjectSimulation = (value: unknown, objectLabel: string): str
   if (value === undefined) return [];
   if (!isRecord(value)) return [`${objectLabel}.simulation must be an object`];
   const errors: string[] = [];
+  errors.push(
+    ...validateAllowedFields(
+      value,
+      WORLD_OBJECT_SIMULATION_FIELDS,
+      `${objectLabel}.simulation`
+    )
+  );
   errors.push(...validateOptionalBoolean(value.fixed, `${objectLabel}.simulation.fixed`));
   errors.push(...validateOptionalBoolean(value.collision, `${objectLabel}.simulation.collision`));
   errors.push(
@@ -294,6 +317,9 @@ const validateWorldObjectMeshMetadata = (
       errors.push(`${objectLabel}.mesh must be an object`);
     } else {
       const mesh = value.mesh;
+      errors.push(
+        ...validateAllowedFields(mesh, WORLD_OBJECT_MESH_FIELDS, `${objectLabel}.mesh`)
+      );
       for (const key of ["asset_ref", "path", "uri", "filename"] as const) {
         if (mesh[key] !== undefined) {
           errors.push(
