@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from backend.services.simulator_adapters.workspace_request_sources import (
@@ -9,7 +7,7 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     build_demo_workspace_request,
     build_workspace_request_from_files,
 )
-from backend.tests.simulator_adapter_test_utils import make_world_package
+from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
 
 def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> None:
@@ -80,10 +78,7 @@ def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> N
         ],
     )
     world_package_path = tmp_path / "world-package.json"
-    world_package_path.write_text(
-        json.dumps(world_package.model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, world_package)
 
     request = build_workspace_request_from_files(
         world_package_path=world_package_path,
@@ -124,10 +119,7 @@ def test_workspace_request_from_files_rejects_conflicting_asset_roots(tmp_path) 
 """.strip()
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
     world_package_path = tmp_path / "world-package.json"
-    world_package_path.write_text(
-        json.dumps(make_world_package(urdf_xml).model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, make_world_package(urdf_xml))
 
     with pytest.raises(ValueError, match="Conflicting asset path"):
         build_workspace_request_from_files(
@@ -147,10 +139,7 @@ def test_workspace_request_from_files_ignores_conflicting_non_transfer_files(tmp
     urdf_xml = "<robot name=\"custom_robot\"><link name=\"base_link\"/></robot>"
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
     world_package_path = tmp_path / "world-package.json"
-    world_package_path.write_text(
-        json.dumps(make_world_package(urdf_xml).model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, make_world_package(urdf_xml))
 
     request = build_workspace_request_from_files(
         world_package_path=world_package_path,
@@ -168,10 +157,7 @@ def test_workspace_request_from_files_accepts_xacro_source_path(tmp_path) -> Non
     urdf_xml = "<robot name=\"custom_robot\"><link name=\"base_link\"/></robot>"
     robot_source_path.write_text(urdf_xml, encoding="utf-8")
     world_package_path = tmp_path / "world-package.json"
-    world_package_path.write_text(
-        json.dumps(make_world_package(urdf_xml).model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, make_world_package(urdf_xml))
 
     request = build_workspace_request_from_files(
         world_package_path=world_package_path,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+from pathlib import Path
 
 from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
 from backend.models.world_scene_package import (
@@ -8,6 +10,7 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
+from backend.services.world_scene_package_digest import world_scene_package_json_payload
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 
 
@@ -46,3 +49,10 @@ def make_world_package(
 
 def make_workspace_prepare_request(urdf_xml: str) -> SimulatorWorkspacePrepareRequest:
     return SimulatorWorkspacePrepareRequest(world_package=make_world_package(urdf_xml))
+
+
+def write_world_package_file(path: Path, world_package: WorldScenePackageManifest) -> None:
+    path.write_text(
+        json.dumps(world_scene_package_json_payload(world_package)),
+        encoding="utf-8",
+    )

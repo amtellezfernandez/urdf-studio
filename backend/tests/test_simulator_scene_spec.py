@@ -7,7 +7,7 @@ from backend.services.simulator_adapters.world_scene import (
     prepare_simulator_scene,
     write_simulator_validation_report,
 )
-from backend.tests.simulator_adapter_test_utils import make_world_package
+from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
 
 def test_prepare_simulator_scene_builds_canonical_scene_spec(tmp_path: Path) -> None:
@@ -50,10 +50,7 @@ def test_prepare_simulator_scene_builds_canonical_scene_spec(tmp_path: Path) -> 
     ]
     world_package_path = tmp_path / "world-package.json"
     robot_urdf_path = tmp_path / "robot.urdf"
-    world_package_path.write_text(
-        json.dumps(world_package.model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, world_package)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
 
     scene = prepare_simulator_scene(
@@ -129,10 +126,7 @@ def test_prepare_simulator_scene_combines_world_and_camera_warnings(tmp_path: Pa
     ]
     world_package_path = tmp_path / "world-package.json"
     robot_urdf_path = tmp_path / "robot.urdf"
-    world_package_path.write_text(
-        json.dumps(world_package.model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, world_package)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
 
     scene = prepare_simulator_scene(

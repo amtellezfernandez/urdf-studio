@@ -35,7 +35,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
 from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
 from backend.tests.fake_blender import FakeBlenderModule
-from backend.tests.simulator_adapter_test_utils import make_world_package
+from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
 
 def _write_scene_inputs(tmp_path: Path):
@@ -75,10 +75,7 @@ def _write_scene_inputs(tmp_path: Path):
     ]
     world_package_path = tmp_path / "world-package.json"
     robot_urdf_path = tmp_path / "robot.urdf"
-    world_package_path.write_text(
-        json.dumps(world_package.model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, world_package)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
     return world_package, world_package_path, robot_urdf_path
 
@@ -1182,10 +1179,7 @@ def test_generated_blender_scripts_import_mesh_world_objects(monkeypatch, tmp_pa
     )
     world_package_path = tmp_path / "world-package.json"
     robot_urdf_path = tmp_path / "robot.urdf"
-    world_package_path.write_text(
-        json.dumps(world_package.model_dump(mode="json")),
-        encoding="utf-8",
-    )
+    write_world_package_file(world_package_path, world_package)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
     scene = prepare_simulator_scene(
         world_package_path=world_package_path,

@@ -16,6 +16,7 @@ from backend.services.world_layout_static_transfer import (
     parse_static_world_layout_payload,
     resolve_world_layout_frame_map,
 )
+from backend.services.world_scene_package_digest import world_scene_package_json_payload
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     SimPrimitive,
@@ -126,7 +127,7 @@ def prepare_world_scene(
     include_hidden: bool,
 ) -> PreparedWorldScene:
     world_package = load_world_package(world_package_path)
-    layout = parse_static_world_layout_payload(world_package.model_dump(mode="json"))
+    layout = parse_static_world_layout_payload(world_scene_package_json_payload(world_package))
     resolved_frame_map = resolve_world_layout_frame_map(layout, frame_map)
     primitives, warnings = build_sim_primitives(
         layout,
