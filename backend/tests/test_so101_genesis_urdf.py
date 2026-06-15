@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -126,3 +127,32 @@ def test_demo_workspace_request_declares_genesis_so101_patch() -> None:
     assert genesis_robot_compatibility_patch_ids_from_world_package(request.world_package) == (
         GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
     )
+
+
+def test_genesis_robot_patch_provenance_rejects_malformed_config() -> None:
+    world_package = SimpleNamespace(
+        provenance={
+            "simulator_compatibility_patches": [
+                GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="simulator_compatibility_patches.*must be an object"):
+        genesis_robot_compatibility_patch_ids_from_world_package(world_package)
+
+
+def test_genesis_robot_patch_provenance_rejects_malformed_patch_ids() -> None:
+    world_package = SimpleNamespace(
+        provenance={
+            "simulator_compatibility_patches": {
+                "genesis": [
+                    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+                    "",
+                ],
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match=r"simulator_compatibility_patches\.genesis\[1\]"):
+        genesis_robot_compatibility_patch_ids_from_world_package(world_package)

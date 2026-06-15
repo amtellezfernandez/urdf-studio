@@ -40,10 +40,17 @@ GENESIS_ROBOT_REPAIRS_BY_ID: Mapping[str, GenesisRobotRepair] = {
 }
 
 
-def _string_list(value: Any) -> tuple[str, ...]:
-    if not isinstance(value, list):
+def _patch_id_list(value: Any, path: str) -> tuple[str, ...]:
+    if value is None:
         return ()
-    return tuple(item.strip() for item in value if isinstance(item, str) and item.strip())
+    if not isinstance(value, list):
+        raise ValueError(f"{path} must be a list of compatibility patch ids.")
+    patch_ids: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{path}[{index}] must be a non-empty string.")
+        patch_ids.append(item.strip())
+    return tuple(patch_ids)
 
 
 def genesis_robot_compatibility_patch_ids_from_world_package(world_package: Any) -> tuple[str, ...]:
@@ -51,9 +58,16 @@ def genesis_robot_compatibility_patch_ids_from_world_package(world_package: Any)
     if not isinstance(provenance, Mapping):
         return ()
     patch_config = provenance.get(GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY)
-    if not isinstance(patch_config, Mapping):
+    if patch_config is None:
         return ()
-    return _string_list(patch_config.get("genesis"))
+    if not isinstance(patch_config, Mapping):
+        raise ValueError(
+            f"provenance.{GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY} must be an object."
+        )
+    return _patch_id_list(
+        patch_config.get("genesis"),
+        f"provenance.{GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY}.genesis",
+    )
 
 
 def materialize_genesis_robot_urdf_report(
