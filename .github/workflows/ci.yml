@@ -138,3 +138,57 @@ jobs:
           python-version: "3.12"
       - name: Compile backend modules
         run: python -m compileall backend
+
+  backend_simulator_transfer:
+    name: Backend simulator transfer
+    runs-on: ubuntu-latest
+    env:
+      URDF_STUDIO_INSTALL_BLENDER: "1"
+      URDF_STUDIO_INSTALL_GENESIS: "1"
+      URDF_STUDIO_INSTALL_MJLAB: "1"
+      URDF_STUDIO_INSTALL_PYBULLET: "1"
+      URDF_STUDIO_SKIP_COLLISION_STACK_AUTO_INSTALL: "1"
+      URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL: "1"
+      URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL: "1"
+      URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL: "1"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+      - name: Rewrite GitHub SSH URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20.19.6
+          cache: npm
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install simulator system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            curl \
+            libegl1 \
+            libgl1 \
+            libsm6 \
+            libx11-6 \
+            libxext6 \
+            libxfixes3 \
+            libxi6 \
+            libxrender1 \
+            libxxf86vm1 \
+            xz-utils
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+      - name: Install deps
+        run: npm ci
+      - name: Set up backend and simulator runtimes
+        run: npm run setup
+      - name: Run backend tests
+        run: npm run test:backend
+      - name: Validate simulator transfer fixtures
+        run: npm run simulator:workspace:check:fixtures
+      - name: Validate Blender transfer fixtures
+        run: npm run simulator:blender:check:fixtures
