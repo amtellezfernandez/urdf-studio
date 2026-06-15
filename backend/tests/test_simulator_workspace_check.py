@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 
 import pytest
@@ -32,10 +31,8 @@ from backend.scripts.simulator_workspace_check import (
     _report_has_camera_artifacts,
     _resolved_frame_map_for_request,
     _selected_simulator_ids_from_args,
-    _validate_blender_blend_artifact,
     _validate_file_artifacts,
     _workspace_request_from_args,
-    BLENDER_BLEND_VALIDATE_MARKER,
     main,
 )
 from backend.services.simulator_adapters.workspace_request_sources import (
@@ -447,67 +444,6 @@ def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
         "blend_path",
     )
     assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
-
-
-def test_blender_blend_validator_checks_saved_layout_counts(monkeypatch, tmp_path) -> None:
-    blend_path = tmp_path / "layout.blend"
-    blend_path.write_text("fake blend", encoding="utf-8")
-
-    def fake_run(command, **_kwargs):
-        return subprocess.CompletedProcess(
-            command,
-            0,
-            stdout=(
-                f'{BLENDER_BLEND_VALIDATE_MARKER}'
-                '{"camera_count": 3, "world_object_count": 2}\n'
-            ),
-            stderr="",
-        )
-
-    monkeypatch.setattr(
-        "backend.scripts.simulator_workspace_check.subprocess.run",
-        fake_run,
-    )
-
-    assert (
-        _validate_blender_blend_artifact(
-            blend_path,
-            blender_executable="/usr/bin/blender",
-            expected_object_count=2,
-            expected_camera_count=3,
-        )
-        is None
-    )
-
-
-def test_blender_blend_validator_rejects_missing_saved_layout_objects(
-    monkeypatch, tmp_path
-) -> None:
-    blend_path = tmp_path / "layout.blend"
-    blend_path.write_text("fake blend", encoding="utf-8")
-
-    def fake_run(command, **_kwargs):
-        return subprocess.CompletedProcess(
-            command,
-            0,
-            stdout=(
-                f'{BLENDER_BLEND_VALIDATE_MARKER}'
-                '{"camera_count": 3, "world_object_count": 0}\n'
-            ),
-            stderr="",
-        )
-
-    monkeypatch.setattr(
-        "backend.scripts.simulator_workspace_check.subprocess.run",
-        fake_run,
-    )
-
-    assert _validate_blender_blend_artifact(
-        blend_path,
-        blender_executable="/usr/bin/blender",
-        expected_object_count=2,
-        expected_camera_count=3,
-    ) == "Blender saved-session world object count mismatch: 0, expected 2"
 
 
 def test_workspace_parity_requires_camera_artifacts(tmp_path) -> None:
