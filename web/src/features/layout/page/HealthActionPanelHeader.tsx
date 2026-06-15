@@ -15,7 +15,7 @@ export const HealthActionPanelHeader = ({
   isDragging,
   onClose,
   onDragStart,
-  panelLabel = "simulation prep",
+  panelLabel = "Open In",
   statusIcon: StatusIcon,
   title,
 }: HealthActionPanelHeaderProps) => (
