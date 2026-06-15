@@ -41,6 +41,7 @@ class ExpectedObjectReport:
 @dataclass(frozen=True)
 class ExpectedCameraReport:
     camera_id: str
+    sim_name: str
     parent_joint: str
     parent_link: str
     position_xyz: tuple[float, float, float]
@@ -691,6 +692,7 @@ def _validate_expected_camera_contracts(
         if item is None:
             return f"simulator validation report missing camera_id {camera_id!r}"
         for field_name, expected_value in (
+            ("sim_name", expected.sim_name),
             ("parent_joint", expected.parent_joint),
             ("parent_link", expected.parent_link),
         ):

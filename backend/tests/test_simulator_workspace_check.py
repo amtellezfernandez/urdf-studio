@@ -34,9 +34,11 @@ from backend.scripts.simulator_workspace_check import (
     _resolved_frame_map_for_request,
     _selected_simulator_ids_from_args,
     _validate_file_artifacts,
+    _validate_image_artifacts,
     _workspace_request_from_args,
     main,
 )
+from backend.services.simulator_adapters.workspace_report_validation import ExpectedCameraReport
 from backend.services.simulator_adapters.workspace_request_sources import (
     build_demo_workspace_request,
     build_studio_y_up_axis_workspace_request,
@@ -513,6 +515,98 @@ def test_workspace_check_runs_configured_file_validators(tmp_path) -> None:
     )
 
     assert _validate_file_artifacts(command) == "invalid edit session"
+
+
+def _write_visible_png(path, *, size=(64, 48)) -> None:
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", size, (255, 0, 0))
+    image.putpixel((size[0] - 1, size[1] - 1), (0, 255, 0))
+    image.save(path)
+
+
+def _camera_contract(
+    *,
+    camera_id: str = "scene-camera",
+    sim_name: str = "scene_camera",
+    width: int = 64,
+    height: int = 48,
+) -> ExpectedCameraReport:
+    return ExpectedCameraReport(
+        camera_id=camera_id,
+        sim_name=sim_name,
+        parent_joint="base_link",
+        parent_link="base_link",
+        position_xyz=(0.0, 0.0, 1.0),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        width=width,
+        height=height,
+        fov_deg=60.0,
+        intrinsics_matrix=(
+            (41.569219381653056, 0.0, 32.0),
+            (0.0, 41.569219381653056, 24.0),
+            (0.0, 0.0, 1.0),
+        ),
+    )
+
+
+def test_workspace_check_validates_camera_image_names_and_dimensions(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    _write_visible_png(camera_dir / "01_scene_camera.png")
+    contract = _camera_contract()
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=0",
+        expected_camera_log_marker="cameras=1",
+        expected_image_dirs=((camera_dir, 1),),
+        expected_camera_ids=("scene-camera",),
+        expected_camera_contracts={"scene-camera": contract},
+    )
+
+    assert _validate_image_artifacts(command) is None
+
+
+def test_workspace_check_rejects_wrong_camera_image_name(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    _write_visible_png(camera_dir / "01_wrong_camera.png")
+    contract = _camera_contract()
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=0",
+        expected_camera_log_marker="cameras=1",
+        expected_image_dirs=((camera_dir, 1),),
+        expected_camera_ids=("scene-camera",),
+        expected_camera_contracts={"scene-camera": contract},
+    )
+
+    assert (
+        _validate_image_artifacts(command)
+        == "camera image artifact names in "
+        f"{camera_dir} are ('01_wrong_camera.png',), expected ('01_scene_camera.png',)"
+    )
+
+
+def test_workspace_check_rejects_wrong_camera_image_dimensions(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    _write_visible_png(camera_dir / "01_scene_camera.png", size=(32, 48))
+    contract = _camera_contract()
+    command = PreparedWorkspaceCommand(
+        command=[],
+        ready_marker="ready",
+        expected_object_marker="objects=0",
+        expected_camera_log_marker="cameras=1",
+        expected_image_dirs=((camera_dir, 1),),
+        expected_camera_ids=("scene-camera",),
+        expected_camera_contracts={"scene-camera": contract},
+    )
+
+    assert _validate_image_artifacts(command) == (
+        f"image artifact has wrong size: {camera_dir / '01_scene_camera.png'} "
+        "32x48, expected 64x48"
+    )
 
 
 def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(

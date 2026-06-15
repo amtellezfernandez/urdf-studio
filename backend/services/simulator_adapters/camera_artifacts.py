@@ -46,13 +46,22 @@ def inspect_rgb_image(path: Path) -> ImageArtifactStats:
         )
 
 
-def validate_visible_rgb_image(path: Path) -> str | None:
+def validate_visible_rgb_image(
+    path: Path,
+    *,
+    expected_size: tuple[int, int] | None = None,
+) -> str | None:
     if not path.exists():
         return f"missing image artifact: {path}"
     try:
         stats = inspect_rgb_image(path)
     except Exception as exc:
         return f"invalid image artifact {path}: {exc}"
+    if expected_size is not None and stats.size != expected_size:
+        return (
+            f"image artifact has wrong size: {path} "
+            f"{stats.size[0]}x{stats.size[1]}, expected {expected_size[0]}x{expected_size[1]}"
+        )
     if stats.channel_span <= MIN_VISIBLE_CHANNEL_SPAN:
         return f"blank image artifact: {path}"
     return None

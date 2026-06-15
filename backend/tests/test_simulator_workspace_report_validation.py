@@ -115,6 +115,7 @@ def _expected_object(source_id: str = "crate") -> ExpectedObjectReport:
 def _expected_camera(camera_id: str = "cam") -> ExpectedCameraReport:
     return ExpectedCameraReport(
         camera_id=camera_id,
+        sim_name=f"{camera_id}_camera",
         parent_joint="base_link",
         parent_link="base_link",
         position_xyz=(0.0, 0.0, 1.0),
@@ -1101,6 +1102,32 @@ def test_workspace_report_validation_rejects_camera_contract_drift(tmp_path) -> 
     ) == (
         "simulator validation report field 'cameras[cam].parent_link' "
         "is 'wrong_link', expected 'base_link'"
+    )
+
+
+def test_workspace_report_validation_rejects_camera_sim_name_contract_drift(tmp_path) -> None:
+    changed_camera = _report_camera("cam")
+    changed_camera["sim_name"] = "wrong_camera"
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [changed_camera],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(camera_contracts={"cam": _expected_camera("cam")}),
+    ) == (
+        "simulator validation report field 'cameras[cam].sim_name' "
+        "is 'wrong_camera', expected 'cam_camera'"
     )
 
 
