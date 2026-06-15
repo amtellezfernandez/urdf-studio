@@ -15,7 +15,10 @@ from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
     wait_for_workspace_readiness,
 )
-from backend.services.simulator_adapters.params import SimulatorWorkspaceProcessParams
+from backend.services.simulator_adapters.params import (
+    WORKSPACE_LAUNCH_FRAME_MAP,
+    SimulatorWorkspaceProcessParams,
+)
 
 
 def build_simulator_workspace_env(cache_root: Path) -> dict[str, str]:
@@ -60,7 +63,7 @@ def start_prepared_workspace_process(
         str(simulator_asset_path),
         *extra_simulator_args,
         "--frame-map",
-        "identity",
+        WORKSPACE_LAUNCH_FRAME_MAP,
     ]
     with log_path.open("ab", buffering=0) as log_file:
         process = subprocess.Popen(

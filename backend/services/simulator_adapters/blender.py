@@ -26,7 +26,10 @@ from backend.services.simulator_adapters.blender_change_sets import (
     apply_blender_layout_change_set_with_summary,
 )
 from backend.services.simulator_adapters.blender_workspace import BLENDER_EDIT_SESSION_FILENAME
-from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
+from backend.services.simulator_adapters.params import (
+    BLENDER_WORKSPACE_PROCESS_PARAMS,
+    WORKSPACE_LAUNCH_FRAME_MAP,
+)
 from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
     prepare_simulator_workspace_package,
@@ -76,7 +79,7 @@ def start_blender_workspace(
         "--robot-urdf",
         str(prepared.robot_urdf_path),
         "--frame-map",
-        "identity",
+        WORKSPACE_LAUNCH_FRAME_MAP,
         "--report",
         str(report_path),
         "--blender",

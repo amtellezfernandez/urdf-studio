@@ -15,6 +15,7 @@ from backend.services.simulator_adapters import pybullet as pybullet_adapter
 from backend.services.simulator_adapters import workspace_process
 from backend.services.simulator_adapters.camera_intrinsics import PinholeCameraIntrinsics
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec, Transform
+from backend.services.simulator_adapters.params import WORKSPACE_LAUNCH_FRAME_MAP
 from backend.services.simulator_adapters.pybullet_camera import (
     pybullet_camera_projection_matrix,
     pybullet_camera_view_matrix,
@@ -602,3 +603,4 @@ def test_start_pybullet_workspace_reports_direct_urdf_transfer(monkeypatch, tmp_
     assert response.simulator_asset_path == str(robot_urdf_path)
     assert response.simulator_asset_format == "urdf"
     assert "--robot-urdf" in response.command
+    assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP

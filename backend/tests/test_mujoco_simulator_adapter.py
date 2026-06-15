@@ -16,6 +16,7 @@ from backend.services.ilu_urdf import (
 )
 from backend.services.simulator_adapters import mujoco as mujoco_adapter
 from backend.services.simulator_adapters import workspace_process
+from backend.services.simulator_adapters.params import WORKSPACE_LAUNCH_FRAME_MAP
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 
 
@@ -212,6 +213,7 @@ def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
     assert response.simulator_asset_path == str(robot_mjcf_path)
     assert "--robot-mjcf" in response.command
     assert "--robot-urdf" in response.command
+    assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
     assert str(fixture.robot_urdf_path) in response.command
 
 

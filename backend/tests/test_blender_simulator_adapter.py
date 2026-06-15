@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID
+from backend.models.simulator_runtime import SIMULATOR_BLENDER_ID, SimulatorWorkspacePrepareRequest
 from backend.models.world_scene_package import WorldArtifactRef
 from backend.scripts import blender_workspace_prepare as blender_prepare
 from backend.scripts.blender_workspace_prepare import prepare_blender_workspace_scene
+from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters import blender as blender_adapter
 from backend.services.simulator_adapters.camera_conventions import (
     world_camera_to_opengl_camera_rotation,
@@ -36,7 +37,11 @@ from backend.services.simulator_adapters.blender_edit_session import (
     BLENDER_EDIT_SESSION_SCHEMA,
     validate_blender_edit_session_artifact,
 )
-from backend.services.simulator_adapters.params import BLENDER_WORKSPACE_PROCESS_PARAMS
+from backend.services.simulator_adapters.params import (
+    BLENDER_WORKSPACE_PROCESS_PARAMS,
+    WORKSPACE_LAUNCH_FRAME_MAP,
+)
+from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.simulator_adapters.world_scene import prepare_simulator_scene
 from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
@@ -1120,6 +1125,59 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert "bpy.ops.render.render" in open_script
     assert "initialize_edit_view" in open_script
     assert "view_perspective = \"CAMERA\"" in open_script
+
+
+def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path) -> None:
+    workspace_dir = tmp_path / "workspace"
+    robot_dir = workspace_dir / "robot"
+    robot_dir.mkdir(parents=True)
+    world_package_path = workspace_dir / "world-package.json"
+    robot_urdf_path = robot_dir / "robot.urdf"
+    world_package_path.write_text("{}", encoding="utf-8")
+    robot_urdf_path.write_text("<robot name=\"demo\"><link name=\"base\"/></robot>", encoding="utf-8")
+    prepared = PreparedSimulatorWorkspace(
+        workspace_dir=workspace_dir,
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        bundle_result=BundleMeshAssetsResult(
+            success=True,
+            content=robot_urdf_path.read_text(encoding="utf-8"),
+            out_path=str(robot_urdf_path),
+            assets_root=str(robot_dir / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        ),
+    )
+
+    class _FakeProcess:
+        pid = 4321
+
+        def poll(self) -> None:
+            return None
+
+    monkeypatch.setattr(blender_adapter, "resolve_blender_executable", lambda: "/bin/blender")
+    monkeypatch.setattr(
+        blender_adapter,
+        "prepare_blender_workspace_package",
+        lambda request: prepared,
+    )
+    monkeypatch.setattr(
+        blender_adapter.subprocess,
+        "Popen",
+        lambda *args, **kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(blender_adapter, "wait_for_workspace_readiness", lambda *args, **kwargs: None)
+
+    response = blender_adapter.start_blender_workspace(
+        SimulatorWorkspacePrepareRequest(
+            world_package=make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>"),
+        )
+    )
+
+    assert response.simulator_id == SIMULATOR_BLENDER_ID
+    assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
 
 
 def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_path: Path) -> None:

@@ -13,6 +13,10 @@ from backend.models.simulator_runtime import (
     SIMULATOR_PYBULLET_ID,
     SimulatorId,
 )
+from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
+
+
+WORKSPACE_LAUNCH_FRAME_MAP: WorldLayoutFrameMap = "auto"
 
 
 @dataclass(frozen=True)

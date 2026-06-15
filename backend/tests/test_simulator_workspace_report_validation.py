@@ -118,6 +118,31 @@ def test_workspace_report_validation_accepts_matching_report(tmp_path) -> None:
     )
 
 
+def test_workspace_report_validation_accepts_auto_requested_frame_map(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "requested_frame_map": "auto",
+            "frame_map": "studio-y-up-to-z-up",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object("crate-a")],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert (
+        validate_simulator_workspace_report(
+            report_path,
+            _expectations(object_count=1, camera_count=1),
+        )
+        is None
+    )
+
+
 def test_workspace_report_validation_rejects_wrong_counts(tmp_path) -> None:
     report_path = _write_report(
         tmp_path,
