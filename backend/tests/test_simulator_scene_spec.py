@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.services.simulator_adapters.world_scene import (
     prepare_simulator_scene,
     write_simulator_validation_report,
@@ -98,7 +100,7 @@ def test_prepare_simulator_scene_builds_canonical_scene_spec(tmp_path: Path) -> 
     assert persisted_report["artifacts"]["camera_dir"] == str(tmp_path / "cameras")
 
 
-def test_prepare_simulator_scene_combines_world_and_camera_warnings(tmp_path: Path) -> None:
+def test_prepare_simulator_scene_rejects_invalid_declared_camera(tmp_path: Path) -> None:
     urdf_xml = "<robot name=\"scene_spec_demo\"><link name=\"base_link\"/></robot>"
     world_package = make_world_package(
         urdf_xml,
@@ -129,17 +131,10 @@ def test_prepare_simulator_scene_combines_world_and_camera_warnings(tmp_path: Pa
     write_world_package_file(world_package_path, world_package)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
 
-    scene = prepare_simulator_scene(
-        world_package_path=world_package_path,
-        robot_urdf_path=robot_urdf_path,
-        frame_map="identity",
-        include_hidden=False,
-    )
-
-    assert scene.primitives == ()
-    assert scene.cameras == ()
-    assert scene.warnings == (
-        "Skipped hidden object: hidden-crate",
-        "Camera 'orphan camera' parent 'missing_link' was not found in robot links or joints; "
-        "skipping simulator camera.",
-    )
+    with pytest.raises(ValueError, match="missing_link"):
+        prepare_simulator_scene(
+            world_package_path=world_package_path,
+            robot_urdf_path=robot_urdf_path,
+            frame_map="identity",
+            include_hidden=False,
+        )

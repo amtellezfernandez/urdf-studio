@@ -229,7 +229,14 @@ def test_build_sim_camera_specs_rejects_invalid_explicit_intrinsics_fields(
         }
     ]
 
-    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+    with pytest.raises(ValueError, match="invalid pinhole intrinsics"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
 
     assert cameras == ()
     assert len(warnings) == 1
@@ -279,7 +286,7 @@ def test_camera_conventions_match_roboverse_metasim_opengl_to_ros_contract() -> 
     assert ros_up_in_opengl[2] == pytest.approx(OPENGL_CAMERA_UP_LOCAL_XYZ[2])
 
 
-def test_build_sim_camera_specs_warns_for_missing_parent(tmp_path: Path) -> None:
+def test_build_sim_camera_specs_rejects_missing_parent(tmp_path: Path) -> None:
     robot_urdf = tmp_path / "robot.urdf"
     robot_urdf.write_text(
         "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
@@ -295,7 +302,14 @@ def test_build_sim_camera_specs_warns_for_missing_parent(tmp_path: Path) -> None
         }
     ]
 
-    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+    with pytest.raises(ValueError, match="missing_joint"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
 
     assert cameras == ()
     assert len(warnings) == 1
@@ -324,7 +338,14 @@ def test_build_sim_camera_specs_requires_pose_and_intrinsics(tmp_path: Path) -> 
         },
     ]
 
-    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+    with pytest.raises(ValueError, match="No pose"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
 
     assert cameras == ()
     assert len(warnings) == 2
@@ -332,7 +353,7 @@ def test_build_sim_camera_specs_requires_pose_and_intrinsics(tmp_path: Path) -> 
     assert "invalid pinhole intrinsics" in warnings[1]
 
 
-def test_build_sim_camera_specs_skips_duplicate_simulator_camera_names(tmp_path: Path) -> None:
+def test_build_sim_camera_specs_rejects_duplicate_simulator_camera_names(tmp_path: Path) -> None:
     robot_urdf = tmp_path / "robot.urdf"
     robot_urdf.write_text(
         "<robot name=\"camera_demo\"><link name=\"base_link\"/></robot>",
@@ -349,7 +370,14 @@ def test_build_sim_camera_specs_skips_duplicate_simulator_camera_names(tmp_path:
         {"id": "cam-b", "name": "wrist camera", **base_camera},
     ]
 
-    cameras, warnings = build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+    with pytest.raises(ValueError, match="duplicates another camera"):
+        build_sim_camera_specs(world_package, robot_urdf_path=robot_urdf)
+
+    cameras, warnings = build_sim_camera_specs(
+        world_package,
+        robot_urdf_path=robot_urdf,
+        strict=False,
+    )
 
     assert len(cameras) == 1
     assert cameras[0].camera_id == "cam-a"

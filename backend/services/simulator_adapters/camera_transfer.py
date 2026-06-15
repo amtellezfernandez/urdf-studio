@@ -24,6 +24,7 @@ from backend.services.simulator_adapters.camera_intrinsics import (
     pinhole_camera_intrinsics_from_record,
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
+from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 
 CAMERA_MARKER_RGBA = (1.0, 0.82, 0.12, 1.0)
@@ -97,6 +98,7 @@ def build_sim_camera_specs(
     world_package: WorldScenePackageManifest,
     *,
     robot_urdf_path: Path,
+    strict: bool = True,
 ) -> tuple[tuple[SimCameraSpec, ...], tuple[str, ...]]:
     cameras = world_package.world_snapshot.cameras
     if not cameras:
@@ -109,7 +111,10 @@ def build_sim_camera_specs(
             world_package.world_snapshot.joint_positions,
         )
     except Exception as exc:
-        return (), (f"Camera transfer could not load robot URDF: {exc}",)
+        warnings = (f"Camera transfer could not load robot URDF: {exc}",)
+        if strict:
+            raise _camera_transfer_error(warnings)
+        return (), warnings
 
     joint_child_link_by_name = {
         name: str(joint.child)
@@ -137,13 +142,19 @@ def build_sim_camera_specs(
             if spec.sim_name in used_sim_names:
                 warnings.append(
                     f"Camera '{spec.name}' simulator name '{spec.sim_name}' duplicates another camera; "
-                    "skipping simulator camera."
+                    "camera simulator names must be unique."
                 )
                 continue
             used_sim_names.add(spec.sim_name)
             camera_specs.append(spec)
 
+    if strict and warnings:
+        raise _camera_transfer_error(tuple(warnings))
     return tuple(camera_specs), tuple(warnings)
+
+
+def _camera_transfer_error(warnings: tuple[str, ...]) -> WorldLayoutTransferError:
+    return WorldLayoutTransferError(f"Camera transfer failed: {'; '.join(warnings)}")
 
 
 def _build_camera_spec(
@@ -156,11 +167,11 @@ def _build_camera_spec(
 ) -> tuple[SimCameraSpec | None, str | None]:
     name = _read_string(camera_record.get("name")) or _read_string(camera_record.get("id"))
     if not name:
-        return None, f"Camera at index {index} has no id or name; skipping simulator camera."
+        return None, f"Camera at index {index} has no id or name."
     camera_id = _read_string(camera_record.get("id")) or name
     parent_joint = _read_string(camera_record.get("parent_joint"))
     if not parent_joint:
-        return None, f"Camera '{name}' has no parent_joint; skipping simulator camera."
+        return None, f"Camera '{name}' has no parent_joint."
 
     parent_link = joint_child_link_by_name.get(parent_joint)
     if parent_link is None and parent_joint in link_names:
@@ -169,7 +180,7 @@ def _build_camera_spec(
         return (
             None,
             f"Camera '{name}' parent '{parent_joint}' was not found in robot links or joints; "
-            "skipping simulator camera.",
+            "camera parent must resolve before simulator transfer.",
         )
 
     base_transform = link_transforms.get(parent_link)
@@ -177,7 +188,7 @@ def _build_camera_spec(
         return (
             None,
             f"Camera '{name}' parent link '{parent_link}' has no forward-kinematics transform; "
-            "skipping simulator camera.",
+            "camera parent must have a forward-kinematics transform.",
         )
 
     render_local_transform, pose_warning = _read_render_camera_local_transform(camera_record, name)
@@ -185,7 +196,7 @@ def _build_camera_spec(
         return None, pose_warning
     intrinsics = pinhole_camera_intrinsics_from_record(camera_record.get("intrinsics"))
     if intrinsics is None:
-        return None, f"Camera '{name}' has invalid pinhole intrinsics; skipping simulator camera."
+        return None, f"Camera '{name}' has invalid pinhole intrinsics."
     render_world_transform = _compose_transform(base_transform, render_local_transform)
     return (
         SimCameraSpec(
@@ -342,15 +353,15 @@ def _read_render_camera_local_transform(
         xyz = _read_vector3(pose.get("xyz"))
         rpy = _read_vector3(pose.get("rpy"))
         if xyz is None or rpy is None:
-            return None, f"Camera '{name}' has invalid pose.xyz or pose.rpy; skipping simulator camera."
+            return None, f"Camera '{name}' has invalid pose.xyz or pose.rpy."
         return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
     if isinstance(pose, list | tuple) and len(pose) >= 6:
         xyz = _read_vector3(pose[:3])
         rpy = _read_vector3(pose[3:6])
         if xyz is None or rpy is None:
-            return None, f"Camera '{name}' has invalid pose values; skipping simulator camera."
+            return None, f"Camera '{name}' has invalid pose values."
         return _render_camera_transform_from_studio_xyz_rpy(xyz, rpy), None
-    return None, f"Camera '{name}' has no pose; skipping simulator camera."
+    return None, f"Camera '{name}' has no pose."
 
 
 def _transform_from_xyz_rpy(
