@@ -65,6 +65,7 @@ from backend.services.simulator_adapters.workspace_request_sources import (
 )
 from backend.services.simulator_adapters.workspace_report_validation import (
     ExpectedCameraReport,
+    ExpectedObjectReport,
     SimulatorWorkspaceReportExpectations,
     validate_simulator_workspace_report,
 )
@@ -106,6 +107,7 @@ class PreparedWorkspaceCommand:
     expected_object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_asset_refs: Mapping[str, str | None] | None = None
+    expected_object_contracts: Mapping[str, ExpectedObjectReport] | None = None
     expected_camera_ids: tuple[str, ...] | None = None
     expected_camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
     expected_report_artifact_file_keys: tuple[str, ...] = ()
@@ -122,6 +124,7 @@ class WorkspaceExpectations:
     object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
+    object_contracts: Mapping[str, ExpectedObjectReport] | None = None
     camera_ids: tuple[str, ...] | None = None
     camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
 
@@ -170,6 +173,12 @@ def _workspace_object_asset_refs(
     expectations: WorkspaceExpectations,
 ) -> Mapping[str, str | None] | None:
     return getattr(expectations, "object_asset_refs", None)
+
+
+def _workspace_object_contracts(
+    expectations: WorkspaceExpectations,
+) -> Mapping[str, ExpectedObjectReport] | None:
+    return getattr(expectations, "object_contracts", None)
 
 
 def _workspace_camera_ids(expectations: WorkspaceExpectations) -> tuple[str, ...] | None:
@@ -366,6 +375,7 @@ def _prepare_direct_urdf_command(
         expected_object_positions_xyz=_workspace_object_positions(expectations),
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_object_asset_refs=_workspace_object_asset_refs(expectations),
+        expected_object_contracts=_workspace_object_contracts(expectations),
         expected_camera_ids=_workspace_camera_ids(expectations),
         expected_camera_contracts=_workspace_camera_contracts(expectations),
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
@@ -485,6 +495,7 @@ def _prepare_mujoco_command(
         expected_object_positions_xyz=_workspace_object_positions(expectations),
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_object_asset_refs=_workspace_object_asset_refs(expectations),
+        expected_object_contracts=_workspace_object_contracts(expectations),
         expected_report_artifact_file_keys=("mjcf_path",),
         expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
@@ -708,6 +719,7 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             object_positions_xyz=command.expected_object_positions_xyz,
             object_sizes_xyz=command.expected_object_sizes_xyz,
             object_asset_refs=command.expected_object_asset_refs,
+            object_contracts=command.expected_object_contracts,
             camera_ids=command.expected_camera_ids,
             camera_contracts=command.expected_camera_contracts,
             required_artifact_file_keys=command.expected_report_artifact_file_keys,
@@ -824,6 +836,7 @@ def _expected_object_contract_for_request(
     dict[str, tuple[float, float, float]],
     dict[str, tuple[float, float, float]],
     dict[str, str | None],
+    dict[str, ExpectedObjectReport],
 ]:
     primitives, _warnings = build_sim_primitives(
         _workspace_layout(request),
@@ -834,6 +847,28 @@ def _expected_object_contract_for_request(
         {primitive.source_id: primitive.position_xyz for primitive in primitives},
         {primitive.source_id: primitive.size_xyz for primitive in primitives},
         {primitive.source_id: primitive.asset_ref for primitive in primitives},
+        {
+            primitive.source_id: ExpectedObjectReport(
+                source_id=primitive.source_id,
+                source_name=primitive.source_name,
+                sim_name=primitive.sim_name,
+                source_type=primitive.source_type,
+                sim_type=primitive.sim_type,
+                position_xyz=primitive.position_xyz,
+                quat_wxyz=primitive.quat_wxyz,
+                size_xyz=primitive.size_xyz,
+                rgba=primitive.rgba,
+                collision=primitive.collision,
+                fixed=primitive.fixed,
+                mass_kg=primitive.mass_kg,
+                friction=primitive.friction,
+                restitution=primitive.restitution,
+                semantic_role=primitive.semantic_role,
+                asset_ref=primitive.asset_ref,
+                asset_scale_xyz=primitive.asset_scale_xyz,
+            )
+            for primitive in primitives
+        },
     )
 
 
@@ -910,10 +945,12 @@ def main() -> int:
         or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
     )
     request = _workspace_request_from_args(args)
-    object_positions_xyz, object_sizes_xyz, object_asset_refs = _expected_object_contract_for_request(
-        request,
-        args.frame_map,
-    )
+    (
+        object_positions_xyz,
+        object_sizes_xyz,
+        object_asset_refs,
+        object_contracts,
+    ) = _expected_object_contract_for_request(request, args.frame_map)
     expectations = WorkspaceExpectations(
         object_count=_active_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
@@ -923,6 +960,7 @@ def main() -> int:
         object_positions_xyz=object_positions_xyz,
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
+        object_contracts=object_contracts,
         camera_ids=_expected_camera_ids_for_request(request),
         camera_contracts=_expected_camera_contracts_for_request(request),
     )

@@ -18,6 +18,27 @@ VALID_REPORT_REQUESTED_FRAME_MAPS = frozenset(("auto", *VALID_REPORT_FRAME_MAPS)
 
 
 @dataclass(frozen=True)
+class ExpectedObjectReport:
+    source_id: str
+    source_name: str
+    sim_name: str
+    source_type: str
+    sim_type: str
+    position_xyz: tuple[float, float, float]
+    quat_wxyz: tuple[float, float, float, float]
+    size_xyz: tuple[float, float, float]
+    rgba: tuple[float, float, float, float]
+    collision: bool
+    fixed: bool
+    mass_kg: float | None
+    friction: float | None
+    restitution: float | None
+    semantic_role: str | None
+    asset_ref: str | None
+    asset_scale_xyz: tuple[float, float, float] | None
+
+
+@dataclass(frozen=True)
 class ExpectedCameraReport:
     camera_id: str
     parent_joint: str
@@ -40,6 +61,7 @@ class SimulatorWorkspaceReportExpectations:
     object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
+    object_contracts: Mapping[str, ExpectedObjectReport] | None = None
     camera_ids: tuple[str, ...] | None = None
     camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
     required_artifact_file_keys: tuple[str, ...] = ()
@@ -139,6 +161,9 @@ def validate_simulator_workspace_report(
     )
     if item_error:
         return item_error
+    object_contract_error = _validate_expected_object_contracts(payload, expectations)
+    if object_contract_error:
+        return object_contract_error
     object_vector_error = _validate_expected_object_vectors(payload, expectations)
     if object_vector_error:
         return object_vector_error
@@ -420,6 +445,101 @@ def _validate_expected_object_vectors(
     return None
 
 
+def _validate_expected_object_contracts(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_contracts = expectations.object_contracts or {}
+    if not expected_contracts:
+        return None
+    objects = payload.get("objects")
+    if not isinstance(objects, list):
+        return "simulator validation report field 'objects' must be a list"
+    objects_by_id = {
+        item.get("source_id"): item
+        for item in objects
+        if isinstance(item, Mapping) and isinstance(item.get("source_id"), str)
+    }
+    for source_id, expected in expected_contracts.items():
+        item = objects_by_id.get(source_id)
+        if item is None:
+            return f"simulator validation report missing object source_id {source_id!r}"
+        for field_name, expected_value in (
+            ("source_name", expected.source_name),
+            ("sim_name", expected.sim_name),
+            ("source_type", expected.source_type),
+            ("sim_type", expected.sim_type),
+            ("semantic_role", expected.semantic_role),
+            ("asset_ref", expected.asset_ref),
+        ):
+            actual_value = item.get(field_name)
+            if actual_value != expected_value:
+                return (
+                    f"simulator validation report field 'objects[{source_id}].{field_name}' "
+                    f"is {actual_value!r}, expected {expected_value!r}"
+                )
+        for field_name, expected_value in (
+            ("collision", expected.collision),
+            ("fixed", expected.fixed),
+        ):
+            actual_value = item.get(field_name)
+            if actual_value is not expected_value:
+                return (
+                    f"simulator validation report field 'objects[{source_id}].{field_name}' "
+                    f"is {actual_value!r}, expected {expected_value!r}"
+                )
+        for field_name, expected_value in (
+            ("mass_kg", expected.mass_kg),
+            ("friction", expected.friction),
+            ("restitution", expected.restitution),
+        ):
+            error = _validate_expected_optional_number(
+                item.get(field_name),
+                expected_value,
+                f"objects[{source_id}].{field_name}",
+            )
+            if error:
+                return error
+        for field_name, expected_value in (
+            ("position_xyz", expected.position_xyz),
+            ("size_xyz", expected.size_xyz),
+        ):
+            error = _validate_expected_vector3(
+                item.get(field_name),
+                expected_value,
+                f"objects[{source_id}].{field_name}",
+            )
+            if error:
+                return error
+        for field_name, expected_value in (
+            ("quat_wxyz", expected.quat_wxyz),
+            ("rgba", expected.rgba),
+        ):
+            error = _validate_expected_vector4(
+                item.get(field_name),
+                expected_value,
+                f"objects[{source_id}].{field_name}",
+            )
+            if error:
+                return error
+        actual_asset_scale = item.get("asset_scale_xyz")
+        if expected.asset_scale_xyz is None:
+            if actual_asset_scale is not None:
+                return (
+                    f"simulator validation report field 'objects[{source_id}].asset_scale_xyz' "
+                    f"is {actual_asset_scale!r}, expected None"
+                )
+        else:
+            error = _validate_expected_vector3(
+                actual_asset_scale,
+                expected.asset_scale_xyz,
+                f"objects[{source_id}].asset_scale_xyz",
+            )
+            if error:
+                return error
+    return None
+
+
 def _validate_expected_object_asset_refs(
     payload: Mapping[str, Any],
     expectations: SimulatorWorkspaceReportExpectations,
@@ -636,6 +756,18 @@ def _validate_expected_number(value: Any, expected: float, path: str) -> str | N
     ):
         return f"simulator validation report field '{path}' is {value!r}, expected {expected!r}"
     return None
+
+
+def _validate_expected_optional_number(
+    value: Any,
+    expected: float | None,
+    path: str,
+) -> str | None:
+    if expected is None:
+        if value is not None:
+            return f"simulator validation report field '{path}' is {value!r}, expected None"
+        return None
+    return _validate_expected_number(value, expected, path)
 
 
 def _validate_report_unique_item_values(

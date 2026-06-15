@@ -114,11 +114,21 @@ def test_workspace_check_resolves_auto_frame_map_from_world_convention() -> None
 def test_workspace_check_expected_object_vectors_follow_auto_frame_map() -> None:
     request = build_studio_y_up_axis_workspace_request()
 
-    positions, sizes, asset_refs = _expected_object_contract_for_request(request, "auto")
+    positions, sizes, asset_refs, object_contracts = _expected_object_contract_for_request(
+        request,
+        "auto",
+    )
 
     assert positions == {"axis-box": (1.0, -3.0, 2.0)}
     assert sizes == {"axis-box": (0.2, 0.8, 0.4)}
     assert asset_refs == {"axis-box": None}
+    assert object_contracts["axis-box"].source_type == "cube"
+    assert object_contracts["axis-box"].rgba == (
+        0.13333333333333333,
+        0.7725490196078432,
+        0.3686274509803922,
+        1.0,
+    )
 
 
 def test_workspace_check_expected_object_contract_preserves_mesh_asset_refs() -> None:
@@ -136,11 +146,16 @@ def test_workspace_check_expected_object_contract_preserves_mesh_asset_refs() ->
         }
     ]
 
-    positions, sizes, asset_refs = _expected_object_contract_for_request(request, "auto")
+    positions, sizes, asset_refs, object_contracts = _expected_object_contract_for_request(
+        request,
+        "auto",
+    )
 
     assert positions == {"mesh-crate": (0.0, -0.0, 0.0)}
     assert sizes == {"mesh-crate": (0.2, 0.4, 0.3)}
     assert asset_refs == {"mesh-crate": "assets/crate.obj"}
+    assert object_contracts["mesh-crate"].source_type == "mesh"
+    assert object_contracts["mesh-crate"].asset_ref == "assets/crate.obj"
 
 
 def test_workspace_check_fixture_selects_studio_y_up_axis_request() -> None:

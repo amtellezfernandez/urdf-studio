@@ -5,6 +5,7 @@ import json
 from backend.models.simulator_runtime import SIMULATOR_GENESIS_ID, SIMULATOR_PYBULLET_ID
 from backend.services.simulator_adapters.workspace_report_validation import (
     ExpectedCameraReport,
+    ExpectedObjectReport,
     SimulatorWorkspaceReportExpectations,
     validate_simulator_workspace_report,
 )
@@ -64,6 +65,7 @@ def _expectations(
     object_positions_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_sizes_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_asset_refs: dict[str, str | None] | None = None,
+    object_contracts: dict[str, ExpectedObjectReport] | None = None,
     camera_ids: tuple[str, ...] | None = None,
     camera_contracts: dict[str, ExpectedCameraReport] | None = None,
     required_artifact_file_keys: tuple[str, ...] = (),
@@ -78,10 +80,33 @@ def _expectations(
         object_positions_xyz=object_positions_xyz,
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
+        object_contracts=object_contracts,
         camera_ids=camera_ids,
         camera_contracts=camera_contracts,
         required_artifact_file_keys=required_artifact_file_keys,
         required_artifact_dir_keys=required_artifact_dir_keys,
+    )
+
+
+def _expected_object(source_id: str = "crate") -> ExpectedObjectReport:
+    return ExpectedObjectReport(
+        source_id=source_id,
+        source_name=source_id.title(),
+        sim_name=f"wl_{source_id}",
+        source_type="cube",
+        sim_type="box",
+        position_xyz=(0.0, 0.0, 0.0),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.1, 0.2, 0.3),
+        rgba=(1.0, 0.0, 0.0, 1.0),
+        collision=True,
+        fixed=True,
+        mass_kg=None,
+        friction=None,
+        restitution=None,
+        semantic_role=None,
+        asset_ref=None,
+        asset_scale_xyz=None,
     )
 
 
@@ -342,6 +367,84 @@ def test_workspace_report_validation_rejects_unexpected_object_size(tmp_path) ->
     ) == (
         "simulator validation report field 'objects[axis-box].size_xyz[0]' "
         "is 0.1, expected 0.2"
+    )
+
+
+def test_workspace_report_validation_rejects_object_color_contract_drift(tmp_path) -> None:
+    changed_object = _report_object("crate")
+    changed_object["rgba"] = [0.0, 1.0, 0.0, 1.0]
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [changed_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(object_contracts={"crate": _expected_object("crate")}),
+    ) == (
+        "simulator validation report field 'objects[crate].rgba[0]' "
+        "is 0.0, expected 1.0"
+    )
+
+
+def test_workspace_report_validation_rejects_object_type_contract_drift(tmp_path) -> None:
+    changed_object = _report_object("crate")
+    changed_object["sim_type"] = "sphere"
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [changed_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(object_contracts={"crate": _expected_object("crate")}),
+    ) == (
+        "simulator validation report field 'objects[crate].sim_type' "
+        "is 'sphere', expected 'box'"
+    )
+
+
+def test_workspace_report_validation_rejects_object_collision_contract_drift(tmp_path) -> None:
+    changed_object = _report_object("crate")
+    changed_object["collision"] = False
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [changed_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(object_contracts={"crate": _expected_object("crate")}),
+    ) == (
+        "simulator validation report field 'objects[crate].collision' "
+        "is False, expected True"
     )
 
 
