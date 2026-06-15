@@ -114,7 +114,6 @@ def normalize_simulator_workspace_package_request(
             update={"world_package": normalized_world_package},
             deep=True,
         )
-    validate_simulator_workspace_package_request(normalized_request)
     return normalized_request
 
 
