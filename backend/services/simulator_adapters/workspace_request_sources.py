@@ -37,13 +37,37 @@ WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_BLENDER_ID,
 )
-WORKSPACE_FIXTURES = ("demo", "studio-y-up-axis")
+WORKSPACE_FIXTURES = ("demo", "studio-y-up-axis", "mesh-asset")
 DEMO_ROOT = BASE_DIR / "web" / "public" / "demo"
 SO101_MANIFEST_PATH = DEMO_ROOT / "so101" / "manifest.json"
 SO101_CAMERA_CONFIG_PATH = DEMO_ROOT / "so101" / "camera-config.json"
 STATIC_WORLD_LAYOUT_PATH = (
     BASE_DIR / "web" / "public" / "world-layouts" / "static-transfer-smoke.world-layout.json"
 )
+MESH_ASSET_FIXTURE_PATH = "assets/workspace_mesh_crate.obj"
+MESH_ASSET_FIXTURE_OBJ = """\
+o workspace_mesh_crate
+v -0.5 -0.5 -0.5
+v 0.5 -0.5 -0.5
+v 0.5 0.5 -0.5
+v -0.5 0.5 -0.5
+v -0.5 -0.5 0.5
+v 0.5 -0.5 0.5
+v 0.5 0.5 0.5
+v -0.5 0.5 0.5
+f 1 2 3
+f 1 3 4
+f 5 8 7
+f 5 7 6
+f 1 5 6
+f 1 6 2
+f 2 6 7
+f 2 7 3
+f 3 7 8
+f 3 8 4
+f 4 8 5
+f 4 5 1
+"""
 WORKSPACE_ASSET_IGNORED_DIR_NAMES = frozenset(
     {
         ".cache",
@@ -152,6 +176,47 @@ def build_studio_y_up_axis_workspace_request() -> SimulatorWorkspacePrepareReque
         "workspace_check_fixture": "studio-y-up-axis",
     }
     return request.model_copy(update={"world_package": world_package}, deep=True)
+
+
+def build_mesh_asset_workspace_request() -> SimulatorWorkspacePrepareRequest:
+    request = build_demo_workspace_request()
+    world_package = request.world_package.model_copy(deep=True)
+    world_package.package_id = "mesh-asset-workspace-check"
+    world_package.title = "Mesh Asset Workspace Check"
+    world_package.interface.observation_modalities = ["state"]
+    world_package.world_snapshot.cameras = []
+    world_package.world_snapshot.objects = [
+        {
+            "id": "mesh-crate",
+            "name": "Mesh crate",
+            "type": "mesh",
+            "position_xyz": [0.4, -0.2, 0.15],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.3, 0.2, 0.2],
+            "color": "#22c55e",
+            "asset_ref": MESH_ASSET_FIXTURE_PATH,
+            "source": "user",
+        }
+    ]
+    world_package.provenance = {
+        **world_package.provenance,
+        "workspace_check_fixture": "mesh-asset",
+    }
+    mesh_asset = SimulatorMeshAssetUpload(
+        path=MESH_ASSET_FIXTURE_PATH,
+        aliases=[],
+        content_base64=base64.b64encode(
+            MESH_ASSET_FIXTURE_OBJ.encode("utf-8")
+        ).decode("ascii"),
+        mime="model/obj",
+    )
+    return request.model_copy(
+        update={
+            "world_package": world_package,
+            "mesh_assets": [*request.mesh_assets, mesh_asset],
+        },
+        deep=True,
+    )
 
 
 def build_workspace_request_from_files(

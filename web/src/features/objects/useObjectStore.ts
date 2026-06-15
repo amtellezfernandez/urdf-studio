@@ -16,6 +16,8 @@ export interface CreatedObject {
   rotation?: THREE.Euler;
   size: THREE.Vector3;
   color: string;
+  assetRef?: string;
+  assetScale?: THREE.Vector3;
   isHidden?: boolean;
   source?:
     | "user"
@@ -101,12 +103,23 @@ const cloneCreatedObject = (object: CreatedObject): CreatedObject => ({
   position: object.position.clone(),
   rotation: normalizeWorldObjectRotationEuler(object.rotation),
   size: object.size.clone(),
+  assetScale: object.assetScale?.clone(),
 });
 
 const cloneSnapshot = (snapshot: ObjectSnapshot): ObjectSnapshot => ({
   objects: snapshot.objects.map(cloneCreatedObject),
   selectedObjectId: snapshot.selectedObjectId,
 });
+
+const optionalVectorEquals = (
+  left: THREE.Vector3 | undefined,
+  right: THREE.Vector3 | undefined
+): boolean => {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return left.equals(right);
+};
 
 const captureSnapshot = (state: Pick<ObjectStore, "objects" | "selectedObjectId">): ObjectSnapshot =>
   cloneSnapshot({
@@ -131,6 +144,8 @@ const snapshotsEqual = (left: ObjectSnapshot, right: ObjectSnapshot): boolean =>
       leftObject.label === rightObject.label &&
       leftObject.type === rightObject.type &&
       leftObject.color === rightObject.color &&
+      leftObject.assetRef === rightObject.assetRef &&
+      optionalVectorEquals(leftObject.assetScale, rightObject.assetScale) &&
       leftObject.isHidden === rightObject.isHidden &&
       leftObject.source === rightObject.source &&
       leftObject.trackedJointName === rightObject.trackedJointName &&
@@ -190,6 +205,8 @@ export const useObjectStore = create<ObjectStore & ObjectStoreInternalState>((se
       orbitSecondaryOffset: object.orbitSecondaryOffset ?? 180,
       orbitTargetPoint: object.orbitTargetPoint ?? "primary",
       label: object.label,
+      assetRef: object.assetRef,
+      assetScale: object.assetScale?.clone(),
     };
 
     set((state) => {

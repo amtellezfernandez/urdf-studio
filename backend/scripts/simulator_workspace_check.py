@@ -57,6 +57,7 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     WORKSPACE_FIXTURES,
     WORKSPACE_SIMULATORS,
     build_demo_workspace_request,
+    build_mesh_asset_workspace_request,
     build_studio_y_up_axis_workspace_request,
     build_workspace_request_from_files,
 )
@@ -101,6 +102,7 @@ class PreparedWorkspaceCommand:
     expected_frame_map: ConcreteWorldLayoutFrameMap | None = None
     expected_object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    expected_object_asset_refs: Mapping[str, str | None] | None = None
     expected_report_artifact_file_keys: tuple[str, ...] = ()
     expected_report_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -114,6 +116,7 @@ class WorkspaceExpectations:
     resolved_frame_map: ConcreteWorldLayoutFrameMap | None = None
     object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    object_asset_refs: Mapping[str, str | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +157,12 @@ def _workspace_object_sizes(
     expectations: WorkspaceExpectations,
 ) -> Mapping[str, tuple[float, float, float]] | None:
     return getattr(expectations, "object_sizes_xyz", None)
+
+
+def _workspace_object_asset_refs(
+    expectations: WorkspaceExpectations,
+) -> Mapping[str, str | None] | None:
+    return getattr(expectations, "object_asset_refs", None)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -245,6 +254,8 @@ def _workspace_request_from_args(args: argparse.Namespace) -> SimulatorWorkspace
     if not has_custom_world_package:
         if fixture == "studio-y-up-axis":
             return build_studio_y_up_axis_workspace_request()
+        if fixture == "mesh-asset":
+            return build_mesh_asset_workspace_request()
         return build_demo_workspace_request()
     return build_workspace_request_from_files(
         world_package_path=Path(args.world_package),
@@ -337,6 +348,7 @@ def _prepare_direct_urdf_command(
         expected_frame_map=_workspace_resolved_frame_map(expectations),
         expected_object_positions_xyz=_workspace_object_positions(expectations),
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
+        expected_object_asset_refs=_workspace_object_asset_refs(expectations),
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
@@ -453,6 +465,7 @@ def _prepare_mujoco_command(
         expected_frame_map=_workspace_resolved_frame_map(expectations),
         expected_object_positions_xyz=_workspace_object_positions(expectations),
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
+        expected_object_asset_refs=_workspace_object_asset_refs(expectations),
         expected_report_artifact_file_keys=("mjcf_path",),
         expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
@@ -675,6 +688,7 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             frame_map=command.expected_frame_map,
             object_positions_xyz=command.expected_object_positions_xyz,
             object_sizes_xyz=command.expected_object_sizes_xyz,
+            object_asset_refs=command.expected_object_asset_refs,
             required_artifact_file_keys=command.expected_report_artifact_file_keys,
             required_artifact_dir_keys=command.expected_report_artifact_dir_keys,
         ),
@@ -782,12 +796,13 @@ def _resolved_frame_map_for_request(
     return resolve_world_layout_frame_map(_workspace_layout(request), frame_map)
 
 
-def _expected_object_vectors_for_request(
+def _expected_object_contract_for_request(
     request: SimulatorWorkspacePrepareRequest,
     frame_map: WorldLayoutFrameMap,
 ) -> tuple[
     dict[str, tuple[float, float, float]],
     dict[str, tuple[float, float, float]],
+    dict[str, str | None],
 ]:
     primitives, _warnings = build_sim_primitives(
         _workspace_layout(request),
@@ -797,6 +812,7 @@ def _expected_object_vectors_for_request(
     return (
         {primitive.source_id: primitive.position_xyz for primitive in primitives},
         {primitive.source_id: primitive.size_xyz for primitive in primitives},
+        {primitive.source_id: primitive.asset_ref for primitive in primitives},
     )
 
 
@@ -826,7 +842,7 @@ def main() -> int:
         or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
     )
     request = _workspace_request_from_args(args)
-    object_positions_xyz, object_sizes_xyz = _expected_object_vectors_for_request(
+    object_positions_xyz, object_sizes_xyz, object_asset_refs = _expected_object_contract_for_request(
         request,
         args.frame_map,
     )
@@ -838,6 +854,7 @@ def main() -> int:
         resolved_frame_map=_resolved_frame_map_for_request(request, args.frame_map),
         object_positions_xyz=object_positions_xyz,
         object_sizes_xyz=object_sizes_xyz,
+        object_asset_refs=object_asset_refs,
     )
     results = [
         _check_target(

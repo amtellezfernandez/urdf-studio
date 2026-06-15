@@ -103,6 +103,15 @@ const TEST_INVALID_GEOMETRY_OBJECT: CreatedObject = {
   size: new THREE.Vector3(Number.NaN, -0.2, 0.3),
 };
 
+const TEST_MESH_OBJECT: CreatedObject = {
+  ...TEST_OBJECT,
+  id: "mesh-crate",
+  position: new THREE.Vector3(0.1, 0.2, 0.3),
+  size: new THREE.Vector3(0.4, 0.5, 0.6),
+  assetRef: "assets/crate.obj",
+  assetScale: new THREE.Vector3(1, 1.2, 1.4),
+};
+
 describe("buildWorldScenePackageManifest", () => {
   it("canonicalizes JSON like backend world snapshot hashing", () => {
     expect(
@@ -225,6 +234,28 @@ describe("buildWorldScenePackageManifest", () => {
       WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
       WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM,
     ]);
+  });
+
+  it("preserves mesh asset metadata when serializing world objects", () => {
+    expect(toSerializableWorldObject(TEST_MESH_OBJECT)).toEqual(
+      expect.objectContaining({
+        id: "mesh-crate",
+        type: "mesh",
+        asset_ref: "assets/crate.obj",
+        asset_scale_xyz: [1, 1.2, 1.4],
+        position_xyz: [0.1, 0.2, 0.3],
+        size_xyz: [0.4, 0.5, 0.6],
+      })
+    );
+  });
+
+  it("rejects non-positive mesh asset scale before package export", () => {
+    expect(() =>
+      toSerializableWorldObject({
+        ...TEST_MESH_OBJECT,
+        assetScale: new THREE.Vector3(1, 0, 1),
+      })
+    ).toThrow("asset_scale_xyz[1] must be > 0.");
   });
 
   it("omits orbit fields for non-orbit objects", async () => {

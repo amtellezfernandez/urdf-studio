@@ -744,6 +744,7 @@ const Index = () => {
   const {
     activeWorldSnapshotRef,
     buildCurrentWorldScenePackageManifest,
+    ensureWorldLayoutForTransfer,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
@@ -807,6 +808,7 @@ const Index = () => {
     activeUrdfPath,
     attachedIluSessionId,
     buildCurrentWorldScenePackageManifest,
+    ensureWorldLayoutForTransfer,
     meshFiles,
     originalUrdfContent,
     packageRoots,

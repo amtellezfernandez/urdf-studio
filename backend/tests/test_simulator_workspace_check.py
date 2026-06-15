@@ -21,7 +21,7 @@ from backend.scripts.simulator_workspace_check import (
     WorkspaceTarget,
     _active_object_count,
     _check_target,
-    _expected_object_vectors_for_request,
+    _expected_object_contract_for_request,
     _module_command,
     _prepare_blender_command,
     _prepare_genesis_command,
@@ -112,10 +112,33 @@ def test_workspace_check_resolves_auto_frame_map_from_world_convention() -> None
 def test_workspace_check_expected_object_vectors_follow_auto_frame_map() -> None:
     request = build_studio_y_up_axis_workspace_request()
 
-    positions, sizes = _expected_object_vectors_for_request(request, "auto")
+    positions, sizes, asset_refs = _expected_object_contract_for_request(request, "auto")
 
     assert positions == {"axis-box": (1.0, -3.0, 2.0)}
     assert sizes == {"axis-box": (0.2, 0.8, 0.4)}
+    assert asset_refs == {"axis-box": None}
+
+
+def test_workspace_check_expected_object_contract_preserves_mesh_asset_refs() -> None:
+    request = build_studio_y_up_axis_workspace_request()
+    request.world_package.world_snapshot.objects = [
+        {
+            "id": "mesh-crate",
+            "name": "Mesh crate",
+            "type": "mesh",
+            "position_xyz": [0.0, 0.0, 0.0],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.3, 0.4],
+            "color": "#22c55e",
+            "asset_ref": "assets/crate.obj",
+        }
+    ]
+
+    positions, sizes, asset_refs = _expected_object_contract_for_request(request, "auto")
+
+    assert positions == {"mesh-crate": (0.0, -0.0, 0.0)}
+    assert sizes == {"mesh-crate": (0.2, 0.4, 0.3)}
+    assert asset_refs == {"mesh-crate": "assets/crate.obj"}
 
 
 def test_workspace_check_fixture_selects_studio_y_up_axis_request() -> None:
@@ -138,6 +161,29 @@ def test_workspace_check_fixture_selects_studio_y_up_axis_request() -> None:
     assert [item["id"] for item in request.world_package.world_snapshot.objects] == [
         "axis-box"
     ]
+
+
+def test_workspace_check_fixture_selects_mesh_asset_request() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fixture": "mesh-asset",
+            "world_package": "",
+            "robot_urdf": "",
+            "asset_root": [],
+        },
+    )()
+
+    request = _workspace_request_from_args(args)
+
+    assert request.world_package.package_id == "mesh-asset-workspace-check"
+    assert request.world_package.world_snapshot.cameras == []
+    assert request.world_package.world_snapshot.objects[0]["id"] == "mesh-crate"
+    assert request.world_package.world_snapshot.objects[0]["asset_ref"] == (
+        "assets/workspace_mesh_crate.obj"
+    )
+    assert "assets/workspace_mesh_crate.obj" in {asset.path for asset in request.mesh_assets}
 
 
 def test_workspace_check_rejects_fixture_with_custom_world_package() -> None:

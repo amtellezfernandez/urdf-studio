@@ -211,6 +211,23 @@ const worldSnapshotArtifactRef = (digest: string): WorldArtifactRef => ({
   uri: WORLD_SCENE_PACKAGE_URI_SCHEME,
 });
 
+const toSerializableAssetScale = (
+  assetScale: CreatedObject["assetScale"] | undefined
+): [number, number, number] | undefined => {
+  if (!assetScale) return undefined;
+  const scale: [number, number, number] = [
+    normalizeSnapshotNumber(assetScale.x, "asset_scale_xyz[0]"),
+    normalizeSnapshotNumber(assetScale.y, "asset_scale_xyz[1]"),
+    normalizeSnapshotNumber(assetScale.z, "asset_scale_xyz[2]"),
+  ];
+  scale.forEach((component, index) => {
+    if (component <= 0) {
+      throw new Error(`asset_scale_xyz[${index}] must be > 0.`);
+    }
+  });
+  return scale;
+};
+
 export const refreshWorldScenePackageSnapshotDigest = async (
   manifest: WorldScenePackageManifest
 ): Promise<WorldScenePackageManifest> => {
@@ -253,7 +270,7 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
   const serializable: SerializableWorldObject = {
     id: object.id,
     name: object.id,
-    type: object.type,
+    type: object.assetRef ? "mesh" : object.type,
     position_xyz: [geometry.position.x, geometry.position.y, geometry.position.z],
     size_xyz: size,
     color: object.color,
@@ -269,6 +286,13 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
       rotation.y,
       rotation.z,
     ];
+  }
+  if (object.assetRef) {
+    serializable.asset_ref = object.assetRef;
+    const assetScale = toSerializableAssetScale(object.assetScale);
+    if (assetScale) {
+      serializable.asset_scale_xyz = assetScale;
+    }
   }
   if (object.isHidden === true) {
     serializable.is_hidden = true;

@@ -11,6 +11,7 @@ from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     WorldLayoutFrameMap,
 )
+from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
 
 VALID_REPORT_FRAME_MAPS = frozenset(("identity", "studio-y-up-to-z-up"))
 VALID_REPORT_REQUESTED_FRAME_MAPS = frozenset(("auto", *VALID_REPORT_FRAME_MAPS))
@@ -25,6 +26,7 @@ class SimulatorWorkspaceReportExpectations:
     frame_map: ConcreteWorldLayoutFrameMap | None = None
     object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    object_asset_refs: Mapping[str, str | None] | None = None
     required_artifact_file_keys: tuple[str, ...] = ()
     required_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -125,6 +127,12 @@ def validate_simulator_workspace_report(
     object_vector_error = _validate_expected_object_vectors(payload, expectations)
     if object_vector_error:
         return object_vector_error
+    object_asset_ref_error = _validate_expected_object_asset_refs(payload, expectations)
+    if object_asset_ref_error:
+        return object_asset_ref_error
+    asset_ref_error = _validate_report_object_asset_refs(payload)
+    if asset_ref_error:
+        return asset_ref_error
     return _validate_report_item_fields(
         payload,
         list_field_name="cameras",
@@ -388,6 +396,62 @@ def _validate_expected_object_vectors(
         )
         if error:
             return error
+    return None
+
+
+def _validate_expected_object_asset_refs(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_asset_refs = expectations.object_asset_refs or {}
+    if not expected_asset_refs:
+        return None
+    objects = payload.get("objects")
+    if not isinstance(objects, list):
+        return "simulator validation report field 'objects' must be a list"
+    objects_by_source_id = {
+        item.get("source_id"): item
+        for item in objects
+        if isinstance(item, Mapping) and isinstance(item.get("source_id"), str)
+    }
+    for source_id, expected_asset_ref in expected_asset_refs.items():
+        item = objects_by_source_id.get(source_id)
+        if item is None:
+            return f"simulator validation report missing object source_id {source_id!r}"
+        actual_asset_ref = item.get("asset_ref")
+        if actual_asset_ref != expected_asset_ref:
+            return (
+                f"simulator validation report field 'objects[{source_id}].asset_ref' "
+                f"is {actual_asset_ref!r}, expected {expected_asset_ref!r}"
+            )
+    return None
+
+
+def _validate_report_object_asset_refs(payload: Mapping[str, Any]) -> str | None:
+    asset_roots_raw = payload.get("asset_roots")
+    if not isinstance(asset_roots_raw, list):
+        return "simulator validation report field 'asset_roots' must be a list"
+    asset_roots = tuple(Path(path) for path in asset_roots_raw if isinstance(path, str))
+    objects = payload.get("objects")
+    if not isinstance(objects, list):
+        return "simulator validation report field 'objects' must be a list"
+    for item in objects:
+        if not isinstance(item, Mapping):
+            continue
+        asset_ref = item.get("asset_ref")
+        if asset_ref is None:
+            continue
+        source_id = item.get("source_id", "<unknown>")
+        if not isinstance(asset_ref, str) or not asset_ref.strip():
+            return (
+                f"simulator validation report field 'objects[{source_id}].asset_ref' "
+                "must be null or a non-empty string"
+            )
+        if resolve_world_layout_asset_path(asset_ref, asset_roots) is None:
+            return (
+                f"simulator validation report field 'objects[{source_id}].asset_ref' "
+                f"does not resolve under asset_roots: {asset_ref}"
+            )
     return None
 
 

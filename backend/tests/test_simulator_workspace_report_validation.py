@@ -62,6 +62,7 @@ def _expectations(
     frame_map: str | None = None,
     object_positions_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_sizes_xyz: dict[str, tuple[float, float, float]] | None = None,
+    object_asset_refs: dict[str, str | None] | None = None,
     required_artifact_file_keys: tuple[str, ...] = (),
     required_artifact_dir_keys: tuple[str, ...] = (),
 ) -> SimulatorWorkspaceReportExpectations:
@@ -73,6 +74,7 @@ def _expectations(
         frame_map=frame_map,
         object_positions_xyz=object_positions_xyz,
         object_sizes_xyz=object_sizes_xyz,
+        object_asset_refs=object_asset_refs,
         required_artifact_file_keys=required_artifact_file_keys,
         required_artifact_dir_keys=required_artifact_dir_keys,
     )
@@ -317,6 +319,90 @@ def test_workspace_report_validation_rejects_unexpected_object_size(tmp_path) ->
     ) == (
         "simulator validation report field 'objects[axis-box].size_xyz[0]' "
         "is 0.1, expected 0.2"
+    )
+
+
+def test_workspace_report_validation_accepts_resolved_mesh_asset_ref(tmp_path) -> None:
+    asset_path = tmp_path / "assets" / "crate.obj"
+    asset_path.parent.mkdir()
+    asset_path.write_text("o crate\n", encoding="utf-8")
+    report_object = {
+        **_report_object("mesh-crate"),
+        "source_type": "mesh",
+        "asset_ref": "assets/crate.obj",
+    }
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [report_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(object_asset_refs={"mesh-crate": "assets/crate.obj"}),
+    ) is None
+
+
+def test_workspace_report_validation_rejects_unexpected_mesh_asset_ref(tmp_path) -> None:
+    report_object = {
+        **_report_object("mesh-crate"),
+        "source_type": "mesh",
+        "asset_ref": None,
+    }
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [report_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(object_asset_refs={"mesh-crate": "assets/crate.obj"}),
+    ) == (
+        "simulator validation report field 'objects[mesh-crate].asset_ref' "
+        "is None, expected 'assets/crate.obj'"
+    )
+
+
+def test_workspace_report_validation_rejects_unresolved_mesh_asset_ref(tmp_path) -> None:
+    report_object = {
+        **_report_object("mesh-crate"),
+        "source_type": "mesh",
+        "asset_ref": "assets/missing.obj",
+    }
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [report_object],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'objects[mesh-crate].asset_ref' "
+        "does not resolve under asset_roots: assets/missing.obj"
     )
 
 

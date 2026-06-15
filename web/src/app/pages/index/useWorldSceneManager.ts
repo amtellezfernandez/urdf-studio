@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toast } from "sonner";
+import { Vector3 } from "three";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_AUTOLOAD, DEMO_MODE } from "@/shared/config/demo";
@@ -430,6 +431,14 @@ export const useWorldSceneManager = ({
         ),
         size: geometry.size,
         color: object.color,
+        assetRef: object.asset_ref,
+        assetScale: object.asset_scale_xyz
+          ? new Vector3(
+              object.asset_scale_xyz[0],
+              object.asset_scale_xyz[1],
+              object.asset_scale_xyz[2]
+            )
+          : undefined,
         isHidden: object.is_hidden === true,
         source: object.source ?? "user",
         trackedJointName: object.tracked_joint_name ?? null,
@@ -647,6 +656,16 @@ export const useWorldSceneManager = ({
     [importWorldLayoutFromUrl]
   );
 
+  const ensureWorldLayoutForTransfer = useCallback(async () => {
+    if (objects.length > 0 || hasExplicitWorldImport || hasExplicitWorldLayoutImport) return;
+    await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout transfer");
+  }, [
+    hasExplicitWorldImport,
+    hasExplicitWorldLayoutImport,
+    importWorldLayoutFromUrl,
+    objects.length,
+  ]);
+
   useEffect(() => {
     if (worldImportHandledRef.current || !hasExplicitWorldImport) return;
     worldImportHandledRef.current = true;
@@ -776,6 +795,7 @@ export const useWorldSceneManager = ({
   return {
     activeWorldSnapshotRef,
     buildCurrentWorldScenePackageManifest,
+    ensureWorldLayoutForTransfer,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
