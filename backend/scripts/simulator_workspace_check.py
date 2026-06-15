@@ -63,7 +63,9 @@ from backend.services.world_layout_static_transfer import (
     count_transferable_world_objects,
     parse_static_world_layout_payload,
 )
+from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 from backend.services.world_scene_package_digest import world_scene_package_json_payload
+from backend.scripts.simulator_workspace_cli import WORKSPACE_FRAME_MAP_CHOICES
 
 REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
 DEFAULT_DURATION_SEC = 0.02
@@ -94,6 +96,7 @@ class WorkspaceExpectations:
     object_count: int
     camera_count: int
     duration_sec: float
+    frame_map: WorldLayoutFrameMap = "auto"
 
 
 @dataclass(frozen=True)
@@ -112,6 +115,10 @@ class WorkspaceCheckResult:
     status: str
     detail: str = ""
     report_path: str | None = None
+
+
+def _workspace_frame_map(expectations: WorkspaceExpectations) -> WorldLayoutFrameMap:
+    return getattr(expectations, "frame_map", "auto")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -149,6 +156,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--duration-sec", type=float, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--timeout-sec", type=float, default=DEFAULT_TIMEOUT_SEC)
+    parser.add_argument(
+        "--frame-map",
+        choices=WORKSPACE_FRAME_MAP_CHOICES,
+        default="auto",
+        help="World frame-map policy used for simulator workspace launches.",
+    )
     parser.add_argument(
         "--world-package",
         default="",
@@ -209,6 +222,7 @@ def _module_command(
     robot_asset_flag: str,
     robot_asset_path: Path,
     duration_sec: float,
+    frame_map: WorldLayoutFrameMap = "auto",
     extra_args: Sequence[str] = (),
     report_path: Path | None = None,
 ) -> list[str]:
@@ -225,7 +239,7 @@ def _module_command(
         *extra_args,
         *report_args,
         "--frame-map",
-        "identity",
+        frame_map,
         "--no-viewer",
         "--duration-sec",
         str(duration_sec),
@@ -257,6 +271,7 @@ def _prepare_direct_urdf_command(
             robot_asset_flag="--robot-urdf",
             robot_asset_path=prepared.robot_urdf_path,
             duration_sec=expectations.duration_sec,
+            frame_map=_workspace_frame_map(expectations),
             extra_args=extra_args,
             report_path=expected_report_path,
         ),
@@ -364,6 +379,7 @@ def _prepare_mujoco_command(
             robot_asset_flag="--robot-mjcf",
             robot_asset_path=prepared.mjcf_path,
             duration_sec=expectations.duration_sec,
+            frame_map=_workspace_frame_map(expectations),
             extra_args=(
                 "--robot-urdf",
                 str(prepared.shared_workspace.robot_urdf_path),
@@ -710,6 +726,7 @@ def main() -> int:
         object_count=_active_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
         duration_sec=args.duration_sec,
+        frame_map=args.frame_map,
     )
     results = [
         _check_target(

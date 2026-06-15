@@ -112,6 +112,20 @@ def test_workspace_check_module_command_writes_report_argument_once(tmp_path) ->
 
     assert command.count("--report") == 1
     assert command[command.index("--report") + 1] == str(tmp_path / "report.json")
+    assert command[command.index("--frame-map") + 1] == "auto"
+
+
+def test_workspace_check_module_command_accepts_explicit_frame_map(tmp_path) -> None:
+    command = _module_command(
+        MUJOCO_WORKSPACE_PROCESS_PARAMS,
+        world_package_path=tmp_path / "world-package.json",
+        robot_asset_flag="--robot-urdf",
+        robot_asset_path=tmp_path / "robot.urdf",
+        duration_sec=0.02,
+        frame_map="identity",
+    )
+
+    assert command[command.index("--frame-map") + 1] == "identity"
 
 
 def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatch, tmp_path) -> None:
@@ -486,7 +500,7 @@ def test_workspace_check_prints_artifact_only_status(capsys) -> None:
 def test_workspace_check_artifact_only_selected_target_does_not_require_runtime(
     monkeypatch, capsys
 ) -> None:
-    captured: dict[str, bool] = {}
+    captured: dict[str, object] = {}
 
     def fake_check_target(
         target,
@@ -497,6 +511,51 @@ def test_workspace_check_artifact_only_selected_target_does_not_require_runtime(
         require_runtime,
     ):
         captured["require_runtime"] = require_runtime
+        captured["frame_map"] = expectations.frame_map
+        return WorkspaceCheckResult(target.simulator_id, target.label, "passed", "ok")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "simulator_workspace_check.py",
+            "--simulator",
+            "blender",
+            "--artifact-only",
+            "--frame-map",
+            "studio-y-up-to-z-up",
+            "--json",
+        ],
+    )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check._check_target",
+        fake_check_target,
+    )
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check._check_cross_simulator_parity",
+        lambda _results: None,
+    )
+
+    assert main() == 0
+    assert captured == {
+        "require_runtime": False,
+        "frame_map": "studio-y-up-to-z-up",
+    }
+    assert '"status": "passed"' in capsys.readouterr().out
+
+
+def test_workspace_check_defaults_to_auto_frame_map(monkeypatch, capsys) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_check_target(
+        target,
+        *,
+        request,
+        expectations,
+        timeout_sec,
+        require_runtime,
+    ):
+        captured["frame_map"] = expectations.frame_map
         return WorkspaceCheckResult(target.simulator_id, target.label, "passed", "ok")
 
     monkeypatch.setattr(
@@ -520,7 +579,7 @@ def test_workspace_check_artifact_only_selected_target_does_not_require_runtime(
     )
 
     assert main() == 0
-    assert captured == {"require_runtime": False}
+    assert captured == {"frame_map": "auto"}
     assert '"status": "passed"' in capsys.readouterr().out
 
 
