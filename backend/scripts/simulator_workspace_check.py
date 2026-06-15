@@ -195,8 +195,8 @@ def _parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help=(
-            "Asset root copied into the simulator workspace for --world-package. "
-            "May be passed more than once. Defaults to the robot URDF directory."
+            "Additional asset root copied into the simulator workspace for --world-package. "
+            "The robot source directory is always included. May be passed more than once."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable results.")

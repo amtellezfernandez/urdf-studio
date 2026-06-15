@@ -148,6 +148,46 @@ def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> N
     ]
 
 
+def test_workspace_request_from_files_keeps_robot_directory_when_extra_asset_root_is_passed(
+    tmp_path,
+) -> None:
+    robot_root = tmp_path / "robot_scene"
+    extra_root = tmp_path / "extra_assets"
+    robot_urdf_path = robot_root / "robot.urdf"
+    robot_mesh_path = robot_root / "meshes" / "arm.stl"
+    extra_mesh_path = extra_root / "props" / "crate.obj"
+    robot_mesh_path.parent.mkdir(parents=True)
+    extra_mesh_path.parent.mkdir(parents=True)
+    robot_mesh_path.write_text("solid arm\nendsolid arm\n", encoding="utf-8")
+    extra_mesh_path.write_text("o crate\nv 0 0 0\n", encoding="utf-8")
+    urdf_xml = """
+<robot name="custom_robot">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/arm.stl"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>
+""".strip()
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    world_package_path = tmp_path / "world-package.json"
+    write_world_package_file(world_package_path, make_world_package(urdf_xml))
+
+    request = build_workspace_request_from_files(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        asset_roots=(extra_root,),
+    )
+
+    assert request.urdf_asset_path == "robot.urdf"
+    assert [asset.path for asset in request.mesh_assets] == [
+        "meshes/arm.stl",
+        "props/crate.obj",
+    ]
+
+
 def test_workspace_request_from_files_rejects_stale_world_snapshot_artifact_digest(
     tmp_path,
 ) -> None:

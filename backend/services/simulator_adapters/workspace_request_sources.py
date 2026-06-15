@@ -237,7 +237,7 @@ def build_workspace_request_from_files(
     resolved_asset_roots = tuple(
         dict.fromkeys(
             root.expanduser().resolve()
-            for root in (asset_roots or (resolved_robot_urdf_path.parent,))
+            for root in (resolved_robot_urdf_path.parent, *asset_roots)
         )
     )
     for root in resolved_asset_roots:
@@ -248,7 +248,6 @@ def build_workspace_request_from_files(
         urdf_asset_path=_relative_to_asset_roots(
             resolved_robot_urdf_path,
             resolved_asset_roots,
-            fallback=resolved_robot_urdf_path.name,
         ),
         mesh_assets=_load_workspace_asset_uploads(
             resolved_asset_roots,
@@ -340,14 +339,14 @@ def _load_demo_objects() -> list[dict]:
     return [item for item in objects if isinstance(item, dict)]
 
 
-def _relative_to_asset_roots(path: Path, roots: Sequence[Path], *, fallback: str) -> str:
+def _relative_to_asset_roots(path: Path, roots: Sequence[Path]) -> str:
     resolved_path = path.resolve()
     for root in roots:
         try:
             return resolved_path.relative_to(root.resolve()).as_posix()
         except ValueError:
             continue
-    return fallback
+    raise ValueError(f"Path is outside simulator transfer asset roots: {path}")
 
 
 def _load_workspace_asset_uploads(

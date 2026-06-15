@@ -156,7 +156,7 @@ npm run simulator:workspace:check -- \
   --artifact-only
 ```
 
-`--asset-root` bundles simulator assets only: mesh files, material/texture sidecars, `package.xml`, and related interchange files. Local notes, logs, caches, and source-control files are ignored.
+The robot source directory is always bundled. `--asset-root` adds extra roots and includes simulator assets only: mesh files, material/texture sidecars, `package.xml`, and related interchange files. Local notes, logs, caches, and source-control files are ignored.
 
 ## Troubleshooting
 
