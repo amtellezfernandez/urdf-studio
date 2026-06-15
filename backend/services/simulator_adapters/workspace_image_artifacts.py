@@ -34,6 +34,8 @@ def validate_workspace_image_artifacts(
             directory,
             expected_count,
         )
+        if isinstance(expected_camera_images, str):
+            return expected_camera_images
         if expected_camera_images is not None:
             actual_names = tuple(path.name for path in directory_images)
             expected_names = tuple(path.name for path, _size in expected_camera_images)
@@ -62,19 +64,41 @@ def _expected_camera_images(
     expectations: WorkspaceImageArtifactExpectations,
     directory: Path,
     expected_count: int,
-) -> tuple[tuple[Path, tuple[int, int]], ...] | None:
+) -> tuple[tuple[Path, tuple[int, int]], ...] | str | None:
     contracts = expectations.camera_contracts or {}
-    if not contracts or len(contracts) != expected_count:
-        return None
-    camera_ids = expectations.camera_ids or tuple(contracts)
+    camera_ids = expectations.camera_ids
+    if camera_ids is None:
+        if not contracts:
+            return None
+        camera_ids = tuple(contracts)
     if len(camera_ids) != expected_count:
+        return (
+            f"camera image artifact contract count mismatch in {directory}: "
+            f"{len(camera_ids)} camera id(s), expected {expected_count}"
+        )
+    missing_contract_ids = tuple(
+        camera_id for camera_id in camera_ids if camera_id not in contracts
+    )
+    if missing_contract_ids:
+        return (
+            f"camera image artifact contracts missing camera id(s) in {directory}: "
+            f"{', '.join(missing_contract_ids)}"
+        )
+    extra_contract_ids = tuple(
+        camera_id for camera_id in contracts if camera_id not in camera_ids
+    )
+    if extra_contract_ids:
+        return (
+            f"camera image artifact contracts contain unexpected camera id(s) in {directory}: "
+            f"{', '.join(extra_contract_ids)}"
+        )
+    if expected_count == 0:
+        return ()
+    if not contracts:
         return None
     ordered_contracts: list[ExpectedCameraReport] = []
     for camera_id in camera_ids:
-        contract = contracts.get(camera_id)
-        if contract is None:
-            return None
-        ordered_contracts.append(contract)
+        ordered_contracts.append(contracts[camera_id])
     return tuple(
         (
             camera_artifact_path(

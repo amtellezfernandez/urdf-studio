@@ -651,6 +651,37 @@ def test_workspace_check_rejects_wrong_camera_image_dimensions(tmp_path) -> None
     )
 
 
+def test_workspace_check_rejects_missing_camera_image_contract(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    _write_visible_png(camera_dir / "01_scene_camera.png")
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 1),),
+        camera_ids=("scene-camera",),
+        camera_contracts={},
+    )
+
+    assert validate_workspace_image_artifacts(expectations) == (
+        f"camera image artifact contracts missing camera id(s) in {camera_dir}: "
+        "scene-camera"
+    )
+
+
+def test_workspace_check_rejects_camera_image_contract_count_drift(tmp_path) -> None:
+    camera_dir = tmp_path / "cameras"
+    _write_visible_png(camera_dir / "01_scene_camera.png")
+    contract = _camera_contract()
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 1),),
+        camera_ids=("scene-camera", "wrist-camera"),
+        camera_contracts={"scene-camera": contract},
+    )
+
+    assert validate_workspace_image_artifacts(expectations) == (
+        f"camera image artifact contract count mismatch in {camera_dir}: "
+        "2 camera id(s), expected 1"
+    )
+
+
 def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
     monkeypatch, tmp_path
 ) -> None:
