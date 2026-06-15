@@ -119,7 +119,9 @@ npm run start -- --help
 | `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run release:check` | Run release-readiness checks |
 | `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed transfer targets |
+| `npm run simulator:workspace:check:fixtures` | Validate demo, Studio Y-up, and mesh-asset transfer fixtures |
 | `npm run simulator:blender:check` | Strictly validate the local Blender runtime and camera renders |
+| `npm run simulator:blender:check:fixtures` | Strictly validate Blender across all transfer fixtures |
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run test` | Run tests |
 | `npm run build` | Build production assets |
@@ -134,6 +136,13 @@ Validate the local Blender runtime strictly:
 
 ```bash
 npm run simulator:blender:check
+```
+
+Validate the built-in transfer fixture matrix:
+
+```bash
+npm run simulator:workspace:check:fixtures
+npm run simulator:blender:check:fixtures
 ```
 
 Validate a specific WSP/URDF package with the same simulator gates:

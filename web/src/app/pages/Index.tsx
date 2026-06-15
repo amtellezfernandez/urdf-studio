@@ -141,9 +141,7 @@ import {
 import { IndexModeGate } from "@/app/pages/index/IndexModeGate";
 import { useIluCalibrationFocus } from "@/app/pages/index/useIluCalibrationFocus";
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
-import {
-  describeCollaborationLinkAccess,
-} from "@/features/collaboration/collaborationTransport";
+import { describeCollaborationLinkAccess } from "@/features/collaboration/collaborationTransport";
 import { useUrdfCollaboration } from "@/features/collaboration/useUrdfCollaboration";
 import type { CollaborationLinkAccess } from "@/features/collaboration/collaborationTypes";
 import { resolveSubstitutionReplacement } from "@/features/dataset/substitutionApply";
@@ -162,9 +160,7 @@ import {
   buildVirtualBakePreview,
   type UrdfBakePreviewSession,
 } from "@/features/urdf/bake/virtualBake";
-import {
-  captureKinematicState,
-} from "@/features/urdf/synthesis/kinematicSynthesizer";
+import { captureKinematicState } from "@/features/urdf/synthesis/kinematicSynthesizer";
 import {
   buildInertialAuditSummary,
   buildInertialMassDeltaSummary,
