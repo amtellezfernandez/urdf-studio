@@ -18,7 +18,6 @@ from backend.models.simulator_runtime import (
     SimulatorWorkspacePrepareRequest,
     validate_simulator_relative_path,
 )
-from backend.services.simulator_adapters.base import SimulatorAdapterError
 from backend.services.ilu_session import IluSessionError, get_ilu_session_local_urdf_source_context
 from backend.services.ilu_urdf import (
     BundleMeshAssetsResult,
@@ -27,7 +26,6 @@ from backend.services.ilu_urdf import (
 )
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
-    validate_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
 )
 from backend.services.world_layout_static_transfer import (
@@ -44,11 +42,6 @@ class PreparedSimulatorWorkspace:
     bundle_result: BundleMeshAssetsResult
     world_object_count: int = 0
     camera_count: int = 0
-
-
-class SimulatorWorkspacePackageValidationError(SimulatorAdapterError):
-    status_code = 422
-
 
 URDF_VISUAL_SYNTHETIC_COLOR_PALETTE = (
     "0.74 0.76 0.72 1.0",
@@ -89,17 +82,6 @@ def _normalize_resolved_urdf_asset_path(value: str | None) -> str:
 
 def _raise(error: Callable[[str], Exception], message: str) -> None:
     raise error(message)
-
-
-def validate_simulator_workspace_package_request(
-    request: SimulatorWorkspacePrepareRequest,
-) -> None:
-    errors = validate_world_snapshot_artifact_digests(request.world_package)
-    if errors:
-        raise SimulatorWorkspacePackageValidationError(
-            f"Simulator workspace world package invalid: {'; '.join(errors)}"
-        )
-
 
 def normalize_simulator_workspace_package_request(
     request: SimulatorWorkspacePrepareRequest,
