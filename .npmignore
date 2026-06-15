@@ -1,0 +1,45 @@
+# Local installs and generated output
+node_modules/
+web/node_modules/
+.cache/
+.uv-cache/
+.venv/
+.venv-lerobot/
+dist/
+**/dist/
+reports/
+*.tsbuildinfo
+**/__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+**/.DS_Store
+.env
+.env.*
+!.env.example
+!.env.*.example
+.npmrc
+.urdf-studio-config.json
+.urdf-studio-version-check.json
+.i-love-urdf/
+
+# Repository and release-process metadata
+.github/
+.gitmodules
+docs/architecture/
+
+# Internal or external source trees that are not part of the app runtime
+third_party/
+amd-hackathon/
+pyroki/
+vggt/
+cam-to-sim/runtime_sessions/
+
+# Tests are kept in git but not shipped in the npm artifact
+backend/tests/
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.test.jsx
+**/*.test.mjs
+**/*.test.cjs
