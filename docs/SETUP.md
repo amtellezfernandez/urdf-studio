@@ -119,7 +119,7 @@ npm run start -- --help
 | `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run release:check` | Run release-readiness checks |
 | `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed transfer targets |
-| `npm run simulator:workspace:check:fixtures` | Validate demo, Studio Y-up, mesh-asset, and Xacro-source transfer fixtures |
+| `npm run simulator:workspace:check:fixtures` | Validate demo, Studio Y-up, mesh-asset, hidden-object, and Xacro-source transfer fixtures |
 | `npm run simulator:blender:check` | Strictly validate the local Blender runtime and camera renders |
 | `npm run simulator:blender:check:fixtures` | Strictly validate Blender across all transfer fixtures |
 | `npm run typecheck` | Run TypeScript checks |

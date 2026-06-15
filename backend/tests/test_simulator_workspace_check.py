@@ -48,6 +48,7 @@ from backend.services.simulator_adapters.workspace_report_validation import Expe
 from backend.services.simulator_adapters.workspace_request_sources import (
     WORKSPACE_FIXTURES,
     build_demo_workspace_request,
+    build_hidden_object_workspace_request,
     build_studio_y_up_axis_workspace_request,
     build_xacro_source_workspace_request,
 )
@@ -211,6 +212,38 @@ def test_workspace_check_fixture_selects_mesh_asset_request() -> None:
         "assets/workspace_mesh_crate.obj"
     )
     assert "assets/workspace_mesh_crate.obj" in {asset.path for asset in request.mesh_assets}
+
+
+def test_workspace_check_fixture_selects_hidden_object_request() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fixture": "hidden-object",
+            "world_package": "",
+            "robot_urdf": "",
+            "asset_root": [],
+        },
+    )()
+
+    request = _workspace_request_from_args(args)
+
+    assert request.world_package.package_id == "hidden-object-workspace-check"
+    assert request.world_package.provenance["workspace_check_fixture"] == "hidden-object"
+    assert len(request.world_package.world_snapshot.objects) == 4
+    assert active_object_count(request) == 3
+
+
+def test_hidden_object_fixture_excludes_hidden_object_from_transfer_contracts() -> None:
+    request = build_hidden_object_workspace_request()
+    object_contracts = expected_object_contracts_for_request(request, "auto")
+
+    assert "hidden-transfer-probe" not in object_contracts.contracts
+    assert set(object_contracts.contracts) == {
+        "transfer-column",
+        "transfer-table",
+        "transfer-target",
+    }
 
 
 def test_workspace_check_fixture_selects_xacro_source_request() -> None:

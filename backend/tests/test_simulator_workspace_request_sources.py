@@ -7,6 +7,7 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     MESH_ASSET_FIXTURE_PATH,
     WORKSPACE_SIMULATORS,
     build_demo_workspace_request,
+    build_hidden_object_workspace_request,
     build_mesh_asset_workspace_request,
     build_studio_y_up_axis_workspace_request,
     build_workspace_request_from_files,
@@ -82,6 +83,22 @@ def test_mesh_asset_workspace_request_contains_mesh_object_and_upload() -> None:
     ]
     assert request.world_package.provenance["workspace_check_fixture"] == "mesh-asset"
     assert MESH_ASSET_FIXTURE_PATH in {asset.path for asset in request.mesh_assets}
+
+
+def test_hidden_object_workspace_request_keeps_hidden_source_but_active_count_stays_demo() -> None:
+    request = build_hidden_object_workspace_request()
+
+    assert request.urdf_asset_path == "robot.urdf"
+    assert request.world_package.package_id == "hidden-object-workspace-check"
+    assert request.world_package.provenance["workspace_check_fixture"] == "hidden-object"
+    assert len(request.world_package.world_snapshot.objects) == 4
+    hidden_objects = [
+        item
+        for item in request.world_package.world_snapshot.objects
+        if item.get("is_hidden") is True
+    ]
+    assert [item["id"] for item in hidden_objects] == ["hidden-transfer-probe"]
+    assert len(request.mesh_assets) > 0
 
 
 def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> None:
