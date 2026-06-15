@@ -20,7 +20,7 @@ export const HealthActionPanelHeader = ({
   title,
 }: HealthActionPanelHeaderProps) => (
   <div
-    data-drag-handle="simulation-prep"
+    data-drag-handle="workspace-launcher"
     className={`flex items-start gap-3 border-b border-border/60 p-3 select-none ${
       isDragging ? "cursor-grabbing" : "cursor-grab"
     }`}

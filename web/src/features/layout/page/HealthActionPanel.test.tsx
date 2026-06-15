@@ -54,8 +54,8 @@ describe("HealthActionPanel", () => {
       );
     });
 
-    const panel = container.querySelector('[data-panel="simulation-prep"]') as HTMLDivElement | null;
-    const dragHandle = container.querySelector('[data-drag-handle="simulation-prep"]') as HTMLDivElement | null;
+    const panel = container.querySelector('[data-panel="workspace-launcher"]') as HTMLDivElement | null;
+    const dragHandle = container.querySelector('[data-drag-handle="workspace-launcher"]') as HTMLDivElement | null;
     expect(panel).toBeTruthy();
     expect(dragHandle).toBeTruthy();
 

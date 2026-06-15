@@ -2086,7 +2086,7 @@ export const HealthActionPanel = ({
     <>
       <div
         ref={panelRef}
-        data-panel="simulation-prep"
+        data-panel="workspace-launcher"
         className="fixed z-50 flex flex-col overflow-hidden rounded-lg border border-border/60 bg-background/95 shadow-lg backdrop-blur"
         style={{
           left: `${panelPosition.left}px`,
