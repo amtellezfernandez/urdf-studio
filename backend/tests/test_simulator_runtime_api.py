@@ -421,6 +421,8 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
             log_path="/tmp/sim.log",
             world_package_path="/tmp/world.json",
             robot_urdf_path="/tmp/robot.urdf",
+            world_object_count=5,
+            camera_count=3,
         )
 
     monkeypatch.setattr(
@@ -442,6 +444,8 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
     assert response.status_code == 200
     assert response.json()["simulator_id"] == "genesis"
     assert response.json()["pid"] == 1234
+    assert response.json()["world_object_count"] == 5
+    assert response.json()["camera_count"] == 3
     assert captured == {
         "simulator_id": "genesis",
         "request_title": "Demo World",
@@ -463,6 +467,8 @@ def test_simulator_workspace_prepare_refreshes_stale_world_snapshot_digest(
             log_path="/tmp/sim.log",
             world_package_path="/tmp/world.json",
             robot_urdf_path="/tmp/robot.urdf",
+            world_object_count=2,
+            camera_count=1,
         )
 
     monkeypatch.setattr(
@@ -604,6 +610,8 @@ def test_workspace_transfer_open_refreshes_stale_world_snapshot_digest(monkeypat
             log_path="/tmp/sim.log",
             world_package_path="/tmp/world.json",
             robot_urdf_path="/tmp/robot.urdf",
+            world_object_count=2,
+            camera_count=1,
         )
 
     monkeypatch.setattr(
@@ -625,6 +633,8 @@ def test_workspace_transfer_open_refreshes_stale_world_snapshot_digest(monkeypat
     assert response.status_code == 200
     assert captured["simulator_id"] == "blender"
     assert captured["declared_digests"] == (captured["actual_digest"],)
+    assert response.json()["worldObjectCount"] == 2
+    assert response.json()["cameraCount"] == 1
 
 
 def test_workspace_transfer_status_delegates_to_target_registry(monkeypatch) -> None:

@@ -25,6 +25,8 @@ type UseWorkspaceTransferLauncherParams = {
   originalUrdfContent: string;
   packageRoots: Record<string, string[]>;
   vizUrdfContent: string;
+  worldCameraCount: number;
+  worldObjectCount: number;
 };
 
 const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
@@ -38,18 +40,25 @@ const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
 const formatWorkspaceAssetFormat = (format: string): string =>
   WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
 
+const formatSceneTransferSummary = (objectCount: number, cameraCount: number): string =>
+  `${objectCount} obj · ${cameraCount} cam`;
+
 const resolveWorkspaceTransferTargetDetail = (
   descriptor: WorkspaceTransferTargetDescriptor,
+  sceneSummary: string,
   status?: WorkspaceTransferTargetStatus
 ): string => {
   const assetFormat = formatWorkspaceAssetFormat(descriptor.transferPolicy.robotAssetFormat);
-  if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} soon`;
-  if (status && !status.available) return `${assetFormat} target unavailable: ${status.status}`;
-  if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
-  if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
-  if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
-  if (descriptor.targetKind === "renderer") return `${assetFormat} visual workspace`;
-  return `${assetFormat} open`;
+  const baseDetail = (() => {
+    if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} soon`;
+    if (status && !status.available) return `${assetFormat} target unavailable: ${status.status}`;
+    if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
+    if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
+    if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
+    if (descriptor.targetKind === "renderer") return `${assetFormat} visual workspace`;
+    return `${assetFormat} open`;
+  })();
+  return `${baseDetail} · ${sceneSummary}`;
 };
 
 export const useWorkspaceTransferLauncher = ({
@@ -60,6 +69,8 @@ export const useWorkspaceTransferLauncher = ({
   originalUrdfContent,
   packageRoots,
   vizUrdfContent,
+  worldCameraCount,
+  worldObjectCount,
 }: UseWorkspaceTransferLauncherParams) => {
   const [loadingTargetId, setLoadingTargetId] = useState<WorkspaceTransferTargetId | null>(null);
   const [lastOpenedTargetId, setLastOpenedTargetId] =
@@ -70,6 +81,10 @@ export const useWorkspaceTransferLauncher = ({
   const [targetStatuses, setTargetStatuses] = useState<
     Partial<Record<WorkspaceTransferTargetId, WorkspaceTransferTargetStatus>>
   >({});
+  const sceneSummary = useMemo(
+    () => formatSceneTransferSummary(worldObjectCount, worldCameraCount),
+    [worldCameraCount, worldObjectCount]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -151,13 +166,19 @@ export const useWorkspaceTransferLauncher = ({
           targetLabel: descriptor.label,
         });
         setLastOpenedTargetId(descriptor.targetId);
+        const openedSceneSummary = formatSceneTransferSummary(
+          prepared.worldObjectCount,
+          prepared.cameraCount
+        );
         const meshSummary =
           prepared.bundledMeshCount > 0
             ? `, ${prepared.bundledMeshCount} mesh asset${
                 prepared.bundledMeshCount === 1 ? "" : "s"
               }`
             : "";
-        toast.success(`${descriptor.label} opened (pid ${prepared.pid}${meshSummary}).`);
+        toast.success(
+          `${descriptor.label} opened (pid ${prepared.pid}, ${openedSceneSummary}${meshSummary}).`
+        );
       } catch (error) {
         toast.error(error instanceof Error ? error.message : `Failed to open ${descriptor.label}`);
       } finally {
@@ -189,7 +210,7 @@ export const useWorkspaceTransferLauncher = ({
       return {
         id: descriptor.targetId,
         label: descriptor.label,
-        detail: resolveWorkspaceTransferTargetDetail(descriptor, status),
+        detail: resolveWorkspaceTransferTargetDetail(descriptor, sceneSummary, status),
         openLabel: `Open ${descriptor.label}`,
         openingLabel: `Opening ${descriptor.label}`,
         isBusy,
@@ -199,11 +220,12 @@ export const useWorkspaceTransferLauncher = ({
         onAction: () => handleOpenTarget(descriptor),
       };
     });
-    return { targets };
+    return { sceneSummary, targets };
   }, [
     handleOpenTarget,
     lastOpenedTargetId,
     loadingTargetId,
+    sceneSummary,
     targetDescriptors,
     targetStatuses,
   ]);

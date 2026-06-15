@@ -811,6 +811,8 @@ const Index = () => {
     originalUrdfContent,
     packageRoots,
     vizUrdfContent,
+    worldCameraCount: cameras.length,
+    worldObjectCount: objects.length,
   });
   const {
     effectiveRuntimePose,

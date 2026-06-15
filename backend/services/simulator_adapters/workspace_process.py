@@ -94,4 +94,6 @@ def start_prepared_workspace_process(
         simulator_asset_format=runtime_spec.transfer.workspace_asset_format(),
         bundled_mesh_count=prepared.bundle_result.copied_files,
         unresolved_mesh_refs=list(prepared.bundle_result.unresolved),
+        world_object_count=prepared.world_object_count,
+        camera_count=prepared.camera_count,
     )

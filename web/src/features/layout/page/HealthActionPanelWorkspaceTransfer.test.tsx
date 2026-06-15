@@ -18,6 +18,7 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
       root.render(
         createElement(HealthActionPanelWorkspaceTransfer, {
           className: "",
+          sceneSummary: "3 obj · 2 cam",
           targets: [
             {
               id: "genesis",
@@ -59,6 +60,7 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
     });
 
     expect(textContent(container)).toContain("Open");
+    expect(textContent(container)).toContain("3 obj · 2 cam");
     expect(textContent(container)).not.toContain("ready");
     expect(textContent(container)).not.toContain("Adapt");
     expect(textContent(container)).not.toContain("Simulation Prep");

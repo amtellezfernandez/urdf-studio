@@ -28,6 +28,8 @@ export type WorkspaceOpenResponse = {
   targetAssetFormat?: "urdf" | "mjcf" | "usd" | "native" | null;
   bundledMeshCount: number;
   unresolvedMeshRefs: string[];
+  worldObjectCount: number;
+  cameraCount: number;
 };
 
 export type WorkspaceTransferTargetStatus = {

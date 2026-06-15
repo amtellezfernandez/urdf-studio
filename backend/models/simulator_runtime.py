@@ -118,6 +118,8 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
     simulator_asset_format: SimulatorWorkspaceAssetFormat | None = None
     bundled_mesh_count: int = 0
     unresolved_mesh_refs: list[str] = Field(default_factory=list)
+    world_object_count: int = Field(default=0, ge=0)
+    camera_count: int = Field(default=0, ge=0)
 
 
 class WorkspaceChangeSetApplyRequest(BaseModel):

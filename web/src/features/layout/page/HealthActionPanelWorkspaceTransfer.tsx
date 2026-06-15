@@ -18,6 +18,7 @@ export type WorkspaceTransferTargetState = {
 };
 
 export type HealthActionPanelWorkspaceTransferState = {
+  sceneSummary?: string;
   targets: WorkspaceTransferTargetState[];
 };
 
@@ -84,15 +85,28 @@ const DisabledTargetButton = ({ target }: { target: WorkspaceTransferTargetState
   </Button>
 );
 
-const WorkspaceTransferRow = ({ children, label }: { children: ReactNode; label: string }) => (
+const WorkspaceTransferRow = ({
+  children,
+  label,
+  summary,
+}: {
+  children: ReactNode;
+  label: string;
+  summary?: string;
+}) => (
   <div className="flex items-start gap-1">
     <div
       className={cn(
-        "w-9 shrink-0 pt-1 text-[8px] font-medium uppercase tracking-wide",
+        "w-10 shrink-0 pt-0.5 text-[8px] font-medium uppercase tracking-wide",
         "text-foreground/65"
       )}
     >
-      {label}
+      <div>{label}</div>
+      {summary ? (
+        <div className="mt-0.5 whitespace-nowrap text-[8px] font-normal normal-case tracking-normal text-foreground/45">
+          {summary}
+        </div>
+      ) : null}
     </div>
     <div className="grid min-w-0 flex-1 grid-cols-4 gap-1">{children}</div>
   </div>
@@ -100,11 +114,12 @@ const WorkspaceTransferRow = ({ children, label }: { children: ReactNode; label:
 
 export const HealthActionPanelWorkspaceTransfer = ({
   className,
+  sceneSummary,
   targets,
 }: HealthActionPanelWorkspaceTransferProps) => {
   return (
     <div data-section="workspace-transfer" className={cn("space-y-1", className)}>
-      <WorkspaceTransferRow label="Open">
+      <WorkspaceTransferRow label="Open" summary={sceneSummary}>
         {targets.map((target) =>
           target.canOpen ? (
             <AvailableTargetButton key={target.id} target={target} />

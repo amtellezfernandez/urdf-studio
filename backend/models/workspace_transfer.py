@@ -149,6 +149,8 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
     )
     bundled_mesh_count: int = Field(default=0, alias="bundledMeshCount")
     unresolved_mesh_refs: list[str] = Field(default_factory=list, alias="unresolvedMeshRefs")
+    world_object_count: int = Field(default=0, ge=0, alias="worldObjectCount")
+    camera_count: int = Field(default=0, ge=0, alias="cameraCount")
 
     @classmethod
     def from_adapter_response(
@@ -167,6 +169,8 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
             targetAssetFormat=response.simulator_asset_format,
             bundledMeshCount=response.bundled_mesh_count,
             unresolvedMeshRefs=response.unresolved_mesh_refs,
+            worldObjectCount=response.world_object_count,
+            cameraCount=response.camera_count,
         )
 
 

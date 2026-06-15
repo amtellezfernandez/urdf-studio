@@ -71,6 +71,8 @@ describe("workspaceTransferApi", () => {
           targetAssetFormat: "urdf",
           bundledMeshCount: 0,
           unresolvedMeshRefs: [],
+          worldObjectCount: 1,
+          cameraCount: 2,
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
@@ -85,6 +87,8 @@ describe("workspaceTransferApi", () => {
 
     expect(prepared.pid).toBe(1234);
     expect(prepared.targetId).toBe("genesis");
+    expect(prepared.worldObjectCount).toBe(1);
+    expect(prepared.cameraCount).toBe(2);
     const requestBody = JSON.parse(
       guardedFetchMock.mock.calls[0][1].body as string
     ) as { world_package: WorldScenePackageManifest };
@@ -119,6 +123,8 @@ describe("workspaceTransferApi", () => {
           targetAssetFormat: "native",
           bundledMeshCount: 0,
           unresolvedMeshRefs: [],
+          worldObjectCount: 1,
+          cameraCount: 0,
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )

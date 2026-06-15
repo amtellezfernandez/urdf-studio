@@ -37,6 +37,8 @@ class PreparedSimulatorWorkspace:
     world_package_path: Path
     robot_urdf_path: Path
     bundle_result: BundleMeshAssetsResult
+    world_object_count: int = 0
+    camera_count: int = 0
 
 
 class SimulatorWorkspacePackageValidationError(SimulatorAdapterError):
@@ -344,6 +346,8 @@ def prepare_simulator_workspace_package(
         world_package_path=world_package_path,
         robot_urdf_path=bundled_urdf_path,
         bundle_result=bundle_result,
+        world_object_count=len(request.world_package.world_snapshot.objects),
+        camera_count=len(request.world_package.world_snapshot.cameras),
     )
 
 
