@@ -78,9 +78,9 @@ const createProps = (): TopNavBarProps => ({
   selectedIkSolverId: "ik-js",
   ikSolverOptions: [{ id: "ik-js", label: "IK JS" }],
   onSelectIkSolver: vi.fn(),
-  simulationPrepStatusLabel: "Physics Warning",
-  simulationPrepNeedsAttention: true,
-  onOpenSimulationPrep: vi.fn(),
+  workspaceLauncherStatusLabel: "Physics Warning",
+  workspaceLauncherNeedsAttention: true,
+  onOpenWorkspaceLauncher: vi.fn(),
   studioIssueReportUrl: undefined,
   onOpenDatasetReview: vi.fn(),
   leaderInputConnected: false,
@@ -201,7 +201,7 @@ describe("TopNavBar", () => {
     await act(async () => {
       simulationPrepButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(props.onOpenSimulationPrep).toHaveBeenCalledTimes(1);
+    expect(props.onOpenWorkspaceLauncher).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

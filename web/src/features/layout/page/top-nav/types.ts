@@ -92,9 +92,9 @@ export type TopNavBarProps = {
   selectedIkSolverId: string;
   ikSolverOptions: Array<{ id: string; label: string }>;
   onSelectIkSolver: (solverId: string) => void;
-  simulationPrepStatusLabel?: string;
-  simulationPrepNeedsAttention?: boolean;
-  onOpenSimulationPrep?: () => void;
+  workspaceLauncherStatusLabel?: string;
+  workspaceLauncherNeedsAttention?: boolean;
+  onOpenWorkspaceLauncher?: () => void;
   studioIssueReportUrl?: string;
   onOpenTrainingMode?: () => void;
   onOpenDatasetReview?: () => void;

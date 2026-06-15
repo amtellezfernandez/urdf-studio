@@ -161,18 +161,22 @@ export const TopNavBar = (props: TopNavBarProps) => {
             <span className="hidden sm:inline">URDF Ops</span>
           </button>
         ) : null}
-        {workspaceModeUi.showStudioChrome && props.simulationPrepStatusLabel && props.onOpenSimulationPrep ? (
+        {workspaceModeUi.showStudioChrome &&
+        props.workspaceLauncherStatusLabel &&
+        props.onOpenWorkspaceLauncher ? (
           <button
             type="button"
             className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/45 px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground sm:px-2"
-            onClick={props.onOpenSimulationPrep}
+            onClick={props.onOpenWorkspaceLauncher}
             aria-label="Open In"
-            title={`Open In: ${props.simulationPrepStatusLabel}`}
+            title={`Open In: ${props.workspaceLauncherStatusLabel}`}
           >
             <span
               aria-hidden="true"
               className={`h-1.5 w-1.5 rounded-full ${
-                props.simulationPrepNeedsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
+                props.workspaceLauncherNeedsAttention
+                  ? "bg-amber-300/90"
+                  : "bg-emerald-300/80"
               }`}
             />
             <span className="font-medium text-foreground">

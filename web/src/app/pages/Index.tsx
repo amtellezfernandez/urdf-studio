@@ -3141,9 +3141,9 @@ const Index = () => {
     selectedIkSolverId,
     ikSolverOptions,
     onSelectIkSolver: (solverId) => setSelectedIkSolverId(solverId as typeof selectedIkSolverId),
-    simulationPrepStatusLabel: simulationPrepStatus.label,
-    simulationPrepNeedsAttention: simulationPrepStatus.tone !== "safe",
-    onOpenSimulationPrep: openSimulationPrepPanel,
+    workspaceLauncherStatusLabel: simulationPrepStatus.label,
+    workspaceLauncherNeedsAttention: simulationPrepStatus.tone !== "safe",
+    onOpenWorkspaceLauncher: openSimulationPrepPanel,
     studioIssueReportUrl: studioIssueReportUrl ?? undefined,
     onOpenTrainingMode: () => {
       window.open(
