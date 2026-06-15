@@ -35,14 +35,14 @@ const getDisabledTargetIcon = () => <Minus className="h-2.5 w-2.5" />;
 
 const getAvailableTargetButtonClassName = (target: WorkspaceTransferTargetState) =>
   cn(
-    "h-6 min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
+    "h-6 w-full min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
     "border-neutral-700/70 bg-neutral-900/60 text-neutral-200 shadow-none hover:border-neutral-600 hover:bg-neutral-800/70",
     target.isActive && "border-slate-500/70 bg-slate-700/35 text-slate-100 hover:bg-slate-700/45"
   );
 
 const getDisabledTargetButtonClassName = () =>
   cn(
-    "h-6 min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
+    "h-6 w-full min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
     "border-neutral-800/80 bg-neutral-950/65 text-neutral-500 shadow-none",
     "disabled:cursor-not-allowed disabled:opacity-100"
   );
@@ -108,7 +108,9 @@ const WorkspaceTransferRow = ({
         </div>
       ) : null}
     </div>
-    <div className="grid min-w-0 flex-1 grid-cols-4 gap-1">{children}</div>
+    <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-1">
+      {children}
+    </div>
   </div>
 );
 
