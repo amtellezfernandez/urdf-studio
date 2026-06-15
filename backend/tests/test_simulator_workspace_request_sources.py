@@ -12,6 +12,10 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     build_studio_y_up_axis_workspace_request,
     build_workspace_request_from_files,
 )
+from backend.services.world_scene_package_digest import (
+    computed_world_snapshot_digest,
+    declared_world_snapshot_digests,
+)
 from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
 
@@ -205,7 +209,7 @@ def test_workspace_request_from_files_keeps_robot_directory_when_extra_asset_roo
     ]
 
 
-def test_workspace_request_from_files_rejects_stale_world_snapshot_artifact_digest(
+def test_workspace_request_from_files_repairs_stale_world_snapshot_artifact_digest(
     tmp_path,
 ) -> None:
     asset_root = tmp_path / "scene"
@@ -224,12 +228,15 @@ def test_workspace_request_from_files_rejects_stale_world_snapshot_artifact_dige
     world_package_path = tmp_path / "world-package.json"
     write_world_package_file(world_package_path, world_package)
 
-    with pytest.raises(ValueError, match="artifacts\\[world_snapshot:0\\]"):
-        build_workspace_request_from_files(
-            world_package_path=world_package_path,
-            robot_urdf_path=robot_urdf_path,
-            asset_roots=(asset_root,),
-        )
+    request = build_workspace_request_from_files(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        asset_roots=(asset_root,),
+    )
+
+    assert declared_world_snapshot_digests(request.world_package) == (
+        computed_world_snapshot_digest(request.world_package),
+    )
 
 
 def test_workspace_request_from_files_rejects_conflicting_asset_roots(tmp_path) -> None:
