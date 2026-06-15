@@ -30,8 +30,7 @@ from backend.services.simulator_adapters.robot_repairs import (
 )
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_scene_package_digest import (
-    normalize_world_snapshot_artifact_digests,
-    require_world_snapshot_artifact_digests,
+    normalize_and_require_world_snapshot_artifact_digests,
 )
 
 WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
@@ -281,8 +280,7 @@ def build_workspace_request_from_files(
     asset_roots: Sequence[Path] = (),
 ) -> SimulatorWorkspacePrepareRequest:
     world_package = WorldScenePackageManifest.model_validate(_load_json(world_package_path))
-    world_package = normalize_world_snapshot_artifact_digests(world_package)
-    require_world_snapshot_artifact_digests(
+    world_package = normalize_and_require_world_snapshot_artifact_digests(
         world_package,
         context=f"World package artifact digest invalid in {world_package_path}",
     )

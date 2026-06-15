@@ -153,6 +153,16 @@ def require_world_snapshot_artifact_digests(
         raise ValueError(f"{context}: {'; '.join(errors)}")
 
 
+def normalize_and_require_world_snapshot_artifact_digests(
+    manifest: WorldScenePackageManifest,
+    *,
+    context: str,
+) -> WorldScenePackageManifest:
+    normalized = normalize_world_snapshot_artifact_digests(manifest)
+    require_world_snapshot_artifact_digests(normalized, context=context)
+    return normalized
+
+
 def normalize_world_snapshot_artifact_digests(
     manifest: WorldScenePackageManifest,
 ) -> WorldScenePackageManifest:

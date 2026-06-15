@@ -26,7 +26,7 @@ from backend.services.ilu_urdf import (
     bundle_mesh_assets_for_urdf_file,
 )
 from backend.services.world_scene_package_digest import (
-    normalize_world_snapshot_artifact_digests,
+    normalize_and_require_world_snapshot_artifact_digests,
     validate_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
 )
@@ -104,7 +104,10 @@ def validate_simulator_workspace_package_request(
 def normalize_simulator_workspace_package_request(
     request: SimulatorWorkspacePrepareRequest,
 ) -> SimulatorWorkspacePrepareRequest:
-    normalized_world_package = normalize_world_snapshot_artifact_digests(request.world_package)
+    normalized_world_package = normalize_and_require_world_snapshot_artifact_digests(
+        request.world_package,
+        context="Simulator workspace world package invalid",
+    )
     normalized_request = request
     if normalized_world_package is not request.world_package:
         normalized_request = request.model_copy(

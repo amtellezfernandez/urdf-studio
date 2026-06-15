@@ -14,6 +14,7 @@ from backend.services.world_scene_package_digest import (
     canonical_world_snapshot_json,
     computed_world_snapshot_digest,
     declared_world_snapshot_digests,
+    normalize_and_require_world_snapshot_artifact_digests,
     normalize_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
 )
@@ -114,6 +115,49 @@ def test_normalize_world_snapshot_artifact_digests_repairs_stale_refs() -> None:
         computed_world_snapshot_digest(normalized),
     )
     assert len(normalized.artifacts) == 1
+
+
+def test_normalize_and_require_world_snapshot_artifact_digests_repairs_and_validates() -> None:
+    manifest = WorldScenePackageManifest(
+        schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
+        package_id="demo-world",
+        version="1.0.0",
+        title="Demo World",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        runtime_targets=[],
+        interface=WorldInterfaceSpec(
+            observation_modalities=["proprio"],
+            action_semantics="joint_position",
+            timestep_ms=10,
+            frame_convention="ros-rep-103",
+        ),
+        artifacts=[
+            WorldArtifactRef(
+                kind="world_snapshot",
+                digest_sha256="0" * 64,
+                uri="inline://snapshot",
+            )
+        ],
+        world_snapshot=WorldSnapshot(
+            urdf_xml="<robot name='demo'/>",
+            joint_positions={},
+            cameras=[],
+            objects=[],
+            scenario_time_ms=0,
+            scenario_duration_ms=0,
+        ),
+        provenance={},
+        security={"attestation_refs": []},
+    )
+
+    normalized = normalize_and_require_world_snapshot_artifact_digests(
+        manifest,
+        context="world package artifact digest invalid",
+    )
+
+    assert declared_world_snapshot_digests(normalized) == (
+        computed_world_snapshot_digest(normalized),
+    )
 
 
 def test_world_scene_package_json_payload_omits_schema_invalid_null_optionals() -> None:
