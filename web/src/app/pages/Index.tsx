@@ -791,6 +791,7 @@ const Index = () => {
     hasExplicitWorldLayoutImport,
     hasLoadedFiles,
     jointValues,
+    getObjectsForTransfer: () => useObjectStore.getState().objects,
     objects,
     originalUrdfContent,
     resolvedRobotName,

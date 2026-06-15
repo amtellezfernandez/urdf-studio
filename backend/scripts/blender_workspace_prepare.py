@@ -260,10 +260,12 @@ def _open_blender_saved_workspace(
 
 def _blender_process_env(*, background: bool) -> dict[str, str]:
     env = os.environ.copy()
-    if background or not _is_wsl_environment():
+    if not _is_wsl_environment():
         return env
     env["GDK_BACKEND"] = "x11"
     env["QT_QPA_PLATFORM"] = "xcb"
+    env["SDL_VIDEODRIVER"] = "x11"
+    env["XDG_SESSION_TYPE"] = "x11"
     env.pop("WAYLAND_DISPLAY", None)
     return env
 

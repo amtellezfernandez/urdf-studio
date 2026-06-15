@@ -1846,7 +1846,7 @@ def test_blender_workspace_runner_uses_background_flag_for_headless_load(
     ]
 
 
-def test_blender_workspace_runner_prefers_x11_on_wsl_gui(
+def test_blender_workspace_runner_prefers_x11_on_wsl_processes(
     monkeypatch, tmp_path: Path
 ) -> None:
     captured: list[dict[str, object]] = []
@@ -1879,10 +1879,14 @@ def test_blender_workspace_runner_prefers_x11_on_wsl_gui(
         cwd=tmp_path,
     )
 
-    env = captured[1]["kwargs"]["env"]
-    assert env["GDK_BACKEND"] == "x11"
-    assert env["QT_QPA_PLATFORM"] == "xcb"
-    assert "WAYLAND_DISPLAY" not in env
+    background_env = captured[0]["kwargs"]["env"]
+    gui_env = captured[1]["kwargs"]["env"]
+    for env in (background_env, gui_env):
+        assert env["GDK_BACKEND"] == "x11"
+        assert env["QT_QPA_PLATFORM"] == "xcb"
+        assert env["SDL_VIDEODRIVER"] == "x11"
+        assert env["XDG_SESSION_TYPE"] == "x11"
+        assert "WAYLAND_DISPLAY" not in env
 
 
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:

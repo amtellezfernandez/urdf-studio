@@ -214,4 +214,142 @@ describe("useWorldSceneManager", () => {
       root.unmount();
     });
   });
+
+  it("adds the default transfer layout when an explicit scene is empty", async () => {
+    const fixture = {
+      urdf: '<robot name="demo"><link name="base"/></robot>',
+    };
+    let manager: ReturnType<typeof useWorldSceneManager> | null = null;
+
+    const Harness = () => {
+      const skipDefaultWorldLayoutAutoImportRef = useRef(true);
+      const [objects, setObjects] = useState<CreatedObject[]>([]);
+      const [cameras, setCameras] = useState<Camera[]>([]);
+      const [jointValues, setJointValues] = useState<Record<string, number>>({});
+      const nextGeneratedIdRef = useRef(0);
+
+      manager = useWorldSceneManager({
+        addCamera: (camera) => {
+          setCameras((previous) => [
+            ...previous,
+            { ...camera, id: `camera-${previous.length}` },
+          ]);
+        },
+        addObject: (object) => {
+          const fallbackId = `object-${nextGeneratedIdRef.current++}`;
+          setObjects((previous) => [...previous, toCreatedObject(object, fallbackId)]);
+        },
+        cameras,
+        clearCameras: () => setCameras([]),
+        clearObjects: () => setObjects([]),
+        hasExplicitWorldImport: true,
+        hasExplicitWorldLayoutImport: false,
+        hasLoadedFiles: true,
+        jointValues,
+        objects,
+        originalUrdfContent: fixture.urdf,
+        resolvedRobotName: "demo",
+        skipDefaultWorldLayoutAutoImportRef,
+        setJointValues,
+        updateUrdfFile: vi.fn(),
+        vizUrdfContent: fixture.urdf,
+        worldImportParams: EMPTY_WORLD_IMPORT_PARAMS,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    let objectSources: string[] = [];
+    await act(async () => {
+      await manager?.ensureWorldLayoutForTransfer();
+      const manifest = await manager?.buildCurrentWorldScenePackageManifest();
+      objectSources = manifest?.world_snapshot.objects.map((object) => object.source) ?? [];
+    });
+
+    expect(objectSources).toEqual(["demo-world"]);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("builds transfer packages from the live object source when provided", async () => {
+    const fixture = {
+      urdf: '<robot name="demo"><link name="base"/></robot>',
+    };
+    const liveObject: CreatedObject = {
+      id: "live-crate",
+      type: "cube",
+      position: new Vector3(0.3, 0.2, 0.1),
+      rotation: normalizeWorldObjectRotationEuler(null),
+      size: new Vector3(0.2, 0.2, 0.2),
+      color: "#22c55e",
+      source: "user",
+      trackedJointName: null,
+      isIkTarget: true,
+      ikTargetType: "punctual",
+    };
+    let manager: ReturnType<typeof useWorldSceneManager> | null = null;
+
+    const Harness = () => {
+      const skipDefaultWorldLayoutAutoImportRef = useRef(true);
+      const [objects, setObjects] = useState<CreatedObject[]>([]);
+      const [cameras, setCameras] = useState<Camera[]>([]);
+      const [jointValues, setJointValues] = useState<Record<string, number>>({});
+
+      manager = useWorldSceneManager({
+        addCamera: (camera) => {
+          setCameras((previous) => [
+            ...previous,
+            { ...camera, id: `camera-${previous.length}` },
+          ]);
+        },
+        addObject: (object) => {
+          setObjects((previous) => [...previous, toCreatedObject(object, "object-0")]);
+        },
+        cameras,
+        clearCameras: () => setCameras([]),
+        clearObjects: () => setObjects([]),
+        getObjectsForTransfer: () => [liveObject],
+        hasExplicitWorldImport: false,
+        hasExplicitWorldLayoutImport: false,
+        hasLoadedFiles: true,
+        jointValues,
+        objects,
+        originalUrdfContent: fixture.urdf,
+        resolvedRobotName: "demo",
+        skipDefaultWorldLayoutAutoImportRef,
+        setJointValues,
+        updateUrdfFile: vi.fn(),
+        vizUrdfContent: fixture.urdf,
+        worldImportParams: EMPTY_WORLD_IMPORT_PARAMS,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    let objectIds: string[] = [];
+    await act(async () => {
+      const manifest = await manager?.buildCurrentWorldScenePackageManifest();
+      objectIds = manifest?.world_snapshot.objects.map((object) => object.id) ?? [];
+    });
+
+    expect(objectIds).toEqual(["live-crate"]);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

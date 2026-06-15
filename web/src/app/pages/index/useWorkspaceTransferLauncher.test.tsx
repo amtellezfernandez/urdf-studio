@@ -211,4 +211,50 @@ describe("useWorkspaceTransferLauncher", () => {
       root.unmount();
     });
   });
+
+  it("blocks a robot-only transfer package when the Studio scene has objects", async () => {
+    const ensureWorldLayoutForTransfer = vi.fn(async () => undefined);
+    const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
+    let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
+
+    const Harness = () => {
+      hookValue = useWorkspaceTransferLauncher({
+        activeUrdfPath: "robot.urdf",
+        attachedIluSessionId: "",
+        buildCurrentWorldScenePackageManifest,
+        ensureWorldLayoutForTransfer,
+        meshFiles: {},
+        originalUrdfContent: "<robot name=\"demo\"/>",
+        packageRoots: {},
+        vizUrdfContent: "<robot name=\"demo\"/>",
+        worldCameraCount: 0,
+        worldObjectCount: 2,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await (hookValue?.workspaceTransfer.targets[0]?.onAction() as unknown as Promise<void>);
+      await Promise.resolve();
+    });
+
+    expect(ensureWorldLayoutForTransfer).toHaveBeenCalledOnce();
+    expect(buildCurrentWorldScenePackageManifest).toHaveBeenCalledOnce();
+    expect(openWorkspaceTransferTargetMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Workspace transfer blocked: Studio has world objects, but the generated scene package is empty."
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

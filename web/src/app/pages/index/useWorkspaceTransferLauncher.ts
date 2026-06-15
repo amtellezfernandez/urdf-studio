@@ -44,6 +44,16 @@ const formatWorkspaceAssetFormat = (format: string): string =>
 const formatSceneTransferSummary = (objectCount: number, cameraCount: number): string =>
   `${objectCount} obj · ${cameraCount} cam`;
 
+const assertWorkspacePackageCarriesSceneObjects = (
+  worldPackage: WorldScenePackageManifest,
+  studioWorldObjectCount: number
+): void => {
+  if (studioWorldObjectCount <= 0 || worldPackage.world_snapshot.objects.length > 0) return;
+  throw new Error(
+    "Workspace transfer blocked: Studio has world objects, but the generated scene package is empty."
+  );
+};
+
 const resolveWorkspaceTransferTargetDetail = (
   descriptor: WorkspaceTransferTargetDescriptor,
   sceneSummary: string,
@@ -159,6 +169,7 @@ export const useWorkspaceTransferLauncher = ({
       try {
         await ensureWorldLayoutForTransfer?.();
         const worldPackage = await buildCurrentWorldScenePackageManifest();
+        assertWorkspacePackageCarriesSceneObjects(worldPackage, worldObjectCount);
         const prepared = await openWorkspaceTransferTarget({
           targetId: descriptor.targetId,
           worldPackage,
@@ -199,6 +210,7 @@ export const useWorkspaceTransferLauncher = ({
       packageRoots,
       targetStatuses,
       vizUrdfContent,
+      worldObjectCount,
     ]
   );
 

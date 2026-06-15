@@ -77,6 +77,7 @@ type UseWorldSceneManagerParams = {
   hasExplicitWorldLayoutImport: boolean;
   hasLoadedFiles: boolean;
   jointValues: Record<string, number>;
+  getObjectsForTransfer?: () => CreatedObject[];
   objects: CreatedObject[];
   originalUrdfContent: string;
   resolvedRobotName: string | null;
@@ -144,6 +145,7 @@ export const useWorldSceneManager = ({
   hasExplicitWorldLayoutImport,
   hasLoadedFiles,
   jointValues,
+  getObjectsForTransfer,
   objects,
   originalUrdfContent,
   resolvedRobotName,
@@ -187,18 +189,27 @@ export const useWorldSceneManager = ({
         Pick<WorldScenePackageManifest, "package_id" | "title" | "version" | "description">
       >
     ) => {
+      const transferObjects = getObjectsForTransfer?.() ?? objectsRef.current;
+      objectsRef.current = transferObjects;
       return buildWorldScenePackageManifestFromState({
         resolvedRobotName,
         vizUrdfContent,
         originalUrdfContent,
         jointValues,
         cameras,
-        objects: objectsRef.current,
+        objects: transferObjects,
         demoMode: DEMO_MODE,
         overrides,
       });
     },
-    [resolvedRobotName, vizUrdfContent, originalUrdfContent, jointValues, cameras]
+    [
+      cameras,
+      getObjectsForTransfer,
+      jointValues,
+      originalUrdfContent,
+      resolvedRobotName,
+      vizUrdfContent,
+    ]
   );
 
   const handleValidateCurrentWorldScenePackage = useCallback(async () => {
@@ -689,11 +700,16 @@ export const useWorldSceneManager = ({
   );
 
   const ensureWorldLayoutForTransfer = useCallback(async () => {
-    if (hasExplicitWorldImport || hasExplicitWorldLayoutImport) return;
     if (
       objectsRef.current.some(
         (object) => object.source === WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE
       )
+    ) {
+      return;
+    }
+    if (
+      (hasExplicitWorldImport || hasExplicitWorldLayoutImport) &&
+      objectsRef.current.length > 0
     ) {
       return;
     }
