@@ -1601,6 +1601,9 @@ class _FakeBlenderProcess:
         self.returncode = returncode
         self.terminated = False
 
+    def poll(self) -> int | None:
+        return None
+
     def wait(self) -> int:
         return self.returncode
 
@@ -1611,45 +1614,132 @@ class _FakeBlenderProcess:
 def test_blender_workspace_runner_reports_ready_after_edit_session_load(
     monkeypatch, capsys, tmp_path: Path
 ) -> None:
-    captured: dict[str, object] = {}
+    captured_commands: list[list[str]] = []
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
 
     def fake_popen(command, **kwargs):
-        captured["command"] = command
-        captured["kwargs"] = kwargs
+        captured_commands.append(command)
+        if len(captured_commands) == 1:
+            return _FakeBlenderProcess(
+                [
+                    "Blender booting\n",
+                    f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+                    "[urdf-studio-blender] blend written: /tmp/layout.blend\n",
+                ]
+            )
         return _FakeBlenderProcess(
             [
-                "Blender booting\n",
-                f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
-                "[urdf-studio-blender] blend written: /tmp/layout.blend\n",
+                "Blender GUI running\n",
             ]
         )
 
     monkeypatch.setattr(blender_prepare.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(blender_prepare.time, "sleep", lambda _seconds: None)
 
     blender_prepare._run_blender_workspace_until_ready(
         blender_executable="/usr/bin/blender",
         open_script_path=tmp_path / "open_blender_scene.py",
+        blend_path=blend_path,
         cwd=tmp_path,
     )
 
     output = capsys.readouterr().out
-    assert captured["command"] == [
-        "/usr/bin/blender",
-        "--window-geometry",
-        "80",
-        "80",
-        "1440",
-        "900",
-        "--python-exit-code",
-        "1",
-        "--python",
-        str(tmp_path / "open_blender_scene.py"),
+    assert captured_commands == [
+        [
+            "/usr/bin/blender",
+            "--background",
+            "--python-exit-code",
+            "1",
+            "--python",
+            str(tmp_path / "open_blender_scene.py"),
+        ],
+        [
+            "/usr/bin/blender",
+            "--window-geometry",
+            "80",
+            "80",
+            "1440",
+            "900",
+            str(blend_path),
+        ],
     ]
     assert blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER in output
     assert BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker in output
     assert output.index(blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER) < output.index(
         BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker
     )
+
+
+def test_blender_workspace_runner_requires_saved_blend_for_interactive_launch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        blender_prepare.subprocess,
+        "Popen",
+        lambda _command, **_kwargs: _FakeBlenderProcess(
+            [
+                f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+            ]
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="workspace \\.blend was not created"):
+        blender_prepare._run_blender_workspace_until_ready(
+            blender_executable="/usr/bin/blender",
+            open_script_path=tmp_path / "open_blender_scene.py",
+            blend_path=tmp_path / "missing.blend",
+            cwd=tmp_path,
+        )
+
+
+def test_blender_workspace_runner_rejects_interactive_launch_without_blend_path(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(RuntimeError, match="requires a saved \\.blend path"):
+        blender_prepare._run_blender_workspace_until_ready(
+            blender_executable="/usr/bin/blender",
+            open_script_path=tmp_path / "open_blender_scene.py",
+            cwd=tmp_path,
+        )
+
+
+def test_blender_workspace_runner_builds_with_background_before_gui(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured_commands: list[list[str]] = []
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
+
+    def fake_popen(command, **kwargs):
+        captured_commands.append(command)
+        if len(captured_commands) == 1:
+            return _FakeBlenderProcess(
+                [
+                    f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+                ]
+            )
+        return _FakeBlenderProcess(["Blender GUI running\n"])
+
+    monkeypatch.setattr(blender_prepare.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(blender_prepare.time, "sleep", lambda _seconds: None)
+
+    blender_prepare._run_blender_workspace_until_ready(
+        blender_executable="/usr/bin/blender",
+        open_script_path=tmp_path / "open_blender_scene.py",
+        blend_path=blend_path,
+        cwd=tmp_path,
+    )
+
+    assert captured_commands[0] == [
+        "/usr/bin/blender",
+        "--background",
+        "--python-exit-code",
+        "1",
+        "--python",
+        str(tmp_path / "open_blender_scene.py"),
+    ]
+    assert captured_commands[1][-1] == str(blend_path)
 
 
 def test_blender_workspace_runner_rejects_exit_before_edit_session_load(
@@ -1707,28 +1797,37 @@ def test_blender_workspace_runner_uses_background_flag_for_headless_load(
 def test_blender_workspace_runner_prefers_x11_on_wsl_gui(
     monkeypatch, tmp_path: Path
 ) -> None:
-    captured: dict[str, object] = {}
+    captured: list[dict[str, object]] = []
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
 
     def fake_popen(command, **kwargs):
-        captured["command"] = command
-        captured["kwargs"] = kwargs
+        captured.append({"command": command, "kwargs": kwargs})
+        if len(captured) == 1:
+            return _FakeBlenderProcess(
+                [
+                    f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+                ]
+            )
         return _FakeBlenderProcess(
             [
-                f"{blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER} /tmp/session.json\n",
+                "Blender GUI running\n",
             ]
         )
 
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     monkeypatch.setattr(blender_prepare, "_is_wsl_environment", lambda: True)
     monkeypatch.setattr(blender_prepare.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(blender_prepare.time, "sleep", lambda _seconds: None)
 
     blender_prepare._run_blender_workspace_until_ready(
         blender_executable="/usr/bin/blender",
         open_script_path=tmp_path / "open_blender_scene.py",
+        blend_path=blend_path,
         cwd=tmp_path,
     )
 
-    env = captured["kwargs"]["env"]
+    env = captured[1]["kwargs"]["env"]
     assert env["GDK_BACKEND"] == "x11"
     assert env["QT_QPA_PLATFORM"] == "xcb"
     assert "WAYLAND_DISPLAY" not in env

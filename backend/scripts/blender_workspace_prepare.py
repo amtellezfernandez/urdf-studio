@@ -127,6 +127,7 @@ def prepare_blender_workspace_scene(
     _run_blender_workspace_until_ready(
         blender_executable=blender_executable,
         open_script_path=artifacts.open_script_path,
+        blend_path=blend_path,
         cwd=world_package_path.parent,
         background=no_viewer,
     )
@@ -136,28 +137,53 @@ def _run_blender_workspace_until_ready(
     *,
     blender_executable: str,
     open_script_path: Path,
+    blend_path: Path | None = None,
     cwd: Path,
     background: bool = False,
 ) -> None:
     open_script_path = open_script_path.expanduser().resolve()
+    blend_path = blend_path.expanduser().resolve() if blend_path is not None else None
     cwd = cwd.expanduser().resolve()
-    command = [blender_executable]
     if background:
-        command.append("--background")
-    else:
-        command.extend(["--window-geometry", "80", "80", "1440", "900"])
-    command.extend(
-        [
-            "--python-exit-code",
-            "1",
-            "--python",
-            str(open_script_path),
-        ]
+        _build_blender_workspace_file(
+            blender_executable=blender_executable,
+            open_script_path=open_script_path,
+            cwd=cwd,
+        )
+        print(BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
+        return
+    if blend_path is None:
+        raise RuntimeError("Interactive Blender workspace launch requires a saved .blend path.")
+    _build_blender_workspace_file(
+        blender_executable=blender_executable,
+        open_script_path=open_script_path,
+        cwd=cwd,
     )
+    _open_blender_saved_workspace(
+        blender_executable=blender_executable,
+        blend_path=blend_path,
+        cwd=cwd,
+    )
+
+
+def _build_blender_workspace_file(
+    *,
+    blender_executable: str,
+    open_script_path: Path,
+    cwd: Path,
+) -> None:
+    command = [
+        blender_executable,
+        "--background",
+        "--python-exit-code",
+        "1",
+        "--python",
+        str(open_script_path),
+    ]
     process = subprocess.Popen(
         command,
         cwd=cwd,
-        env=_blender_process_env(background=background),
+        env=_blender_process_env(background=True),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -172,7 +198,6 @@ def _run_blender_workspace_until_ready(
             sys.stdout.flush()
             if not ready and BLENDER_EDIT_SESSION_LOADED_MARKER in line:
                 ready = True
-                print(BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
         returncode = process.wait()
     except KeyboardInterrupt:
         process.terminate()
@@ -181,6 +206,54 @@ def _run_blender_workspace_until_ready(
         raise RuntimeError(
             f"Blender exited before loading the URDF Studio edit session with code {returncode}."
         )
+    if returncode != 0:
+        raise RuntimeError(f"Blender workspace process exited with code {returncode}.")
+
+
+def _open_blender_saved_workspace(
+    *,
+    blender_executable: str,
+    blend_path: Path,
+    cwd: Path,
+    startup_grace_sec: float = BLENDER_WORKSPACE_PROCESS_PARAMS.post_ready_grace_sec,
+) -> None:
+    if not blend_path.is_file():
+        raise RuntimeError(f"Blender workspace .blend was not created: {blend_path}")
+    command = [
+        blender_executable,
+        "--window-geometry",
+        "80",
+        "80",
+        "1440",
+        "900",
+        str(blend_path),
+    ]
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=_blender_process_env(background=False),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",
+        bufsize=1,
+    )
+    try:
+        time.sleep(startup_grace_sec)
+        returncode = process.poll()
+        if returncode is not None:
+            raise RuntimeError(
+                f"Blender exited before opening the saved workspace with code {returncode}."
+            )
+        print(BLENDER_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
+        assert process.stdout is not None
+        for line in process.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+        returncode = process.wait()
+    except KeyboardInterrupt:
+        process.terminate()
+        raise
     if returncode != 0:
         raise RuntimeError(f"Blender workspace process exited with code {returncode}.")
 
