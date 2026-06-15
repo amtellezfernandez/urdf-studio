@@ -2099,7 +2099,7 @@ export const HealthActionPanel = ({
           isDragging={isDragging}
           onClose={onClose}
           onDragStart={handlePanelDragStart}
-          panelLabel="Open In"
+          panelLabel="workspace launcher"
           statusIcon={StatusIcon}
           title="Open In"
         />

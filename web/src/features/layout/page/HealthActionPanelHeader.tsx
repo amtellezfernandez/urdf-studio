@@ -15,7 +15,7 @@ export const HealthActionPanelHeader = ({
   isDragging,
   onClose,
   onDragStart,
-  panelLabel = "Open In",
+  panelLabel = "workspace launcher",
   statusIcon: StatusIcon,
   title,
 }: HealthActionPanelHeaderProps) => (
