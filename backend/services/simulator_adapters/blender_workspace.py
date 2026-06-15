@@ -20,7 +20,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
     BLENDER_SUPPORTED_LAYOUT_CHANGES,
 )
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
-from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
+from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
 
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
@@ -415,6 +415,14 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 quat = entry.get("quat_wxyz", [1.0, 0.0, 0.0, 0.0])
                 size = vector3(entry, "size_xyz", [1.0, 1.0, 1.0])
                 rgba = entry.get("rgba", [0.8, 0.8, 0.8, 1.0])
+                if entry.get("source_type") == "mesh":
+                    imported = add_mesh_asset_object(entry, position, quat, size, rgba)
+                    if imported is None:
+                        raise RuntimeError(
+                            "Blender mesh object failed to import: "
+                            f"{{entry.get('stable_id', '')}} {{entry.get('asset_ref') or entry.get('asset_path') or ''}}"
+                        )
+                    return imported
                 if entry.get("asset_path"):
                     imported = add_mesh_asset_object(entry, position, quat, size, rgba)
                     if imported is not None:
@@ -916,7 +924,11 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
 
 
 def _blender_object_entry(primitive: Any, asset_roots: Sequence[Path]) -> dict[str, Any]:
-    asset_path = resolve_world_layout_asset_path(primitive.asset_ref, asset_roots)
+    asset_path = resolve_declared_mesh_asset_path(
+        primitive,
+        asset_roots,
+        simulator_label="Blender",
+    )
     return {
         "kind": "world_object",
         "stable_id": primitive.source_id,

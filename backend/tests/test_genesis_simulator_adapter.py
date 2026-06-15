@@ -467,6 +467,25 @@ def test_genesis_adds_mesh_object_when_asset_resolves(tmp_path: Path) -> None:
     assert scene.entity_kwargs["morph"].kwargs["scale"] == (1.0, 1.2, 1.4)
 
 
+def test_genesis_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
+    primitive = SimPrimitive(
+        source_id="crate",
+        source_name="Crate",
+        sim_name="wl_crate",
+        source_type="mesh",
+        sim_type="box",
+        position_xyz=(0.0, 0.0, 0.1),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.2, 0.3, 0.4),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+        asset_ref="assets/missing.obj",
+    )
+
+    with pytest.raises(ValueError, match="Genesis mesh object 'crate' asset_ref does not resolve"):
+        add_mesh_entity_if_available(object(), object(), primitive, (tmp_path,))
+
+
 def test_prepare_genesis_workspace_adds_synthetic_visual_material_colors(
     monkeypatch,
     tmp_path: Path,

@@ -318,6 +318,58 @@ def test_mesh_object_preserves_asset_metadata_and_uses_proxy_for_primitive_adapt
     assert geom.get("mesh") == "wl_crate_mesh"
 
 
+def test_mesh_object_requires_asset_ref_for_simulator_transfer() -> None:
+    payload = {
+        "world_layout": {
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "mesh",
+                    "position_xyz": [0.0, 0.0, 0.1],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.3, 0.4],
+                    "color": "#22c55e",
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+
+    with pytest.raises(ValueError, match="Mesh object requires asset_ref"):
+        build_sim_primitives(layout)
+
+
+def test_mujoco_mesh_object_requires_resolvable_asset(tmp_path: Path) -> None:
+    payload = {
+        "world_layout": {
+            "objects": [
+                {
+                    "id": "crate",
+                    "name": "Crate",
+                    "type": "mesh",
+                    "position_xyz": [0.0, 0.0, 0.1],
+                    "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                    "size_xyz": [0.2, 0.3, 0.4],
+                    "color": "#22c55e",
+                    "asset_ref": "assets/missing.obj",
+                }
+            ],
+            "scenario_time_ms": 0,
+            "scenario_duration_ms": 0,
+        },
+    }
+
+    layout = parse_static_world_layout_payload(payload)
+    primitives, _warnings = build_sim_primitives(layout)
+
+    with pytest.raises(ValueError, match="MuJoCo mesh object 'crate' asset_ref does not resolve"):
+        export_primitives_to_mujoco_mjcf(primitives, asset_roots=(tmp_path,))
+
+
 def test_mesh_asset_refs_are_normalized_to_portable_package_paths(tmp_path) -> None:
     mesh_path = tmp_path / "assets" / "crate.obj"
     mesh_path.parent.mkdir()

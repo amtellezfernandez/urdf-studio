@@ -622,7 +622,9 @@ def build_sim_primitives(
         if obj.primitive_type == "mesh":
             sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
             if obj.asset_ref is None:
-                warnings.append(f"Mesh object has no asset_ref; using primitive proxy: {obj.id}")
+                raise WorldLayoutTransferError(
+                    f"Mesh object requires asset_ref for simulator transfer: {obj.id}"
+                )
             else:
                 warnings.append(f"Mesh object keeps asset_ref for mesh-capable adapters: {obj.id}")
             primitives.append(

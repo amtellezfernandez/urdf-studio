@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+import pytest
 from scipy.spatial.transform import Rotation
 
 from backend.models.simulator_runtime import SimulatorMeshAssetUpload, SimulatorWorkspacePrepareRequest
@@ -99,6 +100,25 @@ def test_pybullet_primitive_shape_uses_mesh_asset_when_available(tmp_path: Path)
         "meshScale": (1.0, 1.2, 1.4),
     }
     assert visual_kwargs == collision_kwargs
+
+
+def test_pybullet_primitive_shape_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
+    primitive = SimPrimitive(
+        source_id="crate",
+        source_name="Crate",
+        sim_name="wl_crate",
+        source_type="mesh",
+        sim_type="box",
+        position_xyz=(0.0, 0.0, 0.0),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.2, 0.3, 0.4),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+        asset_ref="assets/missing.obj",
+    )
+
+    with pytest.raises(ValueError, match="PyBullet mesh object 'crate' asset_ref does not resolve"):
+        _primitive_shape(_FakePybullet, primitive, asset_roots=(tmp_path,))
 
 
 def test_pybullet_primitive_uses_canonical_dynamic_material_fields() -> None:

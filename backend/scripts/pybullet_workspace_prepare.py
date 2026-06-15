@@ -24,8 +24,9 @@ from backend.services.simulator_adapters.world_scene import (
     prepare_simulator_scene,
     write_simulator_validation_report,
 )
-from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
+from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
 from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutFrameMap
+from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 
 def _parse_args() -> argparse.Namespace:
@@ -71,8 +72,14 @@ def _primitive_shape(
     *,
     asset_roots: Sequence[Path] = (),
 ) -> tuple[int, dict[str, Any], dict[str, Any]]:
-    asset_path = resolve_world_layout_asset_path(primitive.asset_ref, asset_roots)
-    if asset_path is not None and hasattr(pybullet, "GEOM_MESH"):
+    asset_path = resolve_declared_mesh_asset_path(
+        primitive,
+        asset_roots,
+        simulator_label="PyBullet",
+    )
+    if asset_path is not None:
+        if not hasattr(pybullet, "GEOM_MESH"):
+            raise WorldLayoutTransferError("PyBullet mesh asset transfer requires GEOM_MESH support.")
         shape_kwargs = {
             "fileName": str(asset_path),
             "meshScale": primitive.asset_scale_xyz or (1.0, 1.0, 1.0),

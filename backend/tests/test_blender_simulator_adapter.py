@@ -1501,6 +1501,100 @@ def test_generated_blender_scripts_import_mesh_world_objects(monkeypatch, tmp_pa
     assert change_set["review_only"] == []
 
 
+def test_blender_workspace_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
+    urdf_xml = "<robot name=\"mesh_world\"><link name=\"base_link\"/></robot>"
+    world_package = make_world_package(
+        urdf_xml,
+        objects=[
+            {
+                "id": "crate",
+                "name": "Crate Mesh",
+                "type": "mesh",
+                "position_xyz": [0.1, 0.2, 0.3],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.4, 0.5, 0.6],
+                "color": "#22c55e",
+                "asset_ref": "assets/missing.obj",
+            }
+        ],
+    )
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    write_world_package_file(world_package_path, world_package)
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+
+    with pytest.raises(ValueError, match="Blender mesh object 'crate' asset_ref does not resolve"):
+        write_blender_workspace_artifacts(
+            scene,
+            artifact_dir=tmp_path / "artifacts",
+            robot_urdf_path=robot_urdf_path,
+            blend_path=tmp_path / "layout.blend",
+        )
+
+
+def test_generated_blender_script_rejects_mesh_import_fallback(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    urdf_xml = "<robot name=\"mesh_world\"><link name=\"base_link\"/></robot>"
+    mesh_path = tmp_path / "assets" / "crate.obj"
+    mesh_path.parent.mkdir(parents=True)
+    mesh_path.write_text("o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", encoding="utf-8")
+    world_package = make_world_package(
+        urdf_xml,
+        objects=[
+            {
+                "id": "crate",
+                "name": "Crate Mesh",
+                "type": "mesh",
+                "position_xyz": [0.1, 0.2, 0.3],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.4, 0.5, 0.6],
+                "color": "#22c55e",
+                "asset_ref": "assets/crate.obj",
+            }
+        ],
+    )
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    write_world_package_file(world_package_path, world_package)
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+    edit_session["objects"][0]["asset_path"] = str(tmp_path / "assets" / "deleted.obj")
+    artifacts.edit_session_path.write_text(
+        f"{json.dumps(edit_session, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+
+    fake_bpy = FakeBlenderModule()
+    monkeypatch.setitem(sys.modules, "bpy", fake_bpy)
+
+    with pytest.raises(RuntimeError, match="Blender mesh object failed to import"):
+        runpy.run_path(str(artifacts.open_script_path), run_name="__main__")
+
+    assert not [
+        obj for obj in fake_bpy.data.objects if obj.get("urdf_studio_kind") == "world_object"
+    ]
+
+
 class _FakeBlenderProcess:
     def __init__(self, lines: list[str], returncode: int = 0):
         self.stdout = iter(lines)

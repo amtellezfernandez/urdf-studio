@@ -8,8 +8,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
-from backend.services.world_layout_static_transfer import resolve_world_layout_asset_path
+from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
 from backend.services.world_layout_transfer_types import SimPrimitive
+from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
 
 def primitive_bounds(primitive: SimPrimitive) -> tuple[np.ndarray, np.ndarray]:
@@ -88,15 +89,12 @@ def add_mesh_entity_if_available(
     primitive: SimPrimitive,
     asset_roots: Sequence[Path],
 ) -> bool:
-    if primitive.asset_ref is None:
-        return False
-    asset_path = resolve_world_layout_asset_path(primitive.asset_ref, asset_roots)
+    asset_path = resolve_declared_mesh_asset_path(
+        primitive,
+        asset_roots,
+        simulator_label="Genesis",
+    )
     if asset_path is None:
-        print(
-            "[genesis-workspace] warning: "
-            f"mesh asset not found for object '{primitive.source_id}': {primitive.asset_ref}; using proxy.",
-            flush=True,
-        )
         return False
     try:
         morph = gs.morphs.Mesh(
@@ -118,12 +116,9 @@ def add_mesh_entity_if_available(
         scene.add_entity(**entity_kwargs)
         return True
     except Exception as exc:
-        print(
-            "[genesis-workspace] warning: "
-            f"failed to add mesh object '{primitive.source_id}': {exc}; using proxy.",
-            flush=True,
-        )
-        return False
+        raise WorldLayoutTransferError(
+            f"Genesis failed to add mesh object '{primitive.source_id}': {exc}"
+        ) from exc
 
 
 def add_primitive_entity(
