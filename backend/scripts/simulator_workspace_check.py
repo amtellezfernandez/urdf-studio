@@ -108,6 +108,7 @@ class PreparedWorkspaceCommand:
     expected_object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_asset_refs: Mapping[str, str | None] | None = None
     expected_object_contracts: Mapping[str, ExpectedObjectReport] | None = None
+    expected_joint_positions: Mapping[str, float] | None = None
     expected_camera_ids: tuple[str, ...] | None = None
     expected_camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
     expected_report_artifact_file_keys: tuple[str, ...] = ()
@@ -125,6 +126,7 @@ class WorkspaceExpectations:
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
     object_contracts: Mapping[str, ExpectedObjectReport] | None = None
+    joint_positions: Mapping[str, float] | None = None
     camera_ids: tuple[str, ...] | None = None
     camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
 
@@ -179,6 +181,12 @@ def _workspace_object_contracts(
     expectations: WorkspaceExpectations,
 ) -> Mapping[str, ExpectedObjectReport] | None:
     return getattr(expectations, "object_contracts", None)
+
+
+def _workspace_joint_positions(
+    expectations: WorkspaceExpectations,
+) -> Mapping[str, float] | None:
+    return getattr(expectations, "joint_positions", None)
 
 
 def _workspace_camera_ids(expectations: WorkspaceExpectations) -> tuple[str, ...] | None:
@@ -376,6 +384,7 @@ def _prepare_direct_urdf_command(
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_object_asset_refs=_workspace_object_asset_refs(expectations),
         expected_object_contracts=_workspace_object_contracts(expectations),
+        expected_joint_positions=_workspace_joint_positions(expectations),
         expected_camera_ids=_workspace_camera_ids(expectations),
         expected_camera_contracts=_workspace_camera_contracts(expectations),
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
@@ -496,6 +505,7 @@ def _prepare_mujoco_command(
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_object_asset_refs=_workspace_object_asset_refs(expectations),
         expected_object_contracts=_workspace_object_contracts(expectations),
+        expected_joint_positions=_workspace_joint_positions(expectations),
         expected_report_artifact_file_keys=("mjcf_path",),
         expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
@@ -720,6 +730,7 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             object_sizes_xyz=command.expected_object_sizes_xyz,
             object_asset_refs=command.expected_object_asset_refs,
             object_contracts=command.expected_object_contracts,
+            joint_positions=command.expected_joint_positions,
             camera_ids=command.expected_camera_ids,
             camera_contracts=command.expected_camera_contracts,
             required_artifact_file_keys=command.expected_report_artifact_file_keys,
@@ -961,6 +972,10 @@ def main() -> int:
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
         object_contracts=object_contracts,
+        joint_positions={
+            str(name): float(position)
+            for name, position in request.world_package.world_snapshot.joint_positions.items()
+        },
         camera_ids=_expected_camera_ids_for_request(request),
         camera_contracts=_expected_camera_contracts_for_request(request),
     )

@@ -21,6 +21,7 @@ PARITY_REPORT_FIELDS = (
     "primitive_count",
     "camera_count",
     "joint_position_count",
+    "joint_positions",
 )
 
 

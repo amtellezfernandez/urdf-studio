@@ -19,6 +19,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
     BLENDER_REVIEW_ONLY_CHANGES,
     BLENDER_SUPPORTED_LAYOUT_CHANGES,
 )
+from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
 
@@ -45,6 +46,7 @@ class BlenderRobotGlbReference:
     path: Path
     geometry_count: int
     node_count: int
+    applied_joint_count: int
 
 
 def write_blender_workspace_artifacts(
@@ -61,7 +63,11 @@ def write_blender_workspace_artifacts(
     export_script_path = artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME
     change_set_path = artifact_dir / BLENDER_CHANGE_SET_FILENAME
     robot_glb_path = artifact_dir / BLENDER_ROBOT_GLB_FILENAME
-    robot_glb = _write_robot_glb_reference(robot_urdf_path, robot_glb_path)
+    robot_glb = _write_robot_glb_reference(
+        robot_urdf_path,
+        robot_glb_path,
+        joint_positions=scene.robot.joint_positions,
+    )
     robot_usd_path = artifact_dir / BLENDER_ROBOT_USD_FILENAME
     usd_conversion = convert_urdf_to_usd(robot_urdf_path.read_text(encoding="utf-8"))
     robot_usd_path.write_text(usd_conversion.usd_content, encoding="utf-8")
@@ -72,6 +78,7 @@ def write_blender_workspace_artifacts(
         robot_glb_stats={
             "geometry_count": robot_glb.geometry_count,
             "node_count": robot_glb.node_count,
+            "applied_joint_count": robot_glb.applied_joint_count,
         }
         if robot_glb
         else None,
@@ -118,12 +125,15 @@ def write_blender_workspace_artifacts(
 def _write_robot_glb_reference(
     robot_urdf_path: Path,
     robot_glb_path: Path,
+    *,
+    joint_positions: Mapping[str, float],
 ) -> BlenderRobotGlbReference | None:
     robot = yourdfpy.URDF.load(
         str(robot_urdf_path),
         build_scene_graph=True,
         load_meshes=True,
     )
+    applied_joint_count = _apply_robot_joint_positions(robot, joint_positions)
     scene = robot.scene
     geometry_count = len(scene.geometry)
     node_count = len(scene.graph.nodes_geometry)
@@ -139,7 +149,20 @@ def _write_robot_glb_reference(
         path=robot_glb_path,
         geometry_count=geometry_count,
         node_count=node_count,
+        applied_joint_count=applied_joint_count,
     )
+
+
+def _apply_robot_joint_positions(robot: yourdfpy.URDF, joint_positions: Mapping[str, float]) -> int:
+    configuration = {
+        joint_name: float(position)
+        for joint_name, position in joint_positions.items()
+        if joint_name in robot.joint_map and is_finite_number(position)
+    }
+    if not configuration:
+        return 0
+    robot.update_cfg(configuration)
+    return len(configuration)
 
 
 def build_blender_edit_session(

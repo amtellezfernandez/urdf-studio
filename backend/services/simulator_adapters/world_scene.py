@@ -63,6 +63,10 @@ class SimulatorSceneSpec:
             "primitive_count": len(self.primitives),
             "camera_count": len(self.cameras),
             "joint_position_count": len(self.robot.joint_positions),
+            "joint_positions": {
+                str(name): float(position)
+                for name, position in sorted(self.robot.joint_positions.items())
+            },
             "robot_urdf_path": str(self.robot.urdf_path),
             "asset_roots": [str(path) for path in self.robot.asset_roots],
             "warnings": list(self.warnings),

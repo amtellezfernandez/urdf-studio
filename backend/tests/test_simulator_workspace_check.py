@@ -365,6 +365,31 @@ def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_pat
     assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
 
 
+def test_pybullet_workspace_check_carries_expected_joint_positions(monkeypatch, tmp_path) -> None:
+    request = build_demo_workspace_request()
+
+    class _Prepared:
+        workspace_dir = tmp_path
+        world_package_path = tmp_path / "world-package.json"
+        robot_urdf_path = tmp_path / "robot.urdf"
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.prepare_pybullet_workspace",
+        lambda _request: _Prepared(),
+    )
+    command = _prepare_pybullet_command(
+        request,
+        expectations=WorkspaceExpectations(
+            object_count=3,
+            camera_count=3,
+            duration_sec=0.02,
+            joint_positions={"shoulder": 0.5, "elbow": -0.25},
+        ),
+    )
+
+    assert command.expected_joint_positions == {"shoulder": 0.5, "elbow": -0.25}
+
+
 def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path) -> None:
     request = build_demo_workspace_request()
 

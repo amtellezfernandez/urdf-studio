@@ -57,6 +57,32 @@ def test_simulator_workspace_parity_rejects_report_mismatch(tmp_path: Path) -> N
     assert "report.objects" in result.detail
 
 
+def test_simulator_workspace_parity_rejects_joint_position_mismatch(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+        joint_positions={"shoulder": 0.5},
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+        joint_positions={"shoulder": 0.75},
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is False
+    assert "report.joint_positions" in result.detail
+
+
 def test_simulator_workspace_parity_accepts_object_only_reports(tmp_path: Path) -> None:
     genesis_report = _write_parity_report(
         tmp_path / "genesis",
@@ -167,6 +193,7 @@ def _write_parity_report(
     image_name: str = "01_scene_camera.png",
     image_variant: str = "visible",
     include_camera: bool = True,
+    joint_positions: dict[str, float] | None = None,
 ) -> Path:
     from PIL import Image
 
@@ -213,7 +240,8 @@ def _write_parity_report(
                 "object_count": 1,
                 "primitive_count": 1,
                 "camera_count": len(camera_entries),
-                "joint_position_count": 0,
+                "joint_position_count": len(joint_positions or {}),
+                "joint_positions": joint_positions or {},
                 "warnings": [],
                 "objects": [
                     {

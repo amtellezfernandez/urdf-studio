@@ -331,7 +331,7 @@ def prepare_genesis_workspace_scene(
     scene.build()
     joint_dof_indices = joint_dof_indices_by_name(robot_entity)
     controlled_dof_count = configure_robot_position_controller(robot_entity, joint_dof_indices)
-    apply_joint_values(
+    applied_joints = apply_joint_values(
         robot_entity,
         joint_dof_indices,
         simulator_scene.robot.joint_positions,
@@ -340,7 +340,8 @@ def prepare_genesis_workspace_scene(
     print(
         "[genesis-workspace] "
         f"controller_policy={GENESIS_SCENE_PARAMS.controller_policy.name} "
-        f"controlled_dofs={controlled_dof_count}",
+        f"controlled_dofs={controlled_dof_count} "
+        f"applied_initial_joints={applied_joints}",
         flush=True,
     )
     print(
@@ -455,6 +456,7 @@ def prepare_genesis_workspace_scene(
                         "requested_patch_ids": requested_robot_patch_ids,
                     },
                     "controlled_dofs": controlled_dof_count,
+                    "applied_initial_joints": applied_joints,
                     "scene_cameras": len(scene_cameras),
                     "attached_cameras": attached_camera_count,
                     "observation_cameras": len(observation_camera_sensors),

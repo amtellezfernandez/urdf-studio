@@ -234,6 +234,7 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
     assert edit_session["robot"]["locked"] is True
     assert Path(edit_session["robot"]["visual_glb_path"]).name == BLENDER_ROBOT_GLB_FILENAME
     assert edit_session["robot"]["visual_glb_stats"]["geometry_count"] == 1
+    assert edit_session["robot"]["visual_glb_stats"]["applied_joint_count"] == 0
     assert Path(edit_session["robot"]["visual_usd_path"]).name == BLENDER_ROBOT_USD_FILENAME
     assert edit_session["robot"]["visual_usd_stats"]["links_converted"] == 1
     assert edit_session["objects"][0]["stable_id"] == "crate"
@@ -258,6 +259,57 @@ def test_blender_workspace_artifacts_preserve_round_trip_ids(tmp_path: Path) -> 
         )
         is None
     )
+
+
+def test_blender_robot_glb_reference_applies_joint_positions(tmp_path: Path) -> None:
+    urdf_xml = """
+<robot name="blender_joint_pose_demo">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="arm_link">
+    <visual>
+      <origin xyz="0.2 0 0"/>
+      <geometry>
+        <box size="0.2 0.05 0.05"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="shoulder" type="revolute">
+    <parent link="base_link"/>
+    <child link="arm_link"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="1" velocity="1"/>
+  </joint>
+</robot>
+""".strip()
+    world_package = make_world_package(urdf_xml, joint_positions={"shoulder": 0.75})
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    write_world_package_file(world_package_path, world_package)
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+
+    artifacts = write_blender_workspace_artifacts(
+        scene,
+        artifact_dir=tmp_path / "artifacts",
+        robot_urdf_path=robot_urdf_path,
+        blend_path=tmp_path / "layout.blend",
+    )
+    edit_session = json.loads(artifacts.edit_session_path.read_text(encoding="utf-8"))
+
+    assert edit_session["robot"]["visual_glb_stats"]["applied_joint_count"] == 1
+    assert artifacts.robot_glb_path is not None
+    assert artifacts.robot_glb_path.exists()
 
 
 def test_blender_edit_session_validation_rejects_missing_supported_change(

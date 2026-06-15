@@ -66,6 +66,7 @@ def _expectations(
     object_sizes_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_asset_refs: dict[str, str | None] | None = None,
     object_contracts: dict[str, ExpectedObjectReport] | None = None,
+    joint_positions: dict[str, float] | None = None,
     camera_ids: tuple[str, ...] | None = None,
     camera_contracts: dict[str, ExpectedCameraReport] | None = None,
     required_artifact_file_keys: tuple[str, ...] = (),
@@ -81,6 +82,7 @@ def _expectations(
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
         object_contracts=object_contracts,
+        joint_positions=joint_positions,
         camera_ids=camera_ids,
         camera_contracts=camera_contracts,
         required_artifact_file_keys=required_artifact_file_keys,
@@ -137,6 +139,7 @@ def _write_report(tmp_path, payload: dict):
         "frame_convention": "z-up",
         "object_count": payload.get("primitive_count", len(objects)),
         "joint_position_count": 0,
+        "joint_positions": {},
         "robot_urdf_path": str(tmp_path / "robot.urdf"),
         "asset_roots": [str(tmp_path)],
         "warnings": [],
@@ -240,7 +243,153 @@ def test_workspace_report_validation_rejects_missing_canonical_header(tmp_path) 
     assert validate_simulator_workspace_report(report_path, _expectations()) == (
         "simulator validation report missing field(s): "
         "version, requested_frame_map, frame_convention, object_count, "
-        "joint_position_count, robot_urdf_path, asset_roots, warnings"
+        "joint_position_count, joint_positions, robot_urdf_path, asset_roots, warnings"
+    )
+
+
+def test_workspace_report_validation_accepts_matching_joint_positions(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 2,
+            "joint_positions": {"elbow": -0.25, "shoulder": 0.5},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert (
+        validate_simulator_workspace_report(
+            report_path,
+            _expectations(joint_positions={"shoulder": 0.5, "elbow": -0.25}),
+        )
+        is None
+    )
+
+
+def test_workspace_report_validation_rejects_joint_position_count_drift(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 2,
+            "joint_positions": {"shoulder": 0.5},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'joint_positions' has 1 item(s), expected 2"
+    )
+
+
+def test_workspace_report_validation_rejects_missing_expected_joint_position(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 1,
+            "joint_positions": {"shoulder": 0.5},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(joint_positions={"elbow": -0.25}),
+    ) == "simulator validation report missing joint position 'elbow'"
+
+
+def test_workspace_report_validation_rejects_unexpected_joint_position_value(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 1,
+            "joint_positions": {"shoulder": 0.5},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(joint_positions={"shoulder": 0.75}),
+    ) == "simulator validation report field 'joint_positions[shoulder]' is 0.5, expected 0.75"
+
+
+def test_workspace_report_validation_rejects_unapplied_runtime_joint_position(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {
+                "id": SIMULATOR_GENESIS_ID,
+                "label": "Genesis",
+                "runtime": {"applied_initial_joints": 0},
+            },
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 1,
+            "joint_positions": {"shoulder": 0.5},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(joint_positions={"shoulder": 0.5}),
+    ) == (
+        "simulator validation report field 'simulator.runtime.applied_initial_joints' "
+        "is 0, expected 1"
+    )
+
+
+def test_workspace_report_validation_rejects_nonfinite_joint_position(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "joint_position_count": 1,
+            "joint_positions": {"shoulder": "0.5"},
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(report_path, _expectations()) == (
+        "simulator validation report field 'joint_positions[shoulder]' must be a finite number"
     )
 
 

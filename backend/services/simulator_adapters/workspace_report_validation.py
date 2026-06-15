@@ -62,6 +62,7 @@ class SimulatorWorkspaceReportExpectations:
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
     object_contracts: Mapping[str, ExpectedObjectReport] | None = None
+    joint_positions: Mapping[str, float] | None = None
     camera_ids: tuple[str, ...] | None = None
     camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
     required_artifact_file_keys: tuple[str, ...] = ()
@@ -92,6 +93,7 @@ def validate_simulator_workspace_report(
         "primitive_count",
         "camera_count",
         "joint_position_count",
+        "joint_positions",
         "robot_urdf_path",
         "asset_roots",
         "warnings",
@@ -111,6 +113,21 @@ def validate_simulator_workspace_report(
     header_error = _validate_report_header(payload)
     if header_error:
         return header_error
+
+    joint_position_error = _validate_report_joint_positions(payload)
+    if joint_position_error:
+        return joint_position_error
+
+    expected_joint_position_error = _validate_expected_joint_positions(payload, expectations)
+    if expected_joint_position_error:
+        return expected_joint_position_error
+
+    expected_runtime_joint_error = _validate_expected_runtime_joint_application(
+        payload,
+        expectations,
+    )
+    if expected_runtime_joint_error:
+        return expected_runtime_joint_error
 
     frame_contract_error = _validate_expected_frame_contract(payload, expectations)
     if frame_contract_error:
@@ -258,6 +275,69 @@ def _validate_report_header(payload: Mapping[str, Any]) -> str | None:
     if error:
         return error
     return _validate_report_string_list(payload.get("warnings"), "warnings", allow_empty=True)
+
+
+def _validate_report_joint_positions(payload: Mapping[str, Any]) -> str | None:
+    joint_positions = payload.get("joint_positions")
+    if not isinstance(joint_positions, Mapping):
+        return "simulator validation report field 'joint_positions' must be an object"
+    joint_position_count = payload.get("joint_position_count")
+    if joint_position_count != len(joint_positions):
+        return (
+            "simulator validation report field 'joint_positions' has "
+            f"{len(joint_positions)} item(s), expected {joint_position_count}"
+        )
+    for name, position in joint_positions.items():
+        if not isinstance(name, str) or not name.strip():
+            return "simulator validation report field 'joint_positions' has an invalid joint name"
+        error = _validate_report_number(position, f"joint_positions[{name}]")
+        if error:
+            return error
+    return None
+
+
+def _validate_expected_joint_positions(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_joint_positions = expectations.joint_positions or {}
+    if not expected_joint_positions:
+        return None
+    joint_positions = payload.get("joint_positions")
+    if not isinstance(joint_positions, Mapping):
+        return "simulator validation report field 'joint_positions' must be an object"
+    for joint_name, expected_position in expected_joint_positions.items():
+        if joint_name not in joint_positions:
+            return f"simulator validation report missing joint position {joint_name!r}"
+        error = _validate_expected_number(
+            joint_positions.get(joint_name),
+            expected_position,
+            f"joint_positions[{joint_name}]",
+        )
+        if error:
+            return error
+    return None
+
+
+def _validate_expected_runtime_joint_application(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_joint_positions = expectations.joint_positions or {}
+    if not expected_joint_positions:
+        return None
+    simulator = payload.get("simulator")
+    runtime = simulator.get("runtime") if isinstance(simulator, Mapping) else None
+    if not isinstance(runtime, Mapping) or "applied_initial_joints" not in runtime:
+        return None
+    applied_count = runtime.get("applied_initial_joints")
+    expected_count = len(expected_joint_positions)
+    if applied_count != expected_count:
+        return (
+            "simulator validation report field 'simulator.runtime.applied_initial_joints' "
+            f"is {applied_count!r}, expected {expected_count}"
+        )
+    return None
 
 
 def _validate_report_frame_map(
@@ -952,6 +1032,12 @@ def _validate_report_optional_non_negative_number(value: Any, path: str) -> str 
         return None
     if not _is_finite_report_number(value) or float(value) < 0.0:
         return f"simulator validation report field '{path}' must be a non-negative finite number"
+    return None
+
+
+def _validate_report_number(value: Any, path: str) -> str | None:
+    if not _is_finite_report_number(value):
+        return f"simulator validation report field '{path}' must be a finite number"
     return None
 
 

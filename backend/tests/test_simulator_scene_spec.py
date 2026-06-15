@@ -74,6 +74,8 @@ def test_prepare_simulator_scene_builds_canonical_scene_spec(tmp_path: Path) -> 
     assert report["frame_map"] == "identity"
     assert report["primitive_count"] == 1
     assert report["camera_count"] == 1
+    assert report["joint_position_count"] == 1
+    assert report["joint_positions"] == {"joint_1": 0.25}
     assert report["cameras"][0]["intrinsics"]["matrix"] == [
         [500.0, 0.0, 319.5],
         [0.0, 510.0, 241.25],
