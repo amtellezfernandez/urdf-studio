@@ -22,22 +22,64 @@ def validate_blender_blend_artifact(
     script = f"""
 import json
 import bpy
+from mathutils import Vector
 
-world_object_count = sum(
-    1
-    for obj in bpy.data.objects
-    if obj.get("urdf_studio_kind") == "world_object"
-)
 camera_count = sum(
     1
     for obj in bpy.data.objects
     if obj.get("urdf_studio_kind") == "camera"
 )
+world_objects = [
+    obj
+    for obj in bpy.data.objects
+    if obj.get("urdf_studio_kind") == "world_object"
+]
+
+
+def object_and_descendants(obj):
+    descendants = list(getattr(obj, "children_recursive", []) or [])
+    return [obj, *descendants]
+
+
+def object_world_bound_points(obj):
+    bound_box = getattr(obj, "bound_box", None)
+    matrix_world = getattr(obj, "matrix_world", None)
+    if bound_box is None or matrix_world is None:
+        return []
+    try:
+        return [matrix_world @ Vector(corner) for corner in bound_box]
+    except Exception:
+        return []
+
+
+def world_object_extent_xyz(root):
+    points = [
+        point
+        for obj in object_and_descendants(root)
+        if obj.visible_get()
+        for point in object_world_bound_points(obj)
+    ]
+    if not points:
+        return [0.0, 0.0, 0.0]
+    return [
+        float(max(point[index] for point in points) - min(point[index] for point in points))
+        for index in range(3)
+    ]
+
+
+visible_world_object_count = sum(1 for obj in world_objects if obj.visible_get())
+bounded_world_object_count = sum(
+    1
+    for obj in world_objects
+    if max(world_object_extent_xyz(obj)) > 1e-6
+)
 print(
     {BLENDER_BLEND_VALIDATE_MARKER!r}
     + json.dumps(
         {{
-            "world_object_count": world_object_count,
+            "world_object_count": len(world_objects),
+            "visible_world_object_count": visible_world_object_count,
+            "bounded_world_object_count": bounded_world_object_count,
             "camera_count": camera_count,
         }},
         sort_keys=True,
@@ -73,6 +115,18 @@ print(
         return (
             "Blender saved-session world object count mismatch: "
             f"{object_count}, expected {expected_object_count}"
+        )
+    visible_object_count = payload.get("visible_world_object_count")
+    if visible_object_count != expected_object_count:
+        return (
+            "Blender saved-session visible world object count mismatch: "
+            f"{visible_object_count}, expected {expected_object_count}"
+        )
+    bounded_object_count = payload.get("bounded_world_object_count")
+    if bounded_object_count != expected_object_count:
+        return (
+            "Blender saved-session bounded world object count mismatch: "
+            f"{bounded_object_count}, expected {expected_object_count}"
         )
     camera_count = payload.get("camera_count")
     if camera_count != expected_camera_count:
