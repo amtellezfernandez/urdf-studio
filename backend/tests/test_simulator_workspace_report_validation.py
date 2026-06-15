@@ -63,6 +63,7 @@ def _expectations(
     object_positions_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_sizes_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_asset_refs: dict[str, str | None] | None = None,
+    camera_ids: tuple[str, ...] | None = None,
     required_artifact_file_keys: tuple[str, ...] = (),
     required_artifact_dir_keys: tuple[str, ...] = (),
 ) -> SimulatorWorkspaceReportExpectations:
@@ -75,6 +76,7 @@ def _expectations(
         object_positions_xyz=object_positions_xyz,
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
+        camera_ids=camera_ids,
         required_artifact_file_keys=required_artifact_file_keys,
         required_artifact_dir_keys=required_artifact_dir_keys,
     )
@@ -776,6 +778,30 @@ def test_workspace_report_validation_rejects_duplicate_camera_sim_name(tmp_path)
     ) == (
         "simulator validation report field 'cameras.sim_name' "
         "contains duplicate value(s): front_camera"
+    )
+
+
+def test_workspace_report_validation_rejects_unexpected_camera_id_sequence(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera("wrong-camera")],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(camera_ids=("cam",)),
+    ) == (
+        "simulator validation report camera_id sequence "
+        "is ('wrong-camera',), expected ('cam',)"
     )
 
 

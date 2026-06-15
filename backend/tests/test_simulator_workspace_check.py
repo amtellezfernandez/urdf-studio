@@ -21,6 +21,7 @@ from backend.scripts.simulator_workspace_check import (
     WorkspaceTarget,
     _active_object_count,
     _check_target,
+    _expected_camera_ids_for_request,
     _expected_object_contract_for_request,
     _module_command,
     _prepare_blender_command,
@@ -251,6 +252,7 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
                 "object_count": 3,
                 "camera_count": 3,
                 "duration_sec": 0.02,
+                "camera_ids": ("so101_overhead_scene", "so101_gripper_down", "so101_port_oblique"),
             },
         )(),
     )
@@ -263,6 +265,11 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     assert command.expected_simulator_id == SIMULATOR_GENESIS_ID
     assert command.expected_object_count == 3
     assert command.expected_camera_count == 3
+    assert command.expected_camera_ids == (
+        "so101_overhead_scene",
+        "so101_gripper_down",
+        "so101_port_oblique",
+    )
     assert command.expected_requested_frame_map == "auto"
     assert command.expected_frame_map is None
     assert "camera_screenshots=3" in command.extra_expected_markers
@@ -274,6 +281,16 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     assert command.expected_report_artifact_dir_keys == (
         "camera_screenshot_dir",
         "sensor_screenshot_dir",
+    )
+
+
+def test_workspace_check_derives_expected_camera_ids_from_request() -> None:
+    request = build_demo_workspace_request()
+
+    assert _expected_camera_ids_for_request(request) == (
+        "so101_overhead_scene",
+        "so101_gripper_down",
+        "so101_port_oblique",
     )
 
 

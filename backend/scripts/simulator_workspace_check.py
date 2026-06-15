@@ -103,6 +103,7 @@ class PreparedWorkspaceCommand:
     expected_object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_asset_refs: Mapping[str, str | None] | None = None
+    expected_camera_ids: tuple[str, ...] | None = None
     expected_report_artifact_file_keys: tuple[str, ...] = ()
     expected_report_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -117,6 +118,7 @@ class WorkspaceExpectations:
     object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
+    camera_ids: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +165,10 @@ def _workspace_object_asset_refs(
     expectations: WorkspaceExpectations,
 ) -> Mapping[str, str | None] | None:
     return getattr(expectations, "object_asset_refs", None)
+
+
+def _workspace_camera_ids(expectations: WorkspaceExpectations) -> tuple[str, ...] | None:
+    return getattr(expectations, "camera_ids", None)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -349,6 +355,7 @@ def _prepare_direct_urdf_command(
         expected_object_positions_xyz=_workspace_object_positions(expectations),
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_object_asset_refs=_workspace_object_asset_refs(expectations),
+        expected_camera_ids=_workspace_camera_ids(expectations),
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
@@ -689,6 +696,7 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             object_positions_xyz=command.expected_object_positions_xyz,
             object_sizes_xyz=command.expected_object_sizes_xyz,
             object_asset_refs=command.expected_object_asset_refs,
+            camera_ids=command.expected_camera_ids,
             required_artifact_file_keys=command.expected_report_artifact_file_keys,
             required_artifact_dir_keys=command.expected_report_artifact_dir_keys,
         ),
@@ -816,6 +824,22 @@ def _expected_object_contract_for_request(
     )
 
 
+def _expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
+    camera_ids: list[str] = []
+    for index, camera in enumerate(request.world_package.world_snapshot.cameras):
+        if isinstance(camera, Mapping):
+            raw_id = camera.get("id")
+            raw_name = camera.get("name")
+            if isinstance(raw_id, str) and raw_id.strip():
+                camera_ids.append(raw_id.strip())
+                continue
+            if isinstance(raw_name, str) and raw_name.strip():
+                camera_ids.append(raw_name.strip())
+                continue
+        camera_ids.append(f"camera_{index + 1}")
+    return tuple(camera_ids)
+
+
 def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
     for result in results:
         if result.status == "passed":
@@ -855,6 +879,7 @@ def main() -> int:
         object_positions_xyz=object_positions_xyz,
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
+        camera_ids=_expected_camera_ids_for_request(request),
     )
     results = [
         _check_target(

@@ -27,6 +27,7 @@ class SimulatorWorkspaceReportExpectations:
     object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
+    camera_ids: tuple[str, ...] | None = None
     required_artifact_file_keys: tuple[str, ...] = ()
     required_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -133,7 +134,7 @@ def validate_simulator_workspace_report(
     asset_ref_error = _validate_report_object_asset_refs(payload)
     if asset_ref_error:
         return asset_ref_error
-    return _validate_report_item_fields(
+    camera_item_error = _validate_report_item_fields(
         payload,
         list_field_name="cameras",
         required_fields=(
@@ -150,6 +151,9 @@ def validate_simulator_workspace_report(
             "intrinsics",
         ),
     )
+    if camera_item_error:
+        return camera_item_error
+    return _validate_expected_camera_ids(payload, expectations)
 
 
 def _validate_report_simulator(
@@ -424,6 +428,29 @@ def _validate_expected_object_asset_refs(
                 f"simulator validation report field 'objects[{source_id}].asset_ref' "
                 f"is {actual_asset_ref!r}, expected {expected_asset_ref!r}"
             )
+    return None
+
+
+def _validate_expected_camera_ids(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_camera_ids = expectations.camera_ids
+    if expected_camera_ids is None:
+        return None
+    cameras = payload.get("cameras")
+    if not isinstance(cameras, list):
+        return "simulator validation report field 'cameras' must be a list"
+    actual_camera_ids = tuple(
+        item.get("camera_id")
+        for item in cameras
+        if isinstance(item, Mapping)
+    )
+    if actual_camera_ids != expected_camera_ids:
+        return (
+            "simulator validation report camera_id sequence "
+            f"is {actual_camera_ids!r}, expected {expected_camera_ids!r}"
+        )
     return None
 
 
