@@ -67,6 +67,7 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     build_mesh_asset_workspace_request,
     build_studio_y_up_axis_workspace_request,
     build_workspace_request_from_files,
+    build_xacro_source_workspace_request,
 )
 from backend.services.simulator_adapters.workspace_report_validation import (
     ExpectedCameraReport,
@@ -222,6 +223,8 @@ def _workspace_request_from_args(args: argparse.Namespace) -> SimulatorWorkspace
             return build_studio_y_up_axis_workspace_request()
         if fixture == "mesh-asset":
             return build_mesh_asset_workspace_request()
+        if fixture == "xacro-source":
+            return build_xacro_source_workspace_request()
         return build_demo_workspace_request()
     return build_workspace_request_from_files(
         world_package_path=Path(args.world_package),

@@ -5,6 +5,7 @@ import sys
 
 import pytest
 
+from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
@@ -45,8 +46,10 @@ from backend.services.simulator_adapters.workspace_image_artifacts import (
 )
 from backend.services.simulator_adapters.workspace_report_validation import ExpectedCameraReport
 from backend.services.simulator_adapters.workspace_request_sources import (
+    WORKSPACE_FIXTURES,
     build_demo_workspace_request,
     build_studio_y_up_axis_workspace_request,
+    build_xacro_source_workspace_request,
 )
 
 
@@ -208,6 +211,56 @@ def test_workspace_check_fixture_selects_mesh_asset_request() -> None:
         "assets/workspace_mesh_crate.obj"
     )
     assert "assets/workspace_mesh_crate.obj" in {asset.path for asset in request.mesh_assets}
+
+
+def test_workspace_check_fixture_selects_xacro_source_request() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fixture": "xacro-source",
+            "world_package": "",
+            "robot_urdf": "",
+            "asset_root": [],
+        },
+    )()
+
+    request = _workspace_request_from_args(args)
+
+    assert request.world_package.package_id == "xacro-source-workspace-check"
+    assert request.urdf_asset_path == "robots/so101.urdf.xacro"
+    assert request.world_package.provenance["workspace_check_fixture"] == "xacro-source"
+    assert request.world_package.world_snapshot.objects
+    assert request.world_package.world_snapshot.cameras
+    assert request.mesh_assets
+
+
+def test_xacro_source_fixture_preserves_demo_scene_contract() -> None:
+    demo_request = build_demo_workspace_request()
+    xacro_request = build_xacro_source_workspace_request()
+
+    assert xacro_request.urdf_asset_path.endswith(".urdf.xacro")
+    assert xacro_request.world_package.world_snapshot.urdf_xml == (
+        demo_request.world_package.world_snapshot.urdf_xml
+    )
+    assert xacro_request.world_package.world_snapshot.objects == (
+        demo_request.world_package.world_snapshot.objects
+    )
+    assert xacro_request.world_package.world_snapshot.cameras == (
+        demo_request.world_package.world_snapshot.cameras
+    )
+
+
+def test_workspace_fixture_scripts_cover_all_backend_fixtures() -> None:
+    package_json = json.loads((BASE_DIR / "package.json").read_text(encoding="utf-8"))
+    scripts = package_json["scripts"]
+    for script_name in (
+        "simulator:workspace:check:fixtures",
+        "simulator:blender:check:fixtures",
+    ):
+        script = scripts[script_name]
+        for fixture in WORKSPACE_FIXTURES:
+            assert f"--fixture {fixture}" in script
 
 
 def test_workspace_check_rejects_fixture_with_custom_world_package() -> None:

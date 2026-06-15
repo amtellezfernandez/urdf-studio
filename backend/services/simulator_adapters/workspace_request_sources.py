@@ -38,7 +38,7 @@ WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_BLENDER_ID,
 )
-WORKSPACE_FIXTURES = ("demo", "studio-y-up-axis", "mesh-asset")
+WORKSPACE_FIXTURES = ("demo", "studio-y-up-axis", "mesh-asset", "xacro-source")
 DEMO_ROOT = BASE_DIR / "web" / "public" / "demo"
 SO101_MANIFEST_PATH = DEMO_ROOT / "so101" / "manifest.json"
 SO101_CAMERA_CONFIG_PATH = DEMO_ROOT / "so101" / "camera-config.json"
@@ -215,6 +215,25 @@ def build_mesh_asset_workspace_request() -> SimulatorWorkspacePrepareRequest:
         update={
             "world_package": world_package,
             "mesh_assets": [*request.mesh_assets, mesh_asset],
+        },
+        deep=True,
+    )
+
+
+def build_xacro_source_workspace_request() -> SimulatorWorkspacePrepareRequest:
+    request = build_demo_workspace_request()
+    world_package = request.world_package.model_copy(deep=True)
+    world_package.package_id = "xacro-source-workspace-check"
+    world_package.title = "Xacro Source Workspace Check"
+    world_package.provenance = {
+        **world_package.provenance,
+        "workspace_check_fixture": "xacro-source",
+        "source_asset_path": "robots/so101.urdf.xacro",
+    }
+    return request.model_copy(
+        update={
+            "world_package": world_package,
+            "urdf_asset_path": "robots/so101.urdf.xacro",
         },
         deep=True,
     )
