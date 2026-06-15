@@ -18,6 +18,7 @@ from backend.services.world_layout_static_transfer import (
 )
 from backend.services.world_scene_package_digest import (
     require_world_snapshot_artifact_digests,
+    normalize_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
 )
 from backend.services.world_layout_transfer_types import (
@@ -125,11 +126,12 @@ def load_world_package(path: Path) -> WorldScenePackageManifest:
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid world package JSON: {exc}") from exc
     world_package = WorldScenePackageManifest.model_validate(payload)
+    normalized_world_package = normalize_world_snapshot_artifact_digests(world_package)
     require_world_snapshot_artifact_digests(
-        world_package,
+        normalized_world_package,
         context=f"World package artifact digest invalid in {path}",
     )
-    return world_package
+    return normalized_world_package
 
 
 def prepare_world_scene(

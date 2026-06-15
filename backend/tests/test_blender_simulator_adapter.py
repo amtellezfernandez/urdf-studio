@@ -1569,6 +1569,35 @@ def test_generated_blender_scripts_import_mesh_world_objects(monkeypatch, tmp_pa
     assert change_set["review_only"] == []
 
 
+def test_blender_workspace_prepare_repairs_stale_world_snapshot_digest(
+    tmp_path: Path,
+) -> None:
+    urdf_xml = "<robot name=\"blender_demo\"><link name=\"base_link\"/></robot>"
+    world_package = make_world_package(urdf_xml)
+    world_package.artifacts = [
+        WorldArtifactRef(
+            kind="world_snapshot",
+            digest_sha256="0" * 64,
+            uri="inline://snapshot",
+        )
+    ]
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    write_world_package_file(world_package_path, world_package)
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+
+    prepare_blender_workspace_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        duration_sec=0.0,
+        include_hidden=False,
+        no_viewer=True,
+        report_path=None,
+        blender_executable=None,
+    )
+
+
 def test_blender_workspace_rejects_unresolved_mesh_asset(tmp_path: Path) -> None:
     urdf_xml = "<robot name=\"mesh_world\"><link name=\"base_link\"/></robot>"
     world_package = make_world_package(

@@ -10,6 +10,10 @@ from backend.services.simulator_adapters.world_scene import (
     prepare_simulator_scene,
     write_simulator_validation_report,
 )
+from backend.services.world_scene_package_digest import (
+    computed_world_snapshot_digest,
+    declared_world_snapshot_digests,
+)
 from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
 
 
@@ -143,7 +147,7 @@ def test_prepare_simulator_scene_rejects_invalid_declared_camera(tmp_path: Path)
         )
 
 
-def test_prepare_simulator_scene_rejects_stale_world_snapshot_artifact_digest(
+def test_prepare_simulator_scene_repairs_stale_world_snapshot_artifact_digest(
     tmp_path: Path,
 ) -> None:
     urdf_xml = "<robot name=\"scene_spec_demo\"><link name=\"base_link\"/></robot>"
@@ -160,10 +164,13 @@ def test_prepare_simulator_scene_rejects_stale_world_snapshot_artifact_digest(
     write_world_package_file(world_package_path, world_package)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="artifacts\\[world_snapshot:0\\]"):
-        prepare_simulator_scene(
-            world_package_path=world_package_path,
-            robot_urdf_path=robot_urdf_path,
-            frame_map="identity",
-            include_hidden=False,
-        )
+    scene = prepare_simulator_scene(
+        world_package_path=world_package_path,
+        robot_urdf_path=robot_urdf_path,
+        frame_map="identity",
+        include_hidden=False,
+    )
+
+    assert declared_world_snapshot_digests(scene.world_package) == (
+        computed_world_snapshot_digest(scene.world_package),
+    )
