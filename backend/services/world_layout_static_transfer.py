@@ -429,6 +429,40 @@ def _transform_quat_wxyz(
     )
 
 
+def inverse_transform_position(
+    position: Sequence[float],
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> tuple[float, float, float]:
+    transformed = _frame_matrix(frame_map).T @ np.array(position, dtype=float)
+    return tuple(float(component) for component in transformed)
+
+
+def inverse_transform_size(
+    size: Sequence[float],
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> tuple[float, float, float]:
+    transformed = np.abs(_frame_matrix(frame_map).T) @ np.array(size, dtype=float)
+    return tuple(float(component) for component in transformed)
+
+
+def inverse_transform_quat_wxyz(
+    quat_wxyz: Sequence[float],
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> tuple[float, float, float, float]:
+    frame = _frame_matrix(frame_map)
+    sim_rotation = Rotation.from_quat(
+        (quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0])
+    ).as_matrix()
+    world_rotation = frame.T @ sim_rotation @ frame
+    quat_xyzw = Rotation.from_matrix(world_rotation).as_quat()
+    return (
+        float(quat_xyzw[3]),
+        float(quat_xyzw[0]),
+        float(quat_xyzw[1]),
+        float(quat_xyzw[2]),
+    )
+
+
 def _parse_rgba(color: str) -> tuple[float, float, float, float]:
     normalized = color.strip()
     if normalized.startswith("#"):

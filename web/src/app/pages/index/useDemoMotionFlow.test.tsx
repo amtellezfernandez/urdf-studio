@@ -245,6 +245,79 @@ describe("useDemoMotionFlow", () => {
     });
   });
 
+  it("does not suppress default world layout while autoloading the demo robot", async () => {
+    vi.resetModules();
+    vi.doMock("@/shared/config/demo", () => ({
+      DEMO_AUTOLOAD: true,
+      DEMO_LOCAL_MANIFEST_URL: "/demo/local-manifest.json",
+      DEMO_MANIFEST_URL: "/demo/manifest.json",
+      DEMO_MODE: true,
+    }));
+    vi.doMock("@/app/pages/index/demoBootstrap", () => ({
+      loadDemoFileListFromManifestUrls: (...args: unknown[]) =>
+        loadDemoFileListFromManifestUrlsSpy(...args),
+      loadDemoFileListProgressivelyFromManifestUrls: (...args: unknown[]) =>
+        loadDemoFileListProgressivelyFromManifestUrlsSpy(...args),
+    }));
+    vi.doMock("@/shared/samples/demoMotion", () => ({
+      createDemoEpisodes: vi.fn(),
+    }));
+    vi.doMock("sonner", () => ({
+      toast: {
+        error: (...args: unknown[]) => toastErrorSpy(...args),
+        info: (...args: unknown[]) => toastInfoSpy(...args),
+      },
+    }));
+    const { useDemoMotionFlow: useDemoMotionFlowWithAutoload } = await import(
+      "@/app/pages/index/useDemoMotionFlow"
+    );
+    const urdfFile = new File(["<robot name='so101'/>"], "so101.urdf", {
+      type: "application/xml",
+    });
+    loadDemoFileListFromManifestUrlsSpy.mockResolvedValue([urdfFile] as unknown as FileList);
+    const skipDefaultWorldLayoutAutoImportRef = { current: false };
+    const loadFilesFromFolderWithFreshCameras = vi.fn();
+    const optionsRef: { current: HookOptions } = {
+      current: {
+        activeUrdfPath: null,
+        availableJoints: [],
+        datasetActions: null,
+        hasLoadedFiles: false,
+        isLeKiwiDemoRobot: false,
+        jointLimits: {},
+        loadFilesFromFolderWithFreshCameras,
+        playbackHandlers: {},
+        prepareDemoScene: vi.fn(() => true),
+        robot: null,
+        setIsViewerOpen: vi.fn(),
+        setViewerEpisode: vi.fn(),
+        skipDefaultWorldLayoutAutoImportRef,
+        urdfAnalysis: null,
+      },
+    };
+
+    const Harness = () => {
+      useDemoMotionFlowWithAutoload(optionsRef.current);
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadDemoFileListFromManifestUrlsSpy).toHaveBeenCalledOnce();
+    expect(loadFilesFromFolderWithFreshCameras).toHaveBeenCalledWith([urdfFile]);
+    expect(skipDefaultWorldLayoutAutoImportRef.current).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("primes demo episodes on autoload without opening the viewer or starting playback", async () => {
     vi.resetModules();
     const demoEpisode = createEpisode(

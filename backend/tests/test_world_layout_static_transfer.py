@@ -14,6 +14,9 @@ from backend.services.world_layout_static_transfer import (
     check_genesis_transfer,
     check_mujoco_transfer,
     export_primitives_to_mujoco_mjcf,
+    inverse_transform_position,
+    inverse_transform_quat_wxyz,
+    inverse_transform_size,
     parse_static_world_layout_payload,
     resolve_world_layout_asset_path,
     resolve_world_layout_frame_map,
@@ -157,6 +160,25 @@ def test_auto_frame_map_converts_studio_y_up_package_axes() -> None:
     assert resolve_world_layout_frame_map(layout, "auto") == "studio-y-up-to-z-up"
     assert primitives[0].position_xyz == (1.0, -3.0, 2.0)
     assert primitives[0].size_xyz == (0.2, 0.8, 0.4)
+
+
+def test_inverse_frame_map_round_trips_studio_y_up_layout_values() -> None:
+    layout = parse_static_world_layout_payload(_layout_payload())
+    primitives, warnings = build_sim_primitives(layout, frame_map="auto")
+
+    assert warnings == ()
+    assert inverse_transform_position(
+        primitives[0].position_xyz,
+        "studio-y-up-to-z-up",
+    ) == pytest.approx((0.0, 0.05, 0.0))
+    assert inverse_transform_size(
+        primitives[0].size_xyz,
+        "studio-y-up-to-z-up",
+    ) == pytest.approx((1.0, 0.1, 0.6))
+    assert inverse_transform_quat_wxyz(
+        primitives[1].quat_wxyz,
+        "studio-y-up-to-z-up",
+    ) == pytest.approx((1.0, 0.0, 0.0, 0.0))
 
 
 def test_build_primitives_preserves_object_simulation_metadata() -> None:

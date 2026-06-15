@@ -99,6 +99,7 @@ def _blender_change_set(
     changes,
     review_only=None,
     include_camera_changes=True,
+    frame_map=None,
 ):
     next_changes = list(changes)
     review_only_entries = list(review_only or [])
@@ -125,6 +126,7 @@ def _blender_change_set(
         "schema": BLENDER_CHANGE_SET_SCHEMA,
         "source": build_blender_change_set_source(
             world_package,
+            frame_map=frame_map,
             world_object_ids=[
                 str(item.get("id", ""))
                 for item in world_package.world_snapshot.objects
@@ -1043,13 +1045,50 @@ def test_blender_change_set_rejects_stale_world_snapshot_source(tmp_path: Path) 
         apply_blender_layout_change_set(world_package, change_set)
 
 
-def test_blender_change_set_rejects_non_identity_frame_map_source(tmp_path: Path) -> None:
+def test_blender_change_set_applies_non_identity_frame_map_source(tmp_path: Path) -> None:
     world_package, _world_package_path, _robot_urdf_path = _write_scene_inputs(tmp_path)
-    change_set = _blender_change_set(world_package, changes=[])
-    change_set["source"]["frame_map"] = "studio-y-up-to-z-up"
 
-    with pytest.raises(ValueError, match="frame_map is not supported"):
-        apply_blender_layout_change_set(world_package, change_set)
+    result = apply_blender_layout_change_set_with_summary(
+        world_package,
+        _blender_change_set(
+            world_package,
+            frame_map="studio-y-up-to-z-up",
+            changes=[
+                {
+                    "entity_type": "world_object",
+                    "stable_id": "crate",
+                    "position_xyz": [1.0, -3.0, 2.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.5, 0.7, 0.6],
+                },
+                _scene_camera_change(position_xyz=[0.2, -1.4, 0.3]),
+            ],
+            review_only=[
+                {
+                    "entity_type": "new_world_object",
+                    "sim_name": "Added cube",
+                    "position_xyz": [2.0, -4.0, 3.0],
+                    "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "size_xyz": [0.4, 0.6, 0.5],
+                    "rgba": [0.1, 0.2, 0.3, 1.0],
+                    "reason": "new Blender mesh object will import as a Studio cube world object",
+                }
+            ],
+        ),
+    )
+
+    updated_object = result.world_package.world_snapshot.objects[0]
+    added_object = result.world_package.world_snapshot.objects[1]
+    updated_camera = result.world_package.world_snapshot.cameras[0]
+    assert updated_object["position_xyz"] == pytest.approx([1.0, 2.0, 3.0])
+    assert updated_object["size_xyz"] == pytest.approx([0.5, 0.6, 0.7])
+    assert added_object["position_xyz"] == pytest.approx([2.0, 3.0, 4.0])
+    assert added_object["size_xyz"] == pytest.approx([0.4, 0.5, 0.6])
+    assert updated_camera["pose"]["xyz"] == pytest.approx([0.2, 0.3, 1.4])
+    assert all(
+        math.isclose(value, 0.0, abs_tol=1e-9)
+        for value in updated_camera["pose"]["rpy"]
+    )
 
 
 def test_blender_change_set_rejects_unknown_source_world_object_id(tmp_path: Path) -> None:
@@ -1124,7 +1163,8 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert "camera_screenshots=" in open_script
     assert "bpy.ops.render.render" in open_script
     assert "initialize_edit_view" in open_script
-    assert "view_perspective = \"CAMERA\"" in open_script
+    assert "view_perspective = \"PERSP\"" in open_script
+    assert "world_objects_created=" in open_script
 
 
 def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path) -> None:

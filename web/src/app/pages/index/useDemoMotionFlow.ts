@@ -303,14 +303,11 @@ export const useDemoMotionFlow = ({
   useEffect(() => {
     if (!DEMO_MODE || !DEMO_AUTOLOAD || demoAutoLoadedRef.current || hasLoadedFiles) return;
     demoAutoLoadedRef.current = true;
-    // Preserve the demo startup layout from scenario generation.
-    // Default world-layout import can overwrite it with static objects.
-    skipDefaultWorldLayoutAutoImportRef.current = true;
     loadDemoBootstrapRobot().catch((error) => {
       const message = error instanceof Error ? error.message : "Failed to load demo robot";
       toast.error(message);
     });
-  }, [hasLoadedFiles, loadDemoBootstrapRobot, skipDefaultWorldLayoutAutoImportRef]);
+  }, [hasLoadedFiles, loadDemoBootstrapRobot]);
 
   useEffect(() => {
     if (!DEMO_MODE || !DEMO_AUTOLOAD || demoMotionPrimedRef.current) return;

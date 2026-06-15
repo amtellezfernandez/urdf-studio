@@ -254,11 +254,40 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                     return None
 
 
+            def object_extent_points(obj):
+                location = object_location_xyz(obj)
+                if location is None:
+                    return []
+                dimensions = getattr(obj, "dimensions", None)
+                if dimensions is None:
+                    return [location]
+                try:
+                    half_extents = [
+                        abs(float(dimensions[0])) * 0.5,
+                        abs(float(dimensions[1])) * 0.5,
+                        abs(float(dimensions[2])) * 0.5,
+                    ]
+                except Exception:
+                    return [location]
+                if max(half_extents) <= 0.0:
+                    return [location]
+                return [
+                    [
+                        location[0] + x_sign * half_extents[0],
+                        location[1] + y_sign * half_extents[1],
+                        location[2] + z_sign * half_extents[2],
+                    ]
+                    for x_sign in (-1.0, 1.0)
+                    for y_sign in (-1.0, 1.0)
+                    for z_sign in (-1.0, 1.0)
+                ]
+
+
             def scene_edit_bounds():
                 points = [
                     point
-                    for point in (object_location_xyz(obj) for obj in scene_edit_objects())
-                    if point is not None
+                    for obj in scene_edit_objects()
+                    for point in object_extent_points(obj)
                 ]
                 if not points:
                     return [0.0, 0.0, 0.35], 1.0
@@ -339,7 +368,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 try:
                     region_3d.view_location = center
                     region_3d.view_distance = max(radius * 2.6, 1.0)
-                    region_3d.view_perspective = "CAMERA" if camera_objects else "PERSP"
+                    region_3d.view_perspective = "PERSP"
                 except Exception:
                     pass
 
@@ -601,9 +630,21 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 configure_scene()
                 add_default_lighting()
                 robot_root = add_robot_reference(session)
-                world_objects = [add_object(entry) for entry in session.get("objects", [])]
+                object_entries = session.get("objects", [])
+                world_objects = [
+                    obj
+                    for obj in (add_object(entry) for entry in object_entries)
+                    if obj is not None
+                ]
+                if len(world_objects) != len(object_entries):
+                    raise RuntimeError(
+                        "Blender edit session created "
+                        f"{{len(world_objects)}}/{{len(object_entries)}} world objects."
+                    )
+                print(f"[urdf-studio-blender] world_objects_created={{len(world_objects)}}", flush=True)
                 camera_entries = session.get("cameras", [])
                 camera_objects = [add_camera(entry) for entry in camera_entries]
+                print(f"[urdf-studio-blender] cameras_created={{len(camera_objects)}}", flush=True)
                 render_camera_views(session, camera_entries, camera_objects)
                 initialize_edit_view(robot_root, world_objects, camera_objects)
                 add_session_notes(session)

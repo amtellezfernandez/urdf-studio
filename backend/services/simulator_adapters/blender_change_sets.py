@@ -17,6 +17,13 @@ from backend.services.simulator_adapters.camera_intrinsics import (
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
+from backend.services.world_layout_static_transfer import (
+    CONCRETE_WORLD_LAYOUT_FRAME_MAPS,
+    inverse_transform_position,
+    inverse_transform_quat_wxyz,
+    inverse_transform_size,
+)
+from backend.services.world_layout_transfer_types import ConcreteWorldLayoutFrameMap
 from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
     normalize_world_snapshot_artifact_digests,
@@ -25,7 +32,7 @@ from backend.services.world_scene_package_params import MAX_OBJECTS_PER_WORLD
 
 BLENDER_CHANGE_SET_SCHEMA = "urdf-studio.blender-change-set.v1"
 BLENDER_CHANGE_SET_SOURCE_SCHEMA = "urdf-studio.blender-change-set-source.v1"
-BLENDER_APPLY_FRAME_MAPS = frozenset({"identity"})
+BLENDER_APPLY_FRAME_MAPS = frozenset(CONCRETE_WORLD_LAYOUT_FRAME_MAPS)
 BLENDER_CAMERA_CHANGE_POSE_FRAME = "opengl_render_local"
 BLENDER_AUXILIARY_ENTITY_TYPES = frozenset(
     {"deleted_camera", "new_world_object", "deleted_world_object"}
@@ -69,6 +76,7 @@ class BlenderCameraChange:
 
 @dataclass(frozen=True)
 class BlenderChangeSetSource:
+    frame_map: ConcreteWorldLayoutFrameMap
     world_object_ids: tuple[str, ...]
     camera_ids: tuple[str, ...]
 
@@ -103,6 +111,7 @@ def apply_blender_layout_change_set_with_summary(
     change_set: Mapping[str, Any],
 ) -> BlenderLayoutChangeSetApplyResult:
     (
+        source,
         object_updates,
         camera_updates,
         new_world_objects,
@@ -128,10 +137,16 @@ def apply_blender_layout_change_set_with_summary(
             continue
         change = object_updates.get(object_id)
         if change is not None:
-            next_item.update(_world_object_change_fields(change))
+            next_item.update(_world_object_change_fields(change, source.frame_map))
             applied_change_count += 1
         next_objects.append(next_item)
-    next_objects.extend(_new_world_object_fields(new_world_objects, package_object_ids))
+    next_objects.extend(
+        _new_world_object_fields(
+            new_world_objects,
+            package_object_ids,
+            source.frame_map,
+        )
+    )
     applied_change_count += len(new_world_objects)
     if len(next_objects) > MAX_OBJECTS_PER_WORLD:
         raise ValueError(
@@ -143,6 +158,7 @@ def apply_blender_layout_change_set_with_summary(
         updated.world_snapshot.cameras,
         camera_updates,
         deleted_camera_ids,
+        source.frame_map,
     )
     applied_change_count += len(camera_updates) + len(deleted_camera_ids)
     normalized = normalize_world_snapshot_artifact_digests(updated)
@@ -169,6 +185,7 @@ def _validate_blender_change_set(
     change_set: Mapping[str, Any],
     world_package: WorldScenePackageManifest,
 ) -> tuple[
+    BlenderChangeSetSource,
     dict[str, BlenderWorldObjectChange],
     dict[str, BlenderCameraChange],
     tuple[BlenderNewWorldObject, ...],
@@ -254,6 +271,7 @@ def _validate_blender_change_set(
         len(new_world_objects) + len(deleted_world_object_ids) + len(deleted_camera_ids)
     )
     return (
+        source,
         object_updates,
         camera_updates,
         tuple(new_world_objects),
@@ -301,6 +319,7 @@ def _validate_change_set_source(
     actual_frame_map = value.get("frame_map")
     if actual_frame_map is not None:
         actual_frame_map = _required_string(actual_frame_map, "source.frame_map")
+    frame_map = _validate_source_frame_map(actual_frame_map)
     actual_world_object_ids = _required_string_list(
         value.get("world_object_ids"),
         "source.world_object_ids",
@@ -322,17 +341,23 @@ def _validate_change_set_source(
         raise ValueError(
             "Blender change-set source world snapshot does not match the current world package."
         )
-    if actual_frame_map is not None and actual_frame_map not in BLENDER_APPLY_FRAME_MAPS:
-        raise ValueError(
-            "Blender change-set source frame_map is not supported for direct apply. "
-            "Only identity frame_map sessions can be imported without coordinate conversion."
-        )
     _validate_source_world_object_ids(actual_world_object_ids, world_package)
     _validate_source_camera_ids(actual_camera_ids, world_package)
     return BlenderChangeSetSource(
+        frame_map=frame_map,
         world_object_ids=actual_world_object_ids,
         camera_ids=actual_camera_ids,
     )
+
+
+def _validate_source_frame_map(value: str | None) -> ConcreteWorldLayoutFrameMap:
+    frame_map = value or "identity"
+    if frame_map not in BLENDER_APPLY_FRAME_MAPS:
+        raise ValueError(
+            "Blender change-set source frame_map is not supported for direct apply. "
+            f"Supported frame maps: {', '.join(sorted(BLENDER_APPLY_FRAME_MAPS))}."
+        )
+    return frame_map  # type: ignore[return-value]
 
 
 def _validate_change_set_source_coverage(
@@ -556,6 +581,7 @@ def _updated_camera_fields(
     cameras: Sequence[dict[str, Any]],
     camera_updates: Mapping[str, BlenderCameraChange],
     deleted_camera_ids: frozenset[str],
+    frame_map: ConcreteWorldLayoutFrameMap,
 ) -> list[dict[str, Any]]:
     if not camera_updates and not deleted_camera_ids:
         return [dict(camera) for camera in cameras]
@@ -578,7 +604,7 @@ def _updated_camera_fields(
             continue
         change = camera_updates.get(camera_id)
         if change is not None:
-            next_camera.update(_world_camera_change_fields(change, next_camera))
+            next_camera.update(_world_camera_change_fields(change, next_camera, frame_map))
         next_cameras.append(next_camera)
     return next_cameras
 
@@ -637,11 +663,15 @@ def _required_string_list(value: Any, label: str) -> tuple[str, ...]:
     )
 
 
-def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, Any]:
+def _world_object_change_fields(
+    change: BlenderWorldObjectChange,
+    frame_map: ConcreteWorldLayoutFrameMap,
+) -> dict[str, Any]:
+    quat_wxyz = inverse_transform_quat_wxyz(change.quat_wxyz, frame_map)
     fields: dict[str, Any] = {
-        "position_xyz": list(change.position_xyz),
-        "rotation_rpy_rad": list(_quat_wxyz_to_rpy(change.quat_wxyz)),
-        "size_xyz": list(change.size_xyz),
+        "position_xyz": list(inverse_transform_position(change.position_xyz, frame_map)),
+        "rotation_rpy_rad": list(_quat_wxyz_to_rpy(quat_wxyz)),
+        "size_xyz": list(inverse_transform_size(change.size_xyz, frame_map)),
     }
     if change.rgba is not None:
         fields["color"] = _rgba_to_hex(change.rgba)
@@ -651,12 +681,16 @@ def _world_object_change_fields(change: BlenderWorldObjectChange) -> dict[str, A
 def _world_camera_change_fields(
     change: BlenderCameraChange,
     camera: Mapping[str, Any],
+    frame_map: ConcreteWorldLayoutFrameMap,
 ) -> dict[str, Any]:
-    studio_rotation = _render_local_quat_to_studio_rotation(change.quat_wxyz)
-    rpy = studio_rotation.as_euler("xyz")
+    sim_rotation = _render_local_quat_to_studio_rotation(change.quat_wxyz)
+    sim_quat_wxyz = _rotation_to_quat_wxyz(sim_rotation)
+    world_quat_wxyz = inverse_transform_quat_wxyz(sim_quat_wxyz, frame_map)
+    world_rotation = _quat_wxyz_to_rotation(world_quat_wxyz)
+    rpy = world_rotation.as_euler("xyz")
     fields: dict[str, Any] = {
         "pose": {
-            "xyz": list(change.position_xyz),
+            "xyz": list(inverse_transform_position(change.position_xyz, frame_map)),
             "rpy": [float(rpy[0]), float(rpy[1]), float(rpy[2])],
         },
     }
@@ -696,6 +730,7 @@ def _render_local_quat_to_studio_rotation(
 def _new_world_object_fields(
     new_world_objects: Sequence[BlenderNewWorldObject],
     existing_ids: set[str],
+    frame_map: ConcreteWorldLayoutFrameMap,
 ) -> list[dict[str, Any]]:
     used_ids = set(existing_ids)
     fields: list[dict[str, Any]] = []
@@ -706,9 +741,11 @@ def _new_world_object_fields(
             "id": object_id,
             "name": item.sim_name,
             "type": "mesh" if item.asset_ref else "cube",
-            "position_xyz": list(item.position_xyz),
-            "rotation_rpy_rad": list(_quat_wxyz_to_rpy(item.quat_wxyz)),
-            "size_xyz": list(item.size_xyz),
+            "position_xyz": list(inverse_transform_position(item.position_xyz, frame_map)),
+            "rotation_rpy_rad": list(
+                _quat_wxyz_to_rpy(inverse_transform_quat_wxyz(item.quat_wxyz, frame_map))
+            ),
+            "size_xyz": list(inverse_transform_size(item.size_xyz, frame_map)),
             "color": _rgba_to_hex(item.rgba) if item.rgba else "#3b82f6",
             "simulation": {
                 "fixed": True,
@@ -825,8 +862,22 @@ def _required_quat_wxyz(value: Any, label: str) -> tuple[float, float, float, fl
     )
 
 
+def _quat_wxyz_to_rotation(quat_wxyz: tuple[float, float, float, float]) -> Rotation:
+    return Rotation.from_quat((quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]))
+
+
+def _rotation_to_quat_wxyz(rotation: Rotation) -> tuple[float, float, float, float]:
+    quat_xyzw = rotation.as_quat()
+    return (
+        float(quat_xyzw[3]),
+        float(quat_xyzw[0]),
+        float(quat_xyzw[1]),
+        float(quat_xyzw[2]),
+    )
+
+
 def _quat_wxyz_to_rpy(quat_wxyz: tuple[float, float, float, float]) -> tuple[float, float, float]:
-    rotation = Rotation.from_quat((quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]))
+    rotation = _quat_wxyz_to_rotation(quat_wxyz)
     rpy = rotation.as_euler("xyz")
     return (float(rpy[0]), float(rpy[1]), float(rpy[2]))
 
