@@ -111,11 +111,24 @@ def test_prepare_simulator_workspace_refreshes_stale_world_snapshot_digest(
     )
 
 
-def test_prepare_simulator_workspace_normalizes_xacro_source_path(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("urdf_asset_path", "staged_relative_path"),
+    (
+        ("robot.urdf.xacro", "robot.urdf"),
+        ("robot.xacro", "robot.urdf"),
+        ("robots/demo.urdf.xacro", "robots/demo.urdf"),
+        ("robots/demo.xacro", "robots/demo.urdf"),
+    ),
+)
+def test_prepare_simulator_workspace_normalizes_xacro_source_path(
+    tmp_path,
+    urdf_asset_path: str,
+    staged_relative_path: str,
+) -> None:
     urdf_xml = "<robot name=\"demo\"><link name=\"base\"/></robot>"
     request = SimulatorWorkspacePrepareRequest(
         world_package=make_world_package(urdf_xml),
-        urdf_asset_path="robot.urdf.xacro",
+        urdf_asset_path=urdf_asset_path,
     )
 
     prepared = prepare_simulator_workspace_package(
@@ -124,7 +137,7 @@ def test_prepare_simulator_workspace_normalizes_xacro_source_path(tmp_path) -> N
         error=ValueError,
     )
 
-    assert (prepared.workspace_dir / "source" / "robot.urdf").read_text(
+    assert (prepared.workspace_dir / "source" / staged_relative_path).read_text(
         encoding="utf-8"
     ) == urdf_xml
     assert prepared.robot_urdf_path.name == "robot.urdf"
