@@ -184,6 +184,14 @@ def _camera_image_manifest(
     loaded_report: tuple[WorkspaceParityInput, Mapping[str, Any]],
 ) -> tuple[str, dict[str, Any] | str]:
     item, report = loaded_report
+    cameras = _list_field(report, "cameras")
+    expected_images_or_error = _expected_camera_images(item.label, cameras)
+    if isinstance(expected_images_or_error, str):
+        return item.label, expected_images_or_error
+    expected_images = expected_images_or_error
+    if not expected_images:
+        return item.label, {"images": []}
+
     artifacts = report.get("artifacts")
     if not isinstance(artifacts, Mapping):
         return item.label, f"{item.label} camera_images validation report has no artifacts object"
@@ -194,11 +202,6 @@ def _camera_image_manifest(
     image_paths = sorted(directory.glob("*.png")) if directory.exists() else []
     if not image_paths:
         return item.label, f"{item.label} camera_images has no PNG artifacts in {directory}"
-    cameras = _list_field(report, "cameras")
-    expected_images_or_error = _expected_camera_images(item.label, cameras)
-    if isinstance(expected_images_or_error, str):
-        return item.label, expected_images_or_error
-    expected_images = expected_images_or_error
     actual_names = sorted(path.name for path in image_paths)
     expected_names = sorted(entry["name"] for entry in expected_images)
     if actual_names != expected_names:

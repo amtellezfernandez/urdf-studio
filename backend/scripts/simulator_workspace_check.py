@@ -51,8 +51,10 @@ from backend.services.simulator_adapters.workspace_parity import (
 )
 from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
 from backend.services.simulator_adapters.workspace_request_sources import (
+    WORKSPACE_FIXTURES,
     WORKSPACE_SIMULATORS,
     build_demo_workspace_request,
+    build_studio_y_up_axis_workspace_request,
     build_workspace_request_from_files,
 )
 from backend.services.simulator_adapters.workspace_report_validation import (
@@ -60,16 +62,23 @@ from backend.services.simulator_adapters.workspace_report_validation import (
     validate_simulator_workspace_report,
 )
 from backend.services.world_layout_static_transfer import (
+    build_sim_primitives,
     count_transferable_world_objects,
     parse_static_world_layout_payload,
+    resolve_world_layout_frame_map,
 )
-from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
+from backend.services.world_layout_transfer_types import (
+    ConcreteWorldLayoutFrameMap,
+    WorldLayoutFrameMap,
+)
 from backend.services.world_scene_package_digest import world_scene_package_json_payload
 from backend.scripts.simulator_workspace_cli import WORKSPACE_FRAME_MAP_CHOICES
 
 REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
 DEFAULT_DURATION_SEC = 0.02
 DEFAULT_TIMEOUT_SEC = 180.0
+BLENDER_BLEND_VALIDATE_MARKER = "URDF_STUDIO_BLEND_VALIDATE "
+BLENDER_BLEND_VALIDATE_TIMEOUT_SEC = 60.0
 
 
 @dataclass(frozen=True)
@@ -87,6 +96,10 @@ class PreparedWorkspaceCommand:
     expected_simulator_id: SimulatorId | None = None
     expected_object_count: int | None = None
     expected_camera_count: int | None = None
+    expected_requested_frame_map: WorldLayoutFrameMap | None = None
+    expected_frame_map: ConcreteWorldLayoutFrameMap | None = None
+    expected_object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    expected_object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_report_artifact_file_keys: tuple[str, ...] = ()
     expected_report_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -97,6 +110,9 @@ class WorkspaceExpectations:
     camera_count: int
     duration_sec: float
     frame_map: WorldLayoutFrameMap = "auto"
+    resolved_frame_map: ConcreteWorldLayoutFrameMap | None = None
+    object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +135,24 @@ class WorkspaceCheckResult:
 
 def _workspace_frame_map(expectations: WorkspaceExpectations) -> WorldLayoutFrameMap:
     return getattr(expectations, "frame_map", "auto")
+
+
+def _workspace_resolved_frame_map(
+    expectations: WorkspaceExpectations,
+) -> ConcreteWorldLayoutFrameMap | None:
+    return getattr(expectations, "resolved_frame_map", None)
+
+
+def _workspace_object_positions(
+    expectations: WorkspaceExpectations,
+) -> Mapping[str, tuple[float, float, float]] | None:
+    return getattr(expectations, "object_positions_xyz", None)
+
+
+def _workspace_object_sizes(
+    expectations: WorkspaceExpectations,
+) -> Mapping[str, tuple[float, float, float]] | None:
+    return getattr(expectations, "object_sizes_xyz", None)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -153,6 +187,12 @@ def _parse_args() -> argparse.Namespace:
             "Validate workspace transfer artifacts without requiring optional opener "
             "applications such as Blender. This cannot be combined with --require-all."
         ),
+    )
+    parser.add_argument(
+        "--fixture",
+        choices=WORKSPACE_FIXTURES,
+        default="demo",
+        help="Built-in workspace fixture to validate when --world-package is not provided.",
     )
     parser.add_argument("--duration-sec", type=float, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--timeout-sec", type=float, default=DEFAULT_TIMEOUT_SEC)
@@ -192,13 +232,18 @@ def _is_truthy_env(value: str | None) -> bool:
 
 
 def _workspace_request_from_args(args: argparse.Namespace) -> SimulatorWorkspacePrepareRequest:
+    fixture = getattr(args, "fixture", "demo")
     has_custom_world_package = bool(args.world_package)
     has_custom_robot_urdf = bool(args.robot_urdf)
     if has_custom_world_package != has_custom_robot_urdf:
         raise SystemExit("--world-package and --robot-urdf must be provided together")
     if args.asset_root and not has_custom_world_package:
         raise SystemExit("--asset-root can only be used with --world-package and --robot-urdf")
+    if has_custom_world_package and fixture != "demo":
+        raise SystemExit("--fixture cannot be combined with --world-package")
     if not has_custom_world_package:
+        if fixture == "studio-y-up-axis":
+            return build_studio_y_up_axis_workspace_request()
         return build_demo_workspace_request()
     return build_workspace_request_from_files(
         world_package_path=Path(args.world_package),
@@ -287,6 +332,10 @@ def _prepare_direct_urdf_command(
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
         expected_camera_count=expectations.camera_count,
+        expected_requested_frame_map=_workspace_frame_map(expectations),
+        expected_frame_map=_workspace_resolved_frame_map(expectations),
+        expected_object_positions_xyz=_workspace_object_positions(expectations),
+        expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
@@ -399,6 +448,10 @@ def _prepare_mujoco_command(
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
         expected_camera_count=expectations.camera_count,
+        expected_requested_frame_map=_workspace_frame_map(expectations),
+        expected_frame_map=_workspace_resolved_frame_map(expectations),
+        expected_object_positions_xyz=_workspace_object_positions(expectations),
+        expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_report_artifact_file_keys=("mjcf_path",),
         expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
@@ -410,12 +463,29 @@ def _prepare_blender_command(
 ) -> PreparedWorkspaceCommand:
     prepared = prepare_blender_workspace_package(request)
     artifact_dir = prepared.workspace_dir / "artifacts"
+    blend_path = prepared.workspace_dir / "blender" / "urdf-studio-layout.blend"
     camera_screenshot_dir = artifact_dir / "cameras"
     report_path = artifact_dir / "report.json"
     blender_executable = resolve_blender_executable()
     extra_args: tuple[str, ...] = ()
     extra_expected_markers = ("edit_session=",)
     expected_image_dirs: tuple[tuple[Path, int], ...] = ()
+    expected_file_validators: tuple[tuple[Path, Callable[[Path], str | None]], ...] = (
+        (
+            artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
+            lambda path: validate_blender_edit_session_artifact(
+                path,
+                expected_object_count=expectations.object_count,
+                expected_camera_count=expectations.camera_count,
+            ),
+        ),
+    )
+    expected_report_artifact_file_keys = (
+        "edit_session_path",
+        "open_script_path",
+        "export_script_path",
+        "robot_usd_path",
+    )
     expected_report_artifact_dir_keys: tuple[str, ...] = ()
     if blender_executable is not None:
         extra_args = (
@@ -429,6 +499,22 @@ def _prepare_blender_command(
             f"camera_screenshots={expectations.camera_count}",
         )
         expected_image_dirs = ((camera_screenshot_dir, expectations.camera_count),)
+        expected_file_validators = (
+            *expected_file_validators,
+            (
+                blend_path,
+                lambda path: _validate_blender_blend_artifact(
+                    path,
+                    blender_executable=blender_executable,
+                    expected_object_count=expectations.object_count,
+                    expected_camera_count=expectations.camera_count,
+                ),
+            ),
+        )
+        expected_report_artifact_file_keys = (
+            *expected_report_artifact_file_keys,
+            "blend_path",
+        )
         expected_report_artifact_dir_keys = ("camera_screenshot_dir",)
     return _prepare_direct_urdf_command(
         prepared,
@@ -444,25 +530,94 @@ def _prepare_blender_command(
             artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME,
             artifact_dir / BLENDER_ROBOT_USD_FILENAME,
         ),
-        expected_file_validators=(
-            (
-                artifact_dir / BLENDER_EDIT_SESSION_FILENAME,
-                lambda path: validate_blender_edit_session_artifact(
-                    path,
-                    expected_object_count=expectations.object_count,
-                    expected_camera_count=expectations.camera_count,
-                ),
-            ),
-        ),
+        expected_file_validators=expected_file_validators,
         expected_report_path=report_path,
-        expected_report_artifact_file_keys=(
-            "edit_session_path",
-            "open_script_path",
-            "export_script_path",
-            "robot_usd_path",
-        ),
+        expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
+
+
+def _validate_blender_blend_artifact(
+    path: Path,
+    *,
+    blender_executable: str,
+    expected_object_count: int,
+    expected_camera_count: int,
+) -> str | None:
+    script = f"""
+import json
+import bpy
+
+world_object_count = sum(
+    1
+    for obj in bpy.data.objects
+    if obj.get("urdf_studio_kind") == "world_object"
+)
+camera_count = sum(
+    1
+    for obj in bpy.data.objects
+    if obj.get("urdf_studio_kind") == "camera"
+)
+print(
+    {BLENDER_BLEND_VALIDATE_MARKER!r}
+    + json.dumps(
+        {{
+            "world_object_count": world_object_count,
+            "camera_count": camera_count,
+        }},
+        sort_keys=True,
+    ),
+    flush=True,
+)
+"""
+    process = subprocess.run(
+        [
+            blender_executable,
+            "--background",
+            str(path),
+            "--python-expr",
+            f"exec({script!r})",
+        ],
+        cwd=BASE_DIR,
+        capture_output=True,
+        text=True,
+        timeout=BLENDER_BLEND_VALIDATE_TIMEOUT_SEC,
+        check=False,
+        env=build_simulator_workspace_env(
+            BASE_DIR / ".cache" / "simulator-workspaces" / "runtime-cache"
+        ),
+    )
+    output = "\n".join(part for part in (process.stdout, process.stderr) if part)
+    if process.returncode != 0:
+        return f"Blender saved-session validation exited with code {process.returncode}: {output.strip()}"
+    payload = _read_blender_validate_payload(output)
+    if payload is None:
+        return f"Blender saved-session validation did not emit {BLENDER_BLEND_VALIDATE_MARKER.strip()}"
+    object_count = payload.get("world_object_count")
+    if object_count != expected_object_count:
+        return (
+            "Blender saved-session world object count mismatch: "
+            f"{object_count}, expected {expected_object_count}"
+        )
+    camera_count = payload.get("camera_count")
+    if camera_count != expected_camera_count:
+        return (
+            "Blender saved-session camera count mismatch: "
+            f"{camera_count}, expected {expected_camera_count}"
+        )
+    return None
+
+
+def _read_blender_validate_payload(output: str) -> Mapping[str, object] | None:
+    for line in output.splitlines():
+        if not line.startswith(BLENDER_BLEND_VALIDATE_MARKER):
+            continue
+        try:
+            payload = json.loads(line[len(BLENDER_BLEND_VALIDATE_MARKER) :])
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, Mapping) else None
+    return None
 
 
 WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
@@ -598,6 +753,10 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             simulator_id=command.expected_simulator_id,
             object_count=command.expected_object_count,
             camera_count=command.expected_camera_count,
+            requested_frame_map=command.expected_requested_frame_map,
+            frame_map=command.expected_frame_map,
+            object_positions_xyz=command.expected_object_positions_xyz,
+            object_sizes_xyz=command.expected_object_sizes_xyz,
             required_artifact_file_keys=command.expected_report_artifact_file_keys,
             required_artifact_dir_keys=command.expected_report_artifact_dir_keys,
         ),
@@ -690,10 +849,37 @@ def _report_has_camera_artifacts(report_path: Path) -> bool:
 
 
 def _active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
-    layout = parse_static_world_layout_payload(
-        world_scene_package_json_payload(request.world_package)
-    )
+    layout = _workspace_layout(request)
     return count_transferable_world_objects(layout, include_hidden=False)
+
+
+def _workspace_layout(request: SimulatorWorkspacePrepareRequest):
+    return parse_static_world_layout_payload(world_scene_package_json_payload(request.world_package))
+
+
+def _resolved_frame_map_for_request(
+    request: SimulatorWorkspacePrepareRequest,
+    frame_map: WorldLayoutFrameMap,
+) -> ConcreteWorldLayoutFrameMap:
+    return resolve_world_layout_frame_map(_workspace_layout(request), frame_map)
+
+
+def _expected_object_vectors_for_request(
+    request: SimulatorWorkspacePrepareRequest,
+    frame_map: WorldLayoutFrameMap,
+) -> tuple[
+    dict[str, tuple[float, float, float]],
+    dict[str, tuple[float, float, float]],
+]:
+    primitives, _warnings = build_sim_primitives(
+        _workspace_layout(request),
+        frame_map=frame_map,
+        include_hidden=False,
+    )
+    return (
+        {primitive.source_id: primitive.position_xyz for primitive in primitives},
+        {primitive.source_id: primitive.size_xyz for primitive in primitives},
+    )
 
 
 def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
@@ -722,11 +908,18 @@ def main() -> int:
         or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
     )
     request = _workspace_request_from_args(args)
+    object_positions_xyz, object_sizes_xyz = _expected_object_vectors_for_request(
+        request,
+        args.frame_map,
+    )
     expectations = WorkspaceExpectations(
         object_count=_active_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
         duration_sec=args.duration_sec,
         frame_map=args.frame_map,
+        resolved_frame_map=_resolved_frame_map_for_request(request, args.frame_map),
+        object_positions_xyz=object_positions_xyz,
+        object_sizes_xyz=object_sizes_xyz,
     )
     results = [
         _check_target(

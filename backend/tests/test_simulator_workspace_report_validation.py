@@ -58,6 +58,10 @@ def _expectations(
     object_count: int = 1,
     camera_count: int = 1,
     simulator_id: str = SIMULATOR_GENESIS_ID,
+    requested_frame_map: str | None = None,
+    frame_map: str | None = None,
+    object_positions_xyz: dict[str, tuple[float, float, float]] | None = None,
+    object_sizes_xyz: dict[str, tuple[float, float, float]] | None = None,
     required_artifact_file_keys: tuple[str, ...] = (),
     required_artifact_dir_keys: tuple[str, ...] = (),
 ) -> SimulatorWorkspaceReportExpectations:
@@ -65,6 +69,10 @@ def _expectations(
         simulator_id=simulator_id,
         object_count=object_count,
         camera_count=camera_count,
+        requested_frame_map=requested_frame_map,
+        frame_map=frame_map,
+        object_positions_xyz=object_positions_xyz,
+        object_sizes_xyz=object_sizes_xyz,
         required_artifact_file_keys=required_artifact_file_keys,
         required_artifact_dir_keys=required_artifact_dir_keys,
     )
@@ -205,6 +213,110 @@ def test_workspace_report_validation_rejects_invalid_frame_map(tmp_path) -> None
     assert validate_simulator_workspace_report(report_path, _expectations()) == (
         "simulator validation report field 'frame_map' must be one of: "
         "identity, studio-y-up-to-z-up"
+    )
+
+
+def test_workspace_report_validation_rejects_unexpected_requested_frame_map(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "requested_frame_map": "identity",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(requested_frame_map="auto"),
+    ) == "simulator validation report has requested_frame_map='identity', expected 'auto'"
+
+
+def test_workspace_report_validation_rejects_unexpected_resolved_frame_map(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "requested_frame_map": "auto",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(
+            requested_frame_map="auto",
+            frame_map="studio-y-up-to-z-up",
+        ),
+    ) == (
+        "simulator validation report has frame_map='identity', "
+        "expected 'studio-y-up-to-z-up'"
+    )
+
+
+def test_workspace_report_validation_rejects_unexpected_object_position(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "studio-y-up-to-z-up",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object("axis-box")],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(
+            frame_map="studio-y-up-to-z-up",
+            object_positions_xyz={"axis-box": (1.0, -3.0, 2.0)},
+        ),
+    ) == (
+        "simulator validation report field 'objects[axis-box].position_xyz[0]' "
+        "is 0.0, expected 1.0"
+    )
+
+
+def test_workspace_report_validation_rejects_unexpected_object_size(tmp_path) -> None:
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "studio-y-up-to-z-up",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object("axis-box")],
+            "cameras": [_report_camera()],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(
+            frame_map="studio-y-up-to-z-up",
+            object_sizes_xyz={"axis-box": (0.2, 0.8, 0.4)},
+        ),
+    ) == (
+        "simulator validation report field 'objects[axis-box].size_xyz[0]' "
+        "is 0.1, expected 0.2"
     )
 
 

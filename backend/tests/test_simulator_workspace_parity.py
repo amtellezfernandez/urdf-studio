@@ -57,6 +57,31 @@ def test_simulator_workspace_parity_rejects_report_mismatch(tmp_path: Path) -> N
     assert "report.objects" in result.detail
 
 
+def test_simulator_workspace_parity_accepts_object_only_reports(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+        include_camera=False,
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+        include_camera=False,
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is True
+
+
 def test_simulator_workspace_parity_rejects_camera_image_mismatch(tmp_path: Path) -> None:
     genesis_report = _write_parity_report(
         tmp_path / "genesis",
@@ -141,17 +166,40 @@ def _write_parity_report(
     image_size: tuple[int, int] = (64, 48),
     image_name: str = "01_scene_camera.png",
     image_variant: str = "visible",
+    include_camera: bool = True,
 ) -> Path:
     from PIL import Image
 
     camera_dir = root / "cameras"
     camera_dir.mkdir(parents=True)
-    image = Image.new("RGB", image_size, (255, 0, 0))
-    if image_variant == "visible" and image_size[0] > 1 and image_size[1] > 1:
-        image.putpixel((image_size[0] - 1, image_size[1] - 1), (0, 255, 0))
-    elif image_variant != "blank":
-        raise ValueError(f"unknown image_variant: {image_variant}")
-    image.save(camera_dir / image_name)
+    if include_camera:
+        image = Image.new("RGB", image_size, (255, 0, 0))
+        if image_variant == "visible" and image_size[0] > 1 and image_size[1] > 1:
+            image.putpixel((image_size[0] - 1, image_size[1] - 1), (0, 255, 0))
+        elif image_variant != "blank":
+            raise ValueError(f"unknown image_variant: {image_variant}")
+        image.save(camera_dir / image_name)
+    camera_entries = [
+        {
+            "camera_id": "cam",
+            "name": "scene camera",
+            "sim_name": "scene_camera",
+            "parent_joint": "base_link",
+            "parent_link": "base_link",
+            "position_xyz": [0.0, 0.0, 1.0],
+            "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "width": 64,
+            "height": 48,
+            "fov_deg": 60.0,
+            "intrinsics": {
+                "matrix": [
+                    [1.0, 0.0, 32.0],
+                    [0.0, 1.0, 24.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            },
+        }
+    ] if include_camera else []
     report_path = root / "report.json"
     report_path.write_text(
         json.dumps(
@@ -164,7 +212,7 @@ def _write_parity_report(
                 "frame_convention": "ros-rep-103",
                 "object_count": 1,
                 "primitive_count": 1,
-                "camera_count": 1,
+                "camera_count": len(camera_entries),
                 "joint_position_count": 0,
                 "warnings": [],
                 "objects": [
@@ -188,27 +236,7 @@ def _write_parity_report(
                         "asset_scale_xyz": None,
                     }
                 ],
-                "cameras": [
-                    {
-                        "camera_id": "cam",
-                        "name": "scene camera",
-                        "sim_name": "scene_camera",
-                        "parent_joint": "base_link",
-                        "parent_link": "base_link",
-                        "position_xyz": [0.0, 0.0, 1.0],
-                        "quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                        "width": 64,
-                        "height": 48,
-                        "fov_deg": 60.0,
-                        "intrinsics": {
-                            "matrix": [
-                                [1.0, 0.0, 32.0],
-                                [0.0, 1.0, 24.0],
-                                [0.0, 0.0, 1.0],
-                            ]
-                        },
-                    }
-                ],
+                "cameras": camera_entries,
                 "artifacts": {"camera_screenshot_dir": str(camera_dir)},
             }
         ),

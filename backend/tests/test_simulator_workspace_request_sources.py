@@ -5,6 +5,7 @@ import pytest
 from backend.services.simulator_adapters.workspace_request_sources import (
     WORKSPACE_SIMULATORS,
     build_demo_workspace_request,
+    build_studio_y_up_axis_workspace_request,
     build_workspace_request_from_files,
 )
 from backend.tests.simulator_adapter_test_utils import make_world_package, write_world_package_file
@@ -30,6 +31,30 @@ def test_demo_workspace_request_contains_robot_assets_objects_and_cameras() -> N
     assert [target.name for target in request.world_package.runtime_targets] == list(
         WORKSPACE_SIMULATORS
     )
+
+
+def test_studio_y_up_axis_workspace_request_contains_axis_probe() -> None:
+    request = build_studio_y_up_axis_workspace_request()
+
+    assert request.urdf_asset_path == "robot.urdf"
+    assert request.world_package.package_id == "studio-y-up-axis-workspace-check"
+    assert request.world_package.interface.frame_convention == "studio-y-up"
+    assert request.world_package.interface.observation_modalities == ["state"]
+    assert request.world_package.world_snapshot.cameras == []
+    assert request.world_package.world_snapshot.objects == [
+        {
+            "id": "axis-box",
+            "name": "Axis box",
+            "type": "cube",
+            "position_xyz": [1.0, 2.0, 3.0],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.4, 0.8],
+            "color": "#22c55e",
+            "source": "user",
+        }
+    ]
+    assert request.world_package.provenance["workspace_check_fixture"] == "studio-y-up-axis"
+    assert len(request.mesh_assets) > 0
 
 
 def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> None:

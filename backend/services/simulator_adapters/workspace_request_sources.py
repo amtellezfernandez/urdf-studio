@@ -37,6 +37,7 @@ WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_BLENDER_ID,
 )
+WORKSPACE_FIXTURES = ("demo", "studio-y-up-axis")
 DEMO_ROOT = BASE_DIR / "web" / "public" / "demo"
 SO101_MANIFEST_PATH = DEMO_ROOT / "so101" / "manifest.json"
 SO101_CAMERA_CONFIG_PATH = DEMO_ROOT / "so101" / "camera-config.json"
@@ -124,6 +125,33 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
         urdf_asset_path="robot.urdf",
         mesh_assets=_load_demo_mesh_assets(),
     )
+
+
+def build_studio_y_up_axis_workspace_request() -> SimulatorWorkspacePrepareRequest:
+    request = build_demo_workspace_request()
+    world_package = request.world_package.model_copy(deep=True)
+    world_package.package_id = "studio-y-up-axis-workspace-check"
+    world_package.title = "Studio Y-Up Axis Workspace Check"
+    world_package.interface.frame_convention = "studio-y-up"
+    world_package.interface.observation_modalities = ["state"]
+    world_package.world_snapshot.cameras = []
+    world_package.world_snapshot.objects = [
+        {
+            "id": "axis-box",
+            "name": "Axis box",
+            "type": "cube",
+            "position_xyz": [1.0, 2.0, 3.0],
+            "rotation_rpy_rad": [0.0, 0.0, 0.0],
+            "size_xyz": [0.2, 0.4, 0.8],
+            "color": "#22c55e",
+            "source": "user",
+        }
+    ]
+    world_package.provenance = {
+        **world_package.provenance,
+        "workspace_check_fixture": "studio-y-up-axis",
+    }
+    return request.model_copy(update={"world_package": world_package}, deep=True)
 
 
 def build_workspace_request_from_files(

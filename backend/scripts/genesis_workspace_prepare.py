@@ -353,12 +353,17 @@ def prepare_genesis_workspace_scene(
         f"observation_sensors={'enabled' if should_add_observation_sensors else 'viewer-skipped'}",
         flush=True,
     )
+    print(
+        "[genesis-workspace] "
+        f"links_to_keep={len(attachment_links)} "
+        f"merge_fixed_links={GENESIS_SCENE_PARAMS.merge_fixed_links}",
+        flush=True,
+    )
     if camera_attachment_links:
         print(
             "[genesis-workspace] "
             f"camera_attachment_links={len(camera_attachment_links)} "
-            f"links_to_keep={len(attachment_links)} "
-            f"merge_fixed_links={GENESIS_SCENE_PARAMS.merge_fixed_links}",
+            f"links_to_keep={len(attachment_links)}",
             flush=True,
         )
     if viewer_camera_spec is not None:
@@ -398,10 +403,10 @@ def prepare_genesis_workspace_scene(
             if not initial_step_done:
                 step_runtime()
                 initial_step_done = True
-            if observation_camera_sensors and not sensor_reads_reported:
+            if not sensor_reads_reported:
                 sensor_read_count, sensor_images = read_observation_camera_sensor_images(
                     observation_camera_sensors
-                )
+                ) if observation_camera_sensors else (0, ())
                 print(f"[genesis-workspace] sensor_reads={sensor_read_count}", flush=True)
                 sensor_reads_reported = True
 

@@ -21,6 +21,10 @@ class SimulatorWorkspaceReportExpectations:
     simulator_id: SimulatorId | None = None
     object_count: int | None = None
     camera_count: int | None = None
+    requested_frame_map: WorldLayoutFrameMap | None = None
+    frame_map: ConcreteWorldLayoutFrameMap | None = None
+    object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     required_artifact_file_keys: tuple[str, ...] = ()
     required_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -69,6 +73,10 @@ def validate_simulator_workspace_report(
     if header_error:
         return header_error
 
+    frame_contract_error = _validate_expected_frame_contract(payload, expectations)
+    if frame_contract_error:
+        return frame_contract_error
+
     artifact_error = _validate_report_artifacts(payload, expectations)
     if artifact_error:
         return artifact_error
@@ -114,6 +122,9 @@ def validate_simulator_workspace_report(
     )
     if item_error:
         return item_error
+    object_vector_error = _validate_expected_object_vectors(payload, expectations)
+    if object_vector_error:
+        return object_vector_error
     return _validate_report_item_fields(
         payload,
         list_field_name="cameras",
@@ -207,6 +218,26 @@ def _validate_report_frame_map(
         return (
             f"simulator validation report field '{path}' must be one of: "
             f"{', '.join(sorted(valid_values))}"
+        )
+    return None
+
+
+def _validate_expected_frame_contract(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    if (
+        expectations.requested_frame_map is not None
+        and payload.get("requested_frame_map") != expectations.requested_frame_map
+    ):
+        return (
+            "simulator validation report has requested_frame_map="
+            f"{payload.get('requested_frame_map')!r}, expected {expectations.requested_frame_map!r}"
+        )
+    if expectations.frame_map is not None and payload.get("frame_map") != expectations.frame_map:
+        return (
+            "simulator validation report has frame_map="
+            f"{payload.get('frame_map')!r}, expected {expectations.frame_map!r}"
         )
     return None
 
@@ -316,6 +347,68 @@ def _validate_report_item_fields(
     )
     if identity_error:
         return identity_error
+    return None
+
+
+def _validate_expected_object_vectors(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_positions = expectations.object_positions_xyz or {}
+    expected_sizes = expectations.object_sizes_xyz or {}
+    if not expected_positions and not expected_sizes:
+        return None
+    objects = payload.get("objects")
+    if not isinstance(objects, list):
+        return "simulator validation report field 'objects' must be a list"
+    objects_by_source_id = {
+        item.get("source_id"): item
+        for item in objects
+        if isinstance(item, Mapping) and isinstance(item.get("source_id"), str)
+    }
+    for source_id, expected_position in expected_positions.items():
+        item = objects_by_source_id.get(source_id)
+        if item is None:
+            return f"simulator validation report missing object source_id {source_id!r}"
+        error = _validate_expected_vector3(
+            item.get("position_xyz"),
+            expected_position,
+            f"objects[{source_id}].position_xyz",
+        )
+        if error:
+            return error
+    for source_id, expected_size in expected_sizes.items():
+        item = objects_by_source_id.get(source_id)
+        if item is None:
+            return f"simulator validation report missing object source_id {source_id!r}"
+        error = _validate_expected_vector3(
+            item.get("size_xyz"),
+            expected_size,
+            f"objects[{source_id}].size_xyz",
+        )
+        if error:
+            return error
+    return None
+
+
+def _validate_expected_vector3(
+    value: Any,
+    expected: tuple[float, float, float],
+    path: str,
+) -> str | None:
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        return f"simulator validation report field '{path}' must be a vector3"
+    for axis, component in enumerate(value):
+        if (
+            not isinstance(component, int | float)
+            or isinstance(component, bool)
+            or not math.isfinite(component)
+            or not math.isclose(float(component), expected[axis], rel_tol=1e-9, abs_tol=1e-9)
+        ):
+            return (
+                f"simulator validation report field '{path}[{axis}]' "
+                f"is {component!r}, expected {expected[axis]!r}"
+            )
     return None
 
 

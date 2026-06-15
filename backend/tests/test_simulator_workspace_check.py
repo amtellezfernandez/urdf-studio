@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 
 import pytest
@@ -21,6 +22,7 @@ from backend.scripts.simulator_workspace_check import (
     WorkspaceTarget,
     _active_object_count,
     _check_target,
+    _expected_object_vectors_for_request,
     _module_command,
     _prepare_blender_command,
     _prepare_genesis_command,
@@ -28,13 +30,17 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_pybullet_command,
     _print_human_results,
     _report_has_camera_artifacts,
+    _resolved_frame_map_for_request,
     _selected_simulator_ids_from_args,
+    _validate_blender_blend_artifact,
     _validate_file_artifacts,
     _workspace_request_from_args,
+    BLENDER_BLEND_VALIDATE_MARKER,
     main,
 )
 from backend.services.simulator_adapters.workspace_request_sources import (
     build_demo_workspace_request,
+    build_studio_y_up_axis_workspace_request,
 )
 
 
@@ -100,6 +106,59 @@ def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:
     assert _active_object_count(request) == 3
 
 
+def test_workspace_check_resolves_auto_frame_map_from_world_convention() -> None:
+    request = build_studio_y_up_axis_workspace_request()
+
+    assert _resolved_frame_map_for_request(request, "auto") == "studio-y-up-to-z-up"
+
+
+def test_workspace_check_expected_object_vectors_follow_auto_frame_map() -> None:
+    request = build_studio_y_up_axis_workspace_request()
+
+    positions, sizes = _expected_object_vectors_for_request(request, "auto")
+
+    assert positions == {"axis-box": (1.0, -3.0, 2.0)}
+    assert sizes == {"axis-box": (0.2, 0.8, 0.4)}
+
+
+def test_workspace_check_fixture_selects_studio_y_up_axis_request() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fixture": "studio-y-up-axis",
+            "world_package": "",
+            "robot_urdf": "",
+            "asset_root": [],
+        },
+    )()
+
+    request = _workspace_request_from_args(args)
+
+    assert request.world_package.package_id == "studio-y-up-axis-workspace-check"
+    assert request.world_package.interface.frame_convention == "studio-y-up"
+    assert request.world_package.world_snapshot.cameras == []
+    assert [item["id"] for item in request.world_package.world_snapshot.objects] == [
+        "axis-box"
+    ]
+
+
+def test_workspace_check_rejects_fixture_with_custom_world_package() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "fixture": "studio-y-up-axis",
+            "world_package": "world-package.json",
+            "robot_urdf": "robot.urdf",
+            "asset_root": [],
+        },
+    )()
+
+    with pytest.raises(SystemExit, match="--fixture cannot be combined"):
+        _workspace_request_from_args(args)
+
+
 def test_workspace_check_module_command_writes_report_argument_once(tmp_path) -> None:
     command = _module_command(
         MUJOCO_WORKSPACE_PROCESS_PARAMS,
@@ -161,6 +220,8 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     assert command.expected_simulator_id == SIMULATOR_GENESIS_ID
     assert command.expected_object_count == 3
     assert command.expected_camera_count == 3
+    assert command.expected_requested_frame_map == "auto"
+    assert command.expected_frame_map is None
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert "observation_cameras=3" in command.extra_expected_markers
     assert "sensor_reads=3" in command.extra_expected_markers
@@ -356,15 +417,97 @@ def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
 
     command = _prepare_blender_command(
         request,
-        expectations=WorkspaceExpectations(object_count=3, camera_count=3, duration_sec=0.02),
+        expectations=WorkspaceExpectations(
+            object_count=3,
+            camera_count=3,
+            duration_sec=0.02,
+            frame_map="auto",
+            resolved_frame_map="studio-y-up-to-z-up",
+        ),
     )
 
     assert "--blender" in command.command
     assert "/usr/bin/blender" in command.command
     assert "--camera-screenshot-dir" in command.command
+    assert command.expected_requested_frame_map == "auto"
+    assert command.expected_frame_map == "studio-y-up-to-z-up"
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
+    assert command.expected_file_validators[0][0] == (
+        tmp_path / "artifacts" / "blender-edit-session.json"
+    )
+    assert command.expected_file_validators[1][0] == (
+        tmp_path / "blender" / "urdf-studio-layout.blend"
+    )
     assert "camera_screenshots=3" in command.extra_expected_markers
+    assert command.expected_report_artifact_file_keys == (
+        "edit_session_path",
+        "open_script_path",
+        "export_script_path",
+        "robot_usd_path",
+        "blend_path",
+    )
     assert command.expected_report_artifact_dir_keys == ("camera_screenshot_dir",)
+
+
+def test_blender_blend_validator_checks_saved_layout_counts(monkeypatch, tmp_path) -> None:
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
+
+    def fake_run(command, **_kwargs):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                f'{BLENDER_BLEND_VALIDATE_MARKER}'
+                '{"camera_count": 3, "world_object_count": 2}\n'
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.subprocess.run",
+        fake_run,
+    )
+
+    assert (
+        _validate_blender_blend_artifact(
+            blend_path,
+            blender_executable="/usr/bin/blender",
+            expected_object_count=2,
+            expected_camera_count=3,
+        )
+        is None
+    )
+
+
+def test_blender_blend_validator_rejects_missing_saved_layout_objects(
+    monkeypatch, tmp_path
+) -> None:
+    blend_path = tmp_path / "layout.blend"
+    blend_path.write_text("fake blend", encoding="utf-8")
+
+    def fake_run(command, **_kwargs):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                f'{BLENDER_BLEND_VALIDATE_MARKER}'
+                '{"camera_count": 3, "world_object_count": 0}\n'
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        "backend.scripts.simulator_workspace_check.subprocess.run",
+        fake_run,
+    )
+
+    assert _validate_blender_blend_artifact(
+        blend_path,
+        blender_executable="/usr/bin/blender",
+        expected_object_count=2,
+        expected_camera_count=3,
+    ) == "Blender saved-session world object count mismatch: 0, expected 2"
 
 
 def test_workspace_parity_requires_camera_artifacts(tmp_path) -> None:
