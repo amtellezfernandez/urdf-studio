@@ -22,6 +22,7 @@ type UseWorkspaceTransferLauncherParams = {
   attachedIluSessionId: string;
   buildCurrentWorldScenePackageManifest: () => Promise<WorldScenePackageManifest>;
   ensureWorldLayoutForTransfer?: () => Promise<void>;
+  getWorldObjectCountForTransfer?: () => number;
   meshFiles: Record<string, Blob>;
   originalUrdfContent: string;
   packageRoots: Record<string, string[]>;
@@ -77,6 +78,7 @@ export const useWorkspaceTransferLauncher = ({
   attachedIluSessionId,
   buildCurrentWorldScenePackageManifest,
   ensureWorldLayoutForTransfer,
+  getWorldObjectCountForTransfer,
   meshFiles,
   originalUrdfContent,
   packageRoots,
@@ -168,8 +170,9 @@ export const useWorkspaceTransferLauncher = ({
       setLoadingTargetId(descriptor.targetId);
       try {
         await ensureWorldLayoutForTransfer?.();
+        const liveWorldObjectCount = getWorldObjectCountForTransfer?.() ?? worldObjectCount;
         const worldPackage = await buildCurrentWorldScenePackageManifest();
-        assertWorkspacePackageCarriesSceneObjects(worldPackage, worldObjectCount);
+        assertWorkspacePackageCarriesSceneObjects(worldPackage, liveWorldObjectCount);
         const prepared = await openWorkspaceTransferTarget({
           targetId: descriptor.targetId,
           worldPackage,
@@ -204,6 +207,7 @@ export const useWorkspaceTransferLauncher = ({
       attachedIluSessionId,
       buildCurrentWorldScenePackageManifest,
       ensureWorldLayoutForTransfer,
+      getWorldObjectCountForTransfer,
       meshFiles,
       loadingTargetId,
       originalUrdfContent,

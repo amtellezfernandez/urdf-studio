@@ -806,6 +806,7 @@ const Index = () => {
     attachedIluSessionId,
     buildCurrentWorldScenePackageManifest,
     ensureWorldLayoutForTransfer,
+    getWorldObjectCountForTransfer: () => useObjectStore.getState().objects.length,
     meshFiles,
     originalUrdfContent,
     packageRoots,
