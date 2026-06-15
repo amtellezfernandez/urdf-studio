@@ -5,7 +5,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
@@ -36,7 +35,6 @@ from backend.services.simulator_adapters.blender_workspace import (
 from backend.services.simulator_adapters.blender_edit_session import (
     validate_blender_edit_session_artifact,
 )
-from backend.services.simulator_adapters.camera_transfer import build_sim_camera_specs
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
@@ -58,6 +56,10 @@ from backend.services.simulator_adapters.workspace_image_artifacts import (
     WorkspaceImageArtifactExpectations,
     validate_workspace_image_artifacts,
 )
+from backend.services.simulator_adapters.workspace_expectations import (
+    WorkspaceExpectations,
+    build_workspace_expectations,
+)
 from backend.services.simulator_adapters.workspace_request_sources import (
     WORKSPACE_FIXTURES,
     WORKSPACE_SIMULATORS,
@@ -72,17 +74,10 @@ from backend.services.simulator_adapters.workspace_report_validation import (
     SimulatorWorkspaceReportExpectations,
     validate_simulator_workspace_report,
 )
-from backend.services.world_layout_static_transfer import (
-    build_sim_primitives,
-    count_transferable_world_objects,
-    parse_static_world_layout_payload,
-    resolve_world_layout_frame_map,
-)
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     WorldLayoutFrameMap,
 )
-from backend.services.world_scene_package_digest import world_scene_package_json_payload
 from backend.scripts.simulator_workspace_cli import WORKSPACE_FRAME_MAP_CHOICES
 
 REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
@@ -119,22 +114,6 @@ class PreparedWorkspaceCommand:
 
 
 @dataclass(frozen=True)
-class WorkspaceExpectations:
-    object_count: int
-    camera_count: int
-    duration_sec: float
-    frame_map: WorldLayoutFrameMap = "auto"
-    resolved_frame_map: ConcreteWorldLayoutFrameMap | None = None
-    object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
-    object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
-    object_asset_refs: Mapping[str, str | None] | None = None
-    object_contracts: Mapping[str, ExpectedObjectReport] | None = None
-    joint_positions: Mapping[str, float] | None = None
-    camera_ids: tuple[str, ...] | None = None
-    camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
-
-
-@dataclass(frozen=True)
 class WorkspaceTarget:
     simulator_id: SimulatorId
     label: str
@@ -150,56 +129,6 @@ class WorkspaceCheckResult:
     status: str
     detail: str = ""
     report_path: str | None = None
-
-
-def _workspace_frame_map(expectations: WorkspaceExpectations) -> WorldLayoutFrameMap:
-    return getattr(expectations, "frame_map", "auto")
-
-
-def _workspace_resolved_frame_map(
-    expectations: WorkspaceExpectations,
-) -> ConcreteWorldLayoutFrameMap | None:
-    return getattr(expectations, "resolved_frame_map", None)
-
-
-def _workspace_object_positions(
-    expectations: WorkspaceExpectations,
-) -> Mapping[str, tuple[float, float, float]] | None:
-    return getattr(expectations, "object_positions_xyz", None)
-
-
-def _workspace_object_sizes(
-    expectations: WorkspaceExpectations,
-) -> Mapping[str, tuple[float, float, float]] | None:
-    return getattr(expectations, "object_sizes_xyz", None)
-
-
-def _workspace_object_asset_refs(
-    expectations: WorkspaceExpectations,
-) -> Mapping[str, str | None] | None:
-    return getattr(expectations, "object_asset_refs", None)
-
-
-def _workspace_object_contracts(
-    expectations: WorkspaceExpectations,
-) -> Mapping[str, ExpectedObjectReport] | None:
-    return getattr(expectations, "object_contracts", None)
-
-
-def _workspace_joint_positions(
-    expectations: WorkspaceExpectations,
-) -> Mapping[str, float] | None:
-    return getattr(expectations, "joint_positions", None)
-
-
-def _workspace_camera_ids(expectations: WorkspaceExpectations) -> tuple[str, ...] | None:
-    return getattr(expectations, "camera_ids", None)
-
-
-def _workspace_camera_contracts(
-    expectations: WorkspaceExpectations,
-) -> Mapping[str, ExpectedCameraReport] | None:
-    return getattr(expectations, "camera_contracts", None)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -365,7 +294,7 @@ def _prepare_direct_urdf_command(
             robot_asset_flag="--robot-urdf",
             robot_asset_path=prepared.robot_urdf_path,
             duration_sec=expectations.duration_sec,
-            frame_map=_workspace_frame_map(expectations),
+            frame_map=expectations.frame_map,
             extra_args=extra_args,
             report_path=expected_report_path,
         ),
@@ -381,15 +310,15 @@ def _prepare_direct_urdf_command(
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
         expected_camera_count=expectations.camera_count,
-        expected_requested_frame_map=_workspace_frame_map(expectations),
-        expected_frame_map=_workspace_resolved_frame_map(expectations),
-        expected_object_positions_xyz=_workspace_object_positions(expectations),
-        expected_object_sizes_xyz=_workspace_object_sizes(expectations),
-        expected_object_asset_refs=_workspace_object_asset_refs(expectations),
-        expected_object_contracts=_workspace_object_contracts(expectations),
-        expected_joint_positions=_workspace_joint_positions(expectations),
-        expected_camera_ids=_workspace_camera_ids(expectations),
-        expected_camera_contracts=_workspace_camera_contracts(expectations),
+        expected_requested_frame_map=expectations.frame_map,
+        expected_frame_map=expectations.resolved_frame_map,
+        expected_object_positions_xyz=expectations.object_positions_xyz,
+        expected_object_sizes_xyz=expectations.object_sizes_xyz,
+        expected_object_asset_refs=expectations.object_asset_refs,
+        expected_object_contracts=expectations.object_contracts,
+        expected_joint_positions=expectations.joint_positions,
+        expected_camera_ids=expectations.camera_ids,
+        expected_camera_contracts=expectations.camera_contracts,
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
@@ -482,7 +411,7 @@ def _prepare_mujoco_command(
             robot_asset_flag="--robot-mjcf",
             robot_asset_path=prepared.mjcf_path,
             duration_sec=expectations.duration_sec,
-            frame_map=_workspace_frame_map(expectations),
+            frame_map=expectations.frame_map,
             extra_args=(
                 "--robot-urdf",
                 str(prepared.shared_workspace.robot_urdf_path),
@@ -502,13 +431,15 @@ def _prepare_mujoco_command(
         expected_simulator_id=simulator_id,
         expected_object_count=expectations.object_count,
         expected_camera_count=expectations.camera_count,
-        expected_requested_frame_map=_workspace_frame_map(expectations),
-        expected_frame_map=_workspace_resolved_frame_map(expectations),
-        expected_object_positions_xyz=_workspace_object_positions(expectations),
-        expected_object_sizes_xyz=_workspace_object_sizes(expectations),
-        expected_object_asset_refs=_workspace_object_asset_refs(expectations),
-        expected_object_contracts=_workspace_object_contracts(expectations),
-        expected_joint_positions=_workspace_joint_positions(expectations),
+        expected_requested_frame_map=expectations.frame_map,
+        expected_frame_map=expectations.resolved_frame_map,
+        expected_object_positions_xyz=expectations.object_positions_xyz,
+        expected_object_sizes_xyz=expectations.object_sizes_xyz,
+        expected_object_asset_refs=expectations.object_asset_refs,
+        expected_object_contracts=expectations.object_contracts,
+        expected_joint_positions=expectations.joint_positions,
+        expected_camera_ids=expectations.camera_ids,
+        expected_camera_contracts=expectations.camera_contracts,
         expected_report_artifact_file_keys=("mjcf_path",),
         expected_report_artifact_dir_keys=("camera_screenshot_dir",),
     )
@@ -817,113 +748,6 @@ def _report_has_camera_artifacts(report_path: Path) -> bool:
     return isinstance(directory, str) and bool(directory.strip())
 
 
-def _active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
-    layout = _workspace_layout(request)
-    return count_transferable_world_objects(layout, include_hidden=False)
-
-
-def _workspace_layout(request: SimulatorWorkspacePrepareRequest):
-    return parse_static_world_layout_payload(world_scene_package_json_payload(request.world_package))
-
-
-def _resolved_frame_map_for_request(
-    request: SimulatorWorkspacePrepareRequest,
-    frame_map: WorldLayoutFrameMap,
-) -> ConcreteWorldLayoutFrameMap:
-    return resolve_world_layout_frame_map(_workspace_layout(request), frame_map)
-
-
-def _expected_object_contract_for_request(
-    request: SimulatorWorkspacePrepareRequest,
-    frame_map: WorldLayoutFrameMap,
-) -> tuple[
-    dict[str, tuple[float, float, float]],
-    dict[str, tuple[float, float, float]],
-    dict[str, str | None],
-    dict[str, ExpectedObjectReport],
-]:
-    primitives, _warnings = build_sim_primitives(
-        _workspace_layout(request),
-        frame_map=frame_map,
-        include_hidden=False,
-    )
-    return (
-        {primitive.source_id: primitive.position_xyz for primitive in primitives},
-        {primitive.source_id: primitive.size_xyz for primitive in primitives},
-        {primitive.source_id: primitive.asset_ref for primitive in primitives},
-        {
-            primitive.source_id: ExpectedObjectReport(
-                source_id=primitive.source_id,
-                source_name=primitive.source_name,
-                sim_name=primitive.sim_name,
-                source_type=primitive.source_type,
-                sim_type=primitive.sim_type,
-                position_xyz=primitive.position_xyz,
-                quat_wxyz=primitive.quat_wxyz,
-                size_xyz=primitive.size_xyz,
-                rgba=primitive.rgba,
-                collision=primitive.collision,
-                fixed=primitive.fixed,
-                mass_kg=primitive.mass_kg,
-                friction=primitive.friction,
-                restitution=primitive.restitution,
-                semantic_role=primitive.semantic_role,
-                asset_ref=primitive.asset_ref,
-                asset_scale_xyz=primitive.asset_scale_xyz,
-            )
-            for primitive in primitives
-        },
-    )
-
-
-def _expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
-    camera_ids: list[str] = []
-    for index, camera in enumerate(request.world_package.world_snapshot.cameras):
-        if isinstance(camera, Mapping):
-            raw_id = camera.get("id")
-            raw_name = camera.get("name")
-            if isinstance(raw_id, str) and raw_id.strip():
-                camera_ids.append(raw_id.strip())
-                continue
-            if isinstance(raw_name, str) and raw_name.strip():
-                camera_ids.append(raw_name.strip())
-                continue
-        camera_ids.append(f"camera_{index + 1}")
-    return tuple(camera_ids)
-
-
-def _expected_camera_contracts_for_request(
-    request: SimulatorWorkspacePrepareRequest,
-) -> dict[str, ExpectedCameraReport]:
-    if not request.world_package.world_snapshot.cameras:
-        return {}
-    with tempfile.TemporaryDirectory(prefix="urdf-studio-camera-contract-") as directory:
-        robot_urdf_path = Path(directory) / "robot.urdf"
-        robot_urdf_path.write_text(
-            request.world_package.world_snapshot.urdf_xml,
-            encoding="utf-8",
-        )
-        camera_specs, _warnings = build_sim_camera_specs(
-            request.world_package,
-            robot_urdf_path=robot_urdf_path,
-        )
-    return {
-        camera.camera_id: ExpectedCameraReport(
-            camera_id=camera.camera_id,
-            sim_name=camera.sim_name,
-            parent_joint=camera.parent_joint,
-            parent_link=camera.parent_link,
-            position_xyz=camera.position_xyz,
-            quat_wxyz=camera.quat_wxyz,
-            width=camera.width,
-            height=camera.height,
-            fov_deg=camera.fov_deg,
-            intrinsics_matrix=camera.intrinsics.matrix if camera.intrinsics is not None else (),
-        )
-        for camera in camera_specs
-    }
-
-
 def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
     for result in results:
         if result.status == "passed":
@@ -950,28 +774,10 @@ def main() -> int:
         or _is_truthy_env(os.getenv(REQUIRE_SIMULATOR_WORKSPACE_ENV))
     )
     request = _workspace_request_from_args(args)
-    (
-        object_positions_xyz,
-        object_sizes_xyz,
-        object_asset_refs,
-        object_contracts,
-    ) = _expected_object_contract_for_request(request, args.frame_map)
-    expectations = WorkspaceExpectations(
-        object_count=_active_object_count(request),
-        camera_count=len(request.world_package.world_snapshot.cameras),
+    expectations = build_workspace_expectations(
+        request,
         duration_sec=args.duration_sec,
         frame_map=args.frame_map,
-        resolved_frame_map=_resolved_frame_map_for_request(request, args.frame_map),
-        object_positions_xyz=object_positions_xyz,
-        object_sizes_xyz=object_sizes_xyz,
-        object_asset_refs=object_asset_refs,
-        object_contracts=object_contracts,
-        joint_positions={
-            str(name): float(position)
-            for name, position in request.world_package.world_snapshot.joint_positions.items()
-        },
-        camera_ids=_expected_camera_ids_for_request(request),
-        camera_contracts=_expected_camera_contracts_for_request(request),
     )
     results = [
         _check_target(

@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
+from backend.services.simulator_adapters.camera_transfer import build_sim_camera_specs
+from backend.services.simulator_adapters.workspace_report_validation import (
+    ExpectedCameraReport,
+    ExpectedObjectReport,
+)
+from backend.services.world_layout_static_transfer import (
+    build_sim_primitives,
+    count_transferable_world_objects,
+    parse_static_world_layout_payload,
+    resolve_world_layout_frame_map,
+)
+from backend.services.world_layout_transfer_types import (
+    ConcreteWorldLayoutFrameMap,
+    WorldLayoutFrameMap,
+)
+from backend.services.world_scene_package_digest import world_scene_package_json_payload
+
+
+@dataclass(frozen=True)
+class ExpectedObjectContracts:
+    positions_xyz: Mapping[str, tuple[float, float, float]]
+    sizes_xyz: Mapping[str, tuple[float, float, float]]
+    asset_refs: Mapping[str, str | None]
+    contracts: Mapping[str, ExpectedObjectReport]
+
+
+@dataclass(frozen=True)
+class WorkspaceExpectations:
+    object_count: int
+    camera_count: int
+    duration_sec: float
+    frame_map: WorldLayoutFrameMap = "auto"
+    resolved_frame_map: ConcreteWorldLayoutFrameMap | None = None
+    object_positions_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
+    object_asset_refs: Mapping[str, str | None] | None = None
+    object_contracts: Mapping[str, ExpectedObjectReport] | None = None
+    joint_positions: Mapping[str, float] | None = None
+    camera_ids: tuple[str, ...] | None = None
+    camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
+
+
+def build_workspace_expectations(
+    request: SimulatorWorkspacePrepareRequest,
+    *,
+    duration_sec: float,
+    frame_map: WorldLayoutFrameMap,
+) -> WorkspaceExpectations:
+    object_contracts = expected_object_contracts_for_request(request, frame_map)
+    return WorkspaceExpectations(
+        object_count=active_object_count(request),
+        camera_count=len(request.world_package.world_snapshot.cameras),
+        duration_sec=duration_sec,
+        frame_map=frame_map,
+        resolved_frame_map=resolved_frame_map_for_request(request, frame_map),
+        object_positions_xyz=object_contracts.positions_xyz,
+        object_sizes_xyz=object_contracts.sizes_xyz,
+        object_asset_refs=object_contracts.asset_refs,
+        object_contracts=object_contracts.contracts,
+        joint_positions={
+            str(name): float(position)
+            for name, position in request.world_package.world_snapshot.joint_positions.items()
+        },
+        camera_ids=expected_camera_ids_for_request(request),
+        camera_contracts=expected_camera_contracts_for_request(request),
+    )
+
+
+def active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
+    layout = workspace_layout_from_request(request)
+    return count_transferable_world_objects(layout, include_hidden=False)
+
+
+def workspace_layout_from_request(request: SimulatorWorkspacePrepareRequest) -> Any:
+    return parse_static_world_layout_payload(world_scene_package_json_payload(request.world_package))
+
+
+def resolved_frame_map_for_request(
+    request: SimulatorWorkspacePrepareRequest,
+    frame_map: WorldLayoutFrameMap,
+) -> ConcreteWorldLayoutFrameMap:
+    return resolve_world_layout_frame_map(workspace_layout_from_request(request), frame_map)
+
+
+def expected_object_contracts_for_request(
+    request: SimulatorWorkspacePrepareRequest,
+    frame_map: WorldLayoutFrameMap,
+) -> ExpectedObjectContracts:
+    primitives, _warnings = build_sim_primitives(
+        workspace_layout_from_request(request),
+        frame_map=frame_map,
+        include_hidden=False,
+    )
+    return ExpectedObjectContracts(
+        positions_xyz={primitive.source_id: primitive.position_xyz for primitive in primitives},
+        sizes_xyz={primitive.source_id: primitive.size_xyz for primitive in primitives},
+        asset_refs={primitive.source_id: primitive.asset_ref for primitive in primitives},
+        contracts={
+            primitive.source_id: ExpectedObjectReport(
+                source_id=primitive.source_id,
+                source_name=primitive.source_name,
+                sim_name=primitive.sim_name,
+                source_type=primitive.source_type,
+                sim_type=primitive.sim_type,
+                position_xyz=primitive.position_xyz,
+                quat_wxyz=primitive.quat_wxyz,
+                size_xyz=primitive.size_xyz,
+                rgba=primitive.rgba,
+                collision=primitive.collision,
+                fixed=primitive.fixed,
+                mass_kg=primitive.mass_kg,
+                friction=primitive.friction,
+                restitution=primitive.restitution,
+                semantic_role=primitive.semantic_role,
+                asset_ref=primitive.asset_ref,
+                asset_scale_xyz=primitive.asset_scale_xyz,
+            )
+            for primitive in primitives
+        },
+    )
+
+
+def expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) -> tuple[str, ...]:
+    camera_ids: list[str] = []
+    for index, camera in enumerate(request.world_package.world_snapshot.cameras):
+        if isinstance(camera, Mapping):
+            raw_id = camera.get("id")
+            raw_name = camera.get("name")
+            if isinstance(raw_id, str) and raw_id.strip():
+                camera_ids.append(raw_id.strip())
+                continue
+            if isinstance(raw_name, str) and raw_name.strip():
+                camera_ids.append(raw_name.strip())
+                continue
+        camera_ids.append(f"camera_{index + 1}")
+    return tuple(camera_ids)
+
+
+def expected_camera_contracts_for_request(
+    request: SimulatorWorkspacePrepareRequest,
+) -> dict[str, ExpectedCameraReport]:
+    if not request.world_package.world_snapshot.cameras:
+        return {}
+    with tempfile.TemporaryDirectory(prefix="urdf-studio-camera-contract-") as directory:
+        robot_urdf_path = Path(directory) / "robot.urdf"
+        robot_urdf_path.write_text(
+            request.world_package.world_snapshot.urdf_xml,
+            encoding="utf-8",
+        )
+        camera_specs, _warnings = build_sim_camera_specs(
+            request.world_package,
+            robot_urdf_path=robot_urdf_path,
+        )
+    return {
+        camera.camera_id: ExpectedCameraReport(
+            camera_id=camera.camera_id,
+            sim_name=camera.sim_name,
+            parent_joint=camera.parent_joint,
+            parent_link=camera.parent_link,
+            position_xyz=camera.position_xyz,
+            quat_wxyz=camera.quat_wxyz,
+            width=camera.width,
+            height=camera.height,
+            fov_deg=camera.fov_deg,
+            intrinsics_matrix=camera.intrinsics.matrix if camera.intrinsics is not None else (),
+        )
+        for camera in camera_specs
+    }

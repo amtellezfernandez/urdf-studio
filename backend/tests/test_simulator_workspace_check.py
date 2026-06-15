@@ -17,13 +17,8 @@ from backend.scripts.simulator_workspace_check import (
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PreparedWorkspaceCommand,
     WorkspaceCheckResult,
-    WorkspaceExpectations,
     WorkspaceTarget,
-    _active_object_count,
     _check_target,
-    _expected_camera_contracts_for_request,
-    _expected_camera_ids_for_request,
-    _expected_object_contract_for_request,
     _module_command,
     _prepare_blender_command,
     _prepare_genesis_command,
@@ -31,11 +26,18 @@ from backend.scripts.simulator_workspace_check import (
     _prepare_pybullet_command,
     _print_human_results,
     _report_has_camera_artifacts,
-    _resolved_frame_map_for_request,
     _selected_simulator_ids_from_args,
     _validate_file_artifacts,
     _workspace_request_from_args,
     main,
+)
+from backend.services.simulator_adapters.workspace_expectations import (
+    WorkspaceExpectations,
+    active_object_count,
+    expected_camera_contracts_for_request,
+    expected_camera_ids_for_request,
+    expected_object_contracts_for_request,
+    resolved_frame_map_for_request,
 )
 from backend.services.simulator_adapters.workspace_image_artifacts import (
     WorkspaceImageArtifactExpectations,
@@ -107,28 +109,28 @@ def test_workspace_check_expected_object_count_ignores_hidden_objects() -> None:
         }
     )
 
-    assert _active_object_count(request) == 3
+    assert active_object_count(request) == 3
 
 
 def test_workspace_check_resolves_auto_frame_map_from_world_convention() -> None:
     request = build_studio_y_up_axis_workspace_request()
 
-    assert _resolved_frame_map_for_request(request, "auto") == "studio-y-up-to-z-up"
+    assert resolved_frame_map_for_request(request, "auto") == "studio-y-up-to-z-up"
 
 
 def test_workspace_check_expected_object_vectors_follow_auto_frame_map() -> None:
     request = build_studio_y_up_axis_workspace_request()
 
-    positions, sizes, asset_refs, object_contracts = _expected_object_contract_for_request(
+    object_contracts = expected_object_contracts_for_request(
         request,
         "auto",
     )
 
-    assert positions == {"axis-box": (1.0, -3.0, 2.0)}
-    assert sizes == {"axis-box": (0.2, 0.8, 0.4)}
-    assert asset_refs == {"axis-box": None}
-    assert object_contracts["axis-box"].source_type == "cube"
-    assert object_contracts["axis-box"].rgba == (
+    assert object_contracts.positions_xyz == {"axis-box": (1.0, -3.0, 2.0)}
+    assert object_contracts.sizes_xyz == {"axis-box": (0.2, 0.8, 0.4)}
+    assert object_contracts.asset_refs == {"axis-box": None}
+    assert object_contracts.contracts["axis-box"].source_type == "cube"
+    assert object_contracts.contracts["axis-box"].rgba == (
         0.13333333333333333,
         0.7725490196078432,
         0.3686274509803922,
@@ -151,16 +153,16 @@ def test_workspace_check_expected_object_contract_preserves_mesh_asset_refs() ->
         }
     ]
 
-    positions, sizes, asset_refs, object_contracts = _expected_object_contract_for_request(
+    object_contracts = expected_object_contracts_for_request(
         request,
         "auto",
     )
 
-    assert positions == {"mesh-crate": (0.0, -0.0, 0.0)}
-    assert sizes == {"mesh-crate": (0.2, 0.4, 0.3)}
-    assert asset_refs == {"mesh-crate": "assets/crate.obj"}
-    assert object_contracts["mesh-crate"].source_type == "mesh"
-    assert object_contracts["mesh-crate"].asset_ref == "assets/crate.obj"
+    assert object_contracts.positions_xyz == {"mesh-crate": (0.0, -0.0, 0.0)}
+    assert object_contracts.sizes_xyz == {"mesh-crate": (0.2, 0.4, 0.3)}
+    assert object_contracts.asset_refs == {"mesh-crate": "assets/crate.obj"}
+    assert object_contracts.contracts["mesh-crate"].source_type == "mesh"
+    assert object_contracts.contracts["mesh-crate"].asset_ref == "assets/crate.obj"
 
 
 def test_workspace_check_fixture_selects_studio_y_up_axis_request() -> None:
@@ -266,16 +268,12 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
     )
     command = _prepare_genesis_command(
         request,
-        expectations=type(
-            "Expectations",
-            (),
-            {
-                "object_count": 3,
-                "camera_count": 3,
-                "duration_sec": 0.02,
-                "camera_ids": ("so101_overhead_scene", "so101_gripper_down", "so101_port_oblique"),
-            },
-        )(),
+        expectations=WorkspaceExpectations(
+            object_count=3,
+            camera_count=3,
+            duration_sec=0.02,
+            camera_ids=("so101_overhead_scene", "so101_gripper_down", "so101_port_oblique"),
+        ),
     )
 
     assert "--screenshot" in command.command
@@ -308,7 +306,7 @@ def test_genesis_workspace_check_requests_viewer_and_camera_artifacts(monkeypatc
 def test_workspace_check_derives_expected_camera_ids_from_request() -> None:
     request = build_demo_workspace_request()
 
-    assert _expected_camera_ids_for_request(request) == (
+    assert expected_camera_ids_for_request(request) == (
         "so101_overhead_scene",
         "so101_gripper_down",
         "so101_port_oblique",
@@ -318,7 +316,7 @@ def test_workspace_check_derives_expected_camera_ids_from_request() -> None:
 def test_workspace_check_derives_expected_camera_contracts_from_request() -> None:
     request = build_demo_workspace_request()
 
-    contracts = _expected_camera_contracts_for_request(request)
+    contracts = expected_camera_contracts_for_request(request)
 
     assert tuple(contracts) == (
         "so101_overhead_scene",
@@ -347,15 +345,11 @@ def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_pat
     )
     command = _prepare_pybullet_command(
         request,
-        expectations=type(
-            "Expectations",
-            (),
-            {
-                "object_count": 3,
-                "camera_count": 3,
-                "duration_sec": 0.02,
-            },
-        )(),
+        expectations=WorkspaceExpectations(
+            object_count=3,
+            camera_count=3,
+            duration_sec=0.02,
+        ),
     )
 
     assert "--camera-screenshot-dir" in command.command
@@ -413,15 +407,13 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
     )
     command = _prepare_mujoco_command(
         request,
-        expectations=type(
-            "Expectations",
-            (),
-            {
-                "object_count": 3,
-                "camera_count": 3,
-                "duration_sec": 0.02,
-            },
-        )(),
+        expectations=WorkspaceExpectations(
+            object_count=3,
+            camera_count=3,
+            duration_sec=0.02,
+            camera_ids=expected_camera_ids_for_request(request),
+            camera_contracts=expected_camera_contracts_for_request(request),
+        ),
         simulator_id=SIMULATOR_MJLAB_ID,
     )
 
@@ -439,6 +431,16 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
     assert command.expected_simulator_id == SIMULATOR_MJLAB_ID
     assert command.expected_object_count == 3
     assert command.expected_camera_count == 3
+    assert command.expected_camera_ids == (
+        "so101_overhead_scene",
+        "so101_gripper_down",
+        "so101_port_oblique",
+    )
+    assert tuple(command.expected_camera_contracts or {}) == (
+        "so101_overhead_scene",
+        "so101_gripper_down",
+        "so101_port_oblique",
+    )
     assert "camera_screenshots=3" in command.extra_expected_markers
     assert command.expected_image_dirs == ((tmp_path / "artifacts" / "cameras", 3),)
     assert command.expected_report_artifact_file_keys == ("mjcf_path",)
@@ -463,15 +465,11 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
     )
     command = _prepare_blender_command(
         request,
-        expectations=type(
-            "Expectations",
-            (),
-            {
-                "object_count": 3,
-                "camera_count": 3,
-                "duration_sec": 0.02,
-            },
-        )(),
+        expectations=WorkspaceExpectations(
+            object_count=3,
+            camera_count=3,
+            duration_sec=0.02,
+        ),
     )
 
     assert "--no-viewer" in command.command
