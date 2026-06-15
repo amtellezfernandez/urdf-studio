@@ -3,10 +3,13 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from copy import copy
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIWebSocketRoute, APIRoute, request_response
 from fastapi.responses import JSONResponse
+from starlette.routing import BaseRoute
 
 from backend.api.attestation import router as attestation_router
 from backend.api.cam_to_sim import router as cam_to_sim_router
@@ -61,6 +64,34 @@ METRICS_PATH_PREFIXES = (
     "/ws/collaboration",
 )
 LOOPBACK_CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\]):\d+$"
+API_ROUTERS = (
+    health_router,
+    ilu_urdf_router,
+    ilu_session_router,
+    ilu_assembly_router,
+    attestation_router,
+    ik_router,
+    ikd_runtime_router,
+    lerobot_router,
+    robot_mastering_router,
+    runtime_sessions_router,
+    samples_router,
+    datasets_router,
+    world_bridge_router,
+    workspace_transfer_router,
+    simulator_runtime_router,
+    world_registry_router,
+    world_rollouts_router,
+    ros_viz_http_router,
+    ros_viz_ws_router,
+    robot_gateway_router,
+    teleop_mjlab_router,
+    teleop_replay_router,
+    cam_to_sim_router,
+    collaboration_http_router,
+    collaboration_ws_router,
+    simulation_prep_router,
+)
 
 
 @asynccontextmanager
@@ -127,32 +158,7 @@ def create_app() -> FastAPI:
             response.headers["X-Process-Time-Ms"] = f"{duration_ms:.2f}"
             return response
 
-    app.include_router(health_router)
-    app.include_router(ilu_urdf_router)
-    app.include_router(ilu_session_router)
-    app.include_router(ilu_assembly_router)
-    app.include_router(attestation_router)
-    app.include_router(ik_router)
-    app.include_router(ikd_runtime_router)
-    app.include_router(lerobot_router)
-    app.include_router(robot_mastering_router)
-    app.include_router(runtime_sessions_router)
-    app.include_router(samples_router)
-    app.include_router(datasets_router)
-    app.include_router(world_bridge_router)
-    app.include_router(workspace_transfer_router)
-    app.include_router(simulator_runtime_router)
-    app.include_router(world_registry_router)
-    app.include_router(world_rollouts_router)
-    app.include_router(ros_viz_http_router)
-    app.include_router(ros_viz_ws_router)
-    app.include_router(robot_gateway_router)
-    app.include_router(teleop_mjlab_router)
-    app.include_router(teleop_replay_router)
-    app.include_router(cam_to_sim_router)
-    app.include_router(collaboration_http_router)
-    app.include_router(collaboration_ws_router)
-    app.include_router(simulation_prep_router)
+    register_api_routers(app)
 
     @app.exception_handler(NotImplementedError)
     async def not_implemented_handler(request: Request, exc: NotImplementedError):
@@ -162,6 +168,29 @@ def create_app() -> FastAPI:
         )
 
     return app
+
+
+def clone_route_for_app(route: BaseRoute, app: FastAPI) -> BaseRoute:
+    if isinstance(route, APIWebSocketRoute):
+        return APIWebSocketRoute(
+            route.path,
+            route.endpoint,
+            name=route.name,
+            dependencies=route.dependencies,
+            dependency_overrides_provider=app,
+        )
+
+    route_copy = copy(route)
+    if hasattr(route_copy, "dependency_overrides_provider"):
+        route_copy.dependency_overrides_provider = app
+    if isinstance(route_copy, APIRoute):
+        route_copy.app = request_response(route_copy.get_route_handler())
+    return route_copy
+
+
+def register_api_routers(app: FastAPI) -> None:
+    for router in API_ROUTERS:
+        app.router.routes.extend(clone_route_for_app(route, app) for route in router.routes)
 
 
 app = create_app()
