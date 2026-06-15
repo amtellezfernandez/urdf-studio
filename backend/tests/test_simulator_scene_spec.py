@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.models.world_scene_package import WorldArtifactRef
 from backend.services.simulator_adapters.world_scene import (
     prepare_simulator_scene,
     write_simulator_validation_report,
@@ -134,6 +135,32 @@ def test_prepare_simulator_scene_rejects_invalid_declared_camera(tmp_path: Path)
     robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
 
     with pytest.raises(ValueError, match="missing_link"):
+        prepare_simulator_scene(
+            world_package_path=world_package_path,
+            robot_urdf_path=robot_urdf_path,
+            frame_map="identity",
+            include_hidden=False,
+        )
+
+
+def test_prepare_simulator_scene_rejects_stale_world_snapshot_artifact_digest(
+    tmp_path: Path,
+) -> None:
+    urdf_xml = "<robot name=\"scene_spec_demo\"><link name=\"base_link\"/></robot>"
+    world_package = make_world_package(urdf_xml)
+    world_package.artifacts = [
+        WorldArtifactRef(
+            kind="world_snapshot",
+            digest_sha256="0" * 64,
+            uri="inline://snapshot",
+        )
+    ]
+    world_package_path = tmp_path / "world-package.json"
+    robot_urdf_path = tmp_path / "robot.urdf"
+    write_world_package_file(world_package_path, world_package)
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="artifacts\\[world_snapshot:0\\]"):
         prepare_simulator_scene(
             world_package_path=world_package_path,
             robot_urdf_path=robot_urdf_path,

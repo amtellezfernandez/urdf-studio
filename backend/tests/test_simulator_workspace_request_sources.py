@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.models.world_scene_package import WorldArtifactRef
 from backend.services.simulator_adapters.workspace_request_sources import (
     MESH_ASSET_FIXTURE_PATH,
     WORKSPACE_SIMULATORS,
@@ -145,6 +146,33 @@ def test_workspace_request_from_files_loads_custom_package_assets(tmp_path) -> N
         "package.xml",
         "textures/box.png",
     ]
+
+
+def test_workspace_request_from_files_rejects_stale_world_snapshot_artifact_digest(
+    tmp_path,
+) -> None:
+    asset_root = tmp_path / "scene"
+    robot_urdf_path = asset_root / "robot.urdf"
+    asset_root.mkdir()
+    urdf_xml = "<robot name=\"custom_robot\"><link name=\"base_link\"/></robot>"
+    robot_urdf_path.write_text(urdf_xml, encoding="utf-8")
+    world_package = make_world_package(urdf_xml)
+    world_package.artifacts = [
+        WorldArtifactRef(
+            kind="world_snapshot",
+            digest_sha256="0" * 64,
+            uri="inline://snapshot",
+        )
+    ]
+    world_package_path = tmp_path / "world-package.json"
+    write_world_package_file(world_package_path, world_package)
+
+    with pytest.raises(ValueError, match="artifacts\\[world_snapshot:0\\]"):
+        build_workspace_request_from_files(
+            world_package_path=world_package_path,
+            robot_urdf_path=robot_urdf_path,
+            asset_roots=(asset_root,),
+        )
 
 
 def test_workspace_request_from_files_rejects_conflicting_asset_roots(tmp_path) -> None:

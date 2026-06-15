@@ -16,7 +16,10 @@ from backend.services.world_layout_static_transfer import (
     parse_static_world_layout_payload,
     resolve_world_layout_frame_map,
 )
-from backend.services.world_scene_package_digest import world_scene_package_json_payload
+from backend.services.world_scene_package_digest import (
+    require_world_snapshot_artifact_digests,
+    world_scene_package_json_payload,
+)
 from backend.services.world_layout_transfer_types import (
     ConcreteWorldLayoutFrameMap,
     SimPrimitive,
@@ -121,7 +124,12 @@ def load_world_package(path: Path) -> WorldScenePackageManifest:
         raise ValueError(f"Failed to read world package: {path}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid world package JSON: {exc}") from exc
-    return WorldScenePackageManifest.model_validate(payload)
+    world_package = WorldScenePackageManifest.model_validate(payload)
+    require_world_snapshot_artifact_digests(
+        world_package,
+        context=f"World package artifact digest invalid in {path}",
+    )
+    return world_package
 
 
 def prepare_world_scene(

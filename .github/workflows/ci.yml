@@ -104,6 +104,8 @@ jobs:
           cache: npm
       - name: Install deps
         run: npm ci
+      - name: Verify package surface
+        run: npm run package:check
       - name: Verify policy constraints
         run: npm run policy-check
 

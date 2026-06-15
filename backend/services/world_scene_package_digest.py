@@ -143,6 +143,16 @@ def validate_world_snapshot_artifact_digests(
     ]
 
 
+def require_world_snapshot_artifact_digests(
+    manifest: WorldScenePackageManifest,
+    *,
+    context: str,
+) -> None:
+    errors = validate_world_snapshot_artifact_digests(manifest)
+    if errors:
+        raise ValueError(f"{context}: {'; '.join(errors)}")
+
+
 def normalize_world_snapshot_artifact_digests(
     manifest: WorldScenePackageManifest,
 ) -> WorldScenePackageManifest:
