@@ -84,11 +84,14 @@ const formatTargetName = (
 ): string => targetLabel?.trim() || targetId;
 
 const normalizeUploadPath = (value: string): string | null => {
-  const normalized = value.replace(/\\/g, "/").trim().replace(/^\/+/, "").replace(/\/+/g, "/");
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("/") || trimmed.startsWith("\\")) return null;
+  const normalized = trimmed.replace(/\\/g, "/").replace(/\/+/g, "/");
   if (!normalized || normalized.includes("\0") || normalized.includes(":")) return null;
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length === 0 || parts.some((part) => part === "..")) return null;
-  return parts.filter((part) => part !== ".").join("/");
+  const portablePath = parts.filter((part) => part !== ".").join("/");
+  return portablePath || null;
 };
 
 const addAlias = (aliases: Set<string>, value: string | null | undefined): void => {
@@ -103,8 +106,11 @@ const buildAssetAliases = (
 ): string[] => {
   const aliases = new Set<string>();
   const normalizedPath = normalizeUploadPath(path);
+  if (!normalizedPath) {
+    throw new Error(`Workspace mesh asset path must be portable relative: ${path}`);
+  }
   addAlias(aliases, normalizedPath);
-  if (!normalizedPath || !packageRoots) return [...aliases];
+  if (!packageRoots) return [...aliases];
 
   Object.entries(packageRoots).forEach(([packageName, roots]) => {
     const normalizedPackageName = normalizeUploadPath(packageName);

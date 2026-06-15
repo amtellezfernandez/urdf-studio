@@ -382,13 +382,18 @@ def get_simulator_runtime_spec(simulator_id: SimulatorId) -> SimulatorRuntimeSpe
 
 
 def validate_simulator_relative_path(value: str, label: str) -> str:
-    normalized = value.replace("\\", "/").strip().lstrip("/")
-    normalized = re.sub(r"/+", "/", normalized)
-    if not normalized:
+    stripped = value.strip()
+    if not stripped:
         raise ValueError(f"{label} must be non-empty")
+    if stripped.startswith(("/", "\\")):
+        raise ValueError(f"{label} must be relative")
+    normalized = stripped.replace("\\", "/")
+    normalized = re.sub(r"/+", "/", normalized)
     if not SIMULATOR_RELATIVE_PATH_PATTERN.match(normalized):
         raise ValueError(f"{label} must be relative")
     parts = [part for part in normalized.split("/") if part and part != "."]
+    if not parts:
+        raise ValueError(f"{label} must be non-empty")
     if any(part == ".." for part in parts):
         raise ValueError(f"{label} must not traverse directories")
     return "/".join(parts)

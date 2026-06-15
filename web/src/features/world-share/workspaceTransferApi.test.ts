@@ -192,6 +192,16 @@ describe("workspaceTransferApi", () => {
     expect(uploads[0].content_base64.length).toBeGreaterThan(0);
   });
 
+  it("rejects absolute browser mesh upload paths", async () => {
+    const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
+
+    await expect(
+      buildWorkspaceTransferMeshAssetUploads({
+        "/tmp/base.stl": mesh,
+      })
+    ).rejects.toThrow("Workspace mesh asset path must be portable relative");
+  });
+
   it("applies a Blender layout change-set through the target endpoint", async () => {
     guardedFetchMock.mockResolvedValueOnce(
       new Response(

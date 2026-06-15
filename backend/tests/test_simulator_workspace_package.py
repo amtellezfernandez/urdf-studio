@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import json
 
-from backend.models.simulator_runtime import SimulatorWorkspacePrepareRequest
+import pytest
+from pydantic import ValidationError
+
+from backend.models.simulator_runtime import (
+    SimulatorMeshAssetUpload,
+    SimulatorWorkspacePrepareRequest,
+    validate_simulator_relative_path,
+)
 from backend.models.world_scene_package import WorldArtifactRef, WorldRuntimeTarget
 from backend.services.simulator_adapters.workspace_package import (
+    _write_asset_file,
     prepare_simulator_workspace_package,
 )
 from backend.services.world_scene_package_digest import (
@@ -14,10 +22,73 @@ from backend.services.world_scene_package_digest import (
 from backend.tests.simulator_adapter_test_utils import make_world_package
 
 
+def _minimal_world_package():
+    return make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>")
+
+
+def test_simulator_relative_path_normalizes_safe_relative_segments() -> None:
+    assert (
+        validate_simulator_relative_path("./assets//meshes/./crate.stl", "mesh asset path")
+        == "assets/meshes/crate.stl"
+    )
+    assert (
+        validate_simulator_relative_path("assets\\meshes\\crate.stl", "mesh asset path")
+        == "assets/meshes/crate.stl"
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/tmp/crate.stl",
+        "\\\\server\\share\\crate.stl",
+        "C:\\tmp\\crate.stl",
+        "assets/../crate.stl",
+        ".",
+        "./",
+    ),
+)
+def test_simulator_relative_path_rejects_host_or_empty_paths(path: str) -> None:
+    with pytest.raises(ValueError):
+        validate_simulator_relative_path(path, "mesh asset path")
+
+
+def test_workspace_prepare_request_rejects_absolute_uploaded_asset_path() -> None:
+    with pytest.raises(ValidationError, match="mesh asset path must be relative"):
+        SimulatorWorkspacePrepareRequest(
+            world_package=_minimal_world_package(),
+            mesh_assets=[
+                SimulatorMeshAssetUpload(
+                    path="/tmp/crate.stl",
+                    aliases=[],
+                    content_base64="AA==",
+                )
+            ],
+        )
+
+
+def test_workspace_prepare_request_rejects_absolute_urdf_asset_path() -> None:
+    with pytest.raises(ValidationError, match="URDF asset path must be relative"):
+        SimulatorWorkspacePrepareRequest(
+            world_package=_minimal_world_package(),
+            urdf_asset_path="/tmp/robot.urdf",
+        )
+
+
+def test_write_asset_file_rejects_absolute_asset_path(tmp_path) -> None:
+    with pytest.raises(ValueError, match="asset path must be relative"):
+        _write_asset_file(
+            tmp_path,
+            "/tmp/crate.stl",
+            b"solid crate\nendsolid crate\n",
+            error=ValueError,
+        )
+
+
 def test_prepare_simulator_workspace_refreshes_stale_world_snapshot_digest(
     tmp_path,
 ) -> None:
-    world_package = make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>")
+    world_package = _minimal_world_package()
     world_package.artifacts = [
         WorldArtifactRef(
             kind="world_snapshot",

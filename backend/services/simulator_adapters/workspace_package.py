@@ -16,6 +16,7 @@ from typing import Callable
 from backend.models.simulator_runtime import (
     SimulatorMeshAssetUpload,
     SimulatorWorkspacePrepareRequest,
+    validate_simulator_relative_path,
 )
 from backend.services.simulator_adapters.base import SimulatorAdapterError
 from backend.services.ilu_session import IluSessionError, get_ilu_session_local_urdf_source_context
@@ -73,7 +74,7 @@ def _timestamped_workspace_dir(workspace_root: Path) -> Path:
 
 
 def _normalize_relative_path(value: str) -> str:
-    return value.replace("\\", "/").strip().lstrip("/")
+    return validate_simulator_relative_path(value, "asset path")
 
 
 def _normalize_resolved_urdf_asset_path(value: str | None) -> str:
