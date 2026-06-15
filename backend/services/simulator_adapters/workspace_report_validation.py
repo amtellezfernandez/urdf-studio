@@ -18,6 +18,19 @@ VALID_REPORT_REQUESTED_FRAME_MAPS = frozenset(("auto", *VALID_REPORT_FRAME_MAPS)
 
 
 @dataclass(frozen=True)
+class ExpectedCameraReport:
+    camera_id: str
+    parent_joint: str
+    parent_link: str
+    position_xyz: tuple[float, float, float]
+    quat_wxyz: tuple[float, float, float, float]
+    width: int
+    height: int
+    fov_deg: float
+    intrinsics_matrix: tuple[tuple[float, float, float], ...]
+
+
+@dataclass(frozen=True)
 class SimulatorWorkspaceReportExpectations:
     simulator_id: SimulatorId | None = None
     object_count: int | None = None
@@ -28,6 +41,7 @@ class SimulatorWorkspaceReportExpectations:
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
     camera_ids: tuple[str, ...] | None = None
+    camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
     required_artifact_file_keys: tuple[str, ...] = ()
     required_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -153,7 +167,10 @@ def validate_simulator_workspace_report(
     )
     if camera_item_error:
         return camera_item_error
-    return _validate_expected_camera_ids(payload, expectations)
+    camera_id_error = _validate_expected_camera_ids(payload, expectations)
+    if camera_id_error:
+        return camera_id_error
+    return _validate_expected_camera_contracts(payload, expectations)
 
 
 def _validate_report_simulator(
@@ -454,6 +471,78 @@ def _validate_expected_camera_ids(
     return None
 
 
+def _validate_expected_camera_contracts(
+    payload: Mapping[str, Any],
+    expectations: SimulatorWorkspaceReportExpectations,
+) -> str | None:
+    expected_contracts = expectations.camera_contracts or {}
+    if not expected_contracts:
+        return None
+    cameras = payload.get("cameras")
+    if not isinstance(cameras, list):
+        return "simulator validation report field 'cameras' must be a list"
+    cameras_by_id = {
+        item.get("camera_id"): item
+        for item in cameras
+        if isinstance(item, Mapping) and isinstance(item.get("camera_id"), str)
+    }
+    for camera_id, expected in expected_contracts.items():
+        item = cameras_by_id.get(camera_id)
+        if item is None:
+            return f"simulator validation report missing camera_id {camera_id!r}"
+        for field_name, expected_value in (
+            ("parent_joint", expected.parent_joint),
+            ("parent_link", expected.parent_link),
+        ):
+            actual_value = item.get(field_name)
+            if actual_value != expected_value:
+                return (
+                    f"simulator validation report field 'cameras[{camera_id}].{field_name}' "
+                    f"is {actual_value!r}, expected {expected_value!r}"
+                )
+        for field_name, expected_value in (
+            ("width", expected.width),
+            ("height", expected.height),
+        ):
+            actual_value = item.get(field_name)
+            if actual_value != expected_value:
+                return (
+                    f"simulator validation report field 'cameras[{camera_id}].{field_name}' "
+                    f"is {actual_value!r}, expected {expected_value!r}"
+                )
+        fov_error = _validate_expected_number(
+            item.get("fov_deg"),
+            expected.fov_deg,
+            f"cameras[{camera_id}].fov_deg",
+        )
+        if fov_error:
+            return fov_error
+        position_error = _validate_expected_vector3(
+            item.get("position_xyz"),
+            expected.position_xyz,
+            f"cameras[{camera_id}].position_xyz",
+        )
+        if position_error:
+            return position_error
+        quat_error = _validate_expected_vector4(
+            item.get("quat_wxyz"),
+            expected.quat_wxyz,
+            f"cameras[{camera_id}].quat_wxyz",
+        )
+        if quat_error:
+            return quat_error
+        matrix_error = _validate_expected_matrix3(
+            (item.get("intrinsics") or {}).get("matrix")
+            if isinstance(item.get("intrinsics"), Mapping)
+            else None,
+            expected.intrinsics_matrix,
+            f"cameras[{camera_id}].intrinsics.matrix",
+        )
+        if matrix_error:
+            return matrix_error
+    return None
+
+
 def _validate_report_object_asset_refs(payload: Mapping[str, Any]) -> str | None:
     asset_roots_raw = payload.get("asset_roots")
     if not isinstance(asset_roots_raw, list):
@@ -500,6 +589,52 @@ def _validate_expected_vector3(
                 f"simulator validation report field '{path}[{axis}]' "
                 f"is {component!r}, expected {expected[axis]!r}"
             )
+    return None
+
+
+def _validate_expected_vector4(
+    value: Any,
+    expected: tuple[float, float, float, float],
+    path: str,
+) -> str | None:
+    if not isinstance(value, list | tuple) or len(value) != 4:
+        return f"simulator validation report field '{path}' must be a vector4"
+    for axis, component in enumerate(value):
+        error = _validate_expected_number(component, expected[axis], f"{path}[{axis}]")
+        if error:
+            return error
+    return None
+
+
+def _validate_expected_matrix3(
+    value: Any,
+    expected: tuple[tuple[float, float, float], ...],
+    path: str,
+) -> str | None:
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        return f"simulator validation report field '{path}' must be a 3x3 matrix"
+    for row_index, row in enumerate(value):
+        if not isinstance(row, list | tuple) or len(row) != 3:
+            return f"simulator validation report field '{path}' must be a 3x3 matrix"
+        for column_index, component in enumerate(row):
+            error = _validate_expected_number(
+                component,
+                expected[row_index][column_index],
+                f"{path}[{row_index}][{column_index}]",
+            )
+            if error:
+                return error
+    return None
+
+
+def _validate_expected_number(value: Any, expected: float, path: str) -> str | None:
+    if (
+        not isinstance(value, int | float)
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or not math.isclose(float(value), expected, rel_tol=1e-9, abs_tol=1e-9)
+    ):
+        return f"simulator validation report field '{path}' is {value!r}, expected {expected!r}"
     return None
 
 

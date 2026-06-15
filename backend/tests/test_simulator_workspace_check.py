@@ -21,6 +21,7 @@ from backend.scripts.simulator_workspace_check import (
     WorkspaceTarget,
     _active_object_count,
     _check_target,
+    _expected_camera_contracts_for_request,
     _expected_camera_ids_for_request,
     _expected_object_contract_for_request,
     _module_command,
@@ -292,6 +293,24 @@ def test_workspace_check_derives_expected_camera_ids_from_request() -> None:
         "so101_gripper_down",
         "so101_port_oblique",
     )
+
+
+def test_workspace_check_derives_expected_camera_contracts_from_request() -> None:
+    request = build_demo_workspace_request()
+
+    contracts = _expected_camera_contracts_for_request(request)
+
+    assert tuple(contracts) == (
+        "so101_overhead_scene",
+        "so101_gripper_down",
+        "so101_port_oblique",
+    )
+    overhead = contracts["so101_overhead_scene"]
+    assert overhead.parent_joint == "base_link"
+    assert overhead.parent_link == "base_link"
+    assert overhead.width == 1280
+    assert overhead.height == 720
+    assert overhead.intrinsics_matrix[2] == (0.0, 0.0, 1.0)
 
 
 def test_pybullet_workspace_check_requests_camera_artifacts(monkeypatch, tmp_path) -> None:

@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
@@ -36,6 +37,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
     validate_blender_edit_session_artifact,
 )
 from backend.services.simulator_adapters.camera_artifacts import validate_visible_rgb_image
+from backend.services.simulator_adapters.camera_transfer import build_sim_camera_specs
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
@@ -62,6 +64,7 @@ from backend.services.simulator_adapters.workspace_request_sources import (
     build_workspace_request_from_files,
 )
 from backend.services.simulator_adapters.workspace_report_validation import (
+    ExpectedCameraReport,
     SimulatorWorkspaceReportExpectations,
     validate_simulator_workspace_report,
 )
@@ -104,6 +107,7 @@ class PreparedWorkspaceCommand:
     expected_object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     expected_object_asset_refs: Mapping[str, str | None] | None = None
     expected_camera_ids: tuple[str, ...] | None = None
+    expected_camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
     expected_report_artifact_file_keys: tuple[str, ...] = ()
     expected_report_artifact_dir_keys: tuple[str, ...] = ()
 
@@ -119,6 +123,7 @@ class WorkspaceExpectations:
     object_sizes_xyz: Mapping[str, tuple[float, float, float]] | None = None
     object_asset_refs: Mapping[str, str | None] | None = None
     camera_ids: tuple[str, ...] | None = None
+    camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
 
 
 @dataclass(frozen=True)
@@ -169,6 +174,12 @@ def _workspace_object_asset_refs(
 
 def _workspace_camera_ids(expectations: WorkspaceExpectations) -> tuple[str, ...] | None:
     return getattr(expectations, "camera_ids", None)
+
+
+def _workspace_camera_contracts(
+    expectations: WorkspaceExpectations,
+) -> Mapping[str, ExpectedCameraReport] | None:
+    return getattr(expectations, "camera_contracts", None)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -356,6 +367,7 @@ def _prepare_direct_urdf_command(
         expected_object_sizes_xyz=_workspace_object_sizes(expectations),
         expected_object_asset_refs=_workspace_object_asset_refs(expectations),
         expected_camera_ids=_workspace_camera_ids(expectations),
+        expected_camera_contracts=_workspace_camera_contracts(expectations),
         expected_report_artifact_file_keys=expected_report_artifact_file_keys,
         expected_report_artifact_dir_keys=expected_report_artifact_dir_keys,
     )
@@ -697,6 +709,7 @@ def _validate_report_artifact(command: PreparedWorkspaceCommand) -> str | None:
             object_sizes_xyz=command.expected_object_sizes_xyz,
             object_asset_refs=command.expected_object_asset_refs,
             camera_ids=command.expected_camera_ids,
+            camera_contracts=command.expected_camera_contracts,
             required_artifact_file_keys=command.expected_report_artifact_file_keys,
             required_artifact_dir_keys=command.expected_report_artifact_dir_keys,
         ),
@@ -840,6 +853,37 @@ def _expected_camera_ids_for_request(request: SimulatorWorkspacePrepareRequest) 
     return tuple(camera_ids)
 
 
+def _expected_camera_contracts_for_request(
+    request: SimulatorWorkspacePrepareRequest,
+) -> dict[str, ExpectedCameraReport]:
+    if not request.world_package.world_snapshot.cameras:
+        return {}
+    with tempfile.TemporaryDirectory(prefix="urdf-studio-camera-contract-") as directory:
+        robot_urdf_path = Path(directory) / "robot.urdf"
+        robot_urdf_path.write_text(
+            request.world_package.world_snapshot.urdf_xml,
+            encoding="utf-8",
+        )
+        camera_specs, _warnings = build_sim_camera_specs(
+            request.world_package,
+            robot_urdf_path=robot_urdf_path,
+        )
+    return {
+        camera.camera_id: ExpectedCameraReport(
+            camera_id=camera.camera_id,
+            parent_joint=camera.parent_joint,
+            parent_link=camera.parent_link,
+            position_xyz=camera.position_xyz,
+            quat_wxyz=camera.quat_wxyz,
+            width=camera.width,
+            height=camera.height,
+            fov_deg=camera.fov_deg,
+            intrinsics_matrix=camera.intrinsics.matrix if camera.intrinsics is not None else (),
+        )
+        for camera in camera_specs
+    }
+
+
 def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
     for result in results:
         if result.status == "passed":
@@ -880,6 +924,7 @@ def main() -> int:
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
         camera_ids=_expected_camera_ids_for_request(request),
+        camera_contracts=_expected_camera_contracts_for_request(request),
     )
     results = [
         _check_target(

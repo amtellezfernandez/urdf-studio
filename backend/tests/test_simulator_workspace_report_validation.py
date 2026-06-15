@@ -4,6 +4,7 @@ import json
 
 from backend.models.simulator_runtime import SIMULATOR_GENESIS_ID, SIMULATOR_PYBULLET_ID
 from backend.services.simulator_adapters.workspace_report_validation import (
+    ExpectedCameraReport,
     SimulatorWorkspaceReportExpectations,
     validate_simulator_workspace_report,
 )
@@ -64,6 +65,7 @@ def _expectations(
     object_sizes_xyz: dict[str, tuple[float, float, float]] | None = None,
     object_asset_refs: dict[str, str | None] | None = None,
     camera_ids: tuple[str, ...] | None = None,
+    camera_contracts: dict[str, ExpectedCameraReport] | None = None,
     required_artifact_file_keys: tuple[str, ...] = (),
     required_artifact_dir_keys: tuple[str, ...] = (),
 ) -> SimulatorWorkspaceReportExpectations:
@@ -77,8 +79,27 @@ def _expectations(
         object_sizes_xyz=object_sizes_xyz,
         object_asset_refs=object_asset_refs,
         camera_ids=camera_ids,
+        camera_contracts=camera_contracts,
         required_artifact_file_keys=required_artifact_file_keys,
         required_artifact_dir_keys=required_artifact_dir_keys,
+    )
+
+
+def _expected_camera(camera_id: str = "cam") -> ExpectedCameraReport:
+    return ExpectedCameraReport(
+        camera_id=camera_id,
+        parent_joint="base_link",
+        parent_link="base_link",
+        position_xyz=(0.0, 0.0, 1.0),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        width=64,
+        height=48,
+        fov_deg=60.0,
+        intrinsics_matrix=(
+            (41.569219381653056, 0.0, 32.0),
+            (0.0, 41.569219381653056, 24.0),
+            (0.0, 0.0, 1.0),
+        ),
     )
 
 
@@ -802,6 +823,58 @@ def test_workspace_report_validation_rejects_unexpected_camera_id_sequence(tmp_p
     ) == (
         "simulator validation report camera_id sequence "
         "is ('wrong-camera',), expected ('cam',)"
+    )
+
+
+def test_workspace_report_validation_rejects_camera_contract_drift(tmp_path) -> None:
+    changed_camera = _report_camera("cam")
+    changed_camera["parent_link"] = "wrong_link"
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [changed_camera],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(camera_contracts={"cam": _expected_camera("cam")}),
+    ) == (
+        "simulator validation report field 'cameras[cam].parent_link' "
+        "is 'wrong_link', expected 'base_link'"
+    )
+
+
+def test_workspace_report_validation_rejects_camera_intrinsics_contract_drift(tmp_path) -> None:
+    changed_camera = _report_camera("cam")
+    changed_camera["intrinsics"]["matrix"][0][0] = 42.0
+    report_path = _write_report(
+        tmp_path,
+        {
+            "simulator": {"id": SIMULATOR_GENESIS_ID, "label": "Genesis", "runtime": {}},
+            "package_id": "demo",
+            "frame_map": "identity",
+            "primitive_count": 1,
+            "camera_count": 1,
+            "objects": [_report_object()],
+            "cameras": [changed_camera],
+            "artifacts": {},
+        },
+    )
+
+    assert validate_simulator_workspace_report(
+        report_path,
+        _expectations(camera_contracts={"cam": _expected_camera("cam")}),
+    ) == (
+        "simulator validation report field 'cameras[cam].intrinsics.matrix[0][0]' "
+        "is 42.0, expected 41.569219381653056"
     )
 
 
