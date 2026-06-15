@@ -36,10 +36,6 @@ from backend.services.simulator_adapters.blender_workspace import (
 from backend.services.simulator_adapters.blender_edit_session import (
     validate_blender_edit_session_artifact,
 )
-from backend.services.simulator_adapters.camera_artifacts import (
-    camera_artifact_path,
-    validate_visible_rgb_image,
-)
 from backend.services.simulator_adapters.camera_transfer import build_sim_camera_specs
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
@@ -58,6 +54,10 @@ from backend.services.simulator_adapters.workspace_parity import (
     check_simulator_workspace_parity,
 )
 from backend.services.simulator_adapters.workspace_process import build_simulator_workspace_env
+from backend.services.simulator_adapters.workspace_image_artifacts import (
+    WorkspaceImageArtifactExpectations,
+    validate_workspace_image_artifacts,
+)
 from backend.services.simulator_adapters.workspace_request_sources import (
     WORKSPACE_FIXTURES,
     WORKSPACE_SIMULATORS,
@@ -672,7 +672,14 @@ def _run_workspace_command(
     missing_markers = [marker for marker in required_markers if marker not in output]
     if missing_markers:
         return False, f"missing workspace marker(s): {', '.join(missing_markers)}\n{output.strip()}"
-    image_error = _validate_image_artifacts(command)
+    image_error = validate_workspace_image_artifacts(
+        WorkspaceImageArtifactExpectations(
+            image_paths=command.expected_image_paths,
+            image_dirs=command.expected_image_dirs,
+            camera_ids=command.expected_camera_ids,
+            camera_contracts=command.expected_camera_contracts,
+        )
+    )
     if image_error:
         return False, f"{image_error}\n{output.strip()}"
     file_error = _validate_file_artifacts(command)
@@ -682,67 +689,6 @@ def _run_workspace_command(
     if report_error:
         return False, f"{report_error}\n{output.strip()}"
     return True, output.strip()
-
-
-def _validate_image_artifacts(command: PreparedWorkspaceCommand) -> str | None:
-    image_paths = list(command.expected_image_paths)
-    for directory, expected_count in command.expected_image_dirs:
-        directory_images = sorted(directory.glob("*.png")) if directory.exists() else []
-        if len(directory_images) != expected_count:
-            return f"expected {expected_count} PNG artifact(s) in {directory}, found {len(directory_images)}"
-        expected_camera_images = _expected_camera_images(command, directory, expected_count)
-        if expected_camera_images is not None:
-            actual_names = tuple(path.name for path in directory_images)
-            expected_names = tuple(path.name for path, _size in expected_camera_images)
-            if actual_names != expected_names:
-                return (
-                    f"camera image artifact names in {directory} are {actual_names!r}, "
-                    f"expected {expected_names!r}"
-                )
-            for path, expected_size in expected_camera_images:
-                error = validate_visible_rgb_image(path, expected_size=expected_size)
-                if error:
-                    return error
-            continue
-        image_paths.extend(directory_images)
-    if not image_paths:
-        return None
-
-    for path in image_paths:
-        error = validate_visible_rgb_image(path)
-        if error:
-            return error
-    return None
-
-
-def _expected_camera_images(
-    command: PreparedWorkspaceCommand,
-    directory: Path,
-    expected_count: int,
-) -> tuple[tuple[Path, tuple[int, int]], ...] | None:
-    contracts = command.expected_camera_contracts or {}
-    if not contracts or len(contracts) != expected_count:
-        return None
-    camera_ids = command.expected_camera_ids or tuple(contracts)
-    if len(camera_ids) != expected_count:
-        return None
-    ordered_contracts: list[ExpectedCameraReport] = []
-    for camera_id in camera_ids:
-        contract = contracts.get(camera_id)
-        if contract is None:
-            return None
-        ordered_contracts.append(contract)
-    return tuple(
-        (
-            camera_artifact_path(
-                directory,
-                index=index,
-                camera_name=contract.sim_name,
-            ),
-            (contract.width, contract.height),
-        )
-        for index, contract in enumerate(ordered_contracts, start=1)
-    )
 
 
 def _validate_file_artifacts(command: PreparedWorkspaceCommand) -> str | None:

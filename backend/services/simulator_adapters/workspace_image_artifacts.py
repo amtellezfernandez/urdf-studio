@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping
+
+from backend.services.simulator_adapters.camera_artifacts import (
+    camera_artifact_path,
+    validate_visible_rgb_image,
+)
+from backend.services.simulator_adapters.workspace_report_validation import (
+    ExpectedCameraReport,
+)
+
+
+@dataclass(frozen=True)
+class WorkspaceImageArtifactExpectations:
+    image_paths: tuple[Path, ...] = ()
+    image_dirs: tuple[tuple[Path, int], ...] = ()
+    camera_ids: tuple[str, ...] | None = None
+    camera_contracts: Mapping[str, ExpectedCameraReport] | None = None
+
+
+def validate_workspace_image_artifacts(
+    expectations: WorkspaceImageArtifactExpectations,
+) -> str | None:
+    image_paths = list(expectations.image_paths)
+    for directory, expected_count in expectations.image_dirs:
+        directory_images = sorted(directory.glob("*.png")) if directory.exists() else []
+        if len(directory_images) != expected_count:
+            return f"expected {expected_count} PNG artifact(s) in {directory}, found {len(directory_images)}"
+        expected_camera_images = _expected_camera_images(
+            expectations,
+            directory,
+            expected_count,
+        )
+        if expected_camera_images is not None:
+            actual_names = tuple(path.name for path in directory_images)
+            expected_names = tuple(path.name for path, _size in expected_camera_images)
+            if actual_names != expected_names:
+                return (
+                    f"camera image artifact names in {directory} are {actual_names!r}, "
+                    f"expected {expected_names!r}"
+                )
+            for path, expected_size in expected_camera_images:
+                error = validate_visible_rgb_image(path, expected_size=expected_size)
+                if error:
+                    return error
+            continue
+        image_paths.extend(directory_images)
+    if not image_paths:
+        return None
+
+    for path in image_paths:
+        error = validate_visible_rgb_image(path)
+        if error:
+            return error
+    return None
+
+
+def _expected_camera_images(
+    expectations: WorkspaceImageArtifactExpectations,
+    directory: Path,
+    expected_count: int,
+) -> tuple[tuple[Path, tuple[int, int]], ...] | None:
+    contracts = expectations.camera_contracts or {}
+    if not contracts or len(contracts) != expected_count:
+        return None
+    camera_ids = expectations.camera_ids or tuple(contracts)
+    if len(camera_ids) != expected_count:
+        return None
+    ordered_contracts: list[ExpectedCameraReport] = []
+    for camera_id in camera_ids:
+        contract = contracts.get(camera_id)
+        if contract is None:
+            return None
+        ordered_contracts.append(contract)
+    return tuple(
+        (
+            camera_artifact_path(
+                directory,
+                index=index,
+                camera_name=contract.sim_name,
+            ),
+            (contract.width, contract.height),
+        )
+        for index, contract in enumerate(ordered_contracts, start=1)
+    )

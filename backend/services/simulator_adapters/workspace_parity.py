@@ -7,6 +7,7 @@ from typing import Any, Mapping, Sequence
 
 from backend.services.simulator_adapters.camera_artifacts import (
     MIN_VISIBLE_CHANNEL_SPAN,
+    camera_artifact_name,
     inspect_rgb_image,
 )
 
@@ -264,7 +265,7 @@ def _expected_camera_images(
             {
                 "camera_id": camera_id,
                 "sim_name": sim_name,
-                "name": f"{index:02d}_{sim_name}.png",
+                "name": camera_artifact_name(index=index, camera_name=sim_name),
                 "width": width,
                 "height": height,
             }

@@ -159,6 +159,33 @@ def test_simulator_workspace_parity_rejects_camera_image_name_mismatch(tmp_path:
     assert "PNG names do not match report cameras" in result.detail
 
 
+def test_simulator_workspace_parity_uses_sanitized_camera_image_names(tmp_path: Path) -> None:
+    genesis_report = _write_parity_report(
+        tmp_path / "genesis",
+        simulator_id=SIMULATOR_GENESIS_ID,
+        object_x=0.1,
+        camera_sim_name="Scene Camera/Main",
+        image_name="01_Scene_Camera_Main.png",
+    )
+    mujoco_report = _write_parity_report(
+        tmp_path / "mujoco",
+        simulator_id=SIMULATOR_MUJOCO_ID,
+        object_x=0.1,
+        camera_sim_name="Scene Camera/Main",
+        image_name="01_Scene_Camera_Main.png",
+    )
+
+    result = check_simulator_workspace_parity(
+        [
+            WorkspaceParityInput("Genesis", genesis_report),
+            WorkspaceParityInput("MuJoCo", mujoco_report),
+        ]
+    )
+
+    assert result is not None
+    assert result.passed is True
+
+
 def test_simulator_workspace_parity_rejects_blank_camera_image(tmp_path: Path) -> None:
     genesis_report = _write_parity_report(
         tmp_path / "genesis",
@@ -194,6 +221,7 @@ def _write_parity_report(
     image_variant: str = "visible",
     include_camera: bool = True,
     joint_positions: dict[str, float] | None = None,
+    camera_sim_name: str = "scene_camera",
 ) -> Path:
     from PIL import Image
 
@@ -210,7 +238,7 @@ def _write_parity_report(
         {
             "camera_id": "cam",
             "name": "scene camera",
-            "sim_name": "scene_camera",
+            "sim_name": camera_sim_name,
             "parent_joint": "base_link",
             "parent_link": "base_link",
             "position_xyz": [0.0, 0.0, 1.0],

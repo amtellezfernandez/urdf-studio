@@ -34,9 +34,12 @@ from backend.scripts.simulator_workspace_check import (
     _resolved_frame_map_for_request,
     _selected_simulator_ids_from_args,
     _validate_file_artifacts,
-    _validate_image_artifacts,
     _workspace_request_from_args,
     main,
+)
+from backend.services.simulator_adapters.workspace_image_artifacts import (
+    WorkspaceImageArtifactExpectations,
+    validate_workspace_image_artifacts,
 )
 from backend.services.simulator_adapters.workspace_report_validation import ExpectedCameraReport
 from backend.services.simulator_adapters.workspace_request_sources import (
@@ -555,35 +558,27 @@ def test_workspace_check_validates_camera_image_names_and_dimensions(tmp_path) -
     camera_dir = tmp_path / "cameras"
     _write_visible_png(camera_dir / "01_scene_camera.png")
     contract = _camera_contract()
-    command = PreparedWorkspaceCommand(
-        command=[],
-        ready_marker="ready",
-        expected_object_marker="objects=0",
-        expected_camera_log_marker="cameras=1",
-        expected_image_dirs=((camera_dir, 1),),
-        expected_camera_ids=("scene-camera",),
-        expected_camera_contracts={"scene-camera": contract},
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 1),),
+        camera_ids=("scene-camera",),
+        camera_contracts={"scene-camera": contract},
     )
 
-    assert _validate_image_artifacts(command) is None
+    assert validate_workspace_image_artifacts(expectations) is None
 
 
 def test_workspace_check_rejects_wrong_camera_image_name(tmp_path) -> None:
     camera_dir = tmp_path / "cameras"
     _write_visible_png(camera_dir / "01_wrong_camera.png")
     contract = _camera_contract()
-    command = PreparedWorkspaceCommand(
-        command=[],
-        ready_marker="ready",
-        expected_object_marker="objects=0",
-        expected_camera_log_marker="cameras=1",
-        expected_image_dirs=((camera_dir, 1),),
-        expected_camera_ids=("scene-camera",),
-        expected_camera_contracts={"scene-camera": contract},
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 1),),
+        camera_ids=("scene-camera",),
+        camera_contracts={"scene-camera": contract},
     )
 
     assert (
-        _validate_image_artifacts(command)
+        validate_workspace_image_artifacts(expectations)
         == "camera image artifact names in "
         f"{camera_dir} are ('01_wrong_camera.png',), expected ('01_scene_camera.png',)"
     )
@@ -593,17 +588,13 @@ def test_workspace_check_rejects_wrong_camera_image_dimensions(tmp_path) -> None
     camera_dir = tmp_path / "cameras"
     _write_visible_png(camera_dir / "01_scene_camera.png", size=(32, 48))
     contract = _camera_contract()
-    command = PreparedWorkspaceCommand(
-        command=[],
-        ready_marker="ready",
-        expected_object_marker="objects=0",
-        expected_camera_log_marker="cameras=1",
-        expected_image_dirs=((camera_dir, 1),),
-        expected_camera_ids=("scene-camera",),
-        expected_camera_contracts={"scene-camera": contract},
+    expectations = WorkspaceImageArtifactExpectations(
+        image_dirs=((camera_dir, 1),),
+        camera_ids=("scene-camera",),
+        camera_contracts={"scene-camera": contract},
     )
 
-    assert _validate_image_artifacts(command) == (
+    assert validate_workspace_image_artifacts(expectations) == (
         f"image artifact has wrong size: {camera_dir / '01_scene_camera.png'} "
         "32x48, expected 64x48"
     )

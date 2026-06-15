@@ -15,8 +15,27 @@ class ImageArtifactStats:
     channel_span: int
 
 
-def camera_artifact_path(output_dir: Path, *, index: int, camera_name: str) -> Path:
-    return output_dir / f"{index:02d}_{safe_artifact_name(camera_name, default_name='camera')}.png"
+def camera_artifact_name(
+    *,
+    index: int,
+    camera_name: str,
+    default_name: str = "camera",
+) -> str:
+    return f"{index:02d}_{safe_artifact_name(camera_name, default_name=default_name)}.png"
+
+
+def camera_artifact_path(
+    output_dir: Path,
+    *,
+    index: int,
+    camera_name: str,
+    default_name: str = "camera",
+) -> Path:
+    return output_dir / camera_artifact_name(
+        index=index,
+        camera_name=camera_name,
+        default_name=default_name,
+    )
 
 
 def safe_artifact_name(value: str, *, default_name: str) -> str:

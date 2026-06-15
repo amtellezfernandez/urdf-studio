@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
 
+from backend.services.simulator_adapters.camera_artifacts import camera_artifact_path
 from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
     CAMERA_MARKER_SIZE_XYZ,
@@ -198,11 +198,6 @@ def read_observation_camera_sensor_images(
     return successful_reads, tuple(images)
 
 
-def _safe_artifact_name(value: str, *, default_name: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip()).strip("._")
-    return normalized or default_name
-
-
 def write_camera_screenshots(
     scene_cameras: Sequence[Any],
     cameras: Sequence[SimCameraSpec],
@@ -214,8 +209,9 @@ def write_camera_screenshots(
     written_count = 0
     for index, (scene_camera, camera_spec) in enumerate(zip(scene_cameras, cameras), start=1):
         image = scene_camera.render(rgb=True, force_render=True)[0]
-        file_name = f"{index:02d}_{_safe_artifact_name(camera_spec.sim_name, default_name='camera')}.png"
-        Image.fromarray(image).save(output_dir / file_name)
+        Image.fromarray(image).save(
+            camera_artifact_path(output_dir, index=index, camera_name=camera_spec.sim_name)
+        )
         written_count += 1
     return written_count
 
@@ -229,7 +225,13 @@ def write_sensor_screenshots(
     output_dir.mkdir(parents=True, exist_ok=True)
     written_count = 0
     for index, (camera_spec, image) in enumerate(sensor_images, start=1):
-        file_name = f"{index:02d}_{_safe_artifact_name(camera_spec.sim_name, default_name='sensor')}.png"
-        Image.fromarray(image).save(output_dir / file_name)
+        Image.fromarray(image).save(
+            camera_artifact_path(
+                output_dir,
+                index=index,
+                camera_name=camera_spec.sim_name,
+                default_name="sensor",
+            )
+        )
         written_count += 1
     return written_count
