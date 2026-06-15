@@ -64,7 +64,7 @@ import {
 type UseWorldSceneManagerParams = {
   addCamera: (camera: Omit<Camera, "id">) => void;
   addObject: (
-    object: Omit<CreatedObject, "id">,
+    object: Omit<CreatedObject, "id"> & Partial<Pick<CreatedObject, "id">>,
     options?: { trackHistory?: boolean; select?: boolean }
   ) => void;
   cameras: Camera[];
@@ -153,6 +153,7 @@ export const useWorldSceneManager = ({
   const worldImportHandledRef = useRef(false);
   const worldLayoutImportHandledRef = useRef(false);
   const defaultWorldLayoutAppliedRef = useRef(false);
+  const objectsRef = useRef(objects);
 
   const [worldRegistryOpen, setWorldRegistryOpen] = useState(false);
   const [worldRegistryFilterText, setWorldRegistryFilterText] = useState("");
@@ -189,12 +190,12 @@ export const useWorldSceneManager = ({
         originalUrdfContent,
         jointValues,
         cameras,
-        objects,
+        objects: objectsRef.current,
         demoMode: DEMO_MODE,
         overrides,
       });
     },
-    [resolvedRobotName, vizUrdfContent, originalUrdfContent, jointValues, cameras, objects]
+    [resolvedRobotName, vizUrdfContent, originalUrdfContent, jointValues, cameras]
   );
 
   const handleValidateCurrentWorldScenePackage = useCallback(async () => {
@@ -459,9 +460,14 @@ export const useWorldSceneManager = ({
 
   const applyWorldSceneObjects = useCallback(
     (sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]) => {
+      const nextObjects = sceneObjects.map((object) => ({
+        id: object.id,
+        ...toImportedObjectParams(object),
+      }));
+      objectsRef.current = nextObjects;
       clearObjects();
-      sceneObjects.forEach((object) => {
-        addObject(toImportedObjectParams(object), {
+      nextObjects.forEach((object) => {
+        addObject(object, {
           trackHistory: false,
           select: false,
         });
@@ -622,6 +628,10 @@ export const useWorldSceneManager = ({
     },
     [applyImportedWorldSceneLayer]
   );
+
+  useEffect(() => {
+    objectsRef.current = objects;
+  }, [objects]);
 
   const handleImportWorldLayoutFromLinkDialog = useCallback(async () => {
     setIsImportingWorldLayout(true);

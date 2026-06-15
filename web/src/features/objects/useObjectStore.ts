@@ -45,7 +45,7 @@ interface ObjectStore {
   canUndo: boolean;
   canRedo: boolean;
   addObject: (
-    object: Omit<CreatedObject, "id">,
+    object: Omit<CreatedObject, "id"> & Partial<Pick<CreatedObject, "id">>,
     options?: { trackHistory?: boolean; select?: boolean }
   ) => string;
   duplicateObject: (id: string, options?: { trackHistory?: boolean }) => string | null;
@@ -170,6 +170,23 @@ const trimUndoStack = (undoStack: ObjectSnapshot[]): ObjectSnapshot[] =>
     ? undoStack.slice(undoStack.length - WORLD_OBJECT_STORE_PARAMS.historyLimit)
     : undoStack;
 
+const nextGeneratedObjectId = (existingIds: Set<string>): string => {
+  let id = `object-${objectIdCounter++}`;
+  while (existingIds.has(id)) {
+    id = `object-${objectIdCounter++}`;
+  }
+  return id;
+};
+
+const resolveAddedObjectId = (
+  object: Partial<Pick<CreatedObject, "id">>,
+  existingIds: Set<string>
+): string => {
+  const requestedId = typeof object.id === "string" ? object.id.trim() : "";
+  if (requestedId && !existingIds.has(requestedId)) return requestedId;
+  return nextGeneratedObjectId(existingIds);
+};
+
 export const useObjectStore = create<ObjectStore & ObjectStoreInternalState>((set, get) => ({
   objects: [],
   selectedObjectId: null,
@@ -182,8 +199,12 @@ export const useObjectStore = create<ObjectStore & ObjectStoreInternalState>((se
   activeEditSnapshot: null,
 
   addObject: (object, options) => {
-    const previousSnapshot = captureSnapshot(get());
-    const id = `object-${objectIdCounter++}`;
+    const state = get();
+    const previousSnapshot = captureSnapshot(state);
+    const id = resolveAddedObjectId(
+      object,
+      new Set(state.objects.map((existingObject) => existingObject.id))
+    );
     const resolvedPosition = normalizeWorldObjectPositionVector(object.position);
     const resolvedSize = normalizeWorldObjectSizeVector({
       type: object.type,

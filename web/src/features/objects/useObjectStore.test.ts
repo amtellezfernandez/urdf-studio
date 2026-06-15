@@ -24,6 +24,47 @@ describe("useObjectStore", () => {
     resetObjectStore();
   });
 
+  it("preserves explicit imported object IDs", () => {
+    const objectId = useObjectStore.getState().addObject({
+      id: "warehouse-crate-a",
+      type: "cube",
+      position: new THREE.Vector3(0, 0, 0),
+      size: new THREE.Vector3(TEST_CUBE_SIZE, TEST_CUBE_SIZE, TEST_CUBE_SIZE),
+      color: "#ffffff",
+      trackedJointName: null,
+      isIkTarget: true,
+    });
+
+    expect(objectId).toBe("warehouse-crate-a");
+    expect(useObjectStore.getState().objects[0]?.id).toBe("warehouse-crate-a");
+  });
+
+  it("generates a unique object ID when an explicit imported ID already exists", () => {
+    const store = useObjectStore.getState();
+    store.addObject({
+      id: "duplicate-world-object",
+      type: "cube",
+      position: new THREE.Vector3(0, 0, 0),
+      size: new THREE.Vector3(TEST_CUBE_SIZE, TEST_CUBE_SIZE, TEST_CUBE_SIZE),
+      color: "#ffffff",
+      trackedJointName: null,
+      isIkTarget: true,
+    });
+
+    const secondObjectId = store.addObject({
+      id: "duplicate-world-object",
+      type: "cube",
+      position: new THREE.Vector3(0, 0, 0),
+      size: new THREE.Vector3(TEST_CUBE_SIZE, TEST_CUBE_SIZE, TEST_CUBE_SIZE),
+      color: "#ffffff",
+      trackedJointName: null,
+      isIkTarget: true,
+    });
+
+    expect(secondObjectId).not.toBe("duplicate-world-object");
+    expect(new Set(useObjectStore.getState().objects.map((object) => object.id)).size).toBe(2);
+  });
+
   it("preserves explicit imported point size on add", () => {
     const pointId = useObjectStore.getState().addObject({
       type: "point",
