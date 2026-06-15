@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from backend.services.simulator_adapters.camera_artifacts import inspect_rgb_image
+from backend.services.simulator_adapters.camera_artifacts import (
+    MIN_VISIBLE_CHANNEL_SPAN,
+    inspect_rgb_image,
+)
 
 WORKSPACE_PARITY_ID = "workspace-parity"
 PARITY_REPORT_FIELDS = (
@@ -219,7 +222,7 @@ def _camera_image_manifest(
                 f"{item.label} camera_images PNG {path.name} size {image_stats.size} "
                 f"does not match report camera size {(expected['width'], expected['height'])}",
             )
-        if image_stats.channel_span <= 5:
+        if image_stats.channel_span <= MIN_VISIBLE_CHANNEL_SPAN:
             return item.label, f"{item.label} camera_images PNG {path.name} is blank"
         images.append(
             {

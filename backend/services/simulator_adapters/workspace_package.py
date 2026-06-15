@@ -29,6 +29,10 @@ from backend.services.world_scene_package_digest import (
     validate_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
 )
+from backend.services.world_layout_static_transfer import (
+    count_transferable_world_objects,
+    parse_static_world_layout_payload,
+)
 
 
 @dataclass(frozen=True)
@@ -262,6 +266,13 @@ def _synthetic_urdf_visual_rgba(link_name: str, visual: ET.Element, visual_index
     return URDF_VISUAL_SYNTHETIC_COLOR_PALETTE[digest[0] % len(URDF_VISUAL_SYNTHETIC_COLOR_PALETTE)]
 
 
+def _transferable_world_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
+    layout = parse_static_world_layout_payload(
+        world_scene_package_json_payload(request.world_package)
+    )
+    return count_transferable_world_objects(layout, include_hidden=False)
+
+
 def _urdf_visual_fingerprint(link_name: str, visual: ET.Element, visual_index: int) -> str:
     parts = [link_name, visual.get("name", ""), str(visual_index)]
     mesh = visual.find("./geometry/mesh")
@@ -346,7 +357,7 @@ def prepare_simulator_workspace_package(
         world_package_path=world_package_path,
         robot_urdf_path=bundled_urdf_path,
         bundle_result=bundle_result,
-        world_object_count=len(request.world_package.world_snapshot.objects),
+        world_object_count=_transferable_world_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
     )
 

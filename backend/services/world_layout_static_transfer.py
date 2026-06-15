@@ -610,6 +610,14 @@ def build_sim_primitives(
     return tuple(primitives), tuple(warnings)
 
 
+def count_transferable_world_objects(
+    layout: StaticWorldLayout,
+    *,
+    include_hidden: bool = False,
+) -> int:
+    return sum(1 for obj in layout.objects if include_hidden or not obj.is_hidden)
+
+
 def append_primitives_to_mujoco_mjcf(
     mjcf_text: str,
     primitives: Sequence[SimPrimitive],

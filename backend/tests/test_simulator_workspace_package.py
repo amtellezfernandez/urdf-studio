@@ -87,6 +87,16 @@ def test_prepare_simulator_workspace_records_scene_counts(tmp_path) -> None:
                 "rotation_rpy_rad": [0.0, 0.0, 0.0],
                 "size_xyz": [0.1, 0.2, 0.3],
                 "color": "#22c55e",
+            },
+            {
+                "id": "hidden-crate",
+                "name": "Hidden Crate",
+                "type": "cube",
+                "position_xyz": [1.0, 1.0, 1.0],
+                "rotation_rpy_rad": [0.0, 0.0, 0.0],
+                "size_xyz": [0.1, 0.2, 0.3],
+                "color": "#111827",
+                "is_hidden": True,
             }
         ],
     )

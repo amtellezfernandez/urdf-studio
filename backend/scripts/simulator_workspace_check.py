@@ -59,6 +59,11 @@ from backend.services.simulator_adapters.workspace_report_validation import (
     SimulatorWorkspaceReportExpectations,
     validate_simulator_workspace_report,
 )
+from backend.services.world_layout_static_transfer import (
+    count_transferable_world_objects,
+    parse_static_world_layout_payload,
+)
+from backend.services.world_scene_package_digest import world_scene_package_json_payload
 
 REQUIRE_SIMULATOR_WORKSPACE_ENV = "URDF_STUDIO_REQUIRE_SIMULATOR_WORKSPACE"
 DEFAULT_DURATION_SEC = 0.02
@@ -669,11 +674,10 @@ def _report_has_camera_artifacts(report_path: Path) -> bool:
 
 
 def _active_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
-    return sum(
-        1
-        for item in request.world_package.world_snapshot.objects
-        if not (isinstance(item, dict) and item.get("is_hidden") is True)
+    layout = parse_static_world_layout_payload(
+        world_scene_package_json_payload(request.world_package)
     )
+    return count_transferable_world_objects(layout, include_hidden=False)
 
 
 def _print_human_results(results: Sequence[WorkspaceCheckResult]) -> None:
