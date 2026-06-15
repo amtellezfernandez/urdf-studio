@@ -8,7 +8,10 @@ import { DEFAULT_WORLD_LAYOUT_URL } from "@/shared/config/scenes";
 import { WORLD_HUB_WEB_BASE_URL } from "@/shared/config/worldHub";
 import type { Camera } from "@/shared/types/camera";
 import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defaultSceneAutoLoadPolicy";
-import { WORLD_SCENE_PACKAGE_DEFAULT_VERSION } from "@/features/world-share/worldScenePackageParams";
+import {
+  WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
+  WORLD_SCENE_PACKAGE_DEFAULT_VERSION,
+} from "@/features/world-share/worldScenePackageParams";
 import {
   WORLD_ROLLOUT_IMPORT_ACCEPT,
   WORLD_ROLLOUT_JOB_MAX_POLLS,
@@ -458,12 +461,8 @@ export const useWorldSceneManager = ({
     []
   );
 
-  const applyWorldSceneObjects = useCallback(
-    (sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]) => {
-      const nextObjects = sceneObjects.map((object) => ({
-        id: object.id,
-        ...toImportedObjectParams(object),
-      }));
+  const applyCreatedObjects = useCallback(
+    (nextObjects: CreatedObject[]) => {
       objectsRef.current = nextObjects;
       clearObjects();
       nextObjects.forEach((object) => {
@@ -473,7 +472,18 @@ export const useWorldSceneManager = ({
         });
       });
     },
-    [addObject, clearObjects, toImportedObjectParams]
+    [addObject, clearObjects]
+  );
+
+  const applyWorldSceneObjects = useCallback(
+    (sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]) => {
+      const nextObjects = sceneObjects.map((object) => ({
+        id: object.id,
+        ...toImportedObjectParams(object),
+      }));
+      applyCreatedObjects(nextObjects);
+    },
+    [applyCreatedObjects, toImportedObjectParams]
   );
 
   const applyImportedWorldSceneLayer = useCallback(
@@ -616,12 +626,22 @@ export const useWorldSceneManager = ({
   }, [refreshWorldRegistry, worldRegistryLoading]);
 
   const importWorldLayoutFromUrl = useCallback(
-    async (worldLayoutUrl: string, contextLabel: string) => {
+    async (
+      worldLayoutUrl: string,
+      contextLabel: string,
+      options: { sourceOverride?: NonNullable<CreatedObject["source"]> } = {}
+    ) => {
       const { worldLayout, embeddedCameras } = await readWorldSceneLayerFromUrl(
         worldLayoutUrl,
         contextLabel
       );
-      applyImportedWorldSceneLayer(worldLayout);
+      applyImportedWorldSceneLayer({
+        ...worldLayout,
+        objects: worldLayout.objects.map((object) => ({
+          ...object,
+          source: options.sourceOverride ?? object.source,
+        })),
+      });
       if (embeddedCameras > 0) {
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
       }
@@ -649,7 +669,9 @@ export const useWorldSceneManager = ({
   const handleImportDefaultWorldLayoutFromDialog = useCallback(async () => {
     setIsImportingWorldLayout(true);
     try {
-      await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout");
+      await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout", {
+        sourceOverride: WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
+      });
       setWorldLayoutImportDialogOpen(false);
       setWorldLayoutImportUrlDraft("");
     } catch (error) {
@@ -667,13 +689,38 @@ export const useWorldSceneManager = ({
   );
 
   const ensureWorldLayoutForTransfer = useCallback(async () => {
-    if (objects.length > 0 || hasExplicitWorldImport || hasExplicitWorldLayoutImport) return;
-    await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout transfer");
+    if (hasExplicitWorldImport || hasExplicitWorldLayoutImport) return;
+    if (
+      objectsRef.current.some(
+        (object) => object.source === WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE
+      )
+    ) {
+      return;
+    }
+    const { worldLayout } = await readWorldSceneLayerFromUrl(
+      DEFAULT_WORLD_LAYOUT_URL,
+      "Default world layout transfer"
+    );
+    const layoutObjects = worldLayout.objects.map((object) => ({
+      id: object.id,
+      ...toImportedObjectParams({
+        ...object,
+        source: WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
+      }),
+    }));
+    if (layoutObjects.length === 0) return;
+    const layoutIds = new Set(layoutObjects.map((object) => object.id));
+    const preservedObjects = objectsRef.current.filter(
+      (object) =>
+        object.source !== WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE &&
+        !layoutIds.has(object.id)
+    );
+    applyCreatedObjects([...preservedObjects, ...layoutObjects]);
   }, [
+    applyCreatedObjects,
     hasExplicitWorldImport,
     hasExplicitWorldLayoutImport,
-    importWorldLayoutFromUrl,
-    objects.length,
+    toImportedObjectParams,
   ]);
 
   useEffect(() => {
@@ -739,7 +786,9 @@ export const useWorldSceneManager = ({
     defaultWorldLayoutAppliedRef.current = true;
     void (async () => {
       try {
-        await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout import");
+        await importWorldLayoutFromUrl(DEFAULT_WORLD_LAYOUT_URL, "Default world layout import", {
+          sourceOverride: WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
+        });
       } catch (error) {
         toast.warning(
           error instanceof Error
