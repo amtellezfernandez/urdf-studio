@@ -121,7 +121,7 @@ export const HealthActionPanelWorkspaceTransfer = ({
 }: HealthActionPanelWorkspaceTransferProps) => {
   return (
     <div data-section="workspace-transfer" className={cn("space-y-1", className)}>
-      <WorkspaceTransferRow label="Open" summary={sceneSummary}>
+      <WorkspaceTransferRow label="Open in" summary={sceneSummary}>
         {targets.map((target) =>
           target.canOpen ? (
             <AvailableTargetButton key={target.id} target={target} />

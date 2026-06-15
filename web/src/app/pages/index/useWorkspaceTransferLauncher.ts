@@ -231,7 +231,7 @@ export const useWorkspaceTransferLauncher = ({
         id: descriptor.targetId,
         label: descriptor.label,
         detail: resolveWorkspaceTransferTargetDetail(descriptor, sceneSummary, status),
-        openLabel: `Open ${descriptor.label}`,
+        openLabel: `Open in ${descriptor.label}`,
         openingLabel: `Opening ${descriptor.label}`,
         isBusy,
         isActive,

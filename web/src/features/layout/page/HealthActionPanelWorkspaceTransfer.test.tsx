@@ -24,7 +24,7 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
               id: "genesis",
               label: "Genesis",
               detail: "URDF open",
-              openLabel: "Open Genesis",
+              openLabel: "Open in Genesis",
               openingLabel: "Opening Genesis",
               isBusy: false,
               canOpen: true,
@@ -35,7 +35,7 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
               id: "mjlab",
               label: "MJLab",
               detail: "MJCF open and validation",
-              openLabel: "Open MJLab",
+              openLabel: "Open in MJLab",
               openingLabel: "Opening MJLab",
               isBusy: false,
               isActive: true,
@@ -47,7 +47,7 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
               id: "sapien2",
               label: "SAPIEN 2",
               detail: "URDF soon",
-              openLabel: "Open SAPIEN 2",
+              openLabel: "Open in SAPIEN 2",
               openingLabel: "Opening SAPIEN 2",
               isBusy: false,
               canOpen: false,
@@ -70,10 +70,10 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
 
     await act(async () => {
       container
-        .querySelector('button[aria-label="Open Genesis"]')
+        .querySelector('button[aria-label="Open in Genesis"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       container
-        .querySelector('button[aria-label="Open MJLab"]')
+        .querySelector('button[aria-label="Open in MJLab"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 

@@ -145,6 +145,7 @@ describe("useWorkspaceTransferLauncher", () => {
     });
 
     const openAction = hookValue?.workspaceTransfer.targets[0]?.onAction;
+    expect(hookValue?.workspaceTransfer.targets[0]?.openLabel).toBe("Open in Blender");
     expect(openAction).toBeDefined();
     await act(async () => {
       await (openAction?.() as unknown as Promise<void>);
