@@ -400,6 +400,13 @@ def test_mesh_asset_refs_are_normalized_to_portable_package_paths(tmp_path) -> N
     assert resolve_world_layout_asset_path(primitives[0].asset_ref, (tmp_path,)) == mesh_path
 
 
+def test_mesh_asset_refs_must_resolve_to_files(tmp_path) -> None:
+    directory_path = tmp_path / "assets" / "crate.obj"
+    directory_path.mkdir(parents=True)
+
+    assert resolve_world_layout_asset_path("assets/crate.obj", (tmp_path,)) is None
+
+
 @pytest.mark.parametrize(
     "asset_ref",
     [

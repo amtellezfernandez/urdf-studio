@@ -264,7 +264,7 @@ def resolve_world_layout_asset_path(asset_ref: str | None, roots: Sequence[Path]
             candidate.relative_to(root_path)
         except ValueError:
             continue
-        if candidate.exists():
+        if candidate.is_file():
             return candidate
     return None
 
