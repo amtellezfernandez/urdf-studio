@@ -26,6 +26,7 @@ from backend.services.simulator_adapters.world_mesh_assets import resolve_declar
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
 BLENDER_OPEN_SCRIPT_FILENAME = "open_blender_scene.py"
+BLENDER_FOCUS_SCRIPT_FILENAME = "focus_blender_view.py"
 BLENDER_EXPORT_SCRIPT_FILENAME = "export_blender_changes.py"
 BLENDER_ROBOT_GLB_FILENAME = "robot-reference.glb"
 BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
@@ -35,6 +36,7 @@ BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
 class BlenderWorkspaceArtifacts:
     edit_session_path: Path
     open_script_path: Path
+    focus_script_path: Path
     export_script_path: Path
     change_set_path: Path
     robot_glb_path: Path | None
@@ -60,6 +62,7 @@ def write_blender_workspace_artifacts(
     artifact_dir.mkdir(parents=True, exist_ok=True)
     edit_session_path = artifact_dir / BLENDER_EDIT_SESSION_FILENAME
     open_script_path = artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME
+    focus_script_path = artifact_dir / BLENDER_FOCUS_SCRIPT_FILENAME
     export_script_path = artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME
     change_set_path = artifact_dir / BLENDER_CHANGE_SET_FILENAME
     robot_glb_path = artifact_dir / BLENDER_ROBOT_GLB_FILENAME
@@ -105,6 +108,7 @@ def write_blender_workspace_artifacts(
         build_blender_open_script(edit_session_path=edit_session_path),
         encoding="utf-8",
     )
+    focus_script_path.write_text(build_blender_focus_script(), encoding="utf-8")
     export_script_path.write_text(
         build_blender_export_script(
             change_set_path=change_set_path,
@@ -115,6 +119,7 @@ def write_blender_workspace_artifacts(
     return BlenderWorkspaceArtifacts(
         edit_session_path=edit_session_path,
         open_script_path=open_script_path,
+        focus_script_path=focus_script_path,
         export_script_path=export_script_path,
         change_set_path=change_set_path,
         robot_glb_path=robot_glb.path if robot_glb else None,
@@ -684,6 +689,125 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
                 print(f"[urdf-studio-blender] edit session loaded: {{SESSION_PATH}}", flush=True)
                 print(f"[urdf-studio-blender] blend written: {{blend_path}}", flush=True)
+
+
+            main()
+            """
+        ).lstrip()
+    )
+
+
+def build_blender_focus_script() -> str:
+    return (
+        textwrap.dedent(
+            """
+            import bpy
+            from mathutils import Vector
+
+
+            def world_object_roots():
+                return [
+                    obj
+                    for obj in bpy.data.objects
+                    if obj.get("urdf_studio_kind") == "world_object"
+                ]
+
+
+            def object_and_descendants(obj):
+                descendants = list(getattr(obj, "children_recursive", []) or [])
+                return [obj, *descendants]
+
+
+            def visible_bound_points(obj):
+                bound_box = getattr(obj, "bound_box", None)
+                matrix_world = getattr(obj, "matrix_world", None)
+                if bound_box is None or matrix_world is None:
+                    return []
+                try:
+                    if not obj.visible_get():
+                        return []
+                    return [matrix_world @ Vector(corner) for corner in bound_box]
+                except Exception:
+                    return []
+
+
+            def layout_bounds(roots):
+                points = [
+                    point
+                    for root in roots
+                    for obj in object_and_descendants(root)
+                    for point in visible_bound_points(obj)
+                ]
+                if not points:
+                    return Vector((0.0, 0.0, 0.35)), 1.0
+                mins = Vector(tuple(min(point[index] for point in points) for index in range(3)))
+                maxs = Vector(tuple(max(point[index] for point in points) for index in range(3)))
+                center = (mins + maxs) * 0.5
+                radius = max(maxs[index] - mins[index] for index in range(3)) * 0.5
+                return center, max(float(radius), 0.75)
+
+
+            def active_view3d_spaces():
+                screen = getattr(bpy.context, "screen", None)
+                if screen is None:
+                    return []
+                spaces = []
+                for area in getattr(screen, "areas", []):
+                    if getattr(area, "type", "") != "VIEW_3D":
+                        continue
+                    space = getattr(getattr(area, "spaces", None), "active", None)
+                    region_3d = getattr(space, "region_3d", None)
+                    if region_3d is not None:
+                        spaces.append(space)
+                return spaces
+
+
+            def select_layout_roots(roots):
+                try:
+                    bpy.ops.object.select_all(action="DESELECT")
+                except Exception:
+                    pass
+                for obj in roots:
+                    try:
+                        obj.select_set(True)
+                    except Exception:
+                        pass
+                if roots:
+                    try:
+                        bpy.context.view_layer.objects.active = roots[0]
+                    except Exception:
+                        pass
+
+
+            def focus_layout_viewports():
+                roots = world_object_roots()
+                select_layout_roots(roots)
+                center, radius = layout_bounds(roots)
+                focused = 0
+                for space in active_view3d_spaces():
+                    region_3d = getattr(space, "region_3d", None)
+                    if region_3d is None:
+                        continue
+                    try:
+                        region_3d.view_location = center
+                        region_3d.view_distance = max(radius * 3.0, 1.0)
+                        region_3d.view_perspective = "PERSP"
+                        focused += 1
+                    except Exception:
+                        pass
+                print(
+                    f"[urdf-studio-blender] viewport_focused world_objects={len(roots)} viewports={focused}",
+                    flush=True,
+                )
+                return None
+
+
+            def main():
+                focus_layout_viewports()
+                try:
+                    bpy.app.timers.register(focus_layout_viewports, first_interval=0.25)
+                except Exception:
+                    pass
 
 
             main()

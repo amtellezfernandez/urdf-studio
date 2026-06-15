@@ -95,6 +95,7 @@ def prepare_blender_workspace_scene(
                 "blender_executable": blender_executable,
                 "edit_session_path": artifacts.edit_session_path,
                 "open_script_path": artifacts.open_script_path,
+                "focus_script_path": artifacts.focus_script_path,
                 "export_script_path": artifacts.export_script_path,
                 "change_set_path": artifacts.change_set_path,
                 "robot_glb_path": artifacts.robot_glb_path,
@@ -104,6 +105,7 @@ def prepare_blender_workspace_scene(
             artifacts={
                 "edit_session_path": artifacts.edit_session_path,
                 "open_script_path": artifacts.open_script_path,
+                "focus_script_path": artifacts.focus_script_path,
                 "export_script_path": artifacts.export_script_path,
                 "change_set_path": artifacts.change_set_path,
                 "robot_glb_path": artifacts.robot_glb_path,
@@ -127,6 +129,7 @@ def prepare_blender_workspace_scene(
     _run_blender_workspace_until_ready(
         blender_executable=blender_executable,
         open_script_path=artifacts.open_script_path,
+        focus_script_path=artifacts.focus_script_path,
         blend_path=blend_path,
         cwd=world_package_path.parent,
         background=no_viewer,
@@ -137,11 +140,15 @@ def _run_blender_workspace_until_ready(
     *,
     blender_executable: str,
     open_script_path: Path,
+    focus_script_path: Path | None = None,
     blend_path: Path | None = None,
     cwd: Path,
     background: bool = False,
 ) -> None:
     open_script_path = open_script_path.expanduser().resolve()
+    focus_script_path = (
+        focus_script_path.expanduser().resolve() if focus_script_path is not None else None
+    )
     blend_path = blend_path.expanduser().resolve() if blend_path is not None else None
     cwd = cwd.expanduser().resolve()
     if background:
@@ -162,6 +169,7 @@ def _run_blender_workspace_until_ready(
     _open_blender_saved_workspace(
         blender_executable=blender_executable,
         blend_path=blend_path,
+        focus_script_path=focus_script_path,
         cwd=cwd,
     )
 
@@ -214,6 +222,7 @@ def _open_blender_saved_workspace(
     *,
     blender_executable: str,
     blend_path: Path,
+    focus_script_path: Path | None,
     cwd: Path,
     startup_grace_sec: float = BLENDER_WORKSPACE_PROCESS_PARAMS.post_ready_grace_sec,
 ) -> None:
@@ -228,6 +237,8 @@ def _open_blender_saved_workspace(
         "900",
         str(blend_path),
     ]
+    if focus_script_path is not None:
+        command.extend(["--python", str(focus_script_path)])
     process = subprocess.Popen(
         command,
         cwd=cwd,

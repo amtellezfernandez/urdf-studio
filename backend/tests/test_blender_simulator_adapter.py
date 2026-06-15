@@ -29,8 +29,10 @@ from backend.services.simulator_adapters.blender_change_sets import (
     build_blender_change_set_source,
 )
 from backend.services.simulator_adapters.blender_workspace import (
+    BLENDER_FOCUS_SCRIPT_FILENAME,
     BLENDER_ROBOT_GLB_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
+    build_blender_focus_script,
     write_blender_workspace_artifacts,
 )
 from backend.services.simulator_adapters.blender_edit_session import (
@@ -1201,13 +1203,16 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert report["camera_count"] == 1
     assert Path(report["artifacts"]["edit_session_path"]).exists()
     assert Path(report["artifacts"]["open_script_path"]).exists()
+    assert Path(report["artifacts"]["focus_script_path"]).exists()
     assert Path(report["artifacts"]["export_script_path"]).exists()
     assert Path(report["artifacts"]["robot_glb_path"]).exists()
     assert Path(report["artifacts"]["robot_usd_path"]).exists()
     assert report["artifacts"]["camera_screenshot_dir"] == str(tmp_path / "artifacts" / "cameras")
     open_script = Path(report["artifacts"]["open_script_path"]).read_text(encoding="utf-8")
+    focus_script = Path(report["artifacts"]["focus_script_path"]).read_text(encoding="utf-8")
     export_script = Path(report["artifacts"]["export_script_path"]).read_text(encoding="utf-8")
     ast.parse(open_script)
+    ast.parse(focus_script)
     ast.parse(export_script)
     assert "new_world_object" in export_script
     assert "deleted_world_object" in export_script
@@ -1217,6 +1222,17 @@ def test_blender_workspace_prepare_no_viewer_writes_report_and_scripts(tmp_path:
     assert "initialize_edit_view" in open_script
     assert "view_perspective = \"PERSP\"" in open_script
     assert "world_objects_created=" in open_script
+    assert "viewport_focused" in focus_script
+
+
+def test_blender_focus_script_frames_world_object_roots() -> None:
+    focus_script = build_blender_focus_script()
+
+    ast.parse(focus_script)
+    assert 'urdf_studio_kind") == "world_object"' in focus_script
+    assert "view_location = center" in focus_script
+    assert "view_distance = max(radius * 3.0, 1.0)" in focus_script
+    assert "bpy.app.timers.register" in focus_script
 
 
 def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path) -> None:
@@ -1668,7 +1684,9 @@ def test_blender_workspace_runner_reports_ready_after_edit_session_load(
 ) -> None:
     captured_commands: list[list[str]] = []
     blend_path = tmp_path / "layout.blend"
+    focus_script_path = tmp_path / BLENDER_FOCUS_SCRIPT_FILENAME
     blend_path.write_text("fake blend", encoding="utf-8")
+    focus_script_path.write_text("print('focus')\n", encoding="utf-8")
 
     def fake_popen(command, **kwargs):
         captured_commands.append(command)
@@ -1692,6 +1710,7 @@ def test_blender_workspace_runner_reports_ready_after_edit_session_load(
     blender_prepare._run_blender_workspace_until_ready(
         blender_executable="/usr/bin/blender",
         open_script_path=tmp_path / "open_blender_scene.py",
+        focus_script_path=focus_script_path,
         blend_path=blend_path,
         cwd=tmp_path,
     )
@@ -1714,6 +1733,8 @@ def test_blender_workspace_runner_reports_ready_after_edit_session_load(
             "1440",
             "900",
             str(blend_path),
+            "--python",
+            str(focus_script_path),
         ],
     ]
     assert blender_prepare.BLENDER_EDIT_SESSION_LOADED_MARKER in output
@@ -1761,7 +1782,9 @@ def test_blender_workspace_runner_builds_with_background_before_gui(
 ) -> None:
     captured_commands: list[list[str]] = []
     blend_path = tmp_path / "layout.blend"
+    focus_script_path = tmp_path / BLENDER_FOCUS_SCRIPT_FILENAME
     blend_path.write_text("fake blend", encoding="utf-8")
+    focus_script_path.write_text("print('focus')\n", encoding="utf-8")
 
     def fake_popen(command, **kwargs):
         captured_commands.append(command)
@@ -1779,6 +1802,7 @@ def test_blender_workspace_runner_builds_with_background_before_gui(
     blender_prepare._run_blender_workspace_until_ready(
         blender_executable="/usr/bin/blender",
         open_script_path=tmp_path / "open_blender_scene.py",
+        focus_script_path=focus_script_path,
         blend_path=blend_path,
         cwd=tmp_path,
     )
@@ -1791,7 +1815,11 @@ def test_blender_workspace_runner_builds_with_background_before_gui(
         "--python",
         str(tmp_path / "open_blender_scene.py"),
     ]
-    assert captured_commands[1][-1] == str(blend_path)
+    assert captured_commands[1][-3:] == [
+        str(blend_path),
+        "--python",
+        str(focus_script_path),
+    ]
 
 
 def test_blender_workspace_runner_rejects_exit_before_edit_session_load(

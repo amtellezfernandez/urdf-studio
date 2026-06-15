@@ -572,12 +572,14 @@ def test_blender_workspace_check_requests_edit_session_artifacts(monkeypatch, tm
     )
     assert command.expected_file_paths == (
         tmp_path / "artifacts" / "open_blender_scene.py",
+        tmp_path / "artifacts" / "focus_blender_view.py",
         tmp_path / "artifacts" / "export_blender_changes.py",
         tmp_path / "artifacts" / "robot-reference.usda",
     )
     assert command.expected_report_artifact_file_keys == (
         "edit_session_path",
         "open_script_path",
+        "focus_script_path",
         "export_script_path",
         "robot_usd_path",
     )
@@ -761,6 +763,7 @@ def test_blender_workspace_check_requests_camera_artifacts_when_runtime_exists(
     assert command.expected_report_artifact_file_keys == (
         "edit_session_path",
         "open_script_path",
+        "focus_script_path",
         "export_script_path",
         "robot_usd_path",
         "blend_path",

@@ -29,6 +29,7 @@ from backend.services.simulator_adapters.blender_saved_session import (
 from backend.services.simulator_adapters.blender_workspace import (
     BLENDER_EDIT_SESSION_FILENAME,
     BLENDER_EXPORT_SCRIPT_FILENAME,
+    BLENDER_FOCUS_SCRIPT_FILENAME,
     BLENDER_OPEN_SCRIPT_FILENAME,
     BLENDER_ROBOT_USD_FILENAME,
 )
@@ -477,6 +478,7 @@ def _prepare_blender_command(
     expected_report_artifact_file_keys = (
         "edit_session_path",
         "open_script_path",
+        "focus_script_path",
         "export_script_path",
         "robot_usd_path",
     )
@@ -521,6 +523,7 @@ def _prepare_blender_command(
         expected_image_dirs=expected_image_dirs,
         expected_file_paths=(
             artifact_dir / BLENDER_OPEN_SCRIPT_FILENAME,
+            artifact_dir / BLENDER_FOCUS_SCRIPT_FILENAME,
             artifact_dir / BLENDER_EXPORT_SCRIPT_FILENAME,
             artifact_dir / BLENDER_ROBOT_USD_FILENAME,
         ),
