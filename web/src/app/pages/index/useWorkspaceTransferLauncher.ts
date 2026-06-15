@@ -63,7 +63,7 @@ const resolveWorkspaceTransferTargetDetail = (
   const assetFormat = formatWorkspaceAssetFormat(descriptor.transferPolicy.robotAssetFormat);
   const baseDetail = (() => {
     if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} soon`;
-    if (status && !status.available) return `${assetFormat} target unavailable: ${status.status}`;
+    if (status && !status.available) return `${assetFormat} soon`;
     if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
     if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
     if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
@@ -160,7 +160,7 @@ export const useWorkspaceTransferLauncher = ({
       if (loadingTargetId !== null) return;
       const status = targetStatuses[descriptor.targetId];
       if (!canOpenWorkspaceTarget(descriptor) || status?.available === false) {
-        toast.message(status?.status || `${descriptor.label} soon.`);
+        toast.message(`${descriptor.label} soon.`);
         return;
       }
       if (!vizUrdfContent && !originalUrdfContent) {
@@ -224,9 +224,7 @@ export const useWorkspaceTransferLauncher = ({
       const isActive = lastOpenedTargetId === descriptor.targetId;
       const status = targetStatuses[descriptor.targetId];
       const canOpen = canOpenWorkspaceTarget(descriptor) && status?.available !== false;
-      const disabledLabel = canOpenWorkspaceTarget(descriptor)
-        ? `${descriptor.label} target unavailable`
-        : `${descriptor.label} soon`;
+      const disabledLabel = `${descriptor.label} soon`;
       return {
         id: descriptor.targetId,
         label: descriptor.label,
@@ -236,7 +234,7 @@ export const useWorkspaceTransferLauncher = ({
         isBusy,
         isActive,
         canOpen,
-        disabledLabel: status?.available === false ? status.status : disabledLabel,
+        disabledLabel,
         onAction: () => handleOpenTarget(descriptor),
       };
     });
