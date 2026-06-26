@@ -50,7 +50,7 @@ from backend.robot_gateway.lerobot_calibration_files import (
     parse_int,
     read_lerobot_calibration_groups,
 )
-from backend.robot_gateway.serial_port_access import robot_gateway_serial_port_lock
+from backend.robot_gateway.serial_port_access import robot_gateway_port_serial_lock
 
 OpenArmLeaderStateSide = Literal["left", "right", "both"]
 
@@ -554,29 +554,44 @@ class OpenArmLeaderStateService:
                 error="OpenArm leader port is required.",
             )
 
+        # Resolve the reader (a dict mutation) under the service lock, then run
+        # the blocking serial read under a per-port lock with the service lock
+        # released. This lets two leaders on different ports (e.g. an OpenArm
+        # left and right arm) read in parallel instead of serializing on either
+        # the service lock or one global serial lock.
         with self._lock:
-            self._release_idle_readers_locked(monotonic())
-            try:
-                with robot_gateway_serial_port_lock:
-                    action_positions = self._read_with_fallback_locked(
-                        normalized_port,
-                        normalized_motor_ids,
-                        normalized_motor_model,
-                        normalized_calibration_ref,
-                    )
-            except Exception as exc:  # pragma: no cover - hardware/library dependent
-                self._drop_reader(
+            idle_leases = self._collect_idle_leases_locked(monotonic())
+            reader = self._get_reader(
+                normalized_port,
+                normalized_motor_ids,
+                normalized_motor_model,
+                normalized_calibration_ref,
+            )
+            self._ensure_idle_reaper_locked()
+        for idle_port, idle_lease in idle_leases:
+            self._disconnect_lease(idle_port, idle_lease)
+
+        try:
+            with robot_gateway_port_serial_lock(normalized_port):
+                action_positions = self._read_with_fallback(
+                    reader,
                     normalized_port,
                     normalized_motor_ids,
                     normalized_motor_model,
                     normalized_calibration_ref,
                 )
-                return _build_error_state(
-                    port=normalized_port,
-                    side=normalized_side,
-                    error=f"OpenArm leader read failed: {exc}",
-                )
-            self._ensure_idle_reaper_locked()
+        except Exception as exc:  # pragma: no cover - hardware/library dependent
+            self._drop_reader(
+                normalized_port,
+                normalized_motor_ids,
+                normalized_motor_model,
+                normalized_calibration_ref,
+            )
+            return _build_error_state(
+                port=normalized_port,
+                side=normalized_side,
+                error=f"OpenArm leader read failed: {exc}",
+            )
 
         return OpenArmLeaderStateResult(
             connected=True,
@@ -605,37 +620,45 @@ class OpenArmLeaderStateService:
             ),
         )
 
-    def _read_with_fallback_locked(
+    def _read_with_fallback(
         self,
+        reader: _LeaderReader,
         port: str,
         motor_ids: tuple[int, ...] | None,
         motor_model: str | None,
         calibration_ref: _LeaderCalibrationRef | None,
     ) -> dict[str, float]:
+        # Runs under this port's serial lock. The reader was resolved by the
+        # caller under the service lock; only the fallback re-creation touches
+        # the readers dict, so that step re-takes the service lock briefly.
         try:
-            return self._get_reader(
-                port,
-                motor_ids,
-                motor_model,
-                calibration_ref,
-            ).read()
+            return reader.read()
         except Exception:
             if motor_ids is None or not _should_use_lerobot_teleoperator_reader(
                 calibration_ref
             ):
                 raise
-            self._drop_reader_locked(
-                port,
-                motor_ids,
-                motor_model,
-                calibration_ref,
-            )
-            return self._get_generic_reader_locked(
-                port,
-                motor_ids,
-                motor_model,
-                calibration_ref,
-            ).read()
+            with self._lock:
+                dropped = self._drop_reader_locked(
+                    port,
+                    motor_ids,
+                    motor_model,
+                    calibration_ref,
+                )
+                fallback_reader = self._get_generic_reader_locked(
+                    port,
+                    motor_ids,
+                    motor_model,
+                    calibration_ref,
+                )
+            # Already holding this port's serial lock (caller acquired it), so
+            # disconnecting the failed reader here is safe and reentrant.
+            if dropped is not None:
+                try:
+                    dropped.reader.disconnect()
+                except Exception:
+                    pass
+            return fallback_reader.read()
 
     def _get_reader(
         self,
@@ -694,8 +717,11 @@ class OpenArmLeaderStateService:
         motor_model: str | None,
         calibration_ref: _LeaderCalibrationRef | None,
     ) -> None:
-        with robot_gateway_serial_port_lock:
-            self._drop_reader_locked(port, motor_ids, motor_model, calibration_ref)
+        with self._lock:
+            lease = self._drop_reader_locked(
+                port, motor_ids, motor_model, calibration_ref
+            )
+        self._disconnect_lease(port, lease)
 
     def _drop_reader_locked(
         self,
@@ -703,29 +729,39 @@ class OpenArmLeaderStateService:
         motor_ids: tuple[int, ...] | None,
         motor_model: str | None,
         calibration_ref: _LeaderCalibrationRef | None,
-    ) -> None:
-        lease = self._readers.pop((port, motor_ids, motor_model, calibration_ref), None)
-        if lease is not None:
-            lease.reader.disconnect()
+    ) -> _LeaderReaderLease | None:
+        # Only removes the lease from the dict (under the service lock). The
+        # caller disconnects the returned lease under its port lock so serial
+        # I/O never runs while the service lock is held.
+        return self._readers.pop((port, motor_ids, motor_model, calibration_ref), None)
 
-    def _release_idle_readers_locked(self, now_monotonic_sec: float) -> int:
-        released = 0
-        for key, lease in list(self._readers.items()):
+    def _disconnect_lease(
+        self, port: str, lease: _LeaderReaderLease | None
+    ) -> None:
+        if lease is None:
+            return
+        try:
+            with robot_gateway_port_serial_lock(port):
+                lease.reader.disconnect()
+        except Exception:
+            pass
+
+    def _collect_idle_leases_locked(
+        self, now_monotonic_sec: float
+    ) -> list[tuple[str, _LeaderReaderLease]]:
+        idle: list[tuple[str, _LeaderReaderLease]] = []
+        for key in list(self._readers):
+            lease = self._readers[key]
             if (
                 now_monotonic_sec - lease.last_used_monotonic_sec
                 < self._idle_timeout_sec
             ):
                 continue
             self._readers.pop(key, None)
-            try:
-                with robot_gateway_serial_port_lock:
-                    lease.reader.disconnect()
-            except Exception:
-                pass
-            released += 1
+            idle.append((key[0], lease))
         if not self._readers:
             self._cancel_idle_reaper_locked()
-        return released
+        return idle
 
     def _ensure_idle_reaper_locked(self) -> None:
         if not self._readers or self._idle_reaper_timer is not None:
@@ -744,8 +780,10 @@ class OpenArmLeaderStateService:
     def _reap_idle_readers(self) -> None:
         with self._lock:
             self._idle_reaper_timer = None
-            self._release_idle_readers_locked(monotonic())
+            idle_leases = self._collect_idle_leases_locked(monotonic())
             self._ensure_idle_reaper_locked()
+        for idle_port, idle_lease in idle_leases:
+            self._disconnect_lease(idle_port, idle_lease)
 
     def release(
         self,
@@ -767,7 +805,7 @@ class OpenArmLeaderStateService:
             calibration_id=calibration_id,
             calibration_group=calibration_group,
         )
-        released = 0
+        leases_to_disconnect: list[tuple[str, _LeaderReaderLease]] = []
         with self._lock:
             keys = list(self._readers)
             for key_port, key_motor_ids, key_motor_model, key_calibration_ref in keys:
@@ -794,15 +832,13 @@ class OpenArmLeaderStateService:
                 )
                 if lease is None:
                     continue
-                try:
-                    with robot_gateway_serial_port_lock:
-                        lease.reader.disconnect()
-                except Exception:
-                    pass
-                released += 1
+                leases_to_disconnect.append((key_port, lease))
             if not self._readers:
                 self._cancel_idle_reaper_locked()
-        return OpenArmLeaderReleaseResult(released=released)
+        # Disconnect outside the service lock, each under its own port lock.
+        for release_port, lease in leases_to_disconnect:
+            self._disconnect_lease(release_port, lease)
+        return OpenArmLeaderReleaseResult(released=len(leases_to_disconnect))
 
     def release_all(self) -> OpenArmLeaderReleaseResult:
         return self.release()

@@ -2,18 +2,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import backend.robot_gateway.openarm_leader_detection as leader_detection
 from backend.robot_gateway.openarm_leader_detection import (
     OpenArmLeaderMotorProbe,
     _build_leader_control_parts,
+    _probe_leader_motors_cached,
     _resolve_configured_port_status,
     detect_openarm_leaders,
 )
 from backend.robot_gateway.params import (
+    ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING,
     ROBOT_GATEWAY_OPENARM_LEADER_RECOMMENDED_ENV,
     ROBOT_GATEWAY_OPENARM_LEADER_SERIAL_BY_ID_SOURCE,
     ROBOT_GATEWAY_OPENARM_LEADER_SERIAL_LEADER_CANDIDATE,
     ROBOT_GATEWAY_OPENARM_LEADER_TTY_GLOB_SOURCE,
 )
+
+_CACHE_TEST_TIME_ORIGIN_SEC = 0.0
 
 
 def test_detect_openarm_leaders_prefers_stable_serial_by_id_path(
@@ -593,3 +598,41 @@ def test_detect_openarm_leaders_reports_configured_dora_provider(
     assert dora_provider.connectable is True
     assert dora_provider.config_ref == str(dataflow_path)
     assert dora_provider.node_id == "robot_control"
+
+
+def test_motor_probe_cache_outlasts_frontend_detection_refresh(monkeypatch) -> None:
+    # Regression guard for slow hardware-teleop leader connect: if the probe
+    # cache TTL drops to or below the frontend's detection refresh interval,
+    # every refresh misses the cache and re-runs the per-port motor probe.
+    assert (
+        ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.motor_probe_cache_ttl_sec
+        > ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.frontend_refresh_interval_sec
+    )
+
+    leader_detection._motor_probe_cache.clear()
+    probe_calls = {"count": 0}
+
+    def fake_probe(_path: Path) -> OpenArmLeaderMotorProbe:
+        probe_calls["count"] += 1
+        return OpenArmLeaderMotorProbe(bus="feetech", motor_ids=[1, 2, 3, 4, 5, 6])
+
+    fake_time = {"now": _CACHE_TEST_TIME_ORIGIN_SEC}
+    monkeypatch.setattr(leader_detection, "_probe_leader_motors", fake_probe)
+    monkeypatch.setattr(leader_detection, "monotonic", lambda: fake_time["now"])
+
+    port = Path("/dev/ttyUSB0")
+    _probe_leader_motors_cached(port)  # cold probe at t=0
+    fake_time["now"] = (
+        ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.frontend_refresh_interval_sec
+    )
+    _probe_leader_motors_cached(port)  # frontend refresh -> must hit cache
+    assert probe_calls["count"] == 1
+
+    fake_time["now"] = (
+        ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.motor_probe_cache_ttl_sec
+        + ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.frontend_refresh_interval_sec
+    )
+    _probe_leader_motors_cached(port)  # past TTL -> re-probe
+    assert probe_calls["count"] == 2
+
+    leader_detection._motor_probe_cache.clear()

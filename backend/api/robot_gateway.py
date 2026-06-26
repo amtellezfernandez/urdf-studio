@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 
+import anyio.to_thread
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.models.robot_gateway import (
@@ -151,7 +153,9 @@ async def open_robot_gateway_env_config(
     response_model_by_alias=False,
 )
 async def detect_robot_gateway_hardware_leaders() -> OpenArmLeaderDetectionResult:
-    return detect_openarm_leaders()
+    # Detection probes candidate serial ports (blocking I/O); keep it off the
+    # event loop so it cannot stall concurrent leader-state polls during teleop.
+    return await anyio.to_thread.run_sync(detect_openarm_leaders)
 
 
 @router.get(
@@ -161,7 +165,7 @@ async def detect_robot_gateway_hardware_leaders() -> OpenArmLeaderDetectionResul
     include_in_schema=False,
 )
 async def detect_robot_gateway_openarm_leaders() -> OpenArmLeaderDetectionResult:
-    return detect_openarm_leaders()
+    return await anyio.to_thread.run_sync(detect_openarm_leaders)
 
 
 @router.get(
@@ -321,15 +325,22 @@ async def read_robot_gateway_hardware_leader_state(
     calibration_id: str | None = None,
     calibration_group: str | None = None,
 ) -> OpenArmLeaderStateResult:
-    return openarm_leader_state_service.read_state(
-        port=port,
-        side=side,
-        motor_ids=_parse_motor_ids_query(motor_ids),
-        motor_model=motor_model,
-        calibration_category=calibration_category,
-        calibration_profile=calibration_profile,
-        calibration_id=calibration_id,
-        calibration_group=calibration_group,
+    # read_state does blocking serial I/O; run it in a worker thread so the
+    # event loop stays free. This lets concurrent leader-state polls (e.g. an
+    # OpenArm left and right arm) run in parallel instead of serializing on the
+    # event loop, which is what made hardware teleop motion feel delayed.
+    return await anyio.to_thread.run_sync(
+        partial(
+            openarm_leader_state_service.read_state,
+            port=port,
+            side=side,
+            motor_ids=_parse_motor_ids_query(motor_ids),
+            motor_model=motor_model,
+            calibration_category=calibration_category,
+            calibration_profile=calibration_profile,
+            calibration_id=calibration_id,
+            calibration_group=calibration_group,
+        )
     )
 
 
