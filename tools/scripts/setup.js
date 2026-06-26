@@ -74,8 +74,10 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..', '..');
-const CMEEL_PREFIX_DIRNAME = 'cmeel.prefix';
-const CMEEL_LIB_DIRNAME = 'lib';
+const CMEEL_LAYOUT = {
+  prefixDirname: 'cmeel.prefix',
+  libDirname: 'lib',
+};
 
 // Colors for terminal output
 const colors = {
@@ -160,7 +162,7 @@ function resolveManagedCmeelLibPathFromSitePackages(sitePackagePaths, pathExists
     if (typeof sitePackagePath !== 'string' || sitePackagePath.trim() === '') {
       continue;
     }
-    const cmeelLibPath = join(sitePackagePath, CMEEL_PREFIX_DIRNAME, CMEEL_LIB_DIRNAME);
+    const cmeelLibPath = join(sitePackagePath, CMEEL_LAYOUT.prefixDirname, CMEEL_LAYOUT.libDirname);
     if (pathExists(cmeelLibPath)) {
       return cmeelLibPath;
     }

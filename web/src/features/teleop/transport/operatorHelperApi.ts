@@ -63,12 +63,7 @@ export const OPERATOR_HELPER_COLLABORATION_SESSION_HEADER =
 export const OPERATOR_HELPER_COLLABORATION_TELEOP_CAPABILITY_HEADER =
   "X-URDF-Collaboration-Teleop-Capability";
 
-export type OperatorConnectionState =
-  | "idle"
-  | "connecting"
-  | "active"
-  | "closing"
-  | "closed";
+export type OperatorConnectionState = "idle" | "connecting" | "active" | "closing" | "closed";
 
 export type OperatorControlMode = "manual" | "shared_autonomy" | "safe_hold";
 
@@ -208,10 +203,7 @@ export type OperatorLeaderDevice = {
   label: string;
   source: "serial_by_id" | "tty_glob";
   leaderType: "serial_leader_candidate" | "serial_candidate";
-  hardwareFamily:
-    | "arm_controller"
-    | "motor_chain"
-    | "serial_unknown";
+  hardwareFamily: "arm_controller" | "motor_chain" | "serial_unknown";
   motorBus: string | null;
   motorIds: number[];
   motorModels: Record<number, string>;

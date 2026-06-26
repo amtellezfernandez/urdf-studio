@@ -92,18 +92,17 @@ export const OPERATOR_TELEOP_PANEL_STATE_STORAGE = {
 export const OPERATOR_LEADER_TELEMETRY_SOURCE_PREFIX = "leader:";
 export const OPERATOR_LEADER_STATE_POLL_INTERVAL_MS = 20;
 export const OPERATOR_LEADER_DETECTION_REFRESH_MS = 2_000;
-export const OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE = "openarm_mini";
-export const OPERATOR_OPENARM_MINI_MOTOR_MODEL = "sts3215";
-export const OPERATOR_OPENARM_MINI_MOTOR_IDS = [
-  1,
-  2,
-  3,
-  4,
-  5,
-  6,
-  7,
-  8,
-] as const;
+export const OPERATOR_OPENARM_MINI = {
+  teleoperatorType: "openarm_mini",
+  motorModel: "sts3215",
+  motorIds: [1, 2, 3, 4, 5, 6, 7, 8],
+} as const;
+export const OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE =
+  OPERATOR_OPENARM_MINI.teleoperatorType;
+export const OPERATOR_OPENARM_MINI_MOTOR_MODEL =
+  OPERATOR_OPENARM_MINI.motorModel;
+export const OPERATOR_OPENARM_MINI_MOTOR_IDS =
+  OPERATOR_OPENARM_MINI.motorIds;
 export const OPERATOR_OPENARM_LEADER_SIDES = {
   left: "left",
   right: "right",
