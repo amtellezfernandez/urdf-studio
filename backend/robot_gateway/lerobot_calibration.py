@@ -22,6 +22,7 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_FIND_PORT_BIN,
     ROBOT_GATEWAY_LEROBOT_LEADER_CALIBRATION_DEFAULTS,
     ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
+    ROBOT_GATEWAY_LEROBOT_VENV_DIR,
     ROBOT_GATEWAY_LEROBOT_VENV_ACTIVATE_RELATIVE_PATH,
     ROBOT_GATEWAY_LEROBOT_VENV_BIN_RELATIVE_DIR,
     ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_LEFT,
@@ -333,6 +334,13 @@ def build_lerobot_calibration_terminal_script(display_command: str) -> str:
     venv_activate = BASE_DIR / ROBOT_GATEWAY_LEROBOT_VENV_ACTIVATE_RELATIVE_PATH
     if venv_activate.is_file():
         commands.append(f". {shlex.quote(str(venv_activate))}")
+    cmeel_lib_path = _resolve_lerobot_cmeel_lib_path()
+    if cmeel_lib_path is not None:
+        commands.append(
+            "export "
+            f"LD_LIBRARY_PATH={shlex.quote(str(cmeel_lib_path))}"
+            "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        )
     commands.extend(
         [
             display_command,
@@ -350,6 +358,16 @@ def build_lerobot_calibration_terminal_script(display_command: str) -> str:
         ]
     )
     return "; ".join(commands)
+
+
+def _resolve_lerobot_cmeel_lib_path() -> Path | None:
+    venv_lib_root = BASE_DIR / ROBOT_GATEWAY_LEROBOT_VENV_DIR / "lib"
+    for cmeel_lib_path in sorted(
+        venv_lib_root.glob("python*/site-packages/cmeel.prefix/lib")
+    ):
+        if cmeel_lib_path.is_dir():
+            return cmeel_lib_path
+    return None
 
 
 def _build_terminal_command(display_command: str) -> list[str] | None:

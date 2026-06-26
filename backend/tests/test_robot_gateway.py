@@ -3293,6 +3293,11 @@ def test_lerobot_calibration_terminal_script_activates_repo_venv(monkeypatch) ->
         "is_file",
         lambda path: str(path).endswith(".venv-lerobot/bin/activate"),
     )
+    monkeypatch.setattr(
+        lerobot_calibration,
+        "_resolve_lerobot_cmeel_lib_path",
+        lambda: Path("/tmp/urdf-studio/cmeel.prefix/lib"),
+    )
 
     script = build_lerobot_calibration_terminal_script(
         "lerobot-calibrate --robot.type=lekiwi"
@@ -3300,6 +3305,7 @@ def test_lerobot_calibration_terminal_script_activates_repo_venv(monkeypatch) ->
 
     assert "cd " in script
     assert ".venv-lerobot/bin/activate" in script
+    assert "export LD_LIBRARY_PATH=/tmp/urdf-studio/cmeel.prefix/lib" in script
     assert "lerobot-calibrate --robot.type=lekiwi" in script
     assert "status=$?" in script
     assert "Calibration finished. Press ENTER to close." in script
