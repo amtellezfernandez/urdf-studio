@@ -17,6 +17,9 @@ from backend.models.cam_to_sim import (
 )
 from backend.services.cam_to_sim import CamToSimService
 from backend.services.cam_to_sim_params import (
+    CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_DEFAULT_PX,
+    CAM_TO_SIM_WEB_CAPTURE_INTERVAL_DEFAULT_MS,
+    CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_DEFAULT,
     CAM_TO_SIM_REFERENCE_COPY_DIRS,
     CAM_TO_SIM_REFERENCE_COPY_FILES,
     CAM_TO_SIM_REFERENCE_DIRNAME,
@@ -42,9 +45,9 @@ TEST_PHONE_FRAME_METADATA = {
     "capture_profile": "qr-web-lite",
     "client_time_ms": 123456789,
     "stream_tuning": {
-        "capture_interval_ms": 95,
-        "jpeg_quality": 0.68,
-        "max_width_px": 680,
+        "capture_interval_ms": CAM_TO_SIM_WEB_CAPTURE_INTERVAL_DEFAULT_MS,
+        "jpeg_quality": CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_DEFAULT,
+        "max_width_px": CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_DEFAULT_PX,
     },
     "orientation": {"alpha": 1.0, "beta": 2.0, "gamma": 3.0, "absolute": True},
     "motion": {"interval_ms": 16},
@@ -315,9 +318,9 @@ def test_get_phone_frame_stats_returns_latest_metadata() -> None:
         assert stats.latest_source == "phone-camera"
         assert isinstance(stats.last_received_at_iso, str)
         assert stats.latest_client_time_ms == 123456789
-        assert stats.latest_capture_interval_ms == 95
-        assert stats.latest_jpeg_quality == 0.68
-        assert stats.latest_max_width_px == 680
+        assert stats.latest_capture_interval_ms == CAM_TO_SIM_WEB_CAPTURE_INTERVAL_DEFAULT_MS
+        assert stats.latest_jpeg_quality == CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_DEFAULT
+        assert stats.latest_max_width_px == CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_DEFAULT_PX
         assert stats.has_orientation_data is True
         assert stats.has_motion_data is True
         assert stats.has_pose_data is True

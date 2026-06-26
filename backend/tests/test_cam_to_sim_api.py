@@ -26,6 +26,7 @@ from backend.models.cam_to_sim import (
     CamToSimStreamRecord,
     CamToSimStreamIngestResponse,
 )
+import backend.services.cam_to_sim_params as cam_to_sim_params
 
 
 TEST_BASE_LOOPBACK = "http://127.0.0.1:8000"
@@ -435,6 +436,47 @@ def test_connect_page_allows_valid_session_token_without_operator_token() -> Non
     assert response.status_code == 200
     assert f"token={TEST_SESSION_TOKEN}" in response.text
     assert "source=phone-camera" in response.text
+
+
+def test_connect_page_uses_conservative_browser_capture_defaults() -> None:
+    client = AsgiTestClient(app)
+    snapshot = _session_snapshot()
+    with _patch_simulator_settings(None), patch(
+        "backend.api.cam_to_sim.cam_to_sim_service.get_session_access_token",
+        return_value=TEST_SESSION_TOKEN,
+    ), patch(
+        "backend.api.cam_to_sim.cam_to_sim_service.get_session",
+        return_value=snapshot,
+    ):
+        response = client.get(f"/cam-to-sim/connect/{TEST_SESSION_ID}?token={TEST_SESSION_TOKEN}")
+
+    assert response.status_code == 200
+    page = response.text
+    assert (
+        f"const DEFAULT_CAPTURE_INTERVAL_MS = "
+        f"{cam_to_sim_params.CAM_TO_SIM_WEB_CAPTURE_INTERVAL_DEFAULT_MS};"
+    ) in page
+    assert (
+        f"const MAX_IN_FLIGHT_UPLOADS = "
+        f"{cam_to_sim_params.CAM_TO_SIM_WEB_CAPTURE_MAX_IN_FLIGHT_UPLOADS};"
+    ) in page
+    assert (
+        f"const DEFAULT_FRAME_WIDTH = "
+        f"{cam_to_sim_params.CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_DEFAULT_PX};"
+    ) in page
+    assert (
+        f"const DEFAULT_JPEG_QUALITY = "
+        f"{cam_to_sim_params.CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_DEFAULT};"
+    ) in page
+    assert (
+        f"const COACH_POLL_INTERVAL_MS = "
+        f"{cam_to_sim_params.CAM_TO_SIM_WEB_CAPTURE_COACH_POLL_INTERVAL_MS};"
+    ) in page
+    assert (
+        f"frameRate: {{ ideal: {cam_to_sim_params.CAM_TO_SIM_WEB_CAMERA_IDEAL_FPS}, "
+        f"max: {cam_to_sim_params.CAM_TO_SIM_WEB_CAMERA_MAX_FPS} }}"
+    ) in page
+    assert "video: CAMERA_CONSTRAINTS" in page
 
 
 def test_stream_endpoint_accepts_valid_session_token() -> None:

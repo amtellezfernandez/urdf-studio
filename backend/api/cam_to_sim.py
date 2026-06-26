@@ -34,6 +34,37 @@ from backend.models.cam_to_sim import (
     CamToSimStreamIngestResponse,
 )
 from backend.services.cam_to_sim import cam_to_sim_service
+from backend.services.cam_to_sim_params import (
+    CAM_TO_SIM_WEB_CAMERA_IDEAL_FPS,
+    CAM_TO_SIM_WEB_CAMERA_IDEAL_HEIGHT_PX,
+    CAM_TO_SIM_WEB_CAMERA_IDEAL_WIDTH_PX,
+    CAM_TO_SIM_WEB_CAMERA_MAX_FPS,
+    CAM_TO_SIM_WEB_CAMERA_MAX_HEIGHT_PX,
+    CAM_TO_SIM_WEB_CAMERA_MAX_WIDTH_PX,
+    CAM_TO_SIM_WEB_CAPTURE_COACH_POLL_INTERVAL_MS,
+    CAM_TO_SIM_WEB_CAPTURE_ERROR_INTERVAL_SCALE,
+    CAM_TO_SIM_WEB_CAPTURE_ERROR_QUALITY_STEP,
+    CAM_TO_SIM_WEB_CAPTURE_ERROR_WIDTH_SCALE,
+    CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_DEFAULT_PX,
+    CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_MAX_PX,
+    CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_MIN_PX,
+    CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_INTERVAL_SCALE,
+    CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_QUALITY_STEP,
+    CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_THRESHOLD_MS,
+    CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_WIDTH_SCALE,
+    CAM_TO_SIM_WEB_CAPTURE_INTERVAL_DEFAULT_MS,
+    CAM_TO_SIM_WEB_CAPTURE_INTERVAL_MAX_MS,
+    CAM_TO_SIM_WEB_CAPTURE_INTERVAL_MIN_MS,
+    CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_DEFAULT,
+    CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_MAX,
+    CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_MIN,
+    CAM_TO_SIM_WEB_CAPTURE_LOW_RTT_THRESHOLD_MS,
+    CAM_TO_SIM_WEB_CAPTURE_MAX_IN_FLIGHT_UPLOADS,
+    CAM_TO_SIM_WEB_CAPTURE_STABLE_SUCCESS_THRESHOLD,
+    CAM_TO_SIM_WEB_CAPTURE_SUCCESS_INTERVAL_SCALE,
+    CAM_TO_SIM_WEB_CAPTURE_SUCCESS_QUALITY_STEP,
+    CAM_TO_SIM_WEB_CAPTURE_SUCCESS_WIDTH_SCALE,
+)
 
 router = APIRouter(prefix="/cam-to-sim", tags=["cam-to-sim"])
 LAN_DISCOVERY_TIMEOUT_SEC = 0.25
@@ -432,18 +463,35 @@ def _render_connect_page_html(
     const hudStatusEl = document.getElementById("hudStatus");
     const hudNextTargetBtnEl = document.getElementById("hudNextTargetBtn");
     const canvas = document.createElement("canvas");
-    const CAPTURE_INTERVAL_MIN_MS = 65;
-    const CAPTURE_INTERVAL_MAX_MS = 220;
-    const DEFAULT_CAPTURE_INTERVAL_MS = 95;
-    const MAX_IN_FLIGHT_UPLOADS = 2;
-    const MIN_FRAME_WIDTH = 420;
-    const MAX_FRAME_WIDTH = 920;
-    const DEFAULT_FRAME_WIDTH = 680;
-    const MIN_JPEG_QUALITY = 0.5;
-    const MAX_JPEG_QUALITY = 0.8;
-    const DEFAULT_JPEG_QUALITY = 0.68;
-    const LOW_RTT_THRESHOLD_MS = 150;
-    const HIGH_RTT_THRESHOLD_MS = 360;
+    const CAPTURE_INTERVAL_MIN_MS = {CAM_TO_SIM_WEB_CAPTURE_INTERVAL_MIN_MS};
+    const CAPTURE_INTERVAL_MAX_MS = {CAM_TO_SIM_WEB_CAPTURE_INTERVAL_MAX_MS};
+    const DEFAULT_CAPTURE_INTERVAL_MS = {CAM_TO_SIM_WEB_CAPTURE_INTERVAL_DEFAULT_MS};
+    const MAX_IN_FLIGHT_UPLOADS = {CAM_TO_SIM_WEB_CAPTURE_MAX_IN_FLIGHT_UPLOADS};
+    const MIN_FRAME_WIDTH = {CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_MIN_PX};
+    const MAX_FRAME_WIDTH = {CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_MAX_PX};
+    const DEFAULT_FRAME_WIDTH = {CAM_TO_SIM_WEB_CAPTURE_FRAME_WIDTH_DEFAULT_PX};
+    const MIN_JPEG_QUALITY = {CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_MIN};
+    const MAX_JPEG_QUALITY = {CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_MAX};
+    const DEFAULT_JPEG_QUALITY = {CAM_TO_SIM_WEB_CAPTURE_JPEG_QUALITY_DEFAULT};
+    const LOW_RTT_THRESHOLD_MS = {CAM_TO_SIM_WEB_CAPTURE_LOW_RTT_THRESHOLD_MS};
+    const HIGH_RTT_THRESHOLD_MS = {CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_THRESHOLD_MS};
+    const STABLE_SUCCESS_THRESHOLD = {CAM_TO_SIM_WEB_CAPTURE_STABLE_SUCCESS_THRESHOLD};
+    const ERROR_INTERVAL_SCALE = {CAM_TO_SIM_WEB_CAPTURE_ERROR_INTERVAL_SCALE};
+    const ERROR_QUALITY_STEP = {CAM_TO_SIM_WEB_CAPTURE_ERROR_QUALITY_STEP};
+    const ERROR_WIDTH_SCALE = {CAM_TO_SIM_WEB_CAPTURE_ERROR_WIDTH_SCALE};
+    const HIGH_RTT_INTERVAL_SCALE = {CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_INTERVAL_SCALE};
+    const HIGH_RTT_QUALITY_STEP = {CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_QUALITY_STEP};
+    const HIGH_RTT_WIDTH_SCALE = {CAM_TO_SIM_WEB_CAPTURE_HIGH_RTT_WIDTH_SCALE};
+    const SUCCESS_INTERVAL_SCALE = {CAM_TO_SIM_WEB_CAPTURE_SUCCESS_INTERVAL_SCALE};
+    const SUCCESS_QUALITY_STEP = {CAM_TO_SIM_WEB_CAPTURE_SUCCESS_QUALITY_STEP};
+    const SUCCESS_WIDTH_SCALE = {CAM_TO_SIM_WEB_CAPTURE_SUCCESS_WIDTH_SCALE};
+    const COACH_POLL_INTERVAL_MS = {CAM_TO_SIM_WEB_CAPTURE_COACH_POLL_INTERVAL_MS};
+    const CAMERA_CONSTRAINTS = {{
+      facingMode: {{ ideal: "environment" }},
+      width: {{ ideal: {CAM_TO_SIM_WEB_CAMERA_IDEAL_WIDTH_PX}, max: {CAM_TO_SIM_WEB_CAMERA_MAX_WIDTH_PX} }},
+      height: {{ ideal: {CAM_TO_SIM_WEB_CAMERA_IDEAL_HEIGHT_PX}, max: {CAM_TO_SIM_WEB_CAMERA_MAX_HEIGHT_PX} }},
+      frameRate: {{ ideal: {CAM_TO_SIM_WEB_CAMERA_IDEAL_FPS}, max: {CAM_TO_SIM_WEB_CAMERA_MAX_FPS} }},
+    }};
     let captureLoopRunning = false;
     let captureLoopTimer = null;
     let uploadInFlight = 0;
@@ -662,18 +710,18 @@ def _render_connect_page_html(
     function applyAdaptiveTune(result) {{
       if (!result || !result.ok) {{
         stableSuccessCount = 0;
-        currentCaptureIntervalMs = clamp(Math.round(currentCaptureIntervalMs * 1.18), CAPTURE_INTERVAL_MIN_MS, CAPTURE_INTERVAL_MAX_MS);
-        currentJpegQuality = clamp(Number((currentJpegQuality - 0.04).toFixed(3)), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-        currentMaxWidth = clamp(Math.round(currentMaxWidth * 0.9), MIN_FRAME_WIDTH, MAX_FRAME_WIDTH);
+        currentCaptureIntervalMs = clamp(Math.round(currentCaptureIntervalMs * ERROR_INTERVAL_SCALE), CAPTURE_INTERVAL_MIN_MS, CAPTURE_INTERVAL_MAX_MS);
+        currentJpegQuality = clamp(Number((currentJpegQuality - ERROR_QUALITY_STEP).toFixed(3)), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+        currentMaxWidth = clamp(Math.round(currentMaxWidth * ERROR_WIDTH_SCALE), MIN_FRAME_WIDTH, MAX_FRAME_WIDTH);
         return;
       }}
 
       const rttMs = typeof result.rttMs === "number" ? result.rttMs : null;
       if (rttMs !== null && rttMs >= HIGH_RTT_THRESHOLD_MS) {{
         stableSuccessCount = 0;
-        currentCaptureIntervalMs = clamp(Math.round(currentCaptureIntervalMs * 1.08), CAPTURE_INTERVAL_MIN_MS, CAPTURE_INTERVAL_MAX_MS);
-        currentJpegQuality = clamp(Number((currentJpegQuality - 0.02).toFixed(3)), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-        currentMaxWidth = clamp(Math.round(currentMaxWidth * 0.95), MIN_FRAME_WIDTH, MAX_FRAME_WIDTH);
+        currentCaptureIntervalMs = clamp(Math.round(currentCaptureIntervalMs * HIGH_RTT_INTERVAL_SCALE), CAPTURE_INTERVAL_MIN_MS, CAPTURE_INTERVAL_MAX_MS);
+        currentJpegQuality = clamp(Number((currentJpegQuality - HIGH_RTT_QUALITY_STEP).toFixed(3)), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+        currentMaxWidth = clamp(Math.round(currentMaxWidth * HIGH_RTT_WIDTH_SCALE), MIN_FRAME_WIDTH, MAX_FRAME_WIDTH);
         return;
       }}
 
@@ -683,11 +731,11 @@ def _render_connect_page_html(
         stableSuccessCount = Math.max(0, stableSuccessCount - 1);
       }}
 
-      if (stableSuccessCount >= 4) {{
+      if (stableSuccessCount >= STABLE_SUCCESS_THRESHOLD) {{
         stableSuccessCount = 0;
-        currentCaptureIntervalMs = clamp(Math.round(currentCaptureIntervalMs * 0.94), CAPTURE_INTERVAL_MIN_MS, CAPTURE_INTERVAL_MAX_MS);
-        currentJpegQuality = clamp(Number((currentJpegQuality + 0.015).toFixed(3)), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-        currentMaxWidth = clamp(Math.round(currentMaxWidth * 1.04), MIN_FRAME_WIDTH, MAX_FRAME_WIDTH);
+        currentCaptureIntervalMs = clamp(Math.round(currentCaptureIntervalMs * SUCCESS_INTERVAL_SCALE), CAPTURE_INTERVAL_MIN_MS, CAPTURE_INTERVAL_MAX_MS);
+        currentJpegQuality = clamp(Number((currentJpegQuality + SUCCESS_QUALITY_STEP).toFixed(3)), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+        currentMaxWidth = clamp(Math.round(currentMaxWidth * SUCCESS_WIDTH_SCALE), MIN_FRAME_WIDTH, MAX_FRAME_WIDTH);
       }}
     }}
 
@@ -856,7 +904,7 @@ def _render_connect_page_html(
       void pollCoach();
       coachPollTimer = window.setInterval(() => {{
         void pollCoach();
-      }}, 1200);
+      }}, COACH_POLL_INTERVAL_MS);
     }}
 
     function stopCoachPolling() {{
@@ -1164,7 +1212,7 @@ def _render_connect_page_html(
         lastUploadRttMs = null;
         await initSensorCapture();
         const stream = await navigator.mediaDevices.getUserMedia({{
-          video: {{ facingMode: {{ ideal: "environment" }} }},
+          video: CAMERA_CONSTRAINTS,
           audio: false
         }});
         mediaStream = stream;
