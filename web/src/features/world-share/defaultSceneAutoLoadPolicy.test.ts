@@ -79,4 +79,19 @@ describe("shouldAutoImportDefaultWorldLayout", () => {
       })
     ).toBe(false);
   });
+
+  it("skips default world layout when auto import is suppressed", () => {
+    expect(
+      shouldAutoImportDefaultWorldLayout({
+        alreadyApplied: false,
+        hasLoadedFiles: true,
+        defaultWorldLayoutUrl: DEFAULT_WORLD_LAYOUT_URL,
+        demoMode: false,
+        demoAutoload: false,
+        hasExplicitWorldImport: false,
+        hasExplicitWorldLayoutImport: false,
+        suppressAutoImport: true,
+      })
+    ).toBe(false);
+  });
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toast } from "sonner";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
+import { isOpenArmRobotAsset } from "@/shared/lib/robotAssetIdentity";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_AUTOLOAD, DEMO_MODE } from "@/shared/config/demo";
 import { DEFAULT_WORLD_LAYOUT_URL } from "@/shared/config/scenes";
@@ -702,6 +703,7 @@ export const useWorldSceneManager = ({
       demoAutoload: DEMO_AUTOLOAD,
       hasExplicitWorldImport,
       hasExplicitWorldLayoutImport,
+      suppressAutoImport: isOpenArmRobotAsset(resolvedRobotName),
     });
     if (!shouldAutoLoad) return;
     defaultWorldLayoutAppliedRef.current = true;
@@ -723,6 +725,7 @@ export const useWorldSceneManager = ({
     hasExplicitWorldLayoutImport,
     hasLoadedFiles,
     importWorldLayoutFromUrl,
+    resolvedRobotName,
     skipDefaultWorldLayoutAutoImportRef,
   ]);
 

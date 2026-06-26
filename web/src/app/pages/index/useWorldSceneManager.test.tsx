@@ -64,6 +64,53 @@ describe("useWorldSceneManager", () => {
     globalThis.fetch = originalFetch;
   });
 
+  it("does not auto-import default background objects for OpenArm robots", async () => {
+    const fixture = {
+      urdf: '<robot name="openarm"><link name="base"/></robot>',
+    };
+
+    const Harness = () => {
+      const skipDefaultWorldLayoutAutoImportRef = useRef(false);
+      const [objects] = useState<CreatedObject[]>([]);
+      const [cameras] = useState<Camera[]>([]);
+      const [jointValues, setJointValues] = useState<Record<string, number>>({});
+
+      useWorldSceneManager({
+        addCamera: vi.fn(),
+        addObject: vi.fn(),
+        cameras,
+        clearCameras: vi.fn(),
+        clearObjects: vi.fn(),
+        hasExplicitWorldImport: false,
+        hasExplicitWorldLayoutImport: false,
+        hasLoadedFiles: true,
+        jointValues,
+        objects,
+        originalUrdfContent: fixture.urdf,
+        resolvedRobotName: "OpenArm",
+        skipDefaultWorldLayoutAutoImportRef,
+        setJointValues,
+        updateUrdfFile: vi.fn(),
+        vizUrdfContent: fixture.urdf,
+        worldImportParams: EMPTY_WORLD_IMPORT_PARAMS,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("packages the default world layout in the same tick it is imported for transfer", async () => {
     const fixture = {
       urdf: '<robot name="demo"><link name="base"/></robot>',

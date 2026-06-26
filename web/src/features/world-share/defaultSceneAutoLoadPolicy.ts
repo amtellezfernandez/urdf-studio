@@ -6,6 +6,7 @@ export type DefaultWorldLayoutAutoLoadPolicyInput = {
   demoAutoload: boolean;
   hasExplicitWorldImport: boolean;
   hasExplicitWorldLayoutImport: boolean;
+  suppressAutoImport?: boolean;
 };
 
 export const hasExplicitWorldImportRequest = (
@@ -23,7 +24,9 @@ export const shouldAutoImportDefaultWorldLayout = ({
   demoAutoload: _demoAutoload,
   hasExplicitWorldImport,
   hasExplicitWorldLayoutImport,
+  suppressAutoImport = false,
 }: DefaultWorldLayoutAutoLoadPolicyInput): boolean => {
+  if (suppressAutoImport) return false;
   if (alreadyApplied) return false;
   if (!hasLoadedFiles) return false;
   if (!defaultWorldLayoutUrl.trim()) return false;
