@@ -72,6 +72,7 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_DIR_ENV,
     ROBOT_GATEWAY_LEROBOT_HARDWARE_JOINT_NAMES_ENV,
     ROBOT_GATEWAY_LEROBOT_ID_ENV,
+    ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_LEROBOT_PORT_ENV,
     ROBOT_GATEWAY_LEROBOT_ROBOT_TYPE_ENV,
     ROBOT_GATEWAY_MODEL_ROBOT_ALIASES_ENV,
@@ -121,6 +122,9 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_OPENARM_ROBOT_ID,
     ROBOT_GATEWAY_OPENARM_ROS2_ADAPTER_ID,
     ROBOT_GATEWAY_OPENARM_SELF_COLLISION_FINGER_NAME_TOKEN,
+    ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT,
+    ROBOT_GATEWAY_OPENARM_MINI_MOTOR_IDS,
+    ROBOT_GATEWAY_OPENARM_MINI_MOTOR_MODEL,
     ROBOT_GATEWAY_ROBOT_ID_ENV,
     ROBOT_GATEWAY_TELEOPERATION_MODE_REAL_HARDWARE,
     ROBOT_GATEWAY_TELEOPERATION_MODE_SIMULATED,
@@ -3265,6 +3269,24 @@ def test_lerobot_leader_calibration_command_maps_follower_profile_to_teleop() ->
     assert all(not arg.startswith("--robot.") for arg in command)
 
 
+def test_lerobot_leader_calibration_command_uses_openarm_mini_ports() -> None:
+    command = build_lerobot_leader_calibration_command(
+        port="/dev/serial/by-id/openarm-right",
+        port_left="/dev/serial/by-id/openarm-left",
+        port_right="/dev/serial/by-id/openarm-right",
+        motor_ids=list(ROBOT_GATEWAY_OPENARM_MINI_MOTOR_IDS),
+        motor_model=ROBOT_GATEWAY_OPENARM_MINI_MOTOR_MODEL,
+        calibration_group=ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT,
+        calibration_id="openarm_pair",
+    )
+
+    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
+    assert "--teleop.port_right=/dev/serial/by-id/openarm-right" in command
+    assert "--teleop.port_left=/dev/serial/by-id/openarm-left" in command
+    assert "--teleop.id=openarm_pair" in command
+    assert all(not arg.startswith("--teleop.port=") for arg in command)
+
+
 def test_lerobot_calibration_terminal_script_activates_repo_venv(monkeypatch) -> None:
     monkeypatch.setattr(
         lerobot_calibration.Path,
@@ -3486,10 +3508,13 @@ def test_robot_gateway_leader_calibration_route_releases_before_start() -> None:
     events: list[str] = []
     request = robot_gateway_api.OpenArmLeaderReleaseRequest(
         port="/dev/serial/by-id/leader-arm",
+        port_left="/dev/serial/by-id/openarm-left",
+        port_right="/dev/serial/by-id/leader-arm",
         motor_ids=[1, 2, 3, 4, 5, 6],
         motor_model="sts3215",
         calibration_profile="so100_follower",
         calibration_id="shared_arm",
+        calibration_group="right",
     )
 
     def release(**kwargs: object) -> robot_gateway_api.OpenArmLeaderReleaseResult:
@@ -3503,9 +3528,12 @@ def test_robot_gateway_leader_calibration_route_releases_before_start() -> None:
         **kwargs: object,
     ) -> RobotGatewayLeRobotCalibrationStartResult:
         assert kwargs["port"] == "/dev/serial/by-id/leader-arm"
+        assert kwargs["port_left"] == "/dev/serial/by-id/openarm-left"
+        assert kwargs["port_right"] == "/dev/serial/by-id/leader-arm"
         assert kwargs["motor_ids"] == [1, 2, 3, 4, 5, 6]
         assert kwargs["calibration_profile"] == "so100_follower"
         assert kwargs["calibration_id"] == "shared_arm"
+        assert kwargs["calibration_group"] == "right"
         events.append("start")
         return RobotGatewayLeRobotCalibrationStartResult(
             started=False,

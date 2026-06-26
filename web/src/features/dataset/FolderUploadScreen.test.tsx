@@ -46,6 +46,7 @@ const {
   startOpenArmHfLiveObserveMock,
   gitHubSourceStoreState,
   cameraStoreState,
+  objectStoreState,
   assemblyStoreState,
 } = vi.hoisted(() => ({
   createIluGalleryJobMock: vi.fn(),
@@ -73,6 +74,9 @@ const {
     loadCameras: vi.fn(),
     clearCameras: vi.fn(),
     removeCamera: vi.fn(),
+  },
+  objectStoreState: {
+    clearObjects: vi.fn(),
   },
   assemblyStoreState: {
     setSelectedUrdfPaths: vi.fn(),
@@ -174,6 +178,11 @@ vi.mock("@/shared/store/useCameraStore", () => ({
       getState: () => cameraStoreState,
     }
   ),
+}));
+
+vi.mock("@/features/objects", () => ({
+  useObjectStore: (selector: (state: typeof objectStoreState) => unknown) =>
+    selector(objectStoreState),
 }));
 
 vi.mock("@/features/assembly/store/useAssemblyStore", () => ({
@@ -1040,7 +1049,11 @@ describe("FolderUploadScreen", () => {
       expect(buildIluGitHubCandidateFileListMock).not.toHaveBeenCalled();
       expect(gitHubSourceStoreState.clearSource).toHaveBeenCalledOnce();
       expect(onWorkspaceModeChange).toHaveBeenCalledWith("studio");
+      expect(objectStoreState.clearObjects).toHaveBeenCalledOnce();
       expect(onFolderSelected).toHaveBeenCalledWith(openArmFileList, { preserveCameras: false });
+      expect(objectStoreState.clearObjects.mock.invocationCallOrder[0]).toBeLessThan(
+        onFolderSelected.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+      );
       expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     });
 

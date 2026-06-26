@@ -293,7 +293,7 @@ describe("OperatorTeleopPanelShell", () => {
     const shell = container.firstElementChild as HTMLElement | null;
     expect(shell?.className).toContain("hidden");
     expect(shell?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.textContent).toContain("Follower Hardware");
+    expect(container.textContent).toContain("Robot Hardware");
 
     await act(async () => {
       root.unmount();

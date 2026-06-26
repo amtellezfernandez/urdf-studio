@@ -78,6 +78,7 @@ import { parseCameraConfig } from "@/features/camera";
 import { normalizeWorldLayoutImportUrl } from "@/features/world-share/sceneImportUrl";
 import { API_BASE_URL } from "@/shared/config/runtime";
 import { useCameraStore } from "@/shared/store/useCameraStore";
+import { useObjectStore } from "@/features/objects";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import {
   VISIBLE_FOLDER_UPLOAD_ENTRY_MODE_CONFIGS,
@@ -533,6 +534,7 @@ export const FolderUploadScreen = memo(
   const loadCameras = useCameraStore((state) => state.loadCameras);
   const clearCameras = useCameraStore((state) => state.clearCameras);
   const removeCamera = useCameraStore((state) => state.removeCamera);
+  const clearObjects = useObjectStore((state) => state.clearObjects);
   const [githubUrl, setGithubUrl] = useState("");
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
   const [loadingRobotShortcutId, setLoadingRobotShortcutId] =
@@ -2775,6 +2777,7 @@ export const FolderUploadScreen = memo(
           } else {
             clearCameras();
           }
+          clearObjects();
           await finalizeRobotLoad(fileList, { applyWorldLayout: false });
           setLoadedRobotName(shortcut.displayName);
           toast.success(`Loaded ${shortcut.displayName}`);
@@ -2790,6 +2793,7 @@ export const FolderUploadScreen = memo(
     clearAssemblySelection,
     clearGitHubSource,
     clearCameras,
+    clearObjects,
     applyCameraConfig,
     finalizeRobotLoad,
     leaveGalleryEditorMode,

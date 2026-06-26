@@ -4,6 +4,7 @@ import {
   applyOperatorLeaderTelemetryPoseReferences,
   applyOperatorLeaderTelemetryZeroOffsets,
   buildMappedOperatorLeaderTelemetry,
+  buildOperatorLeaderCalibrationRequest,
   buildOperatorLeaderHardwareReleaseRequest,
   buildOperatorLeaderTelemetryTargetReleaseRequest,
   pruneOperatorLeaderTelemetryZeroOffsets,
@@ -18,6 +19,10 @@ import type {
 import {
   OPERATOR_LEROBOT_CALIBRATION_FILE_SYNC_REVISION_INITIAL,
   OPERATOR_LEROBOT_CALIBRATION_ZERO_POSITION_RAD,
+  OPERATOR_OPENARM_LEADER_SIDES,
+  OPERATOR_OPENARM_MINI_MOTOR_IDS,
+  OPERATOR_OPENARM_MINI_MOTOR_MODEL,
+  OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
 } from "@/features/teleop/params/operatorTeleopParams";
 
 const TEST_LEADER_POSE_REFERENCES = {
@@ -73,6 +78,35 @@ const buildLeader = (): OperatorLeaderDevice => ({
   ],
   recommendedEnv: "LEADER_SERIAL_PORT",
   available: true,
+});
+
+const buildOpenArmMiniLeader = (
+  identityKey: string,
+  path: string,
+): OperatorLeaderDevice => ({
+  ...buildLeader(),
+  id: identityKey,
+  path,
+  devicePath: path,
+  identityKey,
+  motorIds: [...OPERATOR_OPENARM_MINI_MOTOR_IDS],
+  motorCount: OPERATOR_OPENARM_MINI_MOTOR_IDS.length,
+  controlParts: [
+    {
+      ...buildLeader().controlParts[0],
+      id: `${identityKey}:openarm-mini`,
+      label: "OpenArm Mini",
+      actuatorCount: OPERATOR_OPENARM_MINI_MOTOR_IDS.length,
+      motorIds: [...OPERATOR_OPENARM_MINI_MOTOR_IDS],
+      motorModel: OPERATOR_OPENARM_MINI_MOTOR_MODEL,
+      jointNames: [],
+      zeroPositionsRad: {},
+      calibrationCategory: null,
+      calibrationProfile: null,
+      calibrationId: null,
+      calibrationGroup: null,
+    },
+  ],
 });
 
 describe("operatorLeaderTelemetry", () => {
@@ -502,6 +536,36 @@ describe("operatorLeaderTelemetry", () => {
       calibrationProfile: "so100_leader",
       calibrationId: "my_leader",
       calibrationGroup: "all",
+    });
+  });
+
+  it("builds OpenArm Mini calibration payloads with paired leader ports", () => {
+    const rightLeader = buildOpenArmMiniLeader(
+      "serial:openarm-right",
+      "/dev/serial/by-id/openarm-right",
+    );
+    const leftLeader = buildOpenArmMiniLeader(
+      "serial:openarm-left",
+      "/dev/serial/by-id/openarm-left",
+    );
+
+    expect(
+      buildOperatorLeaderCalibrationRequest({
+        leader: rightLeader,
+        controlPart: rightLeader.controlParts[0],
+        selectedSide: OPERATOR_OPENARM_LEADER_SIDES.right,
+        leaders: [rightLeader, leftLeader],
+      }),
+    ).toEqual({
+      port: "/dev/serial/by-id/openarm-right",
+      portLeft: "/dev/serial/by-id/openarm-left",
+      portRight: "/dev/serial/by-id/openarm-right",
+      motorIds: [...OPERATOR_OPENARM_MINI_MOTOR_IDS],
+      motorModel: OPERATOR_OPENARM_MINI_MOTOR_MODEL,
+      calibrationCategory: null,
+      calibrationProfile: OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+      calibrationId: null,
+      calibrationGroup: OPERATOR_OPENARM_LEADER_SIDES.right,
     });
   });
 

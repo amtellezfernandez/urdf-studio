@@ -374,10 +374,13 @@ async def start_robot_gateway_leader_calibration(
     )
     return start_lerobot_leader_calibration(
         port=req.port,
+        port_left=req.port_left,
+        port_right=req.port_right,
         motor_ids=req.motor_ids,
         motor_model=req.motor_model,
         calibration_profile=req.calibration_profile,
         calibration_id=req.calibration_id,
+        calibration_group=req.calibration_group,
     )
 
 

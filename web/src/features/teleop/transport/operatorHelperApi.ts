@@ -269,6 +269,8 @@ export type OperatorOpenArmLeaderState = OperatorLeaderState;
 
 export type OperatorLeaderReleaseRequest = {
   port?: string | null;
+  portLeft?: string | null;
+  portRight?: string | null;
   motorIds?: readonly number[] | null;
   motorModel?: string | null;
   calibrationCategory?: string | null;
@@ -1865,6 +1867,8 @@ const buildOperatorLeaderReleasePayload = (
   request: OperatorLeaderReleaseRequest,
 ): Record<string, unknown> => ({
   ...(request.port?.trim() ? { port: request.port.trim() } : {}),
+  ...(request.portLeft?.trim() ? { port_left: request.portLeft.trim() } : {}),
+  ...(request.portRight?.trim() ? { port_right: request.portRight.trim() } : {}),
   ...(request.motorIds && request.motorIds.length > 0
     ? { motor_ids: request.motorIds }
     : {}),

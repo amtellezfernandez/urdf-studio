@@ -1151,6 +1151,8 @@ describe("operatorHelperApi", () => {
       startOperatorLeaderCalibration(
         {
           port: "/dev/serial/by-id/so100-arm",
+          portLeft: "/dev/serial/by-id/openarm-left",
+          portRight: "/dev/serial/by-id/openarm-right",
           motorIds: [1, 2, 3, 4, 5, 6],
           motorModel: "sts3215",
           calibrationCategory: "robots",
@@ -1174,6 +1176,8 @@ describe("operatorHelperApi", () => {
     expect(init?.method).toBe("POST");
     expect(JSON.parse(String(init?.body))).toEqual({
       port: "/dev/serial/by-id/so100-arm",
+      port_left: "/dev/serial/by-id/openarm-left",
+      port_right: "/dev/serial/by-id/openarm-right",
       motor_ids: [1, 2, 3, 4, 5, 6],
       motor_model: "sts3215",
       calibration_category: "robots",

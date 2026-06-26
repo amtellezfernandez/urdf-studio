@@ -3,6 +3,10 @@ import {
   OPERATOR_LEADER_TELEMETRY_SOURCE_PREFIX,
   OPERATOR_LEROBOT_CALIBRATION_FILE_SYNC_REVISION_INITIAL,
   OPERATOR_LEROBOT_CALIBRATION_ZERO_POSITION_RAD,
+  OPERATOR_OPENARM_LEADER_SIDES,
+  OPERATOR_OPENARM_MINI_MOTOR_IDS,
+  OPERATOR_OPENARM_MINI_MOTOR_MODEL,
+  OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
 } from "@/features/teleop/params/operatorTeleopParams";
 import type {
   OperatorLeaderControlPart,
@@ -13,6 +17,7 @@ import type {
 } from "@/features/teleop/transport/operatorHelperApi";
 import type {
   OperatorLeaderAssignment,
+  OperatorLeaderAssignmentSide,
   OperatorLeaderAssignments,
 } from "@/features/teleop/transport/operatorLeaderAssignments";
 
@@ -76,6 +81,13 @@ type ApplyLeaderTelemetryPoseReferencesParams = {
   targetZeroPositionsByJointName: Readonly<Record<string, number>>;
   fallbackReferencePositionsByJointName?: Readonly<Record<string, number>>;
   zeroOffsetsByKey: OperatorLeaderTelemetryZeroOffsets;
+};
+
+type BuildLeaderCalibrationRequestParams = {
+  leader: OperatorLeaderDevice;
+  controlPart: OperatorLeaderControlPart | null;
+  selectedSide?: OperatorLeaderAssignmentSide | null;
+  leaders?: readonly OperatorLeaderDevice[];
 };
 
 const GENERIC_LEADER_AXIS_NAME_PATTERN = /^leader_axis_(\d+)$/;
@@ -420,6 +432,77 @@ export const buildOperatorLeaderHardwareReleaseRequest = (
   calibrationId: controlPart?.calibrationId ?? null,
   calibrationGroup: controlPart?.calibrationGroup ?? null,
 });
+
+export const buildOperatorLeaderCalibrationRequest = ({
+  leader,
+  controlPart,
+  selectedSide = null,
+  leaders = [],
+}: BuildLeaderCalibrationRequestParams): OperatorLeaderReleaseRequest => {
+  const request = buildOperatorLeaderHardwareReleaseRequest(leader, controlPart);
+  if (!isOpenArmMiniLeaderCalibrationCandidate(request)) {
+    return request;
+  }
+  const selectedPort = request.port?.trim() ?? "";
+  const selectedSideGroup =
+    selectedSide === OPERATOR_OPENARM_LEADER_SIDES.left ||
+    selectedSide === OPERATOR_OPENARM_LEADER_SIDES.right
+      ? selectedSide
+      : null;
+  const selectedGroup =
+    request.calibrationGroup?.trim() ||
+    selectedSideGroup ||
+    OPERATOR_OPENARM_LEADER_SIDES.right;
+  const companionPort = leaders
+    .find(
+      (candidate) =>
+        candidate.identityKey !== leader.identityKey &&
+        candidate.available &&
+        isOpenArmMiniLeaderDevice(candidate),
+    )
+    ?.path.trim();
+  return {
+    ...request,
+    calibrationProfile:
+      request.calibrationProfile ?? OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+    calibrationGroup: request.calibrationGroup ?? selectedGroup,
+    portLeft:
+      selectedGroup === OPERATOR_OPENARM_LEADER_SIDES.left
+        ? selectedPort
+        : companionPort ?? null,
+    portRight:
+      selectedGroup === OPERATOR_OPENARM_LEADER_SIDES.right
+        ? selectedPort
+        : companionPort ?? null,
+  };
+};
+
+const isOpenArmMiniLeaderCalibrationCandidate = (
+  request: OperatorLeaderReleaseRequest,
+): boolean =>
+  request.calibrationProfile === OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE ||
+  (matchesOpenArmMiniMotorIds(request.motorIds) &&
+    (!request.motorModel ||
+      request.motorModel.trim().toLowerCase() ===
+        OPERATOR_OPENARM_MINI_MOTOR_MODEL));
+
+const isOpenArmMiniLeaderDevice = (leader: OperatorLeaderDevice): boolean =>
+  matchesOpenArmMiniMotorIds(leader.motorIds) ||
+  leader.controlParts.some((part) => matchesOpenArmMiniMotorIds(part.motorIds));
+
+const matchesOpenArmMiniMotorIds = (
+  motorIds: readonly number[] | null | undefined,
+): boolean => {
+  if (!motorIds) return false;
+  return (
+    motorIds.length === OPERATOR_OPENARM_MINI_MOTOR_IDS.length &&
+    [...motorIds]
+      .sort((left, right) => left - right)
+      .every(
+        (motorId, index) => motorId === OPERATOR_OPENARM_MINI_MOTOR_IDS[index],
+      )
+  );
+};
 
 export const buildOperatorLeaderTelemetryTargetReleaseRequest = (
   target: Pick<

@@ -79,6 +79,8 @@ class OpenArmLeaderReleaseRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
     port: str | None = None
+    port_left: str | None = Field(default=None, alias="portLeft")
+    port_right: str | None = Field(default=None, alias="portRight")
     motor_ids: list[int] | None = Field(default=None, alias="motorIds")
     motor_model: str | None = Field(default=None, alias="motorModel")
     calibration_category: str | None = Field(default=None, alias="calibrationCategory")

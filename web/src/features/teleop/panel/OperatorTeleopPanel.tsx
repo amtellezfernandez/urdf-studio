@@ -81,6 +81,10 @@ import {
   OPERATOR_TELEOPERATION_MODE_REAL_HARDWARE,
 } from "@/features/teleop/params/operatorTeleopParams";
 import {
+  OPERATOR_TELEOP_PANEL_COPY,
+  OPERATOR_TELEOP_PANEL_FALLBACK_COPY,
+} from "@/features/teleop/params/operatorTeleopUiCopy";
+import {
   buildFollowerHardwareTargetOptions,
   isFollowerArmPartProfile,
   resolveAssignedFollowerHardwareProfile,
@@ -190,6 +194,7 @@ import {
 import {
   applyOperatorLeaderTelemetryPoseReferences,
   buildMappedOperatorLeaderTelemetry,
+  buildOperatorLeaderCalibrationRequest,
   buildOperatorLeaderHardwareReleaseRequest,
   buildOperatorLeaderTelemetrySourceId,
   buildOperatorLeaderTelemetryTargetReleaseRequest,
@@ -1598,13 +1603,19 @@ export const OperatorTeleopPanel = ({
   ]);
 
   const handleStartLeaderCalibration = useCallback(
-    async (leader: OperatorLeaderDevice, controlPartId: string | null) => {
+    async (
+      leader: OperatorLeaderDevice,
+      controlPartId: string | null,
+      selectedSide: OperatorLeaderAssignmentSide | null,
+    ) => {
       const controlPart =
         leader.controlParts.find((part) => part.id === controlPartId) ?? null;
-      const request = buildOperatorLeaderHardwareReleaseRequest(
+      const request = buildOperatorLeaderCalibrationRequest({
         leader,
         controlPart,
-      );
+        selectedSide,
+        leaders: openArmLeaderDetection?.leaders ?? [],
+      });
       await startCalibration(
         leader.identityKey,
         OPERATOR_CALIBRATION_UI_COPY.leader,
@@ -1615,7 +1626,7 @@ export const OperatorTeleopPanel = ({
           ),
       );
     },
-    [startCalibration],
+    [openArmLeaderDetection?.leaders, startCalibration],
   );
 
   const sendFollowerHardwareJointTargets = useCallback(
@@ -3444,7 +3455,11 @@ export const OperatorTeleopPanel = ({
             disabled={leaderCalibrationDisabled}
             title={leaderCalibrationDisableReason}
             onClick={() =>
-              void handleStartLeaderCalibration(leader, selectedControlPartId)
+              void handleStartLeaderCalibration(
+                leader,
+                selectedControlPartId,
+                selectedTargetOption?.side ?? null,
+              )
             }
           >
             {leaderCalibrationBusy ? "Opening" : "Calibrate"}
@@ -4355,29 +4370,17 @@ type OperatorTeleopPanelShellProps = OperatorTeleopPanelProps & {
 };
 
 const getOperatorTeleopPanelTitle = (panelView: OperatorTeleopPanelView): string => {
-  switch (panelView) {
-    case "camera":
-      return "Cameras";
-    case "studio":
-      return "Leader Input";
-    case "hardware":
-      return "Follower Hardware";
-    default:
-      return "Teleop";
-  }
+  return (
+    OPERATOR_TELEOP_PANEL_COPY[panelView]?.panelTitle ??
+    OPERATOR_TELEOP_PANEL_FALLBACK_COPY.panelTitle
+  );
 };
 
 const getOperatorTeleopPanelSubtitle = (panelView: OperatorTeleopPanelView): string => {
-  switch (panelView) {
-    case "camera":
-      return "Configure live camera and point-cloud streams";
-    case "studio":
-      return "Configure leader arm or joystick input";
-    case "hardware":
-      return "Connect follower hardware and live cameras.";
-    default:
-      return "Watch robot motion / drive from this browser";
-  }
+  return (
+    OPERATOR_TELEOP_PANEL_COPY[panelView]?.panelSubtitle ??
+    OPERATOR_TELEOP_PANEL_FALLBACK_COPY.panelSubtitle
+  );
 };
 
 export const OperatorTeleopPanelShell = ({

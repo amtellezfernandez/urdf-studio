@@ -1,7 +1,8 @@
-import { Bug } from "lucide-react";
+import { Bot, Bug, Gamepad2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { TOP_NAV_HEIGHT } from "@/features/layout/page/constants";
+import { OPERATOR_TELEOP_PANEL_COPY } from "@/features/teleop/params/operatorTeleopUiCopy";
 import { FileUtilsMenus } from "@/features/layout/page/top-nav/FileUtilsMenus";
 import { WorldsMenu } from "@/features/layout/page/top-nav/WorldsMenu";
 import { ViewMenu } from "@/features/layout/page/top-nav/ViewMenu";
@@ -192,25 +193,27 @@ export const TopNavBar = (props: TopNavBarProps) => {
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              className={`h-7 shrink-0 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
+              className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
                 props.leaderInputConnected,
                 props.leaderInputPanelOpen || props.teleopPanelOpen,
               )}`}
               onClick={props.onToggleLeaderInputPanel ?? props.onToggleTeleopPanel}
-              title="Open leader input setup"
+              title={OPERATOR_TELEOP_PANEL_COPY.studio.navTitle}
             >
-              Leader
+              <Gamepad2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {OPERATOR_TELEOP_PANEL_COPY.studio.navLabel}
             </button>
             <button
               type="button"
-              className={`h-7 shrink-0 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
+              className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
                 props.followerHardwareConnected,
                 props.followerHardwarePanelOpen,
               )}`}
               onClick={props.onToggleFollowerHardwarePanel ?? props.onToggleTeleopPanel}
-              title="Open follower hardware and cameras"
+              title={OPERATOR_TELEOP_PANEL_COPY.hardware.navTitle}
             >
-              Follower
+              <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+              {OPERATOR_TELEOP_PANEL_COPY.hardware.navLabel}
             </button>
           </div>
         ) : null}

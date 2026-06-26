@@ -222,9 +222,11 @@ describe("TopNavBar", () => {
     await renderTopNavBar(root, props);
 
     const buttons = Array.from(container.querySelectorAll("button"));
-    const leaderButton = buttons.find((button) => button.textContent === "Leader");
+    const leaderButton = buttons.find(
+      (button) => button.textContent === "Controller",
+    );
     const followerButton = buttons.find(
-      (button) => button.textContent === "Follower",
+      (button) => button.textContent === "Robot",
     );
 
     expect(leaderButton?.className).toContain("border-emerald-500/35");
@@ -352,16 +354,16 @@ describe("TopNavBar", () => {
       (button) => button.textContent === "Cams"
     );
     const studioButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Leader"
+      (button) => button.textContent === "Controller"
     );
     const hardwareButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Follower"
+      (button) => button.textContent === "Robot"
     );
     expect(cameraButton).toBeUndefined();
     expect(studioButton).toBeTruthy();
     expect(hardwareButton).toBeTruthy();
-    expect(studioButton?.getAttribute("title")).toBe("Open leader input setup");
-    expect(hardwareButton?.getAttribute("title")).toBe("Open follower hardware and cameras");
+    expect(studioButton?.getAttribute("title")).toBe("Set up controller input");
+    expect(hardwareButton?.getAttribute("title")).toBe("Connect robot hardware");
 
     await act(async () => {
       studioButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
