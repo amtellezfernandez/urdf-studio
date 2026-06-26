@@ -52,7 +52,14 @@ OpenArmLeaderHardwareFamily = Literal[
     "serial_unknown",
 ]
 OpenArmLeaderControlPartKind = Literal["arm", "unknown"]
-_MOTOR_PROBE_CACHE_TTL_SECONDS = 1.0
+# Each cold motor probe blocks ~0.8s in the Feetech broadcast-ping window and
+# runs once per candidate serial port, so this cache must outlast the
+# frontend's leader-detection refresh (OPERATOR_LEADER_DETECTION_REFRESH_MS =
+# 2000 in web/src/features/teleop/params/operatorTeleopParams.ts). When the TTL
+# is below that interval every refresh misses the cache and re-probes every
+# port, which is what made hardware-teleop leader connect feel slow. Keep this
+# comfortably above the refresh interval (with margin for tick jitter).
+_MOTOR_PROBE_CACHE_TTL_SECONDS = 2.5
 _motor_probe_cache_lock = RLock()
 _motor_probe_cache: dict[str, tuple[float, OpenArmLeaderMotorProbe | None]] = {}
 

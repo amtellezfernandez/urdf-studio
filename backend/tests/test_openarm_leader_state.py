@@ -1,4 +1,6 @@
 import math
+import threading
+from time import monotonic
 
 from backend.robot_gateway.openarm_leader_state import (
     OpenArmLeaderStateService,
@@ -341,12 +343,19 @@ def test_releases_idle_cached_leader_readers() -> None:
         13.5,
     )
 
-    released = service._release_idle_readers_locked(15.0)
+    idle_leases = service._collect_idle_leases_locked(15.0)
 
-    assert released == 1
+    # Collection drops idle leases from the dict but defers serial disconnect to
+    # outside the service lock (each under its own port lock).
+    assert [port for port, _ in idle_leases] == ["/dev/ttyACM0"]
+    assert not idle_reader.disconnected
+    assert list(service._readers) == [("/dev/ttyACM1", (2,), None, None)]
+
+    for port, lease in idle_leases:
+        service._disconnect_lease(port, lease)
+
     assert idle_reader.disconnected
     assert not active_reader.disconnected
-    assert list(service._readers) == [("/dev/ttyACM1", (2,), None, None)]
 
 
 def test_loads_lerobot_calibration_for_generic_axes(tmp_path, monkeypatch) -> None:
@@ -536,3 +545,88 @@ def test_does_not_load_lerobot_calibration_without_explicit_ref(
         )
         is None
     )
+
+
+class _TimedLeaderReader:
+    """Fake reader that records when its blocking read overlaps another."""
+
+    def __init__(self, started: "threading.Event", hold: "threading.Event") -> None:
+        self._started = started
+        self._hold = hold
+        self.disconnected = False
+
+    def read(self) -> dict[str, float]:
+        self._started.set()
+        # Block until released so the test can observe whether a second read on
+        # a different port proceeds concurrently (parallel) or waits (serial).
+        self._hold.wait(timeout=2.0)
+        return {}
+
+    def disconnect(self) -> None:
+        self.disconnected = True
+
+
+def test_reads_on_different_ports_run_in_parallel() -> None:
+    # Seed leases with a fresh timestamp so the idle reaper does not drop them.
+    fresh = monotonic()
+    service = OpenArmLeaderStateService(idle_timeout_sec=60.0)
+    a_started, a_hold = threading.Event(), threading.Event()
+    b_started, b_hold = threading.Event(), threading.Event()
+    service._readers[("/dev/ttyACM0", None, None, None)] = _LeaderReaderLease(
+        _TimedLeaderReader(a_started, a_hold), fresh
+    )
+    service._readers[("/dev/ttyACM1", None, None, None)] = _LeaderReaderLease(
+        _TimedLeaderReader(b_started, b_hold), fresh
+    )
+
+    t_a = threading.Thread(target=lambda: service.read_state(port="/dev/ttyACM0"))
+    t_b = threading.Thread(target=lambda: service.read_state(port="/dev/ttyACM1"))
+    t_a.start()
+    t_b.start()
+    try:
+        # Both reads must enter their blocking section concurrently. If the
+        # service serialized them (old global lock / service lock around I/O),
+        # the second read would never start until the first is released.
+        assert a_started.wait(timeout=2.0)
+        assert b_started.wait(timeout=2.0)
+    finally:
+        a_hold.set()
+        b_hold.set()
+        t_a.join(timeout=2.0)
+        t_b.join(timeout=2.0)
+
+
+def test_reads_on_same_port_are_serialized() -> None:
+    fresh = monotonic()
+    service = OpenArmLeaderStateService(idle_timeout_sec=60.0)
+    first_started, first_hold = threading.Event(), threading.Event()
+    second_started, second_hold = threading.Event(), threading.Event()
+
+    # Distinct reader keys but the same serial port, so both calls contend for
+    # one per-port lock and must not run their I/O concurrently.
+    service._readers[("/dev/ttyACM0", (1,), None, None)] = _LeaderReaderLease(
+        _TimedLeaderReader(first_started, first_hold), fresh
+    )
+    service._readers[("/dev/ttyACM0", (2,), None, None)] = _LeaderReaderLease(
+        _TimedLeaderReader(second_started, second_hold), fresh
+    )
+
+    t_first = threading.Thread(
+        target=lambda: service.read_state(port="/dev/ttyACM0", motor_ids=[1])
+    )
+    t_second = threading.Thread(
+        target=lambda: service.read_state(port="/dev/ttyACM0", motor_ids=[2])
+    )
+    t_first.start()
+    try:
+        assert first_started.wait(timeout=2.0)
+        t_second.start()
+        # The first read still holds this port's lock, so the second read must
+        # be blocked from starting until the first releases.
+        assert not second_started.wait(timeout=0.3)
+    finally:
+        first_hold.set()
+        second_hold.set()
+        t_first.join(timeout=2.0)
+        t_second.join(timeout=2.0)
+    assert second_started.is_set()
