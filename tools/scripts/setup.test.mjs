@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { delimiter, join } from 'node:path';
 
 import {
   assertIluRuntimeContract,
+  didSpawnSyncFail,
+  prependNativeLibraryPath,
   resolveBlenderExecutableForSetup,
+  resolveManagedCmeelLibPathFromSitePackages,
   resolvePythonForLeRobotVenv,
   runSetupSequence,
 } from './setup.js';
@@ -77,6 +81,57 @@ test('setup rejects an invalid explicit Python override', () => {
       process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON = originalBootstrapPython;
     }
   }
+});
+
+test('setup resolves managed cmeel library path from Python site-package paths', () => {
+  const sitePackagePath = join('/tmp', 'studio-env', 'lib', 'python3.13', 'site-packages');
+  const existingPath = join(sitePackagePath, 'cmeel.prefix', 'lib');
+  assert.equal(
+    resolveManagedCmeelLibPathFromSitePackages(
+      [
+        '',
+        join('/tmp', 'empty-site-packages'),
+        sitePackagePath,
+      ],
+      (candidatePath) => candidatePath === existingPath
+    ),
+    existingPath
+  );
+});
+
+test('setup prepends native library path without duplicating existing entries', () => {
+  const env = {
+    LD_LIBRARY_PATH: ['/opt/other/lib', '/tmp/cmeel/lib'].join(delimiter),
+  };
+
+  prependNativeLibraryPath(env, '/tmp/cmeel/lib');
+
+  assert.equal(env.LD_LIBRARY_PATH, ['/tmp/cmeel/lib', '/opt/other/lib'].join(delimiter));
+});
+
+test('setup leaves native library path unchanged when no candidate is available', () => {
+  const env = { LD_LIBRARY_PATH: '/opt/other/lib' };
+
+  prependNativeLibraryPath(env, null);
+
+  assert.equal(env.LD_LIBRARY_PATH, '/opt/other/lib');
+});
+
+test('setup treats zero-status spawn results as successful despite stale error metadata', () => {
+  assert.equal(
+    didSpawnSyncFail({
+      status: 0,
+      signal: null,
+      error: new Error('spawnSync cargo EPERM'),
+    }),
+    false
+  );
+});
+
+test('setup treats nonzero or interrupted spawn results as failures', () => {
+  assert.equal(didSpawnSyncFail({ status: 1, signal: null }), true);
+  assert.equal(didSpawnSyncFail({ status: null, signal: null, error: new Error('EPERM') }), true);
+  assert.equal(didSpawnSyncFail({ status: 0, signal: 'SIGTERM' }), true);
 });
 
 test('setup ignores Windows Blender executables on non-Windows hosts', () => {
@@ -235,10 +290,10 @@ test('setup continues when optional simulator adapters are unavailable', async (
     'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
     'installBackendDeps',
+    'installOfficialLeRobotToolchain',
     'installGenesisRuntime',
     'installPybulletRuntime',
     'installBlenderRuntime',
-    'installOfficialLeRobotToolchain',
     'installOpenArmHardwareRuntime',
     'installMjlabRuntime',
     'installTwinDepsIfRequested',
@@ -267,6 +322,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
       setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
       installBackendDeps: record('installBackendDeps', true),
+      installOfficialLeRobotToolchain: record('installOfficialLeRobotToolchain', true),
       installGenesisRuntime: record('installGenesisRuntime', {
         ok: false,
         installed: false,
@@ -275,7 +331,6 @@ test('setup fails when a forced simulator adapter install fails', async () => {
       }),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
-      installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
       installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
       installMjlabRuntime: unreachable('installMjlabRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
@@ -293,6 +348,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
     'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
     'installBackendDeps',
+    'installOfficialLeRobotToolchain',
     'installGenesisRuntime',
   ]);
 });

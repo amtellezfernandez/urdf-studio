@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { dirname, join, resolve } from 'path';
+import { delimiter, dirname, join, resolve } from 'path';
 import { execFileSync, execSync, spawnSync } from 'child_process';
 import readline from 'readline';
 import { maskToken, resolveSetupGitHubToken } from './githubAuth.js';
@@ -74,6 +74,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..', '..');
+const CMEEL_PREFIX_DIRNAME = 'cmeel.prefix';
+const CMEEL_LIB_DIRNAME = 'lib';
 
 // Colors for terminal output
 const colors = {
@@ -141,13 +143,66 @@ function resolveRosUrdfdomLibPath() {
   return null;
 }
 
-function getUvEnv() {
+function prependNativeLibraryPath(env, libPath) {
+  if (!libPath) {
+    return env;
+  }
+  const existingPaths = String(env.LD_LIBRARY_PATH || '')
+    .split(delimiter)
+    .filter(Boolean)
+    .filter((existingPath) => existingPath !== libPath);
+  env.LD_LIBRARY_PATH = [libPath, ...existingPaths].join(delimiter);
+  return env;
+}
+
+function resolveManagedCmeelLibPathFromSitePackages(sitePackagePaths, pathExists = existsSync) {
+  for (const sitePackagePath of sitePackagePaths) {
+    if (typeof sitePackagePath !== 'string' || sitePackagePath.trim() === '') {
+      continue;
+    }
+    const cmeelLibPath = join(sitePackagePath, CMEEL_PREFIX_DIRNAME, CMEEL_LIB_DIRNAME);
+    if (pathExists(cmeelLibPath)) {
+      return cmeelLibPath;
+    }
+  }
+  return null;
+}
+
+function resolveManagedCmeelLibPath(venvPython) {
+  if (!venvPython || !existsSync(venvPython)) {
+    return null;
+  }
+
+  const script = [
+    'import json',
+    'import site',
+    'paths = []',
+    'for path in site.getsitepackages() + [site.getusersitepackages()]:',
+    '    if path and path not in paths:',
+    '        paths.append(path)',
+    'print(json.dumps(paths))',
+  ].join('\n');
+
+  try {
+    const output = execFileSync(venvPython, ['-c', script], {
+      cwd: rootDir,
+      encoding: 'utf-8',
+      env: getUvEnv(),
+    }).trim();
+    return resolveManagedCmeelLibPathFromSitePackages(JSON.parse(output));
+  } catch (e) {
+    return null;
+  }
+}
+
+function getUvEnv({ managedPythonPath = null } = {}) {
   const uvCacheDir = process.env.UV_CACHE_DIR || join(rootDir, '.uv-cache');
   const env = { ...process.env, UV_CACHE_DIR: uvCacheDir };
   const rosLibPath = resolveRosUrdfdomLibPath();
   if (rosLibPath) {
-    env.LD_LIBRARY_PATH = [rosLibPath, env.LD_LIBRARY_PATH].filter(Boolean).join(':');
+    prependNativeLibraryPath(env, rosLibPath);
   }
+  prependNativeLibraryPath(env, resolveManagedCmeelLibPath(managedPythonPath));
   return env;
 }
 
@@ -817,7 +872,7 @@ async function checkIkd() {
     cwd: rootDir,
     encoding: 'utf-8',
   });
-  if (cargoCheck.status !== 0 || cargoCheck.error) {
+  if (didSpawnSyncFail(cargoCheck)) {
     printCapturedCommandOutput(cargoCheck);
     log('✗ cargo exists but failed to run.', colors.yellow);
     logInfo('Reinstall Rust toolchain or disable ikd in config/app.config.json.');
@@ -1345,7 +1400,7 @@ function runPythonImportCheck(venvPython, script) {
   const result = spawnSync(venvPython, ['-c', script], {
     cwd: rootDir,
     encoding: 'utf-8',
-    env: getUvEnv(),
+    env: getUvEnv({ managedPythonPath: venvPython }),
   });
   const stdout = String(result.stdout || '').trim();
   const stderr = String(result.stderr || '').trim();
@@ -1364,6 +1419,13 @@ function printCapturedCommandOutput(result) {
   if (result.stderr) {
     process.stderr.write(result.stderr);
   }
+}
+
+function didSpawnSyncFail(result) {
+  if (result.status === 0 && !result.signal) {
+    return false;
+  }
+  return result.status !== 0 || Boolean(result.signal) || Boolean(result.error);
 }
 
 function buildOptionalRuntimeInstallFailure({ forceInstallEnv, error = null }) {
@@ -1764,6 +1826,10 @@ async function runSetupSequence(overrides = {}) {
   if (!backendDepsInstalled) {
     throw new Error('Backend dependencies installation failed');
   }
+  const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
+  if (!lerobotToolchainInstalled) {
+    throw new Error('Official LeRobot dataset toolchain installation failed');
+  }
   const genesisRuntimeResult = await steps.installGenesisRuntime();
   if (shouldFailSetupForRuntimeResult(genesisRuntimeResult)) {
     throw new Error('Genesis workspace adapter runtime installation failed');
@@ -1775,10 +1841,6 @@ async function runSetupSequence(overrides = {}) {
   const blenderRuntimeResult = await steps.installBlenderRuntime();
   if (shouldFailSetupForRuntimeResult(blenderRuntimeResult)) {
     throw new Error('Blender workspace runtime installation failed');
-  }
-  const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
-  if (!lerobotToolchainInstalled) {
-    throw new Error('Official LeRobot dataset toolchain installation failed');
   }
   const openArmHardwareRuntimeInstalled = await steps.installOpenArmHardwareRuntime();
   if (!openArmHardwareRuntimeInstalled) {
@@ -1841,9 +1903,12 @@ if (isMainModule()) {
 
 export {
   assertIluRuntimeContract,
+  didSpawnSyncFail,
   findPythonForLeRobot,
   installBlenderRuntime,
+  prependNativeLibraryPath,
   resolveBlenderExecutableForSetup,
+  resolveManagedCmeelLibPathFromSitePackages,
   resolvePythonForLeRobotVenv,
   runSetupSequence,
   verifyIluRuntimeContract,

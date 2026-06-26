@@ -1,7 +1,10 @@
+export const CMEEL_TINYXML2_SO10_PACKAGE = 'cmeel-tinyxml2==10.0.0';
+
 export const COLLISION_STACK_SETUP = {
   skipAutoInstallEnv: 'URDF_STUDIO_SKIP_COLLISION_STACK_AUTO_INSTALL',
   forceInstallEnv: 'URDF_STUDIO_INSTALL_COLLISION_STACK',
   dependencies: [
+    CMEEL_TINYXML2_SO10_PACKAGE,
     'cmeel-urdfdom==4.0.1',
     'coal==3.0.1',
     'placo==0.9.16',

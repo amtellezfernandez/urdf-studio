@@ -21,6 +21,7 @@ import {
   BLENDER_PATH_ENV,
   BLENDER_SETUP,
   BLENDER_SKIP_AUTO_INSTALL_ENV,
+  CMEEL_TINYXML2_SO10_PACKAGE,
   COLLISION_STACK_SETUP,
   GENESIS_FORCE_INSTALL_ENV,
   GENESIS_PYTHON_DEPENDENCIES,
@@ -75,6 +76,8 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.ok(!BACKEND_PYTHON_PORTABLE_DEPENDENCIES.includes('jaxlib==0.6.2'));
   assert.ok(BACKEND_PYTHON_JAX_DEPENDENCIES.includes('jax==0.6.2'));
   assert.ok(BACKEND_PYTHON_JAX_DEPENDENCIES.includes('jaxlib==0.6.2'));
+  assert.equal(CMEEL_TINYXML2_SO10_PACKAGE, 'cmeel-tinyxml2==10.0.0');
+  assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes(CMEEL_TINYXML2_SO10_PACKAGE));
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('cmeel-urdfdom==4.0.1'));
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('coal==3.0.1'));
   assert.ok(BACKEND_PYTHON_PLACO_DEPENDENCIES.includes('placo==0.9.16'));
