@@ -153,6 +153,8 @@ jobs:
       URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL: "1"
       URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL: "1"
       URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL: "1"
+      MUJOCO_GL: "egl"
+      PYOPENGL_PLATFORM: "egl"
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
