@@ -1,5 +1,6 @@
 import math
 import threading
+from dataclasses import dataclass
 from time import monotonic
 
 from backend.robot_gateway.openarm_leader_state import (
@@ -20,6 +21,22 @@ from backend.robot_gateway.openarm_leader_state import (
 from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_GRIPPER_CLOSED_RAD,
     ROBOT_GATEWAY_LEROBOT_GRIPPER_OPEN_RAD,
+)
+
+
+@dataclass(frozen=True)
+class _LeaderReadConcurrencyTiming:
+    idle_timeout_sec: float
+    reader_hold_timeout_sec: float
+    start_wait_timeout_sec: float
+    serialization_probe_timeout_sec: float
+
+
+_LEADER_READ_CONCURRENCY_TIMING = _LeaderReadConcurrencyTiming(
+    idle_timeout_sec=60.0,
+    reader_hold_timeout_sec=2.0,
+    start_wait_timeout_sec=2.0,
+    serialization_probe_timeout_sec=0.3,
 )
 
 LEADER_JOINT1_DEG = 10.0
@@ -559,7 +576,9 @@ class _TimedLeaderReader:
         self._started.set()
         # Block until released so the test can observe whether a second read on
         # a different port proceeds concurrently (parallel) or waits (serial).
-        self._hold.wait(timeout=2.0)
+        self._hold.wait(
+            timeout=_LEADER_READ_CONCURRENCY_TIMING.reader_hold_timeout_sec
+        )
         return {}
 
     def disconnect(self) -> None:
@@ -569,7 +588,9 @@ class _TimedLeaderReader:
 def test_reads_on_different_ports_run_in_parallel() -> None:
     # Seed leases with a fresh timestamp so the idle reaper does not drop them.
     fresh = monotonic()
-    service = OpenArmLeaderStateService(idle_timeout_sec=60.0)
+    service = OpenArmLeaderStateService(
+        idle_timeout_sec=_LEADER_READ_CONCURRENCY_TIMING.idle_timeout_sec
+    )
     a_started, a_hold = threading.Event(), threading.Event()
     b_started, b_hold = threading.Event(), threading.Event()
     service._readers[("/dev/ttyACM0", None, None, None)] = _LeaderReaderLease(
@@ -587,18 +608,24 @@ def test_reads_on_different_ports_run_in_parallel() -> None:
         # Both reads must enter their blocking section concurrently. If the
         # service serialized them (old global lock / service lock around I/O),
         # the second read would never start until the first is released.
-        assert a_started.wait(timeout=2.0)
-        assert b_started.wait(timeout=2.0)
+        assert a_started.wait(
+            timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec
+        )
+        assert b_started.wait(
+            timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec
+        )
     finally:
         a_hold.set()
         b_hold.set()
-        t_a.join(timeout=2.0)
-        t_b.join(timeout=2.0)
+        t_a.join(timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec)
+        t_b.join(timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec)
 
 
 def test_reads_on_same_port_are_serialized() -> None:
     fresh = monotonic()
-    service = OpenArmLeaderStateService(idle_timeout_sec=60.0)
+    service = OpenArmLeaderStateService(
+        idle_timeout_sec=_LEADER_READ_CONCURRENCY_TIMING.idle_timeout_sec
+    )
     first_started, first_hold = threading.Event(), threading.Event()
     second_started, second_hold = threading.Event(), threading.Event()
 
@@ -619,14 +646,18 @@ def test_reads_on_same_port_are_serialized() -> None:
     )
     t_first.start()
     try:
-        assert first_started.wait(timeout=2.0)
+        assert first_started.wait(
+            timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec
+        )
         t_second.start()
         # The first read still holds this port's lock, so the second read must
         # be blocked from starting until the first releases.
-        assert not second_started.wait(timeout=0.3)
+        assert not second_started.wait(
+            timeout=_LEADER_READ_CONCURRENCY_TIMING.serialization_probe_timeout_sec
+        )
     finally:
         first_hold.set()
         second_hold.set()
-        t_first.join(timeout=2.0)
-        t_second.join(timeout=2.0)
+        t_first.join(timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec)
+        t_second.join(timeout=_LEADER_READ_CONCURRENCY_TIMING.start_wait_timeout_sec)
     assert second_started.is_set()

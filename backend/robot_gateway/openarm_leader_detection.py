@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 import json
-from pathlib import Path
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from threading import RLock
 from time import monotonic
 from typing import Any, Literal
@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.robot_gateway.params import (
     ROBOT_GATEWAY_OPENARM_LEADER_DEV_ROOT_DEFAULT,
+    ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING,
     ROBOT_GATEWAY_OPENARM_LEADER_FALLBACK_IDENTITY_PREFIX,
     ROBOT_GATEWAY_OPENARM_LEADER_INTERFACE_SUFFIX_PREFIX,
     ROBOT_GATEWAY_OPENARM_LEADER_LABEL_SEPARATOR,
@@ -52,14 +53,6 @@ OpenArmLeaderHardwareFamily = Literal[
     "serial_unknown",
 ]
 OpenArmLeaderControlPartKind = Literal["arm", "unknown"]
-# Each cold motor probe blocks ~0.8s in the Feetech broadcast-ping window and
-# runs once per candidate serial port, so this cache must outlast the
-# frontend's leader-detection refresh (OPERATOR_LEADER_DETECTION_REFRESH_MS =
-# 2000 in web/src/features/teleop/params/operatorTeleopParams.ts). When the TTL
-# is below that interval every refresh misses the cache and re-probes every
-# port, which is what made hardware-teleop leader connect feel slow. Keep this
-# comfortably above the refresh interval (with margin for tick jitter).
-_MOTOR_PROBE_CACHE_TTL_SECONDS = 2.5
 _motor_probe_cache_lock = RLock()
 _motor_probe_cache: dict[str, tuple[float, OpenArmLeaderMotorProbe | None]] = {}
 
@@ -572,7 +565,11 @@ def _probe_leader_motors_cached(path: Path) -> OpenArmLeaderMotorProbe | None:
     now = monotonic()
     with _motor_probe_cache_lock:
         cached = _motor_probe_cache.get(cache_key)
-        if cached is not None and now - cached[0] <= _MOTOR_PROBE_CACHE_TTL_SECONDS:
+        if (
+            cached is not None
+            and now - cached[0]
+            <= ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.motor_probe_cache_ttl_sec
+        ):
             return (
                 cached[1].model_copy(deep=True)
                 if cached[1] is not None

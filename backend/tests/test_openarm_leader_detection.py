@@ -11,17 +11,14 @@ from backend.robot_gateway.openarm_leader_detection import (
     detect_openarm_leaders,
 )
 from backend.robot_gateway.params import (
+    ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING,
     ROBOT_GATEWAY_OPENARM_LEADER_RECOMMENDED_ENV,
     ROBOT_GATEWAY_OPENARM_LEADER_SERIAL_BY_ID_SOURCE,
     ROBOT_GATEWAY_OPENARM_LEADER_SERIAL_LEADER_CANDIDATE,
     ROBOT_GATEWAY_OPENARM_LEADER_TTY_GLOB_SOURCE,
 )
 
-# Frontend re-runs leader detection every OPERATOR_LEADER_DETECTION_REFRESH_MS
-# (web/src/features/teleop/params/operatorTeleopParams.ts). Mirror it here in
-# seconds; the backend probe cache must outlast it so refreshes hit the cache
-# instead of re-running the ~0.8s-per-port Feetech broadcast ping.
-_FRONTEND_LEADER_DETECTION_REFRESH_SECONDS = 2.0
+_CACHE_TEST_TIME_ORIGIN_SEC = 0.0
 
 
 def test_detect_openarm_leaders_prefers_stable_serial_by_id_path(
@@ -608,8 +605,8 @@ def test_motor_probe_cache_outlasts_frontend_detection_refresh(monkeypatch) -> N
     # cache TTL drops to or below the frontend's detection refresh interval,
     # every refresh misses the cache and re-runs the per-port motor probe.
     assert (
-        leader_detection._MOTOR_PROBE_CACHE_TTL_SECONDS
-        > _FRONTEND_LEADER_DETECTION_REFRESH_SECONDS
+        ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.motor_probe_cache_ttl_sec
+        > ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.frontend_refresh_interval_sec
     )
 
     leader_detection._motor_probe_cache.clear()
@@ -619,17 +616,22 @@ def test_motor_probe_cache_outlasts_frontend_detection_refresh(monkeypatch) -> N
         probe_calls["count"] += 1
         return OpenArmLeaderMotorProbe(bus="feetech", motor_ids=[1, 2, 3, 4, 5, 6])
 
-    fake_time = {"now": 0.0}
+    fake_time = {"now": _CACHE_TEST_TIME_ORIGIN_SEC}
     monkeypatch.setattr(leader_detection, "_probe_leader_motors", fake_probe)
     monkeypatch.setattr(leader_detection, "monotonic", lambda: fake_time["now"])
 
     port = Path("/dev/ttyUSB0")
     _probe_leader_motors_cached(port)  # cold probe at t=0
-    fake_time["now"] = _FRONTEND_LEADER_DETECTION_REFRESH_SECONDS
+    fake_time["now"] = (
+        ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.frontend_refresh_interval_sec
+    )
     _probe_leader_motors_cached(port)  # frontend refresh -> must hit cache
     assert probe_calls["count"] == 1
 
-    fake_time["now"] = leader_detection._MOTOR_PROBE_CACHE_TTL_SECONDS + 0.1
+    fake_time["now"] = (
+        ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.motor_probe_cache_ttl_sec
+        + ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING.frontend_refresh_interval_sec
+    )
     _probe_leader_motors_cached(port)  # past TTL -> re-probe
     assert probe_calls["count"] == 2
 

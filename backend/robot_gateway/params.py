@@ -42,6 +42,13 @@ class RobotGatewayLeRobotLeaderCalibrationDefaults:
     leader_type_suffix: str
     fallback_id_prefix: str
 
+
+@dataclass(frozen=True)
+class RobotGatewayOpenArmLeaderDetectionTiming:
+    frontend_refresh_interval_sec: float
+    motor_probe_cache_ttl_sec: float
+
+
 ROBOT_GATEWAY_CONTRACT_VERSION: Final = "urdf-studio.teleop.v1"
 ROBOT_GATEWAY_DEFAULT_PROVIDER_ID: Final = "urdf-studio.robot-gateway"
 ROBOT_GATEWAY_DEFAULT_PROVIDER_DISPLAY_NAME: Final = "URDF Studio Robot Gateway"
@@ -404,6 +411,12 @@ ROBOT_GATEWAY_OPENARM_LEADER_LABEL_WORD_SEPARATOR: Final = " "
 ROBOT_GATEWAY_OPENARM_LEADER_STABLE_IDENTITY_PREFIX: Final = "serial-by-id:"
 ROBOT_GATEWAY_OPENARM_LEADER_FALLBACK_IDENTITY_PREFIX: Final = "path:"
 ROBOT_GATEWAY_OPENARM_LEADER_READER_IDLE_TIMEOUT_SEC: Final = 2.0
+ROBOT_GATEWAY_OPENARM_LEADER_DETECTION_TIMING: Final = (
+    RobotGatewayOpenArmLeaderDetectionTiming(
+        frontend_refresh_interval_sec=2.0,
+        motor_probe_cache_ttl_sec=2.5,
+    )
+)
 ROBOT_GATEWAY_LEROBOT_CALIBRATION_ROOT_DEFAULT: Final = (
     "~/.cache/huggingface/lerobot/calibration"
 )
