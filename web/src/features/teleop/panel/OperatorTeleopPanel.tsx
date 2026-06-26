@@ -1944,123 +1944,130 @@ export const OperatorTeleopPanel = ({
     }
 
     let cancelled = false;
+    let pollInFlight = false;
     const pollLeaderState = async () => {
-      const telemetryByName: Record<string, OperatorLiveJointTelemetry> = {};
-      const readErrors: string[] = [];
-      const activeZeroOffsetKeys = new Set<string>();
-      await Promise.all(
-        openArmLeaderStatePollTargets.map(async (target) => {
-          try {
-            const state = await fetchOperatorLeaderState(
-              target.path,
-              target.side,
-              OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
-              {
-                motorIds: target.motorIds,
-                motorModel: target.motorModel,
-                calibrationCategory: target.calibrationCategory,
-                calibrationProfile: target.calibrationProfile,
-                calibrationId: target.calibrationId,
-                calibrationGroup: target.calibrationGroup,
-              },
-            );
-            if (!state.connected || state.error) {
-              readErrors.push(
-                state.error ||
-                  `OpenArm target ${target.label} is detected but not streaming.`,
-              );
-              return;
-            }
-            const mappedTelemetry = buildMappedOperatorLeaderTelemetry({
-              state,
-              sourceId: buildOperatorLeaderTelemetrySourceId(
-                target.identityKey,
-              ),
-              sourceLabel: target.label,
-              sourceJointNames: target.sourceJointNames,
-              sourceMotorIds: target.motorIds,
-              targetJointNames: target.targetJointNames,
-              targetJointDirections: target.targetJointDirections,
-              fallbackToSourceJointNames: true,
-            });
-            const zeroOffsetKey =
-              buildOperatorLeaderTelemetryZeroOffsetKey(target);
-            activeZeroOffsetKeys.add(zeroOffsetKey);
-            const perceptionStore = useOperatorPerceptionStore.getState();
-            const followerReferencePositions = Object.fromEntries(
-              Object.entries(
-                perceptionStore.activeFollowerJointTelemetryByName,
-              ).map(([jointName, telemetry]) => [
-                jointName,
-                telemetry.positionRad,
-              ]),
-            );
-            Object.assign(
-              telemetryByName,
-              applyOperatorLeaderTelemetryPoseReferences({
-                telemetryByName: mappedTelemetry,
-                zeroOffsetKey,
-                sourceNeutralPositionsByTargetJointName:
-                  target.sourceNeutralPositionsByTargetJointName,
-                targetZeroPositionsByJointName: resolveJointDataZeroReference({
-                  dataZeroJointValues:
-                    useJointStore.getState().dataZeroJointValues,
-                  fallbackJointValues:
-                    useJointStore.getState().initialJointValues,
-                }),
-                fallbackReferencePositionsByJointName: {
-                  ...useJointStore.getState().jointValues,
-                  ...followerReferencePositions,
+      if (pollInFlight) return;
+      pollInFlight = true;
+      try {
+        const telemetryByName: Record<string, OperatorLiveJointTelemetry> = {};
+        const readErrors: string[] = [];
+        const activeZeroOffsetKeys = new Set<string>();
+        await Promise.all(
+          openArmLeaderStatePollTargets.map(async (target) => {
+            try {
+              const state = await fetchOperatorLeaderState(
+                target.path,
+                target.side,
+                OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
+                {
+                  motorIds: target.motorIds,
+                  motorModel: target.motorModel,
+                  calibrationCategory: target.calibrationCategory,
+                  calibrationProfile: target.calibrationProfile,
+                  calibrationId: target.calibrationId,
+                  calibrationGroup: target.calibrationGroup,
                 },
-                zeroOffsetsByKey: leaderTelemetryZeroOffsetsRef.current,
-              }),
-            );
-          } catch (error) {
-            readErrors.push(
-              error instanceof Error
-                ? error.message
-                : `OpenArm target ${target.label} read failed.`,
-            );
-          }
-        }),
-      );
-      if (cancelled) return;
-      pruneOperatorLeaderTelemetryZeroOffsets(
-        leaderTelemetryZeroOffsetsRef.current,
-        activeZeroOffsetKeys,
-      );
-      const liveJointCount = Object.keys(telemetryByName).length;
-      setOpenArmLeaderLiveJointCount(liveJointCount);
-      setOpenArmLeaderStateError(readErrors[0] ?? null);
-      if (liveJointCount === 0) {
-        useOperatorPerceptionStore.getState().clearActiveLeaderJointTelemetry();
-        return;
-      }
-      const perceptionStore = useOperatorPerceptionStore.getState();
-      perceptionStore.upsertActiveLeaderJointTelemetry(telemetryByName);
-      perceptionStore.upsertActiveJointTelemetry(telemetryByName);
-      const jointTargets = Object.fromEntries(
-        Object.entries(telemetryByName).map(([jointName, telemetry]) => [
-          jointName,
-          telemetry.positionRad,
-        ]),
-      );
-      const previousJointTargets = lastLeaderJointTargetsRef.current;
-      lastLeaderJointTargetsRef.current = jointTargets;
-      if (!followerHardwareMotionReady || previousJointTargets === null) return;
+              );
+              if (!state.connected || state.error) {
+                readErrors.push(
+                  state.error ||
+                    `OpenArm target ${target.label} is detected but not streaming.`,
+                );
+                return;
+              }
+              const mappedTelemetry = buildMappedOperatorLeaderTelemetry({
+                state,
+                sourceId: buildOperatorLeaderTelemetrySourceId(
+                  target.identityKey,
+                ),
+                sourceLabel: target.label,
+                sourceJointNames: target.sourceJointNames,
+                sourceMotorIds: target.motorIds,
+                targetJointNames: target.targetJointNames,
+                targetJointDirections: target.targetJointDirections,
+                fallbackToSourceJointNames: true,
+              });
+              const zeroOffsetKey =
+                buildOperatorLeaderTelemetryZeroOffsetKey(target);
+              activeZeroOffsetKeys.add(zeroOffsetKey);
+              const perceptionStore = useOperatorPerceptionStore.getState();
+              const followerReferencePositions = Object.fromEntries(
+                Object.entries(
+                  perceptionStore.activeFollowerJointTelemetryByName,
+                ).map(([jointName, telemetry]) => [
+                  jointName,
+                  telemetry.positionRad,
+                ]),
+              );
+              Object.assign(
+                telemetryByName,
+                applyOperatorLeaderTelemetryPoseReferences({
+                  telemetryByName: mappedTelemetry,
+                  zeroOffsetKey,
+                  sourceNeutralPositionsByTargetJointName:
+                    target.sourceNeutralPositionsByTargetJointName,
+                  targetZeroPositionsByJointName: resolveJointDataZeroReference({
+                    dataZeroJointValues:
+                      useJointStore.getState().dataZeroJointValues,
+                    fallbackJointValues:
+                      useJointStore.getState().initialJointValues,
+                  }),
+                  fallbackReferencePositionsByJointName: {
+                    ...useJointStore.getState().jointValues,
+                    ...followerReferencePositions,
+                  },
+                  zeroOffsetsByKey: leaderTelemetryZeroOffsetsRef.current,
+                }),
+              );
+            } catch (error) {
+              readErrors.push(
+                error instanceof Error
+                  ? error.message
+                  : `OpenArm target ${target.label} read failed.`,
+              );
+            }
+          }),
+        );
+        if (cancelled) return;
+        pruneOperatorLeaderTelemetryZeroOffsets(
+          leaderTelemetryZeroOffsetsRef.current,
+          activeZeroOffsetKeys,
+        );
+        const liveJointCount = Object.keys(telemetryByName).length;
+        setOpenArmLeaderLiveJointCount(liveJointCount);
+        setOpenArmLeaderStateError(readErrors[0] ?? null);
+        if (liveJointCount === 0) {
+          useOperatorPerceptionStore.getState().clearActiveLeaderJointTelemetry();
+          return;
+        }
+        const perceptionStore = useOperatorPerceptionStore.getState();
+        perceptionStore.upsertActiveLeaderJointTelemetry(telemetryByName);
+        perceptionStore.upsertActiveJointTelemetry(telemetryByName);
+        const jointTargets = Object.fromEntries(
+          Object.entries(telemetryByName).map(([jointName, telemetry]) => [
+            jointName,
+            telemetry.positionRad,
+          ]),
+        );
+        const previousJointTargets = lastLeaderJointTargetsRef.current;
+        lastLeaderJointTargetsRef.current = jointTargets;
+        if (!followerHardwareMotionReady || previousJointTargets === null) return;
 
-      const changedJointTargets = Object.fromEntries(
-        Object.entries(jointTargets).filter(([jointName, targetPositionRad]) => {
-          const previousPositionRad = previousJointTargets[jointName];
-          return (
-            !Number.isFinite(previousPositionRad) ||
-            Math.abs(targetPositionRad - previousPositionRad) >
-              OPERATOR_HARDWARE_IK_COMMAND.minDeltaRad
-          );
-        }),
-      );
-      if (Object.keys(changedJointTargets).length > 0) {
-        await dispatchFollowerHardwareJointTargets(changedJointTargets);
+        const changedJointTargets = Object.fromEntries(
+          Object.entries(jointTargets).filter(([jointName, targetPositionRad]) => {
+            const previousPositionRad = previousJointTargets[jointName];
+            return (
+              !Number.isFinite(previousPositionRad) ||
+              Math.abs(targetPositionRad - previousPositionRad) >
+                OPERATOR_HARDWARE_IK_COMMAND.minDeltaRad
+            );
+          }),
+        );
+        if (Object.keys(changedJointTargets).length > 0) {
+          await dispatchFollowerHardwareJointTargets(changedJointTargets);
+        }
+      } finally {
+        pollInFlight = false;
       }
     };
 
