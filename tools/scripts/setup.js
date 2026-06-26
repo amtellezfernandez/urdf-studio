@@ -1146,13 +1146,20 @@ function shouldInstallPybulletRuntime() {
   return shouldInstallOptionalPythonRuntime({
     skipAutoInstallEnv: PYBULLET_SKIP_AUTO_INSTALL_ENV,
     forceInstallEnv: PYBULLET_FORCE_INSTALL_ENV,
-    defaultInstall: true,
+    defaultInstall: process.platform !== 'darwin',
   });
 }
 
 function getPybulletRuntimeSkipMessage() {
   if (isTruthyEnvValue(process.env[PYBULLET_SKIP_AUTO_INSTALL_ENV])) {
     return `PyBullet workspace adapter runtime skipped by ${PYBULLET_SKIP_AUTO_INSTALL_ENV}.`;
+  }
+  if (process.platform === 'darwin') {
+    return [
+      'PyBullet workspace adapter runtime skipped on macOS.',
+      'The pybullet source build fails against the current macOS SDK headers (bundled zlib fdopen macro collision).',
+      `Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`,
+    ].join(' ');
   }
   return `PyBullet workspace adapter runtime skipped. Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`;
 }
