@@ -28,6 +28,8 @@ import {
   GENESIS_RENDER_PACKAGE,
   GENESIS_SETUP,
   GENESIS_SKIP_AUTO_INSTALL_ENV,
+  GENESIS_TORCH_MIN_VERSION,
+  GENESIS_TORCH_PACKAGE,
   GENESIS_VERIFY_IMPORT_SCRIPT,
   GENESIS_WORLD_PACKAGE,
   LEROBOT_TRAINING_SETUP,
@@ -132,8 +134,9 @@ test('PyBullet workspace adapter runtime is portable and direct URDF based', () 
 test('Genesis workspace adapter runtime is pinned separately from portable backend setup', () => {
   assert.equal(GENESIS_WORLD_PACKAGE, 'genesis-world==1.1.0');
   assert.equal(GENESIS_RENDER_PACKAGE, 'imgui-bundle==1.92.801');
-  assert.deepEqual(GENESIS_PYTHON_DEPENDENCIES, ['torch', GENESIS_WORLD_PACKAGE, GENESIS_RENDER_PACKAGE]);
-  assert.ok(GENESIS_PYTHON_DEPENDENCIES.includes('torch'));
+  assert.equal(GENESIS_TORCH_PACKAGE, `torch>=${GENESIS_TORCH_MIN_VERSION}`);
+  assert.deepEqual(GENESIS_PYTHON_DEPENDENCIES, [GENESIS_TORCH_PACKAGE, GENESIS_WORLD_PACKAGE, GENESIS_RENDER_PACKAGE]);
+  assert.match(GENESIS_TORCH_PACKAGE, /^torch>=\d+\.\d+$/);
   assert.equal(GENESIS_SKIP_AUTO_INSTALL_ENV, 'URDF_STUDIO_SKIP_GENESIS_AUTO_INSTALL');
   assert.equal(GENESIS_FORCE_INSTALL_ENV, 'URDF_STUDIO_INSTALL_GENESIS');
   assert.ok(!BACKEND_PYTHON_DEPENDENCIES.includes(GENESIS_WORLD_PACKAGE));
@@ -143,6 +146,7 @@ test('Genesis workspace adapter runtime is pinned separately from portable backe
   assert.match(GENESIS_VERIFY_IMPORT_SCRIPT, /import torch/);
   assert.match(GENESIS_VERIFY_IMPORT_SCRIPT, /import genesis/);
   assert.match(GENESIS_VERIFY_IMPORT_SCRIPT, /import imgui_bundle/);
+  assert.match(GENESIS_VERIFY_IMPORT_SCRIPT, /assert torch_version >= min_torch/);
 });
 
 test('Blender setup pins a managed LTS runtime for Linux WSL release checks', () => {
