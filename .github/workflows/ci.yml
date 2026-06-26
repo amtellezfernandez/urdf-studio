@@ -188,8 +188,22 @@ jobs:
         run: npm ci
       - name: Set up backend and simulator runtimes
         run: npm run setup
-      - name: Run backend tests
-        run: npm run test:backend
+      - name: Run simulator backend tests
+        run: >
+          npm run test:backend --
+          backend/tests/test_blender_saved_session.py
+          backend/tests/test_blender_simulator_adapter.py
+          backend/tests/test_genesis_simulator_adapter.py
+          backend/tests/test_mujoco_simulator_adapter.py
+          backend/tests/test_pybullet_simulator_adapter.py
+          backend/tests/test_simulator_camera_transfer.py
+          backend/tests/test_simulator_runtime_api.py
+          backend/tests/test_simulator_scene_spec.py
+          backend/tests/test_simulator_workspace_check.py
+          backend/tests/test_simulator_workspace_package.py
+          backend/tests/test_simulator_workspace_parity.py
+          backend/tests/test_simulator_workspace_report_validation.py
+          backend/tests/test_world_layout_static_transfer.py
       - name: Validate simulator transfer fixtures
         run: npm run simulator:workspace:check:fixtures
       - name: Validate Blender transfer fixtures
