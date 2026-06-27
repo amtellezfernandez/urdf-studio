@@ -214,4 +214,87 @@ describe("OperatorFollowerConnectionCard", () => {
     });
     container.remove();
   });
+
+  it("shows LeRobot direct teleop runtime details", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorFollowerConnectionCard, {
+          buttonClassName: "button",
+          calibration: {
+            available: false,
+            command: null,
+            isStarting: false,
+            message: null,
+            required: false,
+            onStart: vi.fn(),
+          },
+          calibrationFileEdit: createInactiveCalibrationFileEditView(),
+          calibrationSourceSelection: {
+            error: null,
+            options: [],
+            selectedSourceId: null,
+            showAll: false,
+            onSelectSource: vi.fn(),
+            onToggleShowAll: vi.fn(),
+          },
+          connection: {
+            connectDisabled: false,
+            issue: null,
+            isBusy: false,
+            isConnected: true,
+            isDisconnectAvailable: true,
+            motionReady: true,
+            motionSafetyLabel: "Motion ready",
+            onToggleConnection: vi.fn(),
+          },
+          directTeleop: {
+            available: true,
+            busy: false,
+            disabled: false,
+            issue: null,
+            running: true,
+            statusLabel: "LeRobot direct running.",
+            detailLines: [
+              "State: running",
+              "Follower: so100_follower",
+              "Leader: so100_leader · blue",
+              "PID: 4200",
+              "Command: lerobot-teleoperate --robot.type=so100_follower",
+            ],
+            onStart: vi.fn(),
+            onStop: vi.fn(),
+          },
+          envConfig: {
+            configRef: null,
+            error: null,
+            isOpening: false,
+            onOpen: vi.fn(),
+          },
+          targetSelection: {
+            disabled: false,
+            selectedProfileId: "so100_follower_joint_jog",
+            onSelectProfile: vi.fn(),
+            options: [],
+          },
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("LeRobot direct running.");
+    expect(container.textContent).toContain("Follower: so100_follower");
+    expect(container.textContent).toContain("Leader: so100_leader · blue");
+    expect(container.textContent).toContain("PID: 4200");
+    expect(container.textContent).toContain(
+      "Command: lerobot-teleoperate --robot.type=so100_follower",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
 });

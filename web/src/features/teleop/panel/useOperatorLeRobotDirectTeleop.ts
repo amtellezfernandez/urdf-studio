@@ -29,6 +29,7 @@ type OperatorLeRobotDirectTeleopCardView = {
   issue: string | null;
   running: boolean;
   statusLabel: string;
+  detailLines: readonly string[];
   onStart: () => void;
   onStop: () => void;
 };
@@ -47,6 +48,21 @@ type UseOperatorLeRobotDirectTeleopParams = {
 type UseOperatorLeRobotDirectTeleopResult = {
   running: boolean;
   card: OperatorLeRobotDirectTeleopCardView | undefined;
+};
+
+const buildLeRobotDirectTeleopDetailLines = (
+  status: OperatorLeRobotDirectTeleopStatus | null,
+): string[] => {
+  if (status === null) return [];
+  return [
+    `State: ${status.state}`,
+    status.followerRobotType ? `Follower: ${status.followerRobotType}` : "",
+    status.leaderProfile
+      ? `Leader: ${[status.leaderProfile, status.leaderId].filter(Boolean).join(" · ")}`
+      : "",
+    status.pid !== null ? `PID: ${status.pid}` : "",
+    status.displayCommand ? `Command: ${status.displayCommand}` : "",
+  ].filter(Boolean);
 };
 
 export const resolveLeRobotDirectTeleopLeaderRequest = (
@@ -245,6 +261,10 @@ export const useOperatorLeRobotDirectTeleop = ({
   const statusLabel =
     status?.lastError ??
     (running ? `LeRobot direct ${status?.state ?? "running"}.` : "LeRobot direct ready.");
+  const detailLines = useMemo(
+    () => buildLeRobotDirectTeleopDetailLines(status),
+    [status],
+  );
 
   return {
     running,
@@ -256,6 +276,7 @@ export const useOperatorLeRobotDirectTeleop = ({
           issue,
           running,
           statusLabel,
+          detailLines,
           onStart: handleStart,
           onStop: handleStop,
         }

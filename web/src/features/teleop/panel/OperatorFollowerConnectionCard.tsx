@@ -32,6 +32,7 @@ type OperatorFollowerDirectTeleopView = {
   issue: string | null;
   running: boolean;
   statusLabel: string;
+  detailLines: readonly string[];
   onStart: () => void;
   onStop: () => void;
 };
@@ -319,13 +320,24 @@ export const OperatorFollowerConnectionCard = ({
       ) : null}
 
       {directTeleop?.available ? (
-        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-center gap-1.5 border-t border-border/20 pt-1">
-          <div
-            className={cn(
-              directTeleop.issue ? "text-amber-200" : "text-muted-foreground",
-            )}
-          >
-            {directTeleop.issue ?? directTeleop.statusLabel}
+        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-start gap-1.5 border-t border-border/20 pt-1">
+          <div className="min-w-0 space-y-0.5">
+            <div
+              className={cn(
+                directTeleop.issue ? "text-amber-200" : "text-muted-foreground",
+              )}
+            >
+              {directTeleop.issue ?? directTeleop.statusLabel}
+            </div>
+            {directTeleop.detailLines.length > 0 ? (
+              <div className="space-y-0.5 font-mono text-[10px] text-muted-foreground">
+                {directTeleop.detailLines.map((line) => (
+                  <div key={line} className="truncate" title={line}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
