@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "description": "Baseline of existing top-level scalar const declarations. New entries fail tools/scripts/topLevelScalarConstantAudit.js.",
-  "totalConstants": 1597,
-  "fileCount": 273,
+  "totalConstants": 1599,
+  "fileCount": 274,
   "files": {
     "config/devServerProxy.js": [
       {
@@ -223,7 +223,17 @@
       },
       {
         "name": "OPENARM_HARDWARE_TELEOP_TYPE",
-        "initializer": "'openarm_mini'"
+        "initializer": "'bi_openarm_mini'"
+      }
+    ],
+    "tools/scripts/setupParams/lerobotSource.js": [
+      {
+        "name": "LEROBOT_UPSTREAM_REF",
+        "initializer": "'6a788fbdb02cabfae60f7408636945df0b1eafa0'"
+      },
+      {
+        "name": "LEROBOT_UPSTREAM_REPO_URL",
+        "initializer": "'https://github.com/huggingface/lerobot.git'"
       }
     ],
     "tools/scripts/perf-gate-params.js": [

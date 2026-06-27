@@ -17,6 +17,7 @@ from backend.robot_gateway.lerobot_direct_teleop import (
 )
 from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+    ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT,
 )
@@ -135,10 +136,12 @@ def test_lerobot_direct_teleop_command_uses_openarm_mini_pair() -> None:
         ),
     )
 
-    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
-    assert f"--teleop.port_left={TEST_LEFT_LEADER_PORT}" in command
-    assert f"--teleop.port_right={TEST_RIGHT_LEADER_PORT}" in command
+    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
+    assert f"--teleop.left_arm_config.port={TEST_LEFT_LEADER_PORT}" in command
+    assert f"--teleop.right_arm_config.port={TEST_RIGHT_LEADER_PORT}" in command
     assert "--teleop.port=" not in " ".join(command)
+    assert "port_left" not in " ".join(command)
+    assert "port_right" not in " ".join(command)
 
 
 def test_lerobot_direct_teleop_release_helper_releases_unique_leader_ports() -> None:

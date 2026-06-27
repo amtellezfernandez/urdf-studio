@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { OperatorTeleopControlGroup } from "@/features/teleop/profiles/operatorTeleopControlGroups";
 import {
+  buildLeaderCalibrationSetupLines,
   buildLeaderDeviceRoleKeys,
   buildLeaderHardwareDetailLines,
   findCompatibleLeaderControlPart,
+  formatLeaderControlPartChoiceLabel,
+  listCompatibleLeaderControlParts,
   resolveLeaderMappedTargetJointNames,
   resolveLeaderSideForControlGroup,
   resolveLeaderTargetCompatibility,
@@ -100,10 +103,11 @@ const buildControlPart = (
   motorModels: {},
   jointNames: [...TEST_EIGHT_LEADER_JOINT_NAMES],
   zeroPositionsRad: {},
-  calibrationCategory: "robots",
+  calibrationCategory: "teleoperators",
   calibrationProfile: "openarm_mini",
   calibrationId: "lab-leader",
   calibrationGroup: "left",
+  calibrationMtimeNs: 0,
   configuredPort: "/dev/serial/by-id/leader",
   configuredPortMatches: true,
   configuredPortStatus: "matched",
@@ -182,14 +186,20 @@ describe("operatorLeaderConnectionPolicy", () => {
     const followerPart = buildControlPart({
       id: "follower-arm",
       label: "Follower arm",
+      calibrationCategory: "robots",
       calibrationProfile: "so100_follower",
       calibrationId: "my_awesome_follower_arm",
+      configuredPortMatches: false,
+      configuredPortStatus: "stale",
     });
     const leaderPart = buildControlPart({
       id: "leader-arm",
       label: "Leader arm",
+      calibrationCategory: "teleoperators",
       calibrationProfile: "so100_leader",
       calibrationId: "my_awesome_leader_arm",
+      calibrationGroup: "all",
+      configuredPortMatches: false,
       configuredPortStatus: "stale",
     });
     const leader = buildLeader([followerPart, leaderPart]);
@@ -199,7 +209,61 @@ describe("operatorLeaderConnectionPolicy", () => {
     );
     expect(buildLeaderHardwareDetailLines(leader, leaderPart)).toEqual([
       "Arm device",
-      "Calibration: so100_leader · my_awesome_leader_arm",
+      "LeRobot teleoperator calibration: so100_leader · my_awesome_leader_arm · all",
+      "LeRobot configured port is missing",
+      "8 actuators",
+    ]);
+  });
+
+  it("lists selectable LeRobot calibration sources with readable labels", () => {
+    const followerPart = buildControlPart({
+      id: "robots:openarm_follower:follower:left",
+      label: "Follower arm",
+      calibrationCategory: "robots",
+      calibrationProfile: "openarm_follower",
+      calibrationId: "follower",
+      calibrationGroup: "left",
+      configuredPortMatches: false,
+      configuredPortStatus: "stale",
+    });
+    const leaderPart = buildControlPart({
+      id: "teleoperators:openarm_mini:leader:left",
+      label: "Leader arm",
+      calibrationCategory: "teleoperators",
+      calibrationProfile: "openarm_mini",
+      calibrationId: "leader",
+      calibrationGroup: "left",
+      configuredPortMatches: false,
+      configuredPortStatus: "stale",
+    });
+    const leader = buildLeader([followerPart, leaderPart]);
+    const options = listCompatibleLeaderControlParts(buildArmGroup(), leader);
+
+    expect(options).toEqual([leaderPart, followerPart]);
+    expect(options.map(formatLeaderControlPartChoiceLabel)).toEqual([
+      "teleoperator: openarm_mini · leader · left",
+      "robot/follower: openarm_follower · follower · left",
+    ]);
+  });
+
+  it("surfaces OpenArm side-specific LeRobot calibration groups", () => {
+    const rightMiniPart = buildControlPart({
+      calibrationCategory: "teleoperators",
+      calibrationProfile: "openarm_mini",
+      calibrationId: "my_leader",
+      calibrationGroup: "right",
+      calibrationMtimeNs: 1_750_000_000_000_000_000,
+      configuredPort: null,
+      configuredPortMatches: false,
+      configuredPortStatus: "none",
+    });
+    const leader = buildLeader([rightMiniPart]);
+    const detailLines = buildLeaderHardwareDetailLines(leader, rightMiniPart);
+
+    expect(detailLines).toEqual([
+      "Arm device",
+      "LeRobot teleoperator calibration: openarm_mini · my_leader · right",
+      expect.stringMatching(/^Last modified: /u),
       "8 actuators",
     ]);
   });
@@ -208,6 +272,7 @@ describe("operatorLeaderConnectionPolicy", () => {
     const followerPart = buildControlPart({
       id: "follower-arm",
       label: "Follower arm",
+      calibrationCategory: "robots",
       calibrationProfile: "so100_follower",
       calibrationId: "my_awesome_follower_arm",
       configuredPortMatches: true,
@@ -216,6 +281,7 @@ describe("operatorLeaderConnectionPolicy", () => {
     const leaderPart = buildControlPart({
       id: "leader-arm",
       label: "Leader arm",
+      calibrationCategory: "teleoperators",
       calibrationProfile: "so100_leader",
       calibrationId: "my_awesome_leader_arm",
       configuredPortMatches: false,
@@ -226,6 +292,35 @@ describe("operatorLeaderConnectionPolicy", () => {
     expect(findCompatibleLeaderControlPart(buildArmGroup(), leader)).toBe(
       followerPart,
     );
+  });
+
+  it("shows the LeRobot setup that will be used for calibration", () => {
+    expect(
+      buildLeaderCalibrationSetupLines({
+        port: "/dev/serial/by-id/openarm-right",
+        portLeft: "/dev/serial/by-id/openarm-left",
+        portRight: "/dev/serial/by-id/openarm-right",
+        calibrationProfile: "openarm_mini",
+        calibrationId: "lab-leader_right",
+        calibrationGroup: "right",
+      }),
+    ).toEqual([
+      "LeRobot setup: bi_openarm_mini (left + right)",
+      "Writes files: lab-leader_left.json + lab-leader_right.json",
+    ]);
+    expect(
+      buildLeaderCalibrationSetupLines({
+        port: "/dev/serial/by-id/openarm-right",
+        calibrationProfile: "openarm_mini",
+        calibrationGroup: "right",
+      }),
+    ).toEqual(["LeRobot setup: openarm_mini (right)"]);
+    expect(
+      buildLeaderCalibrationSetupLines({
+        port: "/dev/serial/by-id/so100",
+        calibrationProfile: "so100_leader",
+      }),
+    ).toEqual(["LeRobot setup: so100_leader"]);
   });
 
   it("builds leader role keys from stable identity, active port, and configured ports", () => {
@@ -362,6 +457,15 @@ describe("operatorLeaderConnectionPolicy", () => {
         leader,
         assignment: null,
         pendingTargetGroupId: "arm.right",
+      }).selectedTargetOption?.group.id,
+    ).toBe("arm.right");
+    expect(
+      resolveLeaderTargetSelection({
+        targetGroups: [leftGroup, rightGroup],
+        leader,
+        assignment: null,
+        pendingTargetGroupId: null,
+        preferredTargetGroupId: "arm.right",
       }).selectedTargetOption?.group.id,
     ).toBe("arm.right");
     expect(

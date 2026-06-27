@@ -965,6 +965,7 @@ describe("operatorHelperApi", () => {
                 motor_ids: [1],
                 zero_positions_rad: { shoulder_pan: 0 },
                 actuator_count: 1,
+                mtime_ns: 123456789,
               },
             ],
           }),
@@ -996,6 +997,7 @@ describe("operatorHelperApi", () => {
           motorIds: [1],
           zeroPositionsRad: { shoulder_pan: 0 },
           actuatorCount: 1,
+          mtimeNs: 123456789,
         },
       ],
     });

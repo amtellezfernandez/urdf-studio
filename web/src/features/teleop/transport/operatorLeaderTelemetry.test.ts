@@ -71,6 +71,7 @@ const buildLeader = (): OperatorLeaderDevice => ({
       calibrationProfile: "so100_leader",
       calibrationId: "my_leader",
       calibrationGroup: "all",
+      calibrationMtimeNs: 0,
       configuredPort: null,
       configuredPortMatches: false,
       configuredPortStatus: "none",
@@ -565,6 +566,69 @@ describe("operatorLeaderTelemetry", () => {
       calibrationCategory: null,
       calibrationProfile: OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
       calibrationId: null,
+      calibrationGroup: OPERATOR_OPENARM_LEADER_SIDES.right,
+    });
+  });
+
+  it("keeps OpenArm Mini calibration single-arm when pairing is disabled", () => {
+    const rightLeader = buildOpenArmMiniLeader(
+      "serial:openarm-right",
+      "/dev/serial/by-id/openarm-right",
+    );
+    const leftLeader = buildOpenArmMiniLeader(
+      "serial:openarm-left",
+      "/dev/serial/by-id/openarm-left",
+    );
+
+    expect(
+      buildOperatorLeaderCalibrationRequest({
+        leader: rightLeader,
+        controlPart: rightLeader.controlParts[0],
+        selectedSide: OPERATOR_OPENARM_LEADER_SIDES.right,
+        leaders: [rightLeader, leftLeader],
+        pairOpenArmMini: false,
+      }),
+    ).toEqual({
+      port: "/dev/serial/by-id/openarm-right",
+      motorIds: [...OPERATOR_OPENARM_MINI_MOTOR_IDS],
+      motorModel: OPERATOR_OPENARM_MINI_MOTOR_MODEL,
+      calibrationCategory: null,
+      calibrationProfile: OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+      calibrationId: null,
+      calibrationGroup: OPERATOR_OPENARM_LEADER_SIDES.right,
+    });
+  });
+
+  it("uses the selected OpenArm Mini side when LeRobot calibration group is all", () => {
+    const rightLeader = buildOpenArmMiniLeader(
+      "serial:openarm-right",
+      "/dev/serial/by-id/openarm-right",
+    );
+    const leftLeader = buildOpenArmMiniLeader(
+      "serial:openarm-left",
+      "/dev/serial/by-id/openarm-left",
+    );
+    const rightControlPart = {
+      ...rightLeader.controlParts[0],
+      calibrationCategory: "teleoperators",
+      calibrationProfile: OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+      calibrationId: "my_leader_right",
+      calibrationGroup: "all",
+    };
+
+    expect(
+      buildOperatorLeaderCalibrationRequest({
+        leader: rightLeader,
+        controlPart: rightControlPart,
+        selectedSide: OPERATOR_OPENARM_LEADER_SIDES.right,
+        leaders: [leftLeader, rightLeader],
+      }),
+    ).toMatchObject({
+      port: "/dev/serial/by-id/openarm-right",
+      portLeft: "/dev/serial/by-id/openarm-left",
+      portRight: "/dev/serial/by-id/openarm-right",
+      calibrationProfile: OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+      calibrationId: "my_leader_right",
       calibrationGroup: OPERATOR_OPENARM_LEADER_SIDES.right,
     });
   });

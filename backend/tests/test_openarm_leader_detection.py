@@ -139,7 +139,8 @@ def test_detect_openarm_leaders_uses_lerobot_calibration_joint_order(
         / "so100_leader"
     )
     calibration_dir.mkdir(parents=True)
-    (calibration_dir / "my_leader.json").write_text(
+    calibration_path = calibration_dir / "my_leader.json"
+    calibration_path.write_text(
         """
         {
           "shoulder_pan": {"id": 1},
@@ -178,6 +179,7 @@ def test_detect_openarm_leaders_uses_lerobot_calibration_joint_order(
     assert control_part.configured_port is None
     assert control_part.configured_port_matches is False
     assert control_part.configured_port_status == "none"
+    assert control_part.calibration_mtime_ns == calibration_path.stat().st_mtime_ns
     assert control_part.joint_names == [
         "shoulder_pan",
         "shoulder_lift",

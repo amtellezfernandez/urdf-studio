@@ -62,13 +62,14 @@ test('buildOpenArmTeleoperateCommand emits bimanual follower plus OpenArm Mini a
     'lerobot.scripts.lerobot_teleoperate',
     '--robot.type=bi_openarm_follower',
   ]);
-  assert.ok(command.includes('--teleop.type=openarm_mini'));
+  assert.ok(command.includes('--teleop.type=bi_openarm_mini'));
   assert.ok(command.includes('--robot.left_arm_config.side=left'));
   assert.ok(command.includes('--robot.right_arm_config.side=right'));
   assert.ok(command.includes('--robot.left_arm_config.max_relative_target=5.0'));
   assert.ok(command.includes('--robot.right_arm_config.max_relative_target=5.0'));
-  assert.ok(command.includes('--teleop.port_right=/dev/tty.usbmodem-right'));
-  assert.ok(command.includes('--teleop.port_left=/dev/tty.usbmodem-left'));
+  assert.ok(command.includes('--teleop.right_arm_config.port=/dev/tty.usbmodem-right'));
+  assert.ok(command.includes('--teleop.left_arm_config.port=/dev/tty.usbmodem-left'));
+  assert.ok(command.every((arg) => !arg.includes('port_right') && !arg.includes('port_left')));
 });
 
 test('buildOpenArmInstallCommand installs LeRobot OpenArm Mini and XoQ CAN dependencies', () => {

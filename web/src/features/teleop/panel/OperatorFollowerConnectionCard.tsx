@@ -75,14 +75,37 @@ type OperatorFollowerTargetSelectionView = {
   onSelectProfile: (profileId: string) => void;
 };
 
+type OperatorFollowerDetectedHardwareTarget = {
+  id: string;
+  label: string;
+  detailLines: readonly string[];
+};
+
+type OperatorFollowerCameraView = {
+  count: number;
+  selectedLabel: string | null;
+  statusLabel: string;
+  detailLines: readonly string[];
+};
+
+type OperatorFollowerHardwareDetectionView = {
+  requested: boolean;
+  resolved: boolean;
+  error: string | null;
+  targets: readonly OperatorFollowerDetectedHardwareTarget[];
+  onScan: () => void;
+};
+
 type OperatorFollowerConnectionCardProps = {
   buttonClassName: string;
   calibration: OperatorFollowerCalibrationView;
   calibrationFileEdit: OperatorFollowerCalibrationFileEditView;
   calibrationSourceSelection: OperatorFollowerCalibrationSourceSelectionView;
+  camera?: OperatorFollowerCameraView;
   connection: OperatorFollowerConnectionView;
   directTeleop?: OperatorFollowerDirectTeleopView;
   envConfig: OperatorFollowerEnvConfigView;
+  hardwareDetection?: OperatorFollowerHardwareDetectionView;
   targetSelection: OperatorFollowerTargetSelectionView;
 };
 
@@ -95,6 +118,30 @@ const findSelectedFollowerTarget = (
   targetSelection.options[0] ??
   null;
 
+function formatFollowerRobotType(
+  selectedTarget: OperatorFollowerTargetOption | null,
+): string | null {
+  const profileId = selectedTarget?.profileId.trim() ?? "";
+  if (!profileId) return null;
+  return profileId.replace(/_joint_jog$/u, "");
+}
+
+function formatFollowerConnectionStatus({
+  connection,
+  selectedTarget,
+  issue,
+}: {
+  connection: OperatorFollowerConnectionView;
+  selectedTarget: OperatorFollowerTargetOption | null;
+  issue: string | null;
+}): string {
+  if (connection.isConnected) return "Connected";
+  if (connection.isBusy) return "Connecting";
+  if (issue) return "Blocked";
+  if (selectedTarget) return "Ready";
+  return "No target";
+}
+
 const OperatorFollowerTargetDetails = ({
   selectedTarget,
   targetSelection,
@@ -102,53 +149,91 @@ const OperatorFollowerTargetDetails = ({
   selectedTarget: OperatorFollowerTargetOption | null;
   targetSelection: OperatorFollowerTargetSelectionView;
 }) => {
-  const selectedStatusVisible =
-    selectedTarget &&
-    selectedTarget.status !== "available" &&
-    selectedTarget.status !== "selected";
   const notableTargets = targetSelection.options.filter(
     (target) => target.profileId !== selectedTarget?.profileId,
   );
+  if (notableTargets.length === 0) return null;
 
   return (
-    <>
-      {selectedTarget ? (
-        <div className="space-y-0.5">
-          <div className="truncate font-mono text-foreground">
-            {selectedTarget.label}
-            {selectedStatusVisible ? (
-              <span className="text-muted-foreground">
-                {" "}
-                ({selectedTarget.statusLabel})
-              </span>
-            ) : null}
+    <div className="space-y-0.5 border-t border-border/20 pt-1">
+      {notableTargets.map((target) => (
+        <div
+          key={target.profileId}
+          className="truncate font-mono text-muted-foreground"
+        >
+          {target.label}
+          {target.status !== "available" ? (
+            <span> ({target.statusLabel})</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const OperatorFollowerHardwareDetection = ({
+  buttonClassName,
+  detection,
+}: {
+  buttonClassName: string;
+  detection: OperatorFollowerHardwareDetectionView;
+}) => {
+  return (
+    <div className="rounded border border-border/25 bg-background/30 p-1.5">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="font-medium text-foreground">Detected targets</span>
+        <div className="flex items-center gap-1">
+          {!detection.resolved || detection.error ? (
+            <span className="font-mono text-foreground">
+              {!detection.requested
+                ? "IDLE"
+                : !detection.resolved
+                  ? "CHECKING"
+                  : "ERROR"}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className={cn(buttonClassName, "h-6 px-1.5")}
+            onClick={detection.onScan}
+          >
+            {detection.requested ? "Rescan" : "Scan"}
+          </button>
+        </div>
+      </div>
+
+      {!detection.requested ? (
+        <div>Click Scan to detect robot targets.</div>
+      ) : !detection.resolved ? (
+        <div>Scanning serial devices.</div>
+      ) : detection.error ? (
+        <div className="text-amber-200">{detection.error}</div>
+      ) : detection.targets.length > 0 ? (
+        <div className="space-y-1">
+          <div className="font-mono text-muted-foreground">
+            {detection.targets.length} detected
           </div>
-          {selectedTarget.detailLines.map((line) => (
-            <div key={line} className="truncate font-mono text-muted-foreground">
-              {line}
+          {detection.targets.map((target) => (
+            <div key={target.id} className="space-y-0.5">
+              <div className="truncate font-mono text-foreground">
+                {target.label}
+              </div>
+              {target.detailLines.map((line) => (
+                <div
+                  key={line}
+                  className="truncate font-mono text-muted-foreground"
+                  title={line}
+                >
+                  {line}
+                </div>
+              ))}
             </div>
           ))}
         </div>
       ) : (
-        <div>No arm targets detected.</div>
+        <div>No LeRobot robot targets detected.</div>
       )}
-
-      {notableTargets.length > 0 ? (
-        <div className="mt-1 space-y-0.5 border-t border-border/20 pt-1">
-          {notableTargets.map((target) => (
-            <div
-              key={target.profileId}
-              className="truncate font-mono text-muted-foreground"
-            >
-              {target.label}
-              {target.status !== "available" ? (
-                <span> ({target.statusLabel})</span>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </>
+    </div>
   );
 };
 
@@ -222,9 +307,11 @@ export const OperatorFollowerConnectionCard = ({
   calibration,
   calibrationFileEdit,
   calibrationSourceSelection,
+  camera,
   connection,
   directTeleop,
   envConfig,
+  hardwareDetection,
   targetSelection,
 }: OperatorFollowerConnectionCardProps) => {
   const envConfigLabel = formatOperatorFollowerEnvConfigRef(envConfig.configRef);
@@ -233,39 +320,77 @@ export const OperatorFollowerConnectionCard = ({
   const shortIssue = selectedTargetBlockedByLeader
     ? "Disconnect Leader first."
     : connection.issue;
+  const selectedCalibrationOption =
+    calibrationSourceSelection.options.find(
+      (option) => option.id === calibrationSourceSelection.selectedSourceId,
+    ) ?? null;
+  const robotType = formatFollowerRobotType(selectedTarget);
+  const connectionStatus = formatFollowerConnectionStatus({
+    connection,
+    selectedTarget,
+    issue: shortIssue,
+  });
+  const cameraSummary =
+    camera && camera.count > 0
+      ? `${camera.count} camera${camera.count === 1 ? "" : "s"}`
+      : "No camera";
+  const noTargetMessage =
+    camera && camera.count > 0
+      ? "Camera detected, but no LeRobot robot target."
+      : "No LeRobot robot target.";
 
   return (
     <div className="rounded-md border border-border/40 bg-background/40 p-2 text-[10px] text-muted-foreground">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="font-medium text-foreground">Follower</div>
+        <div className="font-medium text-foreground">Robot</div>
         <div className="font-mono text-muted-foreground">
-          {targetSelection.options.length} targets
+          {connectionStatus}
         </div>
       </div>
 
-      <div className="border-t border-border/30 pt-1">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="font-medium text-foreground">Detected targets</span>
-          <span className="font-mono text-muted-foreground">
-            {targetSelection.options.length || "none"}
-          </span>
+      <div className="space-y-1 border-t border-border/30 pt-1">
+        {hardwareDetection ? (
+          <OperatorFollowerHardwareDetection
+            buttonClassName={buttonClassName}
+            detection={hardwareDetection}
+          />
+        ) : null}
+
+        <div className="grid grid-cols-[72px_minmax(0,1fr)_88px] items-center gap-1.5">
+          <div className="font-medium text-foreground">Config</div>
+          <div
+            className="truncate font-mono text-muted-foreground"
+            title={envConfig.configRef ?? "Open robot gateway config file"}
+          >
+            {envConfigLabel}
+          </div>
+          <button
+            type="button"
+            className={cn(buttonClassName, "h-7 px-1.5")}
+            disabled={envConfig.isOpening}
+            title={envConfig.configRef ?? "Open robot gateway config file"}
+            onClick={envConfig.onOpen}
+          >
+            {envConfig.isOpening ? "Opening" : "Config"}
+          </button>
         </div>
+      </div>
 
-        <OperatorFollowerTargetDetails
-          selectedTarget={selectedTarget}
-          targetSelection={targetSelection}
-        />
+      {envConfig.error ? (
+        <div className="mt-1 text-amber-200">{envConfig.error}</div>
+      ) : null}
 
-        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-center gap-1.5">
+      <div className="space-y-1 border-t border-border/30 pt-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-1.5">
           <select
             className="h-7 min-w-0 rounded-md border border-border/60 bg-background px-2 font-mono text-[10px] text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Follower target"
+            aria-label="Robot target"
             disabled={targetSelection.disabled || targetSelection.options.length === 0}
             value={selectedTarget?.profileId ?? ""}
             onChange={(event) => targetSelection.onSelectProfile(event.target.value)}
           >
             {targetSelection.options.length === 0 ? (
-              <option value="">No arm targets</option>
+              <option value="">No robot target</option>
             ) : (
               targetSelection.options.map((target) => (
                 <option
@@ -292,71 +417,65 @@ export const OperatorFollowerConnectionCard = ({
                 : "Connect"}
           </button>
         </div>
-      </div>
 
-      <div className="mt-1 grid grid-cols-[68px_minmax(0,1fr)_88px] items-center gap-1.5">
-        <div className="font-medium text-foreground">Gateway env</div>
-        <div
-          className="truncate font-mono text-muted-foreground"
-          title={envConfig.configRef ?? "Open robot gateway config file"}
-        >
-          {envConfigLabel}
-        </div>
-        <button
-          type="button"
-          className={cn(buttonClassName, "h-7 px-1.5")}
-          disabled={envConfig.isOpening}
-          title={envConfig.configRef ?? "Open robot gateway config file"}
-          onClick={envConfig.onOpen}
-        >
-          {envConfig.isOpening ? "Opening" : "Config"}
-        </button>
-      </div>
-
-      {shortIssue ? (
-        <div className="mt-1 text-amber-200">{shortIssue}</div>
-      ) : envConfig.error ? (
-        <div className="mt-1 text-amber-200">{envConfig.error}</div>
-      ) : null}
-
-      {directTeleop?.available ? (
-        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-start gap-1.5 border-t border-border/20 pt-1">
-          <div className="min-w-0 space-y-0.5">
-            <div
-              className={cn(
-                directTeleop.issue ? "text-amber-200" : "text-muted-foreground",
-              )}
-            >
-              {directTeleop.issue ?? directTeleop.statusLabel}
-            </div>
-            {directTeleop.detailLines.length > 0 ? (
-              <div className="space-y-0.5 font-mono text-[10px] text-muted-foreground">
-                {directTeleop.detailLines.map((line) => (
-                  <div key={line} className="truncate" title={line}>
-                    {line}
-                  </div>
-                ))}
-              </div>
-            ) : null}
+        <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 font-mono">
+          <div className="text-muted-foreground">Target</div>
+          <div className="truncate text-foreground">
+            {selectedTarget?.label ?? "No robot target"}
           </div>
-          <button
-            type="button"
-            className={cn(buttonClassName, "h-7 px-1.5")}
-            disabled={
-              directTeleop.busy ||
-              (!directTeleop.running && directTeleop.disabled)
-            }
-            title={directTeleop.disabled ? (directTeleop.issue ?? undefined) : undefined}
-            onClick={directTeleop.running ? directTeleop.onStop : directTeleop.onStart}
-          >
-            {directTeleop.busy
-              ? "Working"
-              : directTeleop.running
-                ? "Stop direct"
-                : "Start direct"}
-          </button>
+          <div className="text-muted-foreground">LeRobot</div>
+          <div className="truncate text-foreground">
+            {robotType ??
+              (calibration.available ? "Configured robot" : "No robot profile")}
+          </div>
+          <div className="text-muted-foreground">Calibration</div>
+          <div className="truncate text-foreground">
+            {selectedCalibrationOption?.label ??
+              (calibration.available ? "Gateway env source" : "Not available")}
+          </div>
+          <div className="text-muted-foreground">Camera</div>
+          <div className="truncate text-foreground" title={camera?.statusLabel}>
+            {camera?.selectedLabel
+              ? `${camera.selectedLabel} · ${cameraSummary}`
+              : cameraSummary}
+          </div>
         </div>
-      ) : null}
+
+        {selectedTarget ? (
+          <div className="space-y-0.5">
+            {selectedTarget.detailLines.map((line) => (
+              <div key={line} className="truncate font-mono text-muted-foreground">
+                {line}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted-foreground">{noTargetMessage}</div>
+        )}
+
+        <OperatorFollowerTargetDetails
+          selectedTarget={selectedTarget}
+          targetSelection={targetSelection}
+        />
+
+        {camera && camera.detailLines.length > 0 ? (
+          <div className="space-y-0.5">
+            {camera.detailLines.map((line) => (
+              <div
+                key={line}
+                className="truncate font-mono text-muted-foreground"
+                title={line}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {shortIssue ? (
+          <div className="text-amber-200">{shortIssue}</div>
+        ) : null}
+      </div>
 
       {connection.isConnected || calibration.available ? (
         <div className="mt-1 space-y-1 border-t border-border/20 pt-1">
@@ -419,6 +538,46 @@ export const OperatorFollowerConnectionCard = ({
               onCancel={calibrationFileEdit.onCancel}
             />
           ) : null}
+        </div>
+      ) : null}
+
+      {directTeleop?.available ? (
+        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-start gap-1.5 border-t border-border/20 pt-1">
+          <div className="min-w-0 space-y-0.5">
+            <div className="font-medium text-foreground">LeRobot direct teleop</div>
+            <div
+              className={cn(
+                directTeleop.issue ? "text-amber-200" : "text-muted-foreground",
+              )}
+            >
+              {directTeleop.issue ?? directTeleop.statusLabel}
+            </div>
+            {directTeleop.detailLines.length > 0 ? (
+              <div className="space-y-0.5 font-mono text-[10px] text-muted-foreground">
+                {directTeleop.detailLines.map((line) => (
+                  <div key={line} className="truncate" title={line}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className={cn(buttonClassName, "h-7 px-1.5")}
+            disabled={
+              directTeleop.busy ||
+              (!directTeleop.running && directTeleop.disabled)
+            }
+            title={directTeleop.disabled ? (directTeleop.issue ?? undefined) : undefined}
+            onClick={directTeleop.running ? directTeleop.onStop : directTeleop.onStart}
+          >
+            {directTeleop.busy
+              ? "Working"
+              : directTeleop.running
+                ? "Stop direct"
+                : "Start direct"}
+          </button>
         </div>
       ) : null}
 

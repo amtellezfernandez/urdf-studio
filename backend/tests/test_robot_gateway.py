@@ -68,6 +68,7 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_JOINT_NAMES_ENV,
     ROBOT_GATEWAY_JOINT_NAMES_SEPARATOR,
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+    ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_REQUIRED_REASON,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_DIR_ENV,
     ROBOT_GATEWAY_LEROBOT_HARDWARE_JOINT_NAMES_ENV,
@@ -2945,7 +2946,8 @@ def test_lerobot_calibration_catalog_lists_structured_and_extra_dirs(
             strict=True,
         )
     }
-    (robot_dir / "so100-left-1.json").write_text(
+    robot_calibration_path = robot_dir / "so100-left-1.json"
+    robot_calibration_path.write_text(
         json.dumps(calibration_payload),
         encoding="utf-8",
     )
@@ -2974,6 +2976,10 @@ def test_lerobot_calibration_catalog_lists_structured_and_extra_dirs(
     assert entries_by_id[
         "robots:so100_follower:so100-left-1:all"
     ].motor_ids == list(TEST_LEROBOT_SO_STYLE_MOTOR_IDS)
+    assert (
+        entries_by_id["robots:so100_follower:so100-left-1:all"].mtime_ns
+        == robot_calibration_path.stat().st_mtime_ns
+    )
     assert entries_by_id[
         "robots:custom-calibration:reused-arm:all"
     ].calibration_dir == str(extra_dir)
@@ -3280,11 +3286,44 @@ def test_lerobot_leader_calibration_command_uses_openarm_mini_ports() -> None:
         calibration_id="openarm_pair",
     )
 
-    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
-    assert "--teleop.port_right=/dev/serial/by-id/openarm-right" in command
-    assert "--teleop.port_left=/dev/serial/by-id/openarm-left" in command
+    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
+    assert "--teleop.right_arm_config.port=/dev/serial/by-id/openarm-right" in command
+    assert "--teleop.left_arm_config.port=/dev/serial/by-id/openarm-left" in command
     assert "--teleop.id=openarm_pair" in command
     assert all(not arg.startswith("--teleop.port=") for arg in command)
+    assert all("port_right" not in arg and "port_left" not in arg for arg in command)
+
+
+def test_lerobot_leader_calibration_command_strips_openarm_mini_side_id_for_pair() -> None:
+    command = build_lerobot_leader_calibration_command(
+        port="/dev/serial/by-id/openarm-right",
+        port_left="/dev/serial/by-id/openarm-left",
+        port_right="/dev/serial/by-id/openarm-right",
+        motor_ids=list(ROBOT_GATEWAY_OPENARM_MINI_MOTOR_IDS),
+        motor_model=ROBOT_GATEWAY_OPENARM_MINI_MOTOR_MODEL,
+        calibration_group="all",
+        calibration_id="openarm_pair_right",
+    )
+
+    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
+    assert "--teleop.id=openarm_pair" in command
+    assert "--teleop.id=openarm_pair_right" not in command
+
+
+def test_lerobot_leader_calibration_command_uses_single_openarm_mini_side() -> None:
+    command = build_lerobot_leader_calibration_command(
+        port="/dev/serial/by-id/openarm-right",
+        motor_ids=list(ROBOT_GATEWAY_OPENARM_MINI_MOTOR_IDS),
+        motor_model=ROBOT_GATEWAY_OPENARM_MINI_MOTOR_MODEL,
+        calibration_group=ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT,
+        calibration_id="openarm_right",
+    )
+
+    assert f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}" in command
+    assert "--teleop.port=/dev/serial/by-id/openarm-right" in command
+    assert f"--teleop.side={ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT}" in command
+    assert "--teleop.id=openarm_right" in command
+    assert all("port_right" not in arg and "port_left" not in arg for arg in command)
 
 
 def test_lerobot_calibration_terminal_script_activates_repo_venv(monkeypatch) -> None:

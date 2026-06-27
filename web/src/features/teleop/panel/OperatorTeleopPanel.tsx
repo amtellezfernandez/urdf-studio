@@ -27,6 +27,7 @@ import {
   type OperatorCollaborationAuthorization,
   type OperatorLeaderDevice,
   type OperatorLeaderDetection,
+  type OperatorLeaderReleaseRequest,
   type OperatorPointCloudFrame,
   type OperatorHardwareMotionSafetyStatus,
   type OperatorLeRobotCalibrationCatalog,
@@ -75,7 +76,9 @@ import {
   OPERATOR_LIVE_JOINT_TELEMETRY_PRECISION,
   OPERATOR_HARDWARE_IK_COMMAND,
   OPERATOR_LEADER_STATE_POLL_INTERVAL_MS,
+  OPERATOR_LEADER_STATE_ERROR_VISIBILITY,
   OPERATOR_OPENARM_CALIBRATION_JOG,
+  OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
   OPERATOR_TELEOP_ADAPTER_IDS,
   OPERATOR_TELEOPERATION_MODE_REAL_HARDWARE,
 } from "@/features/teleop/params/operatorTeleopParams";
@@ -210,9 +213,13 @@ import {
   type OperatorLeaderTelemetryZeroOffsets,
 } from "@/features/teleop/transport/operatorLeaderTelemetry";
 import {
+  buildLeaderCalibrationSetupLines,
   buildLeaderHardwareDetailLines,
   buildLeaderDeviceRoleKeys,
   findCompatibleLeaderControlPart,
+  formatLeaderControlPartChoiceLabel,
+  listCompatibleLeaderControlParts,
+  resolveLeaderControlPartTargetCompatibility,
   resolveLeaderMappedTargetJointNames,
   resolveLeaderSideForControlGroup,
   resolveLeaderTargetCompatibility,
@@ -307,6 +314,8 @@ type PendingOperatorLeaderSelection = {
   side: OperatorLeaderAssignmentSide;
 };
 
+type PendingOperatorLeaderCalibrationSetup = "pair" | "single";
+
 type CapturableCanvasElement = HTMLCanvasElement & {
   captureStream?: (frameRate?: number) => MediaStream;
 };
@@ -318,6 +327,63 @@ const formatOpenArmLiveJointTelemetryValue = (value: number): string =>
   Number.isFinite(value)
     ? value.toFixed(OPERATOR_LIVE_JOINT_TELEMETRY_PRECISION)
     : "NaN";
+
+const buildFollowerHardwareDetectedTargets = (
+  detection: OperatorLeaderDetection | null,
+): {
+  id: string;
+  label: string;
+  detailLines: readonly string[];
+}[] => {
+  if (!detection) return [];
+  return detection.leaders.flatMap((leader) => {
+    const robotParts = leader.controlParts.filter(
+      (part) =>
+        part.kind === "arm" &&
+        part.actuatorCount > 0 &&
+        part.calibrationCategory === "robots",
+    );
+    if (robotParts.length > 0) {
+      return robotParts.map((part) => {
+        const calibrationLabel = [
+          part.calibrationProfile,
+          part.calibrationId,
+          part.calibrationGroup,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        const detailLines = [
+          `Port: ${leader.path}`,
+          `${part.actuatorCount} actuators`,
+          part.configuredPortStatus === "matched"
+            ? "LeRobot port matches this robot"
+            : part.configuredPortStatus === "stale"
+              ? "LeRobot configured port is missing"
+              : part.configuredPortStatus === "unmatched"
+                ? "LeRobot port differs from this robot"
+                : null,
+        ].filter((line): line is string => Boolean(line));
+        return {
+          id: `${leader.identityKey}:${part.id}`,
+          label: calibrationLabel || part.label || "LeRobot robot",
+          detailLines,
+        };
+      });
+    }
+    if (leader.motorCount <= 0) return [];
+    return [
+      {
+        id: `${leader.identityKey}:motor-chain`,
+        label: "Uncalibrated motor chain",
+        detailLines: [
+          `Port: ${leader.path}`,
+          `${leader.motorCount} motors`,
+          "No LeRobot robot calibration match",
+        ],
+      },
+    ];
+  });
+};
 
 const buildOperatorCalibrationFileEditMotionRows = ({
   motorRows,
@@ -678,6 +744,7 @@ export const OperatorTeleopPanel = ({
   collaborationOwnerToken = null,
 }: OperatorTeleopPanelProps) => {
   const showCameraTools = panelView === "camera" || panelView === "hardware";
+  const showCameraLiveTools = panelView === "camera";
   const showStudioTeleopTools = panelView === "studio";
   const showFollowerHardwareTools = panelView === "hardware";
   const showTeleopConnectionTools =
@@ -702,12 +769,24 @@ export const OperatorTeleopPanel = ({
     useState(false);
   const [openArmLeaderStateError, setOpenArmLeaderStateError] =
     useState<string | null>(null);
+  const openArmLeaderStateErrorVisibilityRef = useRef({
+    consecutiveFailures: 0,
+    consecutiveSuccesses: 0,
+  });
   const [openArmLeaderLiveJointCount, setOpenArmLeaderLiveJointCount] =
     useState(0);
   const [operatorLeaderAssignments, setOperatorLeaderAssignments] =
     useState<OperatorLeaderAssignments>({});
   const [pendingOperatorLeaderSelection, setPendingOperatorLeaderSelection] =
     useState<PendingOperatorLeaderSelection | null>(null);
+  const [
+    pendingOperatorLeaderControlPartIds,
+    setPendingOperatorLeaderControlPartIds,
+  ] = useState<Record<string, string>>({});
+  const [
+    pendingOperatorLeaderCalibrationSetups,
+    setPendingOperatorLeaderCalibrationSetups,
+  ] = useState<Record<string, PendingOperatorLeaderCalibrationSetup>>({});
   const [operatorDeviceRoleAssignments, setOperatorDeviceRoleAssignments] =
     useState(readInitialOperatorDeviceRoleAssignments);
   const [selectedProfileId, setSelectedProfileId] =
@@ -976,9 +1055,10 @@ export const OperatorTeleopPanel = ({
   const openArmLiveObserveAvailable =
     loadedRobotIsOpenArmDemo && !robotModelMismatch;
   const openArmLeaderAutodetectActive =
-    showStudioTeleopTools && openArmLeaderDetectionRequested;
+    (showStudioTeleopTools || showFollowerHardwareTools) &&
+    openArmLeaderDetectionRequested;
   const openArmCameraObserveEligible =
-    showCameraTools && openArmLiveObserveAvailable;
+    showCameraLiveTools && openArmLiveObserveAvailable;
   const openArmGatewayObserveActive =
     openArmCameraObserveEligible &&
     !openArmDemoLiveObserveManuallyDisconnected;
@@ -1188,7 +1268,9 @@ export const OperatorTeleopPanel = ({
       followerHardwareProfile &&
       isFollowerArmPartProfile(followerHardwareProfile),
   );
-  const showGatewayLiveCameraTools = showCameraTools && !robotModelMismatch;
+  const showGatewayLiveCameraTools = showCameraLiveTools && !robotModelMismatch;
+  const showFollowerHardwareCameraSummary =
+    showFollowerHardwareTools && !robotModelMismatch;
   const robotModelMismatchBlocksControl =
     active && robotModelMismatch && !selectedConcreteFollowerHardwareTarget;
   const robotModelMismatchMessage =
@@ -1244,6 +1326,10 @@ export const OperatorTeleopPanel = ({
       providerProfiles,
       selectedFollowerHardwareDeviceKey,
     ],
+  );
+  const followerHardwareDetectedTargets = useMemo(
+    () => buildFollowerHardwareDetectedTargets(openArmLeaderDetection),
+    [openArmLeaderDetection],
   );
   const followerCalibrationAvailable =
     followerHardwareProfile?.adapterId === OPERATOR_TELEOP_ADAPTER_IDS.lerobot;
@@ -1624,19 +1710,7 @@ export const OperatorTeleopPanel = ({
   ]);
 
   const handleStartLeaderCalibration = useCallback(
-    async (
-      leader: OperatorLeaderDevice,
-      controlPartId: string | null,
-      selectedSide: OperatorLeaderAssignmentSide | null,
-    ) => {
-      const controlPart =
-        leader.controlParts.find((part) => part.id === controlPartId) ?? null;
-      const request = buildOperatorLeaderCalibrationRequest({
-        leader,
-        controlPart,
-        selectedSide,
-        leaders: openArmLeaderDetection?.leaders ?? [],
-      });
+    async (leader: OperatorLeaderDevice, request: OperatorLeaderReleaseRequest) => {
       await startCalibration(
         leader.identityKey,
         OPERATOR_CALIBRATION_UI_COPY.leader,
@@ -1644,10 +1718,10 @@ export const OperatorTeleopPanel = ({
           startOperatorLeaderCalibration(
             request,
             OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
-          ),
+        ),
       );
     },
-    [openArmLeaderDetection?.leaders, startCalibration],
+    [startCalibration],
   );
 
   const sendFollowerHardwareJointTargets = useCallback(
@@ -1942,9 +2016,16 @@ export const OperatorTeleopPanel = ({
   }, [openArmLeaderDetectionRequested, refreshOpenArmLeaderDetection]);
 
   useEffect(() => {
+    if (!showFollowerHardwareTools || openArmLeaderDetectionRequested) return;
+    setOpenArmLeaderDetectionRequested(true);
+  }, [openArmLeaderDetectionRequested, showFollowerHardwareTools]);
+
+  useEffect(() => {
     if (!openArmLeaderAutodetectActive) {
       setOpenArmLeaderDetectionError(null);
       setPendingOperatorLeaderSelection(null);
+      setPendingOperatorLeaderControlPartIds({});
+      setPendingOperatorLeaderCalibrationSetups({});
       return;
     }
 
@@ -1957,6 +2038,10 @@ export const OperatorTeleopPanel = ({
   useEffect(() => {
     if (!leaderInputTelemetryActive) {
       setOpenArmLeaderStateError(null);
+      openArmLeaderStateErrorVisibilityRef.current = {
+        consecutiveFailures: 0,
+        consecutiveSuccesses: 0,
+      };
       setOpenArmLeaderLiveJointCount(0);
       lastLeaderJointTargetsRef.current = null;
       leaderTelemetryZeroOffsetsRef.current = {};
@@ -1964,6 +2049,11 @@ export const OperatorTeleopPanel = ({
       return;
     }
 
+    setOpenArmLeaderStateError(null);
+    openArmLeaderStateErrorVisibilityRef.current = {
+      consecutiveFailures: 0,
+      consecutiveSuccesses: 0,
+    };
     let cancelled = false;
     let pollInFlight = false;
     const pollLeaderState = async () => {
@@ -2056,7 +2146,27 @@ export const OperatorTeleopPanel = ({
         );
         const liveJointCount = Object.keys(telemetryByName).length;
         setOpenArmLeaderLiveJointCount(liveJointCount);
-        setOpenArmLeaderStateError(readErrors[0] ?? null);
+        const nextLeaderStateError = readErrors[0] ?? null;
+        const visibility = openArmLeaderStateErrorVisibilityRef.current;
+        if (nextLeaderStateError) {
+          visibility.consecutiveFailures += 1;
+          visibility.consecutiveSuccesses = 0;
+          if (
+            visibility.consecutiveFailures >=
+            OPERATOR_LEADER_STATE_ERROR_VISIBILITY.consecutiveFailuresToShow
+          ) {
+            setOpenArmLeaderStateError(nextLeaderStateError);
+          }
+        } else {
+          visibility.consecutiveFailures = 0;
+          visibility.consecutiveSuccesses += 1;
+          if (
+            visibility.consecutiveSuccesses >=
+            OPERATOR_LEADER_STATE_ERROR_VISIBILITY.consecutiveSuccessesToClear
+          ) {
+            setOpenArmLeaderStateError(null);
+          }
+        }
         if (liveJointCount === 0) {
           useOperatorPerceptionStore.getState().clearActiveLeaderJointTelemetry();
           return;
@@ -3159,6 +3269,7 @@ export const OperatorTeleopPanel = ({
       identityKey: string,
       side: OperatorLeaderAssignmentSide,
       group: OperatorTeleopControlGroup,
+      controlPartId: string | null = null,
     ) => {
       const leader = openArmLeaderDetection?.leaders.find(
         (candidate) => candidate.identityKey === identityKey,
@@ -3172,9 +3283,22 @@ export const OperatorTeleopPanel = ({
         setPanelStatusMessage(compatibility.reason);
         return false;
       }
-      const controlPart = findCompatibleLeaderControlPart(group, leader);
+      const requestedControlPart = controlPartId
+        ? leader.controlParts.find((part) => part.id === controlPartId) ?? null
+        : null;
+      const controlPart =
+        requestedControlPart ?? findCompatibleLeaderControlPart(group, leader);
       if (!controlPart) {
         setPanelStatusMessage("No compatible arm found.");
+        return false;
+      }
+      const controlPartCompatibility = resolveLeaderControlPartTargetCompatibility(
+        group,
+        leader,
+        controlPart,
+      );
+      if (!controlPartCompatibility.compatible) {
+        setPanelStatusMessage(controlPartCompatibility.reason);
         return false;
       }
       const roleAssignment = assignOperatorDeviceRoleForKeys(
@@ -3266,6 +3390,18 @@ export const OperatorTeleopPanel = ({
       setPendingOperatorLeaderSelection((current) =>
         current?.identityKey === identityKey ? null : current,
       );
+      setPendingOperatorLeaderControlPartIds((current) => {
+        if (!(identityKey in current)) return current;
+        const next = { ...current };
+        delete next[identityKey];
+        return next;
+      });
+      setPendingOperatorLeaderCalibrationSetups((current) => {
+        if (!(identityKey in current)) return current;
+        const next = { ...current };
+        delete next[identityKey];
+        return next;
+      });
       setPanelStatusMessage("Target disconnected.");
       if (!leader) return;
       try {
@@ -3294,11 +3430,24 @@ export const OperatorTeleopPanel = ({
 
   const renderOpenArmLeaderCandidate = (
     leader: OperatorLeaderDevice,
+    leaderIndex: number,
   ) => {
     const assignment = operatorLeaderAssignments[leader.identityKey] ?? null;
     const targetGroups = studioTeleopControlGroups.filter(
       (group) => group.kind === "arm" && group.teleopEnabled,
     );
+    const detectedArmLeaderCount =
+      openArmLeaderDetection?.leaders.filter((candidate) =>
+        candidate.controlParts.some((part) => part.kind === "arm"),
+      ).length ?? 0;
+    const preferredTargetGroupId =
+      assignment === null && detectedArmLeaderCount > 1
+        ? targetGroups.find(
+            (group) =>
+              resolveLeaderSideForControlGroup(group) ===
+              (leaderIndex === 0 ? "left" : leaderIndex === 1 ? "right" : "both"),
+          )?.id ?? null
+        : null;
     const {
       targetOptions,
       selectableTargetOptions,
@@ -3313,6 +3462,7 @@ export const OperatorTeleopPanel = ({
         pendingOperatorLeaderSelection?.identityKey === leader.identityKey
           ? pendingOperatorLeaderSelection.targetGroupId
           : null,
+      preferredTargetGroupId,
     });
     const leaderRoleConflict = resolveOperatorHardwareRoleConflict({
       assignments: operatorDeviceRoleAssignments,
@@ -3326,17 +3476,72 @@ export const OperatorTeleopPanel = ({
       connectionPrerequisitesReady: true,
       roleConflict: leaderRoleConflict,
     });
+    const connectedControlPart =
+      assignment !== null
+        ? leader.controlParts.find((part) => part.id === assignment.controlPartId) ??
+          null
+        : null;
+    const controlPartOptions = selectedTargetOption
+      ? listCompatibleLeaderControlParts(selectedTargetOption.group, leader)
+      : [];
+    const pendingControlPartId =
+      pendingOperatorLeaderControlPartIds[leader.identityKey] ?? null;
+    const pendingControlPart =
+      pendingControlPartId !== null
+        ? controlPartOptions.find((part) => part.id === pendingControlPartId) ??
+          null
+        : null;
+    const selectedControlPart =
+      connectedControlPart ?? pendingControlPart ?? controlPartOptions[0] ?? null;
+    const selectedControlPartCompatibility =
+      selectedTargetOption && selectedControlPart
+        ? resolveLeaderControlPartTargetCompatibility(
+            selectedTargetOption.group,
+            leader,
+            selectedControlPart,
+          )
+        : selectedCompatibility;
     const connectDisabled =
       selectedTargetOption === null ||
-      selectedCompatibility?.compatible !== true ||
+      selectedControlPartCompatibility?.compatible !== true ||
       leaderConnectionState.connectDisabled;
-    const selectedControlPart = selectedTargetOption
-      ? findCompatibleLeaderControlPart(selectedTargetOption.group, leader)
+    const pairedLeaderCalibrationRequest = selectedTargetOption
+      ? buildOperatorLeaderCalibrationRequest({
+          leader,
+          controlPart: selectedControlPart,
+          selectedSide: selectedTargetOption.side,
+          leaders: openArmLeaderDetection?.leaders ?? [],
+          pairOpenArmMini: true,
+        })
       : null;
+    const canPairOpenArmMiniCalibration = Boolean(
+      pairedLeaderCalibrationRequest?.portLeft &&
+        pairedLeaderCalibrationRequest.portRight,
+    );
+    const pendingCalibrationSetup =
+      pendingOperatorLeaderCalibrationSetups[leader.identityKey] ?? "pair";
+    const selectedCalibrationSetup: PendingOperatorLeaderCalibrationSetup =
+      canPairOpenArmMiniCalibration ? pendingCalibrationSetup : "single";
+    const leaderCalibrationRequest = selectedTargetOption
+      ? buildOperatorLeaderCalibrationRequest({
+          leader,
+          controlPart: selectedControlPart,
+          selectedSide: selectedTargetOption.side,
+          leaders: openArmLeaderDetection?.leaders ?? [],
+          pairOpenArmMini: selectedCalibrationSetup === "pair",
+        })
+      : null;
+    const canChooseOpenArmMiniCalibrationSetup =
+      leaderCalibrationRequest?.calibrationProfile ===
+      OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE;
     const hardwareDetailLines = buildLeaderHardwareDetailLines(
       leader,
       selectedControlPart,
     );
+    const leaderDetailLines = [
+      ...hardwareDetailLines,
+      ...buildLeaderCalibrationSetupLines(leaderCalibrationRequest),
+    ];
     const targetSelectDisabled =
       leaderConnectionState.targetSelectionBlocked ||
       selectableTargetOptions.length === 0;
@@ -3345,6 +3550,7 @@ export const OperatorTeleopPanel = ({
       isOperatorCalibrationUiActive(calibrationUi, leader.identityKey);
     const leaderCalibrationDisabled =
       selectedControlPart === null ||
+      leaderCalibrationRequest === null ||
       leaderCalibrationBusy ||
       assignment !== null ||
       leaderConnectionState.status === "blocked" ||
@@ -3404,6 +3610,42 @@ export const OperatorTeleopPanel = ({
         nextTargetOption.group,
       );
     };
+    const handleControlPartChange = (controlPartId: string) => {
+      setPendingOperatorLeaderControlPartIds((current) => {
+        if (controlPartId === "") {
+          if (!(leader.identityKey in current)) return current;
+          const next = { ...current };
+          delete next[leader.identityKey];
+          return next;
+        }
+        if (current[leader.identityKey] === controlPartId) return current;
+        return {
+          ...current,
+          [leader.identityKey]: controlPartId,
+        };
+      });
+    };
+    const handleCalibrationSetupChange = (
+      setup: PendingOperatorLeaderCalibrationSetup,
+    ) => {
+      setPendingOperatorLeaderCalibrationSetups((current) => {
+        if (current[leader.identityKey] === setup) return current;
+        return {
+          ...current,
+          [leader.identityKey]: setup,
+        };
+      });
+    };
+    const controlPartSelectDisabled =
+      assignment !== null ||
+      selectedTargetOption === null ||
+      controlPartOptions.length <= 1 ||
+      leaderConnectionState.targetSelectionBlocked;
+    const calibrationSetupSelectDisabled =
+      assignment !== null || !canPairOpenArmMiniCalibration;
+    const selectionGridClassName = canChooseOpenArmMiniCalibrationSetup
+      ? "grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)]"
+      : "grid-cols-2";
     return (
       <div key={leader.id} className="rounded border border-border/30 p-1">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
@@ -3415,11 +3657,11 @@ export const OperatorTeleopPanel = ({
           ) : null}
         </div>
         <div className="mt-0.5 space-y-0.5 font-mono">
-          {hardwareDetailLines.map((line) => (
+          {leaderDetailLines.map((line) => (
             <div
               key={line}
               className={
-                selectedCompatibility?.compatible === false
+                selectedControlPartCompatibility?.compatible === false
                   ? "text-amber-200"
                   : "text-muted-foreground"
               }
@@ -3428,117 +3670,159 @@ export const OperatorTeleopPanel = ({
             </div>
           ))}
         </div>
-        {selectedCompatibility?.reason ? (
+        {selectedControlPartCompatibility?.reason ? (
           <div
             className={cn(
               "mt-0.5",
-              selectedCompatibility.compatible
+              selectedControlPartCompatibility.compatible
                 ? "text-muted-foreground"
                 : "text-amber-200",
             )}
           >
-            {selectedCompatibility.reason}
+            {selectedControlPartCompatibility.reason}
           </div>
         ) : null}
         {leaderRoleConflict ? (
           <div className="mt-0.5 text-amber-200">{leaderRoleConflict}</div>
         ) : null}
-        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-1">
-          <select
-            aria-label="Target"
-            className="h-7 min-w-0 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
-            disabled={targetSelectDisabled}
-            value={selectedTargetOption?.group.id ?? ""}
-            onChange={(event) => handleTargetChange(event.currentTarget.value)}
-          >
-            {selectedTargetOption ? null : <option value="">No target</option>}
-            {targetOptions.map((option) => (
-              <option
-                key={option.group.id}
-                value={option.group.id}
-                disabled={!option.compatibility.compatible}
-              >
-                {option.group.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className={cn(controlButtonClass, "h-7 px-2")}
-            disabled={leaderCalibrationDisabled}
-            title={leaderCalibrationDisableReason}
-            onClick={() =>
-              void handleStartLeaderCalibration(
-                leader,
-                selectedControlPartId,
-                selectedTargetOption?.side ?? null,
-              )
-            }
-          >
-            {leaderCalibrationBusy ? "Opening" : "Calibrate"}
-          </button>
-          <button
-            type="button"
-            className={cn(controlButtonClass, "h-7 px-2")}
-            disabled={leaderCalibrationFileEditDisabled}
-            title={
-              leaderCalibrationFileEditEntry
-                ? "Open the calibration file and edit the motor order."
-                : "No calibration file found for this target."
-            }
-            onClick={() => {
-              if (!selectedTargetOption) {
-                return;
-              }
-              void (async () => {
-                setCalibrationFileEditLeaderTelemetryRequested(true);
-                const connected =
-                  connectedTargetOption !== null ||
-                  (await handleConnectOperatorLeader(
-                    leader.identityKey,
-                    selectedTargetOption.side,
-                    selectedTargetOption.group,
-                  ));
-                if (!connected) {
-                  setCalibrationFileEditLeaderTelemetryRequested(false);
-                  return;
-                }
-                await handleStartLeaderCalibrationFileEdit(
-                  leader,
-                  selectedControlPartId,
-                );
-              })();
-            }}
-          >
-            Fix order
-          </button>
-          {connectedTargetOption ? (
-            <button
-              type="button"
-              className={cn(controlButtonClass, "h-7 px-2")}
-              onClick={() => void handleReleaseOperatorLeader(leader.identityKey)}
+        <div className="mt-1 grid gap-1">
+          <div className={cn("grid gap-1", selectionGridClassName)}>
+            <select
+              aria-label="Target"
+              className="h-7 min-w-0 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
+              disabled={targetSelectDisabled}
+              value={selectedTargetOption?.group.id ?? ""}
+              onChange={(event) => handleTargetChange(event.currentTarget.value)}
             >
-              Disconnect
-            </button>
-          ) : (
+              {selectedTargetOption ? null : <option value="">No target</option>}
+              {targetOptions.map((option) => (
+                <option
+                  key={option.group.id}
+                  value={option.group.id}
+                  disabled={!option.compatibility.compatible}
+                >
+                  {option.group.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Calibration"
+              className="h-7 min-w-0 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
+              disabled={controlPartSelectDisabled}
+              value={selectedControlPart?.id ?? ""}
+              onChange={(event) =>
+                handleControlPartChange(event.currentTarget.value)
+              }
+            >
+              {selectedControlPart ? null : <option value="">No calibration</option>}
+              {controlPartOptions.map((part) => (
+                <option key={part.id} value={part.id}>
+                  {formatLeaderControlPartChoiceLabel(part)}
+                </option>
+              ))}
+            </select>
+            {canChooseOpenArmMiniCalibrationSetup ? (
+              <select
+                aria-label="Setup"
+                className="h-7 min-w-0 rounded border border-border/60 bg-background px-2 text-[10px] text-foreground"
+                disabled={calibrationSetupSelectDisabled}
+                value={selectedCalibrationSetup}
+                onChange={(event) =>
+                  handleCalibrationSetupChange(
+                    event.currentTarget
+                      .value as PendingOperatorLeaderCalibrationSetup,
+                  )
+                }
+              >
+                {canPairOpenArmMiniCalibration ? (
+                  <option value="pair">bi_openarm_mini (pair)</option>
+                ) : null}
+                <option value="single">openarm_mini (this arm)</option>
+              </select>
+            ) : null}
+          </div>
+          <div className="grid grid-cols-3 gap-1">
             <button
               type="button"
               className={cn(controlButtonClass, "h-7 px-2")}
-              disabled={connectDisabled}
-              title={connectDisabled ? (leaderRoleConflict ?? undefined) : undefined}
+              disabled={leaderCalibrationDisabled}
+              title={leaderCalibrationDisableReason}
               onClick={() =>
-                selectedTargetOption
-                  ? void handleConnectOperatorLeader(
-                      leader.identityKey,
-                      selectedTargetOption.side,
-                      selectedTargetOption.group,
+                leaderCalibrationRequest
+                  ? void handleStartLeaderCalibration(
+                      leader,
+                      leaderCalibrationRequest,
                     )
                   : undefined
               }
             >
-              Connect
+              {leaderCalibrationBusy ? "Opening" : "Calibrate"}
             </button>
-          )}
+            <button
+              type="button"
+              className={cn(controlButtonClass, "h-7 px-2")}
+              disabled={leaderCalibrationFileEditDisabled}
+              title={
+                leaderCalibrationFileEditEntry
+                  ? "Open the calibration file and edit the motor order."
+                  : "No calibration file found for this target."
+              }
+              onClick={() => {
+                if (!selectedTargetOption) {
+                  return;
+                }
+                void (async () => {
+                  setCalibrationFileEditLeaderTelemetryRequested(true);
+                  const connected =
+                    connectedTargetOption !== null ||
+                    (await handleConnectOperatorLeader(
+                      leader.identityKey,
+                      selectedTargetOption.side,
+                      selectedTargetOption.group,
+                      selectedControlPartId,
+                    ));
+                  if (!connected) {
+                    setCalibrationFileEditLeaderTelemetryRequested(false);
+                    return;
+                  }
+                  await handleStartLeaderCalibrationFileEdit(
+                    leader,
+                    selectedControlPartId,
+                  );
+                })();
+              }}
+            >
+              Fix order
+            </button>
+            {connectedTargetOption ? (
+              <button
+                type="button"
+                className={cn(controlButtonClass, "h-7 px-2")}
+                onClick={() => void handleReleaseOperatorLeader(leader.identityKey)}
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={cn(controlButtonClass, "h-7 px-2")}
+                disabled={connectDisabled}
+                title={connectDisabled ? (leaderRoleConflict ?? undefined) : undefined}
+                onClick={() =>
+                  selectedTargetOption
+                    ? void handleConnectOperatorLeader(
+                        leader.identityKey,
+                        selectedTargetOption.side,
+                        selectedTargetOption.group,
+                        selectedControlPartId,
+                      )
+                    : undefined
+                }
+              >
+                Connect
+              </button>
+            )}
+          </div>
         </div>
         {activeCalibrationFileEditSession ? (
           <div className="mt-1">
@@ -3612,8 +3896,8 @@ export const OperatorTeleopPanel = ({
               Assigned. Opening teleop view.
             </div>
           ) : null}
-          {openArmLeaderDetection.leaders.map((leader) =>
-            renderOpenArmLeaderCandidate(leader),
+          {openArmLeaderDetection.leaders.map((leader, leaderIndex) =>
+            renderOpenArmLeaderCandidate(leader, leaderIndex),
           )}
         </div>
       ) : (
@@ -3675,7 +3959,7 @@ export const OperatorTeleopPanel = ({
   const followerConnectionIssue =
     followerHardwareRoleConflict ??
     (!followerHardwareProfile
-      ? "No follower profile."
+      ? "No LeRobot robot target from gateway."
       : providerManifest?.capabilities.control !== true
         ? "Robot unavailable."
         : !collaborationTeleopPermitted
@@ -3739,12 +4023,12 @@ export const OperatorTeleopPanel = ({
       }
       setFollowerHardwareConnectionSelected(false);
       setConnectedFollowerHardwareDeviceKey(null);
-      setPanelStatusMessage("Follower hardware disconnected.");
+      setPanelStatusMessage("Robot hardware disconnected.");
       return true;
     }
 
     if (!followerHardwareProfile) {
-      setPanelStatusMessage("No follower hardware profile is available.");
+      setPanelStatusMessage("No LeRobot robot target is available.");
       return false;
     }
     if (!providerManifest?.capabilities.control) {
@@ -3791,7 +4075,7 @@ export const OperatorTeleopPanel = ({
       writeOperatorDeviceRoleAssignments(roleAssignment.assignments);
       setConnectedFollowerHardwareDeviceKey(selectedFollowerHardwareDeviceKey);
       setFollowerHardwareConnectionSelected(true);
-      setPanelStatusMessage("Follower hardware connected.");
+      setPanelStatusMessage("Robot hardware connected.");
       return true;
     }
     return false;
@@ -3819,7 +4103,7 @@ export const OperatorTeleopPanel = ({
 
   return (
     <div className="space-y-2 text-[11px]">
-      {showCameraTools && openArmLiveObserveAvailable ? (
+      {openArmCameraObserveEligible ? (
         <div className="rounded-md border border-border/40 bg-background/40 p-2">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="min-w-0">
@@ -3999,6 +4283,25 @@ export const OperatorTeleopPanel = ({
             onToggleShowAll: () =>
               setFollowerCalibrationShowAllSources((current) => !current),
           }}
+          camera={
+            showFollowerHardwareCameraSummary
+              ? {
+                  count: providerCameraStreams.length,
+                  selectedLabel: selectedCameraStream?.label ?? null,
+                  statusLabel: selectedCameraStream
+                    ? "Camera detected."
+                    : "No camera stream.",
+                  detailLines: [
+                    providerCameraStreams.length > 0
+                      ? `${providerCameraStreams.length} camera${providerCameraStreams.length === 1 ? "" : "s"} advertised by gateway.`
+                      : "No camera stream.",
+                    selectedCameraStream
+                      ? `${selectedCameraStream.coordinateFrame}, ${selectedCameraStream.intrinsics.width}x${selectedCameraStream.intrinsics.height}`
+                      : "",
+                  ].filter(Boolean),
+                }
+              : undefined
+          }
           connection={{
             connectDisabled: followerHardwareConnectDisabled,
             issue: followerConnectionIssue,
@@ -4012,6 +4315,13 @@ export const OperatorTeleopPanel = ({
             },
           }}
           directTeleop={lerobotDirectTeleop.card}
+          hardwareDetection={{
+            requested: openArmLeaderDetectionRequested,
+            resolved: openArmLeaderDetectionResolved,
+            error: openArmLeaderDetectionError,
+            targets: followerHardwareDetectedTargets,
+            onScan: handleOpenArmLeaderScan,
+          }}
           targetSelection={{
             disabled:
               leaseBusy ||
@@ -4345,7 +4655,7 @@ export const OperatorTeleopPanel = ({
       </div>
       ) : null}
 
-      {showCameraTools ? (
+      {showCameraLiveTools ? (
       <label className="block text-[10px] text-muted-foreground">
         status endpoint
         <input
@@ -4359,7 +4669,7 @@ export const OperatorTeleopPanel = ({
       </label>
       ) : null}
 
-      {showCameraTools ? (
+      {showCameraLiveTools ? (
       <div
         className={cn(
           "rounded-md border px-2 py-1 text-[10px]",

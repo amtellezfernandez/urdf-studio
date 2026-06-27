@@ -9,7 +9,7 @@ export const OPENARM_HARDWARE_DEFAULT_MAX_RELATIVE_TARGET_DEG = '5.0';
 export const OPENARM_HARDWARE_LEFT_SIDE = 'left';
 export const OPENARM_HARDWARE_RIGHT_SIDE = 'right';
 export const OPENARM_HARDWARE_ROBOT_TYPE = 'bi_openarm_follower';
-export const OPENARM_HARDWARE_TELEOP_TYPE = 'openarm_mini';
+export const OPENARM_HARDWARE_TELEOP_TYPE = 'bi_openarm_mini';
 export const OPENARM_HARDWARE_DEFAULT_ROBOT_ID = 'my_follower';
 export const OPENARM_HARDWARE_DEFAULT_TELEOP_ID = 'my_leader';
 export const OPENARM_HARDWARE_RUN_ACK_ENV = 'OPENARM_ALLOW_HARDWARE_RUN';
@@ -59,7 +59,7 @@ export const OPENARM_HARDWARE_DOCTOR_IMPORTS = [
   ['can', 'Damiao CAN transport'],
   ['scservo_sdk', 'OpenArm Mini Feetech transport'],
   ['lerobot.robots.bi_openarm_follower', 'bimanual OpenArm follower'],
-  ['lerobot.teleoperators.openarm_mini', 'OpenArm Mini teleoperator'],
+  ['lerobot.teleoperators.bi_openarm_mini', 'bimanual OpenArm Mini teleoperator'],
 ];
 
 export const OPENARM_SINGLE_MINI_MOTORS = [

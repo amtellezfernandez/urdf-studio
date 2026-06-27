@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import shlex
 import shutil
@@ -16,6 +17,7 @@ from backend.robot_gateway.lerobot_calibration_catalog import (
 )
 from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+    ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_LEROBOT_CALIBRATE_BIN,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_DONE_MESSAGE,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_FAILED_MESSAGE,
@@ -30,6 +32,20 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_OPENARM_MINI_MOTOR_IDS,
     ROBOT_GATEWAY_OPENARM_MINI_MOTOR_MODEL,
 )
+
+
+@dataclass(frozen=True)
+class _OpenArmMiniLeaderCalibrationPorts:
+    selected_port: str
+    selected_side: str | None
+    left_port: str | None
+    right_port: str | None
+
+    @property
+    def has_distinct_pair(self) -> bool:
+        return bool(
+            self.left_port and self.right_port and self.left_port != self.right_port
+        )
 
 
 def start_lerobot_calibration(
@@ -139,23 +155,43 @@ def build_lerobot_leader_calibration_command(
         _resolve_lerobot_calibrate_bin(),
         f"--teleop.type={teleop_type}",
     ]
-    if teleop_type == ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE:
-        left_port, right_port = _resolve_openarm_mini_leader_calibration_ports(
+    if teleop_type in {
+        ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
+        ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
+    }:
+        openarm_ports = _resolve_openarm_mini_leader_calibration_ports(
             selected_port=port,
             selected_group=calibration_group,
             port_left=port_left,
             port_right=port_right,
         )
-        command.extend(
-            (
-                f"--teleop.port_right={right_port}",
-                f"--teleop.port_left={left_port}",
+        if openarm_ports.has_distinct_pair:
+            command[1] = (
+                f"--teleop.type={ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE}"
             )
-        )
+            command.extend(
+                (
+                    f"--teleop.left_arm_config.port={openarm_ports.left_port}",
+                    f"--teleop.right_arm_config.port={openarm_ports.right_port}",
+                )
+            )
+        else:
+            command[1] = f"--teleop.type={ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE}"
+            command.append(f"--teleop.port={openarm_ports.selected_port}")
+            if openarm_ports.selected_side:
+                command.append(f"--teleop.side={openarm_ports.selected_side}")
     else:
+        openarm_ports = None
         command.append(f"--teleop.port={port}")
+    calibration_command_id = _resolve_lerobot_leader_calibration_id(
+        port,
+        calibration_id,
+        strip_openarm_side_suffix=(
+            openarm_ports.has_distinct_pair if openarm_ports is not None else False
+        ),
+    )
     command.append(
-        f"--teleop.id={_resolve_lerobot_leader_calibration_id(port, calibration_id)}"
+        f"--teleop.id={calibration_command_id}"
     )
     return command
 
@@ -203,7 +239,10 @@ def _resolve_lerobot_leader_teleop_type(
 ) -> str:
     profile = calibration_profile.strip() if calibration_profile else ""
     defaults = ROBOT_GATEWAY_LEROBOT_LEADER_CALIBRATION_DEFAULTS
-    if profile == ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE:
+    if profile in {
+        ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
+        ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
+    }:
         return profile
     if profile.endswith(defaults.leader_type_suffix):
         return profile
@@ -240,28 +279,49 @@ def _resolve_openarm_mini_leader_calibration_ports(
     selected_group: str | None,
     port_left: str | None,
     port_right: str | None,
-) -> tuple[str, str]:
-    normalized_left_port = port_left.strip() if port_left else ""
-    normalized_right_port = port_right.strip() if port_right else ""
+) -> _OpenArmMiniLeaderCalibrationPorts:
+    normalized_left_port = _normalize_optional_string(port_left)
+    normalized_right_port = _normalize_optional_string(port_right)
     normalized_group = selected_group.strip().lower() if selected_group else ""
+    selected_side: str | None = None
     if normalized_group == ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_LEFT:
         normalized_left_port = normalized_left_port or selected_port
+        selected_side = ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_LEFT
     elif normalized_group == ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT:
         normalized_right_port = normalized_right_port or selected_port
+        selected_side = ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT
     elif not normalized_left_port and not normalized_right_port:
         normalized_right_port = selected_port
-    return (
-        normalized_left_port or selected_port,
-        normalized_right_port or selected_port,
+        selected_side = ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT
+    elif normalized_left_port == selected_port:
+        selected_side = ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_LEFT
+    elif normalized_right_port == selected_port:
+        selected_side = ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT
+    return _OpenArmMiniLeaderCalibrationPorts(
+        selected_port=selected_port,
+        selected_side=selected_side,
+        left_port=normalized_left_port,
+        right_port=normalized_right_port,
     )
+
+
+def _normalize_optional_string(value: str | None) -> str | None:
+    normalized = value.strip() if value else ""
+    return normalized or None
 
 
 def _resolve_lerobot_leader_calibration_id(
     port: str,
     calibration_id: str | None,
+    *,
+    strip_openarm_side_suffix: bool = False,
 ) -> str:
     normalized_calibration_id = calibration_id.strip() if calibration_id else ""
     if normalized_calibration_id:
+        if strip_openarm_side_suffix:
+            return _strip_openarm_mini_side_calibration_id(
+                normalized_calibration_id
+            )
         return normalized_calibration_id
     port_name = Path(port).name
     normalized_port_name = "".join(
@@ -272,6 +332,13 @@ def _resolve_lerobot_leader_calibration_id(
     if not normalized_port_name:
         return defaults.fallback_id_prefix
     return f"{defaults.fallback_id_prefix}_{normalized_port_name}"
+
+
+def _strip_openarm_mini_side_calibration_id(calibration_id: str) -> str:
+    for suffix in ("_left", "_right"):
+        if calibration_id.endswith(suffix) and len(calibration_id) > len(suffix):
+            return calibration_id[: -len(suffix)]
+    return calibration_id
 
 
 def _resolve_lerobot_calibrate_bin() -> str:

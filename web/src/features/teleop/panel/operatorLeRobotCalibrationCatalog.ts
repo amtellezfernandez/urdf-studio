@@ -2,6 +2,7 @@ import type {
   OperatorLeRobotCalibrationCatalogEntry,
   OperatorLeRobotCalibrationSource,
 } from "@/features/teleop/transport/operatorHelperApi";
+import { formatOperatorCalibrationModifiedLine } from "@/features/teleop/transport/operatorCalibrationFileTimestamp";
 
 const LEROBOT_CALIBRATION_CATEGORIES = {
   robot: "robots",
@@ -115,12 +116,14 @@ const buildOperatorLeRobotCalibrationOption = (
   });
   const groupSuffix = entry.groupId === "all" ? "" : ` · ${entry.groupId}`;
   const label = `${entry.profileId} · ${entry.calibrationId}${groupSuffix}`;
+  const modifiedLine = formatOperatorCalibrationModifiedLine(entry.mtimeNs);
   return {
     id: entry.id,
     label,
     optionLabel: `${label} (${formatCompatibilityLabel(compatibility)})`,
     detailLines: [
       `${entry.category} · ${entry.actuatorCount} motors`,
+      ...(modifiedLine ? [modifiedLine] : []),
       entry.path,
     ],
     compatibility,

@@ -188,6 +188,7 @@ export type OperatorLeaderControlPart = {
   calibrationProfile: string | null;
   calibrationId: string | null;
   calibrationGroup: string | null;
+  calibrationMtimeNs: number;
   configuredPort: string | null;
   configuredPortMatches: boolean;
   configuredPortStatus: "none" | "matched" | "stale" | "unmatched";
@@ -415,6 +416,7 @@ export type OperatorLeRobotCalibrationCatalogEntry =
     motorIds: number[];
     zeroPositionsRad: Record<string, number>;
     actuatorCount: number;
+    mtimeNs: number;
   };
 
 export type OperatorLeRobotCalibrationCatalog = {
@@ -1161,6 +1163,13 @@ const normalizeLeaderControlPart = (
     calibrationGroup:
       toTrimmedString(readField(value, "calibrationGroup", "calibration_group")) ||
       null,
+    calibrationMtimeNs: Math.max(
+      0,
+      toFiniteNumber(
+        readField(value, "calibrationMtimeNs", "calibration_mtime_ns"),
+        0,
+      ),
+    ),
     configuredPort:
       toTrimmedString(readField(value, "configuredPort", "configured_port")) ||
       null,
@@ -1209,6 +1218,7 @@ const buildFallbackLeaderControlParts = ({
       calibrationProfile: null,
       calibrationId: null,
       calibrationGroup: null,
+      calibrationMtimeNs: 0,
       configuredPort: null,
       configuredPortMatches: false,
       configuredPortStatus: "none",
@@ -1455,6 +1465,10 @@ const normalizeOperatorLeRobotCalibrationCatalogEntry = (
     actuatorCount: Math.max(
       0,
       toFiniteNumber(readField(value, "actuatorCount", "actuator_count"), 0),
+    ),
+    mtimeNs: Math.max(
+      0,
+      toFiniteNumber(readField(value, "mtimeNs", "mtime_ns"), 0),
     ),
   };
 };

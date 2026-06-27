@@ -63,6 +63,7 @@ class _LerobotCalibrationMatch:
     profile_id: str
     calibration_id: str
     group_id: str
+    mtime_ns: int
     joint_names: tuple[str, ...]
     motor_ids: tuple[int, ...]
     zero_positions_rad: dict[str, float]
@@ -100,6 +101,7 @@ class OpenArmLeaderControlPart(BaseModel):
     calibration_profile: str | None = Field(default=None, alias="calibrationProfile")
     calibration_id: str | None = Field(default=None, alias="calibrationId")
     calibration_group: str | None = Field(default=None, alias="calibrationGroup")
+    calibration_mtime_ns: int = Field(default=0, ge=0, alias="calibrationMtimeNs")
     configured_port: str | None = Field(default=None, alias="configuredPort")
     configured_port_matches: bool = Field(
         default=False,
@@ -317,6 +319,7 @@ def _build_leader_control_parts(
                 calibration_profile=match.profile_id,
                 calibration_id=match.calibration_id,
                 calibration_group=match.group_id,
+                calibration_mtime_ns=match.mtime_ns,
                 configured_port=match.configured_port,
                 configured_port_matches=match.configured_port_matches,
                 configured_port_status=match.configured_port_status,
@@ -394,6 +397,10 @@ def _parse_lerobot_calibration_matches(
 ) -> list[_LerobotCalibrationMatch]:
     profile_id = calibration_path.parent.name
     calibration_id = calibration_path.stem
+    try:
+        mtime_ns = calibration_path.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = 0
     configured_port = configured_ports.get((category, profile_id, calibration_id))
     configured_port_status = _resolve_configured_port_status(
         configured_port,
@@ -411,6 +418,7 @@ def _parse_lerobot_calibration_matches(
                 profile_id=profile_id,
                 calibration_id=calibration_id,
                 group_id=group.group_id,
+                mtime_ns=mtime_ns,
                 joint_names=group.joint_names,
                 motor_ids=group.motor_ids,
                 zero_positions_rad=group.zero_positions_rad,

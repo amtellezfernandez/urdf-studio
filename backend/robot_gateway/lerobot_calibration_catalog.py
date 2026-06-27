@@ -30,6 +30,7 @@ class RobotGatewayLeRobotCalibrationCatalogEntry(
 ):
     id: str = Field(..., min_length=1)
     path: str = Field(..., min_length=1)
+    mtime_ns: int = Field(default=0, ge=0, alias="mtimeNs")
     joint_names: list[str] = Field(default_factory=list, alias="jointNames")
     motor_ids: list[int] = Field(default_factory=list, alias="motorIds")
     zero_positions_rad: dict[str, float] = Field(
@@ -159,6 +160,10 @@ def _add_catalog_entries(
     profile_id: str,
 ) -> None:
     resolved_path = calibration_path.resolve()
+    try:
+        mtime_ns = calibration_path.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = 0
     for group in read_lerobot_calibration_groups(calibration_path):
         calibration_id = calibration_path.stem
         entry = RobotGatewayLeRobotCalibrationCatalogEntry(
@@ -169,6 +174,7 @@ def _add_catalog_entries(
             calibrationDir=str(calibration_path.parent),
             groupId=group.group_id,
             path=str(calibration_path),
+            mtimeNs=mtime_ns,
             jointNames=list(group.joint_names),
             motorIds=list(group.motor_ids),
             zeroPositionsRad=group.zero_positions_rad,

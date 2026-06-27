@@ -438,7 +438,7 @@ describe("operator teleop profiles", () => {
 });
 
 describe("OperatorTeleopPanel input routing", () => {
-  it("keeps leader scan state when switching through the follower panel", async () => {
+  it("keeps leader scan state active when switching through the follower panel", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -549,7 +549,8 @@ describe("OperatorTeleopPanel input routing", () => {
       );
       await flushMicrotasks();
     });
-    expect(container.textContent).toContain("Follower");
+    expect(container.textContent).toContain("Robot");
+    expect(container.textContent).toContain("Detected targets");
 
     await act(async () => {
       root.render(
@@ -571,7 +572,7 @@ describe("OperatorTeleopPanel input routing", () => {
       vi
         .mocked(fetchMock)
         .mock.calls.filter((call) => String(call[0]).endsWith("/hardware/leaders")),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
 
     await act(async () => {
       root.unmount();
@@ -801,7 +802,9 @@ describe("OperatorTeleopPanel input routing", () => {
     expect(container.textContent).not.toContain("Gripper is controlled");
     expect(container.textContent).not.toContain("Pick a target.");
     expect(container.textContent).toContain("Arm device");
-    expect(container.textContent).toContain("Calibration: so100_leader · my_leader");
+    expect(container.textContent).toContain(
+      "LeRobot teleoperator calibration: so100_leader · my_leader · all",
+    );
     expect(container.textContent).toContain("6 actuators");
     expect(container.textContent).toContain("/dev/ttyACM0");
     expect(useOperatorLeaderTeleopStore.getState()).toMatchObject({
@@ -1036,6 +1039,186 @@ describe("OperatorTeleopPanel input routing", () => {
     expect(container.textContent).not.toContain("Validate replay");
     expect(container.textContent).not.toContain("MJLab gate");
     expect(container.textContent).not.toContain("Export LeRobot");
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("uses the selected LeRobot calibration source for leader calibration", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const calibrationJointNames = [
+      "shoulder_pan",
+      "shoulder_lift",
+      "elbow_flex",
+      "wrist_flex",
+      "wrist_roll",
+      "gripper",
+    ];
+    useJointStore.getState().setAvailableJoints([
+      "arm_shoulder_pan",
+      "arm_shoulder_lift",
+      "arm_elbow_flex",
+      "arm_wrist_flex",
+      "arm_wrist_roll",
+      "arm_gripper",
+    ]);
+    const fetchMock: typeof fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("urdf-studio-teleop")) {
+        return new Response(JSON.stringify(TEST_PROVIDER_MANIFEST), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/session")) {
+        return new Response(
+          JSON.stringify({
+            state: "active",
+            current_session_id: "operator-session-1",
+            robot_id: "openarm",
+            mode: "manual",
+            runtime_mode: "observe",
+            control_lease_owner: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/stats")) {
+        return new Response(
+          JSON.stringify({
+            operator_rtt_ms: 5,
+            estimated_end_to_end_latency_ms: 10,
+            robot_state: {
+              mode: "manual",
+              connection_state: "active",
+              estop: false,
+              control_rtt_ms: 4,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/hardware/leaders")) {
+        return new Response(
+          JSON.stringify({
+            available: true,
+            leaders: [
+              {
+                id: "leader",
+                path: "/dev/ttyACM0",
+                device_path: "/dev/ttyACM0",
+                identity_key: "path:ttyACM0",
+                identity_stable: false,
+                source: "tty_glob",
+                available: true,
+                leader_type: "serial_leader_candidate",
+                motor_bus: "feetech",
+                motor_ids: [1, 2, 3, 4, 5, 6],
+                motor_count: 6,
+                control_parts: [
+                  {
+                    id: "teleoperators:so100_leader:my_leader:all",
+                    kind: "arm",
+                    label: "Leader arm",
+                    actuator_count: 6,
+                    motor_bus: "feetech",
+                    motor_ids: [1, 2, 3, 4, 5, 6],
+                    joint_names: calibrationJointNames,
+                    calibration_category: "teleoperators",
+                    calibration_profile: "so100_leader",
+                    calibration_id: "my_leader",
+                    calibration_group: "all",
+                  },
+                  {
+                    id: "robots:so100_follower:my_follower:all",
+                    kind: "arm",
+                    label: "Follower arm",
+                    actuator_count: 6,
+                    motor_bus: "feetech",
+                    motor_ids: [1, 2, 3, 4, 5, 6],
+                    joint_names: calibrationJointNames,
+                    calibration_category: "robots",
+                    calibration_profile: "so100_follower",
+                    calibration_id: "my_follower",
+                    calibration_group: "all",
+                  },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith(OPERATOR_HELPER_LEADER_PATHS.calibrationStart)) {
+        return new Response(
+          JSON.stringify({
+            started: true,
+            command: ["lerobot-calibrate", "--robot.type=so100_follower"],
+            display_command: "lerobot-calibrate --robot.type=so100_follower",
+            message: "Opened LeRobot calibration in a terminal.",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    }) as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "studio",
+          studioRobotName: "openarm",
+        }),
+      );
+      await flushMicrotasks();
+    });
+    await clickOpenArmLeaderScan(container);
+
+    const calibrationSelect = container.querySelector(
+      'select[aria-label="Calibration"]',
+    ) as HTMLSelectElement | null;
+    expect(calibrationSelect?.disabled).toBe(false);
+    expect(
+      Array.from(calibrationSelect?.options ?? []).map((option) => option.text),
+    ).toEqual([
+      "teleoperator: so100_leader · my_leader · all",
+      "robot/follower: so100_follower · my_follower · all",
+    ]);
+
+    await act(async () => {
+      if (calibrationSelect) {
+        calibrationSelect.value = "robots:so100_follower:my_follower:all";
+        calibrationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      await flushMicrotasks();
+    });
+    const calibrateLeaderButton = Array.from(
+      container.querySelectorAll("button"),
+    ).find((button) => button.textContent === "Calibrate");
+    await act(async () => {
+      calibrateLeaderButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+
+    const leaderCalibrationCall = vi
+      .mocked(fetchMock)
+      .mock.calls.find((call) =>
+        String(call[0]).endsWith(OPERATOR_HELPER_LEADER_PATHS.calibrationStart),
+      );
+    expect(JSON.parse(String(leaderCalibrationCall?.[1]?.body))).toEqual({
+      port: "/dev/ttyACM0",
+      motor_ids: [1, 2, 3, 4, 5, 6],
+      calibration_category: "robots",
+      calibration_profile: "so100_follower",
+      calibration_id: "my_follower",
+      calibration_group: "all",
+    });
+
     await act(async () => {
       root.unmount();
     });
@@ -1300,7 +1483,9 @@ describe("OperatorTeleopPanel input routing", () => {
     await clickOpenArmLeaderScan(container);
 
     expect(container.textContent).toContain("Arm device");
-    expect(container.textContent).toContain("Calibration: so100_leader · my_leader");
+    expect(container.textContent).toContain(
+      "LeRobot teleoperator calibration: so100_leader · my_leader · all",
+    );
     expect(container.textContent).toContain("5 actuators");
     expect(container.textContent).toContain(
       "5 of 12 Arm axes will move.",
@@ -1697,8 +1882,8 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       root.render(createElement(OperatorTeleopPanel, { studioRobotName: "Open Arm Bimanual" }));
       await flushMicrotasks();
     });
-    expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
-    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(true);
+    expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
+    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(false);
 
     await act(async () => {
       root.render(
@@ -1761,7 +1946,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       );
       await flushMicrotasks();
     });
-    expect(stopOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
+    expect(stopOpenArmHfLiveObserveMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       transitionRoot.render(
@@ -2143,7 +2328,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     container.remove();
   });
 
-  it("auto-connects OpenArm live observe from camera and hardware views", async () => {
+  it("auto-connects OpenArm live observe from the camera view only", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -2209,8 +2394,8 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       await flushMicrotasks();
     });
 
-    expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
-    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(true);
+    expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
+    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(false);
 
     await act(async () => {
       root.render(
@@ -2223,6 +2408,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     });
 
     expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
+    expect(useOperatorPerceptionStore.getState().openArmHfLiveObserveRequested).toBe(true);
     expect(stopOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -2500,9 +2686,9 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       await flushMicrotasks();
     });
 
-    expect(container.textContent).toContain("Follower");
+    expect(container.textContent).toContain("Robot");
     expect(container.textContent).toContain("Detected targets");
-    expect(container.textContent).toContain("Gateway env");
+    expect(container.textContent).toContain("Config");
     expect(container.textContent).toContain(".env.robot.local");
     expect(container.textContent).toContain("OpenArm arm");
     expect(container.textContent).toContain("OpenArm right arm");
@@ -2525,7 +2711,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       vi.mocked(fetchMock).mock.calls.some((call) => String(call[0]).endsWith("/point-cloud")),
     ).toBe(false);
     const targetSelect = container.querySelector(
-      'select[aria-label="Follower target"]',
+      'select[aria-label="Robot target"]',
     ) as HTMLSelectElement | null;
     expect(
       Array.from(targetSelect?.options ?? []).map((option) => option.textContent),
@@ -3116,17 +3302,13 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       await flushMicrotasks();
     });
 
-    expect(startOpenArmHfLiveObserveMock).toHaveBeenCalledOnce();
+    expect(startOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     expect(
       vi.mocked(fetchMock).mock.calls.some((call) => String(call[0]).endsWith("/point-cloud"))
-    ).toBe(true);
-    expect(useOperatorPerceptionStore.getState().activePointCloudFrame?.cameraId).toBe(
-      TEST_CAMERA_STREAM.id,
-    );
-    expect(useOperatorPerceptionStore.getState().activeCameraVideoFrame?.sourceId).toBe(
-      TEST_CAMERA_STREAM.id,
-    );
-    expect(putImageDataMock).toHaveBeenCalled();
+    ).toBe(false);
+    expect(useOperatorPerceptionStore.getState().activePointCloudFrame).toBeNull();
+    expect(useOperatorPerceptionStore.getState().activeCameraVideoFrame).toBeNull();
+    expect(putImageDataMock).not.toHaveBeenCalled();
 
     const connectButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Connect",
@@ -3158,7 +3340,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     ).toBe(false);
     expect(stopOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Motion safety ready");
-    expect(container.textContent).toContain("Follower hardware connected");
+    expect(container.textContent).toContain("RobotConnected");
     expect(container.textContent).not.toContain("Before motion");
     expect(container.textContent).not.toContain("OKFollower gateway");
     expect(container.textContent).not.toContain("OKJoint rotation calibration");

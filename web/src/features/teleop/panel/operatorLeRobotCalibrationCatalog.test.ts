@@ -21,6 +21,7 @@ const buildEntry = (
   motorIds: [],
   zeroPositionsRad: {},
   actuatorCount: TEST_CALIBRATION_FIXTURE.so100ActuatorCount,
+  mtimeNs: 0,
   ...entry,
 });
 
@@ -63,5 +64,27 @@ describe("operatorLeRobotCalibrationCatalog", () => {
       "recommended",
       "advanced",
     ]);
+  });
+
+  it("includes calibration file modification time when available", () => {
+    const [option] = buildOperatorLeRobotCalibrationOptions({
+      entries: [
+        buildEntry({
+          id: "robots:so100_follower:so100-left-1:all",
+          category: "robots",
+          profileId: "so100_follower",
+          calibrationId: "so100-left-1",
+          mtimeNs: 1_750_000_000_000_000_000,
+        }),
+      ],
+      expectedActuatorCount: TEST_CALIBRATION_FIXTURE.so100ActuatorCount,
+      expectedModelIds: ["so100"],
+      expectedRobotIds: ["so100-left-1"],
+      showAll: false,
+    });
+
+    expect(option?.detailLines.some((line) => line.startsWith("Last modified: "))).toBe(
+      true,
+    );
   });
 });

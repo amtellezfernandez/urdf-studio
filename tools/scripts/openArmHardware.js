@@ -96,8 +96,8 @@ export const buildOpenArmTeleoperateCommand = (config) => [
   `--robot.id=${config.robotId}`,
   `--teleop.type=${OPENARM_HARDWARE_TELEOP_TYPE}`,
   `--teleop.id=${config.teleopId}`,
-  `--teleop.port_right=${config.miniRightPort}`,
-  `--teleop.port_left=${config.miniLeftPort}`,
+  `--teleop.left_arm_config.port=${config.miniLeftPort}`,
+  `--teleop.right_arm_config.port=${config.miniRightPort}`,
   `--fps=${config.fps}`,
 ];
 

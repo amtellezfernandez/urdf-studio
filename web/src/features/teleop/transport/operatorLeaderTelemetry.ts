@@ -88,6 +88,7 @@ type BuildLeaderCalibrationRequestParams = {
   controlPart: OperatorLeaderControlPart | null;
   selectedSide?: OperatorLeaderAssignmentSide | null;
   leaders?: readonly OperatorLeaderDevice[];
+  pairOpenArmMini?: boolean;
 };
 
 const GENERIC_LEADER_AXIS_NAME_PATTERN = /^leader_axis_(\d+)$/;
@@ -438,6 +439,7 @@ export const buildOperatorLeaderCalibrationRequest = ({
   controlPart,
   selectedSide = null,
   leaders = [],
+  pairOpenArmMini = true,
 }: BuildLeaderCalibrationRequestParams): OperatorLeaderReleaseRequest => {
   const request = buildOperatorLeaderHardwareReleaseRequest(leader, controlPart);
   if (!isOpenArmMiniLeaderCalibrationCandidate(request)) {
@@ -449,10 +451,23 @@ export const buildOperatorLeaderCalibrationRequest = ({
     selectedSide === OPERATOR_OPENARM_LEADER_SIDES.right
       ? selectedSide
       : null;
+  const calibrationGroup = request.calibrationGroup?.trim() || "";
   const selectedGroup =
-    request.calibrationGroup?.trim() ||
-    selectedSideGroup ||
-    OPERATOR_OPENARM_LEADER_SIDES.right;
+    calibrationGroup === OPERATOR_OPENARM_LEADER_SIDES.left ||
+    calibrationGroup === OPERATOR_OPENARM_LEADER_SIDES.right
+      ? calibrationGroup
+      : selectedSideGroup || OPERATOR_OPENARM_LEADER_SIDES.right;
+  if (!pairOpenArmMini) {
+    return {
+      ...request,
+      calibrationProfile:
+        request.calibrationProfile ?? OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+      calibrationGroup:
+        calibrationGroup && calibrationGroup !== "all"
+          ? calibrationGroup
+          : selectedGroup,
+    };
+  }
   const companionPort = leaders
     .find(
       (candidate) =>
@@ -465,7 +480,10 @@ export const buildOperatorLeaderCalibrationRequest = ({
     ...request,
     calibrationProfile:
       request.calibrationProfile ?? OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
-    calibrationGroup: request.calibrationGroup ?? selectedGroup,
+    calibrationGroup:
+      calibrationGroup && calibrationGroup !== "all"
+        ? calibrationGroup
+        : selectedGroup,
     portLeft:
       selectedGroup === OPERATOR_OPENARM_LEADER_SIDES.left
         ? selectedPort

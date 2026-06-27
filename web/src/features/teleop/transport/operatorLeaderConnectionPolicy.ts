@@ -1,8 +1,11 @@
 import type { OperatorTeleopControlGroup } from "@/features/teleop/profiles/operatorTeleopControlGroups";
+import { OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE } from "@/features/teleop/params/operatorTeleopParams";
 import type {
   OperatorLeaderControlPart,
   OperatorLeaderDevice,
+  OperatorLeaderReleaseRequest,
 } from "@/features/teleop/transport/operatorHelperApi";
+import { formatOperatorCalibrationModifiedLine } from "@/features/teleop/transport/operatorCalibrationFileTimestamp";
 import type {
   OperatorLeaderAssignment,
   OperatorLeaderAssignmentSide,
@@ -40,6 +43,10 @@ const LEADER_CONTROL_PART_ROLE_AFFINITY = {
   neutral: 0,
   fallback: -1,
 } as const;
+const LEROBOT_CALIBRATION_CATEGORY_LABELS: Record<string, string> = {
+  teleoperators: "teleoperator",
+  robots: "robot/follower",
+};
 const LEADER_MOTOR_PROBE_TEXT = {
   failedDetail: "Motor probe failed",
   blockedReason:
@@ -80,7 +87,60 @@ const formatLeaderCalibrationLabel = (
   part: OperatorLeaderControlPart,
 ): string | null => {
   if (!hasExplicitLeaderCalibration(part)) return null;
-  return [part.calibrationProfile, part.calibrationId].filter(Boolean).join(" · ");
+  const categoryLabel =
+    LEROBOT_CALIBRATION_CATEGORY_LABELS[part.calibrationCategory ?? ""] ??
+    part.calibrationCategory;
+  const calibrationPath = [
+    part.calibrationProfile,
+    part.calibrationId,
+    part.calibrationGroup,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return [
+    "LeRobot",
+    categoryLabel,
+    "calibration:",
+    calibrationPath,
+  ]
+    .filter(Boolean)
+    .join(" ");
+};
+
+export const formatLeaderControlPartChoiceLabel = (
+  part: OperatorLeaderControlPart,
+): string => {
+  if (hasExplicitLeaderCalibration(part)) {
+    const categoryLabel =
+      LEROBOT_CALIBRATION_CATEGORY_LABELS[part.calibrationCategory ?? ""] ??
+      part.calibrationCategory ??
+      "calibration";
+    const calibrationPath = [
+      part.calibrationProfile,
+      part.calibrationId,
+      part.calibrationGroup,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return [categoryLabel, calibrationPath].filter(Boolean).join(": ");
+  }
+  const label = part.label.trim();
+  return label ? `${label} (${part.actuatorCount} actuators)` : `${part.actuatorCount} actuators`;
+};
+
+const formatLeaderConfiguredPortLabel = (
+  part: OperatorLeaderControlPart,
+): string | null => {
+  switch (part.configuredPortStatus) {
+    case "matched":
+      return "LeRobot port matches this controller";
+    case "stale":
+      return "LeRobot configured port is missing";
+    case "unmatched":
+      return "LeRobot port differs from this controller";
+    case "none":
+      return null;
+  }
 };
 
 export const buildLeaderHardwareDetailLines = (
@@ -91,7 +151,17 @@ export const buildLeaderHardwareDetailLines = (
     const lines = ["Arm device"];
     const calibrationLabel = formatLeaderCalibrationLabel(part);
     if (calibrationLabel) {
-      lines.push(`Calibration: ${calibrationLabel}`);
+      lines.push(calibrationLabel);
+      const modifiedLine = formatOperatorCalibrationModifiedLine(
+        part.calibrationMtimeNs,
+      );
+      if (modifiedLine) {
+        lines.push(modifiedLine);
+      }
+      const configuredPortLabel = formatLeaderConfiguredPortLabel(part);
+      if (configuredPortLabel) {
+        lines.push(configuredPortLabel);
+      }
     } else if (requiresExplicitLeaderCalibration(leader, part)) {
       lines.push("Calibration required");
     } else if (part.label.trim()) {
@@ -107,6 +177,36 @@ export const buildLeaderHardwareDetailLines = (
     return ["Serial device", LEADER_MOTOR_PROBE_TEXT.failedDetail];
   }
   return ["Serial device"];
+};
+
+export const buildLeaderCalibrationSetupLines = (
+  request: OperatorLeaderReleaseRequest | null,
+): string[] => {
+  const profile = request?.calibrationProfile?.trim();
+  if (!profile) return [];
+  if (profile === OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE) {
+    const hasLeftPort = Boolean(request.portLeft?.trim());
+    const hasRightPort = Boolean(request.portRight?.trim());
+    if (hasLeftPort && hasRightPort) {
+      const calibrationId = request.calibrationId?.trim() ?? "";
+      const baseCalibrationId = calibrationId.replace(/_(?:left|right)$/u, "");
+      return [
+        "LeRobot setup: bi_openarm_mini (left + right)",
+        ...(baseCalibrationId
+          ? [
+              `Writes files: ${baseCalibrationId}_left.json + ${baseCalibrationId}_right.json`,
+            ]
+          : ["Writes left + right calibration files"]),
+      ];
+    }
+    const side = request.calibrationGroup?.trim();
+    return [
+      side === "left" || side === "right"
+        ? `LeRobot setup: openarm_mini (${side})`
+        : "LeRobot setup: openarm_mini",
+    ];
+  }
+  return [`LeRobot setup: ${profile}`];
 };
 
 export const buildLeaderDeviceRoleKeys = (
@@ -127,6 +227,12 @@ export const buildLeaderDeviceRoleKeys = (
 const scoreLeaderControlPartRoleAffinity = (
   part: OperatorLeaderControlPart,
 ): number => {
+  if (part.calibrationCategory === "teleoperators") {
+    return LEADER_CONTROL_PART_ROLE_AFFINITY.preferred;
+  }
+  if (part.calibrationCategory === "robots") {
+    return LEADER_CONTROL_PART_ROLE_AFFINITY.fallback;
+  }
   const roleText = [
     part.label,
     part.calibrationProfile,
@@ -242,51 +348,95 @@ export const resolveLeaderMappedTargetJointNames = (
   );
 };
 
+const compareLeaderControlPartsForTarget = (
+  group: OperatorTeleopControlGroup,
+  left: OperatorLeaderControlPart,
+  right: OperatorLeaderControlPart,
+): number => {
+  const requiredActuatorCount = resolveTeleopTargetActuatorCount(group);
+  const targetJointNames = resolveTeleopTargetActuatorJointNames(group);
+  const leftCalibrated = hasExplicitLeaderCalibration(left);
+  const rightCalibrated = hasExplicitLeaderCalibration(right);
+  if (leftCalibrated !== rightCalibrated) {
+    return leftCalibrated ? -1 : 1;
+  }
+  const leftCoversTarget = left.actuatorCount >= requiredActuatorCount;
+  const rightCoversTarget = right.actuatorCount >= requiredActuatorCount;
+  if (leftCoversTarget !== rightCoversTarget) {
+    return leftCoversTarget ? -1 : 1;
+  }
+  if (left.configuredPortMatches !== right.configuredPortMatches) {
+    return left.configuredPortMatches ? -1 : 1;
+  }
+  const leftRoleAffinity = scoreLeaderControlPartRoleAffinity(left);
+  const rightRoleAffinity = scoreLeaderControlPartRoleAffinity(right);
+  if (leftRoleAffinity !== rightRoleAffinity) {
+    return rightRoleAffinity - leftRoleAffinity;
+  }
+  const leftSemanticScore = scoreOperatorLeaderControlPartForTarget(
+    left,
+    targetJointNames,
+  );
+  const rightSemanticScore = scoreOperatorLeaderControlPartForTarget(
+    right,
+    targetJointNames,
+  );
+  if (leftSemanticScore !== rightSemanticScore) {
+    return rightSemanticScore - leftSemanticScore;
+  }
+  if (leftCoversTarget && rightCoversTarget) {
+    return left.actuatorCount - right.actuatorCount;
+  }
+  return right.actuatorCount - left.actuatorCount;
+};
+
+export const listCompatibleLeaderControlParts = (
+  group: OperatorTeleopControlGroup,
+  leader: OperatorLeaderDevice,
+): OperatorLeaderControlPart[] =>
+  leader.controlParts
+    .filter((part) => part.kind === group.kind && part.actuatorCount > 0)
+    .sort((left, right) =>
+      compareLeaderControlPartsForTarget(group, left, right),
+    );
+
 export const findCompatibleLeaderControlPart = (
   group: OperatorTeleopControlGroup,
   leader: OperatorLeaderDevice,
-): OperatorLeaderControlPart | null => {
-  const sameKindParts = leader.controlParts.filter(
-    (part) => part.kind === group.kind && part.actuatorCount > 0,
-  );
-  if (sameKindParts.length === 0) return null;
+): OperatorLeaderControlPart | null =>
+  listCompatibleLeaderControlParts(group, leader)[0] ?? null;
+
+export const resolveLeaderControlPartTargetCompatibility = (
+  group: OperatorTeleopControlGroup,
+  leader: OperatorLeaderDevice,
+  controlPart: OperatorLeaderControlPart,
+): OperatorLeaderTargetCompatibility => {
+  if (!group.teleopEnabled) {
+    return { compatible: false, reason: group.disabledReason ?? "Target disabled." };
+  }
   const requiredActuatorCount = resolveTeleopTargetActuatorCount(group);
-  const targetJointNames = resolveTeleopTargetActuatorJointNames(group);
-  return [...sameKindParts].sort((left, right) => {
-    const leftCalibrated = hasExplicitLeaderCalibration(left);
-    const rightCalibrated = hasExplicitLeaderCalibration(right);
-    if (leftCalibrated !== rightCalibrated) {
-      return leftCalibrated ? -1 : 1;
-    }
-    const leftCoversTarget = left.actuatorCount >= requiredActuatorCount;
-    const rightCoversTarget = right.actuatorCount >= requiredActuatorCount;
-    if (leftCoversTarget !== rightCoversTarget) {
-      return leftCoversTarget ? -1 : 1;
-    }
-    if (left.configuredPortMatches !== right.configuredPortMatches) {
-      return left.configuredPortMatches ? -1 : 1;
-    }
-    const leftRoleAffinity = scoreLeaderControlPartRoleAffinity(left);
-    const rightRoleAffinity = scoreLeaderControlPartRoleAffinity(right);
-    if (leftRoleAffinity !== rightRoleAffinity) {
-      return rightRoleAffinity - leftRoleAffinity;
-    }
-    const leftSemanticScore = scoreOperatorLeaderControlPartForTarget(
-      left,
-      targetJointNames,
-    );
-    const rightSemanticScore = scoreOperatorLeaderControlPartForTarget(
-      right,
-      targetJointNames,
-    );
-    if (leftSemanticScore !== rightSemanticScore) {
-      return rightSemanticScore - leftSemanticScore;
-    }
-    if (leftCoversTarget && rightCoversTarget) {
-      return left.actuatorCount - right.actuatorCount;
-    }
-    return right.actuatorCount - left.actuatorCount;
-  })[0];
+  if (requiresExplicitLeaderCalibration(leader, controlPart) && !hasExplicitLeaderCalibration(controlPart)) {
+    return {
+      compatible: false,
+      reason: "Calibration required. Rescan after calibration.",
+    };
+  }
+  const exactMatch = controlPart.actuatorCount === requiredActuatorCount;
+  const partialMatch = controlPart.actuatorCount < requiredActuatorCount;
+  if (partialMatch && !canUsePartialLeaderMapping(group)) {
+    return {
+      compatible: false,
+      reason: `${controlPart.actuatorCount} actuators detected. ${group.label} needs ${requiredActuatorCount}. Use a single-arm target for partial mapping.`,
+    };
+  }
+  return {
+    compatible: true,
+    reason: exactMatch
+      ? ""
+      : partialMatch
+        ? `${controlPart.actuatorCount} of ${requiredActuatorCount} ${group.label} axes will move. Remaining joints stay unchanged.`
+        : `First ${requiredActuatorCount} ${group.label} axes will move.`,
+  };
 };
 
 export const resolveLeaderTargetCompatibility = (
@@ -299,31 +449,11 @@ export const resolveLeaderTargetCompatibility = (
   const requiredActuatorCount = resolveTeleopTargetActuatorCount(group);
   const compatiblePart = findCompatibleLeaderControlPart(group, leader);
   if (compatiblePart) {
-    if (
-      requiresExplicitLeaderCalibration(leader, compatiblePart) &&
-      !hasExplicitLeaderCalibration(compatiblePart)
-    ) {
-      return {
-        compatible: false,
-        reason: "Calibration required. Rescan after calibration.",
-      };
-    }
-    const exactMatch = compatiblePart.actuatorCount === requiredActuatorCount;
-    const partialMatch = compatiblePart.actuatorCount < requiredActuatorCount;
-    if (partialMatch && !canUsePartialLeaderMapping(group)) {
-      return {
-        compatible: false,
-        reason: `${compatiblePart.actuatorCount} actuators detected. ${group.label} needs ${requiredActuatorCount}. Use a single-arm target for partial mapping.`,
-      };
-    }
-    return {
-      compatible: true,
-      reason: exactMatch
-        ? ""
-        : partialMatch
-          ? `${compatiblePart.actuatorCount} of ${requiredActuatorCount} ${group.label} axes will move. Remaining joints stay unchanged.`
-          : `First ${requiredActuatorCount} ${group.label} axes will move.`,
-    };
+    return resolveLeaderControlPartTargetCompatibility(
+      group,
+      leader,
+      compatiblePart,
+    );
   }
   const sameKindParts = leader.controlParts.filter((part) => part.kind === group.kind);
   if (sameKindParts.length > 0) {
@@ -366,11 +496,13 @@ export const resolveLeaderTargetSelection = ({
   leader,
   assignment,
   pendingTargetGroupId,
+  preferredTargetGroupId = null,
 }: {
   targetGroups: readonly OperatorTeleopControlGroup[];
   leader: OperatorLeaderDevice;
   assignment: Pick<OperatorLeaderAssignment, "side" | "targetGroupId"> | null;
   pendingTargetGroupId: string | null;
+  preferredTargetGroupId?: string | null;
 }): OperatorLeaderTargetSelection => {
   const targetOptions = targetGroups.map((group) => ({
     group,
@@ -395,9 +527,16 @@ export const resolveLeaderTargetSelection = ({
       ? targetOptions.find((option) => option.group.id === pendingTargetGroupId) ??
         null
       : null;
+  const preferredTargetOption =
+    preferredTargetGroupId !== null
+      ? selectableTargetOptions.find(
+          (option) => option.group.id === preferredTargetGroupId,
+        ) ?? null
+      : null;
   const selectedTargetOption =
     connectedTargetOption ??
     pendingTargetOption ??
+    preferredTargetOption ??
     selectableTargetOptions[0] ??
     targetOptions[0] ??
     null;

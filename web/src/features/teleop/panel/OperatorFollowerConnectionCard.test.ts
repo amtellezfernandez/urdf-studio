@@ -80,6 +80,12 @@ describe("OperatorFollowerConnectionCard", () => {
             onSelectSource: vi.fn(),
             onToggleShowAll: vi.fn(),
           },
+          camera: {
+            count: 1,
+            selectedLabel: "OpenArm depth camera",
+            statusLabel: "Camera detected.",
+            detailLines: ["1 camera advertised by gateway.", "robot_world, 640x480"],
+          },
           connection: {
             connectDisabled: false,
             issue: null,
@@ -121,7 +127,9 @@ describe("OperatorFollowerConnectionCard", () => {
       "LeRobot will ask to use or redo calibration.",
     );
     expect(container.textContent).toContain("Recommended");
-    expect(container.textContent).toContain("Gateway env");
+    expect(container.textContent).toContain("OpenArm depth camera · 1 camera");
+    expect(container.textContent).toContain("so100_follower");
+    expect(container.textContent).toContain(".env.robot.local");
     expect(container.textContent).not.toContain("Remote");
     const calibrateButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Calibrate",
@@ -132,6 +140,96 @@ describe("OperatorFollowerConnectionCard", () => {
       calibrateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(startCalibration).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("shows scanned robot hardware targets and exposes rescan", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onScan = vi.fn();
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorFollowerConnectionCard, {
+          buttonClassName: "button",
+          calibration: {
+            available: false,
+            command: null,
+            isStarting: false,
+            message: null,
+            required: false,
+            onStart: vi.fn(),
+          },
+          calibrationFileEdit: createInactiveCalibrationFileEditView(),
+          calibrationSourceSelection: {
+            error: null,
+            options: [],
+            selectedSourceId: null,
+            showAll: false,
+            onSelectSource: vi.fn(),
+            onToggleShowAll: vi.fn(),
+          },
+          connection: {
+            connectDisabled: true,
+            issue: "Robot unavailable.",
+            isBusy: false,
+            isConnected: false,
+            isDisconnectAvailable: false,
+            motionReady: false,
+            motionSafetyLabel: "Motion safety not ready",
+            onToggleConnection: vi.fn(),
+          },
+          envConfig: {
+            configRef: null,
+            error: null,
+            isOpening: false,
+            onOpen: vi.fn(),
+          },
+          hardwareDetection: {
+            requested: true,
+            resolved: true,
+            error: null,
+            targets: [
+              {
+                id: "robot-left",
+                label: "openarm_follower · my_follower_left · all",
+                detailLines: [
+                  "Port: /dev/serial/by-id/openarm-left",
+                  "8 actuators",
+                ],
+              },
+            ],
+            onScan,
+          },
+          targetSelection: {
+            disabled: false,
+            selectedProfileId: "",
+            onSelectProfile: vi.fn(),
+            options: [],
+          },
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Detected targets");
+    expect(container.textContent).toContain("1 detected");
+    expect(container.textContent).toContain(
+      "openarm_follower · my_follower_left · all",
+    );
+    expect(container.textContent).toContain("/dev/serial/by-id/openarm-left");
+
+    const rescanButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Rescan",
+    );
+    await act(async () => {
+      rescanButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onScan).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

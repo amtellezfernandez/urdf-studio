@@ -96,6 +96,10 @@ export const OPERATOR_TELEOP_PANEL_STATE_STORAGE = {
 } as const;
 export const OPERATOR_LEADER_TELEMETRY_SOURCE_PREFIX = "leader:";
 export const OPERATOR_LEADER_STATE_POLL_INTERVAL_MS = 20;
+export const OPERATOR_LEADER_STATE_ERROR_VISIBILITY = {
+  consecutiveFailuresToShow: 3,
+  consecutiveSuccessesToClear: 3,
+} as const;
 export const OPERATOR_LEADER_DETECTION_REFRESH_MS = 2_000;
 export const OPERATOR_OPENARM_MINI = {
   teleoperatorType: "openarm_mini",
