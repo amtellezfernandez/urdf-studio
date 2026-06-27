@@ -112,11 +112,24 @@ def build_lerobot_calibration_command(
     config: RobotGatewayAdapterConfig,
     calibration_source: RobotGatewayLeRobotCalibrationSource | None = None,
 ) -> list[str]:
-    command = [_resolve_lerobot_calibrate_bin()]
+    return [
+        _resolve_lerobot_calibrate_bin(),
+        *build_lerobot_robot_cli_args(
+            config,
+            calibration_source=calibration_source,
+        ),
+    ]
+
+
+def build_lerobot_robot_cli_args(
+    config: RobotGatewayAdapterConfig,
+    calibration_source: RobotGatewayLeRobotCalibrationSource | None = None,
+) -> list[str]:
+    args: list[str] = []
     if config.lerobot_robot_type:
-        command.append(f"--robot.type={config.lerobot_robot_type}")
+        args.append(f"--robot.type={config.lerobot_robot_type}")
     if config.lerobot_port:
-        command.append(f"--robot.port={config.lerobot_port}")
+        args.append(f"--robot.port={config.lerobot_port}")
     calibration_id = (
         calibration_source.calibration_id
         if calibration_source is not None
@@ -128,11 +141,11 @@ def build_lerobot_calibration_command(
         else config.lerobot_calibration_dir
     )
     if calibration_id:
-        command.append(f"--robot.id={calibration_id}")
+        args.append(f"--robot.id={calibration_id}")
     if calibration_dir is not None:
-        command.append(f"--robot.calibration_dir={calibration_dir}")
-    command.extend(_build_config_json_args(config.lerobot_config_json))
-    return command
+        args.append(f"--robot.calibration_dir={calibration_dir}")
+    args.extend(_build_config_json_args(config.lerobot_config_json))
+    return args
 
 
 def build_lerobot_leader_calibration_command(
@@ -383,11 +396,24 @@ def _build_config_json_args(config_json: str | None) -> list[str]:
     for key, value in sorted(payload.items()):
         if key in {"type", "id", "port", "calibration_dir"}:
             continue
-        if isinstance(value, str | int | float | bool) or value is None:
-            args.append(f"--robot.{key}={_format_draccus_cli_value(value)}")
-        elif isinstance(value, list | dict):
-            args.append(f"--robot.{key}={json.dumps(value, separators=(',', ':'))}")
+        args.extend(_build_config_json_value_args(("robot", key), value))
     return args
+
+
+def _build_config_json_value_args(path: tuple[str, ...], value: Any) -> list[str]:
+    if isinstance(value, dict):
+        args: list[str] = []
+        for key, child_value in sorted(value.items()):
+            if not isinstance(key, str) or not key:
+                continue
+            args.extend(_build_config_json_value_args((*path, key), child_value))
+        return args
+    cli_key = ".".join(path)
+    if isinstance(value, str | int | float | bool) or value is None:
+        return [f"--{cli_key}={_format_draccus_cli_value(value)}"]
+    if isinstance(value, list):
+        return [f"--{cli_key}={json.dumps(value, separators=(',', ':'))}"]
+    return []
 
 
 def _format_draccus_cli_value(value: Any) -> str:

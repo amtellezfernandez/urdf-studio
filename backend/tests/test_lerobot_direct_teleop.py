@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -142,6 +143,43 @@ def test_lerobot_direct_teleop_command_uses_openarm_mini_pair() -> None:
     assert "--teleop.port=" not in " ".join(command)
     assert "port_left" not in " ".join(command)
     assert "port_right" not in " ".join(command)
+
+
+def test_lerobot_direct_teleop_command_flattens_bimanual_follower_config() -> None:
+    command = build_lerobot_direct_teleop_command(
+        RobotGatewayAdapterConfig(
+            adapter_kind=ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+            robot_id="openarm",
+            lerobot_robot_type="bi_openarm_follower",
+            lerobot_id="my_follower",
+            lerobot_config_json=json.dumps(
+                {
+                    "left_arm_config": {
+                        "port": "/dev/serial/by-id/openarm-left",
+                        "side": "left",
+                        "max_relative_target": 5,
+                    },
+                    "right_arm_config": {
+                        "port": "/dev/serial/by-id/openarm-right",
+                        "side": "right",
+                        "max_relative_target": 5,
+                    },
+                }
+            ),
+        ),
+        _build_start_request(),
+    )
+
+    assert command[0].endswith("lerobot-teleoperate")
+    assert "--robot.type=bi_openarm_follower" in command
+    assert "--robot.left_arm_config.port=/dev/serial/by-id/openarm-left" in command
+    assert "--robot.left_arm_config.side=left" in command
+    assert "--robot.left_arm_config.max_relative_target=5" in command
+    assert "--robot.right_arm_config.port=/dev/serial/by-id/openarm-right" in command
+    assert "--robot.right_arm_config.side=right" in command
+    assert "--robot.right_arm_config.max_relative_target=5" in command
+    assert all("left_arm_config={" not in arg for arg in command)
+    assert all("right_arm_config={" not in arg for arg in command)
 
 
 def test_lerobot_direct_teleop_release_helper_releases_unique_leader_ports() -> None:

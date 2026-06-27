@@ -2968,6 +2968,43 @@ def test_lerobot_calibration_command_uses_gateway_config(tmp_path) -> None:
     assert "--robot.max_relative_target=5" in command
 
 
+def test_lerobot_calibration_command_flattens_bimanual_openarm_config() -> None:
+    command = build_lerobot_calibration_command(
+        RobotGatewayAdapterConfig(
+            adapter_kind=ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+            robot_id="openarm",
+            lerobot_robot_type="bi_openarm_follower",
+            lerobot_id="my_follower",
+            lerobot_config_json=json.dumps(
+                {
+                    "id": "ignored",
+                    "left_arm_config": {
+                        "port": "/dev/serial/by-id/openarm-left",
+                        "side": "left",
+                        "max_relative_target": 5,
+                    },
+                    "right_arm_config": {
+                        "port": "/dev/serial/by-id/openarm-right",
+                        "side": "right",
+                        "max_relative_target": 5,
+                    },
+                }
+            ),
+        )
+    )
+
+    assert "--robot.type=bi_openarm_follower" in command
+    assert "--robot.id=my_follower" in command
+    assert "--robot.left_arm_config.port=/dev/serial/by-id/openarm-left" in command
+    assert "--robot.left_arm_config.side=left" in command
+    assert "--robot.left_arm_config.max_relative_target=5" in command
+    assert "--robot.right_arm_config.port=/dev/serial/by-id/openarm-right" in command
+    assert "--robot.right_arm_config.side=right" in command
+    assert "--robot.right_arm_config.max_relative_target=5" in command
+    assert all("left_arm_config={" not in arg for arg in command)
+    assert all("right_arm_config={" not in arg for arg in command)
+
+
 def test_lerobot_calibration_command_can_use_selected_catalog_source(tmp_path) -> None:
     selected_dir = tmp_path / "teleoperators" / "so100_leader"
     selected_source = RobotGatewayLeRobotCalibrationSource(

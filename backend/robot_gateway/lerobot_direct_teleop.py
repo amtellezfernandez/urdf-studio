@@ -19,8 +19,8 @@ from backend.models.robot_gateway import (
 from backend.robot_gateway.adapters import RobotGatewayAdapterConfig
 from backend.robot_gateway.lerobot_calibration import (
     _resolve_lerobot_cmeel_lib_path,
-    build_lerobot_calibration_command,
     build_lerobot_leader_calibration_command,
+    build_lerobot_robot_cli_args,
 )
 from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
@@ -236,7 +236,7 @@ def build_lerobot_direct_teleop_command(
     )
     return [
         _resolve_lerobot_teleoperate_bin(),
-        *build_lerobot_calibration_command(config)[1:],
+        *build_lerobot_robot_cli_args(config),
         *leader_command[1:],
         f"--fps={request.fps}",
     ]
