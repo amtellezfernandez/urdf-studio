@@ -581,12 +581,12 @@ describe("OperatorTeleopPanel input routing", () => {
     container.remove();
   });
 
-  it("collapses detected OpenArm follower ports into one bimanual robot setup", async () => {
+  it("collapses detected OpenArm follower SocketCAN ports into one bimanual robot setup", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
-    const leftPort = "/dev/serial/by-id/openarm-left";
-    const rightPort = "/dev/serial/by-id/openarm-right";
+    const leftPort = "can0";
+    const rightPort = "can1";
     let configured = false;
     let savedEnvContent = "";
     const manifest = () => ({
@@ -776,7 +776,144 @@ describe("OperatorTeleopPanel input routing", () => {
     expect(savedEnvContent).toContain("URDF_ROBOT_GATEWAY_LEROBOT_ID=my_follower");
     expect(savedEnvContent).toContain(`"port":"${leftPort}"`);
     expect(savedEnvContent).toContain(`"port":"${rightPort}"`);
+    expect(savedEnvContent).toContain('"can_interface":"socketcan"');
+    expect(savedEnvContent).toContain('"use_can_fd":true');
     expect(container.textContent).toContain("Bi OpenArm arm");
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("does not save serial OpenArm follower detections as LeRobot robot setup", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const leftPort = "/dev/serial/by-id/openarm-left";
+    const rightPort = "/dev/serial/by-id/openarm-right";
+    let savedEnvContent = "";
+    const serialOpenArmPart = (side: "left" | "right") => ({
+      id: `damiao:openarm_follower:my_follower_${side}:all:1-2-3-4-5-6-7-8`,
+      kind: "arm",
+      label: `openarm_follower · my_follower_${side} · all`,
+      actuator_count: 8,
+      motor_bus: "damiao",
+      motor_ids: [1, 2, 3, 4, 5, 6, 7, 8],
+      calibration_category: "robots",
+      calibration_profile: "openarm_follower",
+      calibration_id: `my_follower_${side}`,
+      calibration_group: "all",
+      configured_port_status: "none",
+    });
+    const fetchMock: typeof fetch = vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url.includes("urdf-studio-teleop") || url.endsWith("/manifest")) {
+        return new Response(
+          JSON.stringify({
+            contract_version: "urdf-studio.teleop.v1",
+            provider_id: "test-provider",
+            provider_display_name: "Test Provider",
+            capabilities: {
+              observe: true,
+              telemetry: true,
+              video: false,
+              record: false,
+              control: true,
+              estop: true,
+            },
+            profiles: [],
+            camera_streams: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/session")) {
+        return new Response(
+          JSON.stringify({
+            state: "active",
+            current_session_id: "operator-session-1",
+            robot_id: "openarm",
+            mode: "manual",
+            runtime_mode: "observe",
+            control_lease_owner: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/stats")) {
+        return new Response(
+          JSON.stringify({
+            operator_rtt_ms: 5,
+            estimated_end_to_end_latency_ms: 10,
+            robot_state: {
+              mode: "manual",
+              connection_state: "idle",
+              estop: false,
+              control_rtt_ms: 4,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/hardware/leaders")) {
+        return new Response(
+          JSON.stringify({
+            leaders: [leftPort, rightPort].map((port) => ({
+              id: port,
+              path: port,
+              device_path: port,
+              identity_key: `serial-by-id:${port}`,
+              identity_stable: true,
+              source: "serial_by_id",
+              available: true,
+              leader_type: "serial_leader_candidate",
+              hardware_family: "arm_controller",
+              motor_bus: "damiao",
+              motor_ids: [1, 2, 3, 4, 5, 6, 7, 8],
+              motor_count: 8,
+              control_parts: [
+                serialOpenArmPart("left"),
+                serialOpenArmPart("right"),
+              ],
+            })),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith(OPERATOR_HELPER_ENV_CONFIG_PATH)) {
+        if (init?.method === "PUT") {
+          savedEnvContent = JSON.parse(String(init.body)).content;
+        }
+        return new Response(
+          JSON.stringify({
+            path: "/workspace/.env.robot.local",
+            content: "URDF_SIMULATOR_API_TOKEN=keep\n",
+            exists: true,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    }) as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "hardware",
+          studioRobotName: "openarm",
+        }),
+      );
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+
+    expect(container.textContent).toContain("2 detected");
+    expect(container.textContent).toContain("Uncalibrated motor chain");
+    expect(container.textContent).not.toContain("bi_openarm_follower · my_follower");
+    expect(container.textContent).not.toContain("Use target");
+    expect(savedEnvContent).toBe("");
 
     await act(async () => {
       root.unmount();

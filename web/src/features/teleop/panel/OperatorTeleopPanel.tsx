@@ -443,14 +443,25 @@ const buildOpenArmFollowerConfigJson = ({
     left_arm_config: {
       port: leftPort,
       side: OPERATOR_OPENARM_FOLLOWER.leftSide,
+      can_interface: "socketcan",
+      use_can_fd: true,
+      can_bitrate: 1_000_000,
+      can_data_bitrate: 5_000_000,
       max_relative_target: 5,
     },
     right_arm_config: {
       port: rightPort,
       side: OPERATOR_OPENARM_FOLLOWER.rightSide,
+      can_interface: "socketcan",
+      use_can_fd: true,
+      can_bitrate: 1_000_000,
+      can_data_bitrate: 5_000_000,
       max_relative_target: 5,
     },
   });
+
+const isOpenArmFollowerSocketCanPort = (port: string): boolean =>
+  /^can\d+$/u.test(port.trim());
 
 const buildFollowerDetectedSetupTargets = (
   detection: OperatorLeaderDetection | null,
@@ -497,6 +508,7 @@ const buildFollowerDetectedSetupTargets = (
         new Set(candidates.map((candidate) => candidate.leader.path)),
       ).sort();
       if (ports.length < 2) return [];
+      if (!ports.every(isOpenArmFollowerSocketCanPort)) return [];
       const matchedLeft = candidates.find(
         (candidate) =>
           candidate.side === "left" &&
@@ -513,6 +525,12 @@ const buildFollowerDetectedSetupTargets = (
         ports.find((port) => port !== leftPort) ??
         null;
       if (!rightPort) return [];
+      if (
+        !isOpenArmFollowerSocketCanPort(leftPort) ||
+        !isOpenArmFollowerSocketCanPort(rightPort)
+      ) {
+        return [];
+      }
       const leftPart = candidates.find(
         (candidate) =>
           candidate.side === "left" && candidate.leader.path === leftPort,
@@ -572,7 +590,9 @@ const buildFollowerHardwareDetectedTargets = (
       (part) =>
         part.kind === "arm" &&
         part.actuatorCount > 0 &&
-        part.calibrationCategory === "robots",
+        part.calibrationCategory === "robots" &&
+        (part.calibrationProfile !== OPERATOR_OPENARM_FOLLOWER.robotType ||
+          isOpenArmFollowerSocketCanPort(leader.path)),
     );
     if (robotParts.length > 0) {
       return robotParts.map((part) => {
