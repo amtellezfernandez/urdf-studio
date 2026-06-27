@@ -4951,7 +4951,7 @@ export const FolderUploadScreen = memo(
                           return;
                         }
                         window.location.assign(
-                          buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.experiments }),
+                          buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets }),
                         );
                         return;
                       }

@@ -3147,7 +3147,7 @@ const Index = () => {
     studioIssueReportUrl: studioIssueReportUrl ?? undefined,
     onOpenTrainingMode: () => {
       window.open(
-        buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.experiments }),
+        buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets }),
         "_blank",
         "noopener,noreferrer",
       );
@@ -3558,7 +3558,7 @@ const Index = () => {
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
       onOpenTrainingMode={() => {
         window.open(
-          buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.experiments }),
+          buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets }),
           "_blank",
           "noopener,noreferrer",
         );
