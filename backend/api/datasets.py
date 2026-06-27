@@ -4,7 +4,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from fastapi import APIRouter, Header, HTTPException, Query, Response
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile
 
 from backend.models.dataset_alignment import (
     DatasetRepresentationValidationRequest,
@@ -16,10 +16,15 @@ from backend.models.dataset_alignment import (
     MappingSpec,
 )
 from backend.models.datasets import (
+    DatasetLocalExportResponse,
     DatasetMixRequest,
     DatasetTreatmentAnalysisResponse,
 )
 from backend.services.dataset_alignment import get_dataset_alignment_service
+from backend.services.dataset_local_exports import (
+    DatasetLocalExportError,
+    extract_lerobot_archive_for_ops,
+)
 from backend.services.dataset_treatments import analyze_dataset_treatment
 from backend.services.dataset_source_contract import normalize_local_dataset_paths
 
@@ -92,6 +97,28 @@ async def hf_proxy(
             status_code=502,
             detail=f"Failed to fetch Hugging Face resource: {error}",
         ) from error
+
+
+@router.post(
+    "/local-exports",
+    response_model=DatasetLocalExportResponse,
+)
+async def create_local_dataset_export(
+    archive: UploadFile = File(...),
+    dataset_name: str = Form(default=""),
+) -> DatasetLocalExportResponse:
+    try:
+        result = extract_lerobot_archive_for_ops(
+            await archive.read(),
+            dataset_name=dataset_name,
+        )
+    except DatasetLocalExportError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return DatasetLocalExportResponse(
+        datasetPath=str(result.dataset_path),
+        datasetName=result.dataset_name,
+        fileCount=result.file_count,
+    )
 
 
 @router.post(

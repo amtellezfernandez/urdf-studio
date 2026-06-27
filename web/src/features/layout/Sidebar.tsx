@@ -453,7 +453,6 @@ export const Sidebar = ({
     availableJoints: availableJointsStore,
     exportLimitMode,
     jointLimits,
-    buildMjlabRobotModel: buildRecordingMjlabRobotModel,
     metricsEnabled,
     loadJSZip,
     effectiveHfToken,

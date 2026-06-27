@@ -90,6 +90,12 @@ class DatasetTreatmentAnalysisResponse(BaseModel):
     treatment_manifest: DatasetTreatmentManifest
 
 
+class DatasetLocalExportResponse(BaseModel):
+    dataset_path: str = Field(..., alias="datasetPath")
+    dataset_name: str = Field(..., alias="datasetName")
+    file_count: int = Field(..., ge=0, alias="fileCount")
+
+
 class DatasetMixArtifactRef(BaseModel):
     store_kind: Literal["local"]
     object_path: str = Field(..., min_length=1)
