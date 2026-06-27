@@ -136,7 +136,7 @@ describe("operatorFollowerConnectionPolicy", () => {
     expect(isFollowerArmPartProfile(mixedProfile)).toBe(true);
   });
 
-  it("prefers a concrete left or right arm target over a dual-arm gateway profile", () => {
+  it("prefers the dual-arm gateway profile over single-arm targets", () => {
     const dualArmProfile = {
       ...TEST_ARM_FOLLOWER_PROFILE,
       id: "openarm_dual_arm_joint_jog",
@@ -164,7 +164,7 @@ describe("operatorFollowerConnectionPolicy", () => {
         leftArmProfile,
         rightArmProfile,
       ])?.id,
-    ).toBe(leftArmProfile.id);
+    ).toBe(dualArmProfile.id);
   });
 
   it("builds remote follower target options with port detail without exposing stale follower state", () => {

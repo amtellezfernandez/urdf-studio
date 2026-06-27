@@ -1146,6 +1146,8 @@ export const OperatorTeleopPanel = ({
     useRef<OperatorLeaderTelemetryZeroOffsets>({});
   const staleStoredLeaderRoleCleanupDoneRef = useRef(false);
   const leaderHardwareAssignedRef = useRef(false);
+  const autoFollowerConnectionAttemptKeyRef = useRef<string | null>(null);
+  const autoFollowerConnectionAfterScanRef = useRef(false);
   const baseUrlRef = useRef(baseUrl);
   const operatorIdRef = useRef(operatorId);
   const selectedProfileIdRef = useRef<OperatorTeleopProfileId | null>(null);
@@ -2326,6 +2328,7 @@ export const OperatorTeleopPanel = ({
   }, []);
 
   const handleOpenArmLeaderScan = useCallback(() => {
+    autoFollowerConnectionAfterScanRef.current = true;
     if (!openArmLeaderDetectionRequested) {
       setOpenArmLeaderDetectionRequested(true);
       return;
@@ -4513,6 +4516,50 @@ export const OperatorTeleopPanel = ({
     selectedFollowerHardwareDeviceKey,
     selectedFollowerHardwareDeviceKeys,
     setPanelStatusMessage,
+  ]);
+
+  useEffect(() => {
+    if (
+      !showFollowerHardwareTools ||
+      !autoFollowerConnectionAfterScanRef.current ||
+      !openArmLeaderDetectionRequested ||
+      !openArmLeaderDetectionResolved ||
+      openArmLeaderDetectionError ||
+      !lerobotFollowerHardwareSelected ||
+      selectedFollowerDetectedSetupTarget ||
+      followerHardwareConnectionActive ||
+      followerHardwareConnectDisabled ||
+      leaseBusy ||
+      !followerHardwareProfile ||
+      !selectedFollowerHardwareDeviceKey
+    ) {
+      return;
+    }
+    const attemptKey = [
+      followerHardwareProfile.id,
+      selectedFollowerHardwareDeviceKey,
+      selectedFollowerHardwareDeviceKeys.join("|"),
+    ].join(":");
+    if (autoFollowerConnectionAttemptKeyRef.current === attemptKey) {
+      return;
+    }
+    autoFollowerConnectionAttemptKeyRef.current = attemptKey;
+    autoFollowerConnectionAfterScanRef.current = false;
+    void handleToggleFollowerHardwareConnection();
+  }, [
+    followerHardwareConnectDisabled,
+    followerHardwareConnectionActive,
+    followerHardwareProfile,
+    handleToggleFollowerHardwareConnection,
+    leaseBusy,
+    lerobotFollowerHardwareSelected,
+    openArmLeaderDetectionError,
+    openArmLeaderDetectionRequested,
+    openArmLeaderDetectionResolved,
+    selectedFollowerDetectedSetupTarget,
+    selectedFollowerHardwareDeviceKey,
+    selectedFollowerHardwareDeviceKeys,
+    showFollowerHardwareTools,
   ]);
 
   return (

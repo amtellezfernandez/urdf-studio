@@ -134,12 +134,14 @@ export const resolveFollowerHardwareProfile = (
     realHardwareProfiles.find(
       (profile) =>
         isFollowerArmPartProfile(profile) &&
-        isSingleArmFollowerProfile(profile) &&
+        !isSingleArmFollowerProfile(profile) &&
         !profile.capabilities.baseTwist,
     ) ??
     realHardwareProfiles.find(
       (profile) =>
-        isFollowerArmPartProfile(profile) && !profile.capabilities.baseTwist,
+        isFollowerArmPartProfile(profile) &&
+        isSingleArmFollowerProfile(profile) &&
+        !profile.capabilities.baseTwist,
     ) ??
     realHardwareProfiles.find(isFollowerArmPartProfile) ??
     null

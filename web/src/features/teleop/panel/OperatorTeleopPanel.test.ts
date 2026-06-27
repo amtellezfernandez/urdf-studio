@@ -3300,6 +3300,199 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     container.remove();
   });
 
+  it("auto-connects a local LeRobot follower after the user rescans", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let leaseOwner: string | null = null;
+    const fetchMock: typeof fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("urdf-studio-teleop") || url.endsWith("/manifest")) {
+        return new Response(
+          JSON.stringify({
+            contract_version: "urdf-studio.teleop.v1",
+            provider_id: "urdf-studio.robot-gateway",
+            provider_display_name: "URDF Studio Robot Gateway",
+            capabilities: {
+              observe: true,
+              telemetry: true,
+              video: false,
+              record: false,
+              control: true,
+              estop: true,
+            },
+            profiles: [
+              {
+                id: "bi_openarm_follower_joint_jog",
+                label: "Bi OpenArm follower joint jog",
+                summary: "LeRobot follower target.",
+                control_target_label: "Bi OpenArm follower",
+                transport: "robot_gateway",
+                capabilities: {
+                  arm_joint_state: true,
+                  arm_joint_command: true,
+                  state_mirroring: true,
+                  joint_jog: true,
+                },
+                robot_family: "manipulator",
+                robot_id: "openarm",
+                adapter_id: "lerobot",
+                teleoperation_mode: "real_hardware",
+                hardware_device_key: "can0 | can1",
+                hardware_device_keys: ["can0", "can1"],
+                controlled_joint_names: ["left_joint_1", "right_joint_1"],
+                topics: {
+                  joint_states: ["provider:/telemetry/state"],
+                  joint_jog: "provider:/control/joint-jog",
+                },
+                limits: {
+                  max_linear_speed_mps: 0,
+                  max_yaw_speed_rps: 0,
+                  command_tick_ms: TEST_PROVIDER_COMMAND_TICK_MS,
+                  deadman_timeout_ms: TEST_PROVIDER_DEADMAN_TIMEOUT_MS,
+                  max_joint_jog_delta_rad:
+                    TEST_PROVIDER_JOINT_LIMITS.defaultJointJogStepRad,
+                  default_joint_jog_step_rad:
+                    TEST_PROVIDER_JOINT_LIMITS.defaultJointJogStepRad,
+                  max_joint_velocity_rad_per_s:
+                    TEST_PROVIDER_JOINT_LIMITS.maxJointVelocityRadPerSec,
+                },
+              },
+            ],
+            camera_streams: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/session")) {
+        return new Response(
+          JSON.stringify({
+            state: "active",
+            current_session_id: "robot-gateway-session",
+            robot_id: "openarm",
+            mode: "manual",
+            runtime_mode: "control",
+            control_lease_owner: leaseOwner,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/stats")) {
+        return new Response(
+          JSON.stringify({
+            operator_rtt_ms: 5,
+            estimated_end_to_end_latency_ms: 10,
+            robot_state: {
+              mode: "manual",
+              connection_state: "active",
+              estop: false,
+              control_rtt_ms: 4,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/hardware/leaders")) {
+        return new Response(
+          JSON.stringify({
+            available: true,
+            leaders: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/lease/request")) {
+        leaseOwner = "browser-operator";
+        return new Response(
+          JSON.stringify({
+            accepted: true,
+            operator_id: leaseOwner,
+            profile_id: "bi_openarm_follower_joint_jog",
+            reason: "Control lease granted.",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/telemetry/state")) {
+        return new Response(
+          JSON.stringify({
+            robot_id: "openarm",
+            adapter_id: "lerobot",
+            profile_id: "bi_openarm_follower_joint_jog",
+            sequence: 1,
+            source_ts_ms: Date.now(),
+            mode: "manual",
+            estop: false,
+            heartbeat_ok: true,
+            joint_positions_rad: { left_joint_1: 0, right_joint_1: 0 },
+            gripper_positions_rad: {},
+            hardware_motion_safety: {
+              motion_ready: true,
+              authoritative_joint_feedback_ready: true,
+              joint_rotation_calibration_ready: true,
+              joint_rotation_calibration_id: "my_follower",
+              self_collision_preflight_ready: true,
+              gripper_motion_enabled: true,
+              last_reject_reason: null,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith(OPERATOR_HELPER_LEROBOT_CALIBRATIONS_PATH)) {
+        return new Response(JSON.stringify({ entries: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "hardware",
+          studioRobotName: "openarm",
+        }),
+      );
+      await flushMicrotasks();
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+
+    expect(
+      vi
+        .mocked(fetchMock)
+        .mock.calls.some((call) => String(call[0]).endsWith("/lease/request")),
+    ).toBe(false);
+
+    const rescanButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Rescan",
+    );
+    expect(rescanButton).toBeTruthy();
+    await act(async () => {
+      rescanButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await flushMicrotasks();
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+
+    const leaseRequest = vi
+      .mocked(fetchMock)
+      .mock.calls.find((call) => String(call[0]).endsWith("/lease/request"));
+    expect(leaseRequest).toBeTruthy();
+    expect(JSON.parse(String(leaseRequest?.[1]?.body))).toMatchObject({
+      operator_id: "browser-operator",
+      profile_id: "bi_openarm_follower_joint_jog",
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
   it("opens the selected LeRobot follower calibration file", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
