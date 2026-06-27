@@ -1850,11 +1850,21 @@ export const OperatorTeleopPanel = ({
     followerHardwareMotionReady &&
     !lerobotDirectTeleopAvailable &&
     !lerobotDirectTeleopRunning;
+  const manualJointJogProfileSelected = Boolean(
+    selectedProfile &&
+      selectedProfile.capabilities.jointJog &&
+      selectedProfile.adapterId !== OPERATOR_TELEOP_ADAPTER_IDS.lerobot,
+  );
   const jointJogAvailable = Boolean(
+    manualJointJogProfileSelected &&
     gatewayControlActive &&
-    selectedProfile?.capabilities.jointJog &&
     controlledJointNames.length > 0 &&
     followerHardwareMotionReady,
+  );
+  const showManualJointJogControls = Boolean(
+    showFollowerHardwareTools &&
+      followerHardwareConnected &&
+      manualJointJogProfileSelected,
   );
   const openArmCalibrationProfileSelected = Boolean(
     selectedProfile &&
@@ -4878,9 +4888,7 @@ export const OperatorTeleopPanel = ({
         </div>
       ) : null}
 
-      {showFollowerHardwareTools &&
-      followerHardwareConnected &&
-      selectedProfile?.capabilities.jointJog ? (
+      {showManualJointJogControls ? (
         <div className="rounded-md border border-border/40 bg-background/40 p-2">
           <div className="mb-2 text-[10px] text-muted-foreground">
             Joint jog

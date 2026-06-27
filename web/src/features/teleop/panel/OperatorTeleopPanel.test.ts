@@ -3378,6 +3378,9 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
           "{}",
       ),
     ).toEqual({});
+    expect(container.textContent).not.toContain("Joint jog");
+    expect(container.textContent).not.toContain("Manual calibration only.");
+    expect(container.textContent).not.toContain("Calibrate jog");
 
     const fixOrderButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Fix order",
