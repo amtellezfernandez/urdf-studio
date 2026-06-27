@@ -755,10 +755,10 @@ describe("OperatorTeleopPanel input routing", () => {
     ) as HTMLSelectElement | null;
     expect(
       Array.from(targetSelect?.options ?? []).map((option) => option.textContent),
-    ).toEqual(["bi_openarm_follower · my_follower (Use detected)"]);
+    ).toEqual(["bi_openarm_follower · my_follower"]);
 
     const useButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Use",
+      (button) => button.textContent === "Use target",
     );
     expect(useButton).toBeTruthy();
     await act(async () => {
@@ -1897,6 +1897,169 @@ describe("OperatorTeleopPanel input routing", () => {
     container.remove();
   });
 
+  it("does not block controller connection while a LeRobot follower is selected", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const serialPort =
+      "/dev/serial/by-id/usb-1a86_USB_Single_Serial_58FA095368-if00";
+    useJointStore.getState().setAvailableJoints([
+      "arm_shoulder_pan",
+      "arm_shoulder_lift",
+      "arm_elbow_flex",
+      "arm_forearm_roll",
+      "arm_wrist_flex",
+      "arm_wrist_roll",
+    ]);
+    window.localStorage.setItem(
+      OPERATOR_DEVICE_ROLE_ASSIGNMENTS_STORAGE_KEY,
+      JSON.stringify({ [serialPort]: "follower" }),
+    );
+    const fetchMock: typeof fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes("urdf-studio-teleop")) {
+        return new Response(
+          JSON.stringify({
+            contract_version: "urdf-studio.teleop.v1",
+            provider_id: "urdf-studio.robot-gateway",
+            provider_display_name: "URDF Studio Robot Gateway",
+            capabilities: {
+              observe: true,
+              telemetry: true,
+              video: false,
+              record: false,
+              control: true,
+              estop: true,
+            },
+            profiles: [
+              {
+                id: "so100_follower_joint_jog",
+                label: "SO100 follower joint jog",
+                summary: "LeRobot follower target.",
+                control_target_label: "Arm",
+                transport: "robot_gateway",
+                capabilities: {
+                  arm_joint_state: true,
+                  arm_joint_command: true,
+                  state_mirroring: true,
+                  joint_jog: true,
+                },
+                robot_family: "manipulator",
+                robot_id: "so100",
+                adapter_id: "lerobot",
+                teleoperation_mode: "real_hardware",
+                hardware_device_key: serialPort,
+                controlled_joint_names: ["arm_shoulder_pan"],
+                topics: {
+                  joint_states: ["provider:/telemetry/state"],
+                  joint_jog: "provider:/control/joint-jog",
+                },
+              },
+            ],
+            camera_streams: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/session")) {
+        return new Response(
+          JSON.stringify({
+            state: "active",
+            current_session_id: "operator-session-1",
+            robot_id: "so100",
+            mode: "manual",
+            runtime_mode: "observe",
+            control_lease_owner: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/stats")) {
+        return new Response(
+          JSON.stringify({
+            operator_rtt_ms: TEST_PROVIDER_MAX_LINEAR_SPEED_MPS,
+            estimated_end_to_end_latency_ms: TEST_PROVIDER_MAX_LINEAR_SPEED_MPS,
+            robot_state: {
+              mode: "manual",
+              connection_state: "active",
+              estop: false,
+              control_rtt_ms: TEST_PROVIDER_MAX_LINEAR_SPEED_MPS,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/hardware/leaders")) {
+        return new Response(
+          JSON.stringify({
+            leaders: [
+              {
+                id: "so100-leader",
+                path: serialPort,
+                device_path: "/dev/ttyACM0",
+                identity_key: "serial-by-id:1a86_USB_Single_Serial_58FA095368",
+                identity_stable: true,
+                serial: "58FA095368",
+                source: "serial_by_id",
+                available: true,
+                leader_type: "serial_leader_candidate",
+                hardware_family: "arm_controller",
+                motor_bus: "feetech",
+                motor_ids: [1, 2, 3, 4, 5, 6],
+                motor_count: 6,
+                control_parts: [
+                  {
+                    id: "feetech:1-2-3-4-5-6",
+                    kind: "arm",
+                    label: "Arm",
+                    actuator_count: 6,
+                    motor_bus: "feetech",
+                    motor_ids: [1, 2, 3, 4, 5, 6],
+                    calibration_category: "teleoperators",
+                    calibration_profile: "so100_leader",
+                    calibration_id: "my_leader",
+                    calibration_group: "all",
+                    configured_port: serialPort,
+                  },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    }) as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorTeleopPanel, {
+          panelView: "studio",
+          studioRobotName: "so100",
+        }),
+      );
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+
+    await clickOpenArmLeaderScan(container);
+
+    const conflict =
+      "Disconnect this device as follower before selecting it as leader.";
+    expect(container.textContent).not.toContain(conflict);
+    const connectLeaderButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Connect",
+    );
+    expect(connectLeaderButton?.disabled).toBe(false);
+    expect(connectLeaderButton?.title).toBe("");
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
   it("blocks undersized leaders for explicit left and right arm targets", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -2969,11 +3132,10 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
         (button) => button.textContent === "Connect",
       ),
     ).toBe(true);
-    expect(
-      Array.from(container.querySelectorAll("button")).some(
-        (button) => button.textContent === "Disconnect",
-      ),
-    ).toBe(false);
+    const inactiveDisconnectButton = Array.from(
+      container.querySelectorAll("button"),
+    ).find((button) => button.textContent === "Disconnect");
+    expect(inactiveDisconnectButton?.disabled).toBe(true);
     expect(
       vi
         .mocked(fetchMock)
@@ -3008,6 +3170,10 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     const followerJointNames = ["wrist_roll"];
     let leaseOwner: string | null = null;
     const wristRollPositionRad = 0;
+    window.localStorage.setItem(
+      OPERATOR_DEVICE_ROLE_ASSIGNMENTS_STORAGE_KEY,
+      JSON.stringify({ "/dev/serial/by-id/so100": "leader" }),
+    );
     const fetchMock: typeof fetch = vi.fn(async (input, init) => {
       const url = String(input);
       if (url.includes("urdf-studio-teleop")) {
@@ -3196,12 +3362,22 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     const connectButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Connect",
     );
+    expect(container.textContent).not.toContain(
+      "Disconnect this device as leader before selecting it as follower.",
+    );
+    expect(connectButton?.disabled).toBe(false);
     await act(async () => {
       connectButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await flushMicrotasks();
       await flushMicrotasks();
       await flushMicrotasks();
     });
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(OPERATOR_DEVICE_ROLE_ASSIGNMENTS_STORAGE_KEY) ??
+          "{}",
+      ),
+    ).toEqual({});
 
     const fixOrderButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Fix order",
@@ -3544,7 +3720,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     ).toBe(false);
     expect(stopOpenArmHfLiveObserveMock).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Motion safety ready");
-    expect(container.textContent).toContain("RobotConnected");
+    expect(container.textContent).toContain("RobotUsing");
     expect(container.textContent).not.toContain("Before motion");
     expect(container.textContent).not.toContain("OKFollower gateway");
     expect(container.textContent).not.toContain("OKJoint rotation calibration");

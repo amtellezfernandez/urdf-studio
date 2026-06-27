@@ -529,7 +529,7 @@ const buildFollowerDetectedSetupTargets = (
           id: `detected:${robotType}:${baseCalibrationId}:${leftPort}:${rightPort}`,
           deviceKey: `${leftPort}|${rightPort}`,
           label,
-          optionLabel: `${label} (Use detected)`,
+          optionLabel: label,
           detailLines: [
             `Left: ${leftPort}`,
             `Right: ${rightPort}`,
@@ -1397,6 +1397,8 @@ export const OperatorTeleopPanel = ({
       selectedFollowerProfileId,
     ],
   );
+  const lerobotFollowerHardwareSelected =
+    followerHardwareProfile?.adapterId === OPERATOR_TELEOP_ADAPTER_IDS.lerobot;
   const selectedFollowerHardwareDeviceKey = useMemo(
     () =>
       followerHardwareProfile
@@ -1417,11 +1419,13 @@ export const OperatorTeleopPanel = ({
         : [],
     [providerManifest?.providerId, followerHardwareProfile],
   );
-  const followerHardwareRoleConflict = resolveOperatorHardwareRoleConflict({
-    assignments: operatorDeviceRoleAssignments,
-    deviceKey: selectedFollowerHardwareDeviceKeys,
-    requestedRole: "follower",
-  });
+  const followerHardwareRoleConflict = lerobotFollowerHardwareSelected
+    ? null
+    : resolveOperatorHardwareRoleConflict({
+        assignments: operatorDeviceRoleAssignments,
+        deviceKey: selectedFollowerHardwareDeviceKeys,
+        requestedRole: "follower",
+      });
   const connectedTeleoperationMode = useMemo(
     () =>
       selectedProfile?.teleoperationMode ??
@@ -1543,7 +1547,9 @@ export const OperatorTeleopPanel = ({
       buildFollowerHardwareTargetOptions({
         profiles: providerProfiles,
         providerId: providerManifest?.providerId,
-        assignments: operatorDeviceRoleAssignments,
+        assignments: lerobotFollowerHardwareSelected
+          ? {}
+          : operatorDeviceRoleAssignments,
         selectedProfileId: followerHardwareProfile?.id ?? null,
         connectedDeviceKey: followerHardwareConnected
           ? (connectedFollowerHardwareDeviceKey ??
@@ -1554,6 +1560,7 @@ export const OperatorTeleopPanel = ({
       connectedFollowerHardwareDeviceKey,
       followerHardwareConnected,
       followerHardwareProfile?.id,
+      lerobotFollowerHardwareSelected,
       operatorDeviceRoleAssignments,
       providerManifest?.providerId,
       providerProfiles,
@@ -1699,8 +1706,7 @@ export const OperatorTeleopPanel = ({
       }),
     [baseLeaderStatePollTargets, calibrationFileEditSession],
   );
-  const lerobotDirectTeleopAvailable =
-    followerHardwareProfile?.adapterId === OPERATOR_TELEOP_ADAPTER_IDS.lerobot;
+  const lerobotDirectTeleopAvailable = lerobotFollowerHardwareSelected;
   const resetLeRobotDirectTeleopBrowserMotion = useCallback(() => {
     clearActiveControls();
     commandQueue.clearQueued();
@@ -3518,11 +3524,13 @@ export const OperatorTeleopPanel = ({
         setPanelStatusMessage(compatibility.reason);
         return;
       }
-      const roleConflict = resolveOperatorHardwareRoleConflict({
-        assignments: operatorDeviceRoleAssignments,
-        deviceKey: buildLeaderDeviceRoleKeys(leader),
-        requestedRole: "leader",
-      });
+      const roleConflict = lerobotFollowerHardwareSelected
+        ? null
+        : resolveOperatorHardwareRoleConflict({
+            assignments: operatorDeviceRoleAssignments,
+            deviceKey: buildLeaderDeviceRoleKeys(leader),
+            requestedRole: "leader",
+          });
       if (roleConflict) {
         setPanelStatusMessage(roleConflict);
         return;
@@ -3541,6 +3549,7 @@ export const OperatorTeleopPanel = ({
     },
     [
       openArmLeaderDetection?.leaders,
+      lerobotFollowerHardwareSelected,
       operatorDeviceRoleAssignments,
       setPanelStatusMessage,
     ],
@@ -3583,11 +3592,21 @@ export const OperatorTeleopPanel = ({
         setPanelStatusMessage(controlPartCompatibility.reason);
         return false;
       }
-      const roleAssignment = assignOperatorDeviceRoleForKeys(
-        operatorDeviceRoleAssignments,
-        buildLeaderDeviceRoleKeys(leader),
-        "leader",
-      );
+      const leaderDeviceRoleKeys = buildLeaderDeviceRoleKeys(leader);
+      const roleAssignment = lerobotFollowerHardwareSelected
+        ? {
+            accepted: true as const,
+            assignments: releaseOperatorDeviceRoleForKeys(
+              operatorDeviceRoleAssignments,
+              leaderDeviceRoleKeys,
+            ),
+            conflict: null,
+          }
+        : assignOperatorDeviceRoleForKeys(
+            operatorDeviceRoleAssignments,
+            leaderDeviceRoleKeys,
+            "leader",
+          );
       if (!roleAssignment.accepted) {
         setPanelStatusMessage(roleAssignment.conflict);
         return false;
@@ -3633,6 +3652,7 @@ export const OperatorTeleopPanel = ({
     },
     [
       openArmLeaderDetection?.leaders,
+      lerobotFollowerHardwareSelected,
       operatorLeaderAssignments,
       operatorDeviceRoleAssignments,
       requestLeaderTeleopViewerMode,
@@ -3746,11 +3766,13 @@ export const OperatorTeleopPanel = ({
           : null,
       preferredTargetGroupId,
     });
-    const leaderRoleConflict = resolveOperatorHardwareRoleConflict({
-      assignments: operatorDeviceRoleAssignments,
-      deviceKey: buildLeaderDeviceRoleKeys(leader),
-      requestedRole: "leader",
-    });
+    const leaderRoleConflict = lerobotFollowerHardwareSelected
+      ? null
+      : resolveOperatorHardwareRoleConflict({
+          assignments: operatorDeviceRoleAssignments,
+          deviceKey: buildLeaderDeviceRoleKeys(leader),
+          requestedRole: "leader",
+        });
     const leaderConnectionState = resolveOperatorHardwareConnectionState({
       deviceAvailable: leader.available,
       operationBusy: false,
@@ -3928,13 +3950,24 @@ export const OperatorTeleopPanel = ({
     const selectionGridClassName = canChooseOpenArmMiniCalibrationSetup
       ? "grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)]"
       : "grid-cols-2";
+    const leaderInUse = connectedTargetOption !== null;
     return (
-      <div key={leader.id} className="rounded border border-border/30 p-1">
+      <div
+        key={leader.id}
+        className={cn(
+          "rounded border p-1",
+          leaderInUse
+            ? "border-emerald-500/55 bg-emerald-500/10"
+            : "border-border/30",
+        )}
+      >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <span className="truncate font-mono text-foreground">
             {leader.path}
           </span>
-          {leaderConnectionState.status === "blocked" ? (
+          {leaderInUse ? (
+            <span className="text-emerald-200">using</span>
+          ) : leaderConnectionState.status === "blocked" ? (
             <span className="text-amber-200">blocked</span>
           ) : null}
         </div>
@@ -4079,7 +4112,10 @@ export const OperatorTeleopPanel = ({
             {connectedTargetOption ? (
               <button
                 type="button"
-                className={cn(controlButtonClass, "h-7 px-2")}
+                className={cn(
+                  controlButtonClass,
+                  "h-7 border-emerald-500/45 bg-emerald-500/15 px-2 text-emerald-100",
+                )}
                 onClick={() => void handleReleaseOperatorLeader(leader.identityKey)}
               >
                 Disconnect
@@ -4134,17 +4170,24 @@ export const OperatorTeleopPanel = ({
   };
 
   const renderLeaderCandidates = () => (
-    <div className="mt-2 rounded border border-border/30 bg-background/30 p-1.5">
+    <div
+      className={cn(
+        "mt-2 rounded border p-1.5",
+        selectedLocalLeaderAssigned
+          ? "border-emerald-500/45 bg-emerald-500/10"
+          : "border-border/30 bg-background/30",
+      )}
+    >
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="font-medium text-foreground">Detected targets</span>
         <div className="flex items-center gap-1">
           {!openArmLeaderDetectionResolved || openArmLeaderDetectionError ? (
             <span className="font-mono text-foreground">
               {!openArmLeaderDetectionRequested
-                ? "IDLE"
+                ? "Idle"
                 : !openArmLeaderDetectionResolved
-                  ? "CHECKING"
-                  : "ERROR"}
+                  ? "Scanning"
+                  : "Error"}
             </span>
           ) : null}
           <button
@@ -4376,11 +4419,20 @@ export const OperatorTeleopPanel = ({
       Object.keys(operatorLeaderAssignments).length === 0
         ? releaseStoredOperatorLeaderRoles()
         : operatorDeviceRoleAssignments;
-    const roleAssignment = assignOperatorDeviceRoleForKeys(
-      activeRoleAssignments,
-      selectedFollowerHardwareDeviceKeys,
-      "follower",
-    );
+    const roleAssignment = lerobotFollowerHardwareSelected
+      ? {
+          accepted: true as const,
+          assignments: releaseOperatorDeviceRoleForKeys(
+            activeRoleAssignments,
+            selectedFollowerHardwareDeviceKeys,
+          ),
+          conflict: null,
+        }
+      : assignOperatorDeviceRoleForKeys(
+          activeRoleAssignments,
+          selectedFollowerHardwareDeviceKeys,
+          "follower",
+        );
     if (!roleAssignment.accepted) {
       if (activeRoleAssignments !== operatorDeviceRoleAssignments) {
         setOperatorDeviceRoleAssignments(activeRoleAssignments);
@@ -4420,6 +4472,7 @@ export const OperatorTeleopPanel = ({
     handleApplyDetectedFollowerSetup,
     handleReleaseLease,
     leaseHeldByThisOperator,
+    lerobotFollowerHardwareSelected,
     operatorDeviceRoleAssignments,
     operatorLeaderAssignments,
     providerManifest?.capabilities.control,
@@ -4656,6 +4709,7 @@ export const OperatorTeleopPanel = ({
           targetSelection={{
             disabled:
               leaseBusy ||
+              followerDetectedSetupApplying ||
               followerHardwareConnectionActive,
             options: followerHardwareTargetOptions,
             selectedProfileId:

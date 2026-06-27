@@ -215,7 +215,7 @@ describe("OperatorFollowerConnectionCard", () => {
                 profileId: "detected:bi_openarm_follower:my_follower",
                 deviceKey: "/dev/serial/by-id/openarm-left|/dev/serial/by-id/openarm-right",
                 label: "bi_openarm_follower · my_follower",
-                optionLabel: "bi_openarm_follower · my_follower (Use detected)",
+                optionLabel: "bi_openarm_follower · my_follower",
                 detailLines: [
                   "Left: /dev/serial/by-id/openarm-left",
                   "Right: /dev/serial/by-id/openarm-right",
@@ -242,7 +242,7 @@ describe("OperatorFollowerConnectionCard", () => {
     expect(container.textContent).toContain("/dev/serial/by-id/openarm-left");
     expect(
       Array.from(container.querySelectorAll("button")).some(
-        (button) => button.textContent === "Use",
+        (button) => button.textContent === "Use target",
       ),
     ).toBe(true);
 
@@ -253,6 +253,83 @@ describe("OperatorFollowerConnectionCard", () => {
       rescanButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onScan).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("labels detected setup application without showing robot connection state", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(OperatorFollowerConnectionCard, {
+          buttonClassName: "button",
+          calibration: {
+            available: false,
+            command: null,
+            isStarting: false,
+            message: null,
+            required: false,
+            onStart: vi.fn(),
+          },
+          calibrationFileEdit: createInactiveCalibrationFileEditView(),
+          calibrationSourceSelection: {
+            error: null,
+            options: [],
+            selectedSourceId: null,
+            showAll: false,
+            onSelectSource: vi.fn(),
+            onToggleShowAll: vi.fn(),
+          },
+          connection: {
+            connectDisabled: true,
+            issue: null,
+            isBusy: true,
+            isConnected: false,
+            isDisconnectAvailable: false,
+            motionReady: false,
+            motionSafetyLabel: "Motion safety not ready",
+            onToggleConnection: vi.fn(),
+          },
+          envConfig: {
+            configRef: "/workspace/.env.robot.local",
+            error: null,
+            isOpening: false,
+            onOpen: vi.fn(),
+          },
+          targetSelection: {
+            disabled: false,
+            selectedProfileId: "detected:bi_openarm_follower:my_follower",
+            onSelectProfile: vi.fn(),
+            options: [
+              {
+                profileId: "detected:bi_openarm_follower:my_follower",
+                deviceKey: "/dev/serial/by-id/openarm-left|/dev/serial/by-id/openarm-right",
+                label: "bi_openarm_follower · my_follower",
+                optionLabel: "bi_openarm_follower · my_follower",
+                detailLines: [
+                  "Left: /dev/serial/by-id/openarm-left",
+                  "Right: /dev/serial/by-id/openarm-right",
+                ],
+                assignedRole: null,
+                status: "available",
+                statusLabel: "setup",
+                setupOnly: true,
+                robotType: "bi_openarm_follower",
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Applying");
+    expect(container.textContent).not.toContain("Connecting");
 
     await act(async () => {
       root.unmount();

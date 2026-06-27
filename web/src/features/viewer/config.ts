@@ -44,7 +44,7 @@ export const IK_ARM_REACH_CONFIG = {
 };
 
 export const LIVE_TELEOP_JOINT_SYNC_CONFIG = {
-  positionEpsilonRad: 1e-6,
+  positionEpsilonRad: 0.005,
 };
 
 export const IK_ORBIT_DEFAULTS = {

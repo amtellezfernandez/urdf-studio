@@ -134,7 +134,7 @@ export const OPERATOR_HELPER_TELEMETRY_POLLING = {
 } as const;
 export const OPERATOR_HARDWARE_IK_COMMAND = {
   minDeltaRad: 1e-4,
-  leaderTargetDeadbandRad: 0.002,
+  leaderTargetDeadbandRad: 0.005,
   maxFollowerTelemetryAgeMs: OPERATOR_HELPER_TELEMETRY_POLLING.intervalMs * 10,
 } as const;
 export const OPERATOR_OPENARM_CALIBRATION_JOG = {

@@ -136,7 +136,8 @@ function formatFollowerConnectionStatus({
   selectedTarget: OperatorFollowerTargetOption | null;
   issue: string | null;
 }): string {
-  if (connection.isConnected) return "Connected";
+  if (connection.isConnected) return "Using";
+  if (selectedTarget?.setupOnly && connection.isBusy) return "Applying";
   if (connection.isBusy) return "Connecting";
   if (issue) return "Blocked";
   if (selectedTarget?.setupOnly) return "Setup";
@@ -188,10 +189,10 @@ const OperatorFollowerHardwareDetection = ({
           {!detection.resolved || detection.error ? (
             <span className="font-mono text-foreground">
               {!detection.requested
-                ? "IDLE"
+                ? "Idle"
                 : !detection.resolved
-                  ? "CHECKING"
-                  : "ERROR"}
+                  ? "Scanning"
+                  : "Error"}
             </span>
           ) : null}
           <button
@@ -332,6 +333,8 @@ export const OperatorFollowerConnectionCard = ({
     selectedTarget,
     issue: shortIssue,
   });
+  const setupTargetSelected = selectedTarget?.setupOnly === true;
+  const cardInUse = connection.isConnected;
   const cameraSummary =
     camera && camera.count > 0
       ? `${camera.count} camera${camera.count === 1 ? "" : "s"}`
@@ -342,10 +345,26 @@ export const OperatorFollowerConnectionCard = ({
       : "No LeRobot robot target.";
 
   return (
-    <div className="rounded-md border border-border/40 bg-background/40 p-2 text-[10px] text-muted-foreground">
+    <div
+      className={cn(
+        "rounded-md border p-2 text-[10px] text-muted-foreground",
+        cardInUse
+          ? "border-emerald-500/55 bg-emerald-500/10"
+          : "border-border/40 bg-background/40",
+      )}
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="font-medium text-foreground">Robot</div>
-        <div className="font-mono text-muted-foreground">
+        <div
+          className={cn(
+            "font-mono",
+            cardInUse
+              ? "text-emerald-200"
+              : shortIssue
+                ? "text-amber-200"
+                : "text-muted-foreground",
+          )}
+        >
           {connectionStatus}
         </div>
       </div>
@@ -383,7 +402,14 @@ export const OperatorFollowerConnectionCard = ({
       ) : null}
 
       <div className="space-y-1 border-t border-border/30 pt-1">
-        <div className="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-1.5">
+        <div
+          className={cn(
+            "grid items-center gap-1.5",
+            setupTargetSelected
+              ? "grid-cols-[minmax(0,1fr)_96px]"
+              : "grid-cols-[minmax(0,1fr)_76px_88px]",
+          )}
+        >
           <select
             className="h-7 min-w-0 rounded-md border border-border/60 bg-background px-2 font-mono text-[10px] text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Robot target"
@@ -405,23 +431,51 @@ export const OperatorFollowerConnectionCard = ({
               ))
             )}
           </select>
-          <button
-            type="button"
-            className={cn(buttonClassName, "h-7 px-2")}
-            disabled={connection.connectDisabled}
-            title={connection.connectDisabled ? (shortIssue ?? undefined) : undefined}
-            onClick={connection.onToggleConnection}
-          >
-            {connection.isBusy
-              ? selectedTarget?.setupOnly
-                ? "Using"
-                : "Connecting"
-              : connection.isConnected && connection.isDisconnectAvailable
-                ? "Disconnect"
-                : selectedTarget?.setupOnly
-                  ? "Use"
-                : "Connect"}
-          </button>
+          {setupTargetSelected ? (
+            <button
+              type="button"
+              className={cn(buttonClassName, "h-7 px-2")}
+              disabled={connection.connectDisabled}
+              title={
+                connection.connectDisabled ? (shortIssue ?? undefined) : undefined
+              }
+              onClick={connection.onToggleConnection}
+            >
+              {connection.isBusy ? "Applying" : "Use target"}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={cn(buttonClassName, "h-7 px-2")}
+                disabled={connection.connectDisabled || connection.isConnected}
+                title={
+                  connection.connectDisabled ? (shortIssue ?? undefined) : undefined
+                }
+                onClick={connection.onToggleConnection}
+              >
+                {connection.isBusy ? "Connecting" : "Connect"}
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  buttonClassName,
+                  "h-7 px-2",
+                  connection.isConnected
+                    ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-100"
+                    : "",
+                )}
+                disabled={
+                  connection.isBusy ||
+                  !connection.isConnected ||
+                  !connection.isDisconnectAvailable
+                }
+                onClick={connection.onToggleConnection}
+              >
+                Disconnect
+              </button>
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 font-mono">
