@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -71,6 +72,7 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_BI_OPENARM_MINI_TELEOPERATOR_TYPE,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_REQUIRED_REASON,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_DIR_ENV,
+    ROBOT_GATEWAY_LEROBOT_CONFIG_JSON_ENV,
     ROBOT_GATEWAY_LEROBOT_HARDWARE_JOINT_NAMES_ENV,
     ROBOT_GATEWAY_LEROBOT_ID_ENV,
     ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
@@ -863,6 +865,30 @@ def test_robot_gateway_env_config_explicit_file_selects_robot_overlay(
 
     assert saved.path == str(selected_path)
     assert selected_path.read_text(encoding="utf-8") == saved.content
+
+
+def test_robot_gateway_env_config_write_applies_live_robot_gateway_env(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(robot_gateway_config_file, "BASE_DIR", tmp_path)
+    monkeypatch.setenv(ROBOT_GATEWAY_ENV_SELECTOR_ENV, "openarm-a")
+    monkeypatch.delenv(ROBOT_GATEWAY_ENV_FILE_ENV, raising=False)
+    monkeypatch.setenv(ROBOT_GATEWAY_LEROBOT_PORT_ENV, "/old-port")
+
+    saved = robot_gateway_config_file.write_robot_gateway_env_config_file(
+        "URDF_ROBOT_GATEWAY_RUNTIME_MODE=control\n"
+        "URDF_ROBOT_GATEWAY_ADAPTER=lerobot\n"
+        "URDF_ROBOT_GATEWAY_LEROBOT_ROBOT_TYPE=bi_openarm_follower\n"
+        "URDF_ROBOT_GATEWAY_LEROBOT_CONFIG_JSON='{\"id\":\"my_follower\"}'\n"
+    )
+
+    assert saved.path.endswith(".env.robots/openarm-a.env")
+    assert os.environ["URDF_ROBOT_GATEWAY_RUNTIME_MODE"] == "control"
+    assert os.environ[ROBOT_GATEWAY_LEROBOT_ROBOT_TYPE_ENV] == "bi_openarm_follower"
+    assert os.environ[ROBOT_GATEWAY_LEROBOT_CONFIG_JSON_ENV] == '{"id":"my_follower"}'
+    assert os.environ[ROBOT_GATEWAY_ENV_SELECTOR_ENV] == "openarm-a"
+    assert ROBOT_GATEWAY_LEROBOT_PORT_ENV not in os.environ
 
 
 def test_robot_gateway_control_transport_follows_sidecar_bind_env(
@@ -2649,6 +2675,49 @@ def test_robot_gateway_runtime_can_select_explicit_lerobot_robot_from_env(
         TEST_LEROBOT_SO_STYLE_JOINT_NAMES
     )
     assert manifest.camera_streams == []
+
+
+def test_robot_gateway_runtime_can_select_bimanual_openarm_lerobot_from_env(
+    monkeypatch,
+) -> None:
+    left_port = "/dev/serial/by-id/openarm-left"
+    right_port = "/dev/serial/by-id/openarm-right"
+    monkeypatch.setenv("URDF_ROBOT_GATEWAY_RUNTIME_MODE", "control")
+    monkeypatch.setenv("URDF_ROBOT_GATEWAY_ADAPTER", ROBOT_GATEWAY_LEROBOT_ADAPTER_ID)
+    monkeypatch.setenv(ROBOT_GATEWAY_ROBOT_ID_ENV, "openarm")
+    monkeypatch.setenv(ROBOT_GATEWAY_MODEL_ROBOT_ID_ENV, "openarm")
+    monkeypatch.setenv(
+        ROBOT_GATEWAY_LEROBOT_ROBOT_TYPE_ENV,
+        "bi_openarm_follower",
+    )
+    monkeypatch.setenv(ROBOT_GATEWAY_LEROBOT_ID_ENV, "my_follower")
+    monkeypatch.delenv(ROBOT_GATEWAY_LEROBOT_PORT_ENV, raising=False)
+    monkeypatch.setenv(
+        ROBOT_GATEWAY_LEROBOT_CONFIG_JSON_ENV,
+        json.dumps(
+            {
+                "id": "my_follower",
+                "left_arm_config": {
+                    "port": left_port,
+                    "side": "left",
+                    "max_relative_target": 5,
+                },
+                "right_arm_config": {
+                    "port": right_port,
+                    "side": "right",
+                    "max_relative_target": 5,
+                },
+            }
+        ),
+    )
+
+    manifest = build_robot_gateway_runtime_from_env().get_manifest()
+
+    assert manifest.profiles[0].id == "bi_openarm_follower_joint_jog"
+    assert manifest.profiles[0].hardware_device_key == f"{left_port} | {right_port}"
+    assert manifest.profiles[0].hardware_device_keys == [left_port, right_port]
+    assert "left_joint_1" in manifest.profiles[0].controlled_joint_names
+    assert "right_joint_1" in manifest.profiles[0].controlled_joint_names
 
 
 def test_robot_gateway_session_separates_lerobot_unit_and_model_ids(

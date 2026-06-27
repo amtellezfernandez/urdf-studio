@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 
 import {
   OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
+  fetchOperatorGatewayEnvConfig,
   fetchOperatorLeRobotCalibrationCatalog,
   fetchOperatorLeaderDetection,
   fetchOperatorLeaderState,
@@ -19,6 +20,7 @@ import {
   releaseOperatorLeaderHardware,
   releaseOperatorLeaderHardwareKeepalive,
   requestOperatorControlLease,
+  saveOperatorGatewayEnvConfig,
   sendOperatorOpenArmCalibrationJogCommand,
   sendOperatorStopCommand,
   sendOperatorStopCommandKeepalive,
@@ -78,6 +80,7 @@ import {
   OPERATOR_LEADER_STATE_POLL_INTERVAL_MS,
   OPERATOR_LEADER_STATE_ERROR_VISIBILITY,
   OPERATOR_OPENARM_CALIBRATION_JOG,
+  OPERATOR_OPENARM_FOLLOWER,
   OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
   OPERATOR_TELEOP_ADAPTER_IDS,
   OPERATOR_TELEOPERATION_MODE_REAL_HARDWARE,
@@ -89,6 +92,7 @@ import {
 import {
   buildFollowerHardwareTargetOptions,
   isFollowerArmPartProfile,
+  type OperatorFollowerTargetOption,
   resolveAssignedFollowerHardwareProfile,
   resolveBlockedOperatorControlMessage,
   resolveFollowerHardwareProfile,
@@ -328,6 +332,225 @@ const formatOpenArmLiveJointTelemetryValue = (value: number): string =>
     ? value.toFixed(OPERATOR_LIVE_JOINT_TELEMETRY_PRECISION)
     : "NaN";
 
+type OperatorFollowerDetectedSetupTarget = {
+  id: string;
+  deviceKey: string;
+  label: string;
+  optionLabel: string;
+  detailLines: string[];
+  robotType: string;
+  robotId: string;
+  lerobotId: string;
+  configJson: string | null;
+  port: string | null;
+};
+
+const OPERATOR_FOLLOWER_SETUP_ENV_KEYS = {
+  runtimeMode: "URDF_ROBOT_GATEWAY_RUNTIME_MODE",
+  adapter: "URDF_ROBOT_GATEWAY_ADAPTER",
+  robotId: "URDF_ROBOT_GATEWAY_ROBOT_ID",
+  modelId: "URDF_ROBOT_GATEWAY_MODEL_ID",
+  lerobotRobotType: "URDF_ROBOT_GATEWAY_LEROBOT_ROBOT_TYPE",
+  lerobotPort: "URDF_ROBOT_GATEWAY_LEROBOT_PORT",
+  lerobotId: "URDF_ROBOT_GATEWAY_LEROBOT_ID",
+  lerobotConfigJson: "URDF_ROBOT_GATEWAY_LEROBOT_CONFIG_JSON",
+} as const;
+
+const stripOpenArmFollowerSideSuffix = (calibrationId: string): string => {
+  const trimmed = calibrationId.trim();
+  for (const suffix of [
+    OPERATOR_OPENARM_FOLLOWER.leftCalibrationSuffix,
+    OPERATOR_OPENARM_FOLLOWER.rightCalibrationSuffix,
+  ]) {
+    if (trimmed.endsWith(suffix)) {
+      return trimmed.slice(0, -suffix.length);
+    }
+  }
+  return trimmed;
+};
+
+const resolveOpenArmFollowerPartSide = (
+  part: OperatorLeaderDevice["controlParts"][number],
+): "left" | "right" | null => {
+  const group = part.calibrationGroup?.trim().toLowerCase() ?? "";
+  if (group === OPERATOR_OPENARM_FOLLOWER.leftSide) return "left";
+  if (group === OPERATOR_OPENARM_FOLLOWER.rightSide) return "right";
+  const calibrationId = part.calibrationId?.trim().toLowerCase() ?? "";
+  if (calibrationId.endsWith(OPERATOR_OPENARM_FOLLOWER.leftCalibrationSuffix)) {
+    return "left";
+  }
+  if (calibrationId.endsWith(OPERATOR_OPENARM_FOLLOWER.rightCalibrationSuffix)) {
+    return "right";
+  }
+  return null;
+};
+
+const quoteOperatorFollowerEnvValue = (value: string): string =>
+  value.includes(" ") || value.includes("{") || value.includes("#")
+    ? `'${value.replace(/'/g, "'\\''")}'`
+    : value;
+
+const buildOperatorFollowerSetupEnvContent = (
+  currentContent: string,
+  setup: OperatorFollowerDetectedSetupTarget,
+): string => {
+  const managedKeys: ReadonlySet<string> = new Set(
+    Object.values(OPERATOR_FOLLOWER_SETUP_ENV_KEYS),
+  );
+  const keptLines = currentContent
+    .split(/\r?\n/u)
+    .filter((line) => {
+      const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/u.exec(
+        line.trim(),
+      );
+      return !match || !managedKeys.has(match[1]);
+    });
+  while (keptLines.length > 0 && keptLines[keptLines.length - 1]?.trim() === "") {
+    keptLines.pop();
+  }
+  const setupLines = [
+    "",
+    "# URDF Studio detected LeRobot robot target.",
+    `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.runtimeMode}=control`,
+    `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.adapter}=lerobot`,
+    `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.robotId}=${setup.robotId}`,
+    `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.modelId}=openarm`,
+    `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.lerobotRobotType}=${setup.robotType}`,
+    `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.lerobotId}=${setup.lerobotId}`,
+    ...(setup.port
+      ? [`${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.lerobotPort}=${setup.port}`]
+      : []),
+    ...(setup.configJson
+      ? [
+          `${OPERATOR_FOLLOWER_SETUP_ENV_KEYS.lerobotConfigJson}=${quoteOperatorFollowerEnvValue(setup.configJson)}`,
+        ]
+      : []),
+  ];
+  return [...keptLines, ...setupLines].join("\n").trimStart() + "\n";
+};
+
+const buildOpenArmFollowerConfigJson = ({
+  lerobotId,
+  leftPort,
+  rightPort,
+}: {
+  lerobotId: string;
+  leftPort: string;
+  rightPort: string;
+}): string =>
+  JSON.stringify({
+    id: lerobotId,
+    left_arm_config: {
+      port: leftPort,
+      side: OPERATOR_OPENARM_FOLLOWER.leftSide,
+      max_relative_target: 5,
+    },
+    right_arm_config: {
+      port: rightPort,
+      side: OPERATOR_OPENARM_FOLLOWER.rightSide,
+      max_relative_target: 5,
+    },
+  });
+
+const buildFollowerDetectedSetupTargets = (
+  detection: OperatorLeaderDetection | null,
+): OperatorFollowerDetectedSetupTarget[] => {
+  if (!detection) return [];
+  const openArmCandidates: {
+    leader: OperatorLeaderDevice;
+    part: OperatorLeaderDevice["controlParts"][number];
+    baseCalibrationId: string;
+    side: "left" | "right";
+  }[] = [];
+  detection.leaders.forEach((leader) => {
+    if (!leader.available) return;
+    leader.controlParts.forEach((part) => {
+      const side = resolveOpenArmFollowerPartSide(part);
+      if (
+        part.kind !== "arm" ||
+        part.calibrationCategory !== "robots" ||
+        part.calibrationProfile !== OPERATOR_OPENARM_FOLLOWER.robotType ||
+        !part.calibrationId ||
+        side === null
+      ) {
+        return;
+      }
+      openArmCandidates.push({
+        leader,
+        part,
+        baseCalibrationId: stripOpenArmFollowerSideSuffix(part.calibrationId),
+        side,
+      });
+    });
+  });
+
+  const byBaseCalibration = new Map<string, typeof openArmCandidates>();
+  openArmCandidates.forEach((candidate) => {
+    const current = byBaseCalibration.get(candidate.baseCalibrationId) ?? [];
+    current.push(candidate);
+    byBaseCalibration.set(candidate.baseCalibrationId, current);
+  });
+
+  return Array.from(byBaseCalibration.entries()).flatMap(
+    ([baseCalibrationId, candidates]) => {
+      const ports = Array.from(
+        new Set(candidates.map((candidate) => candidate.leader.path)),
+      ).sort();
+      if (ports.length < 2) return [];
+      const matchedLeft = candidates.find(
+        (candidate) =>
+          candidate.side === "left" &&
+          candidate.part.configuredPortStatus === "matched",
+      );
+      const matchedRight = candidates.find(
+        (candidate) =>
+          candidate.side === "right" &&
+          candidate.part.configuredPortStatus === "matched",
+      );
+      const leftPort = matchedLeft?.leader.path ?? ports[0];
+      const rightPort =
+        matchedRight?.leader.path ??
+        ports.find((port) => port !== leftPort) ??
+        null;
+      if (!rightPort) return [];
+      const leftPart = candidates.find(
+        (candidate) =>
+          candidate.side === "left" && candidate.leader.path === leftPort,
+      );
+      const rightPart = candidates.find(
+        (candidate) =>
+          candidate.side === "right" && candidate.leader.path === rightPort,
+      );
+      if (!leftPart || !rightPart) return [];
+      const robotType = OPERATOR_OPENARM_FOLLOWER.bimanualRobotType;
+      const label = `${robotType} · ${baseCalibrationId}`;
+      return [
+        {
+          id: `detected:${robotType}:${baseCalibrationId}:${leftPort}:${rightPort}`,
+          deviceKey: `${leftPort}|${rightPort}`,
+          label,
+          optionLabel: `${label} (Use detected)`,
+          detailLines: [
+            `Left: ${leftPort}`,
+            `Right: ${rightPort}`,
+            `Calibration: ${leftPart.part.calibrationId} / ${rightPart.part.calibrationId}`,
+            "Left/right inferred from serial order.",
+          ],
+          robotType,
+          robotId: "openarm",
+          lerobotId: baseCalibrationId,
+          configJson: buildOpenArmFollowerConfigJson({
+            lerobotId: baseCalibrationId,
+            leftPort,
+            rightPort,
+          }),
+          port: null,
+        },
+      ];
+    },
+  );
+};
+
 const buildFollowerHardwareDetectedTargets = (
   detection: OperatorLeaderDetection | null,
 ): {
@@ -335,6 +558,14 @@ const buildFollowerHardwareDetectedTargets = (
   label: string;
   detailLines: readonly string[];
 }[] => {
+  const setupTargets = buildFollowerDetectedSetupTargets(detection);
+  if (setupTargets.length > 0) {
+    return setupTargets.map((target) => ({
+      id: target.id,
+      label: target.label,
+      detailLines: target.detailLines,
+    }));
+  }
   if (!detection) return [];
   return detection.leaders.flatMap((leader) => {
     const robotParts = leader.controlParts.filter(
@@ -826,6 +1057,8 @@ export const OperatorTeleopPanel = ({
     useState(false);
   const [followerEnvConfigError, setFollowerEnvConfigError] =
     useState<string | null>(null);
+  const [followerDetectedSetupApplying, setFollowerDetectedSetupApplying] =
+    useState(false);
   const [lerobotCalibrationCatalog, setLerobotCalibrationCatalog] =
     useState<OperatorLeRobotCalibrationCatalog>({
       activeSource: null,
@@ -1305,7 +1538,7 @@ export const OperatorTeleopPanel = ({
     (followerHardwareConnectionSelected && !selectedProfileRequiresLease);
   const followerHardwareDisconnectAvailable = followerHardwareConnectionActive;
   const followerHardwareCommandReady = followerHardwareConnected;
-  const followerHardwareTargetOptions = useMemo(
+  const providerFollowerHardwareTargetOptions = useMemo(
     () =>
       buildFollowerHardwareTargetOptions({
         profiles: providerProfiles,
@@ -1327,9 +1560,58 @@ export const OperatorTeleopPanel = ({
       selectedFollowerHardwareDeviceKey,
     ],
   );
-  const followerHardwareDetectedTargets = useMemo(
-    () => buildFollowerHardwareDetectedTargets(openArmLeaderDetection),
+  const followerDetectedSetupTargets = useMemo(
+    () => buildFollowerDetectedSetupTargets(openArmLeaderDetection),
     [openArmLeaderDetection],
+  );
+  const followerDetectedSetupTargetOptions = useMemo<OperatorFollowerTargetOption[]>(
+    () =>
+      followerDetectedSetupTargets.map((target) => ({
+        profileId: target.id,
+        deviceKey: target.deviceKey,
+        label: target.label,
+        optionLabel: target.optionLabel,
+        detailLines: target.detailLines,
+        assignedRole: null,
+        status: "available",
+        statusLabel: "setup",
+        setupOnly: true,
+        robotType: target.robotType,
+      })),
+    [followerDetectedSetupTargets],
+  );
+  const followerHardwareTargetOptions = useMemo(
+    () =>
+      providerFollowerHardwareTargetOptions.length > 0
+        ? providerFollowerHardwareTargetOptions
+        : followerDetectedSetupTargetOptions,
+    [followerDetectedSetupTargetOptions, providerFollowerHardwareTargetOptions],
+  );
+  const selectedFollowerDetectedSetupTarget = useMemo(
+    () =>
+      followerHardwareProfile
+        ? null
+        : followerDetectedSetupTargets.find(
+            (target) => target.id === selectedFollowerProfileId,
+          ) ??
+          followerDetectedSetupTargets[0] ??
+          null,
+    [
+      followerDetectedSetupTargets,
+      followerHardwareProfile,
+      selectedFollowerProfileId,
+    ],
+  );
+  const followerHardwareDetectedTargets = useMemo(
+    () =>
+      followerDetectedSetupTargets.length > 0
+        ? followerDetectedSetupTargets.map((target) => ({
+            id: target.id,
+            label: target.label,
+            detailLines: target.detailLines,
+          }))
+        : buildFollowerHardwareDetectedTargets(openArmLeaderDetection),
+    [followerDetectedSetupTargets, openArmLeaderDetection],
   );
   const followerCalibrationAvailable =
     followerHardwareProfile?.adapterId === OPERATOR_TELEOP_ADAPTER_IDS.lerobot;
@@ -3946,19 +4228,22 @@ export const OperatorTeleopPanel = ({
     calibrationUi,
     OPERATOR_CALIBRATION_UI_KEYS.follower,
   );
-  const followerHardwareConnectDisabled =
-    resolveFollowerHardwareConnectDisabled({
-      leaseBusy,
-      followerHardwareConnected,
-      followerHardwareDisconnectAvailable,
-      followerHardwareRoleConflict,
-      followerHardwareProfileAvailable: followerHardwareProfile !== null,
-      gatewayControlCapable: providerManifest?.capabilities.control === true,
-      collaborationTeleopPermitted,
-    });
+  const followerHardwareConnectDisabled = selectedFollowerDetectedSetupTarget
+    ? followerDetectedSetupApplying
+    : resolveFollowerHardwareConnectDisabled({
+        leaseBusy,
+        followerHardwareConnected,
+        followerHardwareDisconnectAvailable,
+        followerHardwareRoleConflict,
+        followerHardwareProfileAvailable: followerHardwareProfile !== null,
+        gatewayControlCapable: providerManifest?.capabilities.control === true,
+        collaborationTeleopPermitted,
+      });
   const followerConnectionIssue =
     followerHardwareRoleConflict ??
-    (!followerHardwareProfile
+    (selectedFollowerDetectedSetupTarget
+      ? null
+      : !followerHardwareProfile
       ? "No LeRobot robot target from gateway."
       : providerManifest?.capabilities.control !== true
         ? "Robot unavailable."
@@ -3977,6 +4262,46 @@ export const OperatorTeleopPanel = ({
     !followerCalibrationFileEditAvailable ||
     (calibrationFileEditSession !== null && !followerCalibrationFileEditOpen) ||
     Boolean(followerHardwareRoleConflict);
+  const handleApplyDetectedFollowerSetup = useCallback(
+    async (setup: OperatorFollowerDetectedSetupTarget) => {
+      setFollowerDetectedSetupApplying(true);
+      setFollowerEnvConfigError(null);
+      try {
+        const currentConfig = await fetchOperatorGatewayEnvConfig(
+          OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
+        );
+        const savedConfig = await saveOperatorGatewayEnvConfig(
+          buildOperatorFollowerSetupEnvContent(currentConfig.content, setup),
+          OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
+        );
+        if (!isMountedRef.current) return false;
+        setFollowerEnvConfigPath(savedConfig.path);
+        setSelectedFollowerProfileId(null);
+        setSelectedProfileId(null);
+        await refreshOperatorState({
+          selectedProfileId: null,
+          requestedTeleoperationMode: OPERATOR_TELEOPERATION_MODE_REAL_HARDWARE,
+        });
+        if (!isMountedRef.current) return false;
+        setPanelStatusMessage(`Using detected robot target: ${setup.label}.`);
+        return true;
+      } catch (error) {
+        if (!isMountedRef.current) return false;
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Could not use detected robot target.";
+        setFollowerEnvConfigError(message);
+        setPanelStatusMessage(message);
+        return false;
+      } finally {
+        if (isMountedRef.current) {
+          setFollowerDetectedSetupApplying(false);
+        }
+      }
+    },
+    [refreshOperatorState, setPanelStatusMessage],
+  );
   const handleToggleFollowerHardwareConnection = useCallback(async () => {
     if (followerHardwareDisconnectAvailable) {
       clearActiveControls();
@@ -4025,6 +4350,10 @@ export const OperatorTeleopPanel = ({
       setConnectedFollowerHardwareDeviceKey(null);
       setPanelStatusMessage("Robot hardware disconnected.");
       return true;
+    }
+
+    if (!followerHardwareProfile && selectedFollowerDetectedSetupTarget) {
+      return handleApplyDetectedFollowerSetup(selectedFollowerDetectedSetupTarget);
     }
 
     if (!followerHardwareProfile) {
@@ -4088,6 +4417,7 @@ export const OperatorTeleopPanel = ({
     followerHardwareConnectionActive,
     followerHardwareDisconnectAvailable,
     connectedFollowerHardwareDeviceKey,
+    handleApplyDetectedFollowerSetup,
     handleReleaseLease,
     leaseHeldByThisOperator,
     operatorDeviceRoleAssignments,
@@ -4095,6 +4425,7 @@ export const OperatorTeleopPanel = ({
     providerManifest?.capabilities.control,
     followerHardwareProfile,
     requestControlLeaseForProfile,
+    selectedFollowerDetectedSetupTarget,
     selectedProfileId,
     selectedFollowerHardwareDeviceKey,
     selectedFollowerHardwareDeviceKeys,
@@ -4305,7 +4636,7 @@ export const OperatorTeleopPanel = ({
           connection={{
             connectDisabled: followerHardwareConnectDisabled,
             issue: followerConnectionIssue,
-            isBusy: leaseBusy,
+            isBusy: leaseBusy || followerDetectedSetupApplying,
             isConnected: followerHardwareConnectionActive,
             isDisconnectAvailable: followerHardwareDisconnectAvailable,
             motionReady: followerHardwareMotionReady,
@@ -4327,7 +4658,10 @@ export const OperatorTeleopPanel = ({
               leaseBusy ||
               followerHardwareConnectionActive,
             options: followerHardwareTargetOptions,
-            selectedProfileId: followerHardwareProfile?.id ?? "",
+            selectedProfileId:
+              followerHardwareProfile?.id ??
+              selectedFollowerDetectedSetupTarget?.id ??
+              "",
             onSelectProfile: (profileId) => {
               setSelectedFollowerProfileId(profileId || null);
             },

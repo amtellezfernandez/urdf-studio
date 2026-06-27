@@ -1232,6 +1232,7 @@ class LeRobotAdapter(RobotGatewayAdapter):
             joint_names=tuple(self._joint_positions),
             robot_type=self.config.lerobot_robot_type,
             hardware_device_key=_lerobot_hardware_device_key(self.config),
+            hardware_device_keys=_lerobot_hardware_device_keys(self.config),
             control_enabled=control_enabled,
             joint_directions=self._joint_directions,
         )
@@ -1833,6 +1834,7 @@ def _build_lerobot_profile(
     joint_names: tuple[str, ...],
     robot_type: str,
     hardware_device_key: str,
+    hardware_device_keys: tuple[str, ...] = (),
     control_enabled: bool,
     joint_directions: Mapping[str, int] | None = None,
 ) -> RobotGatewayProfile:
@@ -1843,6 +1845,7 @@ def _build_lerobot_profile(
         robot_id=robot_id,
         adapter_id=adapter_id,
         hardware_device_key=hardware_device_key,
+        hardware_device_keys=list(hardware_device_keys),
         teleoperation_mode=teleoperation_mode,
         controlled_joint_names=list(joint_names),
         control_inputs=(
@@ -1921,7 +1924,29 @@ def _build_lerobot_joint_map(
 
 
 def _lerobot_hardware_device_key(config: RobotGatewayAdapterConfig) -> str:
+    ports = _lerobot_hardware_device_keys(config)
+    if ports:
+        return " | ".join(ports)
     return (config.lerobot_port or "").strip()
+
+
+def _lerobot_hardware_device_keys(config: RobotGatewayAdapterConfig) -> tuple[str, ...]:
+    ports: list[str] = []
+    if config.lerobot_port and config.lerobot_port.strip():
+        ports.append(config.lerobot_port.strip())
+    if config.lerobot_config_json:
+        try:
+            payload = json.loads(config.lerobot_config_json)
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, Mapping):
+            for arm_key in ("left_arm_config", "right_arm_config"):
+                arm_config = payload.get(arm_key)
+                if isinstance(arm_config, Mapping):
+                    port = arm_config.get("port")
+                    if isinstance(port, str) and port.strip():
+                        ports.append(port.strip())
+    return tuple(dict.fromkeys(ports))
 
 
 def _validate_joint_jog_delta(delta_rad: float) -> str | None:

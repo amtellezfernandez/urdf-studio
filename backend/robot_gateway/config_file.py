@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -93,6 +94,14 @@ ROBOT_GATEWAY_LOCAL_FILE_EDITOR_COMMAND_PREFIXES = (
     ("code", "--reuse-window"),
     ("codium", "--reuse-window"),
 )
+_ROBOT_GATEWAY_ENV_ASSIGNMENT_PATTERN = re.compile(
+    r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$"
+)
+_ROBOT_GATEWAY_ENV_MANAGED_PREFIX = "URDF_ROBOT_GATEWAY_"
+_ROBOT_GATEWAY_ENV_SELECTION_KEYS = {
+    ROBOT_GATEWAY_ENV_FILE_ENV,
+    ROBOT_GATEWAY_ENV_SELECTOR_ENV,
+}
 
 
 def resolve_robot_gateway_env_config_path() -> Path:
@@ -187,7 +196,70 @@ def write_robot_gateway_env_config_file(content: str) -> RobotGatewayEnvConfigFi
     path = resolve_robot_gateway_active_env_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+    apply_robot_gateway_env_config_content(content)
     return RobotGatewayEnvConfigFile(path=str(path), content=content, exists=True)
+
+
+def apply_robot_gateway_env_config_content(content: str) -> None:
+    parsed = _parse_robot_gateway_env_config_content(content)
+    for key in list(os.environ):
+        if (
+            key.startswith(_ROBOT_GATEWAY_ENV_MANAGED_PREFIX)
+            and key not in parsed
+            and key not in _ROBOT_GATEWAY_ENV_SELECTION_KEYS
+        ):
+            os.environ.pop(key, None)
+    os.environ.update(parsed)
+
+
+def _parse_robot_gateway_env_config_content(content: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = _ROBOT_GATEWAY_ENV_ASSIGNMENT_PATTERN.match(line)
+        if not match:
+            continue
+        values[match.group(1)] = _unquote_robot_gateway_env_value(match.group(2))
+    return values
+
+
+def _unquote_robot_gateway_env_value(value: str) -> str:
+    trimmed = _strip_robot_gateway_env_inline_comment(value.strip())
+    if len(trimmed) < 2:
+        return trimmed
+    quote = trimmed[0]
+    if quote not in {"'", '"'} or trimmed[-1] != quote:
+        return trimmed
+    inner = trimmed[1:-1]
+    if quote == '"':
+        return (
+            inner.replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace('\\"', '"')
+            .replace("\\\\", "\\")
+        )
+    return inner
+
+
+def _strip_robot_gateway_env_inline_comment(value: str) -> str:
+    in_single_quote = False
+    in_double_quote = False
+    for index, char in enumerate(value):
+        previous = value[index - 1] if index > 0 else ""
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            continue
+        if char == '"' and not in_single_quote and previous != "\\":
+            in_double_quote = not in_double_quote
+            continue
+        if char == "#" and not in_single_quote and not in_double_quote:
+            before = value[index - 1] if index > 0 else ""
+            if index == 0 or before.isspace():
+                return value[:index].rstrip()
+    return value.rstrip()
 
 
 def open_robot_gateway_env_config_file() -> RobotGatewayEnvConfigOpenResult:

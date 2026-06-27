@@ -106,6 +106,14 @@ export const OPERATOR_OPENARM_MINI = {
   motorModel: "sts3215",
   motorIds: [1, 2, 3, 4, 5, 6, 7, 8],
 } as const;
+export const OPERATOR_OPENARM_FOLLOWER = {
+  robotType: "openarm_follower",
+  bimanualRobotType: "bi_openarm_follower",
+  leftSide: "left",
+  rightSide: "right",
+  leftCalibrationSuffix: "_left",
+  rightCalibrationSuffix: "_right",
+} as const;
 export const OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE =
   OPERATOR_OPENARM_MINI.teleoperatorType;
 export const OPERATOR_LEROBOT_PAIRED_PORT_TELEOPERATOR_TYPES = [

@@ -176,7 +176,7 @@ describe("OperatorFollowerConnectionCard", () => {
           },
           connection: {
             connectDisabled: true,
-            issue: "Robot unavailable.",
+            issue: null,
             isBusy: false,
             isConnected: false,
             isDisconnectAvailable: false,
@@ -208,9 +208,25 @@ describe("OperatorFollowerConnectionCard", () => {
           },
           targetSelection: {
             disabled: false,
-            selectedProfileId: "",
+            selectedProfileId: "detected:bi_openarm_follower:my_follower",
             onSelectProfile: vi.fn(),
-            options: [],
+            options: [
+              {
+                profileId: "detected:bi_openarm_follower:my_follower",
+                deviceKey: "/dev/serial/by-id/openarm-left|/dev/serial/by-id/openarm-right",
+                label: "bi_openarm_follower · my_follower",
+                optionLabel: "bi_openarm_follower · my_follower (Use detected)",
+                detailLines: [
+                  "Left: /dev/serial/by-id/openarm-left",
+                  "Right: /dev/serial/by-id/openarm-right",
+                ],
+                assignedRole: null,
+                status: "available",
+                statusLabel: "setup",
+                setupOnly: true,
+                robotType: "bi_openarm_follower",
+              },
+            ],
           },
         }),
       );
@@ -221,7 +237,14 @@ describe("OperatorFollowerConnectionCard", () => {
     expect(container.textContent).toContain(
       "openarm_follower · my_follower_left · all",
     );
+    expect(container.textContent).toContain("Setup");
+    expect(container.textContent).toContain("bi_openarm_follower · my_follower");
     expect(container.textContent).toContain("/dev/serial/by-id/openarm-left");
+    expect(
+      Array.from(container.querySelectorAll("button")).some(
+        (button) => button.textContent === "Use",
+      ),
+    ).toBe(true);
 
     const rescanButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Rescan",

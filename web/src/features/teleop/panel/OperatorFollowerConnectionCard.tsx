@@ -121,6 +121,7 @@ const findSelectedFollowerTarget = (
 function formatFollowerRobotType(
   selectedTarget: OperatorFollowerTargetOption | null,
 ): string | null {
+  if (selectedTarget?.robotType) return selectedTarget.robotType;
   const profileId = selectedTarget?.profileId.trim() ?? "";
   if (!profileId) return null;
   return profileId.replace(/_joint_jog$/u, "");
@@ -138,6 +139,7 @@ function formatFollowerConnectionStatus({
   if (connection.isConnected) return "Connected";
   if (connection.isBusy) return "Connecting";
   if (issue) return "Blocked";
+  if (selectedTarget?.setupOnly) return "Setup";
   if (selectedTarget) return "Ready";
   return "No target";
 }
@@ -411,9 +413,13 @@ export const OperatorFollowerConnectionCard = ({
             onClick={connection.onToggleConnection}
           >
             {connection.isBusy
-              ? "Connecting"
+              ? selectedTarget?.setupOnly
+                ? "Using"
+                : "Connecting"
               : connection.isConnected && connection.isDisconnectAvailable
                 ? "Disconnect"
+                : selectedTarget?.setupOnly
+                  ? "Use"
                 : "Connect"}
           </button>
         </div>

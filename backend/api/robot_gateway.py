@@ -138,7 +138,10 @@ async def update_robot_gateway_env_config(
     req: RobotGatewayEnvConfigUpdate,
     _access: None = Depends(require_robot_gateway_local_workstation_access_async),
 ) -> RobotGatewayEnvConfigFile:
-    return write_robot_gateway_env_config_file(req.content)
+    global runtime
+    result = write_robot_gateway_env_config_file(req.content)
+    runtime = build_robot_gateway_runtime_from_env()
+    return result
 
 
 @router.post(

@@ -78,6 +78,8 @@ export type OperatorFollowerTargetOption = {
   assignedRole: OperatorDeviceRole | null;
   status: OperatorFollowerTargetStatus;
   statusLabel: string;
+  setupOnly?: boolean;
+  robotType?: string;
 };
 
 export type BuildFollowerHardwareTargetOptionsParams = {
