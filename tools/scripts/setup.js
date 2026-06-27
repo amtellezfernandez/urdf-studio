@@ -55,6 +55,7 @@ import {
   GLOBAL_ILU_INSTALL_COMMAND,
   HUGGING_FACE_TOKEN_URL,
   LEROBOT_TOOLCHAIN_DIRNAME,
+  LEROBOT_PIP_INSTALL_FLAGS,
   LEROBOT_TRAINING_DEPENDENCIES,
   LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT,
   LOCAL_ILU_COMMAND,
@@ -1499,11 +1500,22 @@ async function installOfficialLeRobotToolchain() {
   logInfo(`Installing official LeRobot training packages in ${LEROBOT_TOOLCHAIN_DIRNAME}...`);
 
   try {
-    execFileSync(uvPath, ['pip', 'install', '--python', toolchainPython, ...LEROBOT_TRAINING_DEPENDENCIES], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: getUvEnv(),
-    });
+    execFileSync(
+      uvPath,
+      [
+        'pip',
+        'install',
+        ...LEROBOT_PIP_INSTALL_FLAGS,
+        '--python',
+        toolchainPython,
+        ...LEROBOT_TRAINING_DEPENDENCIES,
+      ],
+      {
+        cwd: rootDir,
+        stdio: 'inherit',
+        env: getUvEnv(),
+      }
+    );
     const installedTrainingCheck = runPythonImportCheck(toolchainPython, LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT);
     if (!installedTrainingCheck.ok) {
       printCapturedCommandOutput(installedTrainingCheck);
@@ -1515,7 +1527,10 @@ async function installOfficialLeRobotToolchain() {
   } catch (e) {
     log('✗ Failed to install official LeRobot training runtime', colors.yellow);
     logInfo('Try manually:');
-    logInfo(`  "${uvPath}" pip install --python ${LEROBOT_TOOLCHAIN_DIRNAME}/bin/python3 ${LEROBOT_TRAINING_DEPENDENCIES.join(' ')}`);
+    logInfo(
+      `  "${uvPath}" pip install ${LEROBOT_PIP_INSTALL_FLAGS.join(' ')} ` +
+      `--python ${LEROBOT_TOOLCHAIN_DIRNAME}/bin/python3 ${LEROBOT_TRAINING_DEPENDENCIES.join(' ')}`
+    );
     return false;
   }
 }
@@ -1555,7 +1570,14 @@ async function installOpenArmHardwareRuntime() {
   try {
     execFileSync(
       uvPath,
-      ['pip', 'install', '--python', venvPython, ...OPENARM_HARDWARE_PIP_DEPENDENCIES],
+      [
+        'pip',
+        'install',
+        ...LEROBOT_PIP_INSTALL_FLAGS,
+        '--python',
+        venvPython,
+        ...OPENARM_HARDWARE_PIP_DEPENDENCIES,
+      ],
       {
         cwd: rootDir,
         stdio: 'inherit',
@@ -1575,7 +1597,10 @@ async function installOpenArmHardwareRuntime() {
     const manualDependencies = OPENARM_HARDWARE_PIP_DEPENDENCIES
       .map((dependency) => JSON.stringify(dependency))
       .join(' ');
-    logInfo(`  "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${manualDependencies}`);
+    logInfo(
+      `  "${uvPath}" pip install ${LEROBOT_PIP_INSTALL_FLAGS.join(' ')} ` +
+      `--python ${PYTHON_ENV_DIRNAME}/bin/python3 ${manualDependencies}`
+    );
     return false;
   }
 }

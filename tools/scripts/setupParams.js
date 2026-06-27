@@ -6,6 +6,7 @@ export * from './setupParams/mjlab.js';
 export * from './setupParams/genesis.js';
 export * from './setupParams/pybullet.js';
 export * from './setupParams/blender.js';
+export * from './setupParams/lerobotSource.js';
 export * from './setupParams/lerobotTraining.js';
 
 import { BACKEND_PYTHON_CORE_SETUP } from './setupParams/backendPythonCore.js';

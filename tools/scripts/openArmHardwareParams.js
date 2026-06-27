@@ -1,3 +1,8 @@
+import {
+  LEROBOT_OPENARM_HARDWARE_PIP_DEPENDENCY,
+  LEROBOT_PIP_INSTALL_FLAGS,
+} from './setupParams/lerobotSource.js';
+
 export const OPENARM_HARDWARE_DEFAULT_PYTHON = '.venv-lerobot/bin/python3';
 export const OPENARM_HARDWARE_DEFAULT_FPS = '60';
 export const OPENARM_HARDWARE_DEFAULT_MAX_RELATIVE_TARGET_DEG = '5.0';
@@ -42,10 +47,11 @@ export const OPENARM_HARDWARE_REQUIRED_ENV = [
 ];
 
 export const OPENARM_HARDWARE_PIP_DEPENDENCIES = [
-  'lerobot[feetech,damiao]',
+  LEROBOT_OPENARM_HARDWARE_PIP_DEPENDENCY,
   'xoq-can',
   'rerun-sdk',
 ];
+export const OPENARM_HARDWARE_PIP_INSTALL_FLAGS = LEROBOT_PIP_INSTALL_FLAGS;
 
 export const OPENARM_HARDWARE_DOCTOR_IMPORTS = [
   ['lerobot', 'LeRobot core'],

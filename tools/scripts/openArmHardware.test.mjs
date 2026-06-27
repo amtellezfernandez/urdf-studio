@@ -15,7 +15,12 @@ import {
   OPENARM_HARDWARE_DEFAULT_ROBOT_ID,
   OPENARM_HARDWARE_DEFAULT_TELEOP_ID,
   OPENARM_HARDWARE_ENV,
+  OPENARM_HARDWARE_PIP_INSTALL_FLAGS,
 } from './openArmHardwareParams.js';
+import {
+  LEROBOT_OPENARM_HARDWARE_PIP_DEPENDENCY,
+  LEROBOT_UPSTREAM_REF,
+} from './setupParams/lerobotSource.js';
 import {
   buildOpenArmHardwareDoctorScript,
   buildOpenArmHardwareVerifyImportScript,
@@ -74,7 +79,8 @@ test('buildOpenArmInstallCommand installs LeRobot OpenArm Mini and XoQ CAN depen
     '-m',
     'pip',
     'install',
-    'lerobot[feetech,damiao]',
+    ...OPENARM_HARDWARE_PIP_INSTALL_FLAGS,
+    LEROBOT_OPENARM_HARDWARE_PIP_DEPENDENCY,
     'xoq-can',
     'rerun-sdk',
   ]);
@@ -111,6 +117,9 @@ test('buildOpenArmHardwareVerifyImportScript imports every hardware module', () 
   ]);
 
   assert.match(script, /importlib\.import_module\(module_name\)/);
+  assert.match(script, /direct_url\.json/);
+  assert.match(script, new RegExp(LEROBOT_UPSTREAM_REF));
+  assert.match(script, /use_velocity_and_torque/);
   assert.match(script, /"lerobot\.robots\.bi_openarm_follower"/);
   assert.match(script, /"scservo_sdk"/);
   assert.doesNotMatch(script, /bimanual follower/);
