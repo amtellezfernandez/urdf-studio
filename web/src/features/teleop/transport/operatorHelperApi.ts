@@ -1531,7 +1531,7 @@ class OperatorHttpError extends Error {
   }
 }
 
-const parseOperatorJson = async <T>(
+export const parseOperatorJson = async <T>(
   response: Response,
   context: string,
 ): Promise<T> => {
@@ -1551,7 +1551,7 @@ const fetchOperatorJson = async <T>(
   return parseOperatorJson<T>(response, context);
 };
 
-const buildOperatorAuthorizationHeaders = (
+export const buildOperatorAuthorizationHeaders = (
   browserToken: string,
   authorization?: OperatorCollaborationAuthorization | null,
   baseHeaders?: HeadersInit,
@@ -1855,7 +1855,7 @@ export const releaseOperatorFollowerHardwareKeepalive = (
     authorization,
   );
 
-const buildOperatorLeaderReleasePayload = (
+export const buildOperatorLeaderReleasePayload = (
   request: OperatorLeaderReleaseRequest,
 ): Record<string, unknown> => ({
   ...(request.port?.trim() ? { port: request.port.trim() } : {}),
@@ -1891,7 +1891,7 @@ const buildOperatorLeRobotCalibrationSourcePayload = (
   group_id: source.groupId,
 });
 
-const postOperatorJson = async <T>(
+export const postOperatorJson = async <T>(
   baseUrl: string,
   path: string,
   payload: unknown,

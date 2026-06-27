@@ -33,6 +33,11 @@ export const OPERATOR_HELPER_LEROBOT_CALIBRATION_OPEN_PATH =
   "/hardware/lerobot/calibrations/open";
 export const OPERATOR_HELPER_LEROBOT_CALIBRATION_SYNC_PATH =
   "/hardware/lerobot/calibrations/sync";
+export const OPERATOR_HELPER_LEROBOT_DIRECT_TELEOP_PATHS = {
+  status: "/hardware/lerobot/direct-teleop/status",
+  start: "/hardware/lerobot/direct-teleop/start",
+  stop: "/hardware/lerobot/direct-teleop/stop",
+} as const;
 export const OPERATOR_HELPER_LEADER_STATE_PATH =
   "/hardware/leader-state";
 export const OPERATOR_HELPER_POINT_CLOUD_PATH_SUFFIX = "/point-cloud";
@@ -113,6 +118,7 @@ export const OPERATOR_HELPER_TELEMETRY_POLLING = {
 } as const;
 export const OPERATOR_HARDWARE_IK_COMMAND = {
   minDeltaRad: 1e-4,
+  leaderTargetDeadbandRad: 0.002,
   maxFollowerTelemetryAgeMs: OPERATOR_HELPER_TELEMETRY_POLLING.intervalMs * 10,
 } as const;
 export const OPERATOR_OPENARM_CALIBRATION_JOG = {

@@ -54,7 +54,6 @@ import {
   OPERATOR_HELPER_LINEAR_SPEED_MAX_MPS,
   OPERATOR_HELPER_LINEAR_SPEED_MIN_MPS,
   OPERATOR_HELPER_LINEAR_SPEED_STEP_MPS,
-  OPERATOR_HELPER_OPENARM_DEMO_ROBOT_NAME_TOKEN,
   OPERATOR_HELPER_OPENARM_FINGER_JOINT_NAME_TOKEN,
   OPERATOR_HELPER_POLL_INTERVAL_MS,
   OPERATOR_HELPER_POINT_CLOUD_POLL_INTERVAL_MS,
@@ -129,6 +128,12 @@ import {
   type OperatorCalibrationFileEditMotorRow,
 } from "@/features/teleop/panel/useOperatorCalibrationFileEdit";
 import { applyCalibrationFileEditLeaderTelemetryOverride } from "@/features/teleop/panel/operatorCalibrationFileEditTelemetry";
+import {
+  applyProfileCapabilities,
+  getOperatorStatusMessage,
+  isOpenArmDemoRobot,
+} from "@/features/teleop/panel/operatorTeleopPanelHelpers";
+import { useOperatorLeRobotDirectTeleop } from "@/features/teleop/panel/useOperatorLeRobotDirectTeleop";
 import { createOperatorCommandQueue } from "@/features/teleop/operator-control/operatorCommandQueue";
 import {
   OPERATOR_LEADER_TELEOP_UNAVAILABLE_STATUS,
@@ -233,7 +238,10 @@ import {
   STUDIO_KINEMATIC_TELEOP_SAMPLE_EVENT,
   type StudioKinematicTeleopSampleDetail,
 } from "@/features/teleop/recording/studioKinematicTeleopEvents";
-import { resolveFollowerHardwareJointJogCommands } from "@/features/teleop/panel/operatorFollowerHardwareSafety";
+import {
+  resolveFollowerHardwareJointJogCommands,
+  resolveFollowerHardwareLeaderTargetChanges,
+} from "@/features/teleop/panel/operatorFollowerHardwareSafety";
 import { useJointStore } from "@/shared/store/useJointStore";
 import type { Camera } from "@/shared/types/camera";
 
@@ -527,25 +535,6 @@ const drawPointCloudColorFrameToCanvas = (
   context.putImageData(new ImageData(pixels, width, height), 0, 0);
   return true;
 };
-
-const applyProfileCapabilities = (
-  twist: OperatorTwistCommand,
-  profile: OperatorTeleopProfile,
-): OperatorTwistCommand => ({
-  ...twist,
-  y: profile.capabilities.lateralStrafe ? twist.y : OPERATOR_HELPER_TWIST_ZERO,
-});
-
-const getOperatorStatusMessage = (session: OperatorSessionSnapshot): string =>
-  session.state === "active"
-    ? "Operator session active."
-    : "No active teleop control session yet. Connect a teleop provider before sending motion.";
-
-const isOpenArmDemoRobot = (robotName: string | null): boolean =>
-  robotName
-    ?.toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .includes(OPERATOR_HELPER_OPENARM_DEMO_ROBOT_NAME_TOKEN) ?? false;
 
 const trimOpenArmHfLivePath = (path: string | null | undefined): string =>
   path?.trim().replace(/^\/+|\/+$/g, "") ?? "";
@@ -951,6 +940,15 @@ export const OperatorTeleopPanel = ({
       }),
     [],
   );
+  const stopControlTimer = useCallback(() => {
+    if (controlIntervalRef.current === null) return;
+    window.clearInterval(controlIntervalRef.current);
+    controlIntervalRef.current = null;
+  }, []);
+  const clearActiveControls = useCallback(() => {
+    heldControlsRef.current.clear();
+    stopControlTimer();
+  }, [stopControlTimer]);
   const active =
     session?.state === "active" && Boolean(session.current_session_id);
   const gatewayCompatibleModelRobotIds = useMemo(
@@ -1333,8 +1331,27 @@ export const OperatorTeleopPanel = ({
       }),
     [baseOpenArmLeaderStatePollTargets, calibrationFileEditSession],
   );
+  const lerobotDirectTeleopAvailable =
+    followerHardwareProfile?.adapterId === OPERATOR_TELEOP_ADAPTER_IDS.lerobot;
+  const resetLeRobotDirectTeleopBrowserMotion = useCallback(() => {
+    clearActiveControls();
+    commandQueue.clearQueued();
+    setLastPreviewTwist(OPERATOR_HELPER_STOP_TWIST);
+  }, [clearActiveControls, commandQueue]);
+  const lerobotDirectTeleop = useOperatorLeRobotDirectTeleop({
+    available: lerobotDirectTeleopAvailable,
+    followerConnected: followerHardwareConnectionActive,
+    leaderTargets: baseOpenArmLeaderStatePollTargets,
+    baseUrl,
+    authorization: collaborationTeleopAuthorization,
+    operatorId,
+    onBeforeStart: resetLeRobotDirectTeleopBrowserMotion,
+    onStatusMessage: setPanelStatusMessage,
+  });
+  const lerobotDirectTeleopRunning = lerobotDirectTeleop.running;
   const leaderInputTelemetryActive =
     openArmLeaderAutodetectActive &&
+    !lerobotDirectTeleopRunning &&
     (leaderTeleopViewerModeActive || calibrationFileEditLeaderTelemetryRequested) &&
     openArmLeaderStatePollTargets.length > 0;
   const selectedTeleopInputConfigured =
@@ -1455,6 +1472,10 @@ export const OperatorTeleopPanel = ({
     followerJointJogCommandReady &&
     followerTelemetryFreshForMotion &&
     followerHardwareMotionSafety?.motionReady === true;
+  const browserLeaderHardwareRelayEnabled =
+    followerHardwareMotionReady &&
+    !lerobotDirectTeleopAvailable &&
+    !lerobotDirectTeleopRunning;
   const jointJogAvailable = Boolean(
     gatewayControlActive &&
     selectedProfile?.capabilities.jointJog &&
@@ -2049,20 +2070,16 @@ export const OperatorTeleopPanel = ({
             telemetry.positionRad,
           ]),
         );
-        const previousJointTargets = lastLeaderJointTargetsRef.current;
-        lastLeaderJointTargetsRef.current = jointTargets;
-        if (!followerHardwareMotionReady || previousJointTargets === null) return;
+        const { changedJointTargets, nextJointTargetReference } =
+          resolveFollowerHardwareLeaderTargetChanges({
+            jointTargets,
+            previousJointTargets: lastLeaderJointTargetsRef.current,
+            minTargetDeltaRad:
+              OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad,
+          });
+        lastLeaderJointTargetsRef.current = nextJointTargetReference;
+        if (!browserLeaderHardwareRelayEnabled) return;
 
-        const changedJointTargets = Object.fromEntries(
-          Object.entries(jointTargets).filter(([jointName, targetPositionRad]) => {
-            const previousPositionRad = previousJointTargets[jointName];
-            return (
-              !Number.isFinite(previousPositionRad) ||
-              Math.abs(targetPositionRad - previousPositionRad) >
-                OPERATOR_HARDWARE_IK_COMMAND.minDeltaRad
-            );
-          }),
-        );
         if (Object.keys(changedJointTargets).length > 0) {
           await dispatchFollowerHardwareJointTargets(changedJointTargets);
         }
@@ -2090,7 +2107,7 @@ export const OperatorTeleopPanel = ({
     };
   }, [
     dispatchFollowerHardwareJointTargets,
-    followerHardwareMotionReady,
+    browserLeaderHardwareRelayEnabled,
     leaderInputTelemetryActive,
     openArmLeaderStatePollTargets,
   ]);
@@ -2208,17 +2225,6 @@ export const OperatorTeleopPanel = ({
       return providerCameraStreams[0]?.id ?? "";
     });
   }, [providerCameraStreams]);
-
-  const stopControlTimer = useCallback(() => {
-    if (controlIntervalRef.current === null) return;
-    window.clearInterval(controlIntervalRef.current);
-    controlIntervalRef.current = null;
-  }, []);
-
-  const clearActiveControls = useCallback(() => {
-    heldControlsRef.current.clear();
-    stopControlTimer();
-  }, [stopControlTimer]);
 
   useEffect(() => {
     if (controlEnabled) return;
@@ -4005,6 +4011,7 @@ export const OperatorTeleopPanel = ({
               void handleToggleFollowerHardwareConnection();
             },
           }}
+          directTeleop={lerobotDirectTeleop.card}
           targetSelection={{
             disabled:
               leaseBusy ||

@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { OperatorLiveJointTelemetry } from "@/features/teleop/perception/operatorPerceptionStore";
-import { resolveFollowerHardwareJointJogCommands } from "@/features/teleop/panel/operatorFollowerHardwareSafety";
-import { OPERATOR_TELEOP_MS_PER_SECOND } from "@/features/teleop/params/operatorTeleopParams";
+import {
+  resolveFollowerHardwareJointJogCommands,
+  resolveFollowerHardwareLeaderTargetChanges,
+} from "@/features/teleop/panel/operatorFollowerHardwareSafety";
+import {
+  OPERATOR_HARDWARE_IK_COMMAND,
+  OPERATOR_TELEOP_MS_PER_SECOND,
+} from "@/features/teleop/params/operatorTeleopParams";
 
 const TEST_FOLLOWER_HARDWARE_SAFETY = {
   nowMs: 1_000,
@@ -158,5 +164,77 @@ describe("resolveFollowerHardwareJointJogCommands", () => {
     expect(result.commands.map((command) => command.joint_name)).toEqual([
       "openarm_left_joint1",
     ]);
+  });
+});
+
+describe("resolveFollowerHardwareLeaderTargetChanges", () => {
+  it("initializes the leader target reference without dispatching hardware motion", () => {
+    const result = resolveFollowerHardwareLeaderTargetChanges({
+      jointTargets: {
+        openarm_left_joint1: 0.2,
+      },
+      previousJointTargets: null,
+      minTargetDeltaRad: OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad,
+    });
+
+    expect(result).toEqual({
+      changedJointTargets: {},
+      nextJointTargetReference: {
+        openarm_left_joint1: 0.2,
+      },
+    });
+  });
+
+  it("holds rest-position leader jitter against the last dispatched target", () => {
+    const result = resolveFollowerHardwareLeaderTargetChanges({
+      jointTargets: {
+        openarm_left_joint1:
+          OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad / 2,
+      },
+      previousJointTargets: {
+        openarm_left_joint1: 0,
+      },
+      minTargetDeltaRad: OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad,
+    });
+
+    expect(result).toEqual({
+      changedJointTargets: {},
+      nextJointTargetReference: {
+        openarm_left_joint1: 0,
+      },
+    });
+  });
+
+  it("accumulates slow leader motion until it crosses the dispatch deadband", () => {
+    const belowDeadband = resolveFollowerHardwareLeaderTargetChanges({
+      jointTargets: {
+        openarm_left_joint1:
+          OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad / 2,
+      },
+      previousJointTargets: {
+        openarm_left_joint1: 0,
+      },
+      minTargetDeltaRad: OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad,
+    });
+    const crossedDeadband = resolveFollowerHardwareLeaderTargetChanges({
+      jointTargets: {
+        openarm_left_joint1:
+          OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad * 2,
+      },
+      previousJointTargets: belowDeadband.nextJointTargetReference,
+      minTargetDeltaRad: OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad,
+    });
+
+    expect(belowDeadband.changedJointTargets).toEqual({});
+    expect(crossedDeadband).toEqual({
+      changedJointTargets: {
+        openarm_left_joint1:
+          OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad * 2,
+      },
+      nextJointTargetReference: {
+        openarm_left_joint1:
+          OPERATOR_HARDWARE_IK_COMMAND.leaderTargetDeadbandRad * 2,
+      },
+    });
   });
 });

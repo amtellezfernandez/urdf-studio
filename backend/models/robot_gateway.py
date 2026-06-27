@@ -29,6 +29,9 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_DEFAULT_PROVIDER_ID,
     ROBOT_GATEWAY_DEFAULT_SESSION_ID,
     ROBOT_GATEWAY_DEFAULT_YAW_SPEED_RPS,
+    ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_DEFAULT_FPS,
+    ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_MAX_FPS,
+    ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_MIN_FPS,
     ROBOT_GATEWAY_OPENARM_CAN_DAMIAO_KD_MAX,
     ROBOT_GATEWAY_OPENARM_CAN_DAMIAO_KD_MIN,
     ROBOT_GATEWAY_OPENARM_CAN_DAMIAO_KP_MAX,
@@ -84,6 +87,9 @@ RobotGatewayTeleoperationMode = Literal["simulated", "real_hardware"]
 RobotGatewayCameraKind = Literal["rgb", "depth", "rgbd"]
 RobotGatewayPointCloudCoordinateFrame = Literal["robot_world", "camera"]
 RobotGatewayPointCloudWorldFrame = Literal["urdf_z_up", "hf_y_up"]
+RobotGatewayLeRobotDirectTeleopState = Literal[
+    "idle", "starting", "running", "stopping", "stopped", "error"
+]
 
 
 class RobotGatewayCapabilitySet(BaseModel):
@@ -426,6 +432,49 @@ class RobotGatewayLeRobotCalibrationStartResult(BaseModel):
     command: list[str] = Field(default_factory=list)
     display_command: str = Field(default="", alias="displayCommand")
     message: str = ""
+
+
+class RobotGatewayLeRobotDirectTeleopLeaderRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    port: str | None = None
+    port_left: str | None = Field(default=None, alias="portLeft")
+    port_right: str | None = Field(default=None, alias="portRight")
+    calibration_category: str | None = Field(default=None, alias="calibrationCategory")
+    calibration_profile: str | None = Field(default=None, alias="calibrationProfile")
+    calibration_id: str | None = Field(default=None, alias="calibrationId")
+    calibration_group: str | None = Field(default=None, alias="calibrationGroup")
+
+
+class RobotGatewayLeRobotDirectTeleopStartRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    operator_id: str = Field(..., min_length=1, alias="operatorId")
+    leader: RobotGatewayLeRobotDirectTeleopLeaderRequest
+    fps: int = Field(
+        default=ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_DEFAULT_FPS,
+        ge=ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_MIN_FPS,
+        le=ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_MAX_FPS,
+    )
+
+
+class RobotGatewayLeRobotDirectTeleopStatus(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    state: RobotGatewayLeRobotDirectTeleopState = "idle"
+    running: bool = False
+    session_id: str | None = Field(default=None, alias="sessionId")
+    fps: int = ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_DEFAULT_FPS
+    pid: int | None = Field(default=None, ge=0)
+    command: list[str] = Field(default_factory=list)
+    display_command: str = Field(default="", alias="displayCommand")
+    leader_profile: str | None = Field(default=None, alias="leaderProfile")
+    leader_id: str | None = Field(default=None, alias="leaderId")
+    follower_robot_type: str | None = Field(default=None, alias="followerRobotType")
+    started_at_ms: int | None = Field(default=None, ge=0, alias="startedAtMs")
+    stopped_at_ms: int | None = Field(default=None, ge=0, alias="stoppedAtMs")
+    return_code: int | None = Field(default=None, alias="returnCode")
+    last_error: str | None = Field(default=None, alias="lastError")
 
 
 class RobotGatewayEnvConfigUpdate(BaseModel):

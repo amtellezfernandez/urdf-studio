@@ -25,6 +25,17 @@ type OperatorFollowerConnectionView = {
   onToggleConnection: () => void;
 };
 
+type OperatorFollowerDirectTeleopView = {
+  available: boolean;
+  busy: boolean;
+  disabled: boolean;
+  issue: string | null;
+  running: boolean;
+  statusLabel: string;
+  onStart: () => void;
+  onStop: () => void;
+};
+
 type OperatorFollowerCalibrationView = {
   available: boolean;
   command: string | null;
@@ -69,6 +80,7 @@ type OperatorFollowerConnectionCardProps = {
   calibrationFileEdit: OperatorFollowerCalibrationFileEditView;
   calibrationSourceSelection: OperatorFollowerCalibrationSourceSelectionView;
   connection: OperatorFollowerConnectionView;
+  directTeleop?: OperatorFollowerDirectTeleopView;
   envConfig: OperatorFollowerEnvConfigView;
   targetSelection: OperatorFollowerTargetSelectionView;
 };
@@ -210,6 +222,7 @@ export const OperatorFollowerConnectionCard = ({
   calibrationFileEdit,
   calibrationSourceSelection,
   connection,
+  directTeleop,
   envConfig,
   targetSelection,
 }: OperatorFollowerConnectionCardProps) => {
@@ -303,6 +316,34 @@ export const OperatorFollowerConnectionCard = ({
         <div className="mt-1 text-amber-200">{shortIssue}</div>
       ) : envConfig.error ? (
         <div className="mt-1 text-amber-200">{envConfig.error}</div>
+      ) : null}
+
+      {directTeleop?.available ? (
+        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_88px] items-center gap-1.5 border-t border-border/20 pt-1">
+          <div
+            className={cn(
+              directTeleop.issue ? "text-amber-200" : "text-muted-foreground",
+            )}
+          >
+            {directTeleop.issue ?? directTeleop.statusLabel}
+          </div>
+          <button
+            type="button"
+            className={cn(buttonClassName, "h-7 px-1.5")}
+            disabled={
+              directTeleop.busy ||
+              (!directTeleop.running && directTeleop.disabled)
+            }
+            title={directTeleop.disabled ? (directTeleop.issue ?? undefined) : undefined}
+            onClick={directTeleop.running ? directTeleop.onStop : directTeleop.onStart}
+          >
+            {directTeleop.busy
+              ? "Working"
+              : directTeleop.running
+                ? "Stop direct"
+                : "Start direct"}
+          </button>
+        </div>
       ) : null}
 
       {connection.isConnected || calibration.available ? (

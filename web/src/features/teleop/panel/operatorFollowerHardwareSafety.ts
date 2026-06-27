@@ -22,6 +22,17 @@ type FollowerHardwareJointJogResolution = {
   staleTelemetryCount: number;
 };
 
+type ResolveFollowerHardwareLeaderTargetChangesParams = {
+  jointTargets: Record<string, number>;
+  previousJointTargets: Record<string, number> | null;
+  minTargetDeltaRad: number;
+};
+
+type FollowerHardwareLeaderTargetChanges = {
+  changedJointTargets: Record<string, number>;
+  nextJointTargetReference: Record<string, number>;
+};
+
 const hasFreshTelemetry = (
   telemetry: OperatorLiveJointTelemetry | undefined,
   nowMs: number,
@@ -31,6 +42,36 @@ const hasFreshTelemetry = (
   if (!Number.isFinite(telemetry.positionRad)) return false;
   if (!Number.isFinite(telemetry.sourceTsMs)) return false;
   return nowMs - telemetry.sourceTsMs <= maxTelemetryAgeMs;
+};
+
+export const resolveFollowerHardwareLeaderTargetChanges = ({
+  jointTargets,
+  previousJointTargets,
+  minTargetDeltaRad,
+}: ResolveFollowerHardwareLeaderTargetChangesParams): FollowerHardwareLeaderTargetChanges => {
+  const changedJointTargets: Record<string, number> = {};
+  const nextJointTargetReference: Record<string, number> = {};
+  const initialized = previousJointTargets !== null;
+
+  for (const [jointName, targetPositionRad] of Object.entries(jointTargets)) {
+    if (!Number.isFinite(targetPositionRad)) continue;
+    if (!initialized) {
+      nextJointTargetReference[jointName] = targetPositionRad;
+      continue;
+    }
+    const previousPositionRad = previousJointTargets[jointName];
+    const changed =
+      !Number.isFinite(previousPositionRad) ||
+      Math.abs(targetPositionRad - previousPositionRad) > minTargetDeltaRad;
+    if (changed) {
+      changedJointTargets[jointName] = targetPositionRad;
+      nextJointTargetReference[jointName] = targetPositionRad;
+      continue;
+    }
+    nextJointTargetReference[jointName] = previousPositionRad;
+  }
+
+  return { changedJointTargets, nextJointTargetReference };
 };
 
 export const resolveFollowerHardwareJointJogCommands = ({

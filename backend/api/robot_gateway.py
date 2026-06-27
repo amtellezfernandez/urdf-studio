@@ -12,6 +12,8 @@ from backend.models.robot_gateway import (
     RobotGatewayEnvConfigOpenResult,
     RobotGatewayEnvConfigUpdate,
     RobotGatewayJointJogRequest,
+    RobotGatewayLeRobotDirectTeleopStartRequest,
+    RobotGatewayLeRobotDirectTeleopStatus,
     RobotGatewayLeaseRequest,
     RobotGatewayLeaseResponse,
     RobotGatewayLeRobotCalibrationStartResult,
@@ -51,6 +53,9 @@ from backend.robot_gateway.openarm_leader_state import (
 from backend.robot_gateway.lerobot_calibration import (
     start_lerobot_calibration,
     start_lerobot_leader_calibration,
+)
+from backend.robot_gateway.lerobot_direct_teleop import (
+    lerobot_direct_teleop_service,
 )
 from backend.robot_gateway.config_file import (
     open_robot_gateway_env_config_file,
@@ -403,6 +408,7 @@ async def start_robot_gateway_leader_calibration(
 async def release_robot_gateway_hardware_follower(
     _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> OpenArmLeaderReleaseResult:
+    await anyio.to_thread.run_sync(lerobot_direct_teleop_service.stop)
     return OpenArmLeaderReleaseResult(released=runtime.release_hardware())
 
 
@@ -420,6 +426,82 @@ async def start_robot_gateway_follower_calibration(
         runtime.config.adapter_config,
         calibration_source=req.calibration_source if req is not None else None,
     )
+
+
+@router.get(
+    "/hardware/lerobot/direct-teleop/status",
+    response_model=RobotGatewayLeRobotDirectTeleopStatus,
+    response_model_by_alias=False,
+)
+async def get_robot_gateway_lerobot_direct_teleop_status(
+    _access: None = Depends(require_robot_gateway_control_access_async),
+) -> RobotGatewayLeRobotDirectTeleopStatus:
+    return lerobot_direct_teleop_service.status()
+
+
+@router.post(
+    "/hardware/lerobot/direct-teleop/start",
+    response_model=RobotGatewayLeRobotDirectTeleopStatus,
+    response_model_by_alias=False,
+)
+async def start_robot_gateway_lerobot_direct_teleop(
+    req: RobotGatewayLeRobotDirectTeleopStartRequest,
+    _access: None = Depends(require_robot_gateway_control_access_async),
+) -> RobotGatewayLeRobotDirectTeleopStatus:
+    session = runtime.get_session()
+    if session.runtime_mode != "control":
+        raise HTTPException(status_code=409, detail="Gateway is in observe mode.")
+    if session.control_lease_owner is None:
+        raise HTTPException(status_code=409, detail="No active control lease.")
+    if session.control_lease_owner != req.operator_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Control lease is held by another operator.",
+        )
+    _release_lerobot_direct_teleop_ports(req)
+    runtime.release_hardware()
+    try:
+        return await anyio.to_thread.run_sync(
+            partial(
+                lerobot_direct_teleop_service.start,
+                req,
+                adapter_config=runtime.config.adapter_config,
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/hardware/lerobot/direct-teleop/stop",
+    response_model=RobotGatewayLeRobotDirectTeleopStatus,
+    response_model_by_alias=False,
+)
+async def stop_robot_gateway_lerobot_direct_teleop(
+    _access: None = Depends(require_robot_gateway_control_access_async),
+) -> RobotGatewayLeRobotDirectTeleopStatus:
+    return await anyio.to_thread.run_sync(lerobot_direct_teleop_service.stop)
+
+
+def _release_lerobot_direct_teleop_ports(
+    req: RobotGatewayLeRobotDirectTeleopStartRequest,
+) -> None:
+    leader = req.leader
+    ports = [
+        port.strip()
+        for port in (leader.port, leader.port_left, leader.port_right)
+        if isinstance(port, str) and port.strip()
+    ]
+    for port in dict.fromkeys(ports):
+        openarm_leader_state_service.release(
+            port=port,
+            calibration_category=leader.calibration_category,
+            calibration_profile=leader.calibration_profile,
+            calibration_id=leader.calibration_id,
+            calibration_group=leader.calibration_group,
+        )
 
 
 @router.get(
@@ -556,6 +638,7 @@ async def apply_robot_gateway_twist(
 async def stop_robot_gateway(
     _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
+    await anyio.to_thread.run_sync(lerobot_direct_teleop_service.stop)
     return runtime.stop()
 
 
@@ -563,4 +646,5 @@ async def stop_robot_gateway(
 async def estop_robot_gateway(
     _access: None = Depends(require_robot_gateway_control_access_async),
 ) -> RobotGatewayControlAck:
+    await anyio.to_thread.run_sync(lerobot_direct_teleop_service.stop)
     return runtime.estop()

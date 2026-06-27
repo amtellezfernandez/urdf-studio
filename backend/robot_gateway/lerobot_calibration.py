@@ -203,6 +203,8 @@ def _resolve_lerobot_leader_teleop_type(
 ) -> str:
     profile = calibration_profile.strip() if calibration_profile else ""
     defaults = ROBOT_GATEWAY_LEROBOT_LEADER_CALIBRATION_DEFAULTS
+    if profile == ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE:
+        return profile
     if profile.endswith(defaults.leader_type_suffix):
         return profile
     if profile.endswith(defaults.follower_type_suffix):
