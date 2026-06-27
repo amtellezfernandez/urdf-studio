@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   OPERATOR_HELPER_DEFAULT_OPERATOR_ID,
   OPERATOR_HELPER_POLL_INTERVAL_MS,
-  OPERATOR_OPENARM_LEADER_SIDES,
-  OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+  OPERATOR_LEADER_SIDES,
+  OPERATOR_LEROBOT_PAIRED_PORT_TELEOPERATOR_TYPES,
 } from "@/features/teleop/params/operatorTeleopParams";
 import {
   fetchOperatorLeRobotDirectTeleopStatus,
@@ -36,7 +36,7 @@ type OperatorLeRobotDirectTeleopCardView = {
 type UseOperatorLeRobotDirectTeleopParams = {
   available: boolean;
   followerConnected: boolean;
-  leaderTargets: readonly OperatorLeaderTelemetryTarget[];
+  teleoperatorTargets: readonly OperatorLeaderTelemetryTarget[];
   baseUrl: string;
   authorization: OperatorCollaborationAuthorization | null;
   operatorId: string;
@@ -49,7 +49,7 @@ type UseOperatorLeRobotDirectTeleopResult = {
   card: OperatorLeRobotDirectTeleopCardView | undefined;
 };
 
-const buildLeRobotDirectTeleopLeaderRequest = (
+export const resolveLeRobotDirectTeleopLeaderRequest = (
   targets: readonly OperatorLeaderTelemetryTarget[],
 ): OperatorLeRobotDirectTeleopLeaderResolution => {
   const primaryTarget = targets[0] ?? null;
@@ -60,17 +60,19 @@ const buildLeRobotDirectTeleopLeaderRequest = (
     return { leader: null, issue: "Calibrate the leader first." };
   }
   if (
-    primaryTarget.calibrationProfile === OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE
+    (
+      OPERATOR_LEROBOT_PAIRED_PORT_TELEOPERATOR_TYPES as readonly string[]
+    ).includes(primaryTarget.calibrationProfile)
   ) {
     const leftTarget = targets.find(
       (target) =>
-        target.side === OPERATOR_OPENARM_LEADER_SIDES.left ||
-        target.calibrationGroup === OPERATOR_OPENARM_LEADER_SIDES.left,
+        target.side === OPERATOR_LEADER_SIDES.left ||
+        target.calibrationGroup === OPERATOR_LEADER_SIDES.left,
     );
     const rightTarget = targets.find(
       (target) =>
-        target.side === OPERATOR_OPENARM_LEADER_SIDES.right ||
-        target.calibrationGroup === OPERATOR_OPENARM_LEADER_SIDES.right,
+        target.side === OPERATOR_LEADER_SIDES.right ||
+        target.calibrationGroup === OPERATOR_LEADER_SIDES.right,
     );
     if (!leftTarget || !rightTarget) {
       return {
@@ -106,7 +108,7 @@ const buildLeRobotDirectTeleopLeaderRequest = (
 export const useOperatorLeRobotDirectTeleop = ({
   available,
   followerConnected,
-  leaderTargets,
+  teleoperatorTargets,
   baseUrl,
   authorization,
   operatorId,
@@ -118,8 +120,8 @@ export const useOperatorLeRobotDirectTeleop = ({
   );
   const [busy, setBusy] = useState(false);
   const leaderResolution = useMemo(
-    () => buildLeRobotDirectTeleopLeaderRequest(leaderTargets),
-    [leaderTargets],
+    () => resolveLeRobotDirectTeleopLeaderRequest(teleoperatorTargets),
+    [teleoperatorTargets],
   );
   const running =
     status?.running === true ||

@@ -61,13 +61,11 @@ describe("operatorLeRobotDirectTeleopApi", () => {
       {
         operatorId: fixture.operatorId,
         leader: {
-          port: "/dev/serial/by-id/leader-right",
-          portLeft: "/dev/serial/by-id/leader-left",
-          portRight: "/dev/serial/by-id/leader-right",
+          port: "/dev/serial/by-id/so100-leader",
           calibrationCategory: "teleoperators",
-          calibrationProfile: "openarm_mini",
+          calibrationProfile: "so100_leader",
           calibrationId: "blue",
-          calibrationGroup: "right",
+          calibrationGroup: "all",
         },
       },
       fixture.baseUrl,
@@ -122,13 +120,11 @@ describe("operatorLeRobotDirectTeleopApi", () => {
     expect(JSON.parse(String(startInit?.body))).toEqual({
       operator_id: fixture.operatorId,
       leader: {
-        port: "/dev/serial/by-id/leader-right",
-        port_left: "/dev/serial/by-id/leader-left",
-        port_right: "/dev/serial/by-id/leader-right",
+        port: "/dev/serial/by-id/so100-leader",
         calibration_category: "teleoperators",
-        calibration_profile: "openarm_mini",
+        calibration_profile: "so100_leader",
         calibration_id: "blue",
-        calibration_group: "right",
+        calibration_group: "all",
       },
     });
 

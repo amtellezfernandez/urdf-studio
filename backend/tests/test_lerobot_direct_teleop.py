@@ -111,13 +111,13 @@ def test_lerobot_direct_teleop_command_requires_openarm_mini_pair() -> None:
             _build_adapter_config(),
             _build_start_request(
                 RobotGatewayLeRobotDirectTeleopLeaderRequest(
-                port=TEST_RIGHT_LEADER_PORT,
-                calibrationProfile=ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
-                calibrationGroup=ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT,
-                calibrationId=TEST_OPENARM_PAIR_ID,
-            )
-        ),
-    )
+                    port=TEST_RIGHT_LEADER_PORT,
+                    calibrationProfile=ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
+                    calibrationGroup=ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_RIGHT,
+                    calibrationId=TEST_OPENARM_PAIR_ID,
+                )
+            ),
+        )
 
 
 def test_lerobot_direct_teleop_command_uses_openarm_mini_pair() -> None:

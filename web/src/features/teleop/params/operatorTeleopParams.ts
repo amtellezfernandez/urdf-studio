@@ -104,15 +104,19 @@ export const OPERATOR_OPENARM_MINI = {
 } as const;
 export const OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE =
   OPERATOR_OPENARM_MINI.teleoperatorType;
+export const OPERATOR_LEROBOT_PAIRED_PORT_TELEOPERATOR_TYPES = [
+  OPERATOR_OPENARM_MINI_TELEOPERATOR_TYPE,
+] as const;
 export const OPERATOR_OPENARM_MINI_MOTOR_MODEL =
   OPERATOR_OPENARM_MINI.motorModel;
 export const OPERATOR_OPENARM_MINI_MOTOR_IDS =
   OPERATOR_OPENARM_MINI.motorIds;
-export const OPERATOR_OPENARM_LEADER_SIDES = {
+export const OPERATOR_LEADER_SIDES = {
   left: "left",
   right: "right",
   both: "both",
 } as const;
+export const OPERATOR_OPENARM_LEADER_SIDES = OPERATOR_LEADER_SIDES;
 export const OPERATOR_HELPER_TELEMETRY_POLLING = {
   intervalMs: 50,
 } as const;

@@ -26,7 +26,7 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
     ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_DEFAULT_FPS,
     ROBOT_GATEWAY_LEROBOT_DIRECT_TELEOP_STOP_TIMEOUT_SEC,
-    ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE,
+    ROBOT_GATEWAY_LEROBOT_PAIRED_PORT_TELEOPERATOR_TYPES,
     ROBOT_GATEWAY_LEROBOT_TELEOPERATE_BIN,
     ROBOT_GATEWAY_LEROBOT_VENV_BIN_RELATIVE_DIR,
     ROBOT_GATEWAY_OPENARM_LEADER_STATE_SIDE_LEFT,
@@ -225,7 +225,7 @@ def build_lerobot_direct_teleop_command(
         leader.port or leader.port_left or leader.port_right,
         "LeRobot direct teleop requires a leader port.",
     )
-    normalized_leader = _normalize_openarm_mini_ports(leader)
+    normalized_leader = _normalize_paired_teleoperator_ports(leader)
     leader_command = build_lerobot_leader_calibration_command(
         port=normalized_port,
         port_left=normalized_leader.port_left,
@@ -242,11 +242,11 @@ def build_lerobot_direct_teleop_command(
     ]
 
 
-def _normalize_openarm_mini_ports(
+def _normalize_paired_teleoperator_ports(
     leader: RobotGatewayLeRobotDirectTeleopLeaderRequest,
 ) -> RobotGatewayLeRobotDirectTeleopLeaderRequest:
     profile = _normalize_non_empty_string(leader.calibration_profile)
-    if profile != ROBOT_GATEWAY_LEROBOT_OPENARM_MINI_TELEOPERATOR_TYPE:
+    if profile not in ROBOT_GATEWAY_LEROBOT_PAIRED_PORT_TELEOPERATOR_TYPES:
         return leader
     selected_port = _normalize_non_empty_string(leader.port)
     group = _normalize_non_empty_string(leader.calibration_group)
@@ -258,7 +258,7 @@ def _normalize_openarm_mini_ports(
         port_right = port_right or selected_port
     if port_left is None or port_right is None:
         raise ValueError(
-            "LeRobot OpenArm Mini direct teleop requires both left and right leader ports."
+            "LeRobot paired direct teleop requires both left and right leader ports."
         )
     return leader.model_copy(
         update={

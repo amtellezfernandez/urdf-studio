@@ -1029,16 +1029,16 @@ export const OperatorTeleopPanel = ({
     () => availableControlInputs.filter((input) => input.kind === "leader_arm"),
     [availableControlInputs],
   );
-  const availableOpenArmLeaders = useMemo(
+  const availableLeaderDevices = useMemo(
     () => openArmLeaderDetection?.leaders.filter((leader) => leader.available) ?? [],
     [openArmLeaderDetection?.leaders],
   );
-  const baseOpenArmLeaderStatePollTargets = useMemo<
+  const baseLeaderStatePollTargets = useMemo<
     OperatorLeaderTelemetryTarget[]
   >(
     () =>
       resolveOperatorLeaderTelemetryTargets({
-        leaders: availableOpenArmLeaders,
+        leaders: availableLeaderDevices,
         assignments: operatorLeaderAssignments,
         availableJointNames: availableStudioJointNames,
         resolveFallbackTargetJointNames: (assignment) => {
@@ -1051,13 +1051,13 @@ export const OperatorTeleopPanel = ({
         },
       }),
     [
-      availableOpenArmLeaders,
+      availableLeaderDevices,
       availableStudioJointNames,
       operatorLeaderAssignments,
       studioTeleopControlGroups,
     ],
   );
-  const selectedLocalLeaderAssigned = availableOpenArmLeaders.some((leader) =>
+  const selectedLocalLeaderAssigned = availableLeaderDevices.some((leader) =>
     Boolean(operatorLeaderAssignments[leader.identityKey]?.side),
   );
   const followerHardwareProfile = useMemo(
@@ -1323,13 +1323,13 @@ export const OperatorTeleopPanel = ({
       calibrationFileEditTelemetryByName,
     ],
   );
-  const openArmLeaderStatePollTargets = useMemo(
+  const leaderStatePollTargets = useMemo(
     () =>
       applyCalibrationFileEditLeaderTelemetryOverride({
-        targets: baseOpenArmLeaderStatePollTargets,
+        targets: baseLeaderStatePollTargets,
         session: calibrationFileEditSession,
       }),
-    [baseOpenArmLeaderStatePollTargets, calibrationFileEditSession],
+    [baseLeaderStatePollTargets, calibrationFileEditSession],
   );
   const lerobotDirectTeleopAvailable =
     followerHardwareProfile?.adapterId === OPERATOR_TELEOP_ADAPTER_IDS.lerobot;
@@ -1341,7 +1341,7 @@ export const OperatorTeleopPanel = ({
   const lerobotDirectTeleop = useOperatorLeRobotDirectTeleop({
     available: lerobotDirectTeleopAvailable,
     followerConnected: followerHardwareConnectionActive,
-    leaderTargets: baseOpenArmLeaderStatePollTargets,
+    teleoperatorTargets: baseLeaderStatePollTargets,
     baseUrl,
     authorization: collaborationTeleopAuthorization,
     operatorId,
@@ -1353,10 +1353,10 @@ export const OperatorTeleopPanel = ({
     openArmLeaderAutodetectActive &&
     !lerobotDirectTeleopRunning &&
     (leaderTeleopViewerModeActive || calibrationFileEditLeaderTelemetryRequested) &&
-    openArmLeaderStatePollTargets.length > 0;
+    leaderStatePollTargets.length > 0;
   const selectedTeleopInputConfigured =
     selectedLocalLeaderAssigned ||
-    openArmLeaderStatePollTargets.length > 0 ||
+    leaderStatePollTargets.length > 0 ||
     advertisedLeaderArmInputs.length > 0;
   const followerJointJogCommandReady =
     followerHardwareCommandReady && Boolean(selectedProfile?.capabilities.jointJog);
@@ -1974,7 +1974,7 @@ export const OperatorTeleopPanel = ({
         const readErrors: string[] = [];
         const activeZeroOffsetKeys = new Set<string>();
         await Promise.all(
-          openArmLeaderStatePollTargets.map(async (target) => {
+          leaderStatePollTargets.map(async (target) => {
             try {
               const state = await fetchOperatorLeaderState(
                 target.path,
@@ -1992,7 +1992,7 @@ export const OperatorTeleopPanel = ({
               if (!state.connected || state.error) {
                 readErrors.push(
                   state.error ||
-                    `OpenArm target ${target.label} is detected but not streaming.`,
+                    `Leader target ${target.label} is detected but not streaming.`,
                 );
                 return;
               }
@@ -2044,7 +2044,7 @@ export const OperatorTeleopPanel = ({
               readErrors.push(
                 error instanceof Error
                   ? error.message
-                  : `OpenArm target ${target.label} read failed.`,
+                  : `Leader target ${target.label} read failed.`,
               );
             }
           }),
@@ -2096,7 +2096,7 @@ export const OperatorTeleopPanel = ({
     return () => {
       cancelled = true;
       stopPolling();
-      openArmLeaderStatePollTargets.forEach((target) => {
+      leaderStatePollTargets.forEach((target) => {
         releaseOperatorLeaderHardwareKeepalive(
           buildOperatorLeaderTelemetryTargetReleaseRequest(target),
           OPERATOR_HELPER_LOCAL_BACKEND_BASE_URL,
@@ -2109,7 +2109,7 @@ export const OperatorTeleopPanel = ({
     dispatchFollowerHardwareJointTargets,
     browserLeaderHardwareRelayEnabled,
     leaderInputTelemetryActive,
-    openArmLeaderStatePollTargets,
+    leaderStatePollTargets,
   ]);
 
   commandTransportRef.current = commandTransport;
@@ -3606,7 +3606,7 @@ export const OperatorTeleopPanel = ({
             <div className="font-mono text-muted-foreground">
               Streaming {openArmLeaderLiveJointCount} joint values.
             </div>
-          ) : openArmLeaderStatePollTargets.length > 0 &&
+          ) : leaderStatePollTargets.length > 0 &&
             !leaderTeleopViewerModeActive ? (
             <div className="font-mono text-muted-foreground">
               Assigned. Opening teleop view.
