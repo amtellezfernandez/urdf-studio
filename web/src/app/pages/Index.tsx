@@ -472,6 +472,43 @@ const Index = () => {
     datasetReviewSessionId,
     datasetReviewSnapshot,
   ]);
+  const handleOpenTrainingMode = useCallback(() => {
+    const baseUrl = buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets });
+    const opsWindow = window.open(baseUrl, "_blank");
+    if (opsWindow) {
+      opsWindow.opener = null;
+    }
+
+    const navigateOpsWindow = (datasetPath?: string) => {
+      const nextUrl = buildUrdfOpsBrowserUrl({
+        tab: URDF_OPS_TABS.datasets,
+        datasetId: datasetPath,
+        datasetSource: datasetPath ? "local" : undefined,
+      });
+      if (opsWindow && !opsWindow.closed) {
+        opsWindow.location.assign(nextUrl);
+        return;
+      }
+      window.open(nextUrl, "_blank", "noopener,noreferrer");
+    };
+
+    if (!datasetActions?.hasEpisodes || !datasetActions.exportRecordedEpisodesToOps) {
+      navigateOpsWindow();
+      return;
+    }
+
+    void datasetActions.exportRecordedEpisodesToOps().then((result) => {
+      navigateOpsWindow(result.datasetPaths[0]);
+    }).catch((error) => {
+      console.error("Failed to export recorded episodes for URDF Ops:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to export recorded episodes for URDF Ops",
+      );
+      navigateOpsWindow();
+    });
+  }, [datasetActions]);
   const [inertiaReliability, setInertiaReliability] = useState<InertiaReliabilityEntry[]>([]);
   const [activeInertiaVisualizationScopeKey, setActiveInertiaVisualizationScopeKey] = useState<string | null>(null);
   const [hoveredInertiaVisualizationPreview, setHoveredInertiaVisualizationPreview] =
@@ -3145,13 +3182,7 @@ const Index = () => {
     workspaceLauncherNeedsAttention: simulationPrepStatus.tone !== "safe",
     onOpenWorkspaceLauncher: openSimulationPrepPanel,
     studioIssueReportUrl: studioIssueReportUrl ?? undefined,
-    onOpenTrainingMode: () => {
-      window.open(
-        buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets }),
-        "_blank",
-        "noopener,noreferrer",
-      );
-    },
+    onOpenTrainingMode: handleOpenTrainingMode,
     onOpenDatasetReview: handleOpenDatasetReview,
     leaderInputConnected,
     leaderInputPanelOpen: teleopPanelOpen && teleopPanelView === "studio",
@@ -3556,13 +3587,7 @@ const Index = () => {
       isAttachingIluSession={isAttachingIluSession || isAttachingIluAssembly}
       loadFilesFromFolderWithFreshCameras={loadFilesFromFolderWithFreshCameras}
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
-      onOpenTrainingMode={() => {
-        window.open(
-          buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets }),
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }}
+      onOpenTrainingMode={handleOpenTrainingMode}
       onPlayDemoMotion={handlePlayDemoMotion}
       workspaceMode={workspaceMode}
       onWorkspaceModeChange={workspaceController.setMode}

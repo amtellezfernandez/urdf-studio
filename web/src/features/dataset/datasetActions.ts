@@ -18,6 +18,12 @@ export type DatasetReviewDeleteTarget = Pick<
   "episode_id" | "source_id" | "content_fingerprint"
 >;
 
+export type DatasetOpsLocalExportResult = {
+  datasetPaths: string[];
+  exportedCount: number;
+  skippedCount: number;
+};
+
 export type DatasetActions = {
   loadFromLocal: () => void;
   loadFromHuggingFace: () => void;
@@ -26,6 +32,7 @@ export type DatasetActions = {
   abortEpisodeLoading?: () => void;
   materializeEpisode?: (episodeId: string) => Promise<Episode | null>;
   exportToLocal: () => void;
+  exportRecordedEpisodesToOps?: () => Promise<DatasetOpsLocalExportResult>;
   exportToHuggingFace: () => void;
   loadDemoEpisodes: (episodes: Episode[]) => void;
   isImportingFromHF: boolean;

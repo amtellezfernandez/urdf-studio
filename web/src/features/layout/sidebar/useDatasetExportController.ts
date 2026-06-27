@@ -6,7 +6,9 @@ import {
   validateEpisodesForStandardizedExport,
   type Episode,
 } from "@/features/dataset";
+import type { DatasetOpsLocalExportResult } from "@/features/dataset/datasetActions";
 import { buildDatasetArchiveArtifact } from "@/features/layout/sidebar/datasetArchiveExport";
+import { buildDatasetEpisodeMjlabRecording } from "@/features/layout/sidebar/datasetMjlabValidation";
 import type { DatasetSourceRecord } from "@/features/layout/sidebar/datasetSourceHelpers";
 import {
   DEFAULT_HF_DATASET_REPO,
@@ -22,6 +24,10 @@ import {
   sanitizeHfDatasetPublishBranchName,
   type HfDatasetVisibility,
 } from "@/features/layout/sidebar/hfDatasetPublishHelpers";
+import {
+  exportTeleopKinematicToLeRobot,
+  type OperatorTeleopMjlabRobotModel,
+} from "@/features/teleop/recording/operatorTeleopReplayApi";
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
 import type { JointLimitMode } from "@/shared/types/feature";
 
@@ -41,6 +47,10 @@ type UseDatasetExportControllerParams = {
   availableJoints: string[];
   exportLimitMode: JointLimitMode;
   jointLimits: JointLimits;
+  buildMjlabRobotModel?: () =>
+    | OperatorTeleopMjlabRobotModel
+    | null
+    | Promise<OperatorTeleopMjlabRobotModel | null>;
   metricsEnabled: boolean;
   loadJSZip: () => Promise<JSZipConstructor>;
   effectiveHfToken: string | null;
@@ -193,6 +203,7 @@ export const useDatasetExportController = ({
   availableJoints,
   exportLimitMode,
   jointLimits,
+  buildMjlabRobotModel,
   metricsEnabled,
   loadJSZip,
   effectiveHfToken,
@@ -236,6 +247,83 @@ export const useDatasetExportController = ({
     hfIdentityRef.current = data;
     return data;
   }, []);
+
+  const exportRecordedEpisodesForOps = useCallback(async (): Promise<DatasetOpsLocalExportResult> => {
+    const recordedEpisodes = episodes.filter((episode) => {
+      const additional = episode.metadata?.additional;
+      return (
+        episode.frames.length > 0 &&
+        additional &&
+        (additional.isRecorded === true || additional.sourceType === "recorded")
+      );
+    });
+    const skippedCount = episodes.length - recordedEpisodes.length;
+
+    if (recordedEpisodes.length === 0) {
+      return {
+        datasetPaths: [],
+        exportedCount: 0,
+        skippedCount,
+      };
+    }
+
+    setIsExportingDataset(true);
+    try {
+      let robotModel: OperatorTeleopMjlabRobotModel | null = null;
+      try {
+        robotModel = (await buildMjlabRobotModel?.()) ?? null;
+      } catch (error) {
+        console.warn("Failed to prepare MJLab robot model for URDF Ops export:", error);
+      }
+
+      const datasetPaths: string[] = [];
+      const failures: string[] = [];
+      for (const episode of recordedEpisodes) {
+        try {
+          const result = await exportTeleopKinematicToLeRobot(
+            buildDatasetEpisodeMjlabRecording(episode),
+            robotModel ? { robotModel } : {},
+          );
+          if (result.datasetPath.trim()) {
+            datasetPaths.push(result.datasetPath);
+          }
+        } catch (error) {
+          failures.push(
+            error instanceof Error
+              ? error.message
+              : `Episode ${episode.number} export failed`,
+          );
+        }
+      }
+
+      if (datasetPaths.length > 0) {
+        logMetric("dataset.export.ops_local", {
+          episodes: datasetPaths.length,
+          skipped: skippedCount,
+        });
+        toast.success(
+          datasetPaths.length === 1
+            ? "Exported 1 recorded episode for URDF Ops"
+            : `Exported ${datasetPaths.length} recorded episodes for URDF Ops`,
+        );
+      }
+      if (failures.length > 0) {
+        toast.error(
+          failures.length === recordedEpisodes.length
+            ? failures[0] ?? "Failed to export recorded episodes for URDF Ops"
+            : `Exported ${datasetPaths.length}; ${failures.length} episode(s) failed`,
+        );
+      }
+
+      return {
+        datasetPaths,
+        exportedCount: datasetPaths.length,
+        skippedCount,
+      };
+    } finally {
+      setIsExportingDataset(false);
+    }
+  }, [buildMjlabRobotModel, episodes, logMetric]);
 
   const promptForDataset = useCallback(
     (defaultOwner?: string, defaultRepoId?: string): HfDatasetTarget | null => {
@@ -602,6 +690,7 @@ export const useDatasetExportController = ({
     isExportingDataset,
     isUploadingToHF,
     exportDatasetToLeRobotFormat,
+    exportRecordedEpisodesForOps,
     uploadEpisodesToHuggingFace,
   };
 };

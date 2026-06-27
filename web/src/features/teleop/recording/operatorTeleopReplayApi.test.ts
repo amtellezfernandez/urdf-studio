@@ -132,6 +132,7 @@ describe("operatorTeleopReplayApi", () => {
     await expect(
       exportTeleopKinematicToLeRobot(TEST_RECORDING, {
         robotModel: TEST_ROBOT_MODEL,
+        outputDir: "ops-local/fold-shirt-demo",
       }),
     ).resolves.toMatchObject({
       success: true,
@@ -144,6 +145,7 @@ describe("operatorTeleopReplayApi", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       recording: TEST_RECORDING,
       robotModel: TEST_ROBOT_MODEL,
+      outputDir: "ops-local/fold-shirt-demo",
     });
   });
 

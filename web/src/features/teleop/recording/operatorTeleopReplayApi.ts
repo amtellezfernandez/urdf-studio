@@ -81,6 +81,7 @@ export type OperatorTeleopMjlabValidationOptions = {
 
 export type OperatorTeleopReplayExportOptions = {
   robotModel?: OperatorTeleopMjlabRobotModel | null;
+  outputDir?: string | null;
 };
 
 export type OperatorTeleopMjlabValidationResult = {
@@ -208,6 +209,21 @@ const postReplayJson = async <T>(
   return (await response.json()) as T;
 };
 
+const buildReplayExportBody = (
+  options: OperatorTeleopReplayExportOptions,
+): Omit<MjlabValidationApiEnvelope, "recording"> & { outputDir?: string } => {
+  const body: Omit<MjlabValidationApiEnvelope, "recording"> & {
+    outputDir?: string;
+  } = {};
+  if (options.robotModel) {
+    body.robotModel = options.robotModel;
+  }
+  if (options.outputDir?.trim()) {
+    body.outputDir = options.outputDir.trim();
+  }
+  return body;
+};
+
 export const validateTeleopReplay = (
   recording: OperatorTeleopRecordingEpisode,
 ): Promise<OperatorTeleopReplayValidationResult> =>
@@ -223,11 +239,7 @@ export const exportTeleopReplayToLeRobot = (
   postReplayJson<OperatorTeleopReplayExportResult>(
     OPERATOR_TELEOP_REPLAY_LEROBOT_EXPORT_PATH,
     recording,
-    options.robotModel
-      ? ({
-          robotModel: options.robotModel,
-        } satisfies Omit<MjlabValidationApiEnvelope, "recording">)
-      : {},
+    buildReplayExportBody(options),
   );
 
 export const exportTeleopKinematicToLeRobot = (
@@ -237,11 +249,7 @@ export const exportTeleopKinematicToLeRobot = (
   postReplayJson<OperatorTeleopReplayExportResult>(
     OPERATOR_TELEOP_KINEMATIC_LEROBOT_EXPORT_PATH,
     recording,
-    options.robotModel
-      ? ({
-          robotModel: options.robotModel,
-        } satisfies Omit<MjlabValidationApiEnvelope, "recording">)
-      : {},
+    buildReplayExportBody(options),
   );
 
 export const validateTeleopMjlabMotion = (

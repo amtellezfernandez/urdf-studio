@@ -442,6 +442,7 @@ export const Sidebar = ({
     isExportingDataset,
     isUploadingToHF,
     exportDatasetToLeRobotFormat,
+    exportRecordedEpisodesForOps,
     uploadEpisodesToHuggingFace,
   } = useDatasetExportController({
     episodes,
@@ -452,6 +453,7 @@ export const Sidebar = ({
     availableJoints: availableJointsStore,
     exportLimitMode,
     jointLimits,
+    buildMjlabRobotModel: buildRecordingMjlabRobotModel,
     metricsEnabled,
     loadJSZip,
     effectiveHfToken,
@@ -740,6 +742,7 @@ export const Sidebar = ({
     abortPendingHfRemainderLoad,
     materializeHfLazyEpisode,
     exportDatasetToLeRobotFormat,
+    exportRecordedEpisodesForOps,
     uploadEpisodesToHuggingFace,
     clearPendingHfRemainderUi,
     resetPipelineProgress,

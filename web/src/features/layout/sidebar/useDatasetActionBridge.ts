@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import type {
   DatasetActions,
+  DatasetOpsLocalExportResult,
   DatasetReviewDeleteTarget,
 } from "@/features/dataset/datasetActions";
 import type {
@@ -37,6 +38,7 @@ type UseDatasetActionBridgeParams = {
   abortPendingHfRemainderLoad: () => void;
   materializeHfLazyEpisode: (episode: Episode) => Promise<Episode | null>;
   exportDatasetToLeRobotFormat: () => void;
+  exportRecordedEpisodesForOps?: () => Promise<DatasetOpsLocalExportResult>;
   uploadEpisodesToHuggingFace: () => void;
   clearPendingHfRemainderUi: () => void;
   resetPipelineProgress: () => void;
@@ -83,6 +85,7 @@ export const useDatasetActionBridge = ({
   abortPendingHfRemainderLoad,
   materializeHfLazyEpisode,
   exportDatasetToLeRobotFormat,
+  exportRecordedEpisodesForOps,
   uploadEpisodesToHuggingFace,
   clearPendingHfRemainderUi,
   resetPipelineProgress,
@@ -162,6 +165,7 @@ export const useDatasetActionBridge = ({
         return materializeHfLazyEpisode(targetEpisode);
       },
       exportToLocal: exportDatasetToLeRobotFormat,
+      exportRecordedEpisodesToOps: exportRecordedEpisodesForOps,
       exportToHuggingFace: uploadEpisodesToHuggingFace,
       loadDemoEpisodes,
       isImportingFromHF: isImportingFromHFDataset,
@@ -199,6 +203,7 @@ export const useDatasetActionBridge = ({
     episodes,
     episodesRef,
     exportDatasetToLeRobotFormat,
+    exportRecordedEpisodesForOps,
     exportLimitMode,
     hfTokenGate,
     isExportingDataset,
