@@ -46,9 +46,7 @@ def test_simulator_list_is_first_release_target_set() -> None:
         for entry in payload["simulators"]
         if entry["transferPolicy"]["transferStrategy"] == "planned"
     }
-    assert planned == {
-        "isaac-gym",
-    }
+    assert planned == set()
 
 
 def test_xacro_expand_uses_uploaded_file_contract(monkeypatch) -> None:

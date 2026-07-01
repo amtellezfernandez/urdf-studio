@@ -26,6 +26,7 @@ from backend.services.simulator_adapters.isaac import (
     ISAAC_LAB_SIMULATOR_ADAPTER,
     ISAAC_SIM_SIMULATOR_ADAPTER,
 )
+from backend.services.simulator_adapters.isaac_gym import ISAAC_GYM_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.mjx import MJX_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.mujoco import MUJOCO_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.optional_runtime import make_optional_simulator_adapter
@@ -50,6 +51,7 @@ _WORKSPACE_SIMULATOR_ADAPTERS = _build_adapter_map(
         MJX_SIMULATOR_ADAPTER,
         ISAAC_SIM_SIMULATOR_ADAPTER,
         ISAAC_LAB_SIMULATOR_ADAPTER,
+        ISAAC_GYM_SIMULATOR_ADAPTER,
         PYBULLET_SIMULATOR_ADAPTER,
         SAPIEN_SIMULATOR_ADAPTER,
         COPPELIASIM_SIMULATOR_ADAPTER,

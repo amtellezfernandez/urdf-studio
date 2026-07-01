@@ -17,8 +17,8 @@ Optional simulator runtimes are not required to load and inspect URDF files. The
 
 Target registry:
 
-- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, SAPIEN, CoppeliaSim, Blender.
-- Planned transfer adapters: Isaac Gym.
+- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, CoppeliaSim, Blender.
+- Planned transfer adapters: none. Optional runtimes are runtime-gated by installed packages, external apps, and required license acknowledgement.
 
 Check what this machine already has:
 

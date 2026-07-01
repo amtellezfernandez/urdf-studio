@@ -320,7 +320,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         SIMULATOR_ISAAC_GYM_ID,
         "Isaac Gym",
         "urdf",
-        "planned",
+        "direct",
         workspace_target=True,
         motion_validation=True,
         dependencies=(_dependency("isaacgym"),),

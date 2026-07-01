@@ -14,6 +14,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_GENESIS_ID,
+    SIMULATOR_ISAAC_GYM_ID,
     SIMULATOR_ISAAC_LAB_ID,
     SIMULATOR_ISAAC_SIM_ID,
     SIMULATOR_MJX_ID,
@@ -43,12 +44,14 @@ from backend.services.simulator_adapters.blender_edit_session import (
 from backend.services.simulator_adapters.coppeliasim import prepare_coppeliasim_workspace
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.isaac import PreparedIsaacWorkspace, prepare_isaac_workspace
+from backend.services.simulator_adapters.isaac_gym import prepare_isaac_gym_workspace
 from backend.services.simulator_adapters.mjx import prepare_mjx_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
     BLENDER_WORKSPACE_PROCESS_PARAMS,
     COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
+    ISAAC_GYM_WORKSPACE_PROCESS_PARAMS,
     ISAAC_LAB_WORKSPACE_PROCESS_PARAMS,
     ISAAC_SIM_WORKSPACE_PROCESS_PARAMS,
     MJX_WORKSPACE_PROCESS_PARAMS,
@@ -597,6 +600,24 @@ def _prepare_isaac_command(
     )
 
 
+def _prepare_isaac_gym_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_isaac_gym_workspace(request)
+    artifact_dir = prepared.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return _prepare_direct_urdf_command(
+        prepared,
+        simulator_id=SIMULATOR_ISAAC_GYM_ID,
+        workspace_process=ISAAC_GYM_WORKSPACE_PROCESS_PARAMS,
+        object_marker=f"world_objects={expectations.object_count}",
+        expectations=expectations,
+        expected_report_path=report_path,
+        extra_expected_markers=("robot_loaded=1",),
+    )
+
+
 def _prepare_blender_command(
     request: SimulatorWorkspacePrepareRequest,
     expectations: WorkspaceExpectations,
@@ -718,6 +739,12 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
             expectations,
             simulator_id=SIMULATOR_ISAAC_LAB_ID,
         ),
+        include_in_parity=False,
+    ),
+    SIMULATOR_ISAAC_GYM_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_ISAAC_GYM_ID,
+        label="Isaac Gym",
+        prepare=_prepare_isaac_gym_command,
         include_in_parity=False,
     ),
     SIMULATOR_PYBULLET_ID: WorkspaceTarget(

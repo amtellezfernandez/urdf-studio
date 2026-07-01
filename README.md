@@ -51,7 +51,7 @@ Use `URDF_STUDIO_PYTHON=/path/to/python` for an existing simulator environment. 
 
 Isaac Sim/Lab use a Python 3.11 simulator environment (`.venv-sim311`) and require NVIDIA Omniverse EULA acceptance before first runtime use. Isaac Gym still requires NVIDIA's legacy Isaac Gym distribution.
 
-Openable targets in this clean release are Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, SAPIEN, CoppeliaSim, and Blender. MJX and SAPIEN use headless physics-only openers in this branch. Isaac Sim/Lab require Python 3.11 and explicit Omniverse EULA acceptance before runtime use. CoppeliaSim uses the ZMQ remote API and requires a separately installed CoppeliaSim app. Isaac Gym is listed as a planned transfer target because it requires NVIDIA's legacy Isaac Gym distribution.
+Openable targets in this clean release are Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, CoppeliaSim, and Blender. MJX and SAPIEN use headless physics-only openers in this branch. Isaac Sim/Lab require Python 3.11 and explicit Omniverse EULA acceptance before runtime use. CoppeliaSim uses the ZMQ remote API and requires a separately installed CoppeliaSim app. Isaac Gym is runtime-gated behind NVIDIA's legacy Isaac Gym distribution.
 
 Simulator fixture checks skip missing optional runtimes by default:
 
