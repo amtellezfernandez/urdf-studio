@@ -16,16 +16,22 @@ const buildSha =
   process.env.SOURCE_VERSION ||
   "dev";
 
-const resolveClientApiBaseUrl = (mode: string): string =>
-  mode === "development" ? "/api" : runtimeUrls.apiBaseUrl;
+const resolveClientApiBaseUrl = (): string => "/api";
 
-const createClientConfig = (mode: string) => ({
-  apiBaseUrl: resolveClientApiBaseUrl(mode),
+const createClientConfig = () => ({
+  apiBaseUrl: resolveClientApiBaseUrl(),
 });
 
 export default defineConfig(({ mode }) => {
-  const clientConfig = createClientConfig(mode);
+  const clientConfig = createClientConfig();
   const isTestMode = mode === "test" || Boolean(process.env.VITEST);
+  const proxy = {
+    "/api": {
+      target: runtimeUrls.apiBaseUrl,
+      changeOrigin: true,
+      rewrite: (requestPath: string) => requestPath.replace(/^\/api/, ""),
+    },
+  };
 
   return {
     root: webRoot,
@@ -47,14 +53,15 @@ export default defineConfig(({ mode }) => {
           "**/id_ed25519*",
         ],
       },
-      proxy: {
-        "/api": {
-          target: runtimeUrls.apiBaseUrl,
-          changeOrigin: true,
-          rewrite: (requestPath) => requestPath.replace(/^\/api/, ""),
-        },
-      },
+      proxy,
       ...(isTestMode ? { hmr: false, ws: false } : {}),
+    },
+    preview: {
+      host: runtimeConfig.web.bindHost,
+      port: runtimeConfig.web.port,
+      strictPort: true,
+      allowedHosts: true,
+      proxy,
     },
     plugins: [react()],
     define: {

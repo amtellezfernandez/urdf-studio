@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { runtimeConfig, runtimeUrls } from "../../config/runtime.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -73,6 +73,31 @@ function spawnManaged(command, args, { prefix, env = process.env } = {}) {
   return child;
 }
 
+function runStep(command, args, { prefix, env = process.env } = {}) {
+  const result = spawnSync(command, args, {
+    cwd: rootDir,
+    env,
+    shell: false,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+  const write = (stream, output) => {
+    for (const line of output.split(/\r?\n/)) {
+      if (line.trim()) {
+        stream.write(`[${prefix}] ${line}\n`);
+      }
+    }
+  };
+  write(process.stdout, result.stdout || "");
+  write(process.stderr, result.stderr || "");
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`${prefix} exited with code ${result.status}`);
+  }
+}
+
 async function waitForUrl(url) {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -97,6 +122,11 @@ function stop(child) {
 }
 
 async function main() {
+  const { command, argsPrefix } = getNpmCommand();
+  runStep(command, [...argsPrefix, "run", "build"], {
+    prefix: "build",
+  });
+
   const python = resolvePythonExecutable();
   const apiEnv = {
     ...process.env,
@@ -109,8 +139,7 @@ async function main() {
     env: apiEnv,
   });
 
-  const { command, argsPrefix } = getNpmCommand();
-  const frontend = spawnManaged(command, [...argsPrefix, "run", "dev", "--", "--host", runtimeConfig.web.bindHost], {
+  const frontend = spawnManaged(command, [...argsPrefix, "run", "preview", "--", "--host", runtimeConfig.web.bindHost], {
     prefix: "web",
   });
 
@@ -134,8 +163,9 @@ async function main() {
 
   log("Ready:", colors.green);
   log(`Open URDF Studio: ${runtimeUrls.webBaseUrl}`, colors.pink);
+  log(`Fresh browser URL: ${runtimeUrls.webBaseUrl}?urdfStudioClearState=1`, colors.gray);
   if (runtimeConfig.web.bindHost === "0.0.0.0" || runtimeConfig.web.bindHost === "::") {
-    log("If that URL does not load from your browser, use the forwarded 5173 URL or one of Vite's Network URLs above.", colors.gray);
+    log("If localhost does not load from your browser, use the forwarded port 5173 URL or one of the Network URLs above.", colors.gray);
   } else {
     log("Access: only this laptop by default.", colors.gray);
   }

@@ -27,6 +27,8 @@ http://127.0.0.1:5173
 
 In hosted or port-forwarded workspaces, use the forwarded port `5173` URL or one of the Vite `Network` URLs printed by `npm run start`.
 
+`npm run start` serves the built clean app with the local backend proxy. Use `npm run dev` only when actively editing the frontend.
+
 ## Checks
 
 ```bash
