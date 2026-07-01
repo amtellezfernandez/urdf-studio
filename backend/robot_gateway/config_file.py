@@ -68,6 +68,13 @@ URDF_ROBOT_GATEWAY_RUNTIME_MODE=observe
 # URDF_ROBOT_GATEWAY_LEROBOT_ID=so100-left-1
 # URDF_ROBOT_GATEWAY_LEROBOT_CALIBRATION_DIR=<lerobot-calibration-dir>
 
+# SO-101 native Feetech leader mirror example ({ROBOT_GATEWAY_ENV_CONFIG_ROBOT_DIRNAME}/so101-leader.env):
+# URDF_ROBOT_GATEWAY_ADAPTER=feetech_so101
+# URDF_ROBOT_GATEWAY_ROBOT_ID=so101-leader
+# URDF_ROBOT_GATEWAY_MODEL_ID=so101
+# URDF_ROBOT_GATEWAY_FEETECH_PORT=<serial-port>
+# URDF_ROBOT_GATEWAY_FEETECH_CALIBRATION=<urdf-studio-teleop-calibration.json>
+
 # Keep shared operator tokens and relay credentials private to this machine:
 # URDF_SIMULATOR_API_TOKEN=<private-operator-api-token>
 """
@@ -86,6 +93,13 @@ ROBOT_GATEWAY_ROBOT_ENV_CONFIG_TEMPLATE = """# URDF Studio robot gateway per-rob
 # URDF_ROBOT_GATEWAY_LEROBOT_PORT=<serial-port-or-hid>
 # URDF_ROBOT_GATEWAY_LEROBOT_ID=so100-left-1
 # URDF_ROBOT_GATEWAY_LEROBOT_CALIBRATION_DIR=<lerobot-calibration-dir>
+#
+# Example SO-101 native Feetech leader mirror:
+# URDF_ROBOT_GATEWAY_ADAPTER=feetech_so101
+# URDF_ROBOT_GATEWAY_ROBOT_ID=so101-leader
+# URDF_ROBOT_GATEWAY_MODEL_ID=so101
+# URDF_ROBOT_GATEWAY_FEETECH_PORT=<serial-port>
+# URDF_ROBOT_GATEWAY_FEETECH_CALIBRATION=<urdf-studio-teleop-calibration.json>
 """
 
 ROBOT_GATEWAY_LOCAL_FILE_EDITOR_COMMAND_PREFIXES = (

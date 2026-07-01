@@ -41,6 +41,10 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_CONTROL_DATAGRAM_STALE_REASON,
     ROBOT_GATEWAY_CONTROL_DATAGRAM_REPLAYED_SEQUENCE_REASON,
     ROBOT_GATEWAY_DEFAULT_SESSION_ID,
+    ROBOT_GATEWAY_FEETECH_CALIBRATION_ENV,
+    ROBOT_GATEWAY_FEETECH_PORT_ENV,
+    ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID,
+    ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID,
     ROBOT_GATEWAY_JOINT_NAMES_ENV,
     ROBOT_GATEWAY_JOINT_NAMES_SEPARATOR,
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
@@ -60,6 +64,11 @@ from backend.robot_gateway.params import (
 )
 from backend.robot_gateway.live_transport import build_robot_gateway_live_transport
 from backend.robot_gateway.profile_targets import build_robot_gateway_manifest_profiles
+from backend.robot_gateway.providers.provider_contract import (
+    RobotGatewayProviderHealth,
+    reject_stale_provider_state_timestamp,
+    validate_provider_joint_positions_rad,
+)
 
 
 @dataclass
@@ -96,13 +105,33 @@ class RobotGatewayRuntime:
         profiles = build_robot_gateway_manifest_profiles(profile)
         camera_streams = self._adapter.build_camera_streams()
         control_transport = build_robot_gateway_control_transport()
+        point_cloud_capable = any(
+            stream.capabilities.point_cloud for stream in camera_streams
+        )
         return RobotGatewayManifest(
+            robot_model_id=_resolve_model_robot_id(self._adapter.config),
+            joint_names=list(profile.controlled_joint_names),
+            joint_units="rad",
+            health=RobotGatewayProviderHealth(status="ok"),
             connection_modes=build_robot_gateway_connection_modes(),
             capabilities=RobotGatewayCapabilitySet(
                 observe=True,
                 telemetry=True,
                 control=self.control_enabled,
                 estop=True,
+                read_state=True,
+                jog_joints=self.control_enabled and profile.capabilities.joint_jog,
+                gripper=profile.capabilities.gripper,
+                calibration=(
+                    profile.capabilities.arm_joint_command
+                    or self._adapter.adapter_id
+                    in {
+                        ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+                        ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID,
+                    }
+                ),
+                cameras=bool(camera_streams),
+                point_cloud=point_cloud_capable,
             ),
             profiles=profiles,
             camera_streams=camera_streams,
@@ -150,7 +179,36 @@ class RobotGatewayRuntime:
         )
 
     def read_state(self) -> RobotGatewayStateFrame:
-        return self._adapter.read_state()
+        state = self._adapter.read_state()
+        validate_provider_joint_positions_rad(state.joint_positions_rad)
+        stale_reason = reject_stale_provider_state_timestamp(
+            source_ts_ms=state.source_ts_ms,
+            now_ms=int(time() * 1000),
+            max_age_ms=ROBOT_GATEWAY_CONTROL_DATAGRAM_MAX_AGE_MS,
+            max_future_skew_ms=ROBOT_GATEWAY_CONTROL_DATAGRAM_MAX_FUTURE_SKEW_MS,
+        )
+        if stale_reason is not None:
+            return state.model_copy(
+                update={
+                    "mode": "safe_hold",
+                    "heartbeat_ok": False,
+                    "provider_health": RobotGatewayProviderHealth(
+                        status="unavailable",
+                        message=stale_reason,
+                        error_code="provider_state_stale",
+                        error_source=self._adapter.adapter_id,
+                        last_state_ts_ms=state.source_ts_ms,
+                    ),
+                    "hardware_motion_safety": state.hardware_motion_safety.model_copy(
+                        update={
+                            "motion_ready": False,
+                            "authoritative_joint_feedback_ready": False,
+                            "last_reject_reason": stale_reason,
+                        }
+                    ),
+                }
+            )
+        return state.model_copy(update={"provider_health": _health_from_state(state)})
 
     def read_point_cloud(self, camera_id: str) -> RobotGatewayPointCloudFrame:
         return self._adapter.read_point_cloud(camera_id)
@@ -207,11 +265,40 @@ class RobotGatewayRuntime:
         self._last_control_datagram_sequences.clear()
         return self._adapter.disconnect()
 
+    def reload_calibration_file(
+        self,
+        calibration_path: Path,
+        *,
+        provider_id: str | None = None,
+    ) -> RobotGatewayCalibrationReloadResult:
+        if provider_id is not None and provider_id != self._adapter.adapter_id:
+            return RobotGatewayCalibrationReloadResult(
+                matched=False,
+                applied=False,
+                message=(
+                    f"Active provider {self._adapter.adapter_id!r} does not match "
+                    f"calibration provider {provider_id!r}."
+                ),
+            )
+        if self._adapter.adapter_id == ROBOT_GATEWAY_LEROBOT_ADAPTER_ID:
+            return self._adapter.reload_lerobot_calibration_file(calibration_path)
+        return RobotGatewayCalibrationReloadResult(
+            matched=False,
+            applied=False,
+            message=(
+                f"Active provider {self._adapter.adapter_id!r} does not support "
+                "calibration file reload."
+            ),
+        )
+
     def reload_lerobot_calibration_file(
         self,
         calibration_path: Path,
     ) -> RobotGatewayCalibrationReloadResult:
-        return self._adapter.reload_lerobot_calibration_file(calibration_path)
+        return self.reload_calibration_file(
+            calibration_path,
+            provider_id=ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+        )
 
     def reject_replayed_control_datagram(
         self,
@@ -427,6 +514,10 @@ def _is_lerobot_adapter(adapter_kind: RobotGatewayAdapterKind) -> bool:
     return adapter_kind == ROBOT_GATEWAY_LEROBOT_ADAPTER_ID
 
 
+def _is_feetech_adapter(adapter_kind: RobotGatewayAdapterKind) -> bool:
+    return adapter_kind == ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID
+
+
 def _default_lerobot_robot_id(robot_type: str) -> str:
     normalized_type = robot_type.strip().lower().replace("_follower", "")
     return normalized_type or "lerobot"
@@ -435,6 +526,8 @@ def _default_lerobot_robot_id(robot_type: str) -> str:
 def _resolve_model_robot_id(config: RobotGatewayAdapterConfig) -> str:
     if config.model_robot_id:
         return config.model_robot_id
+    if _is_feetech_adapter(config.adapter_kind):
+        return ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID
     if _is_lerobot_adapter(config.adapter_kind):
         if config.lerobot_robot_type.strip():
             return _default_lerobot_robot_id(config.lerobot_robot_type)
@@ -449,11 +542,13 @@ def build_robot_gateway_runtime_from_env() -> RobotGatewayRuntime:
     default_robot_id = (
         _default_lerobot_robot_id(lerobot_robot_type)
         if _is_lerobot_adapter(adapter_kind)
+        else ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID
+        if _is_feetech_adapter(adapter_kind)
         else default_adapter_config.robot_id
     )
     default_joint_names = (
         ()
-        if _is_lerobot_adapter(adapter_kind)
+        if _is_lerobot_adapter(adapter_kind) or _is_feetech_adapter(adapter_kind)
         else default_adapter_config.joint_names
     )
     lerobot_calibration_dir = os.getenv(
@@ -461,6 +556,10 @@ def build_robot_gateway_runtime_from_env() -> RobotGatewayRuntime:
         "",
     ).strip()
     lerobot_config_json = os.getenv(ROBOT_GATEWAY_LEROBOT_CONFIG_JSON_ENV, "").strip()
+    feetech_calibration_path = os.getenv(
+        ROBOT_GATEWAY_FEETECH_CALIBRATION_ENV,
+        "",
+    ).strip()
     adapter_config = RobotGatewayAdapterConfig(
         adapter_kind=adapter_kind,
         robot_id=os.getenv(
@@ -487,10 +586,49 @@ def build_robot_gateway_runtime_from_env() -> RobotGatewayRuntime:
         lerobot_hardware_joint_names=_read_joint_names_from_env_for_key(
             ROBOT_GATEWAY_LEROBOT_HARDWARE_JOINT_NAMES_ENV
         ),
+        feetech_port=os.getenv(ROBOT_GATEWAY_FEETECH_PORT_ENV, "").strip() or None,
+        feetech_calibration_path=(
+            Path(feetech_calibration_path).expanduser()
+            if feetech_calibration_path
+            else None
+        ),
     )
     return RobotGatewayRuntime(
         RobotGatewayRuntimeConfig(
             runtime_mode=_read_runtime_mode_from_env(),
             adapter_config=adapter_config,
         )
+    )
+
+
+def _health_from_state(state: RobotGatewayStateFrame) -> RobotGatewayProviderHealth:
+    last_reject_reason = state.hardware_motion_safety.last_reject_reason or ""
+    if not state.heartbeat_ok:
+        return RobotGatewayProviderHealth(
+            status="unavailable",
+            message=last_reject_reason or "Provider state is unavailable.",
+            error_code="provider_unavailable",
+            error_source=state.adapter_id or None,
+            last_state_ts_ms=state.source_ts_ms,
+        )
+    if state.estop:
+        return RobotGatewayProviderHealth(
+            status="degraded",
+            message=last_reject_reason or "Provider is e-stopped.",
+            error_code="provider_estop",
+            error_source=state.adapter_id or None,
+            last_state_ts_ms=state.source_ts_ms,
+        )
+    if last_reject_reason:
+        return RobotGatewayProviderHealth(
+            status="degraded",
+            message=last_reject_reason,
+            error_code="provider_safety_gate",
+            error_source=state.adapter_id or None,
+            last_state_ts_ms=state.source_ts_ms,
+        )
+    return RobotGatewayProviderHealth(
+        status="ok",
+        error_source=state.adapter_id or None,
+        last_state_ts_ms=state.source_ts_ms,
     )

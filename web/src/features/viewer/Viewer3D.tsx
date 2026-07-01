@@ -86,7 +86,7 @@ import { CollisionGeometries } from "@/features/viewer/CollisionGeometries";
 import { RoverApproachGuideLine } from "@/features/viewer/RoverApproachGuideLine";
 import { RoverApproachRoutePreview } from "@/features/viewer/RoverApproachRoutePreview";
 import { TrackingLine } from "@/features/viewer/TrackingLine";
-import { resolveEndEffectorContactObjectId } from "@/features/viewer/eeObjectContact";
+import { useEndEffectorObjectGrasp } from "@/features/viewer/useEndEffectorObjectGrasp";
 import {
   createRoverApproachGuideLineState,
   createRoverApproachRoutePreviewState,
@@ -589,6 +589,7 @@ const CreatedObjects = ({
   robot,
   gpuMode = "high",
   endEffectorLink = null,
+  jointLimits,
   onIkTargetClick,
   onObjectSelect,
   orbitDefaults,
@@ -600,6 +601,7 @@ const CreatedObjects = ({
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
   endEffectorLink?: string | null;
+  jointLimits?: JointLimits;
   onIkTargetClick?: (obj: CreatedObject) => void;
   onObjectSelect?: (objectId: string, object?: CreatedObject) => void;
   editable?: boolean;
@@ -622,40 +624,18 @@ const CreatedObjects = ({
   const [contactObjectId, setContactObjectId] = useState<string | null>(null);
   const gl = useThree((state) => state.gl);
   const resolveLinkObject = useMemo(() => createLinkObjectResolver(robot), [robot]);
-  const endEffectorBoundsBoxRef = useRef(new THREE.Box3());
-  const endEffectorSphereRef = useRef(new THREE.Sphere());
   const lastObjectClickRef = useRef<{
     objectId: string;
     timeMs: number;
   } | null>(null);
 
-  useFrame(() => {
-    if (!robot || !endEffectorLink) {
-      setContactObjectId((previous) => (previous === null ? previous : null));
-      return;
-    }
-    const endEffectorObject = resolveLinkObject(endEffectorLink);
-    if (!endEffectorObject) {
-      setContactObjectId((previous) => (previous === null ? previous : null));
-      return;
-    }
-
-    endEffectorObject.updateMatrixWorld(true);
-    endEffectorBoundsBoxRef.current.makeEmpty();
-    endEffectorBoundsBoxRef.current.setFromObject(endEffectorObject);
-    if (endEffectorBoundsBoxRef.current.isEmpty()) {
-      setContactObjectId((previous) => (previous === null ? previous : null));
-      return;
-    }
-
-    endEffectorBoundsBoxRef.current.getBoundingSphere(endEffectorSphereRef.current);
-    const nextContactObjectId = resolveEndEffectorContactObjectId({
-      endEffectorSphereWorld: endEffectorSphereRef.current,
-      objects,
-    });
-    setContactObjectId((previous) =>
-      previous === nextContactObjectId ? previous : nextContactObjectId
-    );
+  useEndEffectorObjectGrasp({
+    enabled: Boolean(robot),
+    endEffectorLink,
+    jointLimits,
+    objects,
+    resolveLinkObject,
+    setContactObjectId,
   });
 
   useEffect(() => {
@@ -7162,7 +7142,8 @@ export const Viewer3D = ({
                 <CreatedObjects
                   robot={robot}
                   gpuMode={effectiveGpuMode}
-                  endEffectorLink={endEffectorLink}
+                  endEffectorLink={primaryIkEndEffectorLink}
+                  jointLimits={jointLimits}
                   enableObjectActionsInReadOnly={enableObjectActionsInReadOnly}
                   allowRetargetOnClick={hasActiveObjectTargetInteraction}
                   onIkTargetClick={

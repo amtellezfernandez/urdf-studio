@@ -76,6 +76,14 @@ describe("fetchOperatorLeaderDetection", () => {
             ],
             runtime_providers: [
               {
+                id: "feetech",
+                label: "Feetech serial bus",
+                kind: "hardware",
+                status: "needs_config",
+                connectable: false,
+                summary: "Configure Feetech serial bus",
+              },
+              {
                 id: "lerobot",
                 label: "LeRobot local hardware",
                 kind: "hardware",
@@ -109,6 +117,16 @@ describe("fetchOperatorLeaderDetection", () => {
     );
     expect(detection.preferredLeaderPort).toBe(fixture.path);
     expect(detection.runtimeProviders).toEqual([
+      {
+        id: "feetech",
+        label: "Feetech serial bus",
+        kind: "hardware",
+        status: "needs_config",
+        connectable: false,
+        summary: "Configure Feetech serial bus",
+        configRef: null,
+        nodeId: null,
+      },
       {
         id: "lerobot",
         label: "LeRobot local hardware",

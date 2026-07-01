@@ -62,6 +62,12 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_FAKE_POINT_CLOUD_Y_OFFSET_M,
     ROBOT_GATEWAY_FAKE_POINT_CLOUD_Z_OFFSET_M,
     ROBOT_GATEWAY_FAKE_ADAPTER_ID,
+    ROBOT_GATEWAY_FEETECH_CALIBRATION_ENV,
+    ROBOT_GATEWAY_FEETECH_PORT_ENV,
+    ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID,
+    ROBOT_GATEWAY_FEETECH_SO101_JOINT_NAMES,
+    ROBOT_GATEWAY_FEETECH_SO101_PROFILE_ID,
+    ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID,
     ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
     ROBOT_GATEWAY_LEROBOT_CALIBRATION_REQUIRED_REASON,
     ROBOT_GATEWAY_LEROBOT_FOLLOWER_PROFILE_SUFFIX,
@@ -113,6 +119,15 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_SECONDS_TO_MS,
     ROBOT_GATEWAY_TELEOPERATION_MODE_REAL_HARDWARE,
     ROBOT_GATEWAY_TELEOPERATION_MODE_SIMULATED,
+)
+from backend.robot_gateway.providers.feetech_provider import (
+    RobotGatewayFeetechBus,
+    RobotGatewayFeetechBusError,
+    build_native_feetech_bus,
+)
+from backend.robot_gateway.teleop_calibration import (
+    TeleopCalibration,
+    load_teleop_calibration,
 )
 
 RobotGatewayJointJogSafetyPreflight = Callable[
@@ -170,9 +185,15 @@ class RobotGatewayAdapterConfig:
     lerobot_robot_type: str = ""
     lerobot_config_json: str | None = None
     lerobot_hardware_joint_names: tuple[str, ...] = ()
+    feetech_port: str | None = None
+    feetech_calibration_path: Path | None = None
 
 
 RobotGatewayLeRobotFactory = Callable[[RobotGatewayAdapterConfig], object]
+RobotGatewayFeetechBusFactory = Callable[
+    [RobotGatewayAdapterConfig],
+    RobotGatewayFeetechBus,
+]
 
 
 @dataclass(frozen=True)
@@ -1189,6 +1210,249 @@ class NativeOpenArmAdapter(FakeOpenArmAdapter):
         )
 
 
+class FeetechSo101Adapter(RobotGatewayAdapter):
+    def __init__(
+        self,
+        config: RobotGatewayAdapterConfig | None = None,
+        *,
+        bus_factory: RobotGatewayFeetechBusFactory | None = None,
+        calibration: TeleopCalibration | None = None,
+    ) -> None:
+        self.config = config or RobotGatewayAdapterConfig(
+            adapter_kind=ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID,
+            robot_id=ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID,
+        )
+        self._bus_factory = bus_factory or _build_feetech_bus
+        self._bus: RobotGatewayFeetechBus | None = None
+        self._calibration = calibration
+        self._sequence = 0
+        self._joint_positions = {
+            joint_name: 0.0 for joint_name in self._profile_joint_names()
+        }
+        self._last_motion_reject_reason: str | None = None
+        self._estop = False
+
+    @property
+    def adapter_id(self) -> str:
+        return ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID
+
+    @property
+    def teleoperation_mode(self) -> RobotGatewayTeleoperationMode:
+        return ROBOT_GATEWAY_TELEOPERATION_MODE_REAL_HARDWARE
+
+    def build_profile(self, *, control_enabled: bool) -> RobotGatewayProfile:
+        return _build_feetech_so101_profile(
+            adapter_id=self.adapter_id,
+            robot_id=self.config.robot_id or ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID,
+            joint_names=self._profile_joint_names(),
+        )
+
+    def read_state(self) -> RobotGatewayStateFrame:
+        self._sequence += 1
+        source_ts_ms = int(time() * 1000)
+        calibration = self._load_calibration_or_none()
+        if calibration is None:
+            reason = self._last_motion_reject_reason or (
+                "Feetech calibration missing. Set "
+                f"{ROBOT_GATEWAY_FEETECH_CALIBRATION_ENV} to a "
+                "urdf-studio.teleop-calibration.v1 file."
+            )
+            return self._build_state(
+                source_ts_ms=source_ts_ms,
+                heartbeat_ok=False,
+                calibration_ready=False,
+                reason=reason,
+            )
+
+        try:
+            raw_positions = _normalize_feetech_positions(
+                self._get_bus().read_present_positions(calibration.motor_ids)
+            )
+            model_positions = calibration.model_positions_from_motor_positions(
+                raw_positions
+            )
+        except RobotGatewayFeetechBusError as exc:
+            self.disconnect()
+            reason = f"Feetech port unavailable: {exc}"
+            self._last_motion_reject_reason = reason
+            return self._build_state(
+                source_ts_ms=source_ts_ms,
+                heartbeat_ok=False,
+                calibration_ready=True,
+                reason=reason,
+            )
+        except ValueError as exc:
+            reason = f"Feetech calibration mismatch: {exc}"
+            self._last_motion_reject_reason = reason
+            return self._build_state(
+                source_ts_ms=source_ts_ms,
+                heartbeat_ok=False,
+                calibration_ready=False,
+                reason=reason,
+            )
+        except Exception as exc:  # pragma: no cover - hardware driver boundary
+            self.disconnect()
+            reason = f"Feetech provider read failed: {exc}"
+            self._last_motion_reject_reason = reason
+            return self._build_state(
+                source_ts_ms=source_ts_ms,
+                heartbeat_ok=False,
+                calibration_ready=True,
+                reason=reason,
+            )
+
+        self._joint_positions = dict(model_positions)
+        self._last_motion_reject_reason = None
+        return self._build_state(
+            source_ts_ms=source_ts_ms,
+            heartbeat_ok=True,
+            calibration_ready=True,
+            reason=None,
+        )
+
+    def build_camera_streams(self) -> list[RobotGatewayCameraStream]:
+        return []
+
+    def read_point_cloud(self, camera_id: str) -> RobotGatewayPointCloudFrame:
+        return RobotGatewayPointCloudFrame(
+            camera_id=camera_id,
+            intrinsics=_build_openarm_depth_camera_intrinsics(),
+            points_xyz=[],
+            colors_rgb=[],
+        )
+
+    def apply_joint_jog(
+        self,
+        req: RobotGatewayJointJogRequest,
+    ) -> RobotGatewayControlAck:
+        self._last_motion_reject_reason = (
+            "Feetech SO-101 provider is read-only. Follower control requires "
+            "lease, e-stop, stale-state, and calibration gates in a later phase."
+        )
+        return RobotGatewayControlAck(
+            accepted=False,
+            reason=self._last_motion_reject_reason,
+            sequence=req.sequence,
+            applied_joint_name=req.joint_name,
+        )
+
+    def prepare_joint_jog_can_dry_run(
+        self,
+        req: RobotGatewayJointJogRequest,
+    ) -> RobotGatewayOpenArmCanDryRunPlan:
+        return RobotGatewayOpenArmCanDryRunPlan(
+            accepted=False,
+            reason="Feetech SO-101 provider does not expose OpenArm CAN dry-run frames.",
+            sequence=req.sequence,
+            applied_joint_name=req.joint_name,
+        )
+
+    def stop(self, *, sequence: int = 0) -> RobotGatewayControlAck:
+        return RobotGatewayControlAck(
+            accepted=True,
+            reason="safe hold requested",
+            sequence=sequence,
+        )
+
+    def estop(self, *, sequence: int = 0) -> RobotGatewayControlAck:
+        self._estop = True
+        return RobotGatewayControlAck(
+            accepted=True,
+            reason="e-stop latched",
+            sequence=sequence,
+        )
+
+    def disconnect(self) -> int:
+        bus = self._bus
+        self._bus = None
+        if bus is None:
+            return 0
+        bus.disconnect()
+        return 1
+
+    def _get_bus(self) -> RobotGatewayFeetechBus:
+        if self._bus is None:
+            if not self.config.feetech_port:
+                raise RobotGatewayFeetechBusError(
+                    f"{ROBOT_GATEWAY_FEETECH_PORT_ENV} is not configured."
+                )
+            self._bus = self._bus_factory(self.config)
+        return self._bus
+
+    def _load_calibration_or_none(self) -> TeleopCalibration | None:
+        if self._calibration is not None:
+            return self._calibration
+        if self.config.feetech_calibration_path is None:
+            self._last_motion_reject_reason = None
+            return None
+        try:
+            self._calibration = load_teleop_calibration(
+                self.config.feetech_calibration_path
+            )
+        except Exception as exc:
+            self._last_motion_reject_reason = (
+                f"Feetech calibration missing or invalid: {exc}"
+            )
+            return None
+        return self._calibration
+
+    def _profile_joint_names(self) -> tuple[str, ...]:
+        if self._calibration is not None:
+            return self._calibration.joint_names
+        if (
+            self.config.joint_names
+            and self.config.joint_names != ROBOT_GATEWAY_DEFAULT_OPENARM_JOINT_NAMES
+        ):
+            return self.config.joint_names
+        return ROBOT_GATEWAY_FEETECH_SO101_JOINT_NAMES
+
+    def _build_state(
+        self,
+        *,
+        source_ts_ms: int,
+        heartbeat_ok: bool,
+        calibration_ready: bool,
+        reason: str | None,
+    ) -> RobotGatewayStateFrame:
+        gripper_positions = {
+            joint_name: position_rad
+            for joint_name, position_rad in self._joint_positions.items()
+            if joint_name in ROBOT_GATEWAY_LEROBOT_GRIPPER_JOINT_NAMES
+        }
+        return RobotGatewayStateFrame(
+            robot_id=self.config.robot_id or ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID,
+            adapter_id=self.adapter_id,
+            profile_id=ROBOT_GATEWAY_FEETECH_SO101_PROFILE_ID,
+            sequence=self._sequence,
+            source_ts_ms=source_ts_ms,
+            mode="safe_hold" if self._estop or not heartbeat_ok else "manual",
+            estop=self._estop,
+            heartbeat_ok=heartbeat_ok,
+            joint_positions_rad=dict(self._joint_positions) if heartbeat_ok else {},
+            gripper_positions_rad=gripper_positions if heartbeat_ok else {},
+            joint_telemetry={
+                joint_name: RobotGatewayJointTelemetry(position_rad=position_rad)
+                for joint_name, position_rad in self._joint_positions.items()
+            }
+            if heartbeat_ok
+            else {},
+            hardware_motion_safety=RobotGatewayHardwareMotionSafetyStatus(
+                motion_ready=False,
+                authoritative_joint_feedback_ready=heartbeat_ok,
+                joint_rotation_calibration_ready=calibration_ready,
+                joint_rotation_calibration_required=not calibration_ready,
+                joint_rotation_calibration_id=(
+                    str(self.config.feetech_calibration_path)
+                    if self.config.feetech_calibration_path is not None
+                    else None
+                ),
+                self_collision_preflight_ready=False,
+                gripper_motion_enabled=False,
+                last_reject_reason=reason,
+            ),
+        )
+
+
 class LeRobotAdapter(RobotGatewayAdapter):
     def __init__(
         self,
@@ -1718,11 +1982,21 @@ def build_robot_gateway_adapter(config: RobotGatewayAdapterConfig) -> RobotGatew
                 config.joint_names
             ),
         )
+    if config.adapter_kind == ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID:
+        return FeetechSo101Adapter(config)
     if config.adapter_kind in {
         ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
     }:
         return LeRobotAdapter(config)
     return FakeOpenArmAdapter(config)
+
+
+def _build_feetech_bus(config: RobotGatewayAdapterConfig) -> RobotGatewayFeetechBus:
+    if not config.feetech_port:
+        raise RobotGatewayFeetechBusError(
+            f"{ROBOT_GATEWAY_FEETECH_PORT_ENV} is not configured."
+        )
+    return build_native_feetech_bus(port=config.feetech_port)
 
 
 def _build_lerobot_robot(config: RobotGatewayAdapterConfig) -> object:
@@ -1731,8 +2005,14 @@ def _build_lerobot_robot(config: RobotGatewayAdapterConfig) -> object:
             "LeRobot gateway requires URDF_ROBOT_GATEWAY_LEROBOT_ROBOT_TYPE."
         )
     _import_lerobot_robot_configs()
-    import draccus
-    from lerobot.robots import RobotConfig, make_robot_from_config
+    try:
+        import draccus
+        from lerobot.robots import RobotConfig, make_robot_from_config
+    except Exception as exc:  # pragma: no cover - optional dependency boundary
+        raise RuntimeError(
+            "LeRobot API mismatch or missing package. Install a compatible "
+            "LeRobot version or select a native URDF Studio provider."
+        ) from exc
 
     payload = _build_lerobot_config_payload(config)
     robot_config = draccus.decode(
@@ -1825,6 +2105,41 @@ def _build_openarm_profile(
     )
 
 
+def _build_feetech_so101_profile(
+    *,
+    adapter_id: str,
+    robot_id: str,
+    joint_names: tuple[str, ...],
+) -> RobotGatewayProfile:
+    return RobotGatewayProfile(
+        id=ROBOT_GATEWAY_FEETECH_SO101_PROFILE_ID,
+        label="Feetech SO-101 leader mirror",
+        summary=(
+            "Native Feetech serial bus provider for read-only leader mirroring "
+            "in model-space radians."
+        ),
+        control_target_label="SO-101 leader",
+        robot_id=robot_id,
+        adapter_id=adapter_id,
+        hardware_device_key="feetech:leader",
+        teleoperation_mode=ROBOT_GATEWAY_TELEOPERATION_MODE_REAL_HARDWARE,
+        controlled_joint_names=list(joint_names),
+        control_inputs=[],
+        capabilities=RobotGatewayProfileCapabilities(
+            arm_joint_state=True,
+            arm_joint_command=False,
+            state_mirroring=True,
+            joint_jog=False,
+            gripper=True,
+        ),
+        topics=RobotGatewayProfileTopics(
+            joint_states=["provider:/telemetry/state"],
+            robot_state="provider:/telemetry/state",
+        ),
+        limits=RobotGatewayProfileLimits(),
+    )
+
+
 def _build_lerobot_profile(
     *,
     adapter_id: str,
@@ -1867,6 +2182,22 @@ def _build_lerobot_profile(
             for joint_name in joint_names
         },
     )
+
+
+def _normalize_feetech_positions(
+    raw_positions: Mapping[int, float] | Mapping[object, object],
+) -> dict[int, float]:
+    positions: dict[int, float] = {}
+    for raw_motor_id, raw_position in raw_positions.items():
+        try:
+            motor_id = int(raw_motor_id)
+            position = float(raw_position)
+        except (TypeError, ValueError):
+            continue
+        if motor_id <= 0 or not math.isfinite(position):
+            continue
+        positions[motor_id] = position
+    return positions
 
 
 def _build_lerobot_joint_limit(

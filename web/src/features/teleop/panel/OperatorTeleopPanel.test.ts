@@ -2236,7 +2236,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     const root = createRoot(container);
     let leaseOwner: string | null = null;
     const manifest = {
-      contract_version: "urdf-studio.teleop.v1",
+      contract_version: "urdf-studio.teleop-provider.v1",
       provider_id: "urdf-studio.robot-gateway",
       provider_display_name: "URDF Studio Robot Gateway",
       connection_modes: [
@@ -2622,7 +2622,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
       if (url.includes("urdf-studio-teleop")) {
         return new Response(
           JSON.stringify({
-            contract_version: "urdf-studio.teleop.v1",
+            contract_version: "urdf-studio.teleop-provider.v1",
             provider_id: "urdf-studio.robot-gateway",
             provider_display_name: "URDF Studio Robot Gateway",
             capabilities: {
@@ -2900,7 +2900,7 @@ describe("OperatorTeleopPanel collaboration authorization", () => {
     const jointJogBodies: unknown[] = [];
     const calibrationJogBodies: unknown[] = [];
     const manifest = {
-      contract_version: "urdf-studio.teleop.v1",
+      contract_version: "urdf-studio.teleop-provider.v1",
       provider_id: "urdf-studio.robot-gateway",
       provider_display_name: "URDF Studio Robot Gateway",
       capabilities: {

@@ -294,7 +294,10 @@ def _reload_robot_gateway_lerobot_calibration_file(
                 else leader_deferred_message
             ),
         )
-    reload_result = runtime.reload_lerobot_calibration_file(calibration_path)
+    reload_result = runtime.reload_calibration_file(
+        calibration_path,
+        provider_id=ROBOT_GATEWAY_LEROBOT_ADAPTER_ID,
+    )
     return stat_lerobot_calibration_file(
         req.calibration_source,
         last_mtime_ns=req.last_mtime_ns,

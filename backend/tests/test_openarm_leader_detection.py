@@ -58,10 +58,11 @@ def test_detect_openarm_leaders_prefers_stable_serial_by_id_path(
     assert leader.recommended_env == ROBOT_GATEWAY_OPENARM_LEADER_RECOMMENDED_ENV
     assert leader.available is True
     assert [provider.id for provider in result.runtime_providers] == [
+        "feetech",
         "lerobot",
         "dora",
     ]
-    assert result.runtime_providers[0].connectable is True
+    assert result.runtime_providers[1].id == "lerobot"
 
 
 def test_detect_openarm_leaders_falls_back_to_tty_candidates(

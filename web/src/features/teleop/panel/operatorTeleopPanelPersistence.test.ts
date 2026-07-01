@@ -66,7 +66,7 @@ function buildOperatorTeleopPanelPersistenceFixture(): {
     maxJointVelocityRadPerSec: 0.5,
   } as const;
   const providerManifest = normalizeOperatorProviderManifest({
-    contract_version: "urdf-studio.teleop.v1",
+    contract_version: "urdf-studio.teleop-provider.v1",
     provider_id: "test-provider",
     provider_display_name: "Test Provider",
     capabilities: {

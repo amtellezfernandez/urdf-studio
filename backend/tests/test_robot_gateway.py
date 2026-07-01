@@ -3325,7 +3325,7 @@ def test_robot_gateway_public_manifest_redacts_direct_transport_origins() -> Non
         mode="json",
     )
 
-    assert payload["contract_version"] == "urdf-studio.teleop.v1"
+    assert payload["contract_version"] == "urdf-studio.teleop-provider.v1"
     assert payload["capabilities"]["observe"] is True
     assert payload["capabilities"]["control"] is False
     assert (

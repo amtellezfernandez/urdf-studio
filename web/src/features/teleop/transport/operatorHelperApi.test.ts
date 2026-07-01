@@ -114,7 +114,7 @@ describe("operatorHelperApi", () => {
       async () =>
         new Response(
           JSON.stringify({
-            contract_version: "urdf-studio.teleop.v1",
+            contract_version: "urdf-studio.teleop-provider.v1",
             provider_id: "teleop-studio.operator-helper",
             provider_display_name: "Teleop Studio Operator Helper",
             connection_modes: [
@@ -268,7 +268,7 @@ describe("operatorHelperApi", () => {
     await expect(
       fetchOperatorProviderManifest(TEST_BASE_URL),
     ).resolves.toMatchObject({
-      contractVersion: "urdf-studio.teleop.v1",
+      contractVersion: "urdf-studio.teleop-provider.v1",
       providerId: "teleop-studio.operator-helper",
       capabilities: { control: true, video: false },
       connectionModes: [
@@ -371,7 +371,7 @@ describe("operatorHelperApi", () => {
       }
       return new Response(
         JSON.stringify({
-          contract_version: "urdf-studio.teleop.v1",
+          contract_version: "urdf-studio.teleop-provider.v1",
           provider_id: "teleop-studio.operator-helper",
           provider_display_name: "Teleop Studio Operator Helper",
           capabilities: {

@@ -19,3 +19,6 @@
 [submodule "third_party/mujoco-sysid"]
 	path = third_party/mujoco-sysid
 	url = https://github.com/based-robotics/mujoco-sysid.git
+[submodule "third_party/so-101-digital-twin"]
+	path = third_party/so-101-digital-twin
+	url = https://github.com/GitSimone2001/SO-101-Digital-Twin

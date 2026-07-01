@@ -36,6 +36,9 @@ from backend.robot_gateway.lerobot_calibration_files import (
 )
 from backend.robot_gateway.serial_port_matching import serial_port_match_values
 from backend.robot_gateway.providers.dora_provider import get_dora_runtime_provider_info
+from backend.robot_gateway.providers.feetech_provider import (
+    get_feetech_runtime_provider_info,
+)
 from backend.robot_gateway.providers.lerobot_provider import (
     get_lerobot_runtime_provider_info,
 )
@@ -189,6 +192,7 @@ def detect_openarm_leaders(
     return OpenArmLeaderDetectionResult(
         leaders=leaders,
         runtime_providers=[
+            get_feetech_runtime_provider_info(),
             get_lerobot_runtime_provider_info(),
             get_dora_runtime_provider_info(),
         ],

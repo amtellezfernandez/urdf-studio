@@ -11,6 +11,7 @@ class RobotGatewayAdapterIds:
     simulated: str
     openarm_ros2: str
     openarm_native: str
+    feetech_so101: str
     lerobot: str
 
     @property
@@ -20,6 +21,7 @@ class RobotGatewayAdapterIds:
                 self.simulated,
                 self.openarm_ros2,
                 self.openarm_native,
+                self.feetech_so101,
                 self.lerobot,
             )
         )
@@ -42,7 +44,11 @@ class RobotGatewayLeRobotLeaderCalibrationDefaults:
     leader_type_suffix: str
     fallback_id_prefix: str
 
-ROBOT_GATEWAY_CONTRACT_VERSION: Final = "urdf-studio.teleop.v1"
+ROBOT_GATEWAY_CONTRACT_VERSION: Final = "urdf-studio.teleop-provider.v1"
+ROBOT_GATEWAY_PROVIDER_VERSION: Final = "1.0.0"
+ROBOT_GATEWAY_TELEOP_CALIBRATION_SCHEMA_VERSION: Final = (
+    "urdf-studio.teleop-calibration.v1"
+)
 ROBOT_GATEWAY_DEFAULT_PROVIDER_ID: Final = "urdf-studio.robot-gateway"
 ROBOT_GATEWAY_DEFAULT_PROVIDER_DISPLAY_NAME: Final = "URDF Studio Robot Gateway"
 ROBOT_GATEWAY_SECONDS_TO_MS: Final = 1_000
@@ -64,11 +70,15 @@ ROBOT_GATEWAY_ADAPTER_IDS: Final = RobotGatewayAdapterIds(
     simulated="fake_openarm",
     openarm_ros2="openarm_ros2",
     openarm_native="openarm_native",
+    feetech_so101="feetech_so101",
     lerobot="lerobot",
 )
 ROBOT_GATEWAY_SUPPORTED_ADAPTER_IDS: Final = ROBOT_GATEWAY_ADAPTER_IDS.supported
 ROBOT_GATEWAY_OPENARM_ROS2_ADAPTER_ID: Final = ROBOT_GATEWAY_ADAPTER_IDS.openarm_ros2
 ROBOT_GATEWAY_OPENARM_NATIVE_ADAPTER_ID: Final = ROBOT_GATEWAY_ADAPTER_IDS.openarm_native
+ROBOT_GATEWAY_FEETECH_SO101_ADAPTER_ID: Final = (
+    ROBOT_GATEWAY_ADAPTER_IDS.feetech_so101
+)
 ROBOT_GATEWAY_FAKE_ADAPTER_ID: Final = ROBOT_GATEWAY_ADAPTER_IDS.simulated
 ROBOT_GATEWAY_LEROBOT_ADAPTER_ID: Final = ROBOT_GATEWAY_ADAPTER_IDS.lerobot
 ROBOT_GATEWAY_LEROBOT_DEFAULT_ROBOT_TYPE: Final = ""
@@ -473,6 +483,8 @@ ROBOT_GATEWAY_LEROBOT_SIDE_CALIBRATION_GROUPS: Final[frozenset[str]] = frozenset
 )
 ROBOT_GATEWAY_PROVIDER_LEROBOT_ID: Final = "lerobot"
 ROBOT_GATEWAY_PROVIDER_LEROBOT_LABEL: Final = "LeRobot local hardware"
+ROBOT_GATEWAY_PROVIDER_FEETECH_ID: Final = "feetech"
+ROBOT_GATEWAY_PROVIDER_FEETECH_LABEL: Final = "Feetech serial bus"
 ROBOT_GATEWAY_PROVIDER_DORA_ID: Final = "dora"
 ROBOT_GATEWAY_PROVIDER_DORA_LABEL: Final = "dora dataflow"
 ROBOT_GATEWAY_DORA_BIN_ENV: Final = "URDF_ROBOT_GATEWAY_DORA_BIN"
@@ -518,6 +530,26 @@ ROBOT_GATEWAY_OPENARM_MINI_RIGHT_MOTORS_TO_FLIP: Final[frozenset[str]] = frozens
 ROBOT_GATEWAY_OPENARM_MINI_LEFT_MOTORS_TO_FLIP: Final[frozenset[str]] = frozenset(
     ("joint_1", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7")
 )
+ROBOT_GATEWAY_FEETECH_DRIVER_MODULE: Final = "scservo_sdk"
+ROBOT_GATEWAY_FEETECH_DEFAULT_BAUDRATE: Final = 1_000_000
+ROBOT_GATEWAY_FEETECH_PORT_ENV: Final = "URDF_ROBOT_GATEWAY_FEETECH_PORT"
+ROBOT_GATEWAY_FEETECH_CALIBRATION_ENV: Final = (
+    "URDF_ROBOT_GATEWAY_FEETECH_CALIBRATION"
+)
+ROBOT_GATEWAY_FEETECH_MOTOR_MODEL_ENV: Final = (
+    "URDF_ROBOT_GATEWAY_FEETECH_MOTOR_MODEL"
+)
+ROBOT_GATEWAY_FEETECH_SO101_ROBOT_ID: Final = "so101"
+ROBOT_GATEWAY_FEETECH_SO101_PROFILE_ID: Final = "feetech_so101_leader_mirror"
+ROBOT_GATEWAY_FEETECH_SO101_JOINT_NAMES: Final[tuple[str, ...]] = (
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll",
+    "gripper",
+)
+ROBOT_GATEWAY_FEETECH_TICKS_PER_REVOLUTION: Final = 4_096
 
 ROBOT_GATEWAY_RUNTIME_MODE_ENV: Final = "URDF_ROBOT_GATEWAY_RUNTIME_MODE"
 ROBOT_GATEWAY_ADAPTER_KIND_ENV: Final = "URDF_ROBOT_GATEWAY_ADAPTER"

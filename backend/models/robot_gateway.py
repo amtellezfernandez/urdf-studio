@@ -27,6 +27,7 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_DEFAULT_OPERATOR_RTT_MS,
     ROBOT_GATEWAY_DEFAULT_PROVIDER_DISPLAY_NAME,
     ROBOT_GATEWAY_DEFAULT_PROVIDER_ID,
+    ROBOT_GATEWAY_PROVIDER_VERSION,
     ROBOT_GATEWAY_DEFAULT_SESSION_ID,
     ROBOT_GATEWAY_DEFAULT_YAW_SPEED_RPS,
     ROBOT_GATEWAY_OPENARM_CAN_DAMIAO_KD_MAX,
@@ -59,6 +60,9 @@ from backend.robot_gateway.params import (
     ROBOT_GATEWAY_OPENARM_ROBOT_ID,
     ROBOT_GATEWAY_TELEOPERATION_MODE_SIMULATED,
 )
+from backend.robot_gateway.providers.provider_contract import (
+    RobotGatewayProviderHealth,
+)
 
 RobotGatewayConnectionState = Literal[
     "idle", "connecting", "active", "closing", "closed"
@@ -77,6 +81,7 @@ RobotGatewayAdapterKind = Literal[
     "fake_openarm",
     "openarm_ros2",
     "openarm_native",
+    "feetech_so101",
     "lerobot",
 ]
 RobotGatewayRuntimeMode = Literal["observe", "control"]
@@ -87,12 +92,20 @@ RobotGatewayPointCloudWorldFrame = Literal["urdf_z_up", "hf_y_up"]
 
 
 class RobotGatewayCapabilitySet(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
     observe: bool = True
     telemetry: bool = True
     video: bool = False
     record: bool = False
     control: bool = False
     estop: bool = True
+    read_state: bool = Field(default=True, alias="readState")
+    jog_joints: bool = Field(default=False, alias="jogJoints")
+    gripper: bool = False
+    calibration: bool = False
+    cameras: bool = False
+    point_cloud: bool = Field(default=False, alias="pointCloud")
 
 
 class RobotGatewayProfileCapabilities(BaseModel):
@@ -516,6 +529,16 @@ class RobotGatewayManifest(BaseModel):
         default=ROBOT_GATEWAY_DEFAULT_PROVIDER_DISPLAY_NAME,
         alias="providerDisplayName",
     )
+    provider_version: str = Field(
+        default=ROBOT_GATEWAY_PROVIDER_VERSION,
+        alias="providerVersion",
+    )
+    robot_model_id: str | None = Field(default=None, alias="robotModelId")
+    joint_names: list[str] = Field(default_factory=list, alias="jointNames")
+    joint_units: Literal["rad"] = Field(default="rad", alias="jointUnits")
+    health: RobotGatewayProviderHealth = Field(
+        default_factory=RobotGatewayProviderHealth
+    )
     connection_modes: list[RobotGatewayConnectionMode] = Field(
         default_factory=lambda: [RobotGatewayConnectionMode()],
         alias="connectionModes",
@@ -601,6 +624,8 @@ class RobotGatewayJointTelemetry(BaseModel):
 
 
 class RobotGatewayStateFrame(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
     robot_id: str = Field(default=ROBOT_GATEWAY_OPENARM_ROBOT_ID, min_length=1)
     adapter_id: str = ""
     profile_id: str = Field(default=ROBOT_GATEWAY_OPENARM_PROFILE_ID, min_length=1)
@@ -614,6 +639,10 @@ class RobotGatewayStateFrame(BaseModel):
     joint_telemetry: dict[str, RobotGatewayJointTelemetry] = Field(default_factory=dict)
     hardware_motion_safety: RobotGatewayHardwareMotionSafetyStatus = Field(
         default_factory=RobotGatewayHardwareMotionSafetyStatus
+    )
+    provider_health: RobotGatewayProviderHealth = Field(
+        default_factory=RobotGatewayProviderHealth,
+        alias="providerHealth",
     )
 
     @field_validator("joint_positions_rad", "gripper_positions_rad")

@@ -188,7 +188,7 @@ export const TEST_PROVIDER_PROFILE: OperatorTeleopProfile = {
   },
 };
 export const TEST_PROVIDER_MANIFEST = {
-  contract_version: "urdf-studio.teleop.v1",
+  contract_version: "urdf-studio.teleop-provider.v1",
   provider_id: "test-provider",
   provider_display_name: "Test Provider",
   capabilities: {
