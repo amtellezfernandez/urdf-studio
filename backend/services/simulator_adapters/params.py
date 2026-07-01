@@ -8,6 +8,7 @@ from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
+    SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_SAPIEN_ID,
@@ -156,6 +157,12 @@ MUJOCO_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     log_name="mujoco.log",
     ready_log_marker="[mujoco-workspace] workspace ready.",
 )
+MJX_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces",
+    module_name="backend.scripts.mjx_workspace_prepare",
+    log_name="mjx.log",
+    ready_log_marker="[mjx-workspace] workspace ready.",
+)
 PYBULLET_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "pybullet",
     module_name="backend.scripts.pybullet_workspace_prepare",
@@ -251,6 +258,7 @@ BLENDER_SCENE_PARAMS = BlenderSceneParams(
 SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspaceProcessParams] = {
     SIMULATOR_GENESIS_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_MJX_ID: MJX_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_SAPIEN_ID: SAPIEN_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_WORKSPACE_PROCESS_PARAMS,
@@ -258,6 +266,7 @@ SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspacePr
 SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
     SIMULATOR_GENESIS_ID: GENESIS_SCENE_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_SCENE_PARAMS,
+    SIMULATOR_MJX_ID: MUJOCO_SCENE_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_SCENE_PARAMS,
     SIMULATOR_SAPIEN_ID: SAPIEN_SCENE_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_SCENE_PARAMS,

@@ -177,6 +177,8 @@ class SimulatorTransferSpec:
         )
 
     def workspace_asset_format(self) -> SimulatorWorkspaceAssetFormat:
+        if self.robot_asset_format == "mjx_mjcf":
+            return "mjcf"
         if self.robot_asset_format not in ("urdf", "mjcf", "usd", "native"):
             raise ValueError(
                 f"{self.robot_asset_format} is not a workspace simulator asset format"
@@ -284,7 +286,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         SIMULATOR_MJX_ID,
         "MuJoCo MJX",
         "mjx_mjcf",
-        "planned",
+        "convert",
         workspace_target=True,
         motion_validation=True,
         dependencies=(_dependency("mujoco"), _dependency("jax")),

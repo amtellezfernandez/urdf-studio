@@ -13,6 +13,7 @@ from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
+    SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_SAPIEN_ID,
@@ -37,10 +38,12 @@ from backend.services.simulator_adapters.blender_edit_session import (
     validate_blender_edit_session_artifact,
 )
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
+from backend.services.simulator_adapters.mjx import prepare_mjx_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
     BLENDER_WORKSPACE_PROCESS_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
+    MJX_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
     SAPIEN_WORKSPACE_PROCESS_PARAMS,
@@ -472,6 +475,48 @@ def _prepare_mujoco_command(
     )
 
 
+def _prepare_mjx_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_mjx_workspace(request)
+    artifact_dir = prepared.shared_workspace.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return PreparedWorkspaceCommand(
+        command=_module_command(
+            MJX_WORKSPACE_PROCESS_PARAMS,
+            world_package_path=prepared.shared_workspace.world_package_path,
+            robot_asset_flag="--robot-mjcf",
+            robot_asset_path=prepared.mjcf_path,
+            duration_sec=expectations.duration_sec,
+            frame_map=expectations.frame_map,
+            extra_args=(
+                "--robot-urdf",
+                str(prepared.shared_workspace.robot_urdf_path),
+            ),
+            report_path=report_path,
+        ),
+        ready_marker=MJX_WORKSPACE_PROCESS_PARAMS.ready_log_marker,
+        expected_object_marker=f"world_objects={expectations.object_count}",
+        expected_camera_log_marker=f"cameras={expectations.camera_count}",
+        extra_expected_markers=("mjx_step=1",),
+        expected_report_path=report_path,
+        expected_simulator_id=SIMULATOR_MJX_ID,
+        expected_object_count=expectations.object_count,
+        expected_camera_count=expectations.camera_count,
+        expected_requested_frame_map=expectations.frame_map,
+        expected_frame_map=expectations.resolved_frame_map,
+        expected_object_positions_xyz=expectations.object_positions_xyz,
+        expected_object_sizes_xyz=expectations.object_sizes_xyz,
+        expected_object_asset_refs=expectations.object_asset_refs,
+        expected_object_contracts=expectations.object_contracts,
+        expected_joint_positions=expectations.joint_positions,
+        expected_camera_ids=expectations.camera_ids,
+        expected_camera_contracts=expectations.camera_contracts,
+        expected_report_artifact_file_keys=("mjcf_path",),
+    )
+
+
 def _prepare_blender_command(
     request: SimulatorWorkspacePrepareRequest,
     expectations: WorkspaceExpectations,
@@ -568,6 +613,12 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
             expectations,
             simulator_id=SIMULATOR_MUJOCO_ID,
         ),
+    ),
+    SIMULATOR_MJX_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_MJX_ID,
+        label="MuJoCo MJX",
+        prepare=_prepare_mjx_command,
+        include_in_parity=False,
     ),
     SIMULATOR_PYBULLET_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_PYBULLET_ID,
