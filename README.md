@@ -33,10 +33,30 @@ npm run build
 npm run test:backend
 ```
 
-Simulator fixture checks:
+Simulator runtimes are optional local dependencies. Check what is already installed:
+
+```bash
+npm run simulator:status
+```
+
+Install only the Python targets you want:
+
+```bash
+npm run simulator:install -- mujoco pybullet
+```
+
+Use `URDF_STUDIO_PYTHON=/path/to/python` for an existing simulator environment. Use `URDF_STUDIO_BLENDER_PATH=/path/to/blender` when Blender is installed outside standard paths.
+
+Simulator fixture checks skip missing optional runtimes by default:
 
 ```bash
 npm run simulator:workspace:check:fixtures
+```
+
+On a release machine with every runtime installed:
+
+```bash
+npm run simulator:workspace:check:fixtures:strict
 ```
 
 ## Docs

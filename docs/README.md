@@ -6,6 +6,7 @@ URDF Studio first release scope:
 - Inspect links and move model joints in the browser.
 - Add simple scene objects and cameras.
 - Open the same robot-world package in supported simulator targets.
+- Check and install optional simulator runtimes per target.
 
 Out of scope for this branch: teleoperation, robot hardware control, episode/dataset review, ROS visualization, collaboration, and runtime bridge services.
 

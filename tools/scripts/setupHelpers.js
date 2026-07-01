@@ -19,7 +19,9 @@ export function buildSetupSummarySections({ pythonEnvDir = ".venv" } = {}) {
       heading: "Simulator Transfer",
       lines: [
         "Genesis, MuJoCo, PyBullet, and Blender adapters are exposed by the backend.",
-        "Install optional simulator packages separately when you need a local target runtime.",
+        "Check installed targets: npm run simulator:status",
+        "Install selected Python runtimes: npm run simulator:install -- mujoco pybullet",
+        "Use URDF_STUDIO_PYTHON to point at an existing simulator Python environment.",
       ],
     },
   ];

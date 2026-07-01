@@ -30,10 +30,14 @@ if (command === "setup") {
   run("setup.js", commandArgs);
 } else if (command === "start") {
   run("start.js", commandArgs);
+} else if (command === "simulator:status") {
+  run("simulatorRuntime.js", ["status", ...commandArgs]);
+} else if (command === "simulator:install") {
+  run("simulatorRuntime.js", ["install", ...commandArgs]);
 } else if (command === "--help" || command === "-h") {
   console.log("URDF Studio");
   console.log("");
-  console.log("Usage: urdf-studio [setup|start]");
+  console.log("Usage: urdf-studio [setup|start|simulator:status|simulator:install]");
   process.exit(0);
 } else {
   console.error(`Unknown command: ${command}`);
