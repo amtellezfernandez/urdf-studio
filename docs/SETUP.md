@@ -11,6 +11,8 @@ Open the URL printed by the launcher, usually:
 http://127.0.0.1:5173
 ```
 
+In hosted or port-forwarded workspaces, use the forwarded port `5173` URL or one of the Vite `Network` URLs printed by `npm run start`.
+
 `npm run setup` installs Node dependencies and a local Python backend environment in `.venv`.
 
 Optional simulator runtimes are not required to load and inspect URDF files. The backend exposes a RoboVerse-compatible target set, then checks at runtime whether each local dependency is available.

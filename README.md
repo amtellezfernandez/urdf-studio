@@ -25,6 +25,8 @@ Open the URL printed by the launcher, usually:
 http://127.0.0.1:5173
 ```
 
+In hosted or port-forwarded workspaces, use the forwarded port `5173` URL or one of the Vite `Network` URLs printed by `npm run start`.
+
 ## Checks
 
 ```bash

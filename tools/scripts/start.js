@@ -134,7 +134,11 @@ async function main() {
 
   log("Ready:", colors.green);
   log(`Open URDF Studio: ${runtimeUrls.webBaseUrl}`, colors.pink);
-  log("Access: only this laptop by default.", colors.gray);
+  if (runtimeConfig.web.bindHost === "0.0.0.0" || runtimeConfig.web.bindHost === "::") {
+    log("If that URL does not load from your browser, use the forwarded 5173 URL or one of Vite's Network URLs above.", colors.gray);
+  } else {
+    log("Access: only this laptop by default.", colors.gray);
+  }
 }
 
 main().catch((error) => {
