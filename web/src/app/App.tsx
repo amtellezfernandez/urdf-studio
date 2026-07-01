@@ -86,6 +86,7 @@ const RUNTIME_TARGETS = [
   { name: "genesis", mode: "python" },
   { name: "mujoco", mode: "python" },
   { name: "mjx", mode: "python" },
+  { name: "newton", mode: "python" },
   { name: "pybullet", mode: "python" },
   { name: "isaac-sim", mode: "python" },
   { name: "isaac-lab", mode: "python" },
@@ -292,6 +293,7 @@ export default function App() {
   const [jointRows, setJointRows] = useState<JointRow[]>([]);
   const [jointValues, setJointValues] = useState<Record<string, number>>({});
   const [status, setStatus] = useState("Load a URDF file or use the built-in demo.");
+  const [viewerError, setViewerError] = useState<string | null>(null);
   const [targets, setTargets] = useState<WorkspaceTarget[]>([]);
   const [selectedTarget, setSelectedTarget] = useState("genesis");
   const [transferResult, setTransferResult] = useState<WorkspaceOpenResponse | null>(null);
@@ -336,7 +338,18 @@ export default function App() {
   useEffect(() => {
     if (!mountRef.current) return;
     const mount = mountRef.current;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      setViewerError(null);
+    } catch (error) {
+      setViewerError(
+        error instanceof Error
+          ? `3D viewer failed to start: ${error.message}`
+          : "3D viewer failed to start.",
+      );
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.shadowMap.enabled = true;
@@ -388,7 +401,9 @@ export default function App() {
       renderer.setAnimationLoop(null);
       controls.dispose();
       renderer.dispose();
-      mount.removeChild(renderer.domElement);
+      if (renderer.domElement.parentElement === mount) {
+        mount.removeChild(renderer.domElement);
+      }
       robotGroupRef.current = null;
       sceneObjectsRef.current = null;
     };
@@ -667,6 +682,12 @@ export default function App() {
           <span>{objects.length} objects / {cameras.length} cameras</span>
         </div>
         <div ref={mountRef} className="canvas-host" />
+        {viewerError ? (
+          <div className="viewer-error" role="alert">
+            <strong>Viewer unavailable</strong>
+            <span>{viewerError}</span>
+          </div>
+        ) : null}
       </section>
 
       <section className="inspector">

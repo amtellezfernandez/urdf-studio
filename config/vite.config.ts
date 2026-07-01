@@ -25,6 +25,7 @@ const createClientConfig = (mode: string) => ({
 
 export default defineConfig(({ mode }) => {
   const clientConfig = createClientConfig(mode);
+  const isTestMode = mode === "test" || Boolean(process.env.VITEST);
 
   return {
     root: webRoot,
@@ -32,6 +33,8 @@ export default defineConfig(({ mode }) => {
     server: {
       host: runtimeConfig.web.bindHost,
       port: runtimeConfig.web.port,
+      strictPort: true,
+      allowedHosts: true,
       fs: {
         strict: true,
         allow: [webRoot, path.resolve(rootDir, "node_modules")],
@@ -51,13 +54,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (requestPath) => requestPath.replace(/^\/api/, ""),
         },
       },
-      hmr:
-        mode === "test" || process.env.VITEST
-          ? false
-          : {
-              clientPort: runtimeConfig.web.port,
-            },
-      ...(mode === "test" || process.env.VITEST ? { ws: false } : {}),
+      ...(isTestMode ? { hmr: false, ws: false } : {}),
     },
     plugins: [react()],
     define: {
