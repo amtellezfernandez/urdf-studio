@@ -17,7 +17,7 @@ Optional simulator runtimes are not required to load and inspect URDF files. The
 
 Target registry:
 
-- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, CoppeliaSim, Blender.
+- Openable now: Genesis, MuJoCo, MuJoCo MJX, Newton, PyBullet, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, CoppeliaSim, Blender.
 - Planned transfer adapters: none. Optional runtimes are runtime-gated by installed packages, external apps, and required license acknowledgement.
 
 Check what this machine already has:
@@ -34,6 +34,7 @@ npm run simulator:install -- pybullet
 npm run simulator:install -- genesis
 npm run simulator:install -- sapien
 npm run simulator:install -- mjx
+npm run simulator:install -- newton
 ```
 
 You can install more than one at a time:

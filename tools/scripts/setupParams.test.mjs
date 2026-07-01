@@ -27,6 +27,7 @@ test("simulator optional runtimes are explicit and separate from core setup", ()
     "genesis",
     "mujoco",
     "mjx",
+    "newton",
     "pybullet",
     "isaac-sim",
     "isaac-lab",
@@ -40,6 +41,8 @@ test("simulator optional runtimes are explicit and separate from core setup", ()
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mujoco.packages.includes("mujoco"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mjx.packages.includes("mujoco-mjx"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mjx.packages.includes("jax"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.newton.packages.includes("newton[importers]"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.newton.importNames.includes("trimesh"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.pybullet.packages.includes("pybullet"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-sim"].packages.includes("isaacsim"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-sim"].pythonVersion, "3.11");

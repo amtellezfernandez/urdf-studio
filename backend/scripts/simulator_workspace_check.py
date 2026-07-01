@@ -19,6 +19,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_ISAAC_SIM_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
+    SIMULATOR_NEWTON_ID,
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_SAPIEN_ID,
     SimulatorId,
@@ -47,6 +48,7 @@ from backend.services.simulator_adapters.isaac import PreparedIsaacWorkspace, pr
 from backend.services.simulator_adapters.isaac_gym import prepare_isaac_gym_workspace
 from backend.services.simulator_adapters.mjx import prepare_mjx_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
+from backend.services.simulator_adapters.newton import prepare_newton_workspace
 from backend.services.simulator_adapters.params import (
     BLENDER_WORKSPACE_PROCESS_PARAMS,
     COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
@@ -56,6 +58,7 @@ from backend.services.simulator_adapters.params import (
     ISAAC_SIM_WORKSPACE_PROCESS_PARAMS,
     MJX_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    NEWTON_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
     SAPIEN_WORKSPACE_PROCESS_PARAMS,
     SimulatorWorkspaceProcessParams,
@@ -414,6 +417,24 @@ def _prepare_pybullet_command(
     )
 
 
+def _prepare_newton_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_newton_workspace(request)
+    artifact_dir = prepared.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return _prepare_direct_urdf_command(
+        prepared,
+        simulator_id=SIMULATOR_NEWTON_ID,
+        workspace_process=NEWTON_WORKSPACE_PROCESS_PARAMS,
+        object_marker=f"world_objects={expectations.object_count}",
+        expectations=expectations,
+        expected_report_path=report_path,
+        extra_expected_markers=("robot_loaded=1", "newton_step=1"),
+    )
+
+
 def _prepare_sapien_command(
     request: SimulatorWorkspacePrepareRequest,
     expectations: WorkspaceExpectations,
@@ -719,6 +740,12 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         simulator_id=SIMULATOR_MJX_ID,
         label="MuJoCo MJX",
         prepare=_prepare_mjx_command,
+        include_in_parity=False,
+    ),
+    SIMULATOR_NEWTON_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_NEWTON_ID,
+        label="Newton",
+        prepare=_prepare_newton_command,
         include_in_parity=False,
     ),
     SIMULATOR_ISAAC_SIM_ID: WorkspaceTarget(

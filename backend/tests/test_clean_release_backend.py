@@ -33,6 +33,7 @@ def test_simulator_list_is_first_release_target_set() -> None:
         "genesis",
         "mujoco",
         "mjx",
+        "newton",
         "pybullet",
         "isaac-sim",
         "isaac-lab",

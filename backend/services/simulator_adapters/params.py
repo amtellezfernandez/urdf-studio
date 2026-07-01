@@ -14,6 +14,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_ISAAC_SIM_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
+    SIMULATOR_NEWTON_ID,
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_SAPIEN_ID,
     SimulatorId,
@@ -119,6 +120,15 @@ class MujocoWorkspaceRepairParams:
 
 
 @dataclass(frozen=True)
+class NewtonSceneParams:
+    viewer_step_hz: float
+    sim_dt_sec: float
+    solver_iterations: int
+    enable_self_collision: bool = False
+    ignore_inertial_definitions: bool = True
+
+
+@dataclass(frozen=True)
 class PyBulletSceneParams:
     viewer_step_hz: float
     gravity_xyz: tuple[float, float, float]
@@ -143,7 +153,12 @@ class BlenderSceneParams:
 
 
 SimulatorSceneParams: TypeAlias = (
-    GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams | SapienSceneParams | BlenderSceneParams
+    GenesisSceneParams
+    | MujocoSceneParams
+    | NewtonSceneParams
+    | PyBulletSceneParams
+    | SapienSceneParams
+    | BlenderSceneParams
 )
 
 
@@ -166,6 +181,12 @@ MJX_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     module_name="backend.scripts.mjx_workspace_prepare",
     log_name="mjx.log",
     ready_log_marker="[mjx-workspace] workspace ready.",
+)
+NEWTON_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "newton",
+    module_name="backend.scripts.newton_workspace_prepare",
+    log_name="newton.log",
+    ready_log_marker="[newton-workspace] workspace ready.",
 )
 ISAAC_SIM_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "isaac-sim",
@@ -268,6 +289,11 @@ MUJOCO_WORKSPACE_REPAIR_PARAMS = MujocoWorkspaceRepairParams(
     min_inertia_diagonal=1e-12,
     inertia_shift_attempts=12,
 )
+NEWTON_SCENE_PARAMS = NewtonSceneParams(
+    viewer_step_hz=60.0,
+    sim_dt_sec=1.0 / 120.0,
+    solver_iterations=8,
+)
 PYBULLET_SCENE_PARAMS = PyBulletSceneParams(
     viewer_step_hz=60.0,
     gravity_xyz=(0.0, 0.0, -9.81),
@@ -290,6 +316,7 @@ SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspacePr
     SIMULATOR_GENESIS_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MJX_ID: MJX_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_NEWTON_ID: NEWTON_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_ISAAC_SIM_ID: ISAAC_SIM_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_ISAAC_LAB_ID: ISAAC_LAB_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_ISAAC_GYM_ID: ISAAC_GYM_WORKSPACE_PROCESS_PARAMS,
@@ -302,6 +329,7 @@ SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
     SIMULATOR_GENESIS_ID: GENESIS_SCENE_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_SCENE_PARAMS,
     SIMULATOR_MJX_ID: MUJOCO_SCENE_PARAMS,
+    SIMULATOR_NEWTON_ID: NEWTON_SCENE_PARAMS,
     SIMULATOR_ISAAC_SIM_ID: BLENDER_SCENE_PARAMS,
     SIMULATOR_ISAAC_LAB_ID: BLENDER_SCENE_PARAMS,
     SIMULATOR_ISAAC_GYM_ID: PYBULLET_SCENE_PARAMS,

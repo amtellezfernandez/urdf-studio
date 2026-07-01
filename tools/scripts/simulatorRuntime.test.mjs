@@ -16,6 +16,7 @@ test("simulator selection supports explicit targets and all", () => {
     "genesis",
     "mujoco",
     "mjx",
+    "newton",
     "pybullet",
     "isaac-sim",
     "isaac-lab",
@@ -45,6 +46,7 @@ test("simulator install packages stay target-specific", () => {
     "mujoco-mjx",
     "jax",
   ]);
+  assert.deepEqual(pythonPackagesForSimulatorIds(["newton"]), ["newton[importers]"]);
   assert.deepEqual(pythonPackagesForSimulatorIds(["coppeliasim"]), ["coppeliasim-zmqremoteapi-client"]);
   assert.deepEqual(pythonPackagesForSimulatorIds(["blender"]), []);
 });

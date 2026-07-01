@@ -33,6 +33,14 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
     packages: ["mujoco", "mujoco-mjx", "jax"],
     importNames: ["mujoco.mjx", "jax"],
   },
+  newton: {
+    label: "Newton",
+    kind: "python",
+    packages: ["newton[importers]"],
+    importNames: ["newton", "warp", "trimesh"],
+    installNote:
+      "Newton is optional and GPU-accelerated when CUDA is available; CPU fallback is enough for workspace smoke checks.",
+  },
   pybullet: {
     label: "PyBullet",
     kind: "python",
