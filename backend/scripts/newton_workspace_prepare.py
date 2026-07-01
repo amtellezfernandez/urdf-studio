@@ -80,20 +80,34 @@ def _shape_config(builder: Any, primitive: SimPrimitive) -> Any:
     return cfg
 
 
-def _load_newton_mesh(asset_path: Path, scale: tuple[float, float, float]) -> Any:
-    from newton._src.utils.mesh import load_meshes_from_file
+def _load_newton_mesh(
+    newton: Any,
+    asset_path: Path,
+    scale: tuple[float, float, float],
+) -> Any:
+    import numpy as np
+    import trimesh
 
-    meshes = load_meshes_from_file(
-        str(asset_path),
-        scale=scale,
+    loaded_mesh = trimesh.load(str(asset_path), force="mesh", process=False)
+    if isinstance(loaded_mesh, trimesh.Scene):
+        geometry = tuple(loaded_mesh.geometry.values())
+        if not geometry:
+            raise WorldLayoutTransferError(f"Newton could not load mesh asset: {asset_path}")
+        loaded_mesh = trimesh.util.concatenate(geometry)
+    vertices = np.asarray(loaded_mesh.vertices, dtype=np.float32)
+    faces = np.asarray(loaded_mesh.faces, dtype=np.int32)
+    if vertices.size == 0 or faces.size == 0:
+        raise WorldLayoutTransferError(f"Newton mesh asset is empty: {asset_path}")
+    scaled_vertices = vertices * np.asarray(scale, dtype=np.float32)
+    return newton.Mesh(
+        scaled_vertices,
+        faces.reshape(-1),
         maxhullvert=64,
     )
-    if not meshes:
-        raise WorldLayoutTransferError(f"Newton could not load mesh asset: {asset_path}")
-    return meshes[0]
 
 
 def _add_primitive(
+    newton: Any,
     wp: Any,
     builder: Any,
     primitive: SimPrimitive,
@@ -119,6 +133,7 @@ def _add_primitive(
     )
     if asset_path is not None:
         mesh = _load_newton_mesh(
+            newton,
             asset_path,
             primitive.asset_scale_xyz or (1.0, 1.0, 1.0),
         )
@@ -202,6 +217,7 @@ def prepare_newton_workspace_scene(
     )
     object_shape_ids = [
         _add_primitive(
+            newton,
             wp,
             builder,
             primitive,
