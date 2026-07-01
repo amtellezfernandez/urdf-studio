@@ -335,11 +335,11 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
     ),
     _runtime(
         SIMULATOR_COPPELIASIM_ID,
-        "CoppeliaSim / PyRep",
+        "CoppeliaSim",
         "urdf",
-        "planned",
+        "direct",
         workspace_target=True,
-        dependencies=(_dependency("pyrep"),),
+        dependencies=(_dependency("coppeliasim-zmqremoteapi-client", "coppeliasim_zmqremoteapi_client"),),
     ),
     _runtime(
         SIMULATOR_BLENDER_ID,

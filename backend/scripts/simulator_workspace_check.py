@@ -12,6 +12,7 @@ from typing import Callable, Mapping, Sequence
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
+    SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
@@ -37,11 +38,13 @@ from backend.services.simulator_adapters.blender_workspace import (
 from backend.services.simulator_adapters.blender_edit_session import (
     validate_blender_edit_session_artifact,
 )
+from backend.services.simulator_adapters.coppeliasim import prepare_coppeliasim_workspace
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
 from backend.services.simulator_adapters.mjx import prepare_mjx_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
     BLENDER_WORKSPACE_PROCESS_PARAMS,
+    COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
     MJX_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
@@ -421,6 +424,24 @@ def _prepare_sapien_command(
     )
 
 
+def _prepare_coppeliasim_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_coppeliasim_workspace(request)
+    artifact_dir = prepared.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return _prepare_direct_urdf_command(
+        prepared,
+        simulator_id=SIMULATOR_COPPELIASIM_ID,
+        workspace_process=COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
+        object_marker=f"world_objects={expectations.object_count}",
+        expectations=expectations,
+        expected_report_path=report_path,
+        extra_expected_markers=("robot_loaded=1",),
+    )
+
+
 def _prepare_mujoco_command(
     request: SimulatorWorkspacePrepareRequest,
     expectations: WorkspaceExpectations,
@@ -629,6 +650,12 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         simulator_id=SIMULATOR_SAPIEN_ID,
         label="SAPIEN",
         prepare=_prepare_sapien_command,
+        include_in_parity=False,
+    ),
+    SIMULATOR_COPPELIASIM_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_COPPELIASIM_ID,
+        label="CoppeliaSim",
+        prepare=_prepare_coppeliasim_command,
         include_in_parity=False,
     ),
     SIMULATOR_BLENDER_ID: WorkspaceTarget(

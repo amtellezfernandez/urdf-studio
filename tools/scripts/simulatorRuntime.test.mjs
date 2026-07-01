@@ -45,7 +45,7 @@ test("simulator install packages stay target-specific", () => {
     "mujoco-mjx",
     "jax",
   ]);
-  assert.deepEqual(pythonPackagesForSimulatorIds(["coppeliasim"]), ["pyrep"]);
+  assert.deepEqual(pythonPackagesForSimulatorIds(["coppeliasim"]), ["coppeliasim-zmqremoteapi-client"]);
   assert.deepEqual(pythonPackagesForSimulatorIds(["blender"]), []);
 });
 

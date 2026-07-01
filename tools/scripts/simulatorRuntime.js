@@ -201,6 +201,19 @@ function probeBlender(pythonExecutable) {
   return result.stdout.trim();
 }
 
+function probeCoppeliaSim(pythonExecutable) {
+  const probe = [
+    "from backend.services.simulator_adapters.coppeliasim_runtime import resolve_coppeliasim_executable, coppeliasim_remote_configured",
+    "path = resolve_coppeliasim_executable()",
+    "print(str(path) if path else ('remote' if coppeliasim_remote_configured() else ''))",
+  ].join("; ");
+  const result = runCapture(pythonExecutable, ["-c", probe]);
+  if (result.status !== 0 || result.error) {
+    return "";
+  }
+  return result.stdout.trim();
+}
+
 export function collectRuntimeStatus(simulatorIds, pythonExecutable = resolveRuntimePython()) {
   return simulatorIds.map((simulatorId) => {
     const runtime = SIMULATOR_OPTIONAL_RUNTIMES[simulatorId];
@@ -215,6 +228,15 @@ export function collectRuntimeStatus(simulatorIds, pythonExecutable = resolveRun
     }
     const moduleStatus = probePythonModules(pythonExecutable, runtime.importNames);
     const missingModules = runtime.importNames.filter((name) => !moduleStatus[name]);
+    if (simulatorId === "coppeliasim" && missingModules.length === 0) {
+      const executable = probeCoppeliaSim(pythonExecutable);
+      return {
+        simulatorId,
+        label: runtime.label,
+        available: Boolean(executable),
+        detail: executable || "set URDF_STUDIO_COPPELIASIM_PATH, COPPELIASIM_ROOT, or URDF_STUDIO_COPPELIASIM_REMOTE=1",
+      };
+    }
     return {
       simulatorId,
       label: runtime.label,

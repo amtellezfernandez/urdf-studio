@@ -7,6 +7,7 @@ from typing import TypeAlias
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
+    SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
@@ -175,6 +176,13 @@ SAPIEN_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     log_name="sapien.log",
     ready_log_marker="[sapien-workspace] workspace ready.",
 )
+COPPELIASIM_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "coppeliasim",
+    module_name="backend.scripts.coppeliasim_workspace_prepare",
+    log_name="coppeliasim.log",
+    ready_log_marker="[coppeliasim-workspace] workspace ready.",
+    ready_timeout_sec=120.0,
+)
 BLENDER_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "blender",
     module_name="backend.scripts.blender_workspace_prepare",
@@ -261,6 +269,7 @@ SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspacePr
     SIMULATOR_MJX_ID: MJX_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_SAPIEN_ID: SAPIEN_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_COPPELIASIM_ID: COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_WORKSPACE_PROCESS_PARAMS,
 }
 SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
@@ -269,5 +278,6 @@ SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
     SIMULATOR_MJX_ID: MUJOCO_SCENE_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_SCENE_PARAMS,
     SIMULATOR_SAPIEN_ID: SAPIEN_SCENE_PARAMS,
+    SIMULATOR_COPPELIASIM_ID: SAPIEN_SCENE_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_SCENE_PARAMS,
 }

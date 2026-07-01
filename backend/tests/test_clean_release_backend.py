@@ -50,7 +50,6 @@ def test_simulator_list_is_first_release_target_set() -> None:
         "isaac-sim",
         "isaac-lab",
         "isaac-gym",
-        "coppeliasim",
     }
 
 

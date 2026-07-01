@@ -8,6 +8,7 @@ from typing import Sequence
 
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
+    SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
@@ -34,6 +35,7 @@ WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_MJX_ID,
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_SAPIEN_ID,
+    SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_BLENDER_ID,
 )
 WORKSPACE_FIXTURES = (

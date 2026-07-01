@@ -47,6 +47,7 @@ test("simulator optional runtimes are explicit and separate from core setup", ()
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-lab"].pythonVersion, "3.11");
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-gym"].packages.length, 0);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.sapien.packages.includes("sapien"), true);
-  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.coppeliasim.packages.includes("pyrep"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.coppeliasim.packages.includes("coppeliasim-zmqremoteapi-client"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.coppeliasim.executableEnv, "URDF_STUDIO_COPPELIASIM_PATH");
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.blender.kind, "external");
 });

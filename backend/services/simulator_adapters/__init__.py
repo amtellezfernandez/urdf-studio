@@ -18,6 +18,7 @@ from backend.services.simulator_adapters.base import (
     SimulatorCapabilityError,
 )
 from backend.services.simulator_adapters.blender import BLENDER_SIMULATOR_ADAPTER
+from backend.services.simulator_adapters.coppeliasim import COPPELIASIM_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.genesis import (
     GENESIS_SIMULATOR_ADAPTER,
 )
@@ -45,6 +46,7 @@ _WORKSPACE_SIMULATOR_ADAPTERS = _build_adapter_map(
         MJX_SIMULATOR_ADAPTER,
         PYBULLET_SIMULATOR_ADAPTER,
         SAPIEN_SIMULATOR_ADAPTER,
+        COPPELIASIM_SIMULATOR_ADAPTER,
         BLENDER_SIMULATOR_ADAPTER,
     )
 )

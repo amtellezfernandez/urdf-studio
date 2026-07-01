@@ -17,8 +17,8 @@ Optional simulator runtimes are not required to load and inspect URDF files. The
 
 Target registry:
 
-- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, SAPIEN, Blender.
-- Planned transfer adapters: Isaac Sim, Isaac Lab, Isaac Gym, CoppeliaSim/PyRep.
+- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, SAPIEN, CoppeliaSim, Blender.
+- Planned transfer adapters: Isaac Sim, Isaac Lab, Isaac Gym.
 
 Check what this machine already has:
 
@@ -61,7 +61,14 @@ URDF_STUDIO_PYTHON=/path/to/python npm run simulator:status
 URDF_STUDIO_PYTHON=/path/to/python npm run start
 ```
 
-Use this for manually managed simulator environments, especially Isaac Gym and custom CoppeliaSim/PyRep installations.
+Use this for manually managed simulator environments, especially Isaac Gym and custom CoppeliaSim installations.
+
+CoppeliaSim requires the pip-installable ZMQ remote API client plus the external CoppeliaSim application. After installing CoppeliaSim, set one of:
+
+```bash
+URDF_STUDIO_COPPELIASIM_PATH=/path/to/coppeliaSim.sh
+COPPELIASIM_ROOT=/path/to/CoppeliaSim
+```
 
 For Isaac Sim or Isaac Lab, NVIDIA requires accepting the Omniverse EULA before first runtime use. After you have accepted it, set:
 

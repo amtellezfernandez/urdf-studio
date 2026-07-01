@@ -74,12 +74,13 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
     importNames: ["sapien"],
   },
   coppeliasim: {
-    label: "CoppeliaSim / PyRep",
+    label: "CoppeliaSim",
     kind: "python",
-    packages: ["pyrep"],
-    importNames: ["pyrep"],
+    packages: ["coppeliasim-zmqremoteapi-client"],
+    importNames: ["coppeliasim_zmqremoteapi_client"],
+    executableEnv: "URDF_STUDIO_COPPELIASIM_PATH",
     installNote:
-      "PyRep can be installed by pip, but a full CoppeliaSim installation is still required to run scenes.",
+      "The ZMQ Python client is pip-installable, but CoppeliaSim itself is an external app. Set URDF_STUDIO_COPPELIASIM_PATH or COPPELIASIM_ROOT after installing it.",
   },
   blender: {
     label: "Blender",
