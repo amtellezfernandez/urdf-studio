@@ -10,6 +10,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
+    SIMULATOR_SAPIEN_ID,
     SimulatorId,
 )
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
@@ -123,11 +124,22 @@ class PyBulletSceneParams:
 
 
 @dataclass(frozen=True)
+class SapienSceneParams:
+    viewer_step_hz: float
+    sim_dt_sec: float
+    floor_size_xy_m: tuple[float, float]
+    floor_thickness_m: float
+    fixed_base: bool = True
+
+
+@dataclass(frozen=True)
 class BlenderSceneParams:
     workspace_mode: str
 
 
-SimulatorSceneParams: TypeAlias = GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams | BlenderSceneParams
+SimulatorSceneParams: TypeAlias = (
+    GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams | SapienSceneParams | BlenderSceneParams
+)
 
 
 GENESIS_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
@@ -149,6 +161,12 @@ PYBULLET_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     module_name="backend.scripts.pybullet_workspace_prepare",
     log_name="pybullet.log",
     ready_log_marker="[pybullet-workspace] workspace ready.",
+)
+SAPIEN_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "sapien",
+    module_name="backend.scripts.sapien_workspace_prepare",
+    log_name="sapien.log",
+    ready_log_marker="[sapien-workspace] workspace ready.",
 )
 BLENDER_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "blender",
@@ -220,6 +238,12 @@ PYBULLET_SCENE_PARAMS = PyBulletSceneParams(
     camera_near_m=0.01,
     camera_far_m=25.0,
 )
+SAPIEN_SCENE_PARAMS = SapienSceneParams(
+    viewer_step_hz=60.0,
+    sim_dt_sec=0.01,
+    floor_size_xy_m=(4.0, 4.0),
+    floor_thickness_m=0.04,
+)
 BLENDER_SCENE_PARAMS = BlenderSceneParams(
     workspace_mode="visual-layout-round-trip-v1",
 )
@@ -228,11 +252,13 @@ SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspacePr
     SIMULATOR_GENESIS_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_SAPIEN_ID: SAPIEN_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_WORKSPACE_PROCESS_PARAMS,
 }
 SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
     SIMULATOR_GENESIS_ID: GENESIS_SCENE_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_SCENE_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_SCENE_PARAMS,
+    SIMULATOR_SAPIEN_ID: SAPIEN_SCENE_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_SCENE_PARAMS,
 }

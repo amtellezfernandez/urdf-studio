@@ -11,6 +11,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
+    SIMULATOR_SAPIEN_ID,
     SimulatorId,
     SimulatorMeshAssetUpload,
     SimulatorWorkspacePrepareRequest,
@@ -30,6 +31,7 @@ WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
+    SIMULATOR_SAPIEN_ID,
     SIMULATOR_BLENDER_ID,
 )
 WORKSPACE_FIXTURES = (

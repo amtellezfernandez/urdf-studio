@@ -327,7 +327,7 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         SIMULATOR_SAPIEN_ID,
         "SAPIEN",
         "urdf",
-        "planned",
+        "direct",
         workspace_target=True,
         dependencies=(_dependency("sapien"),),
     ),

@@ -24,6 +24,7 @@ from backend.services.simulator_adapters.genesis import (
 from backend.services.simulator_adapters.mujoco import MUJOCO_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.optional_runtime import make_optional_simulator_adapter
 from backend.services.simulator_adapters.pybullet import PYBULLET_SIMULATOR_ADAPTER
+from backend.services.simulator_adapters.sapien import SAPIEN_SIMULATOR_ADAPTER
 from backend.services.world_scene_package_digest import normalize_world_snapshot_artifact_digests
 
 
@@ -41,6 +42,7 @@ _WORKSPACE_SIMULATOR_ADAPTERS = _build_adapter_map(
         GENESIS_SIMULATOR_ADAPTER,
         MUJOCO_SIMULATOR_ADAPTER,
         PYBULLET_SIMULATOR_ADAPTER,
+        SAPIEN_SIMULATOR_ADAPTER,
         BLENDER_SIMULATOR_ADAPTER,
     )
 )

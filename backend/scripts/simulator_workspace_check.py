@@ -15,6 +15,7 @@ from backend.models.simulator_runtime import (
     SIMULATOR_GENESIS_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
+    SIMULATOR_SAPIEN_ID,
     SimulatorId,
     SimulatorRuntimeStatus,
     SimulatorWorkspacePrepareRequest,
@@ -42,9 +43,11 @@ from backend.services.simulator_adapters.params import (
     GENESIS_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
+    SAPIEN_WORKSPACE_PROCESS_PARAMS,
     SimulatorWorkspaceProcessParams,
 )
 from backend.services.simulator_adapters.pybullet import prepare_pybullet_workspace
+from backend.services.simulator_adapters.sapien import prepare_sapien_workspace
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.simulator_adapters.workspace_parity import (
     WORKSPACE_PARITY_ID,
@@ -397,6 +400,24 @@ def _prepare_pybullet_command(
     )
 
 
+def _prepare_sapien_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+) -> PreparedWorkspaceCommand:
+    prepared = prepare_sapien_workspace(request)
+    artifact_dir = prepared.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return _prepare_direct_urdf_command(
+        prepared,
+        simulator_id=SIMULATOR_SAPIEN_ID,
+        workspace_process=SAPIEN_WORKSPACE_PROCESS_PARAMS,
+        object_marker=f"world_objects={expectations.object_count}",
+        expectations=expectations,
+        expected_report_path=report_path,
+        extra_expected_markers=("robot_loaded=1",),
+    )
+
+
 def _prepare_mujoco_command(
     request: SimulatorWorkspacePrepareRequest,
     expectations: WorkspaceExpectations,
@@ -552,6 +573,12 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         simulator_id=SIMULATOR_PYBULLET_ID,
         label="PyBullet",
         prepare=_prepare_pybullet_command,
+    ),
+    SIMULATOR_SAPIEN_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_SAPIEN_ID,
+        label="SAPIEN",
+        prepare=_prepare_sapien_command,
+        include_in_parity=False,
     ),
     SIMULATOR_BLENDER_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_BLENDER_ID,
