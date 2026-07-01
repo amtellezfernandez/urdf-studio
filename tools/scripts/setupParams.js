@@ -26,11 +26,55 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
     packages: ["mujoco"],
     importNames: ["mujoco"],
   },
+  mjx: {
+    label: "MuJoCo MJX",
+    kind: "python",
+    packages: ["mujoco", "jax"],
+    importNames: ["mujoco.mjx", "jax"],
+  },
   pybullet: {
     label: "PyBullet",
     kind: "python",
     packages: ["pybullet"],
     importNames: ["pybullet"],
+  },
+  "isaac-sim": {
+    label: "Isaac Sim",
+    kind: "python",
+    packages: [],
+    importNames: ["isaacsim"],
+    installNote:
+      "Install Isaac Sim with NVIDIA's supported workflow, then run with URDF_STUDIO_PYTHON pointing at that Python environment.",
+  },
+  "isaac-lab": {
+    label: "Isaac Lab",
+    kind: "python",
+    packages: [],
+    importNames: ["isaaclab"],
+    installNote:
+      "Install Isaac Lab on top of Isaac Sim with NVIDIA's supported workflow, then set URDF_STUDIO_PYTHON to its Python environment.",
+  },
+  "isaac-gym": {
+    label: "Isaac Gym",
+    kind: "python",
+    packages: [],
+    importNames: ["isaacgym"],
+    installNote:
+      "Install Isaac Gym from NVIDIA's legacy distribution, then set URDF_STUDIO_PYTHON to that Python environment.",
+  },
+  sapien: {
+    label: "SAPIEN",
+    kind: "python",
+    packages: ["sapien"],
+    importNames: ["sapien"],
+  },
+  coppeliasim: {
+    label: "CoppeliaSim / PyRep",
+    kind: "python",
+    packages: [],
+    importNames: ["pyrep"],
+    installNote:
+      "Install CoppeliaSim and PyRep, then set URDF_STUDIO_PYTHON to the PyRep Python environment.",
   },
   blender: {
     label: "Blender",

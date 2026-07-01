@@ -15,7 +15,13 @@ test("simulator selection supports explicit targets and all", () => {
   assert.deepEqual(normalizeSimulatorSelection(["all"]), [
     "genesis",
     "mujoco",
+    "mjx",
     "pybullet",
+    "isaac-sim",
+    "isaac-lab",
+    "isaac-gym",
+    "sapien",
+    "coppeliasim",
     "blender",
   ]);
 });
@@ -28,6 +34,12 @@ test("simulator install packages stay target-specific", () => {
   assert.deepEqual(pythonPackagesForSimulatorIds(["mujoco", "pybullet"]), [
     "mujoco",
     "pybullet",
+  ]);
+  assert.deepEqual(pythonPackagesForSimulatorIds(["isaac-sim", "isaac-lab"]), []);
+  assert.deepEqual(pythonPackagesForSimulatorIds(["sapien", "mjx"]), [
+    "sapien",
+    "mujoco",
+    "jax",
   ]);
   assert.deepEqual(pythonPackagesForSimulatorIds(["blender"]), []);
 });

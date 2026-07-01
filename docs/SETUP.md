@@ -13,7 +13,12 @@ http://127.0.0.1:5173
 
 `npm run setup` installs Node dependencies and a local Python backend environment in `.venv`.
 
-Optional simulator runtimes are not required to load and inspect URDF files. The backend exposes Genesis, MuJoCo, PyBullet, and Blender transfer targets, then checks at runtime whether each local dependency is available.
+Optional simulator runtimes are not required to load and inspect URDF files. The backend exposes a RoboVerse-compatible target set, then checks at runtime whether each local dependency is available.
+
+Target registry:
+
+- Openable now: Genesis, MuJoCo, PyBullet, Blender.
+- Planned transfer adapters: MuJoCo MJX, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, CoppeliaSim/PyRep.
 
 Check what this machine already has:
 
@@ -27,6 +32,8 @@ Install only the Python simulators you want in the local `.venv`:
 npm run simulator:install -- mujoco
 npm run simulator:install -- pybullet
 npm run simulator:install -- genesis
+npm run simulator:install -- sapien
+npm run simulator:install -- mjx
 ```
 
 You can install more than one at a time:
@@ -41,6 +48,8 @@ For an existing simulator Python environment, skip installing into `.venv` and p
 URDF_STUDIO_PYTHON=/path/to/python npm run simulator:status
 URDF_STUDIO_PYTHON=/path/to/python npm run start
 ```
+
+Use this for Isaac Sim, Isaac Lab, Isaac Gym, and CoppeliaSim/PyRep environments, because their upstream installers are more specific than a small pip helper should manage.
 
 Blender is detected as an external application, not installed as a Python package. If it is not on `PATH`, set:
 

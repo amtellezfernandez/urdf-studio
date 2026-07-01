@@ -85,8 +85,14 @@ const DEFAULT_URDF = `<?xml version="1.0"?>
 const RUNTIME_TARGETS = [
   { name: "genesis", mode: "python" },
   { name: "mujoco", mode: "python" },
+  { name: "mjx", mode: "python" },
   { name: "pybullet", mode: "python" },
-  { name: "blender", mode: "python" },
+  { name: "isaac-sim", mode: "python" },
+  { name: "isaac-lab", mode: "python" },
+  { name: "isaac-gym", mode: "python" },
+  { name: "sapien", mode: "python" },
+  { name: "coppeliasim", mode: "python" },
+  { name: "blender", mode: "native" },
 ] as const;
 
 const isUrdfFile = (file: File) => /\.urdf$/i.test(file.name);
@@ -144,6 +150,9 @@ const getJointLimit = (joint: URDFJoint, fallback: number): number => {
   const value = fallback < 0 ? joint.limit?.lower : joint.limit?.upper;
   return Number.isFinite(value) ? value : fallback;
 };
+
+const isPlannedTransferTarget = (target: WorkspaceTarget | null | undefined): boolean =>
+  target?.transferPolicy?.transferStrategy === "planned";
 
 const toJointRows = (robot: URDFRobot): JointRow[] =>
   Object.entries(robot.joints)
@@ -311,6 +320,11 @@ export default function App() {
     () => meshAssets.map((asset) => asset.path).join(", "),
     [meshAssets],
   );
+  const selectedWorkspaceTarget = useMemo(
+    () => targets.find((target) => target.targetId === selectedTarget),
+    [selectedTarget, targets],
+  );
+  const selectedTargetIsPlanned = isPlannedTransferTarget(selectedWorkspaceTarget);
 
   useEffect(
     () => () => {
@@ -442,7 +456,10 @@ export default function App() {
       .then((payload) => {
         const nextTargets = Array.isArray(payload.targets) ? payload.targets : [];
         setTargets(nextTargets);
-        if (nextTargets[0]?.targetId) setSelectedTarget(nextTargets[0].targetId);
+        const firstOpenableTarget =
+          nextTargets.find((target: WorkspaceTarget) => !isPlannedTransferTarget(target))
+          ?? nextTargets[0];
+        if (firstOpenableTarget?.targetId) setSelectedTarget(firstOpenableTarget.targetId);
       })
       .catch(() => setTargets([]));
   }, []);
@@ -531,6 +548,10 @@ export default function App() {
   };
 
   const openInSimulator = async () => {
+    if (selectedTargetIsPlanned) {
+      setStatus(`${selectedWorkspaceTarget?.label || selectedTarget} transfer is listed for compatibility, but the opener is planned.`);
+      return;
+    }
     setStatus(`Preparing ${selectedTarget} workspace...`);
     setTransferResult(null);
     const worldPackage = await buildWorldPackage({
@@ -618,12 +639,14 @@ export default function App() {
             {(targets.length ? targets : RUNTIME_TARGETS).map((target) => {
               const id = "targetId" in target ? target.targetId : target.name;
               const label = "label" in target ? target.label : target.name;
-              return <option key={id} value={id}>{label}</option>;
+              const planned = "transferPolicy" in target && target.transferPolicy?.transferStrategy === "planned";
+              return <option key={id} value={id} disabled={planned}>{label}{planned ? " (planned)" : ""}</option>;
             })}
           </select>
           <button
             type="button"
             className="primary"
+            disabled={selectedTargetIsPlanned}
             onClick={() => void openInSimulator().catch((error) => {
               setStatus(error instanceof Error ? error.message : "Workspace transfer failed.");
             })}

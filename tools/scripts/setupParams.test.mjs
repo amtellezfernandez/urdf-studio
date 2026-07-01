@@ -24,11 +24,23 @@ test("simulator optional runtimes are explicit and separate from core setup", ()
   assert.deepEqual(SIMULATOR_OPTIONAL_RUNTIME_IDS, [
     "genesis",
     "mujoco",
+    "mjx",
     "pybullet",
+    "isaac-sim",
+    "isaac-lab",
+    "isaac-gym",
+    "sapien",
+    "coppeliasim",
     "blender",
   ]);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.genesis.packages.includes("genesis-world"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mujoco.packages.includes("mujoco"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mjx.packages.includes("jax"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.pybullet.packages.includes("pybullet"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-sim"].packages.length, 0);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-lab"].packages.length, 0);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-gym"].packages.length, 0);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.sapien.packages.includes("sapien"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.coppeliasim.packages.length, 0);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.blender.kind, "external");
 });

@@ -18,7 +18,9 @@ export function buildSetupSummarySections({ pythonEnvDir = ".venv" } = {}) {
     {
       heading: "Simulator Transfer",
       lines: [
-        "Genesis, MuJoCo, PyBullet, and Blender adapters are exposed by the backend.",
+        "RoboVerse-compatible targets are exposed by the backend.",
+        "Openable now: Genesis, MuJoCo, PyBullet, Blender.",
+        "Planned targets are listed for MJX, Isaac Sim/Lab/Gym, SAPIEN, and CoppeliaSim/PyRep.",
         "Check installed targets: npm run simulator:status",
         "Install selected Python runtimes: npm run simulator:install -- mujoco pybullet",
         "Use URDF_STUDIO_PYTHON to point at an existing simulator Python environment.",

@@ -214,13 +214,18 @@ function printStatus(statuses, { json = false } = {}) {
 }
 
 function printInstallNotes(simulatorIds) {
-  if (simulatorIds.includes("blender")) {
-    const runtime = SIMULATOR_OPTIONAL_RUNTIMES.blender;
-    log("Blender is an external application runtime.", colors.yellow);
-    log(
-      `  Install Blender from your OS package manager or blender.org, then set ${runtime.executableEnv} if it is not on PATH.`,
-      colors.gray,
-    );
+  for (const simulatorId of simulatorIds) {
+    const runtime = SIMULATOR_OPTIONAL_RUNTIMES[simulatorId];
+    if (runtime.installNote) {
+      log(`${runtime.label}: ${runtime.installNote}`, colors.yellow);
+    }
+    if (runtime.executableEnv) {
+      log(`${runtime.label} is an external application runtime.`, colors.yellow);
+      log(
+        `  Install ${runtime.label} from its upstream distribution, then set ${runtime.executableEnv} if it is not on PATH.`,
+        colors.gray,
+      );
+    }
   }
 }
 
@@ -271,6 +276,8 @@ async function main() {
     if (packages.length > 0) {
       log(`Installing simulator Python packages into ${pythonExecutable}: ${packages.join(", ")}`, colors.pink);
       installPythonPackages(pythonExecutable, packages);
+    } else if (missingPythonRuntimeIds.length > 0) {
+      log("No pip install is configured for the missing selected runtimes.", colors.yellow);
     } else {
       log("Selected Python simulator runtimes are already installed.", colors.gray);
     }

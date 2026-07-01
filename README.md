@@ -7,7 +7,8 @@ First release scope:
 - Load URDF or Xacro files with mesh assets.
 - Move model joints in the browser viewer.
 - Add simple boxes and cameras to a scene.
-- Transfer the workspace to Genesis, MuJoCo, PyBullet, or Blender.
+- Transfer the workspace to openable simulator targets.
+- Track the RoboVerse-compatible simulator set: Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, CoppeliaSim/PyRep, and Blender.
 
 Not included in this branch: teleoperation, robot hardware control, episodes, datasets, ROS visualization, collaboration, or LeRobot-specific workflows.
 
@@ -46,6 +47,8 @@ npm run simulator:install -- mujoco pybullet
 ```
 
 Use `URDF_STUDIO_PYTHON=/path/to/python` for an existing simulator environment. Use `URDF_STUDIO_BLENDER_PATH=/path/to/blender` when Blender is installed outside standard paths.
+
+Openable targets in this clean release are Genesis, MuJoCo, PyBullet, and Blender. MJX, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, and CoppeliaSim/PyRep are listed as planned transfer targets with runtime status detection so their adapters can be filled in without changing the public target contract.
 
 Simulator fixture checks skip missing optional runtimes by default:
 

@@ -32,9 +32,28 @@ def test_simulator_list_is_first_release_target_set() -> None:
     assert [entry["simulatorId"] for entry in payload["simulators"]] == [
         "genesis",
         "mujoco",
+        "mjx",
         "pybullet",
+        "isaac-sim",
+        "isaac-lab",
+        "isaac-gym",
+        "sapien",
+        "coppeliasim",
         "blender",
     ]
+    planned = {
+        entry["simulatorId"]
+        for entry in payload["simulators"]
+        if entry["transferPolicy"]["transferStrategy"] == "planned"
+    }
+    assert planned == {
+        "mjx",
+        "isaac-sim",
+        "isaac-lab",
+        "isaac-gym",
+        "sapien",
+        "coppeliasim",
+    }
 
 
 def test_xacro_expand_uses_uploaded_file_contract(monkeypatch) -> None:

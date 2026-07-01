@@ -7,6 +7,7 @@ URDF Studio first release scope:
 - Add simple scene objects and cameras.
 - Open the same robot-world package in supported simulator targets.
 - Check and install optional simulator runtimes per target.
+- Keep a stable target contract for the RoboVerse-compatible simulator set.
 
 Out of scope for this branch: teleoperation, robot hardware control, episode/dataset review, ROS visualization, collaboration, and runtime bridge services.
 
