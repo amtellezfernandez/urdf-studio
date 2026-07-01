@@ -42,6 +42,18 @@ You can install more than one at a time:
 npm run simulator:install -- mujoco pybullet
 ```
 
+Install every pip-installable target:
+
+```bash
+npm run simulator:install -- all
+```
+
+When Isaac Sim or Isaac Lab is selected, the installer uses `.venv-sim311` because Isaac Sim 5.x requires Python 3.11. Run with that environment when validating Isaac/PyRep packages:
+
+```bash
+URDF_STUDIO_PYTHON=.venv-sim311/bin/python3 npm run simulator:status
+```
+
 For an existing simulator Python environment, skip installing into `.venv` and point URDF Studio at it:
 
 ```bash
@@ -49,7 +61,15 @@ URDF_STUDIO_PYTHON=/path/to/python npm run simulator:status
 URDF_STUDIO_PYTHON=/path/to/python npm run start
 ```
 
-Use this for Isaac Sim, Isaac Lab, Isaac Gym, and CoppeliaSim/PyRep environments, because their upstream installers are more specific than a small pip helper should manage.
+Use this for manually managed simulator environments, especially Isaac Gym and custom CoppeliaSim/PyRep installations.
+
+For Isaac Sim or Isaac Lab, NVIDIA requires accepting the Omniverse EULA before first runtime use. After you have accepted it, set:
+
+```bash
+OMNI_KIT_ACCEPT_EULA=YES
+```
+
+Isaac Gym is not published as a normal package on the Python registry. Install it from NVIDIA's legacy Isaac Gym distribution, then run URDF Studio with `URDF_STUDIO_PYTHON` pointing at that environment.
 
 Blender is detected as an external application, not installed as a Python package. If it is not on `PATH`, set:
 

@@ -44,9 +44,12 @@ Install only the Python targets you want:
 
 ```bash
 npm run simulator:install -- mujoco pybullet
+npm run simulator:install -- all
 ```
 
 Use `URDF_STUDIO_PYTHON=/path/to/python` for an existing simulator environment. Use `URDF_STUDIO_BLENDER_PATH=/path/to/blender` when Blender is installed outside standard paths.
+
+Isaac Sim/Lab use a Python 3.11 simulator environment (`.venv-sim311`) and require NVIDIA Omniverse EULA acceptance before first runtime use. Isaac Gym still requires NVIDIA's legacy Isaac Gym distribution.
 
 Openable targets in this clean release are Genesis, MuJoCo, PyBullet, and Blender. MJX, Isaac Sim, Isaac Lab, Isaac Gym, SAPIEN, and CoppeliaSim/PyRep are listed as planned transfer targets with runtime status detection so their adapters can be filled in without changing the public target contract.
 

@@ -21,10 +21,6 @@ from backend.models.world_scene_package import (
     WorldScenePackageManifest,
     WorldSnapshot,
 )
-from backend.services.simulator_adapters.robot_repairs import (
-    GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY,
-    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
-)
 from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
@@ -196,11 +192,6 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
         ),
         provenance={
             "workspace_check_fixture": "demo",
-            GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY: {
-                "genesis": [
-                    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
-                ],
-            },
         },
         security={"attestation_refs": []},
     )
@@ -313,12 +304,12 @@ def build_xacro_source_workspace_request() -> SimulatorWorkspacePrepareRequest:
     world_package.provenance = {
         **world_package.provenance,
         "workspace_check_fixture": "xacro-source",
-        "source_asset_path": "robots/so101.urdf.xacro",
+        "source_asset_path": "robots/demo.urdf.xacro",
     }
     return request.model_copy(
         update={
             "world_package": world_package,
-            "urdf_asset_path": "robots/so101.urdf.xacro",
+            "urdf_asset_path": "robots/demo.urdf.xacro",
         },
         deep=True,
     )

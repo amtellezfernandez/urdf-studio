@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   BACKEND_PYTHON_CORE_DEPENDENCIES,
   PYTHON_ENV_DIRNAME,
+  SIMULATOR_PYTHON_ENV_DIRNAME,
   SETUP_NPM_INSTALL_FLAGS,
   SIMULATOR_OPTIONAL_RUNTIME_IDS,
   SIMULATOR_OPTIONAL_RUNTIMES,
@@ -11,6 +12,7 @@ import {
 
 test("setup params describe the clean local runtime", () => {
   assert.equal(PYTHON_ENV_DIRNAME, ".venv");
+  assert.equal(SIMULATOR_PYTHON_ENV_DIRNAME, ".venv-sim311");
   assert.ok(SETUP_NPM_INSTALL_FLAGS.includes("--audit=false"));
   assert.ok(BACKEND_PYTHON_CORE_DEPENDENCIES.includes("fastapi"));
   assert.ok(BACKEND_PYTHON_CORE_DEPENDENCIES.includes("yourdfpy"));
@@ -34,13 +36,17 @@ test("simulator optional runtimes are explicit and separate from core setup", ()
     "blender",
   ]);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.genesis.packages.includes("genesis-world"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.genesis.packages.includes("torch"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mujoco.packages.includes("mujoco"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mjx.packages.includes("mujoco-mjx"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.mjx.packages.includes("jax"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.pybullet.packages.includes("pybullet"), true);
-  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-sim"].packages.length, 0);
-  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-lab"].packages.length, 0);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-sim"].packages.includes("isaacsim"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-sim"].pythonVersion, "3.11");
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-lab"].packages.includes("isaaclab"), true);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-lab"].pythonVersion, "3.11");
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES["isaac-gym"].packages.length, 0);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.sapien.packages.includes("sapien"), true);
-  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.coppeliasim.packages.length, 0);
+  assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.coppeliasim.packages.includes("pyrep"), true);
   assert.equal(SIMULATOR_OPTIONAL_RUNTIMES.blender.kind, "external");
 });

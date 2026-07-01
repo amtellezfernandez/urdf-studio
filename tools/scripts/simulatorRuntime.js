@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   PYTHON_ENV_DIRNAME,
+  SIMULATOR_PYTHON_ENV_DIRNAME,
   SIMULATOR_OPTIONAL_RUNTIME_IDS,
   SIMULATOR_OPTIONAL_RUNTIMES,
 } from "./setupParams.js";
@@ -101,6 +102,27 @@ export function pythonPackagesForSimulatorIds(simulatorIds) {
   return packages;
 }
 
+function requiredPythonVersionsForSimulatorIds(simulatorIds) {
+  return [
+    ...new Set(
+      simulatorIds
+        .map((simulatorId) => SIMULATOR_OPTIONAL_RUNTIMES[simulatorId].pythonVersion)
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function defaultEnvDirForSimulatorIds(simulatorIds, env = process.env) {
+  if (typeof env.URDF_STUDIO_PYTHON_ENV === "string" && env.URDF_STUDIO_PYTHON_ENV.trim()) {
+    return env.URDF_STUDIO_PYTHON_ENV.trim();
+  }
+  const requiredVersions = requiredPythonVersionsForSimulatorIds(simulatorIds);
+  if (requiredVersions.includes("3.11")) {
+    return SIMULATOR_PYTHON_ENV_DIRNAME;
+  }
+  return PYTHON_ENV_DIRNAME;
+}
+
 export function resolveRuntimePython(env = process.env) {
   const explicitPython = typeof env.URDF_STUDIO_PYTHON === "string" ? env.URDF_STUDIO_PYTHON.trim() : "";
   if (explicitPython) {
@@ -114,16 +136,31 @@ export function resolveRuntimePython(env = process.env) {
   return process.platform === "win32" ? "python" : "python3";
 }
 
-function ensureInstallPython(env = process.env) {
+function pythonVersionForExecutable(pythonExecutable) {
+  const result = runCapture(pythonExecutable, [
+    "-c",
+    "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
+  ]);
+  if (result.status !== 0 || result.error) {
+    return "";
+  }
+  return result.stdout.trim();
+}
+
+function ensureInstallPython(simulatorIds, env = process.env) {
   const explicitPython = typeof env.URDF_STUDIO_PYTHON === "string" ? env.URDF_STUDIO_PYTHON.trim() : "";
   if (explicitPython) {
     return explicitPython;
   }
-  const envDir = resolvePythonEnvDir(env);
+  const envDir = defaultEnvDirForSimulatorIds(simulatorIds, env);
   const pythonExecutable = resolvePythonExecutable({ envDir });
   if (!existsSync(absolutePythonPath(pythonExecutable))) {
+    const requiredVersions = requiredPythonVersionsForSimulatorIds(simulatorIds);
+    const pythonVersion = typeof env.URDF_STUDIO_PYTHON_VERSION === "string" && env.URDF_STUDIO_PYTHON_VERSION.trim()
+      ? env.URDF_STUDIO_PYTHON_VERSION.trim()
+      : requiredVersions[0] || "3.12";
     if (commandExists("uv")) {
-      run("uv", ["venv", envDir, "--python", "3.12"]);
+      run("uv", ["venv", envDir, "--python", pythonVersion]);
     } else {
       run(process.platform === "win32" ? "python" : "python3", ["-m", "venv", envDir]);
     }
@@ -183,10 +220,18 @@ export function collectRuntimeStatus(simulatorIds, pythonExecutable = resolveRun
       label: runtime.label,
       available: missingModules.length === 0,
       detail: missingModules.length === 0
-        ? `python=${pythonExecutable}`
+        ? `python=${pythonExecutable}${runtime.eulaEnv ? `; ${runtime.eulaEnv} may be required for first run` : ""}`
         : `missing Python module(s): ${missingModules.join(", ")}`,
     };
   });
+}
+
+function pythonMatchesRuntime(pythonExecutable, simulatorId) {
+  const requiredVersion = SIMULATOR_OPTIONAL_RUNTIMES[simulatorId].pythonVersion;
+  if (!requiredVersion) {
+    return true;
+  }
+  return pythonVersionForExecutable(pythonExecutable) === requiredVersion;
 }
 
 function installPythonPackages(pythonExecutable, packages) {
@@ -239,7 +284,7 @@ function usage() {
   console.log("  npm run simulator:install -- all");
   console.log("");
   console.log(`Targets: ${SIMULATOR_OPTIONAL_RUNTIME_IDS.join(", ")}, all`);
-  console.log(`Python env: ${PYTHON_ENV_DIRNAME} by default, or URDF_STUDIO_PYTHON when set.`);
+  console.log(`Python env: ${PYTHON_ENV_DIRNAME} by default, ${SIMULATOR_PYTHON_ENV_DIRNAME} for Python 3.11 runtimes, or URDF_STUDIO_PYTHON when set.`);
 }
 
 async function main() {
@@ -266,13 +311,26 @@ async function main() {
       throw new Error("Choose at least one simulator to install, or pass all explicitly.");
     }
     const simulatorIds = normalizeSimulatorSelection(args);
-    const pythonExecutable = ensureInstallPython();
+    const pythonExecutable = ensureInstallPython(simulatorIds);
     const before = collectRuntimeStatus(simulatorIds, pythonExecutable);
     const missingPythonRuntimeIds = before
       .filter((status) => !status.available)
       .map((status) => status.simulatorId)
       .filter((simulatorId) => SIMULATOR_OPTIONAL_RUNTIMES[simulatorId].kind === "python");
-    const packages = pythonPackagesForSimulatorIds(missingPythonRuntimeIds);
+    const wrongPythonRuntimeIds = missingPythonRuntimeIds.filter(
+      (simulatorId) => !pythonMatchesRuntime(pythonExecutable, simulatorId),
+    );
+    for (const simulatorId of wrongPythonRuntimeIds) {
+      const runtime = SIMULATOR_OPTIONAL_RUNTIMES[simulatorId];
+      log(
+        `${runtime.label} requires Python ${runtime.pythonVersion}; current install Python is ${pythonVersionForExecutable(pythonExecutable) || "unknown"}.`,
+        colors.yellow,
+      );
+    }
+    const installableRuntimeIds = missingPythonRuntimeIds.filter(
+      (simulatorId) => !wrongPythonRuntimeIds.includes(simulatorId),
+    );
+    const packages = pythonPackagesForSimulatorIds(installableRuntimeIds);
     if (packages.length > 0) {
       log(`Installing simulator Python packages into ${pythonExecutable}: ${packages.join(", ")}`, colors.pink);
       installPythonPackages(pythonExecutable, packages);

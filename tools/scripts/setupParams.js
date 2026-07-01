@@ -1,6 +1,7 @@
 export const SETUP_NPM_INSTALL_FLAGS = ["--no-fund", "--audit=false", "--loglevel=error"];
 
 export const PYTHON_ENV_DIRNAME = ".venv";
+export const SIMULATOR_PYTHON_ENV_DIRNAME = ".venv-sim311";
 
 export const BACKEND_PYTHON_CORE_DEPENDENCIES = [
   "fastapi",
@@ -17,7 +18,7 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
   genesis: {
     label: "Genesis",
     kind: "python",
-    packages: ["genesis-world"],
+    packages: ["genesis-world", "torch"],
     importNames: ["genesis"],
   },
   mujoco: {
@@ -29,7 +30,7 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
   mjx: {
     label: "MuJoCo MJX",
     kind: "python",
-    packages: ["mujoco", "jax"],
+    packages: ["mujoco", "mujoco-mjx", "jax"],
     importNames: ["mujoco.mjx", "jax"],
   },
   pybullet: {
@@ -41,18 +42,22 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
   "isaac-sim": {
     label: "Isaac Sim",
     kind: "python",
-    packages: [],
+    pythonVersion: "3.11",
+    packages: ["isaacsim"],
     importNames: ["isaacsim"],
+    eulaEnv: "OMNI_KIT_ACCEPT_EULA",
     installNote:
-      "Install Isaac Sim with NVIDIA's supported workflow, then run with URDF_STUDIO_PYTHON pointing at that Python environment.",
+      "Isaac Sim 5.x requires Python 3.11. Set OMNI_KIT_ACCEPT_EULA=YES only after you accept NVIDIA's Omniverse EULA.",
   },
   "isaac-lab": {
     label: "Isaac Lab",
     kind: "python",
-    packages: [],
+    pythonVersion: "3.11",
+    packages: ["isaacsim", "isaaclab"],
     importNames: ["isaaclab"],
+    eulaEnv: "OMNI_KIT_ACCEPT_EULA",
     installNote:
-      "Install Isaac Lab on top of Isaac Sim with NVIDIA's supported workflow, then set URDF_STUDIO_PYTHON to its Python environment.",
+      "Isaac Lab requires Python 3.11 and Isaac Sim. Set OMNI_KIT_ACCEPT_EULA=YES only after you accept NVIDIA's Omniverse EULA.",
   },
   "isaac-gym": {
     label: "Isaac Gym",
@@ -71,10 +76,10 @@ export const SIMULATOR_OPTIONAL_RUNTIMES = {
   coppeliasim: {
     label: "CoppeliaSim / PyRep",
     kind: "python",
-    packages: [],
+    packages: ["pyrep"],
     importNames: ["pyrep"],
     installNote:
-      "Install CoppeliaSim and PyRep, then set URDF_STUDIO_PYTHON to the PyRep Python environment.",
+      "PyRep can be installed by pip, but a full CoppeliaSim installation is still required to run scenes.",
   },
   blender: {
     label: "Blender",

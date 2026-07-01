@@ -35,12 +35,17 @@ test("simulator install packages stay target-specific", () => {
     "mujoco",
     "pybullet",
   ]);
-  assert.deepEqual(pythonPackagesForSimulatorIds(["isaac-sim", "isaac-lab"]), []);
+  assert.deepEqual(pythonPackagesForSimulatorIds(["isaac-sim", "isaac-lab"]), [
+    "isaacsim",
+    "isaaclab",
+  ]);
   assert.deepEqual(pythonPackagesForSimulatorIds(["sapien", "mjx"]), [
     "sapien",
     "mujoco",
+    "mujoco-mjx",
     "jax",
   ]);
+  assert.deepEqual(pythonPackagesForSimulatorIds(["coppeliasim"]), ["pyrep"]);
   assert.deepEqual(pythonPackagesForSimulatorIds(["blender"]), []);
 });
 
