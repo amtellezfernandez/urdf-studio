@@ -1,21 +1,3 @@
-[submodule "third_party/lerobot"]
-	path = third_party/lerobot
-	url = https://github.com/huggingface/lerobot
 [submodule "third_party/so-arm100"]
 	path = third_party/so-arm100
 	url = https://github.com/TheRobotStudio/SO-ARM100
-[submodule "third_party/linkforge"]
-	path = third_party/linkforge
-	url = https://github.com/arounamounchili/linkforge
-[submodule "third_party/ros2_bridge_project"]
-	path = third_party/ros2_bridge_project
-	url = https://github.com/charbelsan/ros2_bridge_project
-[submodule "third_party/viewport"]
-	path = third_party/viewport
-	url = https://github.com/codecflow/viewport.git
-[submodule "third_party/lerobot-dataset-visualizer"]
-	path = third_party/lerobot-dataset-visualizer
-	url = https://github.com/huggingface/lerobot-dataset-visualizer
-[submodule "third_party/mujoco-sysid"]
-	path = third_party/mujoco-sysid
-	url = https://github.com/based-robotics/mujoco-sysid.git

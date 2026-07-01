@@ -1,5 +1,269 @@
-@import "../shared/styles/theme.css";
+* {
+  box-sizing: border-box;
+}
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #111315;
+  color: #edf2f7;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #111315;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+.upload {
+  min-height: 36px;
+  border: 1px solid #313943;
+  border-radius: 6px;
+  background: #1b2026;
+  color: #f7fafc;
+  cursor: pointer;
+}
+
+button {
+  padding: 0 12px;
+}
+
+button:hover,
+.upload:hover {
+  background: #242b33;
+}
+
+button.primary {
+  border-color: #3b82f6;
+  background: #2563eb;
+}
+
+select,
+input[type="range"] {
+  width: 100%;
+}
+
+select {
+  height: 36px;
+  border: 1px solid #313943;
+  border-radius: 6px;
+  background: #14181d;
+  color: #edf2f7;
+  padding: 0 10px;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 340px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar,
+.inspector {
+  min-width: 0;
+  overflow: auto;
+  border-color: #252b33;
+  background: #15191e;
+}
+
+.sidebar {
+  border-right: 1px solid #252b33;
+  padding: 16px;
+}
+
+.inspector {
+  border-left: 1px solid #252b33;
+  padding: 16px;
+}
+
+.brand {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+
+.brand span {
+  color: #8b98a8;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.brand strong {
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  padding: 0 12px;
+  text-align: center;
+}
+
+.upload input {
+  display: none;
+}
+
+.panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #252b33;
+  border-radius: 8px;
+  background: #11161b;
+  padding: 12px;
+}
+
+.panel h2,
+.inspector h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #aab6c5;
+}
+
+.panel dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.panel dl div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel dt {
+  color: #8b98a8;
+}
+
+.panel dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.actions h2 {
+  grid-column: 1 / -1;
+}
+
+.meta {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #edf2f7;
+}
+
+.small {
+  margin: 0;
+  color: #8b98a8;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.viewer {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: #111315;
+}
+
+.viewer-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 8px;
+  background: rgb(12 15 18 / 0.78);
+  padding: 9px 11px;
+  color: #cbd5e1;
+  font-size: 12px;
+  backdrop-filter: blur(12px);
+}
+
+.canvas-host {
+  width: 100%;
+  height: 100%;
+}
+
+.joint-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.joint-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid #252b33;
+  border-radius: 8px;
+  background: #11161b;
+  padding: 12px;
+}
+
+.joint-row span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.joint-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.joint-row em {
+  color: #8b98a8;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.joint-row code {
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 980px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(420px, 1fr) auto;
+    overflow: auto;
+  }
+
+  .sidebar,
+  .inspector {
+    border: 0;
+  }
+
+  .viewer {
+    min-height: 420px;
+  }
+}

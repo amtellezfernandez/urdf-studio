@@ -4,7 +4,6 @@ import process from "node:process";
 import {
   urdfCore,
   urdfCoreBundleMeshAssetsNode,
-  urdfCoreLoadSourceNode,
   urdfCoreUrdfNode,
   urdfCoreXacroNode,
 } from "../../tools/scripts/urdfCoreModules.js";
@@ -24,9 +23,6 @@ const {
 const {
   expandXacroRequestPayload,
 } = urdfCoreXacroNode;
-const {
-  loadSourceFromGitHub,
-} = urdfCoreLoadSourceNode;
 const {
   bundleMeshAssetsForUrdfFile,
 } = urdfCoreBundleMeshAssetsNode;
@@ -120,47 +116,6 @@ const main = async () => {
     }
     const result = await expandXacroRequestPayload(requestPayload, options);
     process.stdout.write(JSON.stringify(result));
-    return;
-  }
-
-  if (command === "load-source-github") {
-    const owner = String(payload.owner || "").trim();
-    const repo = String(payload.repo || "").trim();
-    const targetPath = String(payload.target_path || "").trim();
-    if (!owner || !repo || !targetPath) {
-      fail("load-source-github requires owner, repo, and target_path.");
-    }
-
-    const options = {
-      reference: {
-        owner,
-        repo,
-        ref: typeof payload.branch === "string" && payload.branch.trim() ? payload.branch.trim() : undefined,
-      },
-      entryPath: targetPath,
-      accessToken:
-        typeof payload.access_token === "string" && payload.access_token.trim()
-          ? payload.access_token.trim()
-          : undefined,
-      args: payload.args && typeof payload.args === "object" ? payload.args : {},
-      useInorder: payload.use_inorder !== false,
-    };
-    if (typeof payload.pythonExecutable === "string" && payload.pythonExecutable.trim()) {
-      options.pythonExecutable = payload.pythonExecutable.trim();
-    }
-    if (typeof payload.wheelPath === "string" && payload.wheelPath.trim()) {
-      options.wheelPath = payload.wheelPath.trim();
-    }
-
-    const result = await loadSourceFromGitHub(options);
-    process.stdout.write(
-      JSON.stringify({
-        urdf: result.urdf,
-        runtime: result.runtime,
-        ref: result.ref ?? null,
-        entryPath: result.entryPath,
-      })
-    );
     return;
   }
 

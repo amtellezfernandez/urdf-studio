@@ -6,7 +6,6 @@ export const urdfCoreNodeDomRuntime = requireIluModule("i-love-urdf/node-dom-run
 urdfCoreNodeDomRuntime.installNodeDomGlobals();
 export const urdfCore = requireIluModule("i-love-urdf");
 export const urdfCoreBundleMeshAssetsNode = requireIluModule("i-love-urdf/bundle-mesh-assets-node");
-export const urdfCoreLoadSourceNode = requireIluModule("i-love-urdf/load-source-node");
 export const urdfCoreLocal = requireIluModule("i-love-urdf/local");
 export const urdfCoreUrdfNode = requireIluModule("i-love-urdf/urdf-node");
 export const urdfCoreXacroNode = requireIluModule("i-love-urdf/xacro-node");

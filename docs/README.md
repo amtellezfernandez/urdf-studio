@@ -1,20 +1,15 @@
-# URDF Studio Documentation
+# URDF Studio Docs
 
-This index is for product documentation: how to install, launch, operate, and understand the public file/session formats. Architecture notes are kept separate from the public reading path.
+URDF Studio first release scope:
 
-## Start Here
+- Load a URDF or Xacro with mesh assets.
+- Inspect links and move model joints in the browser.
+- Add simple scene objects and cameras.
+- Open the same robot-world package in supported simulator targets.
 
-- [User Guide](USER_GUIDE.md) - first launch, UI map, workflows, command reference, troubleshooting.
-- [Setup Guide](SETUP.md) - prerequisites, setup behavior, launch modes, ports, tokens, and runtime checks.
-- [Root README](../README.md) - shortest path from clone to running app.
+Out of scope for this branch: teleoperation, robot hardware control, episode/dataset review, ROS visualization, collaboration, and runtime bridge services.
 
-## Advanced Operation
+## Documents
 
-- [Teleoperation](TELEOPERATION.md)
-- [Team Session Setup](TEAM_SESSION_SETUP.md)
-- [Health vs Readiness](health/HEALTH_VS_READINESS.md)
-
-## Reference Specs
-
-- [World Scene Package v0.1](specs/WSP_v0.1.md)
-- [ROS Viz Stream v1](specs/ROSVIZ_STREAM_V1.md)
+- [Setup](SETUP.md)
+- [World Scene Package](specs/WSP_v1.md)

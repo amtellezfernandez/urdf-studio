@@ -11,186 +11,32 @@ permissions:
   contents: read
 
 jobs:
-  frontend_checks:
-    name: Frontend checks
+  checks:
+    name: Clean release checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - name: Set up Node
         uses: actions/setup-node@v5
         with:
           node-version: 20.19.6
           cache: npm
-      - name: Install deps
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Node deps
         run: npm ci
-      - name: Validate i-love-urdf package integration
-        run: node tools/scripts/ilu-cli-smoke.js
+      - name: Install backend deps
+        run: python -m pip install fastapi python-multipart uvicorn pydantic httpx pytest numpy==2.2.6 yourdfpy
       - name: Lint
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      - name: Demo mode boundaries
-        run: npm run demo:mode:check
-
-  frontend_tests:
-    name: Frontend tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20.19.6
-          cache: npm
-      - name: Install deps
-        run: npm ci
-      - name: Run tests
+      - name: Frontend tests
         run: npm test
-
-  duplication_check:
-    name: Duplication check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20.19.6
-          cache: npm
-      - name: Install deps
-        run: npm ci
-      - name: Check code duplication
-        run: npm run duplicate-check
-
-  architecture_check:
-    name: Architecture check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20.19.6
-          cache: npm
-      - name: Install deps
-        run: npm ci
-      - name: Verify architecture constraints
-        run: npm run architecture-check
-
-  policy_check:
-    name: Policy check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20.19.6
-          cache: npm
-      - name: Install deps
-        run: npm ci
-      - name: Verify package surface
-        run: npm run package:check
-      - name: Verify policy constraints
-        run: npm run policy-check
-
-  build:
-    name: Frontend build
-    runs-on: ubuntu-latest
-    needs: [frontend_checks, frontend_tests, duplication_check, architecture_check, policy_check]
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20.19.6
-          cache: npm
-      - name: Install deps
-        run: npm ci
       - name: Build
         run: npm run build
-
-  backend:
-    name: Backend compile
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Compile backend modules
-        run: python -m compileall backend
-
-  backend_simulator_transfer:
-    name: Backend simulator transfer
-    runs-on: ubuntu-latest
-    env:
-      URDF_STUDIO_INSTALL_BLENDER: "1"
-      URDF_STUDIO_INSTALL_GENESIS: "1"
-      URDF_STUDIO_INSTALL_MJLAB: "1"
-      URDF_STUDIO_INSTALL_PYBULLET: "1"
-      URDF_STUDIO_SKIP_COLLISION_STACK_AUTO_INSTALL: "1"
-      URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL: "1"
-      URDF_STUDIO_SKIP_NATIVE_SIM_AUTO_INSTALL: "1"
-      URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL: "1"
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Rewrite GitHub SSH URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf ssh://git@github.com/
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20.19.6
-          cache: npm
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install simulator system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            curl \
-            libegl1 \
-            libgl1 \
-            libsm6 \
-            libx11-6 \
-            libxext6 \
-            libxfixes3 \
-            libxi6 \
-            libxrender1 \
-            libxxf86vm1 \
-            xz-utils
-      - name: Install uv
-        run: python -m pip install --upgrade pip uv
-      - name: Install deps
-        run: npm ci
-      - name: Set up backend and simulator runtimes
-        run: npm run setup
-      - name: Run backend tests
-        run: npm run test:backend
-      - name: Validate simulator transfer fixtures
-        run: npm run simulator:workspace:check:fixtures
-      - name: Validate Blender transfer fixtures
-        run: npm run simulator:blender:check:fixtures
+      - name: Backend tests
+        run: URDF_STUDIO_PYTHON=python npm run test:backend

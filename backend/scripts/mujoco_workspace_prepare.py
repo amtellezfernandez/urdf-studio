@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from backend.models.simulator_runtime import (
-    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SimulatorId,
 )
@@ -37,7 +36,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--robot-urdf", required=True)
     parser.add_argument(
         "--simulator-id",
-        choices=(SIMULATOR_MJLAB_ID, SIMULATOR_MUJOCO_ID),
+        choices=(SIMULATOR_MUJOCO_ID,),
         default=SIMULATOR_MUJOCO_ID,
     )
     add_common_workspace_args(parser)
@@ -46,8 +45,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _simulator_label(simulator_id: SimulatorId) -> str:
-    if simulator_id == SIMULATOR_MJLAB_ID:
-        return "MJLab"
     return "MuJoCo"
 
 

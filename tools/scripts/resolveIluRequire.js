@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 const ILU_ENTRYPOINTS = Object.freeze({
   "i-love-urdf": "dist/index.js",
   "i-love-urdf/node-dom-runtime": "dist/node/nodeDomRuntime.js",
-  "i-love-urdf/load-source-node": "dist/sources/loadSourceNode.js",
   "i-love-urdf/local": "dist/repository/localRepositoryInspection.js",
   "i-love-urdf/bundle-mesh-assets-node": "dist/node/bundleMeshAssets.js",
   "i-love-urdf/urdf-node": "dist/node/urdfNode.js",

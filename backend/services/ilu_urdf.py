@@ -9,8 +9,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from backend.core.paths import BASE_DIR, SCRIPTS_DIR
-from backend.models.xacro import GitHubXacroExpandRequest, XacroExpandRequest
-from backend.services.github_auth import resolve_server_github_token
+from backend.models.xacro import XacroExpandRequest
 
 
 NODE_BIN = os.getenv("URDF_NODE_BIN", "node").strip() or "node"
@@ -114,12 +113,8 @@ def _map_bridge_error(command: str, detail: str) -> IluUrdfBridgeError:
     lowered = detail.lower()
     if "target xacro file not found" in lowered:
         return IluUrdfBridgeError(status_code=404, detail=detail)
-    if "repository not found" in lowered or "path not found" in lowered or "file not found" in lowered:
+    if "path not found" in lowered or "file not found" in lowered:
         return IluUrdfBridgeError(status_code=404, detail=detail)
-    if "github api rate limit exceeded" in lowered or "access denied" in lowered or "no access" in lowered:
-        return IluUrdfBridgeError(status_code=403, detail=detail)
-    if "invalid github token" in lowered or "invalid token" in lowered:
-        return IluUrdfBridgeError(status_code=401, detail=detail)
     if "no python xacro runtime available" in lowered or "no vendored xacro runtime available" in lowered:
         return IluUrdfBridgeError(status_code=500, detail=detail)
     if "failed to initialize vendored xacro runtime" in lowered:
@@ -227,28 +222,6 @@ def expand_xacro(request: XacroExpandRequest) -> tuple[str, str | None]:
         raise IluUrdfBridgeError(502, "ilu bridge returned an invalid xacro expansion response.")
     stderr = response.get("stderr")
     return urdf, stderr if isinstance(stderr, str) or stderr is None else None
-
-
-def expand_github_xacro(request: GitHubXacroExpandRequest) -> tuple[str, str | None]:
-    access_token = resolve_server_github_token(request.access_token)
-    payload = {
-        "owner": request.owner,
-        "repo": request.repo,
-        "target_path": request.target_path,
-        "branch": request.branch,
-        "access_token": access_token,
-        "args": request.args,
-        "use_inorder": request.use_inorder,
-        "pythonExecutable": sys.executable,
-    }
-    if XACRODOC_WHEEL.exists():
-        payload["wheelPath"] = str(XACRODOC_WHEEL)
-
-    response = _run_bridge("load-source-github", payload)
-    urdf = response.get("urdf")
-    if not isinstance(urdf, str) or not urdf.strip():
-        raise IluUrdfBridgeError(502, "ilu bridge returned an invalid GitHub xacro expansion response.")
-    return urdf, None
 
 
 def bundle_mesh_assets_for_urdf_file(

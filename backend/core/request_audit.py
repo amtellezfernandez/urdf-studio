@@ -9,8 +9,6 @@ from fastapi import Request, WebSocket
 
 from backend.core.simulator_security import (
     BACKEND_ROUTE_POLICY_PUBLIC,
-    CAM_TO_SIM_PROXY_TOKEN_HEADER,
-    RUNTIME_SESSION_TOKEN_HEADER,
     SIMULATOR_TOKEN_HEADER,
     SIMULATOR_TOKEN_QUERY_PARAM,
     classify_backend_http_route_policy,
@@ -67,10 +65,6 @@ def _auth_hint_summary(headers, query_params) -> str:
         hints.append("ws-subprotocol")
     if headers.get(SIMULATOR_TOKEN_HEADER):
         hints.append("simulator-header")
-    if headers.get(RUNTIME_SESSION_TOKEN_HEADER):
-        hints.append("runtime-header")
-    if headers.get(CAM_TO_SIM_PROXY_TOKEN_HEADER):
-        hints.append("proxy-header")
     if query_params.get(SIMULATOR_TOKEN_QUERY_PARAM):
         hints.append("query-token")
     return ",".join(hints) if hints else "none"

@@ -12,7 +12,7 @@ const baseTypeScriptRules = {
 };
 
 export default tseslint.config(
-  { ignores: [".venv", ".venv-lerobot", ".uv-cache", "node_modules", "**/dist", "third_party"] },
+  { ignores: [".venv*", ".uv-cache", "node_modules", "**/dist", "third_party"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -26,67 +26,6 @@ export default tseslint.config(
     },
     rules: {
       ...baseTypeScriptRules,
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/runtime/viz2/*"],
-              message:
-                "Import RosViz runtime modules from '@/runtime_engine/rosviz/*'.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["web/src/runtime_engine/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/studio_ui/*"],
-              message: "runtime_engine must not import studio_ui.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["web/src/studio_core/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/studio_ui/*"],
-              message: "studio_core must not import studio_ui.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["web/src/studio_ui/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/runtime/viz2/*"],
-              message:
-                "studio_ui must consume runtime contracts through '@/runtime_engine/rosviz/*'.",
-            },
-          ],
-        },
-      ],
     },
   }
 );

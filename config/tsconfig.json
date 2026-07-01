@@ -4,10 +4,7 @@
   "compilerOptions": {
     "baseUrl": "..",
     "paths": {
-      "@/*": ["web/src/*"],
-      "@runtime-private/*": ["runtime/*"],
-      "i-love-urdf": ["node_modules/i-love-urdf/dist/index.d.ts"],
-      "i-love-urdf/browser": ["node_modules/i-love-urdf/dist/browser.d.ts"]
+      "@/*": ["web/src/*"]
     },
     "noImplicitAny": false,
     "noUnusedParameters": false,

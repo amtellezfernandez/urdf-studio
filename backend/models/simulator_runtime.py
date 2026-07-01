@@ -16,32 +16,16 @@ SimulatorTargetKind = Literal["physics_simulator", "authoring_tool", "renderer"]
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",
-    "mjlab",
     "mujoco",
-    "mjx",
     "pybullet",
-    "sapien2",
-    "sapien3",
-    "isaacsim",
-    "isaacgym",
-    "newton",
     "blender",
-    "robosplatter",
 )
 SimulatorId = Literal[*SIMULATOR_ID_VALUES]
 (
     SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
-    SIMULATOR_MJX_ID,
     SIMULATOR_PYBULLET_ID,
-    SIMULATOR_SAPIEN2_ID,
-    SIMULATOR_SAPIEN3_ID,
-    SIMULATOR_ISAACSIM_ID,
-    SIMULATOR_ISAACGYM_ID,
-    SIMULATOR_NEWTON_ID,
     SIMULATOR_BLENDER_ID,
-    SIMULATOR_ROBOSPLATTER_ID,
 ) = SIMULATOR_ID_VALUES
 
 MAX_SIMULATOR_MESH_ASSETS = 512
@@ -277,35 +261,12 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         dependencies=(_dependency("genesis"),),
     ),
     _runtime(
-        SIMULATOR_MJLAB_ID,
-        "MJLab",
-        "mjcf",
-        "convert",
-        workspace_target=True,
-        motion_validation=True,
-        dependencies=(
-            _dependency("mjlab"),
-            _dependency("mujoco"),
-            _dependency("mujoco_warp"),
-        ),
-    ),
-    _runtime(
         SIMULATOR_MUJOCO_ID,
         "MuJoCo",
         "mjcf",
         "convert",
         workspace_target=True,
         dependencies=(_dependency("mujoco"),),
-    ),
-    _runtime(
-        SIMULATOR_MJX_ID,
-        "MJX",
-        "mjx_mjcf",
-        "planned",
-        dependencies=(
-            _dependency("mujoco"),
-            _dependency("jax"),
-        ),
     ),
     _runtime(
         SIMULATOR_PYBULLET_ID,
@@ -316,41 +277,6 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         dependencies=(_dependency("pybullet"),),
     ),
     _runtime(
-        SIMULATOR_SAPIEN2_ID,
-        "SAPIEN 2",
-        "urdf",
-        "planned",
-        dependencies=(_dependency("sapien"),),
-    ),
-    _runtime(
-        SIMULATOR_SAPIEN3_ID,
-        "SAPIEN 3",
-        "urdf",
-        "planned",
-        dependencies=(_dependency("sapien"),),
-    ),
-    _runtime(
-        SIMULATOR_ISAACSIM_ID,
-        "Isaac Sim",
-        "usd",
-        "planned",
-        dependencies=(_dependency("isaacsim"),),
-    ),
-    _runtime(
-        SIMULATOR_ISAACGYM_ID,
-        "Isaac Gym",
-        "urdf",
-        "planned",
-        dependencies=(_dependency("isaacgym"),),
-    ),
-    _runtime(
-        SIMULATOR_NEWTON_ID,
-        "Newton",
-        "mjcf",
-        "planned",
-        dependencies=(_dependency("newton"),),
-    ),
-    _runtime(
         SIMULATOR_BLENDER_ID,
         "Blender",
         "native",
@@ -359,14 +285,6 @@ SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
         workspace_target=True,
         layout_round_trip=True,
         dependencies=(_dependency("blender", "bpy"),),
-    ),
-    _runtime(
-        SIMULATOR_ROBOSPLATTER_ID,
-        "RoboSplatter",
-        "native",
-        "planned",
-        target_kind="renderer",
-        dependencies=(_dependency("robosplatter"),),
     ),
 )
 SUPPORTED_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(

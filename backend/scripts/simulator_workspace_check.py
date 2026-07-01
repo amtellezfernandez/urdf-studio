@@ -13,7 +13,6 @@ from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
     SimulatorId,
@@ -539,15 +538,6 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         simulator_id=SIMULATOR_GENESIS_ID,
         label="Genesis",
         prepare=_prepare_genesis_command,
-    ),
-    SIMULATOR_MJLAB_ID: WorkspaceTarget(
-        simulator_id=SIMULATOR_MJLAB_ID,
-        label="MJLab",
-        prepare=lambda request, expectations: _prepare_mujoco_command(
-            request,
-            expectations,
-            simulator_id=SIMULATOR_MJLAB_ID,
-        ),
     ),
     SIMULATOR_MUJOCO_ID: WorkspaceTarget(
         simulator_id=SIMULATOR_MUJOCO_ID,

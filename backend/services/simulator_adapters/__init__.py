@@ -21,7 +21,6 @@ from backend.services.simulator_adapters.blender import BLENDER_SIMULATOR_ADAPTE
 from backend.services.simulator_adapters.genesis import (
     GENESIS_SIMULATOR_ADAPTER,
 )
-from backend.services.simulator_adapters.mjlab import MJLAB_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.mujoco import MUJOCO_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.optional_runtime import make_optional_simulator_adapter
 from backend.services.simulator_adapters.pybullet import PYBULLET_SIMULATOR_ADAPTER
@@ -40,7 +39,6 @@ def _build_adapter_map(adapters: tuple[SimulatorAdapter, ...]) -> dict[Simulator
 _WORKSPACE_SIMULATOR_ADAPTERS = _build_adapter_map(
     (
         GENESIS_SIMULATOR_ADAPTER,
-        MJLAB_SIMULATOR_ADAPTER,
         MUJOCO_SIMULATOR_ADAPTER,
         PYBULLET_SIMULATOR_ADAPTER,
         BLENDER_SIMULATOR_ADAPTER,

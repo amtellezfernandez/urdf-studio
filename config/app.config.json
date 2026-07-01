@@ -9,77 +9,11 @@
     "bindHost": "127.0.0.1",
     "port": 8000
   },
-  "ikd": {
-    "enabled": true,
-    "host": "127.0.0.1",
-    "port": 8088,
-    "controlHz": 500,
-    "telemetryHz": 60,
-    "staleTargetMs": 250,
-    "useForDrag": true
-  },
-  "teleop": {
-    "enabled": false,
-    "host": "127.0.0.1",
-    "httpPort": 8091
-  },
-  "ik": {
-    "defaultSolverChain": [
-      "ik-js",
-      "lerobot-placo",
-      "amik"
-    ],
-    "timeouts": {
-      "requestMs": 1200,
-      "dragMs": 300,
-      "orbitMs": 250
-    },
-    "drag": {
-      "maxDragSpeed": 0.8,
-      "minSolveDistance": 0.005,
-      "springStrength": 30,
-      "springDamping": 18,
-      "snapDistance": 0.004,
-      "reachMargin": 1.2,
-      "ikThrottleMs": 60,
-      "maxLinkTraversal": 200
-    },
-    "orbit": {
-      "radius": 0.3,
-      "inclinationDeg": 45,
-      "phaseDeg": 0,
-      "secondaryOffsetDeg": 180
-    },
-    "solverTuning": {
-      "lerobot-placo": {
-        "positionWeight": 100,
-        "orientationWeight": 0.5,
-        "postureWeight": 0,
-        "velocityDt": 0,
-        "limitWeight": 1,
-        "smoothAlpha": 0.12,
-        "maxStepDelta": 0.04,
-        "maxBlendDelta": 0.18,
-        "solveIterations": 5
-      },
-      "amik": {
-        "positionWeight": 100,
-        "orientationWeight": 0,
-        "postureWeight": 0,
-        "velocityDt": 0,
-        "limitWeight": 1,
-        "smoothAlpha": 0.2,
-        "maxStepDelta": 0.35,
-        "maxBlendDelta": 0.35,
-        "solveIterations": 28
-      }
-    }
-  },
   "samples": {
     "quickStartId": "so-arm100",
     "items": {
       "so-arm100": {
-        "label": "SO-ARM100 (SO101)",
+        "label": "SO-ARM100",
         "repoPath": "third_party/so-arm100",
         "urdfPath": "Simulation/SO101/so101_new_calib.urdf"
       }

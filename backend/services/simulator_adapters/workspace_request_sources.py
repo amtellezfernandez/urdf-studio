@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import base64
 import json
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
-from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
     SimulatorId,
@@ -35,7 +32,6 @@ from backend.services.world_scene_package_digest import (
 
 WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
     SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
     SIMULATOR_BLENDER_ID,
@@ -46,12 +42,6 @@ WORKSPACE_FIXTURES = (
     "mesh-asset",
     "hidden-object",
     "xacro-source",
-)
-DEMO_ROOT = BASE_DIR / "web" / "public" / "demo"
-SO101_MANIFEST_PATH = DEMO_ROOT / "so101" / "manifest.json"
-SO101_CAMERA_CONFIG_PATH = DEMO_ROOT / "so101" / "camera-config.json"
-STATIC_WORLD_LAYOUT_PATH = (
-    BASE_DIR / "web" / "public" / "world-layouts" / "static-transfer-smoke.world-layout.json"
 )
 MESH_ASSET_FIXTURE_PATH = "assets/workspace_mesh_crate.obj"
 MESH_ASSET_FIXTURE_OBJ = """\
@@ -77,6 +67,72 @@ f 3 8 4
 f 4 8 5
 f 4 5 1
 """
+DEMO_URDF_XML = """\
+<?xml version="1.0"?>
+<robot name="workspace_demo">
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.08" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.32 0.24 0.16"/>
+      </geometry>
+      <material name="base_green">
+        <color rgba="0.2 0.55 0.45 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.08" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.32 0.24 0.16"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+  <link name="tool_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.06"/>
+      </geometry>
+      <material name="tool_yellow">
+        <color rgba="0.95 0.72 0.2 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <joint name="lift_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="tool_link"/>
+    <origin xyz="0 0 0.24" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.57" upper="1.57" effort="5" velocity="1"/>
+  </joint>
+</robot>
+"""
+DEMO_CAMERAS: list[dict] = []
+DEMO_OBJECTS = [
+    {
+        "id": "table_block",
+        "name": "Table block",
+        "type": "cube",
+        "position_xyz": [0.65, 0.0, 0.12],
+        "rotation_rpy_rad": [0.0, 0.0, 0.0],
+        "size_xyz": [0.28, 0.28, 0.24],
+        "color": "#2563eb",
+        "source": "user",
+    }
+]
 WORKSPACE_ASSET_IGNORED_DIR_NAMES = frozenset(
     {
         ".cache",
@@ -113,14 +169,11 @@ WORKSPACE_TRANSFER_ASSET_SUFFIXES = frozenset(
 
 
 def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
-    urdf_xml = (DEMO_ROOT / "robot.urdf").read_text(encoding="utf-8")
-    cameras = _load_demo_cameras()
-    objects = _load_demo_objects()
     world_package = WorldScenePackageManifest(
         schema_version=WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
-        package_id="so101-simulator-workspaces-check",
+        package_id="demo-simulator-workspaces-check",
         version="1.0.0",
-        title="SO101 Simulator Workspace Check",
+        title="Demo Simulator Workspace Check",
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         runtime_targets=[
             WorldRuntimeTarget(name=simulator_id, mode="python")
@@ -134,17 +187,15 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
         ),
         artifacts=[],
         world_snapshot=WorldSnapshot(
-            urdf_xml=urdf_xml,
+            urdf_xml=DEMO_URDF_XML,
             joint_positions={},
-            cameras=cameras,
-            objects=objects,
+            cameras=DEMO_CAMERAS,
+            objects=DEMO_OBJECTS,
             scenario_time_ms=0,
             scenario_duration_ms=0,
         ),
         provenance={
-            "robot": str((DEMO_ROOT / "robot.urdf").relative_to(BASE_DIR)),
-            "cameras": str(SO101_CAMERA_CONFIG_PATH.relative_to(BASE_DIR)),
-            "world_layout": str(STATIC_WORLD_LAYOUT_PATH.relative_to(BASE_DIR)),
+            "workspace_check_fixture": "demo",
             GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY: {
                 "genesis": [
                     GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
@@ -156,7 +207,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
     return SimulatorWorkspacePrepareRequest(
         world_package=world_package,
         urdf_asset_path="robot.urdf",
-        mesh_assets=_load_demo_mesh_assets(),
+        mesh_assets=[],
     )
 
 
@@ -315,81 +366,6 @@ def _load_json(path: Path) -> dict:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object: {path}")
     return payload
-
-
-def _load_demo_mesh_assets() -> list[SimulatorMeshAssetUpload]:
-    manifest = _load_json(SO101_MANIFEST_PATH)
-    files = manifest.get("files")
-    if not isinstance(files, list):
-        raise ValueError(f"Invalid SO101 manifest: {SO101_MANIFEST_PATH}")
-
-    uploads: list[SimulatorMeshAssetUpload] = []
-    for entry in files:
-        if not isinstance(entry, dict):
-            continue
-        relative_path = entry.get("path")
-        if not isinstance(relative_path, str) or relative_path == "robot.urdf":
-            continue
-        url = entry.get("url")
-        source_path = (
-            (SO101_MANIFEST_PATH.parent / url).resolve()
-            if isinstance(url, str) and url
-            else (DEMO_ROOT / relative_path).resolve()
-        )
-        uploads.append(
-            SimulatorMeshAssetUpload(
-                path=relative_path,
-                aliases=[],
-                content_base64=base64.b64encode(source_path.read_bytes()).decode("ascii"),
-                mime=entry.get("mime") if isinstance(entry.get("mime"), str) else None,
-            )
-        )
-    return uploads
-
-
-def _load_demo_cameras() -> list[dict]:
-    payload = _load_json(SO101_CAMERA_CONFIG_PATH)
-    cameras = payload.get("cameras")
-    if not isinstance(cameras, list):
-        raise ValueError(f"Invalid SO101 camera config: {SO101_CAMERA_CONFIG_PATH}")
-    return [
-        _normalize_demo_camera(camera, index)
-        for index, camera in enumerate(cameras)
-        if isinstance(camera, dict)
-    ]
-
-
-def _normalize_demo_camera(camera: dict, index: int) -> dict:
-    normalized = dict(camera)
-    camera_name = normalized.get("name")
-    normalized["id"] = (
-        normalized.get("id")
-        if isinstance(normalized.get("id"), str) and normalized.get("id")
-        else _camera_id_from_name(camera_name if isinstance(camera_name, str) else "", index)
-    )
-    pose = normalized.get("pose")
-    if isinstance(pose, list) and len(pose) == 6:
-        normalized["pose"] = {
-            "xyz": pose[:3],
-            "rpy": pose[3:],
-        }
-    return normalized
-
-
-def _camera_id_from_name(name: str, index: int) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "_", name.strip()).strip("_")
-    return normalized or f"camera_{index + 1}"
-
-
-def _load_demo_objects() -> list[dict]:
-    payload = _load_json(STATIC_WORLD_LAYOUT_PATH)
-    world_layout = payload.get("world_layout")
-    if not isinstance(world_layout, dict):
-        raise ValueError(f"Invalid static world layout: {STATIC_WORLD_LAYOUT_PATH}")
-    objects = world_layout.get("objects")
-    if not isinstance(objects, list):
-        raise ValueError(f"Invalid object list in static world layout: {STATIC_WORLD_LAYOUT_PATH}")
-    return [item for item in objects if isinstance(item, dict)]
 
 
 def _relative_to_asset_roots(path: Path, roots: Sequence[Path]) -> str:
