@@ -17,8 +17,8 @@ Optional simulator runtimes are not required to load and inspect URDF files. The
 
 Target registry:
 
-- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, SAPIEN, CoppeliaSim, Blender.
-- Planned transfer adapters: Isaac Sim, Isaac Lab, Isaac Gym.
+- Openable now: Genesis, MuJoCo, MuJoCo MJX, PyBullet, Isaac Sim, Isaac Lab, SAPIEN, CoppeliaSim, Blender.
+- Planned transfer adapters: Isaac Gym.
 
 Check what this machine already has:
 
@@ -48,7 +48,7 @@ Install every pip-installable target:
 npm run simulator:install -- all
 ```
 
-When Isaac Sim or Isaac Lab is selected, the installer uses `.venv-sim311` because Isaac Sim 5.x requires Python 3.11. Run with that environment when validating Isaac/PyRep packages:
+When Isaac Sim or Isaac Lab is selected, the installer uses `.venv-sim311` because Isaac Sim 5.x requires Python 3.11. Run with that environment when validating Isaac packages:
 
 ```bash
 URDF_STUDIO_PYTHON=.venv-sim311/bin/python3 npm run simulator:status

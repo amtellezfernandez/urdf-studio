@@ -9,6 +9,8 @@ from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_GENESIS_ID,
+    SIMULATOR_ISAAC_LAB_ID,
+    SIMULATOR_ISAAC_SIM_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
@@ -164,6 +166,20 @@ MJX_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     log_name="mjx.log",
     ready_log_marker="[mjx-workspace] workspace ready.",
 )
+ISAAC_SIM_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "isaac-sim",
+    module_name="backend.scripts.isaac_workspace_prepare",
+    log_name="isaac-sim.log",
+    ready_log_marker="[isaac-workspace] workspace ready.",
+    ready_timeout_sec=240.0,
+)
+ISAAC_LAB_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "isaac-lab",
+    module_name="backend.scripts.isaac_workspace_prepare",
+    log_name="isaac-lab.log",
+    ready_log_marker="[isaac-workspace] workspace ready.",
+    ready_timeout_sec=240.0,
+)
 PYBULLET_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "pybullet",
     module_name="backend.scripts.pybullet_workspace_prepare",
@@ -267,6 +283,8 @@ SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspacePr
     SIMULATOR_GENESIS_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MJX_ID: MJX_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_ISAAC_SIM_ID: ISAAC_SIM_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_ISAAC_LAB_ID: ISAAC_LAB_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_SAPIEN_ID: SAPIEN_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_COPPELIASIM_ID: COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
@@ -276,6 +294,8 @@ SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
     SIMULATOR_GENESIS_ID: GENESIS_SCENE_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_SCENE_PARAMS,
     SIMULATOR_MJX_ID: MUJOCO_SCENE_PARAMS,
+    SIMULATOR_ISAAC_SIM_ID: BLENDER_SCENE_PARAMS,
+    SIMULATOR_ISAAC_LAB_ID: BLENDER_SCENE_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_SCENE_PARAMS,
     SIMULATOR_SAPIEN_ID: SAPIEN_SCENE_PARAMS,
     SIMULATOR_COPPELIASIM_ID: SAPIEN_SCENE_PARAMS,

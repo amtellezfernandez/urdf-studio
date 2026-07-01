@@ -47,8 +47,6 @@ def test_simulator_list_is_first_release_target_set() -> None:
         if entry["transferPolicy"]["transferStrategy"] == "planned"
     }
     assert planned == {
-        "isaac-sim",
-        "isaac-lab",
         "isaac-gym",
     }
 

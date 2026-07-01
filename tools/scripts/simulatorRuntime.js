@@ -237,6 +237,17 @@ export function collectRuntimeStatus(simulatorIds, pythonExecutable = resolveRun
         detail: executable || "set URDF_STUDIO_COPPELIASIM_PATH, COPPELIASIM_ROOT, or URDF_STUDIO_COPPELIASIM_REMOTE=1",
       };
     }
+    if ((simulatorId === "isaac-sim" || simulatorId === "isaac-lab") && missingModules.length === 0) {
+      const acceptedEula = process.env.OMNI_KIT_ACCEPT_EULA === "YES";
+      return {
+        simulatorId,
+        label: runtime.label,
+        available: acceptedEula,
+        detail: acceptedEula
+          ? `python=${pythonExecutable}; OMNI_KIT_ACCEPT_EULA=YES`
+          : "set OMNI_KIT_ACCEPT_EULA=YES only after accepting NVIDIA's Omniverse EULA",
+      };
+    }
     return {
       simulatorId,
       label: runtime.label,

@@ -14,6 +14,8 @@ from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
     SIMULATOR_COPPELIASIM_ID,
     SIMULATOR_GENESIS_ID,
+    SIMULATOR_ISAAC_LAB_ID,
+    SIMULATOR_ISAAC_SIM_ID,
     SIMULATOR_MJX_ID,
     SIMULATOR_MUJOCO_ID,
     SIMULATOR_PYBULLET_ID,
@@ -40,12 +42,15 @@ from backend.services.simulator_adapters.blender_edit_session import (
 )
 from backend.services.simulator_adapters.coppeliasim import prepare_coppeliasim_workspace
 from backend.services.simulator_adapters.genesis import prepare_genesis_workspace
+from backend.services.simulator_adapters.isaac import PreparedIsaacWorkspace, prepare_isaac_workspace
 from backend.services.simulator_adapters.mjx import prepare_mjx_workspace
 from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, prepare_mujoco_workspace
 from backend.services.simulator_adapters.params import (
     BLENDER_WORKSPACE_PROCESS_PARAMS,
     COPPELIASIM_WORKSPACE_PROCESS_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
+    ISAAC_LAB_WORKSPACE_PROCESS_PARAMS,
+    ISAAC_SIM_WORKSPACE_PROCESS_PARAMS,
     MJX_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
@@ -538,6 +543,60 @@ def _prepare_mjx_command(
     )
 
 
+def _prepare_isaac_command(
+    request: SimulatorWorkspacePrepareRequest,
+    expectations: WorkspaceExpectations,
+    *,
+    simulator_id: SimulatorId,
+) -> PreparedWorkspaceCommand:
+    prepared: PreparedIsaacWorkspace = prepare_isaac_workspace(
+        request,
+        simulator_id=simulator_id,
+    )
+    workspace_process = (
+        ISAAC_LAB_WORKSPACE_PROCESS_PARAMS
+        if simulator_id == SIMULATOR_ISAAC_LAB_ID
+        else ISAAC_SIM_WORKSPACE_PROCESS_PARAMS
+    )
+    artifact_dir = prepared.shared_workspace.workspace_dir / "artifacts"
+    report_path = artifact_dir / "report.json"
+    return PreparedWorkspaceCommand(
+        command=_module_command(
+            workspace_process,
+            world_package_path=prepared.shared_workspace.world_package_path,
+            robot_asset_flag="--stage-usd",
+            robot_asset_path=prepared.stage_usd_path,
+            duration_sec=expectations.duration_sec,
+            frame_map=expectations.frame_map,
+            extra_args=(
+                "--robot-urdf",
+                str(prepared.shared_workspace.robot_urdf_path),
+                "--simulator-id",
+                simulator_id,
+            ),
+            report_path=report_path,
+        ),
+        ready_marker=workspace_process.ready_log_marker,
+        expected_object_marker=f"world_objects={expectations.object_count}",
+        expected_camera_log_marker=f"cameras={expectations.camera_count}",
+        extra_expected_markers=("robot_loaded=1",),
+        expected_report_path=report_path,
+        expected_simulator_id=simulator_id,
+        expected_object_count=expectations.object_count,
+        expected_camera_count=expectations.camera_count,
+        expected_requested_frame_map=expectations.frame_map,
+        expected_frame_map=expectations.resolved_frame_map,
+        expected_object_positions_xyz=expectations.object_positions_xyz,
+        expected_object_sizes_xyz=expectations.object_sizes_xyz,
+        expected_object_asset_refs=expectations.object_asset_refs,
+        expected_object_contracts=expectations.object_contracts,
+        expected_joint_positions=expectations.joint_positions,
+        expected_camera_ids=expectations.camera_ids,
+        expected_camera_contracts=expectations.camera_contracts,
+        expected_report_artifact_file_keys=("stage_usd_path",),
+    )
+
+
 def _prepare_blender_command(
     request: SimulatorWorkspacePrepareRequest,
     expectations: WorkspaceExpectations,
@@ -639,6 +698,26 @@ WORKSPACE_TARGETS: dict[SimulatorId, WorkspaceTarget] = {
         simulator_id=SIMULATOR_MJX_ID,
         label="MuJoCo MJX",
         prepare=_prepare_mjx_command,
+        include_in_parity=False,
+    ),
+    SIMULATOR_ISAAC_SIM_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_ISAAC_SIM_ID,
+        label="Isaac Sim",
+        prepare=lambda request, expectations: _prepare_isaac_command(
+            request,
+            expectations,
+            simulator_id=SIMULATOR_ISAAC_SIM_ID,
+        ),
+        include_in_parity=False,
+    ),
+    SIMULATOR_ISAAC_LAB_ID: WorkspaceTarget(
+        simulator_id=SIMULATOR_ISAAC_LAB_ID,
+        label="Isaac Lab",
+        prepare=lambda request, expectations: _prepare_isaac_command(
+            request,
+            expectations,
+            simulator_id=SIMULATOR_ISAAC_LAB_ID,
+        ),
         include_in_parity=False,
     ),
     SIMULATOR_PYBULLET_ID: WorkspaceTarget(

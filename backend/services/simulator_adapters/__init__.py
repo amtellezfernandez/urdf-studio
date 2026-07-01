@@ -22,6 +22,10 @@ from backend.services.simulator_adapters.coppeliasim import COPPELIASIM_SIMULATO
 from backend.services.simulator_adapters.genesis import (
     GENESIS_SIMULATOR_ADAPTER,
 )
+from backend.services.simulator_adapters.isaac import (
+    ISAAC_LAB_SIMULATOR_ADAPTER,
+    ISAAC_SIM_SIMULATOR_ADAPTER,
+)
 from backend.services.simulator_adapters.mjx import MJX_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.mujoco import MUJOCO_SIMULATOR_ADAPTER
 from backend.services.simulator_adapters.optional_runtime import make_optional_simulator_adapter
@@ -44,6 +48,8 @@ _WORKSPACE_SIMULATOR_ADAPTERS = _build_adapter_map(
         GENESIS_SIMULATOR_ADAPTER,
         MUJOCO_SIMULATOR_ADAPTER,
         MJX_SIMULATOR_ADAPTER,
+        ISAAC_SIM_SIMULATOR_ADAPTER,
+        ISAAC_LAB_SIMULATOR_ADAPTER,
         PYBULLET_SIMULATOR_ADAPTER,
         SAPIEN_SIMULATOR_ADAPTER,
         COPPELIASIM_SIMULATOR_ADAPTER,
