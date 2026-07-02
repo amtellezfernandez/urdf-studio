@@ -1,20 +1,8 @@
 import { lazy } from "react";
 
-export const FolderUploadScreen = lazy(() =>
-  import("@/features/dataset/FolderUploadScreen").then((module) => ({
-    default: module.FolderUploadScreen,
-  }))
-);
-
 export const IkDebuggerPanel = lazy(() =>
   import("@/features/ik/IkDebuggerPanel").then((module) => ({
     default: module.IkDebuggerPanel,
-  }))
-);
-
-export const OperatorTeleopPanelShell = lazy(() =>
-  import("@/features/teleop/panel/OperatorTeleopPanel").then((module) => ({
-    default: module.OperatorTeleopPanelShell,
   }))
 );
 

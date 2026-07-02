@@ -168,11 +168,6 @@ export const runtimeConfig = {
     staleTargetMs: readNumber("URDF_IKD_STALE_TARGET_MS", getConfigValue(fileConfig, ["ikd", "staleTargetMs"], 250)),
     useForDrag: readString("URDF_IKD_USE_FOR_DRAG", String(getConfigValue(fileConfig, ["ikd", "useForDrag"], false))).toLowerCase() === "true",
   },
-  teleop: {
-    enabled: readString("URDF_TELEOP_ENABLED", String(getConfigValue(fileConfig, ["teleop", "enabled"], false))).toLowerCase() === "true",
-    host: readString("URDF_TELEOP_HOST", getConfigValue(fileConfig, ["teleop", "host"], "127.0.0.1")),
-    httpPort: readNumber("URDF_TELEOP_HTTP_PORT", getConfigValue(fileConfig, ["teleop", "httpPort"], 8091)),
-  },
   ik: getConfigValue(fileConfig, ["ik"], {}),
 };
 
@@ -181,7 +176,6 @@ export const buildRuntimeUrls = (config) => ({
   apiBaseUrl: `http://${formatHostForUrl(config.api.host)}:${config.api.port}`,
   ikdBaseUrl: `http://${formatHostForUrl(config.ikd.host)}:${config.ikd.port}`,
   ikdWsUrl: `ws://${formatHostForUrl(config.ikd.host)}:${config.ikd.port}/telemetry`,
-  teleopHttpBaseUrl: `http://${formatHostForUrl(config.teleop.host)}:${config.teleop.httpPort}`,
 });
 
 export const runtimeUrls = buildRuntimeUrls(runtimeConfig);

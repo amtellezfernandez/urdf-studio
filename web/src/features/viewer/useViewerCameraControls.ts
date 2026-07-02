@@ -15,10 +15,6 @@ import {
   toThreeViewQuaternionFromStudioCamera,
 } from "@/features/camera/cameraOrientationContract";
 import { getCameraWorldPose } from "@/features/camera/cameraWorldPose";
-import {
-  applyOperatorPointCloudFloorCalibrationToWorldPose,
-  type OperatorPointCloudFloorCalibrationByCameraId,
-} from "@/features/teleop/perception/operatorPointCloudFloorCalibration";
 import { applyIntrinsicsToPerspectiveCamera, normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
 import { VIEWER_CAMERA_CONTROL_PARAMS } from "@/features/viewer/viewerCameraControlParams";
 
@@ -28,7 +24,6 @@ type UseViewerCameraControlsParams = {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   jointValues?: Record<string, number>;
   camerasOverride?: ReturnType<typeof useCameraStore.getState>["cameras"];
-  floorCalibrationsByCameraId?: OperatorPointCloudFloorCalibrationByCameraId;
   suspendSelectedCameraSync?: boolean;
 };
 
@@ -227,7 +222,6 @@ export const useViewerCameraControls = ({
   cameraRef,
   jointValues,
   camerasOverride,
-  floorCalibrationsByCameraId = {},
   suspendSelectedCameraSync = false,
 }: UseViewerCameraControlsParams) => {
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
@@ -252,22 +246,9 @@ export const useViewerCameraControls = ({
 
   const resolveCalibratedCameraWorldPose = useCallback(
     (cameraConfig: NonNullable<ReturnType<typeof findCameraConfigById>>) => {
-      const { position, quaternion } = getCameraWorldPose(
-        robot,
-        cameraConfig,
-        { updateRobotWorld: true }
-      );
-      const calibration =
-        floorCalibrationsByCameraId[cameraConfig.id] ??
-        floorCalibrationsByCameraId[cameraConfig.name] ??
-        null;
-      return applyOperatorPointCloudFloorCalibrationToWorldPose(
-        position,
-        quaternion,
-        calibration,
-      );
+      return getCameraWorldPose(robot, cameraConfig, { updateRobotWorld: true });
     },
-    [floorCalibrationsByCameraId, robot],
+    [robot],
   );
 
   const resolveFocusBoundsWithCameras = useCallback(() => {

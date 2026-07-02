@@ -32,19 +32,7 @@ import {
   GENESIS_TORCH_PACKAGE,
   GENESIS_VERIFY_IMPORT_SCRIPT,
   GENESIS_WORLD_PACKAGE,
-  LEROBOT_OPENARM_HARDWARE_PIP_DEPENDENCY,
-  LEROBOT_PIP_DEPENDENCY,
-  LEROBOT_PIP_INSTALL_FLAGS,
-  LEROBOT_TRAINING_SETUP,
-  LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT,
-  LEROBOT_UPSTREAM_REF,
   MJX_SYSTEM_ID_DEPENDENCIES,
-  MJLAB_DEPENDENCIES,
-  MJLAB_FORCE_INSTALL_ENV,
-  MJLAB_MUJOCO_WARP_PACKAGE,
-  MJLAB_SETUP,
-  MJLAB_SKIP_AUTO_INSTALL_ENV,
-  MJLAB_VERIFY_IMPORT_SCRIPT,
   NATIVE_SIM_SETUP,
   PYBULLET_DEPENDENCIES,
   PYBULLET_FORCE_INSTALL_ENV,
@@ -63,19 +51,7 @@ test('simulator setup params stay grouped by runtime stack', () => {
   assert.equal(BACKEND_PYTHON_COLLISION_STACK_VERIFY_IMPORT_SCRIPT, COLLISION_STACK_SETUP.verifyImportScript);
   assert.equal(GENESIS_WORLD_PACKAGE, GENESIS_SETUP.packages.world);
   assert.equal(GENESIS_RENDER_PACKAGE, GENESIS_SETUP.packages.renderer);
-  assert.equal(MJLAB_MUJOCO_WARP_PACKAGE, MJLAB_SETUP.packages.mujocoWarp);
   assert.equal(PYBULLET_PACKAGE, PYBULLET_SETUP.packages.pybullet);
-  assert.equal(LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT, LEROBOT_TRAINING_SETUP.verifyImportScript);
-});
-
-test('LeRobot setup uses one pinned upstream source for all runtimes', () => {
-  assert.match(LEROBOT_UPSTREAM_REF, /^[0-9a-f]{40}$/);
-  assert.deepEqual(LEROBOT_PIP_INSTALL_FLAGS, ['--upgrade']);
-  assert.equal(LEROBOT_TRAINING_SETUP.packages.lerobot, LEROBOT_PIP_DEPENDENCY);
-  assert.match(LEROBOT_PIP_DEPENDENCY, new RegExp(`@${LEROBOT_UPSTREAM_REF}$`));
-  assert.match(LEROBOT_OPENARM_HARDWARE_PIP_DEPENDENCY, new RegExp(`@${LEROBOT_UPSTREAM_REF}$`));
-  assert.match(LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT, /direct_url\.json/);
-  assert.match(LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT, new RegExp(LEROBOT_UPSTREAM_REF));
 });
 
 test('backend Python setup separates portable and native simulation runtimes', () => {
@@ -124,16 +100,6 @@ test('backend Python setup includes MJX system-id runtime', () => {
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"optax"/);
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"mujoco_sysid"/);
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"mujoco_sysid\.mjx"/);
-});
-
-test('MJLab setup pins and verifies MuJoCo-Warp', () => {
-  assert.equal(MJLAB_SKIP_AUTO_INSTALL_ENV, 'URDF_STUDIO_SKIP_MJLAB_AUTO_INSTALL');
-  assert.equal(MJLAB_FORCE_INSTALL_ENV, 'URDF_STUDIO_INSTALL_MJLAB');
-  assert.equal(MJLAB_MUJOCO_WARP_PACKAGE, 'mujoco-warp==3.9.0.1');
-  assert.ok(MJLAB_DEPENDENCIES.includes(MJLAB_MUJOCO_WARP_PACKAGE));
-  assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mjlab/);
-  assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mujoco/);
-  assert.match(MJLAB_VERIFY_IMPORT_SCRIPT, /import mujoco_warp/);
 });
 
 test('PyBullet workspace adapter runtime is portable and direct URDF based', () => {

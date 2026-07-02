@@ -21,12 +21,8 @@ export type PageLayoutProps = {
   healthActionPanelProps: ComponentProps<
     typeof import("@/features/layout/page/HealthActionPanel").HealthActionPanel
   >;
-  exportDialogProps: ComponentProps<typeof import("@/features/dataset/ExportDialog").ExportDialog>;
   povCamerasOverlayProps: ComponentProps<
     typeof import("@/features/layout/page/PovCamerasOverlay").PovCamerasOverlay
-  >;
-  mappingPanelsProps: ComponentProps<
-    typeof import("@/features/layout/page/MappingPanels").MappingPanels
   >;
   creationDialogsProps: ComponentProps<
     typeof import("@/features/layout/page/CreationDialogs").CreationDialogs
@@ -42,9 +38,7 @@ export const PageLayout = ({
   urdfStatusBannerProps,
   loadIssuesPanelProps,
   healthActionPanelProps,
-  exportDialogProps,
   povCamerasOverlayProps,
-  mappingPanelsProps,
   creationDialogsProps,
 }: PageLayoutProps) => (
   <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -57,15 +51,11 @@ export const PageLayout = ({
       urdfStatusBannerProps={urdfStatusBannerProps}
     />
     <PageOverlays
-      exportDialogProps={exportDialogProps}
       povCamerasOverlayProps={povCamerasOverlayProps}
       loadIssuesPanelProps={loadIssuesPanelProps}
       healthActionPanelProps={healthActionPanelProps}
     />
-    <PageDialogs
-      mappingPanelsProps={mappingPanelsProps}
-      creationDialogsProps={creationDialogsProps}
-    />
+    <PageDialogs creationDialogsProps={creationDialogsProps} />
     <WorkspacePanels />
   </div>
 );

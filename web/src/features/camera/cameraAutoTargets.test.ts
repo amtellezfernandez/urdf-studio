@@ -7,6 +7,14 @@ describe("resolveCameraPrefixLinks", () => {
     expect(resolveCameraPrefixLinks(links)).toEqual(["camera_front_link", "CameraTop"]);
   });
 
+  it("returns camera links named with a camera token inside the link name", () => {
+    const links = ["Wrist-Camera-Mount-v11", "front_camera_model", "notcamera"];
+    expect(resolveCameraPrefixLinks(links)).toEqual([
+      "Wrist-Camera-Mount-v11",
+      "front_camera_model",
+    ]);
+  });
+
   it("handles URL-encoded link names and removes duplicates", () => {
     const links = ["camera%2Fhead", "camera/head", "camera%2Fhead"];
     expect(resolveCameraPrefixLinks(links)).toEqual(["camera/head", "camera%2Fhead"]);

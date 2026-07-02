@@ -192,7 +192,18 @@ describe("workspaceTransferApi", () => {
     expect(uploads[0].content_base64.length).toBeGreaterThan(0);
   });
 
-  it("rejects absolute browser mesh upload paths", async () => {
+  it("normalizes root-relative URDF mesh upload paths", async () => {
+    const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
+
+    const uploads = await buildWorkspaceTransferMeshAssetUploads({
+      "/meshes/base.stl": mesh,
+    });
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].path).toBe("meshes/base.stl");
+  });
+
+  it("rejects host-absolute browser mesh upload paths", async () => {
     const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
 
     await expect(

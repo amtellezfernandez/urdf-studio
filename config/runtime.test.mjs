@@ -48,7 +48,6 @@ test('runtime URL builder keeps resolved host browser-facing', () => {
       web: { host: '192.168.1.44', port: 5173 },
       api: { host: '127.0.0.1', port: 8000 },
       ikd: { host: '127.0.0.1', port: 8088 },
-      teleop: { host: '127.0.0.1', httpPort: 8091 },
     }).webBaseUrl,
     'http://192.168.1.44:5173',
   );

@@ -16,8 +16,8 @@ export const NODE_INSTALL_SETUP = {
 };
 
 export const PYTHON_TOOLCHAIN_SETUP = {
-  lerobotEnvDirname: '.venv-lerobot',
-  backendEnvDirname: '.venv-lerobot',
+  lerobotEnvDirname: '.venv',
+  backendEnvDirname: '.venv',
 };
 
 export const HUGGING_FACE_TOKEN_URL = SETUP_SUPPORT_LINKS.huggingFaceTokenUrl;

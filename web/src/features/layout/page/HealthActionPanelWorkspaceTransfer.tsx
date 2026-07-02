@@ -1,13 +1,25 @@
-import { Cuboid, LoaderCircle, Minus } from "lucide-react";
-import type { ReactNode } from "react";
-import { Button } from "@/shared/ui/button";
+import { ArrowUpRight, Cuboid, LoaderCircle, Minus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { WorkspaceTransferTargetId } from "@/features/world-share/workspaceTransferApi";
+import type {
+  WorkspaceTransferAssetFormat,
+  WorkspaceTransferStrategy,
+  WorkspaceTransferTargetKind,
+} from "@/features/world-share/workspaceTransferParams";
+import { formatWorkspaceTransferAssetLabel } from "@/features/layout/page/workspaceTransferLabels";
 
 export type WorkspaceTransferTargetState = {
   id: WorkspaceTransferTargetId;
   label: string;
+  targetKind: WorkspaceTransferTargetKind;
   detail: string;
+  robotAssetFormat: WorkspaceTransferAssetFormat;
+  sceneAssetFormat: WorkspaceTransferAssetFormat;
+  transferStrategy: WorkspaceTransferStrategy;
+  transferLabel: string;
+  transferDescription: string;
+  createsTransferAsset: boolean;
+  statusLabel: string;
   openLabel: string;
   openingLabel: string;
   isBusy: boolean;
@@ -27,92 +39,93 @@ type HealthActionPanelWorkspaceTransferProps = HealthActionPanelWorkspaceTransfe
 };
 
 const getAvailableTargetIcon = (target: WorkspaceTransferTargetState) => {
-  if (target.isBusy) return <LoaderCircle className="h-2.5 w-2.5 animate-spin" />;
-  return <Cuboid className="h-2.5 w-2.5" />;
+  if (target.isBusy) return <LoaderCircle className="h-3 w-3 animate-spin" />;
+  return <Cuboid className="h-3 w-3" />;
 };
 
-const getDisabledTargetIcon = () => <Minus className="h-2.5 w-2.5" />;
+const getDisabledTargetIcon = () => <Minus className="h-3 w-3" />;
 
-const getAvailableTargetButtonClassName = (target: WorkspaceTransferTargetState) =>
+const getTargetRowClassName = (target: WorkspaceTransferTargetState) =>
   cn(
-    "h-6 w-full min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
-    "border-neutral-700/70 bg-neutral-900/60 text-neutral-200 shadow-none hover:border-neutral-600 hover:bg-neutral-800/70",
-    target.isActive && "border-slate-500/70 bg-slate-700/35 text-slate-100 hover:bg-slate-700/45"
+    "group flex min-h-10 w-full min-w-0 items-center gap-2 rounded border px-2 py-1.5 text-left transition-colors",
+    target.canOpen
+      ? "border-border/50 bg-background/40 text-foreground hover:border-border/75 hover:bg-muted/25"
+      : "border-border/30 bg-background/20 text-muted-foreground/70",
+    target.isActive && "border-sky-500/35 bg-sky-500/10 text-sky-100",
+    (!target.canOpen || target.isBusy) && "disabled:cursor-not-allowed disabled:opacity-100"
   );
 
-const getDisabledTargetButtonClassName = () =>
+const getTransferBadgeClassName = (target: WorkspaceTransferTargetState) =>
   cn(
-    "h-6 w-full min-w-0 justify-start gap-1 rounded-sm px-1.5 text-left text-[9px]",
-    "border-neutral-800/80 bg-neutral-950/65 text-neutral-500 shadow-none",
-    "disabled:cursor-not-allowed disabled:opacity-100"
+    "max-w-16 truncate whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-[8px] font-medium leading-none",
+    target.transferStrategy === "planned"
+      ? "border-border/35 bg-muted/20 text-muted-foreground"
+      : target.createsTransferAsset
+        ? "border-border/45 bg-background/35 text-muted-foreground"
+        : "border-border/45 bg-background/35 text-foreground/80"
   );
 
-const AvailableTargetButton = ({ target }: { target: WorkspaceTransferTargetState }) => (
-  <Button
-    type="button"
-    variant="outline"
-    size="sm"
-    className={getAvailableTargetButtonClassName(target)}
-    onMouseDown={(event) => event.stopPropagation()}
-    onClick={target.onAction}
-    disabled={target.isBusy}
-    aria-label={target.isBusy ? target.openingLabel : target.openLabel}
-    title={target.detail}
-  >
-    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-      {getAvailableTargetIcon(target)}
-    </span>
-    <span className="min-w-0 truncate font-medium">
-      {target.isBusy ? target.openingLabel : target.label}
-    </span>
-  </Button>
-);
+const getStatusDotClassName = (target: WorkspaceTransferTargetState) =>
+  cn(
+    "h-1.5 w-1.5 rounded-full",
+    target.isBusy
+      ? "bg-sky-300"
+      : target.canOpen
+        ? "bg-emerald-300/85"
+        : "bg-muted-foreground/45"
+  );
 
-const DisabledTargetButton = ({ target }: { target: WorkspaceTransferTargetState }) => (
-  <Button
-    type="button"
-    variant="outline"
-    size="sm"
-    className={getDisabledTargetButtonClassName()}
-    onMouseDown={(event) => event.stopPropagation()}
-    onClick={target.onAction}
-    disabled
-    aria-label={target.disabledLabel}
-    title={target.disabledLabel}
-  >
-    {getDisabledTargetIcon()}
-    <span className="min-w-0 truncate">{target.label}</span>
-  </Button>
-);
+const formatTargetCount = (count: number): string =>
+  `${count} target${count === 1 ? "" : "s"}`;
 
-const WorkspaceTransferRow = ({
-  children,
-  label,
-  summary,
-}: {
-  children: ReactNode;
-  label: string;
-  summary?: string;
-}) => (
-  <div className="flex items-start gap-1">
-    <div
-      className={cn(
-        "w-10 shrink-0 pt-0.5 text-[8px] font-medium uppercase tracking-wide",
-        "text-foreground/65"
-      )}
+const WorkspaceTransferTargetRow = ({ target }: { target: WorkspaceTransferTargetState }) => {
+  const isDisabled = !target.canOpen || target.isBusy;
+  const actionLabel = target.isBusy
+    ? target.openingLabel
+    : target.canOpen
+      ? target.openLabel
+      : target.disabledLabel;
+  const title = target.canOpen
+    ? `${target.detail}. ${target.transferDescription} Status: ${target.statusLabel}.`
+    : target.disabledLabel;
+
+  return (
+    <button
+      type="button"
+      className={getTargetRowClassName(target)}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={target.onAction}
+      disabled={isDisabled}
+      aria-label={actionLabel}
+      title={title}
     >
-      <div>{label}</div>
-      {summary ? (
-        <div className="mt-0.5 whitespace-nowrap text-[8px] font-normal normal-case tracking-normal text-foreground/45">
-          {summary}
-        </div>
-      ) : null}
-    </div>
-    <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-1">
-      {children}
-    </div>
-  </div>
-);
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-border/45 bg-muted/20 text-muted-foreground">
+        {target.canOpen ? getAvailableTargetIcon(target) : getDisabledTargetIcon()}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 truncate text-[10px] font-medium leading-tight">
+            {target.isBusy ? target.openingLabel : target.label}
+          </span>
+          <span className={getStatusDotClassName(target)} aria-hidden="true" />
+        </span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[8px] leading-none text-muted-foreground">
+          <span className="truncate">{target.detail}</span>
+          <span className="shrink-0 text-muted-foreground/45">·</span>
+          <span className="shrink-0">{target.statusLabel}</span>
+        </span>
+      </span>
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span className={getTransferBadgeClassName(target)}>
+          {formatWorkspaceTransferAssetLabel(target)}
+        </span>
+        {target.canOpen ? (
+          <ArrowUpRight className="h-3 w-3 text-muted-foreground/65 transition-colors group-hover:text-foreground" />
+        ) : null}
+      </span>
+    </button>
+  );
+};
 
 export const HealthActionPanelWorkspaceTransfer = ({
   className,
@@ -120,16 +133,23 @@ export const HealthActionPanelWorkspaceTransfer = ({
   targets,
 }: HealthActionPanelWorkspaceTransferProps) => {
   return (
-    <div data-section="workspace-transfer" className={cn("space-y-1", className)}>
-      <WorkspaceTransferRow label="Open in" summary={sceneSummary}>
-        {targets.map((target) =>
-          target.canOpen ? (
-            <AvailableTargetButton key={target.id} target={target} />
-          ) : (
-            <DisabledTargetButton key={target.id} target={target} />
-          )
-        )}
-      </WorkspaceTransferRow>
+    <div data-section="workspace-transfer" className={cn("space-y-2", className)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium text-foreground/85">Targets</div>
+          <div className="mt-0.5 truncate text-[9px] text-muted-foreground">
+            Simulators + tools{sceneSummary ? ` · ${sceneSummary}` : ""}
+          </div>
+        </div>
+        <div className="rounded-sm border border-border/40 bg-background/35 px-1.5 py-0.5 text-[8px] font-medium leading-none text-muted-foreground">
+          {formatTargetCount(targets.length)}
+        </div>
+      </div>
+      <div className="space-y-1">
+        {targets.map((target) => (
+          <WorkspaceTransferTargetRow key={target.id} target={target} />
+        ))}
+      </div>
     </div>
   );
 };

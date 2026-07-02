@@ -21,10 +21,6 @@ import {
   createCameraIconFrustumGeometry,
   toCameraIconDisplayQuaternion,
 } from "@/features/camera/cameraIconMath";
-import {
-  applyOperatorPointCloudFloorCalibrationToWorldPose,
-  type OperatorPointCloudFloorCalibrationByCameraId,
-} from "@/features/teleop/perception/operatorPointCloudFloorCalibration";
 import { resolveCameraLinkEnvelope } from "@/features/camera/cameraEnvelopeFit";
 import {
   copyWorldMatrixToObjectLocal,
@@ -33,14 +29,12 @@ import {
 
 interface CameraIconsProps {
   camerasOverride?: readonly Camera[];
-  floorCalibrationsByCameraId?: OperatorPointCloudFloorCalibrationByCameraId;
   robot: URDFRobot | null;
   gpuMode?: GPUMode;
 }
 
 export const CameraIcons = ({
   camerasOverride,
-  floorCalibrationsByCameraId = {},
   robot,
   gpuMode = "high",
 }: CameraIconsProps) => {
@@ -54,7 +48,6 @@ export const CameraIcons = ({
         <CameraIcon
           key={camera.id}
           camera={camera}
-          floorCalibrationsByCameraId={floorCalibrationsByCameraId}
           robot={robot}
           isSelected={camera.id === selectedCameraId}
           gpuMode={gpuMode}
@@ -66,7 +59,6 @@ export const CameraIcons = ({
 
 interface CameraIconProps {
   camera: Camera;
-  floorCalibrationsByCameraId: OperatorPointCloudFloorCalibrationByCameraId;
   robot: URDFRobot | null;
   isSelected: boolean;
   gpuMode?: GPUMode;
@@ -74,7 +66,6 @@ interface CameraIconProps {
 
 const CameraIcon = ({
   camera,
-  floorCalibrationsByCameraId,
   robot,
   isSelected,
   gpuMode = "high",
@@ -100,18 +91,9 @@ const CameraIcon = ({
     const { position, quaternion } = getCameraWorldPose(robot, camera, {
       updateRobotWorld: true,
     });
-    const calibration =
-      floorCalibrationsByCameraId[camera.id] ??
-      floorCalibrationsByCameraId[camera.name] ??
-      null;
-    const calibratedPose = applyOperatorPointCloudFloorCalibrationToWorldPose(
-      position,
-      quaternion,
-      calibration,
-    );
-    groupRef.current.position.copy(calibratedPose.position);
+    groupRef.current.position.copy(position);
     groupRef.current.quaternion.copy(
-      toCameraIconDisplayQuaternion(calibratedPose.quaternion),
+      toCameraIconDisplayQuaternion(quaternion),
     );
 
     if (!envelopeRef.current || !envelopeMeshRef.current) return;

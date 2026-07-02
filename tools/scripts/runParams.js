@@ -41,7 +41,6 @@ export const RUN_OPTION_FLAGS = {
   help: '--help',
   helpShort: '-h',
   dataMode: '--data',
-  teleopMode: '--teleop',
   teamMode: '--team',
   teamHost: '--team-host',
   robot: '--robot',
@@ -59,10 +58,6 @@ export const RUN_OPTION_FLAGS = {
   apiBindHost: '--api-bind-host',
   ikdHost: '--ikd-host',
   ikdPort: '--ikd-port',
-  teleopHost: '--teleop-host',
-  teleopHttpPort: '--teleop-http-port',
-  teleopWebTransportPort: '--teleop-webtransport-port',
-  teleopNativeQuicPort: '--teleop-native-quic-port',
 };
 
 export const RUN_LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -108,11 +103,6 @@ export const RUN_HELP_LINES = [
   '',
   'Advanced options:',
   '  --robot-env-file <path> Select an explicit per-robot env file, e.g. .env.robots/so100-left-2.env',
-  '  --teleop               Start the live teleop relay',
-  '  --teleop-http-port <port> Override teleop relay status port',
-  '  --teleop-webtransport-port <port> Override fast browser teleop port',
-  '  --teleop-native-quic-port <port> Override native robot channel port',
-  '  --teleop-host <host>   Override teleop relay host',
   '  --web-host <host>      Override frontend URL host',
   '  --api-host <host>      Override backend API URL host',
   '  --ikd-host <host>      Override native IKD bind host',

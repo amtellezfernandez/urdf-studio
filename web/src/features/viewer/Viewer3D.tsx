@@ -47,11 +47,6 @@ import { AxisGizmo3D } from "@/features/viewer/AxisGizmo3D";
 import { CustomAxesHelper } from "@/features/viewer/CustomAxesHelper";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
-import {
-  resolveOpenArmDemoTableCalibrationPlanesFromPointCloudFrames,
-  type OpenArmDemoTableCalibrationPlane,
-} from "@/features/viewer/openArmDemoTableGeometry";
-import { resolveOperatorPointCloudSceneMeshes } from "@/features/teleop/perception/operatorPointCloudSceneMeshes";
 import { OrbitVisualization } from "@/features/viewer/components/OrbitVisualization";
 import { StudioWheelRoleMarkers } from "@/features/viewer/components/StudioWheelRoleMarkers";
 import { WorldObjectEditHandles } from "@/features/viewer/components/WorldObjectEditHandles";
@@ -103,7 +98,6 @@ import {
 } from "@/features/viewer/useIkSolver";
 import { useUrdfAnimation } from "@/features/viewer/useUrdfAnimation";
 import { useOrbitControlsBindings } from "@/features/viewer/useOrbitControlsBindings";
-import { useMotionDataUpload } from "@/features/viewer/useMotionDataUpload";
 import { usePlaybackHandlers } from "@/features/viewer/usePlaybackHandlers";
 import { useViewerCameraControls } from "@/features/viewer/useViewerCameraControls";
 import { usePlaybackNotifications } from "@/features/viewer/usePlaybackNotifications";
@@ -112,27 +106,17 @@ import { useMeshFilesState } from "@/features/viewer/useMeshFilesState";
 import { useRobotBoundingBoxSync } from "@/features/viewer/useRobotBoundingBoxSync";
 import { useRobotCameraCentering } from "@/features/viewer/useRobotCameraCentering";
 import { useRobotJointSync } from "@/features/viewer/useRobotJointSync";
-import { useOperatorLeaderTelemetryBridge } from "@/features/viewer/useOperatorLeaderTelemetryBridge";
 import { buildThumbnailCameraFrame } from "@/features/viewer/thumbnailCameraFrame";
 import { useUrdfFileContent } from "@/features/viewer/useUrdfFileContent";
 import { useDragModeEffects } from "@/features/viewer/useDragModeEffects";
 import {
   canUseViewerDragHandleMode,
-  canUseViewerLeaderTeleopMode,
   resolveEffectiveViewerDragMode,
-  shouldResetPoseAfterLeaderTeleopFallback,
 } from "@/features/viewer/viewerDragModePolicy";
-import {
-  resolveLiveTeleopJointTelemetryByName,
-  resolveLiveTeleopJointSyncActive,
-  resolveLiveTeleopJointTargets,
-} from "@/features/viewer/operatorLiveTeleopJointSync";
-import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
 import { resolveViewerPartSelection } from "@/features/viewer/viewerPartSelectionPolicy";
 import { shouldApplySimulationPrepResetPoseRequest } from "@/features/viewer/simulationPrepResetPosePolicy";
 import {
   isLeKiwiRobotAsset,
-  isOpenArmRobotAsset,
   resolveRemountPreservedFrameTimestamp,
 } from "@/features/viewer/demoRobotPolicy";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
@@ -211,11 +195,6 @@ import {
   createLocalStorageAdaptiveTrajectoryRepository,
 } from "@/features/ik/runtime/adaptiveTrajectoryRuntime";
 import {
-  OPERATOR_POINT_CLOUD_AUTOCALIBRATION_MAX_ACCUMULATED_SAMPLES,
-  OPERATOR_POINT_CLOUD_AUTOCALIBRATION_SAMPLE_INTERVAL_MS,
-  OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY,
-} from "@/features/teleop/params/operatorTeleopParams";
-import {
   computeStudioWheelDriveAuthority,
   extractStudioDriveJointHintsFromUrdf,
   getStudioWheelRoleLabel,
@@ -287,25 +266,6 @@ import {
 import {
   buildViewerRenderPerformancePolicy,
 } from "@/features/viewer/viewerPerformancePolicy";
-import { OperatorPointCloudOverlay } from "@/features/teleop/perception/OperatorPointCloudOverlay";
-import {
-  OperatorPointCloudCalibrationPlanes,
-  type OperatorPointCloudCalibrationPlaneOverlay,
-} from "@/features/teleop/perception/OperatorPointCloudCalibrationPlanes";
-import {
-  applyOperatorPointCloudFloorCalibrationToPlane,
-  collectOperatorPointCloudWorldSamples,
-  resolveOperatorPointCloudDominantSurfaceCalibrationResult,
-  type OperatorPointCloudFloorCalibrationByCameraId,
-  type OperatorPointCloudWorldSample,
-} from "@/features/teleop/perception/operatorPointCloudFloorCalibration";
-import { buildOperatorPointCloudPoseTransform } from "@/features/teleop/perception/operatorPointCloudPose";
-import {
-  OPENARM_HF_LIVE_CAMERA_FOV_DEG,
-  OPENARM_HF_LIVE_CAMERA_PARENT_JOINT,
-} from "@/features/teleop/perception/openArmHfLiveParams";
-import { resolveOpenArmHfLiveCameraConfigPoseFromPointCloudPose } from "@/features/teleop/perception/openArmHfLiveCameraConfig";
-import { useOperatorPerceptionStore } from "@/features/teleop/perception/operatorPerceptionStore";
 export interface Viewer3DProps {
   workspaceMode?: WorkspaceMode;
   assemblyPrimaryModel?: { id: string; name: string };
@@ -332,7 +292,6 @@ export interface Viewer3DProps {
   ) => void;
   onRobotLoaded?: (robot: URDFRobot | null) => void;
   onMotionDataNodesGenerated?: (nodes: Node[], edges: Edge[]) => void;
-  onMotionFileChange?: (file: File | null) => void;
   onPlayingChange?: (isPlaying: boolean) => void;
   onAnimationFramesChange?: (hasFrames: boolean) => void;
   onFrameChange?: (currentFrame: number, totalFrames?: number) => void;
@@ -375,12 +334,8 @@ const shouldHideCameraInReadOnlyRuntime = (camera: RobotCamera) => {
 const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
 const HEX_COLOR_RADIX = 16;
 const HEX_COLOR_PAD_LENGTH = 6;
+const IK_APPLY_INPUT_SOURCE = "ik_apply";
 
-type PointCloudAutocalibrationAccumulator = {
-  lastSampledAtMsByCameraId: Map<string, number>;
-  requestId: number;
-  samplesByCameraId: Map<string, OperatorPointCloudWorldSample[]>;
-};
 const HEX_COLOR_COMPONENT_MASK = 0xff;
 
 const formatHexColor = (color: number) =>
@@ -3776,7 +3731,6 @@ export const Viewer3D = ({
   onRobotJointsLoaded,
   onRobotLoaded,
   onMotionDataNodesGenerated,
-  onMotionFileChange,
   onPlayingChange,
   onAnimationFramesChange,
   onFrameChange,
@@ -3821,7 +3775,6 @@ export const Viewer3D = ({
     () => isFeatureFlagEnabled("motionKernelV2"),
     () => true
   );
-  const [, setMotionDataFile] = useState<File | null>(null);
   const [animationFrames, setAnimationFrames] = useState<
     AnimationFrame[] | null
   >(null);
@@ -3869,10 +3822,6 @@ export const Viewer3D = ({
     () => isLeKiwiRobotAsset(urdfFile?.name, robot?.name),
     [robot?.name, urdfFile?.name]
   );
-  const isOpenArmDemoRobot = useMemo(
-    () => isOpenArmRobotAsset(urdfFile?.name, robot?.name),
-    [robot?.name, urdfFile?.name]
-  );
   const storeJointValues = useJointStore((s) => s.jointValues);
   const availableJointNames = useJointStore((s) => s.availableJoints);
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
@@ -3884,432 +3833,6 @@ export const Viewer3D = ({
   );
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const objectEditMode = useObjectStore((state) => state.editMode);
-  const operatorPointCloudFrame = useOperatorPerceptionStore(
-    (state) => state.activePointCloudFrame
-  );
-  const operatorPointCloudFrames = useOperatorPerceptionStore(
-    (state) => state.activePointCloudFrames
-  );
-  const openArmHfLiveObserveRequested = useOperatorPerceptionStore(
-    (state) => state.openArmHfLiveObserveRequested
-  );
-  const liveLeaderJointTelemetryByName = useOperatorPerceptionStore(
-    (state) => state.activeLeaderJointTelemetryByName,
-  );
-  const liveFollowerJointTelemetryByName = useOperatorPerceptionStore(
-    (state) => state.activeFollowerJointTelemetryByName,
-  );
-  const pointCloudAutocalibrationRequest = useOperatorPerceptionStore(
-    (state) => state.pointCloudAutocalibrationRequest
-  );
-  const leaderTeleopAvailable = useOperatorLeaderTeleopStore(
-    (state) => state.available,
-  );
-  const localLeaderAssigned = useOperatorLeaderTeleopStore(
-    (state) => state.localLeaderAssigned,
-  );
-  const leaderTeleopUnavailableReason = useOperatorLeaderTeleopStore(
-    (state) => state.reason,
-  );
-  const leaderTeleopViewerModeRequestId = useOperatorLeaderTeleopStore(
-    (state) => state.viewerModeRequestId,
-  );
-  const leaderTeleopViewerModeExitRequestId = useOperatorLeaderTeleopStore(
-    (state) => state.viewerModeExitRequestId,
-  );
-  const setLeaderTeleopViewerModeActive = useOperatorLeaderTeleopStore(
-    (state) => state.setLeaderTeleopViewerModeActive,
-  );
-  const pointCloudAutocalibrationDecision = useOperatorPerceptionStore(
-    (state) => state.pointCloudAutocalibrationDecision
-  );
-  const pointCloudSceneMeshRequest = useOperatorPerceptionStore(
-    (state) => state.pointCloudSceneMeshRequest
-  );
-  const clearPointCloudAutocalibrationRequest = useOperatorPerceptionStore(
-    (state) => state.clearPointCloudAutocalibrationRequest
-  );
-  const markPointCloudAutocalibrationReady = useOperatorPerceptionStore(
-    (state) => state.markPointCloudAutocalibrationReady
-  );
-  const clearPointCloudAutocalibrationReview = useOperatorPerceptionStore(
-    (state) => state.clearPointCloudAutocalibrationReview
-  );
-  const clearPointCloudAutocalibrationDecision = useOperatorPerceptionStore(
-    (state) => state.clearPointCloudAutocalibrationDecision
-  );
-  const clearPointCloudSceneMeshRequest = useOperatorPerceptionStore(
-    (state) => state.clearPointCloudSceneMeshRequest
-  );
-  const setPointCloudSceneMeshStatus = useOperatorPerceptionStore(
-    (state) => state.setPointCloudSceneMeshStatus
-  );
-  const operatorPointCloudOverlayFrames = useMemo(
-    () =>
-      operatorPointCloudFrames.length > 0
-        ? operatorPointCloudFrames
-        : operatorPointCloudFrame
-          ? [operatorPointCloudFrame]
-          : [],
-    [operatorPointCloudFrame, operatorPointCloudFrames],
-  );
-  const autocalibrationAccumulatorRef =
-    useRef<PointCloudAutocalibrationAccumulator | null>(null);
-  const [
-    acceptedPointCloudFloorCalibrationsByCameraId,
-    setAcceptedPointCloudFloorCalibrationsByCameraId,
-  ] = useState<OperatorPointCloudFloorCalibrationByCameraId>({});
-  const [
-    pendingPointCloudFloorCalibrationsByCameraId,
-    setPendingPointCloudFloorCalibrationsByCameraId,
-  ] = useState<OperatorPointCloudFloorCalibrationByCameraId>({});
-  const [
-    pendingPointCloudAutocalibrationRequestId,
-    setPendingPointCloudAutocalibrationRequestId,
-  ] = useState<number | null>(null);
-  const [
-    operatorPointCloudCalibrationPlanes,
-    setOperatorPointCloudCalibrationPlanes,
-  ] = useState<OperatorPointCloudCalibrationPlaneOverlay[]>([]);
-  const [
-    acceptedOpenArmDemoTableCalibrationPlanes,
-    setAcceptedOpenArmDemoTableCalibrationPlanes,
-  ] = useState<OperatorPointCloudCalibrationPlaneOverlay[]>([]);
-  const [
-    bootstrappedOpenArmDemoTableCalibrationPlanes,
-    setBootstrappedOpenArmDemoTableCalibrationPlanes,
-  ] = useState<OpenArmDemoTableCalibrationPlane[]>([]);
-  const operatorPointCloudFloorCalibrationsByCameraId = useMemo(
-    () => ({
-      ...acceptedPointCloudFloorCalibrationsByCameraId,
-      ...pendingPointCloudFloorCalibrationsByCameraId,
-    }),
-    [
-      acceptedPointCloudFloorCalibrationsByCameraId,
-      pendingPointCloudFloorCalibrationsByCameraId,
-    ],
-  );
-  const openArmDemoTableCalibrationPlanes = useMemo<
-    readonly OpenArmDemoTableCalibrationPlane[]
-  >(
-    () =>
-      operatorPointCloudCalibrationPlanes.length > 0
-        ? operatorPointCloudCalibrationPlanes
-        : acceptedOpenArmDemoTableCalibrationPlanes.length > 0
-          ? acceptedOpenArmDemoTableCalibrationPlanes
-          : bootstrappedOpenArmDemoTableCalibrationPlanes,
-    [
-      acceptedOpenArmDemoTableCalibrationPlanes,
-      bootstrappedOpenArmDemoTableCalibrationPlanes,
-      operatorPointCloudCalibrationPlanes,
-    ],
-  );
-  useEffect(() => {
-    if (!pointCloudSceneMeshRequest) return;
-
-    if (operatorPointCloudOverlayFrames.length === 0) {
-      setPointCloudSceneMeshStatus("No live point cloud available.");
-      clearPointCloudSceneMeshRequest();
-      return;
-    }
-
-    const sceneMeshes = resolveOperatorPointCloudSceneMeshes(
-      operatorPointCloudOverlayFrames,
-      operatorPointCloudFloorCalibrationsByCameraId,
-      openArmDemoTableCalibrationPlanes,
-    );
-    const sceneObjects: Omit<CreatedObject, "id">[] = sceneMeshes.map(
-      (mesh) => ({
-        label: mesh.label,
-        type: "cube",
-        position: new THREE.Vector3(...mesh.position),
-        rotation: new THREE.Euler(...mesh.rotationRpyRad, "XYZ"),
-        size: new THREE.Vector3(...mesh.size),
-        color: mesh.color,
-        source: "runtime-detection",
-        trackedJointName: null,
-        isIkTarget: false,
-      }),
-    );
-
-    replaceWorldObjectsBySource("runtime-detection", sceneObjects);
-    setPointCloudSceneMeshStatus(
-      sceneMeshes.length > 0
-        ? `Created ${sceneMeshes.length} cloud scene mesh${
-            sceneMeshes.length === 1 ? "" : "es"
-          }.`
-        : "No large planar cloud surfaces found.",
-    );
-    clearPointCloudSceneMeshRequest();
-  }, [
-    clearPointCloudSceneMeshRequest,
-    operatorPointCloudFloorCalibrationsByCameraId,
-    operatorPointCloudOverlayFrames,
-    openArmDemoTableCalibrationPlanes,
-    pointCloudSceneMeshRequest,
-    replaceWorldObjectsBySource,
-    setPointCloudSceneMeshStatus,
-  ]);
-  const finalizePointCloudAutocalibration = useCallback(
-    (requestId: number) => {
-      const accumulator = autocalibrationAccumulatorRef.current;
-      if (!accumulator || accumulator.requestId !== requestId) return;
-
-      const nextCalibrationsByCameraId: OperatorPointCloudFloorCalibrationByCameraId =
-        {};
-      const nextPlanes: OperatorPointCloudCalibrationPlaneOverlay[] = [];
-      for (const [cameraId, samples] of accumulator.samplesByCameraId) {
-        const result =
-          resolveOperatorPointCloudDominantSurfaceCalibrationResult(samples);
-        if (!result) continue;
-        nextCalibrationsByCameraId[cameraId] = result.calibration;
-        nextPlanes.push({
-          ...applyOperatorPointCloudFloorCalibrationToPlane(
-            result.plane,
-            result.calibration,
-          ),
-          cameraId,
-        });
-      }
-
-      if (nextPlanes.length > 0) {
-        setPendingPointCloudFloorCalibrationsByCameraId(
-          nextCalibrationsByCameraId,
-        );
-        setPendingPointCloudAutocalibrationRequestId(requestId);
-        setOperatorPointCloudCalibrationPlanes(nextPlanes);
-        markPointCloudAutocalibrationReady(requestId, nextPlanes.length);
-      }
-      autocalibrationAccumulatorRef.current = null;
-      clearPointCloudAutocalibrationRequest();
-    },
-    [clearPointCloudAutocalibrationRequest, markPointCloudAutocalibrationReady],
-  );
-  useEffect(() => {
-    if (!pointCloudAutocalibrationRequest) {
-      autocalibrationAccumulatorRef.current = null;
-      return;
-    }
-
-    autocalibrationAccumulatorRef.current = {
-      lastSampledAtMsByCameraId: new Map(),
-      requestId: pointCloudAutocalibrationRequest.requestId,
-      samplesByCameraId: new Map(),
-    };
-    setPendingPointCloudFloorCalibrationsByCameraId({});
-    setPendingPointCloudAutocalibrationRequestId(null);
-    setOperatorPointCloudCalibrationPlanes([]);
-  }, [pointCloudAutocalibrationRequest]);
-  useEffect(() => {
-    if (!pointCloudAutocalibrationRequest) return;
-    const timeoutId = window.setTimeout(
-      () =>
-        finalizePointCloudAutocalibration(
-          pointCloudAutocalibrationRequest.requestId,
-        ),
-      pointCloudAutocalibrationRequest.durationMs,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [finalizePointCloudAutocalibration, pointCloudAutocalibrationRequest]);
-  useEffect(() => {
-    const accumulator = autocalibrationAccumulatorRef.current;
-    if (
-      !pointCloudAutocalibrationRequest ||
-      !accumulator ||
-      accumulator.requestId !== pointCloudAutocalibrationRequest.requestId
-    ) {
-      return;
-    }
-
-    for (const frame of operatorPointCloudOverlayFrames) {
-      const sampleTimestampMs = Date.now();
-      const lastSampledAtMs =
-        accumulator.lastSampledAtMsByCameraId.get(frame.cameraId) ?? 0;
-      if (
-        sampleTimestampMs - lastSampledAtMs <
-        OPERATOR_POINT_CLOUD_AUTOCALIBRATION_SAMPLE_INTERVAL_MS
-      ) {
-        continue;
-      }
-      const poseTransform = frame.cameraPose
-        ? buildOperatorPointCloudPoseTransform(frame.cameraPose)
-        : null;
-      const samples = collectOperatorPointCloudWorldSamples(frame, poseTransform);
-      if (samples.length === 0) continue;
-      accumulator.lastSampledAtMsByCameraId.set(
-        frame.cameraId,
-        sampleTimestampMs,
-      );
-      const currentSamples =
-        accumulator.samplesByCameraId.get(frame.cameraId) ?? [];
-      const combinedSamples = [...currentSamples, ...samples];
-      accumulator.samplesByCameraId.set(
-        frame.cameraId,
-        combinedSamples.slice(
-          -OPERATOR_POINT_CLOUD_AUTOCALIBRATION_MAX_ACCUMULATED_SAMPLES,
-        ),
-      );
-    }
-  }, [operatorPointCloudOverlayFrames, pointCloudAutocalibrationRequest]);
-  useEffect(() => {
-    if (
-      !openArmHfLiveObserveRequested ||
-      !isOpenArmDemoRobot ||
-      operatorPointCloudOverlayFrames.length === 0 ||
-      operatorPointCloudCalibrationPlanes.length > 0 ||
-      acceptedOpenArmDemoTableCalibrationPlanes.length > 0 ||
-      bootstrappedOpenArmDemoTableCalibrationPlanes.length > 0
-    ) {
-      return;
-    }
-
-    const calibrationPlanes =
-      resolveOpenArmDemoTableCalibrationPlanesFromPointCloudFrames(
-        operatorPointCloudOverlayFrames,
-      );
-    if (calibrationPlanes.length === 0) return;
-    setBootstrappedOpenArmDemoTableCalibrationPlanes(calibrationPlanes);
-  }, [
-    acceptedOpenArmDemoTableCalibrationPlanes.length,
-    bootstrappedOpenArmDemoTableCalibrationPlanes.length,
-    isOpenArmDemoRobot,
-    openArmHfLiveObserveRequested,
-    operatorPointCloudCalibrationPlanes.length,
-    operatorPointCloudOverlayFrames,
-  ]);
-  useEffect(() => {
-    if (!pointCloudAutocalibrationDecision) return;
-    if (
-      pendingPointCloudAutocalibrationRequestId !==
-      pointCloudAutocalibrationDecision.requestId
-    ) {
-      clearPointCloudAutocalibrationDecision();
-      return;
-    }
-
-    if (pointCloudAutocalibrationDecision.action === "accept") {
-      setAcceptedPointCloudFloorCalibrationsByCameraId((current) => ({
-        ...current,
-        ...pendingPointCloudFloorCalibrationsByCameraId,
-      }));
-      setAcceptedOpenArmDemoTableCalibrationPlanes(
-        operatorPointCloudCalibrationPlanes,
-      );
-    }
-
-    setPendingPointCloudFloorCalibrationsByCameraId({});
-    setPendingPointCloudAutocalibrationRequestId(null);
-    setOperatorPointCloudCalibrationPlanes([]);
-    clearPointCloudAutocalibrationReview();
-    clearPointCloudAutocalibrationDecision();
-  }, [
-    clearPointCloudAutocalibrationDecision,
-    clearPointCloudAutocalibrationReview,
-    pendingPointCloudAutocalibrationRequestId,
-    pendingPointCloudFloorCalibrationsByCameraId,
-    pointCloudAutocalibrationDecision,
-    operatorPointCloudCalibrationPlanes,
-  ]);
-  useEffect(() => {
-    if (
-      openArmHfLiveObserveRequested ||
-      operatorPointCloudOverlayFrames.length > 0
-    ) {
-      return;
-    }
-    setAcceptedPointCloudFloorCalibrationsByCameraId({});
-    setAcceptedOpenArmDemoTableCalibrationPlanes([]);
-    setBootstrappedOpenArmDemoTableCalibrationPlanes([]);
-    setPendingPointCloudFloorCalibrationsByCameraId({});
-    setPendingPointCloudAutocalibrationRequestId(null);
-    setOperatorPointCloudCalibrationPlanes([]);
-    clearPointCloudAutocalibrationReview();
-    clearPointCloudAutocalibrationDecision();
-  }, [
-    clearPointCloudAutocalibrationDecision,
-    clearPointCloudAutocalibrationReview,
-    openArmHfLiveObserveRequested,
-    operatorPointCloudOverlayFrames.length,
-  ]);
-  const livePointCloudCameraConfigs = useMemo<RobotCamera[]>(() => {
-    if (!openArmHfLiveObserveRequested || !isOpenArmDemoRobot) return [];
-    const insertedLiveCameraIds = insertedLiveCameraIdsRef.current;
-    const storedNonLiveCameraKeys = new Set(
-      cameraConfigs
-        .filter((camera) => !insertedLiveCameraIds.has(camera.id))
-        .flatMap((camera) => [camera.id, camera.name]),
-    );
-    return operatorPointCloudOverlayFrames.flatMap((frame) => {
-      if (
-        !frame.cameraPose ||
-        !frame.cameraId.trim() ||
-        storedNonLiveCameraKeys.has(frame.cameraId)
-      ) {
-        return [];
-      }
-      const liveCameraPose =
-        resolveOpenArmHfLiveCameraConfigPoseFromPointCloudPose(frame.cameraPose);
-      return [{
-        id: frame.cameraId,
-        name: frame.cameraId,
-        parent_joint: OPENARM_HF_LIVE_CAMERA_PARENT_JOINT,
-        pose: {
-          xyz: liveCameraPose.xyz,
-          rpy: liveCameraPose.rpy,
-        },
-        intrinsics: {
-          width: frame.intrinsics.width,
-          height: frame.intrinsics.height,
-          fov_deg: OPENARM_HF_LIVE_CAMERA_FOV_DEG,
-          fx: frame.intrinsics.fx,
-          fy: frame.intrinsics.fy,
-          cx: frame.intrinsics.ppx,
-          cy: frame.intrinsics.ppy,
-        },
-      }];
-    });
-  }, [
-    cameraConfigs,
-    isOpenArmDemoRobot,
-    openArmHfLiveObserveRequested,
-    operatorPointCloudOverlayFrames,
-  ]);
-  useEffect(() => {
-    const insertedLiveCameraIds = insertedLiveCameraIdsRef.current;
-    const liveCameraIds = new Set(livePointCloudCameraConfigs.map((camera) => camera.id));
-    const storeCameraKeys = new Set(
-      cameraConfigs
-        .filter((camera) => !insertedLiveCameraIds.has(camera.id))
-        .flatMap((camera) => [camera.id, camera.name]),
-    );
-    const storeCameraById = new Map(
-      cameraConfigs.map((camera) => [camera.id, camera] as const),
-    );
-
-    for (const camera of livePointCloudCameraConfigs) {
-      if (storeCameraKeys.has(camera.id) || storeCameraKeys.has(camera.name)) continue;
-      const storedCamera = storeCameraById.get(camera.id);
-      const shouldUpsertCamera =
-        !storedCamera ||
-        storedCamera.name !== camera.name ||
-        storedCamera.parent_joint !== camera.parent_joint ||
-        !cameraPoseClose(storedCamera.pose, camera.pose) ||
-        !cameraIntrinsicsClose(
-          normalizeCameraIntrinsics(storedCamera.intrinsics),
-          normalizeCameraIntrinsics(camera.intrinsics),
-        );
-      if (shouldUpsertCamera) {
-        upsertCameraConfig(camera);
-      }
-      insertedLiveCameraIds.add(camera.id);
-    }
-
-    for (const cameraId of [...insertedLiveCameraIds]) {
-      if (liveCameraIds.has(cameraId)) continue;
-      removeCameraConfig(cameraId);
-      insertedLiveCameraIds.delete(cameraId);
-    }
-  }, [cameraConfigs, livePointCloudCameraConfigs, removeCameraConfig, upsertCameraConfig]);
   const visibleCameraConfigs = useMemo(
     () => {
       const insertedLiveCameraIds = insertedLiveCameraIdsRef.current;
@@ -4317,7 +3840,7 @@ export const Viewer3D = ({
       const nonLiveCameraConfigs = cameraConfigs.filter(
         (camera) => !insertedLiveCameraIds.has(camera.id),
       );
-      for (const camera of [...nonLiveCameraConfigs, ...livePointCloudCameraConfigs]) {
+      for (const camera of nonLiveCameraConfigs) {
         const duplicateCamera = cameraConfigsByKey.get(camera.id) ??
           cameraConfigsByKey.get(camera.name);
         if (!duplicateCamera) {
@@ -4332,7 +3855,7 @@ export const Viewer3D = ({
           )
         : cameraConfigsWithLive;
     },
-    [cameraConfigs, livePointCloudCameraConfigs, readOnlyMode]
+    [cameraConfigs, readOnlyMode]
   );
   const cameraIconConfigs = useMemo(
     () =>
@@ -4590,123 +4113,28 @@ export const Viewer3D = ({
       }),
     [isAssemblyWorkspace, simulationPrepPanelOpen]
   );
-  const canUseLeaderTeleopMode = useMemo(
-    () =>
-      canUseViewerLeaderTeleopMode({
-        leaderTeleopAvailable: leaderTeleopAvailable || localLeaderAssigned,
-        isAssemblyWorkspace,
-      }),
-    [leaderTeleopAvailable, localLeaderAssigned, isAssemblyWorkspace],
-  );
-  const canOpenDragModeMenu = canUseDragHandleMode || canUseLeaderTeleopMode;
+  const canOpenDragModeMenu = canUseDragHandleMode;
   const effectiveDragMode = useMemo(
     () =>
       resolveEffectiveViewerDragMode({
         dragMode,
-        leaderTeleopAvailable: leaderTeleopAvailable || localLeaderAssigned,
         isAssemblyWorkspace,
         simulationPrepPanelOpen,
       }),
     [
       dragMode,
-      leaderTeleopAvailable,
-      localLeaderAssigned,
       isAssemblyWorkspace,
       simulationPrepPanelOpen,
     ]
   );
-  const liveTeleopJointTelemetryByName = useMemo(
-    () =>
-      resolveLiveTeleopJointTelemetryByName({
-        leaderTelemetryByName: liveLeaderJointTelemetryByName,
-        followerTelemetryByName: liveFollowerJointTelemetryByName,
-      }),
-    [liveFollowerJointTelemetryByName, liveLeaderJointTelemetryByName],
-  );
-  const liveTeleopJointTelemetryCount = Object.keys(
-    liveTeleopJointTelemetryByName,
-  ).length;
-  const liveTeleopJointSyncActive =
-    resolveLiveTeleopJointSyncActive({
-      dragMode: effectiveDragMode,
-      isPlaying,
-      liveTelemetryCount: liveTeleopJointTelemetryCount,
-    });
-  useOperatorLeaderTelemetryBridge({
-    active: effectiveDragMode === "hardware-teleop" && localLeaderAssigned && !isPlaying,
-    availableJointNames,
-  });
-  useEffect(() => {
-    const active = effectiveDragMode === "hardware-teleop";
-    setLeaderTeleopViewerModeActive(active);
-    return () => setLeaderTeleopViewerModeActive(false);
-  }, [effectiveDragMode, setLeaderTeleopViewerModeActive]);
   const readOnlyNoticeShownAtRef = useRef<number | null>(null);
   const [isDragModeMenuOpen, setIsDragModeMenuOpen] = useState(false);
-  const handledLeaderTeleopViewerModeRequestIdRef = useRef(0);
   useEffect(() => {
-    if (leaderTeleopViewerModeRequestId <= 0) return;
-    if (
-      handledLeaderTeleopViewerModeRequestIdRef.current ===
-      leaderTeleopViewerModeRequestId
-    ) {
-      return;
-    }
-    if (!canUseLeaderTeleopMode) return;
-    handledLeaderTeleopViewerModeRequestIdRef.current =
-      leaderTeleopViewerModeRequestId;
-    setDragMode("hardware-teleop");
-    setIsDragModeMenuOpen(false);
-  }, [canUseLeaderTeleopMode, leaderTeleopViewerModeRequestId]);
-  const handledLeaderTeleopViewerModeExitRequestIdRef = useRef(0);
-  useEffect(() => {
-    if (leaderTeleopViewerModeExitRequestId <= 0) return;
-    if (
-      handledLeaderTeleopViewerModeExitRequestIdRef.current ===
-      leaderTeleopViewerModeExitRequestId
-    ) {
-      return;
-    }
-    handledLeaderTeleopViewerModeExitRequestIdRef.current =
-      leaderTeleopViewerModeExitRequestId;
-    if (dragMode !== "hardware-teleop") return;
-    setDragMode(canUseDragHandleMode ? "drag-handle" : "move-joints");
-    setIsDragModeMenuOpen(false);
-  }, [
-    canUseDragHandleMode,
-    dragMode,
-    leaderTeleopViewerModeExitRequestId,
-  ]);
-  useEffect(() => {
-    if (dragMode === "hardware-teleop" && !canUseLeaderTeleopMode) {
-      setDragMode(canUseDragHandleMode ? "drag-handle" : "move-joints");
-      setIsDragModeMenuOpen(false);
-      return;
-    }
     if (!canUseDragHandleMode && dragMode !== "move-joints") {
       setDragMode("move-joints");
       setIsDragModeMenuOpen(false);
     }
-  }, [canUseDragHandleMode, canUseLeaderTeleopMode, dragMode]);
-
-  useEffect(() => {
-    if (!liveTeleopJointSyncActive) return;
-    const currentJointValues = useJointStore.getState().jointValues;
-    const { jointValues: liveJointValues, changed } =
-      resolveLiveTeleopJointTargets({
-        telemetryByName: liveTeleopJointTelemetryByName,
-        availableJointNames,
-        currentJointValues,
-      });
-    if (!changed || Object.keys(liveJointValues).length === 0) return;
-    const candidateJointValues = { ...currentJointValues, ...liveJointValues };
-    setStoreJointValues(candidateJointValues);
-  }, [
-    availableJointNames,
-    liveTeleopJointSyncActive,
-    liveTeleopJointTelemetryByName,
-    setStoreJointValues,
-  ]);
+  }, [canUseDragHandleMode, dragMode]);
 
   const motionKernel = useMemo(() => {
     if (!motionKernelEnabled || isAssemblyWorkspace || !robot) {
@@ -5110,7 +4538,7 @@ export const Viewer3D = ({
         }
         setStoreJointValues(merged);
         onIkApplied?.(merged, {
-          inputSource: OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY,
+          inputSource: IK_APPLY_INPUT_SOURCE,
         });
         onComplete?.();
         setIsIkTrajectoryApplying(false);
@@ -5222,7 +4650,7 @@ export const Viewer3D = ({
         }
         setStoreJointValues(finalValues);
         onIkApplied?.(finalValues, {
-          inputSource: OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY,
+          inputSource: IK_APPLY_INPUT_SOURCE,
         });
         onComplete?.();
         setIsIkTrajectoryApplying(false);
@@ -5443,11 +4871,7 @@ export const Viewer3D = ({
       workspaceModeUi.showIkPanel,
     ]
   );
-  const pointCloudGpuOverlayVisible =
-    viewerUi.showStudioSceneChrome &&
-    !thumbnailMode &&
-    openArmHfLiveObserveRequested &&
-    operatorPointCloudOverlayFrames.length > 0;
+  const pointCloudGpuOverlayVisible = false;
   const inertiaLegendItems = [
     {
       key: "shape",
@@ -5556,7 +4980,7 @@ export const Viewer3D = ({
     isIkHandleDragging,
     isIkTrajectoryApplying,
     isPlaying,
-    liveTeleopJointSyncActive,
+    liveExternalJointSyncActive: false,
     animationController,
     jointLimits,
     initialPosePolicy: DEMO_MODE ? "limits-center" : "robot",
@@ -5632,21 +5056,6 @@ export const Viewer3D = ({
     closeIkDialog,
     stopOrbitFollow,
   ]);
-  const previousEffectiveDragModeForLeaderFallbackRef =
-    useRef<DragMode>(effectiveDragMode);
-  useEffect(() => {
-    const previousDragMode = previousEffectiveDragModeForLeaderFallbackRef.current;
-    previousEffectiveDragModeForLeaderFallbackRef.current = effectiveDragMode;
-    if (
-      shouldResetPoseAfterLeaderTeleopFallback({
-        previousDragMode,
-        currentDragMode: effectiveDragMode,
-        leaderTeleopAvailable: canUseLeaderTeleopMode,
-      })
-    ) {
-      handleResetPoseToOrigin();
-    }
-  }, [canUseLeaderTeleopMode, effectiveDragMode, handleResetPoseToOrigin]);
   useEffect(() => {
     if (
       !shouldApplySimulationPrepResetPoseRequest({
@@ -5682,9 +5091,6 @@ export const Viewer3D = ({
     setIsObjectToolsOpen((previous) => !previous);
   }
   function selectDragMode(nextDragMode: DragMode) {
-    if (nextDragMode === "hardware-teleop" && !canUseLeaderTeleopMode) {
-      return;
-    }
     setIsDragModeMenuOpen(false);
     setDragMode(nextDragMode);
   }
@@ -6283,14 +5689,6 @@ export const Viewer3D = ({
     viewerUi.canRunStudioWheelDrive,
   ]);
 
-  const { handleMotionDataUpload } = useMotionDataUpload({
-    robot,
-    setAnimationFrames,
-    setIsPlaying,
-    setMotionDataFile,
-    setStoreJointValues,
-    onMotionFileChange,
-  });
   const {
     handleRun,
     handlePlayEpisode,
@@ -6323,7 +5721,6 @@ export const Viewer3D = ({
     cameraRef,
     jointValues: storeJointValues,
     camerasOverride: visibleCameraConfigs,
-    floorCalibrationsByCameraId: operatorPointCloudFloorCalibrationsByCameraId,
     suspendSelectedCameraSync: isIkHandleDragging,
   });
   const closeCameraMenu = useCallback(() => {
@@ -6696,7 +6093,6 @@ export const Viewer3D = ({
 
   useViewerWindowBindings({
     handleRun,
-    handleMotionDataUpload,
     handlePlayEpisode,
     handleStopAnimation,
     handleClearAnimation,
@@ -7196,29 +6592,11 @@ export const Viewer3D = ({
           {viewerUi.showStudioSceneChrome && showWorldLayoutOverlays && robot && (
             <CameraIcons
               camerasOverride={cameraIconConfigs}
-              floorCalibrationsByCameraId={operatorPointCloudFloorCalibrationsByCameraId}
               robot={robot}
               gpuMode={effectiveGpuMode}
             />
           )}
-          {pointCloudGpuOverlayVisible && (
-            <>
-              <OperatorPointCloudCalibrationPlanes
-                planes={operatorPointCloudCalibrationPlanes}
-                visible={true}
-              />
-              {operatorPointCloudOverlayFrames.map((frame) => (
-                <OperatorPointCloudOverlay
-                  key={frame.cameraId}
-                  frame={frame}
-                  floorCalibration={
-                    operatorPointCloudFloorCalibrationsByCameraId[frame.cameraId] ?? null
-                  }
-                  visible={true}
-                />
-              ))}
-            </>
-          )}
+          {pointCloudGpuOverlayVisible && null}
           
           <OrbitControls
             ref={controlsRef}
@@ -7307,24 +6685,6 @@ export const Viewer3D = ({
                         Drag Handle
                       </button>
                     ) : null}
-                    <button
-                      className={cn(
-                        "w-full text-left px-3 py-1.5 transition-colors",
-                        canUseLeaderTeleopMode
-                          ? "hover:bg-muted"
-                          : "cursor-not-allowed text-muted-foreground/60",
-                        effectiveDragMode === "hardware-teleop" && "bg-muted/70 font-medium"
-                      )}
-                      disabled={!canUseLeaderTeleopMode}
-                      title={
-                        canUseLeaderTeleopMode
-                          ? "Use the configured leader input"
-                          : leaderTeleopUnavailableReason
-                      }
-                      onClick={() => selectDragMode("hardware-teleop")}
-                    >
-                      Leader Teleop
-                    </button>
                   </div>
                 )}
               </div>

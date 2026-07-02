@@ -23,7 +23,15 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
             {
               id: "genesis",
               label: "Genesis",
+              targetKind: "physics_simulator",
               detail: "URDF open",
+              robotAssetFormat: "urdf",
+              sceneAssetFormat: "urdf",
+              transferStrategy: "direct",
+              transferLabel: "Direct URDF",
+              transferDescription: "Uses the loaded URDF directly.",
+              createsTransferAsset: false,
+              statusLabel: "ready",
               openLabel: "Open in Genesis",
               openingLabel: "Opening Genesis",
               isBusy: false,
@@ -34,7 +42,15 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
             {
               id: "mjlab",
               label: "MJLab",
+              targetKind: "physics_simulator",
               detail: "MJCF open and validation",
+              robotAssetFormat: "mjcf",
+              sceneAssetFormat: "mjcf",
+              transferStrategy: "convert",
+              transferLabel: "Converts to MJCF",
+              transferDescription: "URDF Studio writes a new MJCF simulator asset.",
+              createsTransferAsset: true,
+              statusLabel: "ready",
               openLabel: "Open in MJLab",
               openingLabel: "Opening MJLab",
               isBusy: false,
@@ -46,7 +62,15 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
             {
               id: "sapien2",
               label: "SAPIEN 2",
+              targetKind: "physics_simulator",
               detail: "URDF soon",
+              robotAssetFormat: "urdf",
+              sceneAssetFormat: "urdf",
+              transferStrategy: "planned",
+              transferLabel: "Planned URDF",
+              transferDescription: "Opening is not enabled yet.",
+              createsTransferAsset: true,
+              statusLabel: "planned",
               openLabel: "Open in SAPIEN 2",
               openingLabel: "Opening SAPIEN 2",
               isBusy: false,
@@ -59,14 +83,22 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
       );
     });
 
-    expect(textContent(container)).toContain("Open");
+    expect(textContent(container)).toContain("Targets");
+    expect(textContent(container)).toContain("Simulators + tools");
     expect(textContent(container)).toContain("3 obj · 2 cam");
-    expect(textContent(container)).not.toContain("ready");
+    expect(textContent(container)).toContain("3 targets");
+    expect(textContent(container)).toContain("ready");
     expect(textContent(container)).not.toContain("Adapt");
+    expect(textContent(container)).not.toContain("Open In");
     expect(textContent(container)).not.toContain("Simulation Prep");
     expect(textContent(container)).toContain("Genesis");
     expect(textContent(container)).toContain("MJLab");
     expect(textContent(container)).toContain("SAPIEN 2");
+    expect(textContent(container)).toContain("URDF");
+    expect(textContent(container)).toContain("MJCF");
+    expect(textContent(container)).not.toContain("Direct URDF");
+    expect(textContent(container)).not.toContain("Writes MJCF");
+    expect(textContent(container)).not.toContain("Planned URDF");
 
     await act(async () => {
       container
@@ -81,8 +113,8 @@ describe("HealthActionPanelWorkspaceTransfer", () => {
       'button[aria-label="SAPIEN 2 soon"]'
     );
     expect(disabledButton?.hasAttribute("disabled")).toBe(true);
-    expect(disabledButton?.getAttribute("class")).toContain("bg-neutral-950");
-    expect(disabledButton?.getAttribute("class")).toContain("text-neutral-500");
+    expect(disabledButton?.getAttribute("class")).toContain("bg-background/20");
+    expect(disabledButton?.getAttribute("class")).toContain("text-muted-foreground/70");
     expect(prepareGenesis).toHaveBeenCalledTimes(1);
     expect(prepareMjlab).toHaveBeenCalledTimes(1);
     expect(prepareSapien).not.toHaveBeenCalled();

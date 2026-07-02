@@ -36,7 +36,6 @@ describe("toViewer3DProps", () => {
       setHoveredLink: vi.fn(),
       handleJointChange: vi.fn(),
       handleRobotJointsLoaded: vi.fn(),
-      setMotionDataFile: vi.fn(),
       setIsPlaying: vi.fn(),
       setHasAnimationFrames: vi.fn(),
       handleFrameChange: vi.fn(),

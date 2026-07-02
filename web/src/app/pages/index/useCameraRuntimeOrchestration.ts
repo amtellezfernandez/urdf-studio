@@ -19,6 +19,10 @@ import {
   writeThumbnailRenderState,
 } from "@/app/pages/index/thumbnailRenderState";
 import { useDemoMotionFlow } from "@/app/pages/index/useDemoMotionFlow";
+import {
+  CAMERA_AUTO_RECONCILE_INTERVAL_MS,
+  CAMERA_AUTO_RECONCILE_MAX_ATTEMPTS,
+} from "@/features/camera/cameraAutoGenerationParams";
 import type { ThumbnailParams } from "@/app/pages/index/useIndexPageParams";
 import {
   computeRuntimeDemoDirectMovePose,
@@ -60,7 +64,6 @@ type UseCameraRuntimeOrchestrationParams = {
   availableJoints: string[];
   availableLinks: string[];
   cameras: Camera[];
-  datasetActions: UseDemoMotionFlowParams["datasetActions"];
   endEffectorLink: string | null;
   hasLoadedFiles: boolean;
   hydrateDemoAssetsFromFiles: UseDemoMotionFlowParams["hydrateDemoAssetsFromFiles"];
@@ -76,8 +79,6 @@ type UseCameraRuntimeOrchestrationParams = {
   runtimeRobotBasePose: RuntimePose;
   setGPUMode: UseThumbnailBootstrapParams["setGPUMode"];
   setIsImportingWorldLayout: (value: boolean) => void;
-  setIsViewerOpen: UseDemoMotionFlowParams["setIsViewerOpen"];
-  setViewerEpisode: UseDemoMotionFlowParams["setViewerEpisode"];
   setWorldLayoutImportDialogOpen: (value: boolean) => void;
   setWorldLayoutImportUrlDraft: (value: string) => void;
   skipDefaultWorldLayoutAutoImportRef: MutableRefObject<boolean>;
@@ -98,7 +99,6 @@ export const useCameraRuntimeOrchestration = ({
   availableJoints,
   availableLinks,
   cameras,
-  datasetActions,
   endEffectorLink,
   hasLoadedFiles,
   hydrateDemoAssetsFromFiles,
@@ -114,8 +114,6 @@ export const useCameraRuntimeOrchestration = ({
   runtimeRobotBasePose,
   setGPUMode,
   setIsImportingWorldLayout,
-  setIsViewerOpen,
-  setViewerEpisode,
   setWorldLayoutImportDialogOpen,
   setWorldLayoutImportUrlDraft,
   skipDefaultWorldLayoutAutoImportRef,
@@ -252,12 +250,12 @@ export const useCameraRuntimeOrchestration = ({
       if (cancelled) return;
       attemptCount += 1;
       ensureDetectedCamerasForLoadedRobot(useCameraStore.getState().cameras);
-      if (attemptCount >= 4) return;
+      if (attemptCount >= CAMERA_AUTO_RECONCILE_MAX_ATTEMPTS) return;
       if (!hasPendingAutoCameraGeometry()) return;
-      timeoutId = window.setTimeout(reconcile, 250);
+      timeoutId = window.setTimeout(reconcile, CAMERA_AUTO_RECONCILE_INTERVAL_MS);
     };
 
-    timeoutId = window.setTimeout(reconcile, 250);
+    timeoutId = window.setTimeout(reconcile, CAMERA_AUTO_RECONCILE_INTERVAL_MS);
     return () => {
       cancelled = true;
       if (timeoutId) window.clearTimeout(timeoutId);
@@ -374,7 +372,6 @@ export const useCameraRuntimeOrchestration = ({
   const { handlePlayDemoMotion, loadBundledDemoRobot, pendingDemoMotion } = useDemoMotionFlow({
     activeUrdfPath,
     availableJoints,
-    datasetActions,
     hasLoadedFiles,
     hydrateDemoAssetsFromFiles,
     isLeKiwiDemoRobot: /lekiwi/i.test(urdfFileName ?? "") || /lekiwi/i.test(activeUrdfPath ?? ""),
@@ -384,8 +381,6 @@ export const useCameraRuntimeOrchestration = ({
     playbackHandlers,
     prepareDemoScene,
     robot,
-    setIsViewerOpen,
-    setViewerEpisode,
     skipDefaultWorldLayoutAutoImportRef,
     urdfAnalysis,
   });

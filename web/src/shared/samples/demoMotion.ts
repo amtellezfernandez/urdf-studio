@@ -1,5 +1,5 @@
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
-import { createEpisode, type Episode } from "@/features/dataset/episodes";
+import type { AnimationFrame } from "@/features/viewer/viewer-types";
 
 const DEFAULT_FPS = 60;
 const DEFAULT_DURATION_MS = 4000;
@@ -44,6 +44,29 @@ type DemoProfile = {
   fps: number;
   amplitudeScale: number;
   wave: (t: number, jointIndex: number, phase: number) => number;
+};
+
+export type DemoMotionFrame = {
+  timestamp: number;
+  jointPositions: Record<string, number>;
+};
+
+export type DemoMotionEpisode = {
+  id: string;
+  number: number;
+  frames: DemoMotionFrame[];
+  createdAt: number;
+  metadata: {
+    joint_names: string[];
+    source: "demo";
+    label: string;
+    createdAt: number;
+    num_frames: number;
+    fps: number;
+    additional: {
+      demoType: string;
+    };
+  };
 };
 
 const easeInOut = (t: number) =>
@@ -141,7 +164,7 @@ export const createDemoEpisodes = ({
   jointNames: string[];
   jointLimits?: JointLimits;
   profiles?: DemoProfile[];
-}): Episode[] => {
+}): DemoMotionEpisode[] => {
   const baseId = Date.now();
   const safeProfiles = profiles.slice(0, DEFAULT_DEMO_COUNT);
   const activeProfiles = safeProfiles.length > 1 ? safeProfiles.slice(1) : safeProfiles;
@@ -154,16 +177,29 @@ export const createDemoEpisodes = ({
       wave: profile.wave,
       amplitudeScale: profile.amplitudeScale,
     });
-    return createEpisode(`demo-${profile.id}-${baseId}`, index + 1, frames, {
-      joint_names: jointNames,
-      source: "demo",
-      label: profile.label,
-      createdAt: Date.now(),
-      num_frames: frames.length,
-      fps: profile.fps,
-      additional: {
-        demoType: profile.id,
+    const createdAt = Date.now();
+    return {
+      id: `demo-${profile.id}-${baseId}`,
+      number: index + 1,
+      frames,
+      createdAt,
+      metadata: {
+        joint_names: jointNames,
+        source: "demo",
+        label: profile.label,
+        createdAt,
+        num_frames: frames.length,
+        fps: profile.fps,
+        additional: {
+          demoType: profile.id,
+        },
       },
-    });
+    };
   });
 };
+
+export const toDemoAnimationFrames = (episode: DemoMotionEpisode): AnimationFrame[] =>
+  episode.frames.map((frame) => ({
+    timestamp: frame.timestamp,
+    joints: frame.jointPositions,
+  }));

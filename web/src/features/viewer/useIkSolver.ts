@@ -9,7 +9,6 @@ import { getJointLimits, type JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import {
   buildIkOrientationPayload,
-  extractLinkPose,
   getLiveRobotJoints,
   normalizeIkTargetPoseForRobotBase,
   type DragMode,
@@ -48,10 +47,6 @@ import { useIkdApproachTaskStore } from "@/features/viewer/useIkdApproachTaskSto
 import { IKD_RUNTIME_CONFIG } from "@/shared/config/runtime";
 import { beginIkObjectSolveSession } from "@/features/viewer/ikObjectSolveSession";
 import {
-  OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY,
-  OPERATOR_TELEOP_INPUT_SOURCE_IK_DRAG,
-} from "@/features/teleop/params/operatorTeleopParams";
-import {
   createIkMotionSafetyState,
   limitIkJointTargetsToMotionSafety,
   resetIkMotionSafetyState,
@@ -64,10 +59,11 @@ import {
 } from "@/features/viewer/ikObjectSolvePreSolvePolicy";
 import { doesViewerDragModeUseIkHandles } from "@/features/viewer/viewerDragModePolicy";
 
+const IK_APPLY_INPUT_SOURCE = "ik_apply";
+const IK_DRAG_INPUT_SOURCE = "ik_drag";
+
 export type IkAppliedMetadata = {
-  inputSource:
-    | typeof OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY
-    | typeof OPERATOR_TELEOP_INPUT_SOURCE_IK_DRAG;
+  inputSource: typeof IK_APPLY_INPUT_SOURCE | typeof IK_DRAG_INPUT_SOURCE;
 };
 
 export type IkObjectPreSolveProgress = {
@@ -196,10 +192,6 @@ export const useIkSolver = ({
   const orbitFollowAbortRef = useRef<boolean>(false);
   const lastIkAppliedRef = useRef<Record<string, number> | null>(null);
   const lastIkApplyTimeRef = useRef<number | null>(null);
-  const lerobotWarmupRef = useRef<{ key: string; inFlight: boolean }>({
-    key: "",
-    inFlight: false,
-  });
   const ikMotionSafetyStateRef = useRef(createIkMotionSafetyState());
   const objectSolveTokenRef = useRef(0);
   const activeIkdApproachTaskIdRef = useRef(0);
@@ -513,58 +505,6 @@ export const useIkSolver = ({
     lastIkAppliedRef.current = null;
     lastIkApplyTimeRef.current = null;
   }, [urdfContent, endEffectorLink, dragMode]);
-
-  useEffect(() => {
-    if (!allowRemote || !robot || !urdfContent || !endEffectorLink) return;
-    if (selectedSolverId !== "lerobot-placo") return;
-
-    const pose = extractLinkPose(robot, endEffectorLink);
-    if (!pose) return;
-
-    const warmupKey = `lerobot:${endEffectorLink}:${urdfContent.length}`;
-    if (lerobotWarmupRef.current.key === warmupKey) {
-      return;
-    }
-    lerobotWarmupRef.current = { key: warmupKey, inFlight: true };
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
-    const normalizedPose = normalizeIkTargetPoseForRobotBase(robot, {
-      position: pose.position,
-      quaternion: pose.quaternion,
-    });
-    const warmupJoints = getLiveRobotJoints(robot, useJointStore.getState().jointValues);
-
-    guardedFetch(`${apiBaseUrl}/lerobot/ik`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        urdf: urdfContent,
-        joint_values: warmupJoints,
-        target_link: endEffectorLink,
-        target_position: normalizedPose.position,
-        target_wxyz: normalizedPose.quaternion,
-      }),
-      signal: controller.signal,
-    }, {
-      requiredBackends: FEATURE_GATES.ikRemoteSolve.requiredBackends,
-      context: "IK warmup (LeRobot)",
-    })
-      .catch(() => {
-        // Best-effort warmup for Placo.
-      })
-      .finally(() => {
-        clearTimeout(timeout);
-        if (lerobotWarmupRef.current.key === warmupKey) {
-          lerobotWarmupRef.current.inFlight = false;
-        }
-      });
-
-    return () => {
-      controller.abort();
-      clearTimeout(timeout);
-    };
-  }, [apiBaseUrl, allowRemote, endEffectorLink, robot, selectedSolverId, urdfContent]);
 
   useEffect(() => {
     if (doesViewerDragModeUseIkHandles(dragMode)) {
@@ -1265,7 +1205,7 @@ export const useIkSolver = ({
           if (!orbitFollowAbortRef.current) {
             setStoreJointValues(nextJointValues);
             onIkApplied?.(nextJointValues, {
-              inputSource: OPERATOR_TELEOP_INPUT_SOURCE_IK_APPLY,
+              inputSource: IK_APPLY_INPUT_SOURCE,
             });
           }
         } catch (err) {
@@ -1369,7 +1309,7 @@ export const useIkSolver = ({
       // Store and recording get the raw solution.
       setStoreJointValues(rawNextSafe);
       onIkApplied?.(rawNextSafe, {
-        inputSource: OPERATOR_TELEOP_INPUT_SOURCE_IK_DRAG,
+        inputSource: IK_DRAG_INPUT_SOURCE,
       });
     },
     [

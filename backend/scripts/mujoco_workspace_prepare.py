@@ -20,6 +20,7 @@ from backend.services.simulator_adapters.mujoco_camera import (
 )
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import (
+    MJLAB_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_SCENE_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
 )
@@ -31,14 +32,18 @@ from backend.services.world_layout_static_transfer import append_primitives_to_m
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(
+    *,
+    default_simulator_id: SimulatorId = SIMULATOR_MUJOCO_ID,
+    simulator_choices: tuple[SimulatorId, ...] = (SIMULATOR_MJLAB_ID, SIMULATOR_MUJOCO_ID),
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare a URDF Studio workspace in MuJoCo.")
     parser.add_argument("--robot-mjcf", required=True)
     parser.add_argument("--robot-urdf", required=True)
     parser.add_argument(
         "--simulator-id",
-        choices=(SIMULATOR_MJLAB_ID, SIMULATOR_MUJOCO_ID),
-        default=SIMULATOR_MUJOCO_ID,
+        choices=simulator_choices,
+        default=default_simulator_id,
     )
     add_common_workspace_args(parser)
     parser.add_argument("--camera-screenshot-dir", default="")
@@ -49,6 +54,18 @@ def _simulator_label(simulator_id: SimulatorId) -> str:
     if simulator_id == SIMULATOR_MJLAB_ID:
         return "MJLab"
     return "MuJoCo"
+
+
+def _workspace_log_prefix(simulator_id: SimulatorId) -> str:
+    if simulator_id == SIMULATOR_MJLAB_ID:
+        return "[mjlab-workspace]"
+    return "[mujoco-workspace]"
+
+
+def _workspace_ready_marker(simulator_id: SimulatorId) -> str:
+    if simulator_id == SIMULATOR_MJLAB_ID:
+        return MJLAB_WORKSPACE_PROCESS_PARAMS.ready_log_marker
+    return MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker
 
 
 def _apply_initial_joint_positions(model: Any, data: Any, joint_positions: dict[str, float]) -> int:
@@ -110,6 +127,7 @@ def prepare_mujoco_workspace_scene(
 ) -> None:
     import mujoco
 
+    log_prefix = _workspace_log_prefix(simulator_id)
     simulator_scene = prepare_simulator_scene(
         world_package_path=world_package_path,
         robot_urdf_path=robot_urdf_path,
@@ -117,7 +135,7 @@ def prepare_mujoco_workspace_scene(
         include_hidden=include_hidden,
     )
     for warning in simulator_scene.warnings:
-        print(f"[mujoco-workspace] warning: {warning}", flush=True)
+        print(f"{log_prefix} warning: {warning}", flush=True)
     cameras = simulator_scene.cameras
 
     mjcf_path = robot_mjcf_path
@@ -135,7 +153,7 @@ def prepare_mujoco_workspace_scene(
 
     model, mjcf_path, mjcf_repair_warnings = _load_model_with_workspace_repair(mujoco, mjcf_path)
     for warning in mjcf_repair_warnings:
-        print(f"[mujoco-workspace] warning: {warning}", flush=True)
+        print(f"{log_prefix} warning: {warning}", flush=True)
     data = mujoco.MjData(model)
     applied_joints = _apply_initial_joint_positions(
         model,
@@ -153,7 +171,7 @@ def prepare_mujoco_workspace_scene(
             camera_screenshot_dir,
         )
     print(
-        "[mujoco-workspace] "
+        f"{log_prefix} "
         f"package={simulator_scene.world_package.package_id}@{simulator_scene.world_package.version} "
         f"joints={model.njnt} world_objects={len(simulator_scene.primitives)} cameras={len(cameras)} "
         f"frame_map={simulator_scene.frame_map} requested_frame_map={simulator_scene.requested_frame_map} "
@@ -161,7 +179,7 @@ def prepare_mujoco_workspace_scene(
         flush=True,
     )
     if camera_screenshot_dir is not None:
-        print(f"[mujoco-workspace] camera_screenshots={camera_screenshot_count}", flush=True)
+        print(f"{log_prefix} camera_screenshots={camera_screenshot_count}", flush=True)
     if report_path is not None:
         write_simulator_validation_report(
             simulator_scene,
@@ -184,8 +202,8 @@ def prepare_mujoco_workspace_scene(
                 "camera_screenshot_dir": camera_screenshot_dir,
             },
         )
-        print(f"[mujoco-workspace] report written: {report_path}", flush=True)
-    print(MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker, flush=True)
+        print(f"{log_prefix} report written: {report_path}", flush=True)
+    print(_workspace_ready_marker(simulator_id), flush=True)
 
     if no_viewer:
         return
@@ -201,8 +219,15 @@ def prepare_mujoco_workspace_scene(
             time.sleep(1.0 / MUJOCO_SCENE_PARAMS.viewer_step_hz)
 
 
-def main() -> int:
-    args = _parse_args()
+def main(
+    *,
+    default_simulator_id: SimulatorId = SIMULATOR_MUJOCO_ID,
+    simulator_choices: tuple[SimulatorId, ...] = (SIMULATOR_MJLAB_ID, SIMULATOR_MUJOCO_ID),
+) -> int:
+    args = _parse_args(
+        default_simulator_id=default_simulator_id,
+        simulator_choices=simulator_choices,
+    )
     prepare_mujoco_workspace_scene(
         world_package_path=Path(args.world_package),
         robot_mjcf_path=Path(args.robot_mjcf),

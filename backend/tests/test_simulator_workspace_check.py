@@ -15,7 +15,6 @@ from backend.models.simulator_runtime import (
     SimulatorRuntimeStatus,
 )
 from backend.scripts.simulator_workspace_check import (
-    MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PreparedWorkspaceCommand,
     WorkspaceCheckResult,
     WorkspaceTarget,
@@ -31,6 +30,10 @@ from backend.scripts.simulator_workspace_check import (
     _validate_file_artifacts,
     _workspace_request_from_args,
     main,
+)
+from backend.services.simulator_adapters.params import (
+    MJLAB_WORKSPACE_PROCESS_PARAMS,
+    MUJOCO_WORKSPACE_PROCESS_PARAMS,
 )
 from backend.services.simulator_adapters.workspace_expectations import (
     WorkspaceExpectations,
@@ -507,8 +510,9 @@ def test_mjlab_workspace_check_requests_validation_report(monkeypatch, tmp_path)
         sys.executable,
         "-u",
         "-m",
-        MUJOCO_WORKSPACE_PROCESS_PARAMS.module_name,
+        MJLAB_WORKSPACE_PROCESS_PARAMS.module_name,
     ]
+    assert command.ready_marker == MJLAB_WORKSPACE_PROCESS_PARAMS.ready_log_marker
     assert "--simulator-id" in command.command
     assert SIMULATOR_MJLAB_ID in command.command
     assert "--camera-screenshot-dir" in command.command

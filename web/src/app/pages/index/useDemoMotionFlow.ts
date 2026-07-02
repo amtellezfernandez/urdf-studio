@@ -11,10 +11,8 @@ import {
   shouldPreserveScenarioWorldLayoutOnDemoMotion,
 } from "@/app/pages/index/demoMotionPolicy";
 import { resolveDemoJointNames } from "@/app/pages/index/demoMotionHelpers";
-import { createDemoEpisodes } from "@/shared/samples/demoMotion";
+import { createDemoEpisodes, toDemoAnimationFrames } from "@/shared/samples/demoMotion";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
-import { toAnimationFrames, type Episode } from "@/features/dataset";
-import type { DatasetActions } from "@/features/dataset/datasetActions";
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { URDFRobot } from "urdf-loader";
@@ -42,7 +40,6 @@ type DemoAssetHydrateOptions = {
 type UseDemoMotionFlowParams = {
   activeUrdfPath: string | null;
   availableJoints: string[];
-  datasetActions: DatasetActions | null;
   hasLoadedFiles: boolean;
   hydrateDemoAssetsFromFiles?: (
     files: FileList,
@@ -61,8 +58,6 @@ type UseDemoMotionFlowParams = {
   playbackHandlers: DemoPlaybackHandlers;
   prepareDemoScene: () => boolean;
   robot: URDFRobot | null;
-  setIsViewerOpen: (open: boolean) => void;
-  setViewerEpisode: (episode: Episode) => void;
   skipDefaultWorldLayoutAutoImportRef: MutableRefObject<boolean>;
   urdfAnalysis: UrdfAnalysis | null;
 };
@@ -81,7 +76,6 @@ const getFileRelativePath = (file: File): string => {
 export const useDemoMotionFlow = ({
   activeUrdfPath,
   availableJoints,
-  datasetActions,
   hasLoadedFiles,
   hydrateDemoAssetsFromFiles,
   isLeKiwiDemoRobot,
@@ -91,13 +85,10 @@ export const useDemoMotionFlow = ({
   playbackHandlers,
   prepareDemoScene,
   robot,
-  setIsViewerOpen,
-  setViewerEpisode,
   skipDefaultWorldLayoutAutoImportRef,
   urdfAnalysis,
 }: UseDemoMotionFlowParams) => {
   const [pendingDemoMotion, setPendingDemoMotion] = useState(false);
-  const [pendingDemoEpisodes, setPendingDemoEpisodes] = useState<Episode[] | null>(null);
   const [pendingDemoPlaybackFrames, setPendingDemoPlaybackFrames] = useState<
     AnimationFrame[] | null
   >(null);
@@ -108,8 +99,6 @@ export const useDemoMotionFlow = ({
   const demoAutoLoadedRef = useRef(false);
   const demoMotionPrimedRef = useRef(false);
   const demoMotionLoadedRef = useRef(false);
-  const pendingDemoEpisodesRequestRef = useRef(0);
-  const appliedDemoEpisodesRequestRef = useRef(0);
   const pendingDemoPlaybackRequestRef = useRef(0);
   const appliedDemoPlaybackRequestRef = useRef(0);
   const activeUrdfPathRef = useRef(activeUrdfPath);
@@ -200,14 +189,6 @@ export const useDemoMotionFlow = ({
         jointLimits,
       });
       const firstEpisode = demoEpisodes[0];
-      const episodesRequestId = pendingDemoEpisodesRequestRef.current + 1;
-      pendingDemoEpisodesRequestRef.current = episodesRequestId;
-      setPendingDemoEpisodes(demoEpisodes);
-      if (datasetActions?.loadDemoEpisodes) {
-        datasetActions.loadDemoEpisodes(demoEpisodes);
-        appliedDemoEpisodesRequestRef.current = episodesRequestId;
-        setPendingDemoEpisodes(null);
-      }
 
       const shouldPrepareDemoScene = shouldPrepareLeKiwiDemoScene(isLeKiwiDemoRobot);
       const didPrepare = shouldPrepareDemoScene ? prepareDemoScene() : true;
@@ -221,9 +202,7 @@ export const useDemoMotionFlow = ({
         return;
       }
 
-      setViewerEpisode(firstEpisode);
-      setIsViewerOpen(true);
-      const demoFrames = toAnimationFrames(firstEpisode);
+      const demoFrames = toDemoAnimationFrames(firstEpisode);
 
       const playbackRequestId = pendingDemoPlaybackRequestRef.current + 1;
       pendingDemoPlaybackRequestRef.current = playbackRequestId;
@@ -238,13 +217,10 @@ export const useDemoMotionFlow = ({
       }
     },
     [
-      datasetActions,
       isLeKiwiDemoRobot,
       jointLimits,
       playbackHandlers.playEpisode,
       prepareDemoScene,
-      setIsViewerOpen,
-      setViewerEpisode,
     ]
   );
 
@@ -333,17 +309,6 @@ export const useDemoMotionFlow = ({
     resolveCurrentDemoJointNames,
     triggerDemoPlaybackFromLauncher,
   ]);
-
-  useEffect(() => {
-    if (!pendingDemoEpisodes) return;
-    if (!datasetActions?.loadDemoEpisodes) return;
-    if (appliedDemoEpisodesRequestRef.current === pendingDemoEpisodesRequestRef.current) {
-      return;
-    }
-    datasetActions.loadDemoEpisodes(pendingDemoEpisodes);
-    appliedDemoEpisodesRequestRef.current = pendingDemoEpisodesRequestRef.current;
-    setPendingDemoEpisodes(null);
-  }, [datasetActions, pendingDemoEpisodes]);
 
   useEffect(() => {
     if (!pendingDemoScene) return;

@@ -9,8 +9,6 @@ import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { AppErrorBoundary } from "@/shared/ui/AppErrorBoundary";
-import { DATASET_REVIEW_ROUTE } from "@/shared/config/datasetReviewRoutes";
-import { DatasetReviewStandalonePage } from "@/features/dataset/DatasetReviewStandalonePage";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -76,7 +74,6 @@ const App = () => {
             >
               <Routes>
                 <Route path="/" element={<Index />} />
-                <Route path={DATASET_REVIEW_ROUTE} element={<DatasetReviewStandalonePage />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

@@ -5,7 +5,6 @@ import { Html } from "@react-three/drei";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import { API_BASE_URL } from "@/shared/config/api";
-import { IKD_RUNTIME_CONFIG } from "@/shared/config/runtime";
 import {
   buildIkOrientationPayload,
   normalizeIkTargetPoseForRobotBase,
@@ -22,7 +21,6 @@ import {
   solveIk as solveIkRequest,
 } from "@/features/ik/ikClient";
 import { syncVisibleIkDragHandlePosition } from "@/features/viewer/ikDragHandlePosition";
-import { useNativeTeleop } from "@/features/teleop";
 import { useIkDebugStore } from "@/features/ik/useIkDebugStore";
 import { useIkSolverStore } from "@/features/ik/useIkSolverStore";
 import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
@@ -45,9 +43,14 @@ import {
   worldToRobotQuaternion,
 } from "@/features/viewer/drag-runtime";
 import { cloneIkDragReferenceCamera } from "@/features/viewer/ikDragCamera";
-import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
 
 const NON_ARM_JOINT_PATTERN = /(wheel|caster|drive|tire)/i;
+
+type DisabledNativeTelemetry = {
+  sequence_applied?: number;
+  stale_target?: boolean;
+  q_rad?: Record<string, number>;
+};
 
 interface IKDragControlsProps {
   robot: URDFRobot | null; // URDFRobot
@@ -118,24 +121,21 @@ export const IKDragControls = ({
   const dragOrientation = useIkParamsStore((s) => s.dragOrientation);
   const dragTimeoutMs = useIkParamsStore((s) => s.dragTimeoutMs);
   const dragConfig = useIkParamsStore((s) => s.dragConfig);
-  const studioIkAffectsFollowerHardware = useOperatorLeaderTeleopStore(
-    (s) => s.studioIkAffectsFollowerHardware,
-  );
+  const studioIkAffectsFollowerHardware = false;
   const lastDebugUpdateRef = useRef(0);
   const nativeTargetLink = (() => {
     return safeDecodeURIComponent(endEffectorLink);
   })();
   const debugTargetName = `ee-${handleIndex + 1}:${nativeTargetLink}`;
-  const nativeTeleopEnabled =
-    enabled && IKD_RUNTIME_CONFIG.useForDrag === true && selectedSolverId !== "ik-js";
-  const nativeTeleop = useNativeTeleop({
-    enabled: nativeTeleopEnabled,
-  });
-  const nativeEnabled = nativeTeleop.enabled;
-  const nativeConnected = nativeTeleop.connected;
-  const nativeModelReady = nativeTeleop.modelReady;
-  const ensureNativeModel = nativeTeleop.ensureModel;
-  const sendNativeTargetLatest = nativeTeleop.sendTargetLatest;
+  const nativeTeleop = {
+    error: null as string | null,
+    lastTelemetry: null as DisabledNativeTelemetry | null,
+  };
+  const nativeEnabled = false;
+  const nativeConnected = false;
+  const nativeModelReady = false;
+  const ensureNativeModel = useCallback(async (_model: unknown) => false, []);
+  const sendNativeTargetLatest = useCallback((_target: unknown) => false, []);
 
   const {
     minSolveDistance,
@@ -504,8 +504,6 @@ export const IKDragControls = ({
         dragOrientation === "auto"
           ? selectedSolverId === "ik-js"
             ? "optional"
-            : selectedSolverId === "lerobot-placo"
-            ? "ignore"
             : "prefer"
           : dragOrientation;
 

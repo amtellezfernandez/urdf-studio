@@ -1,5 +1,4 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { DatasetActions } from "@/features/dataset/datasetActions";
 import type { ViewerRuntime } from "@/runtime_engine/rosviz/session/runtimeSelector";
 import type { ViewerProfile } from "@/features/workspace/viewerProfile";
 import type { WorkspaceMode } from "@/features/workspace/types";
@@ -65,8 +64,6 @@ export type TopNavBarProps = {
   setShowPovCameras: (show: boolean) => void;
   inertialVisualization: InertialVisualizationSettings;
   setInertialVisualization: Dispatch<SetStateAction<InertialVisualizationSettings>>;
-  openMappingList: () => void;
-  datasetActions?: DatasetActions | null;
   onValidateCurrentWorldScenePackage: () => void;
   onPublishCurrentWorldScenePackage: () => void;
   onPublishCurrentWorldScenePackageToHub?: () => void;
@@ -96,8 +93,6 @@ export type TopNavBarProps = {
   workspaceLauncherNeedsAttention?: boolean;
   onOpenWorkspaceLauncher?: () => void;
   studioIssueReportUrl?: string;
-  onOpenTrainingMode?: () => void;
-  onOpenDatasetReview?: () => void;
   collaborationOwner?: boolean;
   collaborationPeerCount?: number;
   collaborationInviteAction?: CollaborationInviteAction | null;
@@ -107,12 +102,4 @@ export type TopNavBarProps = {
   onEmailCollaborationLink?: (email: string, baseUrl?: string, access?: CollaborationLinkAccess) => void;
   onResetCollaborationLink?: () => void;
   onSetCollaborationSharingEnabled?: (enabled: boolean) => void | Promise<void>;
-  teleopPanelOpen?: boolean;
-  onToggleTeleopPanel?: () => void;
-  leaderInputConnected?: boolean;
-  leaderInputPanelOpen?: boolean;
-  followerHardwareConnected?: boolean;
-  followerHardwarePanelOpen?: boolean;
-  onToggleLeaderInputPanel?: () => void;
-  onToggleFollowerHardwarePanel?: () => void;
 };

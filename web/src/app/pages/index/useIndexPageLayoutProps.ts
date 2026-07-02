@@ -11,9 +11,7 @@ type LayoutShellParams = Pick<
   | "urdfStatusBannerProps"
   | "loadIssuesPanelProps"
   | "healthActionPanelProps"
-  | "exportDialogProps"
   | "povCamerasOverlayProps"
-  | "mappingPanelsProps"
   | "creationDialogsProps"
 >;
 
@@ -31,53 +29,32 @@ type WorkspaceModeParams = Pick<
 
 type JointEditingParams = {
   availableJoints: LeftSidebarProps["availableJoints"];
-  jointLimits: LeftSidebarProps["jointLimits"];
-  jointAxes: LeftSidebarProps["jointAxes"];
-  originalJointAxes: LeftSidebarProps["originalJointAxes"];
-  originalUrdfContent: LeftSidebarProps["originalUrdfContent"];
-  vizUrdfContent: LeftSidebarProps["vizUrdfContent"];
-  onJointChange: LeftSidebarProps["onJointChange"];
+  availableLinks: LeftSidebarProps["availableLinks"];
+  cameraCount: LeftSidebarProps["cameraCount"];
+  jointLimits: ViewerLayoutProps["jointLimits"];
+  jointAxes: ViewerLayoutProps["jointAxes"];
+  originalJointAxes: RightSidebarProps["originalJointAxes"];
+  originalUrdfContent: ViewerLayoutProps["originalUrdfContent"];
+  vizUrdfContent: ViewerLayoutProps["vizUrdfContent"];
+  onJointChange: ViewerLayoutProps["handleJointChange"];
   onJointSelect: LeftSidebarProps["onJointSelect"];
   selectedJoint: LeftSidebarProps["selectedJoint"];
-  onVizUrdfChange: LeftSidebarProps["onVizUrdfChange"];
-  onJointAxisChange: LeftSidebarProps["onJointAxisChange"];
+  onVizUrdfChange: ViewerLayoutProps["handleVizUrdfChange"];
+  onJointAxisChange: RightSidebarProps["onJointAxisChange"];
   onJointOriginChange: RightSidebarProps["onJointOriginChange"];
-  onResetAxis: LeftSidebarProps["onResetAxis"];
-  onJointTypeChange: LeftSidebarProps["onJointTypeChange"];
-  onJointNameChange: LeftSidebarProps["onJointNameChange"];
-  onDeleteJoint: LeftSidebarProps["onDeleteJoint"];
-  deletedJoints: LeftSidebarProps["deletedJoints"];
+  onResetAxis: RightSidebarProps["onResetAxis"];
+  onJointTypeChange: RightSidebarProps["onJointTypeChange"];
+  onJointNameChange: RightSidebarProps["onJointNameChange"];
+  onDeleteJoint: RightSidebarProps["onDeleteJoint"];
+  deletedJoints: RightSidebarProps["deletedJoints"];
 };
 
 type LeftSidebarWorkflowParams = {
-  getExportUrdfContent: LeftSidebarProps["getExportUrdfContent"];
-  onMotionDataUpload: LeftSidebarProps["onMotionDataUpload"];
-  onPlayAnimation: LeftSidebarProps["onPlayAnimation"];
-  isPlaying: LeftSidebarProps["isPlaying"];
-  motionDataFileName: LeftSidebarProps["motionDataFileName"];
-  hasAnimationFrames: LeftSidebarProps["hasAnimationFrames"];
-  currentFrame: LeftSidebarProps["currentFrame"];
-  totalFrames: LeftSidebarProps["totalFrames"];
   sidebarWidth: LeftSidebarProps["sidebarWidth"];
   isSidebarCollapsed: LeftSidebarProps["isSidebarCollapsed"];
   onToggleSidebarCollapse: LeftSidebarProps["onToggleCollapse"];
   meshFiles: LeftSidebarProps["meshFiles"];
-  onCollisionVisibilityChange: LeftSidebarProps["onCollisionVisibilityChange"];
-  rotationPlaneVisible: LeftSidebarProps["rotationPlaneVisible"];
-  onRotationPlaneVisibilityChange: LeftSidebarProps["onRotationPlaneVisibilityChange"];
-  onFrameChange: LeftSidebarProps["onFrameChange"];
-  onUrdfEditorToggle: LeftSidebarProps["onUrdfEditorToggle"];
-  showUrdfEditor: LeftSidebarProps["showUrdfEditor"];
-  viewerSplitView: LeftSidebarProps["viewerSplitView"];
-  onViewerSplitViewChange: LeftSidebarProps["onViewerSplitViewChange"];
-  onViewerEpisodeChange: LeftSidebarProps["onViewerEpisodeChange"];
-  onViewerOpenChange: LeftSidebarProps["onViewerOpenChange"];
-  onEpisodeSaveHandlerChange: LeftSidebarProps["onEpisodeSaveHandlerChange"];
-  episodesViewHeight: LeftSidebarProps["episodesViewHeight"];
-  onEpisodesResizeStart: LeftSidebarProps["onEpisodesResizeStart"];
-  onDatasetActionsReady: LeftSidebarProps["onDatasetActionsReady"];
   onSidebarResizeStart: LeftSidebarProps["onSidebarResizeStart"];
-  activeWorldSnapshotRef: LeftSidebarProps["activeWorldSnapshotRef"];
   urdfBasePath: LeftSidebarProps["urdfBasePath"];
   packageRoots: LeftSidebarProps["packageRoots"];
 };
@@ -86,7 +63,6 @@ type ViewerPaneParams = {
   isRightSidebarCollapsed: ViewerLayoutProps["isRightSidebarCollapsed"];
   rightSidebarWidth: ViewerLayoutProps["rightSidebarWidth"];
   urdfEditorSplitView: ViewerLayoutProps["urdfEditorSplitView"];
-  recordingViewHeight: ViewerLayoutProps["recordingViewHeight"];
   urdfContentVersion: ViewerLayoutProps["urdfContentVersion"];
   assemblyIssueReportUrl: ViewerLayoutProps["assemblyIssueReportUrl"];
   assemblyPrimaryModel: ViewerLayoutProps["assemblyPrimaryModel"];
@@ -98,6 +74,7 @@ type ViewerPaneParams = {
   selectedLink: ViewerLayoutProps["selectedLink"];
   jointValues: ViewerLayoutProps["jointValues"];
   collisionVisibility: ViewerLayoutProps["collisionVisibility"];
+  rotationPlaneVisible: ViewerLayoutProps["rotationPlaneVisible"];
   collisionsVisible: ViewerLayoutProps["collisionsVisible"];
   collisionSimplifyLinks: ViewerLayoutProps["collisionSimplifyLinks"];
   collisionMergedLinks: ViewerLayoutProps["collisionMergedLinks"];
@@ -109,16 +86,15 @@ type ViewerPaneParams = {
     ViewerLayoutProps["simulationPrepRobotMirrorDeemphasizedLinkNames"];
   simulationPrepSymmetryVisualization: ViewerLayoutProps["simulationPrepSymmetryVisualization"];
   simulationPrepSymmetryOverlayCenterMode: ViewerLayoutProps["simulationPrepSymmetryOverlayCenterMode"];
+  showUrdfEditor: ViewerLayoutProps["showUrdfEditor"];
   urdfViewMode: ViewerLayoutProps["urdfViewMode"];
   endEffectorLink: ViewerLayoutProps["endEffectorLink"];
-  viewerEpisode: ViewerLayoutProps["viewerEpisode"];
-  datasetConstraintSettings: ViewerLayoutProps["datasetConstraintSettings"];
-  episodeSaveHandler: ViewerLayoutProps["episodeSaveHandler"];
   handleFrameChange: ViewerLayoutProps["handleFrameChange"];
   onFixMissingMeshRefs: ViewerLayoutProps["onFixMissingMeshRefs"];
+  getExportUrdfContent: ViewerLayoutProps["getExportUrdfContent"];
   setUrdfEditorSplitView: ViewerLayoutProps["setUrdfEditorSplitView"];
   setUrdfViewMode: ViewerLayoutProps["setUrdfViewMode"];
-  setMotionDataFile: ViewerLayoutProps["setMotionDataFile"];
+  onUrdfEditorToggle: ViewerLayoutProps["setShowUrdfEditor"];
   setIsPlaying: ViewerLayoutProps["setIsPlaying"];
   setHasAnimationFrames: ViewerLayoutProps["setHasAnimationFrames"];
   setRobotBoundingBox: ViewerLayoutProps["setRobotBoundingBox"];
@@ -127,7 +103,6 @@ type ViewerPaneParams = {
   setRobot: ViewerLayoutProps["setRobot"];
   onIkApplied: ViewerLayoutProps["handleIkApplied"];
   ikDragSuppressed: ViewerLayoutProps["ikDragSuppressed"];
-  onViewerResizeStart: ViewerLayoutProps["handleViewerResizeStart"];
   onLinkSelect: ViewerLayoutProps["setSelectedLink"];
   onJointHover: ViewerLayoutProps["setHoveredJoint"];
   onLinkHover: ViewerLayoutProps["setHoveredLink"];
@@ -142,7 +117,6 @@ type RightSidebarParams = {
   substitutionSession: RightSidebarProps["substitutionSession"];
   onApplySubstitution: RightSidebarProps["onApplySubstitution"];
   episodeJointNames: RightSidebarProps["episodeJointNames"];
-  availableLinks: RightSidebarProps["availableLinks"];
   hoveredLink: RightSidebarProps["hoveredLink"];
   rightSidebarCollapsed: RightSidebarProps["isRightSidebarCollapsed"];
   onJointLimitsChange: RightSidebarProps["onJointLimitsChange"];
@@ -153,6 +127,7 @@ type RightSidebarParams = {
   onAngleUnitChange: RightSidebarProps["onAngleUnitChange"];
   onMaterialChange: RightSidebarProps["onMaterialChange"];
   onLinkNameChange: RightSidebarProps["onLinkNameChange"];
+  onCollisionVisibilityChange: RightSidebarProps["onCollisionVisibilityChange"];
   onCollisionSimplifyLinksChange: RightSidebarProps["onCollisionSimplifyLinksChange"];
   onCollisionMergedLinksChange: RightSidebarProps["onCollisionMergedLinksChange"];
   endEffectorCandidates: RightSidebarProps["endEffectorCandidates"];
@@ -182,51 +157,23 @@ const buildLeftSidebarProps = (params: UseIndexPageLayoutPropsParams): LeftSideb
   onApplySubstitution: params.onApplySubstitution,
   isLoading: params.isLoading,
   availableJoints: params.availableJoints,
-  jointLimits: params.jointLimits,
-  jointAxes: params.jointAxes,
-  originalJointAxes: params.originalJointAxes,
-  originalUrdfContent: params.originalUrdfContent,
-  vizUrdfContent: params.vizUrdfContent,
-  onJointChange: params.onJointChange,
+  availableLinks: params.availableLinks,
+  cameraCount: params.cameraCount,
   onJointSelect: params.onJointSelect,
   selectedJoint: params.selectedJoint,
-  onVizUrdfChange: params.onVizUrdfChange,
-  onJointAxisChange: params.onJointAxisChange,
-  onResetAxis: params.onResetAxis,
-  onJointTypeChange: params.onJointTypeChange,
-  onJointNameChange: params.onJointNameChange,
-  onDeleteJoint: params.onDeleteJoint,
-  deletedJoints: params.deletedJoints,
-  getExportUrdfContent: params.getExportUrdfContent,
-  onMotionDataUpload: params.onMotionDataUpload,
-  onPlayAnimation: params.onPlayAnimation,
-  isPlaying: params.isPlaying,
-  motionDataFileName: params.motionDataFileName,
-  hasAnimationFrames: params.hasAnimationFrames,
-  currentFrame: params.currentFrame,
-  totalFrames: params.totalFrames,
+  originalUrdfContent: params.originalUrdfContent,
+  vizUrdfContent: params.vizUrdfContent,
   sidebarWidth: params.sidebarWidth,
   isSidebarCollapsed: params.isSidebarCollapsed,
   onToggleCollapse: params.onToggleSidebarCollapse,
   meshFiles: params.meshFiles,
-  onCollisionVisibilityChange: params.onCollisionVisibilityChange,
-  rotationPlaneVisible: params.rotationPlaneVisible,
-  onRotationPlaneVisibilityChange: params.onRotationPlaneVisibilityChange,
-  onFrameChange: params.onFrameChange,
-  onUrdfEditorToggle: params.onUrdfEditorToggle,
-  showUrdfEditor: params.showUrdfEditor,
-  viewerSplitView: params.viewerSplitView,
-  onViewerSplitViewChange: params.onViewerSplitViewChange,
-  onViewerEpisodeChange: params.onViewerEpisodeChange,
-  onViewerOpenChange: params.onViewerOpenChange,
-  onEpisodeSaveHandlerChange: params.onEpisodeSaveHandlerChange,
-  episodesViewHeight: params.episodesViewHeight,
-  onEpisodesResizeStart: params.onEpisodesResizeStart,
-  onDatasetActionsReady: params.onDatasetActionsReady,
   onSidebarResizeStart: params.onSidebarResizeStart,
-  activeWorldSnapshotRef: params.activeWorldSnapshotRef,
   urdfBasePath: params.urdfBasePath,
   packageRoots: params.packageRoots,
+  workspaceTransfer: params.healthActionPanelProps.workspaceTransfer,
+  workspaceLauncherNeedsAttention: params.topNavBarProps.workspaceLauncherNeedsAttention,
+  workspaceLauncherStatusLabel: params.topNavBarProps.workspaceLauncherStatusLabel,
+  onOpenWorkspaceLauncher: params.topNavBarProps.onOpenWorkspaceLauncher,
 });
 
 const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLayoutProps => ({
@@ -237,7 +184,6 @@ const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLa
   rightSidebarWidth: params.rightSidebarWidth,
   showUrdfEditor: params.showUrdfEditor,
   urdfEditorSplitView: params.urdfEditorSplitView,
-  recordingViewHeight: params.recordingViewHeight,
   urdfContentVersion: params.urdfContentVersion,
   assemblyIssueReportUrl: params.assemblyIssueReportUrl,
   assemblyPrimaryModel: params.assemblyPrimaryModel,
@@ -272,14 +218,9 @@ const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLa
   vizUrdfContent: params.vizUrdfContent,
   urdfViewMode: params.urdfViewMode,
   endEffectorLink: params.endEffectorLink,
-  viewerEpisode: params.viewerEpisode,
-  datasetConstraintSettings: params.datasetConstraintSettings,
-  currentFrame: params.currentFrame,
-  episodeSaveHandler: params.episodeSaveHandler,
   setUrdfEditorSplitView: params.setUrdfEditorSplitView,
   setUrdfViewMode: params.setUrdfViewMode,
   setShowUrdfEditor: params.onUrdfEditorToggle,
-  setMotionDataFile: params.setMotionDataFile,
   setIsPlaying: params.setIsPlaying,
   setHasAnimationFrames: params.setHasAnimationFrames,
   handleFrameChange: params.handleFrameChange,
@@ -289,7 +230,6 @@ const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLa
   setRobot: params.setRobot,
   handleIkApplied: params.onIkApplied,
   ikDragSuppressed: params.ikDragSuppressed,
-  handleViewerResizeStart: params.onViewerResizeStart,
   setSelectedJoint: params.onJointSelect,
   setSelectedLink: params.onLinkSelect,
   setHoveredJoint: params.onJointHover,
@@ -300,9 +240,7 @@ const buildViewerLayoutProps = (params: UseIndexPageLayoutPropsParams): ViewerLa
   updateUrdfFile: params.updateUrdfFile,
   onInertiaReliabilityChange: params.onInertiaReliabilityChange,
   getExportUrdfContent: params.getExportUrdfContent,
-  setCurrentFrame: params.onFrameChange,
   onFixMissingMeshRefs: params.onFixMissingMeshRefs,
-  onViewerOpenChange: params.onViewerOpenChange,
   thumbnailMode: params.thumbnailMode,
 });
 
@@ -378,9 +316,7 @@ export const useIndexPageLayoutProps = (params: UseIndexPageLayoutPropsParams) =
     urdfStatusBannerProps: params.urdfStatusBannerProps,
     loadIssuesPanelProps: params.loadIssuesPanelProps,
     healthActionPanelProps: params.healthActionPanelProps,
-    exportDialogProps: params.exportDialogProps,
     povCamerasOverlayProps: params.povCamerasOverlayProps,
-    mappingPanelsProps: params.mappingPanelsProps,
     creationDialogsProps: params.creationDialogsProps,
   };
 

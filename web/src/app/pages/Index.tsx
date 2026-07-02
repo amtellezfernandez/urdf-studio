@@ -1,22 +1,11 @@
 import { Suspense, useState, useCallback, useMemo, startTransition, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  readLatestDatasetReviewSessionId,
-  writeLatestDatasetReviewSessionId,
-} from "@/shared/config/datasetReviewRoutes";
-import {
-  buildUrdfOpsBrowserUrl,
-  URDF_OPS_TABS,
-} from "@/shared/config/urdfOpsRoutes";
-import { useDatasetActions } from "@/features/dataset";
-import {
-  buildDatasetReviewSnapshot,
-  writeDatasetReviewSnapshot,
-} from "@/features/dataset/datasetReviewSnapshot";
 import { toast } from "sonner";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import {
   autoComputeCameraPoseDefault,
+  exportCamerasToJSON,
+  exportCamerasToYAML,
   remapCameraPoseBetweenParentLinks,
   remapCameraPoseToParentJointFrame,
   resolveCameraParentLinkNameFromJoint,
@@ -28,20 +17,16 @@ import type { FileWithPath } from "@/shared/types/file";
 import type { URDFRobot } from "urdf-loader";
 import { useUrdfEditHandlers } from "@/features/layout/page/useUrdfEditHandlers";
 import { useUrdfUtilityHandlers } from "@/features/layout/page/useUrdfUtilityHandlers";
-import { useDatasetPlaybackHandlers } from "@/features/layout/page/useDatasetPlaybackHandlers";
 import { useUrdfMaterialHandlers } from "@/features/layout/page/useUrdfMaterialHandlers";
 import { PageLayout, type PageLayoutProps } from "@/features/layout/page/PageLayout";
 import type { CollaborationInviteAction } from "@/features/layout/page/top-nav/types";
-import { createDefaultDatasetConstraintSettings } from "@/features/dataset/episode-viewer/constraintSettings";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
-import { emitStudioKinematicTeleopSample } from "@/features/teleop/recording/studioKinematicTeleopEvents";
-import { useOperatorLeaderTeleopStore } from "@/features/teleop/operator-control/operatorLeaderTeleopStore";
 import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/shared/types/feature";
 import { useUrdfLoader } from "@/features/urdf/loader/useUrdfLoader";
 import { useUrdfSelection } from "@/features/urdf/selection";
+import { useUrdfViewer } from "@/features/urdf/viewer";
 import { useObjectCreatorStore, useObjectStore } from "@/features/objects";
 import { useLayout } from "@/features/layout";
-import { useExportHandlers, useJointMappingPersistence } from "@/features/dataset/exports";
 import { useThemeAndGPUMode } from "@/features/theme";
 import { useWorkspaceController } from "@/features/workspace/useWorkspaceController";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
@@ -71,12 +56,7 @@ import {
 import { normalizeMeshPathForMatch, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
 import { validateInertiaTensor } from "@/features/viewer/inertialMath";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
-import {
-  DEFAULT_RECORDING_VIEW_HEIGHT,
-  MIN_CAMERAS_PANEL_HEIGHT,
-  MIN_EPISODES_PANEL_HEIGHT,
-  TOP_NAV_HEIGHT,
-} from "@/features/layout/page/constants";
+import { TOP_NAV_HEIGHT } from "@/features/layout/page/constants";
 import { useButterClawRuntimePose } from "@/studio_ui/runtimeviz/useButterClawRuntimePose";
 import { ROBOT_NAME_PATTERN, parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
@@ -89,10 +69,18 @@ import { useIndexPageLayoutProps } from "@/app/pages/index/useIndexPageLayoutPro
 import { useIndexViewerProps } from "@/app/pages/index/useIndexViewerProps";
 import { resolveViewerDraftPreview } from "@/app/pages/index/viewerDraftPreview";
 import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTransferLauncher";
+import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
 import {
-  FolderUploadScreen,
+  findURDFCandidates,
+  parseGitHubUrl,
+  resolveRepositoryXacroTargetPath,
+} from "@/features/urdf/github/githubRepo";
+import {
+  buildIluGitHubCandidateFileList,
+  fetchIluGitHubRepoFiles,
+} from "@/features/urdf/github/iluGitHubImport";
+import {
   IkDebuggerPanel,
-  OperatorTeleopPanelShell,
   WorldPublishDialog,
   WorldRegistryPanel,
   WorldRolloutReviewPanel,
@@ -110,7 +98,6 @@ import {
   type CollaborationToastId,
   type FramePreflightSession,
   type InertialSynthesisSession,
-  type OperatorTeleopPanelView,
   type PhysicsActionRequest,
   type PhysicsPreflightSession,
   type PrepareCollaborationInviteLinkParams,
@@ -144,8 +131,8 @@ import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi
 import { describeCollaborationLinkAccess } from "@/features/collaboration/collaborationTransport";
 import { useUrdfCollaboration } from "@/features/collaboration/useUrdfCollaboration";
 import type { CollaborationLinkAccess } from "@/features/collaboration/collaborationTypes";
-import { resolveSubstitutionReplacement } from "@/features/dataset/substitutionApply";
-import { applySubstitutionSubtree } from "@/features/dataset/substitutionSubtree";
+import { resolveSubstitutionReplacement } from "@/features/assembly/substitution/substitutionApply";
+import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
 import {
   buildOrientationStatus,
   buildOrientationReviewSummary,
@@ -225,6 +212,39 @@ import {
 } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
+
+type UrdfFileInput = FileList | File[];
+
+const resolveRemoteUrdfFileUrl = (rawUrl: string): string => {
+  const parsed = new URL(rawUrl);
+  const host = parsed.hostname.toLowerCase();
+  const pathParts = parsed.pathname.split("/").filter(Boolean);
+
+  if ((host === "huggingface.co" || host === "www.huggingface.co" || host === "hf.co") && pathParts.includes("blob")) {
+    parsed.pathname = `/${pathParts.map((part) => part === "blob" ? "resolve" : part).join("/")}`;
+    return parsed.toString();
+  }
+
+  if (host === "github.com" && pathParts.length >= 5 && pathParts[2] === "blob") {
+    const [owner, repo, , branch, ...filePathParts] = pathParts;
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePathParts.join("/")}`;
+  }
+
+  return parsed.toString();
+};
+
+const inferRemoteUrdfFileName = (rawUrl: string): string => {
+  try {
+    const parsed = new URL(rawUrl);
+    const name = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
+    if (/\.(urdf|xacro|xml)$/i.test(name)) {
+      return name;
+    }
+  } catch {
+    // Fall through to the default name.
+  }
+  return "robot.urdf";
+};
 
 const Index = () => {
   const navigate = useNavigate();
@@ -340,13 +360,99 @@ const Index = () => {
     onAutoSelectEndEffector: setEndEffectorLink,
   });
   const loadFilesFromFolderWithFreshCameras = useCallback(
-    async (fileList: FileList, options?: { preserveCameras?: boolean }) => {
+    async (fileList: UrdfFileInput, options?: { preserveCameras?: boolean }) => {
       if (!options?.preserveCameras) {
         clearCameras();
       }
-      await loadFilesFromFolder(fileList);
+      await loadFilesFromFolder(fileList as FileList);
     },
     [clearCameras, loadFilesFromFolder]
+  );
+  const handleLoadGitHubSource = useCallback(
+    async ({
+      repoUrl,
+      urdfPath,
+      token,
+    }: {
+      repoUrl: string;
+      urdfPath?: string;
+      token?: string;
+    }) => {
+      try {
+        const repoInfo = parseGitHubUrl(repoUrl);
+        if (!repoInfo) {
+          throw new Error("Enter a valid GitHub repository URL.");
+        }
+
+        const sourceInfo = {
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          path: repoInfo.path,
+          branch: repoInfo.branch,
+        };
+        const files = await fetchIluGitHubRepoFiles(sourceInfo, token);
+        const candidates = findURDFCandidates(files);
+        const requestedPath = urdfPath?.trim() ||
+          (repoInfo.path && /\.(urdf|xacro)$/i.test(repoInfo.path) ? repoInfo.path : "");
+        const candidatePath = requestedPath
+          ? resolveRepositoryXacroTargetPath(files, requestedPath)
+          : candidates[0]?.path;
+
+        if (!candidatePath) {
+          throw new Error("No URDF or Xacro file was found in that repository.");
+        }
+
+        const fileList = await buildIluGitHubCandidateFileList(
+          {
+            files,
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            branch: repoInfo.branch,
+            path: repoInfo.path,
+            token,
+          },
+          candidatePath
+        );
+
+        setGitHubSource({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          branch: repoInfo.branch,
+          path: repoInfo.path,
+          token,
+          files,
+          urdfPath: candidatePath,
+        });
+        await loadFilesFromFolderWithFreshCameras(fileList);
+        toast.success(`Loaded ${candidatePath} from GitHub`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load GitHub repository.";
+        toast.error(message);
+      }
+    },
+    [loadFilesFromFolderWithFreshCameras, setGitHubSource]
+  );
+  const handleLoadUrlSource = useCallback(
+    async (url: string) => {
+      try {
+        const resolvedUrl = resolveRemoteUrdfFileUrl(url);
+        const response = await fetch(resolvedUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch URDF URL (${response.status})`);
+        }
+        const content = await response.text();
+        const file = new File([content], inferRemoteUrdfFileName(resolvedUrl), {
+          type: response.headers.get("content-type") || "application/xml",
+        });
+        clearGitHubSource();
+        await loadFilesFromFolderWithFreshCameras([file]);
+        toast.success("Loaded URDF from URL");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load URDF URL.";
+        toast.error(message);
+      }
+    },
+    [clearGitHubSource, loadFilesFromFolderWithFreshCameras]
   );
   const loadDemoUrdfTextWithFreshCameras = useCallback(
     (content: string, options?: Parameters<typeof loadUrdfText>[1]) => {
@@ -448,67 +554,7 @@ const Index = () => {
     workspaceMode,
   });
   const playbackHandlers = useViewerPlaybackStore((state) => state.handlers);
-  const { datasetActions, handleDatasetActionsReady } = useDatasetActions();
-  const datasetReviewSessionId = datasetActions?.datasetSessionSummary?.session_id ?? null;
-  const datasetReviewSnapshot = useMemo(
-    () => buildDatasetReviewSnapshot(datasetActions?.episodes ?? []),
-    [datasetActions?.episodes]
-  );
-  useEffect(() => {
-    writeDatasetReviewSnapshot(datasetReviewSnapshot);
-    if (datasetReviewSessionId) {
-      writeLatestDatasetReviewSessionId(datasetReviewSessionId);
-      return;
-    }
-    if (
-      !datasetReviewSnapshot &&
-      (!datasetActions?.hasEpisodes || datasetActions.datasetSessionStatus !== "syncing")
-    ) {
-      writeLatestDatasetReviewSessionId(null);
-    }
-  }, [
-    datasetActions?.datasetSessionStatus,
-    datasetActions?.hasEpisodes,
-    datasetReviewSessionId,
-    datasetReviewSnapshot,
-  ]);
-  const handleOpenTrainingMode = useCallback(() => {
-    const baseUrl = buildUrdfOpsBrowserUrl({ tab: URDF_OPS_TABS.datasets });
-    const opsWindow = window.open(baseUrl, "_blank");
-    if (opsWindow) {
-      opsWindow.opener = null;
-    }
-
-    const navigateOpsWindow = (datasetPath?: string) => {
-      const nextUrl = buildUrdfOpsBrowserUrl({
-        tab: URDF_OPS_TABS.datasets,
-        datasetId: datasetPath,
-        datasetSource: datasetPath ? "local" : undefined,
-      });
-      if (opsWindow && !opsWindow.closed) {
-        opsWindow.location.assign(nextUrl);
-        return;
-      }
-      window.open(nextUrl, "_blank", "noopener,noreferrer");
-    };
-
-    if (!datasetActions?.hasEpisodes || !datasetActions.exportRecordedEpisodesToOps) {
-      navigateOpsWindow();
-      return;
-    }
-
-    void datasetActions.exportRecordedEpisodesToOps().then((result) => {
-      navigateOpsWindow(result.datasetPaths[0]);
-    }).catch((error) => {
-      console.error("Failed to export recorded episodes for URDF Ops:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to export recorded episodes for URDF Ops",
-      );
-      navigateOpsWindow();
-    });
-  }, [datasetActions]);
+  const handleDatasetActionsReady = useCallback(() => {}, []);
   const [inertiaReliability, setInertiaReliability] = useState<InertiaReliabilityEntry[]>([]);
   const [activeInertiaVisualizationScopeKey, setActiveInertiaVisualizationScopeKey] = useState<string | null>(null);
   const [hoveredInertiaVisualizationPreview, setHoveredInertiaVisualizationPreview] =
@@ -559,15 +605,9 @@ const Index = () => {
     Record<string, RepeatedInertiaGroupOutcome>
   >({});
   const {
-    isPlaying,
     setIsPlaying,
-    hasAnimationFrames,
     setHasAnimationFrames,
-    currentFrame,
-    setCurrentFrame,
-    totalFrames,
     rotationPlaneVisible,
-    setRotationPlaneVisible,
     collisionsVisible,
     setCollisionsVisible,
     collisionSimplifyLinks,
@@ -577,22 +617,11 @@ const Index = () => {
     collisionVisibility,
     setCollisionVisibility,
     viewerSplitView,
-    setViewerSplitView,
     inertialVisualization,
     setInertialVisualization,
-    handleMotionDataUpload,
-    handlePlayAnimation,
     handleFrameChange,
-    motionDataFile,
-    setMotionDataFile,
-    viewerEpisode,
-    setViewerEpisode,
-    isViewerOpen,
-    setIsViewerOpen,
-    episodeSaveHandler,
-    handleEpisodeSaveHandlerChange,
-    episodeJointNames,
-  } = useDatasetPlaybackHandlers();
+  } = useUrdfViewer();
+  const episodeJointNames = useMemo(() => [], []);
   const {
     sidebarWidth,
     setSidebarWidth,
@@ -601,31 +630,11 @@ const Index = () => {
     rightSidebarWidth,
     setRightSidebarWidth,
     isRightSidebarCollapsed,
-    recordingViewHeight,
     handleSidebarToggle,
     handleRightSidebarToggle,
     handleSidebarResizeStart,
     handleRightSidebarResizeStart,
-    handleViewerResizeStart,
   } = useLayout();
-  const [sidebarEpisodesViewHeight, setSidebarEpisodesViewHeight] = useState(
-    DEFAULT_RECORDING_VIEW_HEIGHT
-  );
-  const clampSidebarEpisodesViewHeight = useCallback(
-    (height: number, containerHeight: number) => {
-      if (!Number.isFinite(height)) {
-        return DEFAULT_RECORDING_VIEW_HEIGHT;
-      }
-      if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
-        return Math.min(0.95, Math.max(0.05, height));
-      }
-      const minBottomRatio = Math.min(0.95, MIN_CAMERAS_PANEL_HEIGHT / containerHeight);
-      const maxBottomRatioFromTop = 1 - MIN_EPISODES_PANEL_HEIGHT / containerHeight;
-      const maxBottomRatio = Math.max(minBottomRatio, Math.min(0.95, maxBottomRatioFromTop));
-      return Math.min(maxBottomRatio, Math.max(minBottomRatio, height));
-    },
-    []
-  );
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
   const [runningPhysicsActionKey, setRunningPhysicsActionKey] =
@@ -650,33 +659,6 @@ const Index = () => {
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
   const [isIkPanelOpen, setIsIkPanelOpen] = useState(false);
-  const [teleopPanelView, setTeleopPanelView] =
-    useState<OperatorTeleopPanelView>("hardware");
-  const [teleopPanelMounted, setTeleopPanelMounted] = useState(false);
-  const [teleopPanelOpen, setTeleopPanelOpen] = useState(false);
-  const leaderInputConnected = useOperatorLeaderTeleopStore(
-    (state) => state.connected,
-  );
-  const followerHardwareConnected = useOperatorLeaderTeleopStore(
-    (state) => state.followerHardwareConnected,
-  );
-  const closeTeleopPanel = useCallback(() => {
-    setTeleopPanelOpen(false);
-    setTeleopPanelMounted((mounted) => mounted && teleopPanelView !== "camera");
-  }, [teleopPanelView]);
-  const toggleTeleopPanelView = useCallback(
-    (view: OperatorTeleopPanelView) => {
-      if (teleopPanelOpen && teleopPanelView === view) {
-        setTeleopPanelOpen(false);
-        setTeleopPanelMounted(view !== "camera");
-        return;
-      }
-      setTeleopPanelMounted(true);
-      setTeleopPanelView(view);
-      setTeleopPanelOpen(true);
-    },
-    [teleopPanelOpen, teleopPanelView],
-  );
   const [bakePreviewSession, setBakePreviewSession] = useState<UrdfBakePreviewSession | null>(null);
   const [canonicalSynthesisPreview, setCanonicalSynthesisPreview] =
     useState<CanonicalSynthesisPreviewSession | null>(null);
@@ -699,37 +681,43 @@ const Index = () => {
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
-  const lastEpisodesResizePointerDownRef = useRef<{ t: number; y: number } | null>(null);
-  const {
-    isExportDialogOpen,
-    openExportDialog,
-    closeExportDialog,
-    handleSave,
-    handleRevert,
-    canRevert,
-    exportCamerasAsJSON,
-    exportCamerasAsYAML,
-    hasCamerasToExport,
-  } = useExportHandlers({
-    vizUrdfContent,
-    savedVizUrdfContent,
-    updateUrdfFile: updateUrdfFileWithCollaboration,
-    setSavedVizUrdfContent,
-    cameras,
-  });
-  const {
-    mappingDialogData,
-    selectedMapping,
-    showMappingDialog,
-    showMappingListPanel,
-    savedMappings,
-    openMappingList,
-    closeMappingList,
-    selectMapping,
-    deleteMappingById,
-    applyMapping,
-    closeMappingDialog,
-  } = useJointMappingPersistence();
+  const hasCamerasToExport = cameras.length > 0;
+  const canRevert = useMemo(
+    () => Boolean(savedVizUrdfContent && savedVizUrdfContent !== vizUrdfContent),
+    [savedVizUrdfContent, vizUrdfContent],
+  );
+  const handleSave = useCallback(() => {
+    if (!vizUrdfContent) {
+      toast.error("No URDF content to save");
+      return;
+    }
+    setSavedVizUrdfContent(vizUrdfContent);
+    toast.success("Changes saved");
+  }, [setSavedVizUrdfContent, vizUrdfContent]);
+  const handleRevert = useCallback(() => {
+    if (!savedVizUrdfContent) {
+      toast.error("No saved URDF content found");
+      return;
+    }
+    updateUrdfFileWithCollaboration(savedVizUrdfContent);
+    toast.success("Reverted to last saved file");
+  }, [savedVizUrdfContent, updateUrdfFileWithCollaboration]);
+  const exportCamerasAsJSON = useCallback(() => {
+    if (!hasCamerasToExport) {
+      toast.error("No cameras to export");
+      return;
+    }
+    downloadTextDocument(exportCamerasToJSON(cameras), "camera-config.json", "application/json");
+    toast.success(`Exported ${cameras.length} camera(s) to JSON`);
+  }, [cameras, hasCamerasToExport]);
+  const exportCamerasAsYAML = useCallback(() => {
+    if (!hasCamerasToExport) {
+      toast.error("No cameras to export");
+      return;
+    }
+    downloadTextDocument(exportCamerasToYAML(cameras), "camera-config.yaml", "text/yaml");
+    toast.success(`Exported ${cameras.length} camera(s) to YAML`);
+  }, [cameras, hasCamerasToExport]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -742,22 +730,6 @@ const Index = () => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const reclampEpisodesSplit = () => {
-      const container = document.querySelector<HTMLElement>(".sidebar-panel");
-      if (!container) return;
-      setSidebarEpisodesViewHeight((current) =>
-        clampSidebarEpisodesViewHeight(current, container.clientHeight)
-      );
-    };
-
-    reclampEpisodesSplit();
-    window.addEventListener("resize", reclampEpisodesSplit);
-    return () => window.removeEventListener("resize", reclampEpisodesSplit);
-  }, [clampSidebarEpisodesViewHeight, isSidebarCollapsed]);
 
   // Object creation state
   const {
@@ -775,7 +747,6 @@ const Index = () => {
     [vizUrdfContent, originalUrdfContent]
   );
   const {
-    activeWorldSnapshotRef,
     buildCurrentWorldScenePackageManifest,
     ensureWorldLayoutForTransfer,
     handleExportCurrentWorldSceneLayer,
@@ -863,7 +834,6 @@ const Index = () => {
     availableJoints,
     availableLinks,
     cameras,
-    datasetActions,
     endEffectorLink,
     hasLoadedFiles,
     hydrateDemoAssetsFromFiles: hydrateLoadedAssetsFromFiles,
@@ -879,8 +849,6 @@ const Index = () => {
     runtimeRobotBasePose,
     setGPUMode,
     setIsImportingWorldLayout,
-    setIsViewerOpen,
-    setViewerEpisode,
     setWorldLayoutImportDialogOpen,
     setWorldLayoutImportUrlDraft,
     skipDefaultWorldLayoutAutoImportRef,
@@ -1052,11 +1020,6 @@ const Index = () => {
     setShowPovCameras,
   } = useCameraPanels();
 
-  const defaultConstraintSettings = useMemo(
-    () => createDefaultDatasetConstraintSettings(),
-    []
-  );
-
   // Keep selection context in sync for auto end-effector selection and validity checks
   useEffect(() => {
     setSelectionContext({ vizUrdfContent, availableLinks, urdfAnalysis });
@@ -1085,13 +1048,7 @@ const Index = () => {
         timestamp,
       });
     });
-    if (metadata) {
-      emitStudioKinematicTeleopSample({
-        inputSource: metadata.inputSource,
-        jointTargets: values,
-        sourceTsMs: Date.now(),
-      });
-    }
+    void metadata;
   }, [setStoreJointValue]);
 
 
@@ -1888,6 +1845,21 @@ const Index = () => {
     }
     return getExportUrdfContent();
   }, [canonicalSynthesisPreview?.draftContent, getExportUrdfContent, inertialSynthesisSession?.draftContent]);
+  const handleExportCurrentUrdf = useCallback(() => {
+    const exportContent = getResolvedExportUrdfContent();
+    if (!exportContent) {
+      toast.error("No URDF content to export");
+      return;
+    }
+
+    const safeRobotName =
+      (robotName || resolvedRobotName || "robot")
+        .trim()
+        .replace(/[^a-zA-Z0-9._-]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "robot";
+    downloadTextDocument(exportContent, `${safeRobotName}.urdf`, "application/xml");
+    toast.success("Exported URDF");
+  }, [getResolvedExportUrdfContent, resolvedRobotName, robotName]);
   const canonicalSynthesisSupportLabel = useMemo(() => {
     const supportPlane = canonicalSynthesisPreview?.preview.supportPlane;
     if (!supportPlane?.success) {
@@ -1929,69 +1901,6 @@ const Index = () => {
       // Don't automatically select a joint - let user choose what to select
     });
   }, [setJointValues]);
-
-  const handleEpisodesResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const startY = event.clientY;
-      const container = event.currentTarget.closest(".sidebar-panel") as HTMLElement;
-      if (!container) return;
-
-      const containerHeight = container.clientHeight;
-      if (containerHeight <= 0) return;
-
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const lastPointerDown = lastEpisodesResizePointerDownRef.current;
-      if (
-        lastPointerDown &&
-        now - lastPointerDown.t <= 320 &&
-        Math.abs(event.clientY - lastPointerDown.y) <= 8
-      ) {
-        lastEpisodesResizePointerDownRef.current = null;
-        setSidebarEpisodesViewHeight(
-          clampSidebarEpisodesViewHeight(DEFAULT_RECORDING_VIEW_HEIGHT, containerHeight)
-        );
-        return;
-      }
-      lastEpisodesResizePointerDownRef.current = { t: now, y: event.clientY };
-
-      const startHeight = clampSidebarEpisodesViewHeight(
-        sidebarEpisodesViewHeight,
-        containerHeight
-      );
-      const originalCursor = document.body.style.cursor;
-      const originalUserSelect = document.body.style.userSelect;
-
-      document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const delta = moveEvent.clientY - startY;
-        const deltaRatio = delta / containerHeight;
-        // Dragging down moves the splitter down: top grows, bottom shrinks.
-        const nextHeight = clampSidebarEpisodesViewHeight(startHeight - deltaRatio, containerHeight);
-        setSidebarEpisodesViewHeight(nextHeight);
-      };
-
-      const handlePointerUp = () => {
-        document.body.style.cursor = originalCursor;
-        document.body.style.userSelect = originalUserSelect;
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-    },
-    [
-      sidebarEpisodesViewHeight,
-      clampSidebarEpisodesViewHeight,
-      setSidebarEpisodesViewHeight,
-    ]
-  );
 
   const hasRotationChanges = useMemo(
     () => vizUrdfContent !== originalVizUrdfContent,
@@ -3065,14 +2974,9 @@ const Index = () => {
     clearGitHubSource();
     clearAssemblySelection();
     clearAssemblyPlacement();
-    writeLatestDatasetReviewSessionId(null);
-    writeDatasetReviewSnapshot(null);
     workspaceController.setMode("studio");
     setShowUrdfEditor(false);
     setShowHealthActionPanel(false);
-    setViewerEpisode(null);
-    setIsViewerOpen(false);
-    setMotionDataFile(null);
     setRobot(null);
     setRobotBoundingBox(null);
     navigate("/");
@@ -3084,21 +2988,9 @@ const Index = () => {
     clearObjects,
     navigate,
     resetLoadedUrdf,
-    setIsViewerOpen,
-    setMotionDataFile,
     setRobotBoundingBox,
-    setViewerEpisode,
     workspaceController,
   ]);
-
-  const handleOpenDatasetReview = useCallback(() => {
-    const sessionId = datasetReviewSessionId ?? readLatestDatasetReviewSessionId();
-    const reviewHref = buildUrdfOpsBrowserUrl({
-      tab: URDF_OPS_TABS.review,
-      reviewSessionId: sessionId,
-    });
-    window.open(reviewHref, "_blank", "noopener,noreferrer");
-  }, [datasetReviewSessionId]);
 
   const topNavBarProps: PageLayoutProps["topNavBarProps"] = {
     workspaceMode,
@@ -3106,7 +2998,7 @@ const Index = () => {
     onGoHome: handleGoHome,
     onExportAssemblyUrdf: handleExportAssemblyUrdf,
     showMenus: Boolean(originalUrdfContent && vizUrdfContent),
-    openExportDialog,
+    openExportDialog: handleExportCurrentUrdf,
     onSave: handleSave,
     onRevert: handleRevert,
     canRevert,
@@ -3147,8 +3039,6 @@ const Index = () => {
     setShowPovCameras,
     inertialVisualization,
     setInertialVisualization,
-    openMappingList,
-    datasetActions,
     onValidateCurrentWorldScenePackage: handleValidateCurrentWorldScenePackage,
     onPublishCurrentWorldScenePackage: handlePublishCurrentWorldScenePackage,
     onPublishCurrentWorldScenePackageToHub: worldHubEnabled
@@ -3182,14 +3072,6 @@ const Index = () => {
     workspaceLauncherNeedsAttention: simulationPrepStatus.tone !== "safe",
     onOpenWorkspaceLauncher: openSimulationPrepPanel,
     studioIssueReportUrl: studioIssueReportUrl ?? undefined,
-    onOpenTrainingMode: handleOpenTrainingMode,
-    onOpenDatasetReview: handleOpenDatasetReview,
-    leaderInputConnected,
-    leaderInputPanelOpen: teleopPanelOpen && teleopPanelView === "studio",
-    followerHardwareConnected,
-    followerHardwarePanelOpen: teleopPanelOpen && teleopPanelView === "hardware",
-    onToggleLeaderInputPanel: () => toggleTeleopPanelView("studio"),
-    onToggleFollowerHardwarePanel: () => toggleTeleopPanelView("hardware"),
     collaborationOwner,
     collaborationPeerCount,
     collaborationInviteAction,
@@ -3358,37 +3240,11 @@ const Index = () => {
     onClearPhysicsDraft: inertialSynthesisSession ? handleClearInertialSynthesisSession : undefined,
   };
 
-  const exportDialogProps: PageLayoutProps["exportDialogProps"] = {
-    isOpen: isExportDialogOpen,
-    onClose: closeExportDialog,
-    urdfContent: getResolvedExportUrdfContent(),
-    meshFiles,
-    urdfBasePath,
-    packageRoots,
-    robotName,
-    stagedBakeSession: bakePreviewSession,
-  };
-
   const povCamerasOverlayProps: PageLayoutProps["povCamerasOverlayProps"] = {
     open: showPovCameras,
     cameras,
     selectedCameraId,
     onClose: () => setShowPovCameras(false),
-  };
-
-  const mappingPanelsProps: PageLayoutProps["mappingPanelsProps"] = {
-    showMappingListPanel,
-    onCloseMappingList: closeMappingList,
-    savedMappings,
-    onSelectMapping: selectMapping,
-    onDeleteMapping: deleteMappingById,
-    mappingDialogData,
-    showMappingDialog,
-    onCloseMappingDialog: closeMappingDialog,
-    availableJoints,
-    selectedMapping,
-    jointLimits,
-    onApplyMapping: applyMapping,
   };
 
   const creationDialogsProps: PageLayoutProps["creationDialogsProps"] = {
@@ -3411,9 +3267,7 @@ const Index = () => {
     urdfStatusBannerProps,
     loadIssuesPanelProps,
     healthActionPanelProps,
-    exportDialogProps,
     povCamerasOverlayProps,
-    mappingPanelsProps,
     creationDialogsProps,
     workspaceMode,
     assemblyInspector,
@@ -3424,6 +3278,8 @@ const Index = () => {
     substitutionSession,
     onApplySubstitution: handleApplySubstitution,
     availableJoints,
+    availableLinks,
+    cameraCount: cameras.length,
     jointLimits,
     jointAxes,
     originalJointAxes,
@@ -3441,41 +3297,22 @@ const Index = () => {
     onDeleteJoint: handleDeleteJointAndClearSelection,
     deletedJoints,
     getExportUrdfContent: getResolvedExportUrdfContent,
-    onMotionDataUpload: handleMotionDataUpload,
-    onPlayAnimation: handlePlayAnimation,
-    isPlaying,
-    motionDataFileName: motionDataFile?.name,
-    hasAnimationFrames,
-    currentFrame,
-    totalFrames,
     sidebarWidth,
     isSidebarCollapsed,
     onToggleSidebarCollapse: handleSidebarToggle,
     meshFiles,
     onCollisionVisibilityChange: setCollisionVisibility,
     rotationPlaneVisible,
-    onRotationPlaneVisibilityChange: setRotationPlaneVisible,
-    onFrameChange: setCurrentFrame,
     handleFrameChange,
     onFixMissingMeshRefs: handleFixMeshPaths,
     onUrdfEditorToggle: setShowUrdfEditor,
     showUrdfEditor,
-    viewerSplitView,
-    onViewerSplitViewChange: setViewerSplitView,
-    onViewerEpisodeChange: setViewerEpisode,
-    onViewerOpenChange: setIsViewerOpen,
-    onEpisodeSaveHandlerChange: handleEpisodeSaveHandlerChange,
-    episodesViewHeight: sidebarEpisodesViewHeight,
-    onEpisodesResizeStart: handleEpisodesResizeStart,
-    onDatasetActionsReady: handleDatasetActionsReady,
     onSidebarResizeStart: handleSidebarResizeStart,
-    activeWorldSnapshotRef,
     urdfBasePath,
     packageRoots,
     isRightSidebarCollapsed,
     rightSidebarWidth,
     urdfEditorSplitView,
-    recordingViewHeight,
     urdfContentVersion,
     assemblyIssueReportUrl,
     assemblyPrimaryModel,
@@ -3500,13 +3337,8 @@ const Index = () => {
     simulationPrepSymmetryOverlayCenterMode: repeatedInertiaSymmetryCenterMode,
     urdfViewMode,
     endEffectorLink,
-    viewerEpisode,
-    datasetConstraintSettings:
-      datasetActions?.constraintSettings ?? defaultConstraintSettings,
-    episodeSaveHandler,
     setUrdfEditorSplitView,
     setUrdfViewMode,
-    setMotionDataFile,
     setIsPlaying,
     setHasAnimationFrames,
     setRobotBoundingBox,
@@ -3515,7 +3347,6 @@ const Index = () => {
     setRobot,
     onIkApplied: handleIkApplied,
     ikDragSuppressed: false,
-    onViewerResizeStart: handleViewerResizeStart,
     onLinkSelect: setSelectedLink,
     onJointHover: setHoveredJoint,
     onLinkHover: setHoveredLink,
@@ -3525,7 +3356,6 @@ const Index = () => {
     thumbnailMode,
     onDuplicateAssemblyRobot: handleDuplicateAssemblyRobot,
     episodeJointNames,
-    availableLinks,
     rightSidebarCollapsed: isRightSidebarCollapsed,
     onJointLimitsChange: handleJointLimitsChange,
     onJointLinkChange: handleJointLinkChange,
@@ -3586,18 +3416,17 @@ const Index = () => {
       hasLoadedFiles={hasLoadedFiles}
       isAttachingIluSession={isAttachingIluSession || isAttachingIluAssembly}
       loadFilesFromFolderWithFreshCameras={loadFilesFromFolderWithFreshCameras}
+      onLoadGitHubSource={handleLoadGitHubSource}
+      onLoadUrlSource={handleLoadUrlSource}
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
-      onOpenTrainingMode={handleOpenTrainingMode}
       onPlayDemoMotion={handlePlayDemoMotion}
-      workspaceMode={workspaceMode}
-      onWorkspaceModeChange={workspaceController.setMode}
       runtimePreviewMode={runtimePreviewMode}
       runtimePreviewLoadError={runtimePreviewLoadError}
       runtimePreviewViewerProps={runtimePreviewViewerProps}
       thumbnailMode={thumbnailMode}
       thumbnailViewerProps={thumbnailViewerProps}
       urdfContentVersion={urdfContentVersion}
-      FolderUploadScreen={FolderUploadScreen}
+      FolderUploadScreen={CoreFolderUploadScreen}
     />
   );
   if (!hasLoadedFiles || thumbnailMode || runtimePreviewMode) {
@@ -3611,19 +3440,6 @@ const Index = () => {
   return (
     <>
       <PageLayout {...pageLayoutWithViewerDraft} />
-      {workspaceModeUi.showStudioChrome && teleopPanelMounted ? (
-        <Suspense fallback={null}>
-          <OperatorTeleopPanelShell
-            panelView={teleopPanelView}
-            open={teleopPanelOpen}
-            studioRobotName={resolvedRobotName}
-            collaborationSessionId={collaborationSessionId}
-            teleopCapabilityToken={collaborationTeleopCapabilityToken}
-            collaborationOwnerToken={collaborationOwnerToken}
-            onClose={closeTeleopPanel}
-          />
-        </Suspense>
-      ) : null}
       {workspaceModeUi.showIkPanel && isIkPanelOpen ? (
         <div
           className="fixed z-50 rounded-md border border-border/40 bg-background/95 shadow-lg backdrop-blur-sm"

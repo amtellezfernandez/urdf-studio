@@ -8,7 +8,7 @@ import {
   prependNativeLibraryPath,
   resolveBlenderExecutableForSetup,
   resolveManagedCmeelLibPathFromSitePackages,
-  resolvePythonForLeRobotVenv,
+  resolvePythonForBackendVenv,
   runSetupSequence,
 } from './setup.js';
 
@@ -51,34 +51,41 @@ test('setup rejects an incomplete i-love-urdf simulator transfer contract', () =
 });
 
 test('setup uses uv-managed Python 3.12 by default', () => {
-  const originalBootstrapPython = process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
+  const originalBootstrapPython = process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON;
+  const originalLegacyBootstrapPython = process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
+  delete process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON;
   delete process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
 
   try {
-    assert.deepEqual(resolvePythonForLeRobotVenv(), {
+    assert.deepEqual(resolvePythonForBackendVenv(), {
       python: '3.12',
       usesUvManagedPython: true,
     });
   } finally {
     if (originalBootstrapPython === undefined) {
+      delete process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON;
+    } else {
+      process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON = originalBootstrapPython;
+    }
+    if (originalLegacyBootstrapPython === undefined) {
       delete process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
     } else {
-      process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON = originalBootstrapPython;
+      process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON = originalLegacyBootstrapPython;
     }
   }
 });
 
 test('setup rejects an invalid explicit Python override', () => {
-  const originalBootstrapPython = process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
-  process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON = '/definitely/not/python3.12';
+  const originalBootstrapPython = process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON;
+  process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON = '/definitely/not/python3.12';
 
   try {
-    assert.equal(resolvePythonForLeRobotVenv(), null);
+    assert.equal(resolvePythonForBackendVenv(), null);
   } finally {
     if (originalBootstrapPython === undefined) {
-      delete process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON;
+      delete process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON;
     } else {
-      process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON = originalBootstrapPython;
+      process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON = originalBootstrapPython;
     }
   }
 });
@@ -166,15 +173,11 @@ test('setup stops before backend dependency installation when unified Python set
     runSetupSequence({
       installDependencies: record('installDependencies'),
       verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
-      setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', false),
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
-      installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
-      installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
-      installMjlabRuntime: unreachable('installMjlabRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
       checkIkd: unreachable('checkIkd'),
       setupHuggingFace: unreachable('setupHuggingFace'),
@@ -187,7 +190,6 @@ test('setup stops before backend dependency installation when unified Python set
   assert.deepEqual(calls, [
     'installDependencies',
     'verifyIluRuntimeContract',
-    'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
   ]);
 });
@@ -207,15 +209,11 @@ test('setup stops before workspace setup when i-love-urdf runtime check fails', 
     runSetupSequence({
       installDependencies: record('installDependencies'),
       verifyIluRuntimeContract: record('verifyIluRuntimeContract', false),
-      setupUrdfOpsWorkspace: unreachable('setupUrdfOpsWorkspace'),
       setupPythonBackendEnvironment: unreachable('setupPythonBackendEnvironment'),
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
-      installOfficialLeRobotToolchain: unreachable('installOfficialLeRobotToolchain'),
-      installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
-      installMjlabRuntime: unreachable('installMjlabRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
       checkIkd: unreachable('checkIkd'),
       setupHuggingFace: unreachable('setupHuggingFace'),
@@ -241,7 +239,6 @@ test('setup continues when optional simulator adapters are unavailable', async (
   const result = await runSetupSequence({
     installDependencies: record('installDependencies'),
     verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
-    setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
     setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
     installBackendDeps: record('installBackendDeps', true),
     installGenesisRuntime: record('installGenesisRuntime', {
@@ -262,14 +259,6 @@ test('setup continues when optional simulator adapters are unavailable', async (
       skipped: false,
       fatal: false,
     }),
-    installOfficialLeRobotToolchain: record('installOfficialLeRobotToolchain', true),
-    installOpenArmHardwareRuntime: record('installOpenArmHardwareRuntime', true),
-    installMjlabRuntime: record('installMjlabRuntime', {
-      ok: false,
-      installed: false,
-      skipped: false,
-      fatal: false,
-    }),
     installTwinDepsIfRequested: record('installTwinDepsIfRequested'),
     checkIkd: record('checkIkd'),
     setupHuggingFace: record('setupHuggingFace'),
@@ -282,20 +271,15 @@ test('setup continues when optional simulator adapters are unavailable', async (
 
   assert.equal(result.genesisRuntimeResult.ok, false);
   assert.equal(result.pybulletRuntimeResult.ok, false);
-  assert.equal(result.mjlabRuntimeResult.ok, false);
   assert.equal(result.blenderRuntimeResult.ok, false);
   assert.deepEqual(calls, [
     'installDependencies',
     'verifyIluRuntimeContract',
-    'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
     'installBackendDeps',
-    'installOfficialLeRobotToolchain',
     'installGenesisRuntime',
     'installPybulletRuntime',
     'installBlenderRuntime',
-    'installOpenArmHardwareRuntime',
-    'installMjlabRuntime',
     'installTwinDepsIfRequested',
     'checkIkd',
     'setupHuggingFace',
@@ -319,10 +303,8 @@ test('setup fails when a forced simulator adapter install fails', async () => {
     runSetupSequence({
       installDependencies: record('installDependencies'),
       verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
-      setupUrdfOpsWorkspace: record('setupUrdfOpsWorkspace', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
       installBackendDeps: record('installBackendDeps', true),
-      installOfficialLeRobotToolchain: record('installOfficialLeRobotToolchain', true),
       installGenesisRuntime: record('installGenesisRuntime', {
         ok: false,
         installed: false,
@@ -331,8 +313,6 @@ test('setup fails when a forced simulator adapter install fails', async () => {
       }),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
-      installOpenArmHardwareRuntime: unreachable('installOpenArmHardwareRuntime'),
-      installMjlabRuntime: unreachable('installMjlabRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
       checkIkd: unreachable('checkIkd'),
       setupHuggingFace: unreachable('setupHuggingFace'),
@@ -345,10 +325,8 @@ test('setup fails when a forced simulator adapter install fails', async () => {
   assert.deepEqual(calls, [
     'installDependencies',
     'verifyIluRuntimeContract',
-    'setupUrdfOpsWorkspace',
     'setupPythonBackendEnvironment',
     'installBackendDeps',
-    'installOfficialLeRobotToolchain',
     'installGenesisRuntime',
   ]);
 });

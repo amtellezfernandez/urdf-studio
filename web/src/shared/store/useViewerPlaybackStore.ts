@@ -1,18 +1,16 @@
 import { create } from "zustand";
-import type { ChangeEvent } from "react";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
-import type { Episode } from "@/features/dataset/episodes";
+import type { ViewerEpisode } from "@/shared/types/feature";
 
 export type EpisodePlaybackOptions = {
   autoplay?: boolean;
   applyInitialFrame?: boolean;
   startFrame?: number;
-  playbackEpisode?: Episode | null;
+  playbackEpisode?: ViewerEpisode | null;
 };
 
 type ViewerPlaybackHandlers = {
   playAnimation?: (forceState?: boolean) => void;
-  uploadMotionData?: (fileOrEvent: ChangeEvent<HTMLInputElement> | File) => void;
   playEpisode?: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
   stopAnimation?: () => void;
   clearAnimation?: () => void;
@@ -21,7 +19,6 @@ type ViewerPlaybackHandlers = {
 
 type PendingViewerPlaybackCommand =
   | { type: "playAnimation"; forceState?: boolean }
-  | { type: "uploadMotionData"; file: File }
   | {
       type: "playEpisode";
       frames: AnimationFrame[];
@@ -45,7 +42,7 @@ type ViewerPlaybackStore = {
   currentFrame: number;
   totalFrames: number;
   hasFrames: boolean;
-  playbackEpisode: Episode | null;
+  playbackEpisode: ViewerEpisode | null;
   registerHandlers: (handlers: ViewerPlaybackHandlers) => void;
   clearHandlers: () => void;
   setPlaybackSpeed: (speed: number) => void;
@@ -53,7 +50,6 @@ type ViewerPlaybackStore = {
   setFrameInfo: (currentFrame: number, totalFrames?: number) => void;
   setHasFrames: (hasFrames: boolean) => void;
   playAnimation: (forceState?: boolean) => void;
-  uploadMotionData: (file: File) => void;
   playEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
   stopAnimation: () => void;
   clearAnimation: () => void;
@@ -67,9 +63,6 @@ const executePendingViewerPlaybackCommand = (
   switch (command.type) {
     case "playAnimation":
       handlers.playAnimation?.(command.forceState);
-      return;
-    case "uploadMotionData":
-      handlers.uploadMotionData?.(command.file);
       return;
     case "playEpisode":
       handlers.playEpisode?.(command.frames, command.options);
@@ -124,16 +117,6 @@ export const useViewerPlaybackStore = create<ViewerPlaybackStore>((set, get) => 
     }
     set((state) => ({
       pendingCommands: [...state.pendingCommands, { type: "playAnimation", forceState }],
-    }));
-  },
-  uploadMotionData: (file) => {
-    const { handlers } = get();
-    if (handlers.uploadMotionData) {
-      handlers.uploadMotionData(file);
-      return;
-    }
-    set((state) => ({
-      pendingCommands: [...state.pendingCommands, { type: "uploadMotionData", file }],
     }));
   },
   playEpisode: (frames, options) => {

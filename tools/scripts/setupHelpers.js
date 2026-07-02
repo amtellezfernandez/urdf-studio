@@ -1,7 +1,4 @@
 import {
-  OPENARM_HARDWARE_PIP_DEPENDENCIES,
-} from './openArmHardwareParams.js';
-import {
   GITHUB_CLI_LOGIN_COMMAND,
   GLOBAL_ILU_INSTALL_COMMAND,
   GLOBAL_ILU_INSTALL_ENV,
@@ -46,11 +43,8 @@ export function buildSetupRoadmapSections() {
       heading: 'Setup steps',
       lines: [
         'Node dependencies',
-        'URDF Ops sibling workspace',
-        'Unified Python backend/training runtime',
-        'LeRobot training runtime',
-        'OpenArm hardware runtime',
-        'Simulator runtimes: Genesis, PyBullet, MJLab, and Blender',
+        'Unified Python backend runtime',
+        'Simulator runtimes: Genesis, PyBullet, and Blender',
         'Hugging Face and GitHub access',
       ],
     },
@@ -84,7 +78,6 @@ export function buildSetupSummarySections({
   globalIluAttempted = false,
   globalIluInstalled = false,
   genesisRuntimeResult = null,
-  mjlabRuntimeResult = null,
   pybulletRuntimeResult = null,
   blenderRuntimeResult = null,
 } = {}) {
@@ -102,14 +95,6 @@ export function buildSetupSummarySections({
     installedLine: 'Genesis viewer runtime is available.',
     unavailableLine: 'Genesis viewer runtime is unavailable.',
     fallbackLine: 'Genesis viewer installs into the unified Python runtime when supported.',
-  });
-  const mjlabLines = buildSimulatorRuntimeLines({
-    result: mjlabRuntimeResult,
-    skippedLine: 'MJLab install was skipped for this run.',
-    installedLine: 'MJLab validation runtime is available.',
-    unavailableLine: 'MJLab runtime is unavailable.',
-    fallbackLine:
-      'MJLab installs into the unified Python runtime for teleop motion validation when supported.',
   });
   const pybulletLines = buildSimulatorRuntimeLines({
     result: pybulletRuntimeResult,
@@ -143,23 +128,12 @@ export function buildSetupSummarySections({
       ],
     },
     {
-      heading: 'OpenArm Hardware',
-      lines: [
-        `Installed into the unified Python runtime: ${OPENARM_HARDWARE_PIP_DEPENDENCIES.join(', ')}.`,
-        'Check CAN, Feetech, and OpenArm Mini imports with npm run openarm:doctor.',
-      ],
-    },
-    {
       heading: 'Genesis',
       lines: genesisLines,
     },
     {
       heading: 'PyBullet',
       lines: pybulletLines,
-    },
-    {
-      heading: 'MJLab',
-      lines: mjlabLines,
     },
     {
       heading: 'Blender',

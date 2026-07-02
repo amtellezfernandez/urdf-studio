@@ -83,10 +83,22 @@ const formatTargetName = (
   targetLabel?: string | null
 ): string => targetLabel?.trim() || targetId;
 
-const normalizeUploadPath = (value: string): string | null => {
+const normalizeUploadPath = (
+  value: string,
+  { allowRootRelativeAsset = false } = {}
+): string | null => {
   const trimmed = value.trim();
-  if (!trimmed || trimmed.startsWith("/") || trimmed.startsWith("\\")) return null;
-  const normalized = trimmed.replace(/\\/g, "/").replace(/\/+/g, "/");
+  if (!trimmed) return null;
+  const slashNormalized = trimmed.replace(/\\/g, "/").replace(/\/+/g, "/");
+  if (slashNormalized.startsWith("/")) {
+    if (!allowRootRelativeAsset) return null;
+    const rootRelative = slashNormalized.replace(/^\/+/, "");
+    if (!rootRelative.startsWith("meshes/") && !rootRelative.startsWith("assets/")) {
+      return null;
+    }
+    return normalizeUploadPath(rootRelative);
+  }
+  const normalized = slashNormalized;
   if (!normalized || normalized.includes("\0") || normalized.includes(":")) return null;
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length === 0 || parts.some((part) => part === "..")) return null;
@@ -105,7 +117,7 @@ const buildAssetAliases = (
   packageRoots: Record<string, string[]> | undefined
 ): string[] => {
   const aliases = new Set<string>();
-  const normalizedPath = normalizeUploadPath(path);
+  const normalizedPath = normalizeUploadPath(path, { allowRootRelativeAsset: true });
   if (!normalizedPath) {
     throw new Error(`Workspace mesh asset path must be portable relative: ${path}`);
   }

@@ -50,7 +50,7 @@ describe("GPUModeProvider", () => {
         );
       });
 
-      expect(container.textContent).toBe("low");
+      expect(container.textContent).toBe("high");
 
       await act(async () => {
         root.unmount();

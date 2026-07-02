@@ -104,15 +104,14 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             onKeyDown={handleKeyDown}
             disabled={disabled}
             className={cn(
-              "w-full h-6 pr-6 pl-1.5 text-xs blender-number bg-input border border-border rounded text-foreground",
+              "w-full h-6 pr-3.5 pl-1 text-[11px] blender-number bg-input border border-border rounded text-foreground",
               "focus:outline-none focus:ring-1 focus:ring-ring",
               "disabled:cursor-not-allowed disabled:opacity-50",
-              "group-hover:border-border/80",
-              className
+              "group-hover:border-border/80"
             )}
             {...props}
           />
-          <div className="absolute right-0 top-0 bottom-0 flex flex-col border-l border-border rounded-r">
+          <div className="absolute right-0 top-0 bottom-0 flex w-2.5 flex-col border-l border-border rounded-r">
             <button
               type="button"
               onClick={(e) => {
@@ -121,10 +120,10 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
                 increment();
               }}
               disabled={disabled || (max !== undefined && value >= max)}
-              className="h-3 w-3 flex items-center justify-center hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed rounded-tr"
+              className="h-3 w-2.5 flex items-center justify-center hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed rounded-tr"
               tabIndex={-1}
             >
-              <ChevronUp className="w-2.5 h-2.5" />
+              <ChevronUp className="w-2 h-2" />
             </button>
             <button
               type="button"
@@ -134,10 +133,10 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
                 decrement();
               }}
               disabled={disabled || (min !== undefined && value <= min)}
-              className="h-3 w-3 flex items-center justify-center hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed rounded-br border-t border-border"
+              className="h-3 w-2.5 flex items-center justify-center hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed rounded-br border-t border-border"
               tabIndex={-1}
             >
-              <ChevronDown className="w-2.5 h-2.5" />
+              <ChevronDown className="w-2 h-2" />
             </button>
           </div>
         </div>

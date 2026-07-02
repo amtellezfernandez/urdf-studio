@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
-import type { Episode } from "@/features/dataset/episodes";
+import type { ViewerEpisode } from "@/shared/types/feature";
 
 const PLAYBACK_FRAME_COUNT = 1;
 const PLAYBACK_START_FRAME = 0;
@@ -13,7 +13,7 @@ const PLAYBACK_ANIMATION_FRAMES = Array.from(
   })
 );
 
-const PLAYBACK_EPISODE: Episode = {
+const PLAYBACK_EPISODE: ViewerEpisode = {
   id: "episode-store-test",
   number: 1,
   createdAt: 0,

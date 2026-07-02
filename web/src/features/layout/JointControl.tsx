@@ -75,6 +75,19 @@ interface JointControlProps {
   groupLabel?: string | null;
 }
 
+type JointLimitMetadata = JointLimitInfo & {
+  effort?: number | null;
+  velocity?: number | null;
+};
+
+type LimitAttributeStatus = "set" | "missing" | "invalid" | "zero";
+
+type LimitAttributeDebugState = {
+  raw: string | null;
+  status: LimitAttributeStatus;
+  value: number | null;
+};
+
 
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";
@@ -90,6 +103,43 @@ const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
 const parsePositiveScalar = (value: string | number | null | undefined): number | null => {
   const parsedValue = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+};
+
+const parseLimitAttributeDebugState = (
+  value: string | number | null | undefined
+): LimitAttributeDebugState => {
+  if (value === null || value === undefined) {
+    return { raw: null, status: "missing", value: null };
+  }
+
+  const raw = typeof value === "number" ? String(value) : value.trim();
+  const parsedValue = typeof value === "number" ? value : Number(raw);
+  if (raw.length === 0 || !Number.isFinite(parsedValue)) {
+    return { raw, status: "invalid", value: null };
+  }
+  if (parsedValue < 0) {
+    return { raw, status: "invalid", value: parsedValue };
+  }
+  if (parsedValue === 0) {
+    return { raw, status: "zero", value: parsedValue };
+  }
+  return { raw, status: "set", value: parsedValue };
+};
+
+const getLimitAttributeInputTitle = (
+  attributeName: "effort" | "velocity",
+  attribute: LimitAttributeDebugState
+): string => {
+  if (attribute.status === "missing") {
+    return `URDF <limit ${attributeName}> is not set.`;
+  }
+  if (attribute.status === "invalid") {
+    return `URDF <limit ${attributeName}="${attribute.raw ?? ""}"> is invalid.`;
+  }
+  if (attribute.status === "zero") {
+    return `URDF <limit ${attributeName}="0"> is zero.`;
+  }
+  return `URDF <limit ${attributeName}="${attribute.raw ?? attribute.value}">`;
 };
 
 const roundToPrecision = (value: number, precision: number): number =>
@@ -146,6 +196,32 @@ const getJointValueColor = (value: number, min: number, max: number, hasBothLimi
   return interpolateColor(LIGHT_YELLOW, LIGHT_RED, (clampedCloseness - 0.5) * 2);
 };
 
+const LimitAttributeStatusBadge = ({
+  attributeName,
+  state,
+}: {
+  attributeName: "effort" | "velocity";
+  state: LimitAttributeDebugState;
+}) => {
+  if (state.status === "set" || state.status === "missing") {
+    return null;
+  }
+
+  return (
+    <span
+      className={cn(
+        "rounded-sm border px-0.5 text-[7px] font-medium leading-3",
+        state.status === "invalid"
+          ? "border-red-400/35 bg-red-500/10 text-red-200"
+          : "border-amber-400/35 bg-amber-500/10 text-amber-200"
+      )}
+      title={getLimitAttributeInputTitle(attributeName, state)}
+    >
+      {state.status === "invalid" ? "bad" : "zero"}
+    </span>
+  );
+};
+
 export const JointControl = ({
   jointName,
   jointInfo,
@@ -192,19 +268,8 @@ export const JointControl = ({
     });
   const hasBothLimits = hasFiniteHardLimits;
 
-  const jointMaxVelocityOverride = useJointStore(
-    (s) => s.jointVelocityLimits[jointName]
-  );
-  const globalMaxJointVelocity = useJointStore((s) => s.globalMaxJointVelocity);
-  const setJointMaxVelocity = useJointStore((s) => s.setJointMaxVelocity);
   const degPerRad = RAD_TO_DEG;
   const radPerDeg = DEG_TO_RAD;
-  const hasCustomVelocity =
-    jointMaxVelocityOverride !== undefined && jointMaxVelocityOverride !== null;
-  const effectiveJointVelocity =
-    jointMaxVelocityOverride !== undefined && jointMaxVelocityOverride !== null
-      ? jointMaxVelocityOverride
-      : globalMaxJointVelocity;
   const velocityUnit = angleUnit === "deg" ? "°/s" : "rad/s";
   const velocityStep =
     angleUnit === "deg"
@@ -214,55 +279,69 @@ export const JointControl = ({
     angleUnit === "deg"
       ? JOINT_CONTROL_PARAMS.velocity.minRadPerSec * RAD_TO_DEG
       : JOINT_CONTROL_PARAMS.velocity.minRadPerSec;
-  const velocityDisplayRaw =
-    angleUnit === "deg" ? effectiveJointVelocity * degPerRad : effectiveJointVelocity;
   const velocityPrecision =
     angleUnit === "deg"
       ? JOINT_CONTROL_PARAMS.velocity.degPrecision
       : JOINT_CONTROL_PARAMS.velocity.radPrecision;
-  const velocityDisplay = roundToPrecision(velocityDisplayRaw, velocityPrecision);
-
-  const effortLimit = useMemo(() => {
-    const jointInfoEffort = parsePositiveScalar(
-      (jointInfo as (JointLimitInfo & { effort?: number | null }) | undefined)?.effort
-    );
-    if (jointInfoEffort !== null) {
-      return jointInfoEffort;
-    }
+  const jointLimitMetadata = jointInfo as JointLimitMetadata | undefined;
+  const parsedJointLimitAttributes = useMemo(() => {
     if (!urdfContent) {
-      return null;
+      return undefined;
     }
 
     const xmlDoc = parseUrdfDocument(urdfContent, JOINT_CONTROL_URDF_PARSE_OPTIONS);
     if (!xmlDoc) {
-      return null;
+      return undefined;
     }
     const joint = getUrdfElementByName(xmlDoc, "joint", jointName, {
       label: "joint",
       onMissing: () => {},
     });
-    return parsePositiveScalar(joint?.querySelector("limit")?.getAttribute("effort"));
-  }, [jointInfo, jointName, urdfContent]);
+    if (!joint) {
+      return undefined;
+    }
+    const limitElement = joint.querySelector("limit");
+    return {
+      velocity: parseLimitAttributeDebugState(limitElement?.getAttribute("velocity")),
+      effort: parseLimitAttributeDebugState(limitElement?.getAttribute("effort")),
+    };
+  }, [jointName, urdfContent]);
+  const velocityAttribute =
+    parsedJointLimitAttributes !== undefined
+      ? parsedJointLimitAttributes.velocity
+      : parseLimitAttributeDebugState(jointLimitMetadata?.velocity);
+  const velocityLimit = velocityAttribute.value;
+  const velocityDisplay =
+    velocityLimit === null
+      ? undefined
+      : roundToPrecision(
+          angleUnit === "deg" ? velocityLimit * degPerRad : velocityLimit,
+          velocityPrecision
+        );
+
+  const effortAttribute =
+    parsedJointLimitAttributes !== undefined
+      ? parsedJointLimitAttributes.effort
+      : parseLimitAttributeDebugState(jointLimitMetadata?.effort);
+  const effortLimit = effortAttribute.value;
   const effortDisplay =
     effortLimit === null
       ? undefined
       : roundToPrecision(effortLimit, JOINT_CONTROL_PARAMS.effort.precision);
-  const hasEffortLimit = effortLimit !== null;
+  const hasEffortLimit = effortAttribute.status !== "missing";
   const effortUnit = currentType === "prismatic" ? "N" : "N*m";
+  const velocityPlaceholder = velocityAttribute.status === "invalid" ? "bad" : "-";
+  const effortPlaceholder = effortAttribute.status === "invalid" ? "bad" : "-";
 
   const handleJointVelocityChange = useCallback(
     (value: number) => {
       const velocityRad = angleUnit === "deg" ? value * radPerDeg : value;
-      setJointMaxVelocity(jointName, velocityRad);
-      onVelocityChange?.(velocityRad);
+      const nextVelocity = parsePositiveScalar(velocityRad);
+      if (nextVelocity === velocityLimit) return;
+      onVelocityChange?.(nextVelocity);
     },
-    [angleUnit, jointName, onVelocityChange, setJointMaxVelocity, radPerDeg]
+    [angleUnit, onVelocityChange, radPerDeg, velocityLimit]
   );
-
-  const handleResetVelocity = useCallback(() => {
-    setJointMaxVelocity(jointName, null);
-    onVelocityChange?.(globalMaxJointVelocity);
-  }, [globalMaxJointVelocity, jointName, onVelocityChange, setJointMaxVelocity]);
 
   const handleJointEffortChange = useCallback(
     (value: number) => {
@@ -274,9 +353,9 @@ export const JointControl = ({
   );
 
   const handleClearEffort = useCallback(() => {
-    if (effortLimit === null) return;
+    if (effortAttribute.status === "missing") return;
     onEffortChange?.(null);
-  }, [effortLimit, onEffortChange]);
+  }, [effortAttribute.status, onEffortChange]);
   
   // Delete confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -816,7 +895,7 @@ export const JointControl = ({
                   onKeyDown={handleNameKeyDown}
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
-                    "text-xs font-medium flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
+                    "text-[9px] font-normal leading-none flex-1 min-w-0 text-left bg-background border border-primary rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary",
                     isDeleted
                       ? "text-muted-foreground/50"
                       : isHighlighted
@@ -827,7 +906,7 @@ export const JointControl = ({
               ) : (
                 <label
                   className={cn(
-                    "text-xs font-medium truncate flex-1 min-w-0 text-left cursor-text",
+                    "text-[9px] font-normal leading-none truncate flex-1 min-w-0 text-left cursor-text",
                     isDeleted
                       ? "text-muted-foreground/50"
                       : isHighlighted
@@ -942,85 +1021,70 @@ export const JointControl = ({
                     : undefined
                 }
                 compact
-                className="w-16"
+                className="w-12"
                 disabled={isFixedJoint}
               />
             </div>
           </BlenderPropertyRow>
 
-          <BlenderPropertyRow
-            label={
-              <span className="truncate">
-                Vel
-                <span className="ml-1 text-[8px] text-muted-foreground/80">
-                  {hasCustomVelocity ? "custom" : "global"}
-                </span>
-              </span>
-            }
-            labelWidth="w-12"
-          >
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <NumberInput
-                value={velocityDisplay}
-                onValueChange={handleJointVelocityChange}
-                step={velocityStep}
-                min={velocityMin}
-                compact
-                className="w-16"
-                aria-label="Max joint velocity"
-              />
-              <span className="text-[8px] text-muted-foreground">{velocityUnit}</span>
-              {hasCustomVelocity && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 px-1 text-[9px] flex-shrink-0"
-                  onClick={handleResetVelocity}
-                  title="Reset to global velocity"
-                >
-                  Reset
-                </Button>
-              )}
-            </div>
-          </BlenderPropertyRow>
+          <div className="grid min-w-0 grid-cols-2 gap-x-2 gap-y-0.5">
+            <BlenderPropertyRow
+              label="Vel"
+              labelWidth="w-8"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                <NumberInput
+                  value={velocityDisplay}
+                  onValueChange={handleJointVelocityChange}
+                  step={velocityStep}
+                  min={velocityMin}
+                  compact
+                  allowEmpty
+                  className="w-10"
+                  aria-label="Max joint velocity"
+                  placeholder={velocityPlaceholder}
+                  title={getLimitAttributeInputTitle("velocity", velocityAttribute)}
+                  disabled={!onVelocityChange}
+                />
+                <span className="text-[8px] text-muted-foreground">{velocityUnit}</span>
+                <LimitAttributeStatusBadge attributeName="velocity" state={velocityAttribute} />
+              </div>
+            </BlenderPropertyRow>
 
-          <BlenderPropertyRow
-            label={
-              <span className="truncate">
-                Tau
-                <span className="ml-1 text-[8px] text-muted-foreground/80">
-                  effort
-                </span>
-              </span>
-            }
-            labelWidth="w-12"
-          >
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <NumberInput
-                value={effortDisplay}
-                onValueChange={handleJointEffortChange}
-                step={JOINT_CONTROL_PARAMS.effort.step}
-                min={JOINT_CONTROL_PARAMS.effort.min}
-                compact
-                allowEmpty
-                className="w-16"
-                aria-label="Joint effort limit"
-                disabled={!onEffortChange}
-              />
-              <span className="text-[8px] text-muted-foreground">{effortUnit}</span>
-              {hasEffortLimit && onEffortChange && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 px-1 text-[9px] flex-shrink-0"
-                  onClick={handleClearEffort}
-                  title="Clear effort limit"
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          </BlenderPropertyRow>
+            <BlenderPropertyRow
+              label="Tau"
+              labelWidth="w-8"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                <NumberInput
+                  value={effortDisplay}
+                  onValueChange={handleJointEffortChange}
+                  step={JOINT_CONTROL_PARAMS.effort.step}
+                  min={JOINT_CONTROL_PARAMS.effort.min}
+                  compact
+                  allowEmpty
+                  className="w-10"
+                  aria-label="Joint effort limit"
+                  placeholder={effortPlaceholder}
+                  title={getLimitAttributeInputTitle("effort", effortAttribute)}
+                  disabled={!onEffortChange}
+                />
+                <span className="text-[8px] text-muted-foreground">{effortUnit}</span>
+                <LimitAttributeStatusBadge attributeName="effort" state={effortAttribute} />
+                {hasEffortLimit && onEffortChange && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-1 text-[9px] flex-shrink-0"
+                    onClick={handleClearEffort}
+                    title="Clear effort limit"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </BlenderPropertyRow>
+          </div>
 
           {/* Limits for Revolute/Prismatic - Single line */}
           {needsLimits && (

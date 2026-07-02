@@ -3,18 +3,18 @@ import { ViewerHost } from "@/features/layout/page/ViewerHost";
 import { LoadingScreen } from "@/features/layout/page/LoadingScreen";
 import { Button } from "@/shared/ui/button";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
-import type { WorkspaceMode } from "@/features/workspace/types";
+
+type UrdfFileInput = FileList | File[];
 
 type IndexModeGateProps = {
   demoMode: boolean;
   hasLoadedFiles: boolean;
   isAttachingIluSession: boolean;
-  loadFilesFromFolderWithFreshCameras: (fileList: FileList, options?: { preserveCameras?: boolean }) => Promise<void>;
+  loadFilesFromFolderWithFreshCameras: (fileList: UrdfFileInput, options?: { preserveCameras?: boolean }) => Promise<void>;
+  onLoadGitHubSource: (params: { repoUrl: string; urdfPath?: string; token?: string }) => Promise<void>;
+  onLoadUrlSource: (url: string) => Promise<void>;
   onImportWorldLayout: (worldLayoutUrl: string) => Promise<void>;
-  onOpenTrainingMode: () => void;
   onPlayDemoMotion: () => void | Promise<void>;
-  workspaceMode: WorkspaceMode;
-  onWorkspaceModeChange: (mode: string) => void;
   runtimePreviewMode: boolean;
   runtimePreviewLoadError: string | null;
   runtimePreviewViewerProps: Viewer3DProps;
@@ -22,12 +22,11 @@ type IndexModeGateProps = {
   thumbnailViewerProps: Viewer3DProps;
   urdfContentVersion: number;
   FolderUploadScreen: React.ComponentType<{
-    onFolderSelected: (fileList: FileList, options?: { preserveCameras?: boolean }) => Promise<void>;
+    onFolderSelected: (fileList: UrdfFileInput, options?: { preserveCameras?: boolean }) => Promise<void>;
+    onGitHubSelected: (params: { repoUrl: string; urdfPath?: string; token?: string }) => Promise<void>;
+    onUrlSelected: (url: string) => Promise<void>;
     onPlayDemoMotion: () => void | Promise<void>;
     onImportWorldLayout: (worldLayoutUrl: string) => Promise<void>;
-    onOpenTrainingMode: () => void;
-    workspaceMode: WorkspaceMode;
-    onWorkspaceModeChange: (mode: string) => void;
   }>;
 };
 
@@ -66,11 +65,10 @@ export const IndexModeGate = ({
   hasLoadedFiles,
   isAttachingIluSession,
   loadFilesFromFolderWithFreshCameras,
+  onLoadGitHubSource,
+  onLoadUrlSource,
   onImportWorldLayout,
-  onOpenTrainingMode,
   onPlayDemoMotion,
-  workspaceMode,
-  onWorkspaceModeChange,
   runtimePreviewMode,
   runtimePreviewLoadError,
   runtimePreviewViewerProps,
@@ -92,11 +90,10 @@ export const IndexModeGate = ({
       <Suspense fallback={<LoadingScreenFrame />}>
         <FolderUploadScreen
           onFolderSelected={loadFilesFromFolderWithFreshCameras}
+          onGitHubSelected={onLoadGitHubSource}
+          onUrlSelected={onLoadUrlSource}
           onPlayDemoMotion={onPlayDemoMotion}
           onImportWorldLayout={onImportWorldLayout}
-          onOpenTrainingMode={onOpenTrainingMode}
-          workspaceMode={workspaceMode}
-          onWorkspaceModeChange={onWorkspaceModeChange}
         />
       </Suspense>
     );

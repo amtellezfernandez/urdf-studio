@@ -1,5 +1,15 @@
-import { OPERATOR_TELEOP_MJLAB_MOTION_LIMITS } from "@/features/teleop/recording/operatorTeleopMotionSafetyParams";
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
+
+const IK_MOTION_SAFETY_LIMITS = {
+  maxJointVelocityRadPerSec: 12,
+  maxJointAccelerationRadPerSec2: 120,
+  safetyScale: 0.99,
+  millisecondsPerSecond: 1_000,
+  defaultControlDtSec: 1 / 60,
+  maxControlDtSec: 1 / 30,
+  initialJointVelocityRadPerSec: 0,
+  stationaryJointDeltaRad: 1e-9,
+} as const;
 
 export type IkMotionSafetyState = {
   lastTimestampMs: number | null;
@@ -27,16 +37,16 @@ export const resolveIkMotionSafetyVelocityLimit = (
   jointName: string
 ): number => {
   const limit = jointLimits?.[jointName]?.velocity;
-  const mjlabLimit = OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.maxJointVelocityRadPerSec;
+  const mjlabLimit = IK_MOTION_SAFETY_LIMITS.maxJointVelocityRadPerSec;
   const effectiveLimit = Number.isFinite(limit) && (limit as number) > 0
     ? Math.min(limit as number, mjlabLimit)
     : mjlabLimit;
-  return effectiveLimit * OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.safetyScale;
+  return effectiveLimit * IK_MOTION_SAFETY_LIMITS.safetyScale;
 };
 
 export const resolveIkMotionSafetyAccelerationLimit = (): number =>
-  OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.maxJointAccelerationRadPerSec2 *
-  OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.safetyScale;
+  IK_MOTION_SAFETY_LIMITS.maxJointAccelerationRadPerSec2 *
+  IK_MOTION_SAFETY_LIMITS.safetyScale;
 
 const resolveDtSec = (
   state: IkMotionSafetyState,
@@ -45,15 +55,15 @@ const resolveDtSec = (
   const previousTimestampMs = state.lastTimestampMs;
   state.lastTimestampMs = timestampMs;
   if (previousTimestampMs === null) {
-    return OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.defaultControlDtSec;
+    return IK_MOTION_SAFETY_LIMITS.defaultControlDtSec;
   }
   const dtSec =
     (timestampMs - previousTimestampMs) /
-    OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.millisecondsPerSecond;
+    IK_MOTION_SAFETY_LIMITS.millisecondsPerSecond;
   if (!Number.isFinite(dtSec) || dtSec <= 0) {
     return null;
   }
-  return Math.min(dtSec, OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.maxControlDtSec);
+  return Math.min(dtSec, IK_MOTION_SAFETY_LIMITS.maxControlDtSec);
 };
 
 const holdCurrentFiniteJointTargets = (
@@ -129,7 +139,7 @@ export const limitIkJointTargetsToMotionSafety = ({
     const targetDelta = (targetValue as number) - (currentValue as number);
     if (
       Math.abs(targetDelta) <=
-      OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.stationaryJointDeltaRad
+      IK_MOTION_SAFETY_LIMITS.stationaryJointDeltaRad
     ) {
       state.velocityByJoint.set(jointName, 0);
       return;
@@ -144,7 +154,7 @@ export const limitIkJointTargetsToMotionSafety = ({
 
     const previousVelocity =
       state.velocityByJoint.get(jointName) ??
-      OPERATOR_TELEOP_MJLAB_MOTION_LIMITS.initialJointVelocityRadPerSec;
+      IK_MOTION_SAFETY_LIMITS.initialJointVelocityRadPerSec;
     if (Number.isFinite(previousVelocity)) {
       const maxVelocityDelta = accelerationLimit * dtSec;
       minVelocity = Math.max(minVelocity, previousVelocity - maxVelocityDelta);

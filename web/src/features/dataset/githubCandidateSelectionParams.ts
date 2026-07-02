@@ -1,1 +1,0 @@
-export const MULTI_GITHUB_CANDIDATE_MIN_COUNT = 2;

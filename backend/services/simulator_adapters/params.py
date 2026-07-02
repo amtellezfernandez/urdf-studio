@@ -145,6 +145,12 @@ MUJOCO_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     log_name="mujoco.log",
     ready_log_marker="[mujoco-workspace] workspace ready.",
 )
+MJLAB_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
+    workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "mjlab",
+    module_name="backend.scripts.mjlab_workspace_prepare",
+    log_name="mjlab.log",
+    ready_log_marker="[mjlab-workspace] workspace ready.",
+)
 PYBULLET_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
     workspace_root=BASE_DIR / ".cache" / "simulator-workspaces" / "pybullet",
     module_name="backend.scripts.pybullet_workspace_prepare",
@@ -227,7 +233,7 @@ BLENDER_SCENE_PARAMS = BlenderSceneParams(
 
 SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspaceProcessParams] = {
     SIMULATOR_GENESIS_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
-    SIMULATOR_MJLAB_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_MJLAB_ID: MJLAB_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_MUJOCO_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_PYBULLET_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
     SIMULATOR_BLENDER_ID: BLENDER_WORKSPACE_PROCESS_PARAMS,

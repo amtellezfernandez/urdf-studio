@@ -2099,9 +2099,9 @@ export const HealthActionPanel = ({
           isDragging={isDragging}
           onClose={onClose}
           onDragStart={handlePanelDragStart}
-          panelLabel="workspace launcher"
+          panelLabel="simulation prep"
           statusIcon={StatusIcon}
-          title="Open In"
+          title="Simulation Prep"
         />
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">

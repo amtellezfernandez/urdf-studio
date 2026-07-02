@@ -1,5 +1,4 @@
 import { buildRuntimeUrls, formatHostForUrl, resolveLocalNetworkHost } from '../../config/runtime.js';
-import dgram from 'node:dgram';
 import net from 'node:net';
 import os from 'node:os';
 import {
@@ -23,10 +22,6 @@ const RUN_VALUE_FLAGS = {
   [RUN_OPTION_FLAGS.apiBindHost]: { section: 'api', key: 'bindHost', type: 'host' },
   [RUN_OPTION_FLAGS.ikdHost]: { section: 'ikd', key: 'host', type: 'host' },
   [RUN_OPTION_FLAGS.ikdPort]: { section: 'ikd', key: 'port', type: 'port' },
-  [RUN_OPTION_FLAGS.teleopHost]: { section: 'teleop', key: 'host', type: 'host' },
-  [RUN_OPTION_FLAGS.teleopHttpPort]: { section: 'teleop', key: 'httpPort', type: 'port' },
-  [RUN_OPTION_FLAGS.teleopWebTransportPort]: { section: 'teleop', key: 'webtransportPort', type: 'port' },
-  [RUN_OPTION_FLAGS.teleopNativeQuicPort]: { section: 'teleop', key: 'nativeQuicPort', type: 'port' },
 };
 
 function normalizeOptionToken(token) {
@@ -138,7 +133,6 @@ export function parseRunArgs(argv = process.argv.slice(2)) {
     runtimeDemoMode: false,
     teamHost: null,
     teamMode: false,
-    teleopMode: false,
     robotEnvFile: null,
     robotName: null,
     unknownArgs: [],
@@ -154,10 +148,6 @@ export function parseRunArgs(argv = process.argv.slice(2)) {
     }
     if (flag === RUN_OPTION_FLAGS.dataMode) {
       parsedRunArgs.dataMode = true;
-      continue;
-    }
-    if (flag === RUN_OPTION_FLAGS.teleopMode) {
-      parsedRunArgs.teleopMode = true;
       continue;
     }
     if (flag === RUN_OPTION_FLAGS.teamMode) {
@@ -341,9 +331,6 @@ export function buildStartupOverviewLines({
       'Owner: open the Team URL, open Share, then send viewer/editor links.',
       'Controls: Share can lock editing or reset the editor link.'
     );
-    if (runtimeConfig.teleop.enabled) {
-      lines.push('Live teleop relay: starting for this team session.');
-    }
   } else {
     const hasRemoteExposure = remoteExposureIssues.length > 0;
     const hasRemoteFrontendExposure = remoteExposureIssues.some(
@@ -421,7 +408,6 @@ export function mergeRuntimeConfig(baseConfig, overrides = {}) {
     web: { ...baseConfig.web, ...(overrides.web || {}) },
     api: { ...baseConfig.api, ...(overrides.api || {}) },
     ikd: { ...baseConfig.ikd, ...(overrides.ikd || {}) },
-    teleop: { ...baseConfig.teleop, ...(overrides.teleop || {}) },
     ik: baseConfig.ik,
   };
 }
@@ -445,11 +431,6 @@ export function getRemoteBindingIssues(runtimeConfig, { allowGatedFrontend = fal
   }
   if (runtimeConfig.ikd.enabled && isRemoteBindHost(runtimeConfig.ikd.host)) {
     issues.push({ service: 'native IKD', host: runtimeConfig.ikd.host, port: runtimeConfig.ikd.port });
-  }
-  if (runtimeConfig.teleop.enabled && isRemoteBindHost(runtimeConfig.teleop.host)) {
-    issues.push({ service: 'live teleop relay', host: runtimeConfig.teleop.host, port: runtimeConfig.teleop.httpPort });
-    issues.push({ service: 'teleop fast browser channel', host: runtimeConfig.teleop.host, port: runtimeConfig.teleop.webtransportPort });
-    issues.push({ service: 'teleop native robot channel', host: runtimeConfig.teleop.host, port: runtimeConfig.teleop.nativeQuicPort });
   }
   return issues;
 }
@@ -535,16 +516,8 @@ export function buildSecurityPostureLines({
   const lines = [
     `frontend bind: ${formatBindAddress(runtimeConfig.web.bindHost, runtimeConfig.web.port)}`,
     `backend bind: ${formatBindAddress(runtimeConfig.api.bindHost, runtimeConfig.api.port)}`,
-    `live teleop relay: ${runtimeConfig.teleop.enabled ? formatBindAddress(runtimeConfig.teleop.host, runtimeConfig.teleop.httpPort) : 'disabled'}`,
     `team sharing gate: ${teamSharingGateway ? 'remote frontend blocked until enabled' : 'disabled'}`,
   ];
-
-  if (runtimeConfig.teleop.enabled) {
-    lines.push(
-      `teleop fast browser channel: ${formatBindAddress(runtimeConfig.teleop.host, runtimeConfig.teleop.webtransportPort)}`,
-      `teleop native robot channel: ${formatBindAddress(runtimeConfig.teleop.host, runtimeConfig.teleop.nativeQuicPort)}`
-    );
-  }
 
   lines.push(
     `data mode: ${dataMode ? 'public tunnel enabled' : 'disabled'}`,
@@ -610,15 +583,10 @@ export function applyRuntimeEnvOverrides(env, runtimeConfig) {
     URDF_API_BIND_HOST: runtimeConfig.api.bindHost,
     URDF_IKD_HOST: runtimeConfig.ikd.host,
     URDF_IKD_PORT: String(runtimeConfig.ikd.port),
-    URDF_TELEOP_HOST: runtimeConfig.teleop.host,
-    URDF_TELEOP_HTTP_PORT: String(runtimeConfig.teleop.httpPort),
-    URDF_TELEOP_WEBTRANSPORT_PORT: String(runtimeConfig.teleop.webtransportPort),
-    URDF_TELEOP_NATIVE_QUIC_PORT: String(runtimeConfig.teleop.nativeQuicPort),
     VITE_API_BASE_URL: runtimeUrls.apiBaseUrl,
     VITE_IKD_BASE_URL: runtimeUrls.ikdBaseUrl,
     VITE_IKD_WS_URL: runtimeUrls.ikdWsUrl,
     VITE_IKD_APPROACH_WS_URL: ikdApproachWsUrl,
-    VITE_TELEOP_HTTP_BASE_URL: runtimeUrls.teleopHttpBaseUrl,
   };
 }
 
@@ -651,31 +619,6 @@ function checkPortAvailability(host, port) {
   });
 }
 
-function checkUdpPortAvailability(host, port) {
-  return new Promise((resolve, reject) => {
-    const socketType = normalizeHost(host).includes(':') ? 'udp6' : 'udp4';
-    const socket = dgram.createSocket(socketType);
-    socket.unref();
-    socket.on('error', (error) => {
-      socket.close();
-      if (error && (error.code === 'EADDRINUSE' || error.code === 'EACCES')) {
-        resolve(false);
-        return;
-      }
-      reject(error);
-    });
-    socket.bind({ address: host, port, exclusive: true }, () => {
-      socket.close((closeError) => {
-        if (closeError) {
-          reject(closeError);
-          return;
-        }
-        resolve(true);
-      });
-    });
-  });
-}
-
 async function findNextAvailablePort(
   host,
   preferredPort,
@@ -697,41 +640,13 @@ async function findNextAvailablePort(
   return null;
 }
 
-function buildPortReservationKey(host, port) {
-  return `${normalizeHost(host)}:${port}`;
-}
-
-async function findNextAvailableUnreservedPort(
-  host,
-  preferredPort,
-  reservedPortKeys,
-  {
-    maxAttempts = PORT_RECOVERY_ATTEMPTS,
-    portAvailabilityChecker = checkPortAvailability,
-  } = {}
-) {
-  return findNextAvailablePort(host, preferredPort, {
-    maxAttempts,
-    portAvailabilityChecker: async (candidateHost, candidatePort) => {
-      if (reservedPortKeys.has(buildPortReservationKey(candidateHost, candidatePort))) {
-        return false;
-      }
-      return portAvailabilityChecker(candidateHost, candidatePort);
-    },
-  });
-}
-
 export async function recoverLoopbackPorts(
   runtimeConfig,
   {
     webPortPinned = false,
     apiPortPinned = false,
     ikdPortPinned = false,
-    teleopHttpPortPinned = false,
-    teleopWebTransportPortPinned = false,
-    teleopNativeQuicPortPinned = false,
     portAvailabilityChecker = checkPortAvailability,
-    udpPortAvailabilityChecker = checkUdpPortAvailability,
   } = {}
 ) {
   const nextConfig = {
@@ -739,13 +654,8 @@ export async function recoverLoopbackPorts(
     web: { ...runtimeConfig.web },
     api: { ...runtimeConfig.api },
     ikd: { ...runtimeConfig.ikd },
-    teleop: { ...runtimeConfig.teleop },
   };
   const notices = [];
-  const reservedTeleopUdpPortKeys = new Set();
-  const reserveTeleopUdpPort = (port) => {
-    reservedTeleopUdpPortKeys.add(buildPortReservationKey(nextConfig.teleop.host, port));
-  };
 
   if (isPortRecoveryEligible(nextConfig.web.bindHost, webPortPinned, { allowRemoteBind: true })) {
     const resolvedPort = await findNextAvailablePort(nextConfig.web.bindHost, nextConfig.web.port, {
@@ -783,58 +693,6 @@ export async function recoverLoopbackPorts(
         `IKD port ${nextConfig.ikd.port} was busy on ${formatHostForUrl(nextConfig.ikd.host)}; using ${resolvedPort} instead.`
       );
       nextConfig.ikd.port = resolvedPort;
-    }
-  }
-
-  if (nextConfig.teleop.enabled && isPortRecoveryEligible(nextConfig.teleop.host, teleopHttpPortPinned)) {
-    const httpPort = await findNextAvailablePort(nextConfig.teleop.host, nextConfig.teleop.httpPort, {
-      portAvailabilityChecker,
-    });
-    if (httpPort !== null && httpPort !== nextConfig.teleop.httpPort) {
-      notices.push(
-        `Teleop HTTP port ${nextConfig.teleop.httpPort} was busy on ${formatHostForUrl(nextConfig.teleop.host)}; using ${httpPort} instead.`
-      );
-      nextConfig.teleop.httpPort = httpPort;
-    }
-
-  }
-
-  if (
-    nextConfig.teleop.enabled &&
-    isPortRecoveryEligible(nextConfig.teleop.host, teleopWebTransportPortPinned)
-  ) {
-    const webTransportPort = await findNextAvailableUnreservedPort(
-      nextConfig.teleop.host,
-      nextConfig.teleop.webtransportPort,
-      reservedTeleopUdpPortKeys,
-      { portAvailabilityChecker: udpPortAvailabilityChecker }
-    );
-    if (webTransportPort !== null && webTransportPort !== nextConfig.teleop.webtransportPort) {
-      notices.push(
-        `Teleop WebTransport port ${nextConfig.teleop.webtransportPort} was unavailable on ${formatHostForUrl(nextConfig.teleop.host)}; using ${webTransportPort} instead.`
-      );
-      nextConfig.teleop.webtransportPort = webTransportPort;
-    }
-  }
-  if (nextConfig.teleop.enabled) {
-    reserveTeleopUdpPort(nextConfig.teleop.webtransportPort);
-  }
-
-  if (
-    nextConfig.teleop.enabled &&
-    isPortRecoveryEligible(nextConfig.teleop.host, teleopNativeQuicPortPinned)
-  ) {
-    const nativeQuicPort = await findNextAvailableUnreservedPort(
-      nextConfig.teleop.host,
-      nextConfig.teleop.nativeQuicPort,
-      reservedTeleopUdpPortKeys,
-      { portAvailabilityChecker: udpPortAvailabilityChecker }
-    );
-    if (nativeQuicPort !== null && nativeQuicPort !== nextConfig.teleop.nativeQuicPort) {
-      notices.push(
-        `Teleop native QUIC port ${nextConfig.teleop.nativeQuicPort} was unavailable on ${formatHostForUrl(nextConfig.teleop.host)}; using ${nativeQuicPort} instead.`
-      );
-      nextConfig.teleop.nativeQuicPort = nativeQuicPort;
     }
   }
 

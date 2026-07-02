@@ -1,7 +1,6 @@
 import type { IkResponsePayload } from "@/features/viewer/ik-types";
 
 export type IkSolverId =
-  | "lerobot-placo"
   | "amik"
   | "ikfast-wasm"
   | "ik-js";

@@ -23,7 +23,7 @@ type UseRobotJointSyncParams = {
   isIkHandleDragging: boolean;
   isIkTrajectoryApplying: boolean;
   isPlaying: boolean;
-  liveTeleopJointSyncActive?: boolean;
+  liveExternalJointSyncActive?: boolean;
   animationController: AnimationController;
   jointLimits?: JointLimits;
   initialPosePolicy?: "robot" | "limits-center";
@@ -68,7 +68,7 @@ export const useRobotJointSync = ({
   isIkHandleDragging,
   isIkTrajectoryApplying,
   isPlaying,
-  liveTeleopJointSyncActive = false,
+  liveExternalJointSyncActive = false,
   animationController,
   jointLimits,
   initialPosePolicy = "robot",
@@ -228,19 +228,19 @@ export const useRobotJointSync = ({
       const delta = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
 
-      // IK drag and live teleop telemetry both own the visual pose directly.
-      // Skipping the smoother avoids competing writes and hidden telemetry lag.
-      const shouldDirectApplyLiveTeleop =
-        liveTeleopJointSyncActive &&
+      // Some external sources own the visual pose directly. Skipping the
+      // smoother avoids competing writes and hidden input lag.
+      const shouldDirectApplyExternal =
+        liveExternalJointSyncActive &&
         !isPlaying &&
         !isDraggingJoint;
       if (
         !isPlaying &&
-        (shouldDirectApplyLiveTeleop || (!isIkHandleDragging && !isIkTrajectoryApplying))
+        (shouldDirectApplyExternal || (!isIkHandleDragging && !isIkTrajectoryApplying))
       ) {
         const targets = targetJointValuesRef.current;
         if (Object.keys(targets).length > 0) {
-          if (shouldDirectApplyLiveTeleop) {
+          if (shouldDirectApplyExternal) {
             applyJointValues(robot, targets, { filter: false });
             robot.updateMatrixWorld?.(true);
             animatedJointValuesRef.current = { ...targets };
@@ -297,7 +297,7 @@ export const useRobotJointSync = ({
     isIkHandleDragging,
     isIkTrajectoryApplying,
     isPlaying,
-    liveTeleopJointSyncActive,
+    liveExternalJointSyncActive,
   ]);
 
   const resetPose = useCallback(() => {
@@ -362,7 +362,7 @@ export const useRobotJointSync = ({
         }
       }
     }
-    if (hasChanges && !isPlaying && !liveTeleopJointSyncActive) {
+    if (hasChanges && !isPlaying && !liveExternalJointSyncActive) {
       animationController.markManualJointChange();
     }
   }, [
@@ -373,7 +373,7 @@ export const useRobotJointSync = ({
     isIkHandleDragging,
     isIkTrajectoryApplying,
     isPlaying,
-    liveTeleopJointSyncActive,
+    liveExternalJointSyncActive,
   ]);
 
   return { resetPose, setJointTargetsToInitialPose };

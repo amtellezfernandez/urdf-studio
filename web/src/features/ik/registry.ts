@@ -5,7 +5,6 @@ import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 
 const KNOWN_SOLVER_IDS = new Set<IkSolverId>([
-  "lerobot-placo",
   "amik",
   "ikfast-wasm",
   "ik-js",
@@ -57,7 +56,7 @@ const mergeSolverChains = (primary: IkSolverId[], fallback: IkSolverId[]) => {
 };
 
 const remoteIkEnabled = FEATURE_GATES.ikRemoteSolve.enabled;
-const FALLBACK_CHAIN: IkSolverId[] = remoteIkEnabled ? ["ik-js", "lerobot-placo", "amik"] : ["ik-js"];
+const FALLBACK_CHAIN: IkSolverId[] = remoteIkEnabled ? ["ik-js", "amik"] : ["ik-js"];
 
 export const DEFAULT_IK_SOLVER_CHAIN: IkSolverId[] = (() => {
   const configured = normalizeSolverChain(IK_RUNTIME_CONFIG?.defaultSolverChain);

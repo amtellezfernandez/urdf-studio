@@ -18,15 +18,9 @@
     "staleTargetMs": 250,
     "useForDrag": true
   },
-  "teleop": {
-    "enabled": false,
-    "host": "127.0.0.1",
-    "httpPort": 8091
-  },
   "ik": {
     "defaultSolverChain": [
       "ik-js",
-      "lerobot-placo",
       "amik"
     ],
     "timeouts": {
@@ -51,17 +45,6 @@
       "secondaryOffsetDeg": 180
     },
     "solverTuning": {
-      "lerobot-placo": {
-        "positionWeight": 100,
-        "orientationWeight": 0.5,
-        "postureWeight": 0,
-        "velocityDt": 0,
-        "limitWeight": 1,
-        "smoothAlpha": 0.12,
-        "maxStepDelta": 0.04,
-        "maxBlendDelta": 0.18,
-        "solveIterations": 5
-      },
       "amik": {
         "positionWeight": 100,
         "orientationWeight": 0,

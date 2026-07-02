@@ -659,8 +659,9 @@ describe("HealthActionPanel", () => {
       );
     });
 
-    expect(getText(container)).toContain("Open In");
-    const closePanelButton = container.querySelector('button[aria-label="Close workspace launcher panel"]');
+    expect(getText(container)).toContain("Simulation Prep");
+    expect(getText(container)).not.toContain("Open In");
+    const closePanelButton = container.querySelector('button[aria-label="Close simulation prep panel"]');
     expect(closePanelButton).toBeTruthy();
     expect(getText(container)).toContain("Physics Warning");
     expect(getText(container)).not.toContain("Next Step");

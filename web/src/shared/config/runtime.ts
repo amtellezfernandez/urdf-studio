@@ -1,10 +1,8 @@
 type RuntimeConfig = {
   apiBaseUrl?: string;
-  urdfOpsWebUrl?: string;
   ikdBaseUrl?: string;
   ikdWsUrl?: string;
   ikdApproachWsUrl?: string;
-  teleopHttpBaseUrl?: string;
   ikd?: IkdRuntimeConfig;
   ik?: IkRuntimeConfig;
 };
@@ -37,17 +35,15 @@ type IkdRuntimeConfig = {
 
 type ResolvedRuntimeConfig = {
   apiBaseUrl: string;
-  urdfOpsWebUrl: string;
   ikdBaseUrl: string;
   ikdWsUrl: string;
   ikdApproachWsUrl: string;
-  teleopHttpBaseUrl: string;
   ikd: IkdRuntimeConfig;
   ik: IkRuntimeConfig;
 };
 
 const FALLBACK_IK: IkRuntimeConfig = {
-  defaultSolverChain: ["ik-js", "lerobot-placo", "amik"],
+  defaultSolverChain: ["ik-js", "amik"],
   timeouts: {
     requestMs: 1200,
     dragMs: 300,
@@ -58,11 +54,9 @@ const FALLBACK_IK: IkRuntimeConfig = {
 
 const FALLBACKS: ResolvedRuntimeConfig = {
   apiBaseUrl: "http://127.0.0.1:8000",
-  urdfOpsWebUrl: "http://127.0.0.1:5174",
   ikdBaseUrl: "http://127.0.0.1:8088",
   ikdWsUrl: "ws://127.0.0.1:8088/telemetry",
   ikdApproachWsUrl: "ws://127.0.0.1:8088/approach/ws",
-  teleopHttpBaseUrl: "http://127.0.0.1:8091",
   ikd: {
     enabled: false,
     useForDrag: false,
@@ -77,11 +71,9 @@ const injectedConfig =
 
 const envConfig: RuntimeConfig = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
-  urdfOpsWebUrl: import.meta.env.VITE_URDF_OPS_WEB_URL,
   ikdBaseUrl: import.meta.env.VITE_IKD_BASE_URL,
   ikdWsUrl: import.meta.env.VITE_IKD_WS_URL,
   ikdApproachWsUrl: import.meta.env.VITE_IKD_APPROACH_WS_URL,
-  teleopHttpBaseUrl: import.meta.env.VITE_TELEOP_HTTP_BASE_URL,
 };
 
 const resolveIkdConfig = (config?: IkdRuntimeConfig): IkdRuntimeConfig => ({
@@ -105,26 +97,17 @@ const resolveIkConfig = (config?: IkRuntimeConfig): IkRuntimeConfig => ({
 
 const resolvedConfig: ResolvedRuntimeConfig = {
   apiBaseUrl: envConfig.apiBaseUrl ?? injectedConfig.apiBaseUrl ?? FALLBACKS.apiBaseUrl,
-  urdfOpsWebUrl:
-    envConfig.urdfOpsWebUrl ??
-    injectedConfig.urdfOpsWebUrl ??
-    FALLBACKS.urdfOpsWebUrl,
   ikdBaseUrl: envConfig.ikdBaseUrl ?? injectedConfig.ikdBaseUrl ?? FALLBACKS.ikdBaseUrl,
   ikdWsUrl: envConfig.ikdWsUrl ?? injectedConfig.ikdWsUrl ?? FALLBACKS.ikdWsUrl,
   ikdApproachWsUrl:
     envConfig.ikdApproachWsUrl ??
     injectedConfig.ikdApproachWsUrl ??
     FALLBACKS.ikdApproachWsUrl,
-  teleopHttpBaseUrl:
-    envConfig.teleopHttpBaseUrl ??
-    injectedConfig.teleopHttpBaseUrl ??
-    FALLBACKS.teleopHttpBaseUrl,
   ikd: resolveIkdConfig(injectedConfig.ikd),
   ik: resolveIkConfig(envConfig.ik ?? injectedConfig.ik),
 };
 
 export const API_BASE_URL = resolvedConfig.apiBaseUrl;
-export const URDF_OPS_WEB_URL = resolvedConfig.urdfOpsWebUrl;
 export const IKD_BASE_URL = resolvedConfig.ikdBaseUrl;
 export const IKD_WS_URL = resolvedConfig.ikdWsUrl;
 export const IKD_APPROACH_WS_URL = resolvedConfig.ikdApproachWsUrl;

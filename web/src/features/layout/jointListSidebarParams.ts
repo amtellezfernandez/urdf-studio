@@ -1,4 +1,9 @@
 export const JOINT_LIST_SIDEBAR_PARAMS = {
+  leftSidebar: {
+    defaultWidth: 220,
+    minWidth: 200,
+    maxWidth: 320,
+  },
   rightSidebar: {
     defaultWidth: 280,
     minWidth: 200,
@@ -52,6 +57,9 @@ export const JOINT_LIST_SIDEBAR_PARAMS = {
   },
 } as const;
 
+export const DEFAULT_SIDEBAR_WIDTH: number = JOINT_LIST_SIDEBAR_PARAMS.leftSidebar.defaultWidth;
+export const SIDEBAR_MIN_WIDTH: number = JOINT_LIST_SIDEBAR_PARAMS.leftSidebar.minWidth;
+export const SIDEBAR_MAX_WIDTH: number = JOINT_LIST_SIDEBAR_PARAMS.leftSidebar.maxWidth;
 export const DEFAULT_RIGHT_SIDEBAR_WIDTH: number = JOINT_LIST_SIDEBAR_PARAMS.rightSidebar.defaultWidth;
 export const RIGHT_SIDEBAR_MIN_WIDTH: number = JOINT_LIST_SIDEBAR_PARAMS.rightSidebar.minWidth;
 export const RIGHT_SIDEBAR_MAX_WIDTH: number = JOINT_LIST_SIDEBAR_PARAMS.rightSidebar.maxWidth;

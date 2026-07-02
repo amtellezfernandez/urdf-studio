@@ -1,15 +1,12 @@
-import { Bot, Bug, Gamepad2 } from "lucide-react";
+import { Bug } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { TOP_NAV_HEIGHT } from "@/features/layout/page/constants";
-import { OPERATOR_TELEOP_PANEL_COPY } from "@/features/teleop/params/operatorTeleopUiCopy";
 import { FileUtilsMenus } from "@/features/layout/page/top-nav/FileUtilsMenus";
 import { WorldsMenu } from "@/features/layout/page/top-nav/WorldsMenu";
 import { ViewMenu } from "@/features/layout/page/top-nav/ViewMenu";
-import { DatasetMenu } from "@/features/layout/page/top-nav/DatasetMenu";
 import { CreateMenu } from "@/features/layout/page/top-nav/CreateMenu";
 import { IkMenu } from "@/features/layout/page/top-nav/IkMenu";
-import { CollaborationMenu } from "@/features/layout/page/top-nav/CollaborationMenu";
 import type { TopNavBarProps } from "@/features/layout/page/top-nav/types";
 import {
   getWorkspaceModeUiPolicy,
@@ -18,15 +15,6 @@ import {
 export const TopNavBar = (props: TopNavBarProps) => {
   const logoUrl = `${import.meta.env.BASE_URL}assets/urdf-studio-logo.png`;
   const workspaceModeUi = getWorkspaceModeUiPolicy(props.workspaceMode);
-  const teleopConnectionButtonClassName = (
-    connected: boolean | undefined,
-    open: boolean | undefined,
-  ): string =>
-    connected
-      ? "border-emerald-500/35 bg-emerald-500/10 text-foreground"
-      : open
-        ? "border-border/70 bg-muted/30 text-foreground"
-        : "border-border/70 bg-background/50 text-muted-foreground hover:bg-muted/40 hover:text-foreground";
 
   return (
     <div
@@ -123,14 +111,6 @@ export const TopNavBar = (props: TopNavBarProps) => {
             ) : null}
 
             {workspaceModeUi.showStudioChrome ? (
-              <DatasetMenu
-                openMappingList={props.openMappingList}
-                datasetActions={props.datasetActions}
-                onOpenDatasetReview={props.onOpenDatasetReview}
-              />
-            ) : null}
-
-            {workspaceModeUi.showStudioChrome ? (
               <CreateMenu
                 openObjectCreator={props.openObjectCreator}
                 setShowCameraCreator={props.setShowCameraCreator}
@@ -150,18 +130,6 @@ export const TopNavBar = (props: TopNavBarProps) => {
         ) : null}
       </div>
       <div className="ml-1 flex shrink-0 items-center gap-1 sm:gap-2">
-        {workspaceModeUi.showStudioChrome && props.onOpenTrainingMode ? (
-          <button
-            type="button"
-            className="h-7 shrink-0 rounded-md border border-border/70 bg-background/50 px-2 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground sm:px-2.5"
-            onClick={props.onOpenTrainingMode}
-            aria-label="URDF Ops"
-            title="Open URDF Ops training workspace"
-          >
-            <span className="sm:hidden">Ops</span>
-            <span className="hidden sm:inline">URDF Ops</span>
-          </button>
-        ) : null}
         {workspaceModeUi.showStudioChrome &&
         props.workspaceLauncherStatusLabel &&
         props.onOpenWorkspaceLauncher ? (
@@ -185,50 +153,6 @@ export const TopNavBar = (props: TopNavBarProps) => {
               <span className="hidden sm:inline">Open In</span>
             </span>
           </button>
-        ) : null}
-        {workspaceModeUi.showStudioChrome &&
-        (props.onToggleLeaderInputPanel ||
-          props.onToggleFollowerHardwarePanel ||
-          props.onToggleTeleopPanel) ? (
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
-                props.leaderInputConnected,
-                props.leaderInputPanelOpen || props.teleopPanelOpen,
-              )}`}
-              onClick={props.onToggleLeaderInputPanel ?? props.onToggleTeleopPanel}
-              title={OPERATOR_TELEOP_PANEL_COPY.studio.navTitle}
-            >
-              <Gamepad2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {OPERATOR_TELEOP_PANEL_COPY.studio.navLabel}
-            </button>
-            <button
-              type="button"
-              className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs sm:px-2 ${teleopConnectionButtonClassName(
-                props.followerHardwareConnected,
-                props.followerHardwarePanelOpen,
-              )}`}
-              onClick={props.onToggleFollowerHardwarePanel ?? props.onToggleTeleopPanel}
-              title={OPERATOR_TELEOP_PANEL_COPY.hardware.navTitle}
-            >
-              <Bot className="h-3.5 w-3.5" aria-hidden="true" />
-              {OPERATOR_TELEOP_PANEL_COPY.hardware.navLabel}
-            </button>
-          </div>
-        ) : null}
-        {workspaceModeUi.showStudioChrome && props.onCreateCollaborationLink ? (
-          <CollaborationMenu
-            collaborationOwner={props.collaborationOwner}
-            collaborationPeerCount={props.collaborationPeerCount}
-            collaborationInviteAction={props.collaborationInviteAction}
-            collaborationSharingEnabled={props.collaborationSharingEnabled}
-            collaborationStatus={props.collaborationStatus}
-            onCreateCollaborationLink={props.onCreateCollaborationLink}
-            onEmailCollaborationLink={props.onEmailCollaborationLink}
-            onResetCollaborationLink={props.onResetCollaborationLink}
-            onSetCollaborationSharingEnabled={props.onSetCollaborationSharingEnabled}
-          />
         ) : null}
         {workspaceModeUi.showStudioChrome && props.studioIssueReportUrl ? (
           <a

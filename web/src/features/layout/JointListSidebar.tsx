@@ -237,6 +237,10 @@ const StructureSectionShell = ({
   </section>
 );
 
+const HIERARCHY_TREE_INDENT_PX = 8;
+const HIERARCHY_TREE_LINE_OFFSET_PX = 4;
+const HIERARCHY_TREE_BRANCH_WIDTH_PX = 4;
+
 const HierarchyTreeView = React.memo(({
   hierarchyTree,
   jointLimits,
@@ -329,7 +333,32 @@ const HierarchyTreeView = React.memo(({
       if (joints.length === 0) {
         // Leaf link - just show the link
         return (
-          <div key={`link-${linkName}-${depth}`} className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
+          <div
+            key={`link-${linkName}-${depth}`}
+            className="relative"
+            style={{ paddingLeft: `${depth * HIERARCHY_TREE_INDENT_PX}px` }}
+          >
+            {depth > 0 && (
+              <>
+                <div
+                  className="absolute top-1/2 bg-border/30"
+                  style={{
+                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                    width: `${HIERARCHY_TREE_BRANCH_WIDTH_PX}px`,
+                    height: "1px",
+                  }}
+                />
+                <div
+                  className="absolute bg-border/30"
+                  style={{
+                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                    top: "0",
+                    bottom: "50%",
+                    width: "1px",
+                  }}
+                />
+              </>
+            )}
             <div
               className={cn(
                 "px-1.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
@@ -419,26 +448,29 @@ const HierarchyTreeView = React.memo(({
       return (
         <div key={`link-${linkName}-${depth}`}>
           {/* Link */}
-          <div className="relative" style={{ paddingLeft: `${depth * 12}px` }}>
+          <div
+            className="relative"
+            style={{ paddingLeft: `${depth * HIERARCHY_TREE_INDENT_PX}px` }}
+          >
             {depth > 0 && (
               <>
                 {/* Horizontal line to link */}
                 <div
                   className="absolute top-1/2 bg-border/30"
                   style={{
-                    left: `${(depth - 1) * 12 + 6}px`,
-                    width: '6px',
-                    height: '1px',
+                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                    width: `${HIERARCHY_TREE_BRANCH_WIDTH_PX}px`,
+                    height: "1px",
                   }}
                 />
                 {/* Vertical line */}
                 <div
                   className="absolute bg-border/30"
                   style={{
-                    left: `${(depth - 1) * 12 + 6}px`,
-                    top: '0',
-                    bottom: '0',
-                    width: '1px',
+                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                    top: "0",
+                    bottom: "0",
+                    width: "1px",
                   }}
                 />
               </>
@@ -517,26 +549,29 @@ const HierarchyTreeView = React.memo(({
             return (
               <div key={`joint-${joint.jointName}`}>
                 {/* Joint */}
-                <div className="relative" style={{ paddingLeft: `${(depth + 1) * 12}px` }}>
+                <div
+                  className="relative"
+                  style={{ paddingLeft: `${(depth + 1) * HIERARCHY_TREE_INDENT_PX}px` }}
+                >
                   {/* Tree lines */}
                   <>
                     {/* Horizontal line to joint */}
                     <div
                       className="absolute top-1/2 bg-border/30"
                       style={{
-                        left: `${depth * 12 + 6}px`,
-                        width: '6px',
-                        height: '1px',
+                        left: `${depth * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                        width: `${HIERARCHY_TREE_BRANCH_WIDTH_PX}px`,
+                        height: "1px",
                       }}
                     />
                     {/* Vertical line */}
                     <div
                       className="absolute bg-border/30"
                       style={{
-                        left: `${depth * 12 + 6}px`,
-                        top: '0',
-                        bottom: hasChildJoints || !isLastJoint ? '0' : '50%',
-                        width: '1px',
+                        left: `${depth * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                        top: "0",
+                        bottom: hasChildJoints || !isLastJoint ? "0" : "50%",
+                        width: "1px",
                       }}
                     />
                   </>
@@ -557,10 +592,11 @@ const HierarchyTreeView = React.memo(({
                     onVisibilityToggle={onVisibilityToggle}
                     hideColorSquare={false}
                     groupLabel={structureLabels.jointByName[joint.jointName] ?? null}
+                    compact
                   />
                 </div>
                 {/* Recursively render child link */}
-                {renderLinkNode(joint.childLink, depth + 2, branchVisitedLinks)}
+                {renderLinkNode(joint.childLink, depth + 1, branchVisitedLinks)}
               </div>
             );
           })}

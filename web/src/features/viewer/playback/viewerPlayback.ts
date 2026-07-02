@@ -30,10 +30,6 @@ export const viewerPlayback = {
     });
     useViewerPlaybackStore.getState().playEpisode(frames, options);
   },
-  uploadMotionData: (file: File) => {
-    recordPlaybackTrace("cmd:uploadMotionData", { name: file.name, size: file.size });
-    useViewerPlaybackStore.getState().uploadMotionData(file);
-  },
   setFrame: (frameIndex: number) => {
     recordPlaybackTrace("cmd:setFrame", { frameIndex });
     useViewerPlaybackStore.getState().setFrame(frameIndex);

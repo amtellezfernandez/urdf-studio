@@ -24,10 +24,6 @@ export const useUrdfViewer = () => {
     () => createDefaultInertialVisualizationSettings()
   );
 
-  const handleMotionDataUpload = useCallback((file: File) => {
-    viewerPlayback.uploadMotionData(file);
-  }, []);
-
   const handlePlayAnimation = useCallback(() => {
     viewerPlayback.playAnimation();
   }, []);
@@ -76,7 +72,6 @@ export const useUrdfViewer = () => {
     setViewerSplitView,
     setInertialVisualization,
     // Handlers
-    handleMotionDataUpload,
     handlePlayAnimation,
     handleFrameChange,
   };

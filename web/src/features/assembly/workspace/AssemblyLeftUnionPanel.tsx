@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import type { AssemblyInspectorData } from "@/features/assembly/inspector/buildAssemblyInspectorData";
 import { SidebarResizeHandle } from "@/features/layout/page/SidebarResizeHandle";
 import { TOP_NAV_HEIGHT, VIEWPORT_HEIGHT_WITH_TOP_NAV } from "@/features/layout/page/constants";
-import { applySubstitutionSubtree } from "@/features/dataset/substitutionSubtree";
+import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
 import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
 
 type AssemblyLeftUnionPanelProps = {

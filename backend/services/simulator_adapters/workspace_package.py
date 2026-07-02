@@ -58,6 +58,7 @@ URDF_VISUAL_SEMANTIC_SYNTHETIC_COLORS = (
     (("motor", "servo", "actuator"), "0.45 0.48 0.52 1.0"),
     (("frame", "plate", "base", "mount", "bracket", "body", "chassis"), "0.66 0.69 0.64 1.0"),
 )
+ROOT_RELATIVE_URDF_MESH_PREFIXES = ("meshes/", "assets/")
 
 
 def _timestamped_workspace_dir(workspace_root: Path) -> Path:
@@ -78,6 +79,31 @@ def _normalize_resolved_urdf_asset_path(value: str | None) -> str:
     if lowered.endswith(".xacro"):
         return f"{normalized[:-len('.xacro')]}.urdf"
     return normalized
+
+
+def _normalize_root_relative_urdf_mesh_filenames(urdf_xml: str) -> str:
+    try:
+        root = ET.fromstring(urdf_xml)
+    except ET.ParseError:
+        return urdf_xml
+
+    changed = False
+    for mesh in root.findall(".//mesh"):
+        filename = mesh.get("filename")
+        if not filename:
+            continue
+        normalized_filename = filename.strip().replace("\\", "/")
+        if not normalized_filename.startswith("/"):
+            continue
+        portable_filename = normalized_filename.lstrip("/")
+        if not portable_filename.startswith(ROOT_RELATIVE_URDF_MESH_PREFIXES):
+            continue
+        mesh.set("filename", portable_filename)
+        changed = True
+
+    if not changed:
+        return urdf_xml
+    return ET.tostring(root, encoding="unicode")
 
 
 def _raise(error: Callable[[str], Exception], message: str) -> None:
@@ -288,10 +314,13 @@ def prepare_simulator_workspace_package(
     requested_asset_path = request.urdf_asset_path or "robot.urdf"
     staged_urdf_relative_path = _normalize_resolved_urdf_asset_path(requested_asset_path)
     staged_urdf_path = source_root / staged_urdf_relative_path
+    robot_urdf_xml = _normalize_root_relative_urdf_mesh_filenames(
+        request.world_package.world_snapshot.urdf_xml
+    )
     _write_asset_file(
         source_root,
         staged_urdf_relative_path,
-        request.world_package.world_snapshot.urdf_xml.encode("utf-8"),
+        robot_urdf_xml.encode("utf-8"),
         error=error,
     )
 
@@ -315,7 +344,7 @@ def prepare_simulator_workspace_package(
     try:
         bundle_result = bundle_mesh_assets_for_urdf_file(
             urdf_path=str(source_urdf_path),
-            urdf_xml=request.world_package.world_snapshot.urdf_xml,
+            urdf_xml=robot_urdf_xml,
             out_path=str(bundled_urdf_path),
             extra_search_roots=[
                 str(path)

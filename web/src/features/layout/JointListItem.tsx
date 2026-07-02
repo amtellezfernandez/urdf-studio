@@ -80,6 +80,7 @@ interface JointListItemProps {
   hideColorSquare?: boolean;
   groupLabel?: string | null;
   effortLimit?: number | null;
+  compact?: boolean;
 }
 
 const toFiniteNumberOrNull = (value: number | null | undefined): number | null =>
@@ -110,6 +111,7 @@ const JointListItemBase = ({
   hideColorSquare = false,
   groupLabel = null,
   effortLimit = null,
+  compact = false,
 }: JointListItemProps) => {
   const storeJointValue = useJointStore(
     useCallback((s) => s.jointValues[jointName] ?? 0, [jointName])
@@ -388,12 +390,13 @@ const JointListItemBase = ({
   };
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div className={cn("flex min-w-0 items-center", compact ? "gap-1" : "gap-1.5")}>
       {/* Color square matching 3D editor colors - outside highlight area */}
       {!hideColorSquare && (
         <div
           className={cn(
-            "w-3.5 h-3.5 rounded-sm flex-shrink-0 transition-opacity",
+            compact ? "h-3 w-3" : "h-3.5 w-3.5",
+            "rounded-sm flex-shrink-0 transition-opacity",
             isFixedJoint ? "cursor-default opacity-90" : "cursor-pointer hover:opacity-80"
           )}
           style={{ backgroundColor: squareColor }}
@@ -403,7 +406,8 @@ const JointListItemBase = ({
       )}
       <div
         className={cn(
-          "flex min-w-0 items-center gap-1.5 flex-1 px-2 py-1.5 rounded-sm transition-colors",
+          "flex min-w-0 items-center flex-1 rounded-sm transition-colors",
+          compact ? "gap-1 px-1 py-1" : "gap-1.5 px-2 py-1.5",
           !isFixedJoint && "cursor-pointer hover:bg-muted/30",
           !isFixedJoint && isHighlighted && "hover:bg-muted/40",
           isFixedJoint && "cursor-default",
@@ -422,7 +426,8 @@ const JointListItemBase = ({
       >
         <span
           className={cn(
-            "text-xs font-medium truncate flex-1 min-w-0 text-left",
+            compact ? "text-[10px]" : "text-xs",
+            "font-medium truncate flex-1 min-w-0 text-left",
             isFixedJoint && "text-muted-foreground/55",
             isDeleted && "text-muted-foreground/50",
             !isDeleted && !isHighlighted && !isSelected && !isFixedJoint && "text-foreground",

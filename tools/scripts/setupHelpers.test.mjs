@@ -8,7 +8,6 @@ import {
   selectInstalledSupersededPythonDependencies,
   shouldInstallGlobalIlu,
 } from './setupHelpers.js';
-import { OPENARM_HARDWARE_PIP_DEPENDENCIES } from './openArmHardwareParams.js';
 import {
   GITHUB_CLI_LOGIN_COMMAND,
   GLOBAL_ILU_INSTALL_ENV,
@@ -58,11 +57,6 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
       skipped: false,
       fatal: false,
     },
-    mjlabRuntimeResult: {
-      ok: true,
-      installed: true,
-      skipped: false,
-    },
     pybulletRuntimeResult: {
       ok: true,
       installed: true,
@@ -94,25 +88,14 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
     ],
   });
   assert.deepEqual(sections[3], {
-    heading: 'OpenArm Hardware',
-    lines: [
-      `Installed into the unified Python runtime: ${OPENARM_HARDWARE_PIP_DEPENDENCIES.join(', ')}.`,
-      'Check CAN, Feetech, and OpenArm Mini imports with npm run openarm:doctor.',
-    ],
-  });
-  assert.deepEqual(sections[4], {
     heading: 'Genesis',
     lines: ['Genesis viewer runtime is unavailable. Setup continued because this adapter is optional.'],
   });
-  assert.deepEqual(sections[5], {
+  assert.deepEqual(sections[4], {
     heading: 'PyBullet',
     lines: ['PyBullet workspace adapter runtime is available.'],
   });
-  assert.deepEqual(sections[6], {
-    heading: 'MJLab',
-    lines: ['MJLab validation runtime is available.'],
-  });
-  assert.deepEqual(sections[7], {
+  assert.deepEqual(sections[5], {
     heading: 'Blender',
     lines: ['Blender workspace runtime is available.'],
   });
@@ -122,9 +105,9 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
   const sections = buildSetupRoadmapSections();
 
   assert.equal(sections[0].heading, 'Setup steps');
-  assert.ok(sections[0].lines.includes('Unified Python backend/training runtime'));
+  assert.ok(sections[0].lines.includes('Unified Python backend runtime'));
   assert.ok(
-    sections[0].lines.includes('Simulator runtimes: Genesis, PyBullet, MJLab, and Blender')
+    sections[0].lines.includes('Simulator runtimes: Genesis, PyBullet, and Blender')
   );
   assert.equal(sections.length, 1);
 });

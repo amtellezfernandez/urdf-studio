@@ -55,8 +55,6 @@ const createProps = (): TopNavBarProps => ({
     scopedLinkNames: null,
   },
   setInertialVisualization: vi.fn(),
-  openMappingList: vi.fn(),
-  datasetActions: null,
   onValidateCurrentWorldScenePackage: vi.fn(),
   onPublishCurrentWorldScenePackage: vi.fn(),
   onPublishCurrentWorldScenePackageToHub: vi.fn(),
@@ -82,13 +80,6 @@ const createProps = (): TopNavBarProps => ({
   workspaceLauncherNeedsAttention: true,
   onOpenWorkspaceLauncher: vi.fn(),
   studioIssueReportUrl: undefined,
-  onOpenDatasetReview: vi.fn(),
-  leaderInputConnected: false,
-  leaderInputPanelOpen: false,
-  followerHardwareConnected: false,
-  followerHardwarePanelOpen: false,
-  onToggleLeaderInputPanel: vi.fn(),
-  onToggleFollowerHardwarePanel: vi.fn(),
 });
 
 const renderTopNavBar = async (
@@ -238,38 +229,6 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("surfaces dataset review from the Dataset menu", async () => {
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = { ...createProps(), showMenus: true };
-
-    await renderTopNavBar(root, props);
-
-    expect(container.textContent).not.toContain("Dataset Review");
-    const datasetButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Dataset"
-    );
-    expect(datasetButton).toBeTruthy();
-
-    await act(async () => {
-      datasetButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-    });
-
-    const reviewMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
-      (item) => item.textContent === "Dataset Review"
-    );
-    expect(reviewMenuItem).toBeTruthy();
-
-    await act(async () => {
-      reviewMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(props.onOpenDatasetReview).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
   it("surfaces world rollout actions from the Worlds menu", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
@@ -337,38 +296,6 @@ describe("TopNavBar", () => {
       workspaceChangeMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(props.onImportWorkspaceChangeSet).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("surfaces leader and follower teleop panel toggles in studio mode", async () => {
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = createProps();
-
-    await renderTopNavBar(root, props);
-
-    const cameraButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Cams"
-    );
-    const studioButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Controller"
-    );
-    const hardwareButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Robot"
-    );
-    expect(cameraButton).toBeUndefined();
-    expect(studioButton).toBeTruthy();
-    expect(hardwareButton).toBeTruthy();
-    expect(studioButton?.getAttribute("title")).toBe("Set up controller input");
-    expect(hardwareButton?.getAttribute("title")).toBe("Connect robot hardware");
-
-    await act(async () => {
-      studioButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(props.onToggleLeaderInputPanel).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

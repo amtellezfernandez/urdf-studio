@@ -11,7 +11,7 @@ import {
 const BASE_POSE_APPLY_EPSILON = 1e-9;
 const tempRobotBaseFrame = createIdentityRigidFrame();
 
-export type DragMode = "move-joints" | "drag-handle" | "hardware-teleop";
+export type DragMode = "move-joints" | "drag-handle";
 
 export type LinkPose = {
   position: [number, number, number];
@@ -36,8 +36,6 @@ export const getDragModeDisplayName = (mode: DragMode) => {
       return "Move Joints";
     case "drag-handle":
       return "Drag Handle";
-    case "hardware-teleop":
-      return "Leader Teleop";
     default:
       return "Move Joints";
   }

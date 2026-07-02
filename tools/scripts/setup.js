@@ -22,14 +22,6 @@ import {
   selectInstalledSupersededPythonDependencies,
   shouldInstallGlobalIlu,
 } from './setupHelpers.js';
-import { OPENARM_HARDWARE_PIP_DEPENDENCIES } from './openArmHardwareParams.js';
-import { buildOpenArmHardwareVerifyImportScript } from './openArmHardwareRuntime.js';
-import { buildUrdfOpsRuntime, isUrdfOpsCheckoutAvailable } from './urdfOpsIntegration.js';
-import {
-  URDF_OPS_REPO_URL,
-  URDF_OPS_ROOT_ENV,
-  URDF_OPS_SKIP_SETUP_ENV,
-} from './urdfOpsParams.js';
 import {
   BACKEND_COLLISION_STACK_FORCE_ENV,
   BACKEND_COLLISION_STACK_SKIP_ENV,
@@ -54,16 +46,8 @@ import {
   GITHUB_FINE_GRAINED_TOKEN_URL,
   GLOBAL_ILU_INSTALL_COMMAND,
   HUGGING_FACE_TOKEN_URL,
-  LEROBOT_TOOLCHAIN_DIRNAME,
-  LEROBOT_PIP_INSTALL_FLAGS,
-  LEROBOT_TRAINING_DEPENDENCIES,
-  LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT,
   LOCAL_ILU_COMMAND,
-  MJLAB_DEPENDENCIES,
-  MJLAB_FORCE_INSTALL_ENV,
-  MJLAB_SKIP_AUTO_INSTALL_ENV,
   MJX_SYSTEM_ID_DEPENDENCIES,
-  MJLAB_VERIFY_IMPORT_SCRIPT,
   PYBULLET_DEPENDENCIES,
   PYBULLET_FORCE_INSTALL_ENV,
   PYBULLET_SKIP_AUTO_INSTALL_ENV,
@@ -342,56 +326,6 @@ async function verifyIluRuntimeContract() {
     log('✗ i-love-urdf runtime check failed', colors.yellow);
     logInfo(error?.message || String(error));
     logInfo('Run npm install, then rerun npm run setup.');
-    return false;
-  }
-}
-
-async function setupUrdfOpsWorkspace() {
-  if (isTruthyEnvValue(process.env[URDF_OPS_SKIP_SETUP_ENV])) {
-    return true;
-  }
-
-  log('');
-  logArrow('🧭 Setting up URDF Ops workspace');
-  log('');
-
-  const opsRuntime = buildUrdfOpsRuntime({ studioRootDir: rootDir });
-  if (!isUrdfOpsCheckoutAvailable(opsRuntime)) {
-    logInfo(`Cloning ${URDF_OPS_REPO_URL} into ${opsRuntime.root}`);
-    try {
-      execFileSync('git', ['clone', URDF_OPS_REPO_URL, opsRuntime.root], {
-        cwd: dirname(rootDir),
-        stdio: 'inherit',
-      });
-    } catch (error) {
-      log('✗ Failed to clone URDF Ops', colors.yellow);
-      logInfo(`Set ${URDF_OPS_ROOT_ENV}=/path/to/urdf-ops if you already cloned it elsewhere.`);
-      logInfo(`Set ${URDF_OPS_SKIP_SETUP_ENV}=1 to continue without URDF Ops.`);
-      return false;
-    }
-  }
-
-  try {
-    const lockfilePath = join(opsRuntime.root, 'package-lock.json');
-    const viteBinPath = join(
-      opsRuntime.nodeModulesPath,
-      '.bin',
-      process.platform === 'win32' ? 'vite.cmd' : 'vite'
-    );
-    if (existsSync(opsRuntime.nodeModulesPath) && existsSync(viteBinPath)) {
-      logSuccess('URDF Ops dependencies already installed');
-      return true;
-    }
-
-    const installCommand = existsSync(lockfilePath) ? 'ci' : 'install';
-    logInfo(`Installing URDF Ops dependencies with npm ${installCommand}...`);
-    runNpmInstallIn(opsRuntime.root, [installCommand, ...SETUP_NPM_INSTALL_FLAGS], {
-      stdio: 'inherit',
-    });
-    logSuccess('URDF Ops dependencies installed');
-    return true;
-  } catch (error) {
-    log('✗ Failed to install URDF Ops dependencies', colors.yellow);
     return false;
   }
 }
@@ -684,7 +618,6 @@ async function installOptionalGlobalIlu() {
 function printSetupSummary({
   globalIluResult,
   genesisRuntimeResult,
-  mjlabRuntimeResult,
   pybulletRuntimeResult,
   blenderRuntimeResult,
 } = {}) {
@@ -692,7 +625,6 @@ function printSetupSummary({
     globalIluAttempted: Boolean(globalIluResult?.attempted),
     globalIluInstalled: Boolean(globalIluResult?.installed),
     genesisRuntimeResult,
-    mjlabRuntimeResult,
     pybulletRuntimeResult,
     blenderRuntimeResult,
   });
@@ -897,7 +829,7 @@ function getManagedPythonPath() {
 
 async function setupPythonBackendEnvironment() {
   log('');
-  logArrow('🔍 Setting up unified Python backend/training environment');
+  logArrow('🔍 Setting up unified Python backend environment');
   log('');
 
   const venvPath = join(rootDir, PYTHON_ENV_DIRNAME);
@@ -918,9 +850,9 @@ async function setupPythonBackendEnvironment() {
     return true;
   }
 
-  const pythonResolution = resolvePythonForLeRobotVenv();
+  const pythonResolution = resolvePythonForBackendVenv();
   if (!pythonResolution) {
-    log('✗ URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON must point to Python 3.12+.', colors.yellow);
+    log('✗ URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON must point to Python 3.12+.', colors.yellow);
     logPythonBootstrapHelp();
     return false;
   }
@@ -945,7 +877,10 @@ async function setupPythonBackendEnvironment() {
   }
 }
 
-function getConfiguredPythonForLeRobot() {
+function getConfiguredPythonForBackend() {
+  if (typeof process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON === 'string') {
+    return process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON.trim();
+  }
   return typeof process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON === 'string'
     ? process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON.trim()
     : '';
@@ -965,16 +900,16 @@ function isSupportedPythonExecutable(candidate) {
   }
 }
 
-function findPythonForLeRobot() {
-  const configuredPython = getConfiguredPythonForLeRobot();
+function findPythonForBackend() {
+  const configuredPython = getConfiguredPythonForBackend();
   if (!configuredPython) {
     return null;
   }
   return isSupportedPythonExecutable(configuredPython) ? configuredPython : null;
 }
 
-function resolvePythonForLeRobotVenv() {
-  const configuredPython = getConfiguredPythonForLeRobot();
+function resolvePythonForBackendVenv() {
+  const configuredPython = getConfiguredPythonForBackend();
   if (!configuredPython) {
     return {
       python: '3.12',
@@ -982,7 +917,7 @@ function resolvePythonForLeRobotVenv() {
     };
   }
 
-  const pythonPath = findPythonForLeRobot();
+  const pythonPath = findPythonForBackend();
   if (pythonPath) {
     return {
       python: pythonPath,
@@ -995,49 +930,7 @@ function resolvePythonForLeRobotVenv() {
 function logPythonBootstrapHelp() {
   logInfo('Use uv for Python 3.12: uv python install 3.12');
   logInfo('Then rerun: npm run setup');
-  logInfo('Optional manual override: URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12');
-}
-
-function shouldInstallOfficialLeRobot() {
-  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL)) {
-    return false;
-  }
-  if (isTruthyEnvValue(process.env.URDF_STUDIO_INSTALL_LEROBOT)) {
-    return true;
-  }
-  return process.platform !== 'darwin';
-}
-
-function getLeRobotToolchainSkipMessage() {
-  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL)) {
-    return 'Official LeRobot training runtime skipped by URDF_STUDIO_SKIP_LEROBOT_AUTO_INSTALL.';
-  }
-  return 'Official LeRobot training runtime skipped on macOS. Set URDF_STUDIO_INSTALL_LEROBOT=1 to force install.';
-}
-
-function shouldInstallMjlab() {
-  return shouldInstallOptionalPythonRuntime({
-    skipAutoInstallEnv: MJLAB_SKIP_AUTO_INSTALL_ENV,
-    forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
-    defaultInstall: process.platform !== 'darwin',
-  });
-}
-
-function shouldInstallOpenArmHardwareRuntime() {
-  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL)) {
-    return false;
-  }
-  if (isTruthyEnvValue(process.env.URDF_STUDIO_INSTALL_OPENARM_HARDWARE)) {
-    return true;
-  }
-  return process.platform !== 'darwin';
-}
-
-function getOpenArmHardwareRuntimeSkipMessage() {
-  if (isTruthyEnvValue(process.env.URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL)) {
-    return 'OpenArm hardware runtime skipped by URDF_STUDIO_SKIP_OPENARM_AUTO_INSTALL.';
-  }
-  return 'OpenArm hardware runtime skipped on macOS. Set URDF_STUDIO_INSTALL_OPENARM_HARDWARE=1 to force install.';
+  logInfo('Optional manual override: URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON=/path/to/python3.12');
 }
 
 function shouldInstallBackendNativeSimRuntime() {
@@ -1129,20 +1022,6 @@ function getGenesisRuntimeSkipMessage() {
     `Genesis workspace adapter runtime skipped on ${process.platform}.`,
     `Set ${GENESIS_FORCE_INSTALL_ENV}=1 to force install.`,
   ].join(' ');
-}
-
-function getMjlabRuntimeSkipMessage() {
-  if (isTruthyEnvValue(process.env[MJLAB_SKIP_AUTO_INSTALL_ENV])) {
-    return `MJLab validation runtime skipped by ${MJLAB_SKIP_AUTO_INSTALL_ENV}.`;
-  }
-  if (process.platform === 'darwin') {
-    return [
-      'MJLab validation runtime skipped on macOS.',
-      'The pinned MuJoCo-Warp/Warp wheels are not available for every macOS architecture.',
-      `Set ${MJLAB_FORCE_INSTALL_ENV}=1 to force install.`,
-    ].join(' ');
-  }
-  return `MJLab validation runtime skipped. Set ${MJLAB_FORCE_INSTALL_ENV}=1 to force install.`;
 }
 
 function shouldInstallPybulletRuntime() {
@@ -1453,158 +1332,6 @@ function shouldFailSetupForRuntimeResult(result) {
   return result?.ok === false && result.fatal !== false;
 }
 
-async function installOfficialLeRobotToolchain() {
-  if (!shouldInstallOfficialLeRobot()) {
-    log('');
-    logArrow('🤖 Checking official LeRobot training toolchain');
-    log('');
-    logInfo(getLeRobotToolchainSkipMessage());
-    return true;
-  }
-
-  log('');
-  logArrow('🤖 Installing official LeRobot training toolchain');
-  log('');
-
-  const uvPath = findUv();
-  if (!uvPath) {
-    log('✗ uv not found. Official LeRobot dataset merge requires uv.', colors.yellow);
-    return false;
-  }
-
-  const toolchainPath = join(rootDir, LEROBOT_TOOLCHAIN_DIRNAME);
-  const toolchainPython = join(toolchainPath, 'bin', 'python3');
-  if (!existsSync(toolchainPython)) {
-    const pythonResolution = resolvePythonForLeRobotVenv();
-    if (!pythonResolution) {
-      log('✗ URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON must point to Python 3.12+.', colors.yellow);
-      logPythonBootstrapHelp();
-      return false;
-    }
-    if (pythonResolution.usesUvManagedPython) {
-      logInfo('Using uv-managed Python 3.12 for the official LeRobot runtime.');
-    }
-    logInfo(`Creating ${toolchainPath} with ${pythonResolution.python}`);
-    execFileSync(uvPath, ['venv', '--python', pythonResolution.python, toolchainPath], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: getUvEnv(),
-    });
-  }
-
-  const existingTrainingCheck = runPythonImportCheck(toolchainPython, LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT);
-  if (existingTrainingCheck.ok) {
-    logSuccess('Official LeRobot training runtime ready');
-    return true;
-  }
-  logInfo(`Installing official LeRobot training packages in ${LEROBOT_TOOLCHAIN_DIRNAME}...`);
-
-  try {
-    execFileSync(
-      uvPath,
-      [
-        'pip',
-        'install',
-        ...LEROBOT_PIP_INSTALL_FLAGS,
-        '--python',
-        toolchainPython,
-        ...LEROBOT_TRAINING_DEPENDENCIES,
-      ],
-      {
-        cwd: rootDir,
-        stdio: 'inherit',
-        env: getUvEnv(),
-      }
-    );
-    const installedTrainingCheck = runPythonImportCheck(toolchainPython, LEROBOT_TRAINING_VERIFY_IMPORT_SCRIPT);
-    if (!installedTrainingCheck.ok) {
-      printCapturedCommandOutput(installedTrainingCheck);
-      throw new Error(installedTrainingCheck.output || 'LeRobot training import check failed after install.');
-    }
-    logSuccess('Official LeRobot training runtime installed');
-    logInfo(`Backend will use unified Python: ${toolchainPython}`);
-    return true;
-  } catch (e) {
-    log('✗ Failed to install official LeRobot training runtime', colors.yellow);
-    logInfo('Try manually:');
-    logInfo(
-      `  "${uvPath}" pip install ${LEROBOT_PIP_INSTALL_FLAGS.join(' ')} ` +
-      `--python ${LEROBOT_TOOLCHAIN_DIRNAME}/bin/python3 ${LEROBOT_TRAINING_DEPENDENCIES.join(' ')}`
-    );
-    return false;
-  }
-}
-
-async function installOpenArmHardwareRuntime() {
-  if (!shouldInstallOpenArmHardwareRuntime()) {
-    log('');
-    logArrow('🦾 Checking OpenArm hardware runtime');
-    log('');
-    logInfo(getOpenArmHardwareRuntimeSkipMessage());
-    return true;
-  }
-
-  log('');
-  logArrow('🦾 Installing OpenArm hardware runtime');
-  log('');
-
-  const venvPython = getManagedPythonPath();
-  const uvPath = findUv();
-  if (!existsSync(venvPython)) {
-    logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
-    return false;
-  }
-  if (!uvPath) {
-    log('✗ uv not found. OpenArm hardware setup requires uv.', colors.yellow);
-    return false;
-  }
-
-  const verifyScript = buildOpenArmHardwareVerifyImportScript();
-  const existingOpenArmCheck = runPythonImportCheck(venvPython, verifyScript);
-  if (existingOpenArmCheck.ok) {
-    logSuccess('OpenArm hardware runtime ready');
-    return true;
-  }
-  logInfo(`Installing OpenArm hardware packages in ${PYTHON_ENV_DIRNAME}...`);
-
-  try {
-    execFileSync(
-      uvPath,
-      [
-        'pip',
-        'install',
-        ...LEROBOT_PIP_INSTALL_FLAGS,
-        '--python',
-        venvPython,
-        ...OPENARM_HARDWARE_PIP_DEPENDENCIES,
-      ],
-      {
-        cwd: rootDir,
-        stdio: 'inherit',
-        env: getUvEnv(),
-      }
-    );
-    const installedOpenArmCheck = runPythonImportCheck(venvPython, verifyScript);
-    if (!installedOpenArmCheck.ok) {
-      printCapturedCommandOutput(installedOpenArmCheck);
-      throw new Error(installedOpenArmCheck.output || 'OpenArm hardware import check failed after install.');
-    }
-    logSuccess('OpenArm hardware runtime installed');
-    return true;
-  } catch (e) {
-    log('✗ Failed to install OpenArm hardware runtime', colors.yellow);
-    logInfo('Try manually:');
-    const manualDependencies = OPENARM_HARDWARE_PIP_DEPENDENCIES
-      .map((dependency) => JSON.stringify(dependency))
-      .join(' ');
-    logInfo(
-      `  "${uvPath}" pip install ${LEROBOT_PIP_INSTALL_FLAGS.join(' ')} ` +
-      `--python ${PYTHON_ENV_DIRNAME}/bin/python3 ${manualDependencies}`
-    );
-    return false;
-  }
-}
-
 async function installOptionalPythonRuntime({
   shouldInstall,
   skipMessage,
@@ -1676,19 +1403,6 @@ async function installOptionalPythonRuntime({
       error: e,
     });
   }
-}
-
-async function installMjlabRuntime() {
-  return installOptionalPythonRuntime({
-    shouldInstall: shouldInstallMjlab,
-    skipMessage: getMjlabRuntimeSkipMessage,
-    icon: '🧪',
-    displayName: 'MJLab validation runtime',
-    setupName: 'MJLab',
-    dependencies: MJLAB_DEPENDENCIES,
-    verifyImportScript: MJLAB_VERIFY_IMPORT_SCRIPT,
-    forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
-  });
 }
 
 async function installPybulletRuntime() {
@@ -1826,15 +1540,11 @@ async function runSetupSequence(overrides = {}) {
   const steps = {
     installDependencies,
     verifyIluRuntimeContract,
-    setupUrdfOpsWorkspace,
     setupPythonBackendEnvironment,
     installBackendDeps,
     installGenesisRuntime,
     installPybulletRuntime,
     installBlenderRuntime,
-    installOfficialLeRobotToolchain,
-    installOpenArmHardwareRuntime,
-    installMjlabRuntime,
     installTwinDepsIfRequested,
     checkIkd,
     setupHuggingFace,
@@ -1848,10 +1558,6 @@ async function runSetupSequence(overrides = {}) {
   if (!iluRuntimeReady) {
     throw new Error('i-love-urdf runtime setup failed');
   }
-  const urdfOpsInstalled = await steps.setupUrdfOpsWorkspace();
-  if (!urdfOpsInstalled) {
-    throw new Error('URDF Ops setup failed');
-  }
   const pythonBackendEnvironmentReady = await steps.setupPythonBackendEnvironment();
   if (!pythonBackendEnvironmentReady) {
     throw new Error('Unified Python environment setup failed');
@@ -1859,10 +1565,6 @@ async function runSetupSequence(overrides = {}) {
   const backendDepsInstalled = await steps.installBackendDeps();
   if (!backendDepsInstalled) {
     throw new Error('Backend dependencies installation failed');
-  }
-  const lerobotToolchainInstalled = await steps.installOfficialLeRobotToolchain();
-  if (!lerobotToolchainInstalled) {
-    throw new Error('Official LeRobot dataset toolchain installation failed');
   }
   const genesisRuntimeResult = await steps.installGenesisRuntime();
   if (shouldFailSetupForRuntimeResult(genesisRuntimeResult)) {
@@ -1876,14 +1578,6 @@ async function runSetupSequence(overrides = {}) {
   if (shouldFailSetupForRuntimeResult(blenderRuntimeResult)) {
     throw new Error('Blender workspace runtime installation failed');
   }
-  const openArmHardwareRuntimeInstalled = await steps.installOpenArmHardwareRuntime();
-  if (!openArmHardwareRuntimeInstalled) {
-    throw new Error('OpenArm hardware runtime installation failed');
-  }
-  const mjlabRuntimeResult = await steps.installMjlabRuntime();
-  if (shouldFailSetupForRuntimeResult(mjlabRuntimeResult)) {
-    throw new Error('MJLab validation runtime installation failed');
-  }
   await steps.installTwinDepsIfRequested();
   await steps.checkIkd();
   await steps.setupHuggingFace();
@@ -1892,7 +1586,6 @@ async function runSetupSequence(overrides = {}) {
   return {
     globalIluResult,
     genesisRuntimeResult,
-    mjlabRuntimeResult,
     pybulletRuntimeResult,
     blenderRuntimeResult,
   };
@@ -1905,7 +1598,6 @@ async function main() {
     const {
       globalIluResult,
       genesisRuntimeResult,
-      mjlabRuntimeResult,
       pybulletRuntimeResult,
       blenderRuntimeResult,
     } = await runSetupSequence();
@@ -1913,7 +1605,6 @@ async function main() {
     printSetupSummary({
       globalIluResult,
       genesisRuntimeResult,
-      mjlabRuntimeResult,
       pybulletRuntimeResult,
       blenderRuntimeResult,
     });
@@ -1938,12 +1629,12 @@ if (isMainModule()) {
 export {
   assertIluRuntimeContract,
   didSpawnSyncFail,
-  findPythonForLeRobot,
+  findPythonForBackend,
   installBlenderRuntime,
   prependNativeLibraryPath,
   resolveBlenderExecutableForSetup,
   resolveManagedCmeelLibPathFromSitePackages,
-  resolvePythonForLeRobotVenv,
+  resolvePythonForBackendVenv,
   runSetupSequence,
   verifyIluRuntimeContract,
 };

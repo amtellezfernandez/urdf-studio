@@ -8,7 +8,6 @@ import type {
   MeshFiles,
   RobotBasePose,
   UrdfViewMode,
-  ViewerEpisode,
 } from "@/shared/types/feature";
 import type { URDFRobot } from "urdf-loader";
 import type * as THREE from "three";
@@ -25,7 +24,6 @@ import { WorkspaceViewerContent } from "@/features/layout/page/WorkspaceViewerCo
 import { toViewer3DProps } from "@/features/layout/page/viewer3DProps";
 import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
-import type { DatasetConstraintSettings } from "@/features/dataset/episode-viewer/constraintSettings";
 
 const URDFComparison = lazy(() =>
   import("@/features/urdf/editor/URDFComparison").then((module) => ({ default: module.URDFComparison }))
@@ -41,7 +39,6 @@ type ViewerLayoutProps = {
   rightSidebarWidth: number;
   showUrdfEditor: boolean;
   urdfEditorSplitView: boolean;
-  recordingViewHeight: number;
   urdfContentVersion: number;
   urdfFile: File | null;
   assemblySecondaryModels: AssemblySecondaryModel[];
@@ -72,15 +69,9 @@ type ViewerLayoutProps = {
   vizUrdfContent: string;
   urdfViewMode: UrdfViewMode;
   endEffectorLink: string | null;
-  viewerEpisode: ViewerEpisode | null;
-  datasetConstraintSettings?: DatasetConstraintSettings;
-  currentFrame: number;
-  episodeSaveHandler?: (episode: ViewerEpisode, saveAsNew: boolean, newName?: string) => void;
-  onViewerOpenChange?: (open: boolean) => void;
   setUrdfEditorSplitView: (split: boolean) => void;
   setUrdfViewMode: (mode: UrdfViewMode) => void;
   setShowUrdfEditor: (show: boolean) => void;
-  setMotionDataFile: (file: File | null) => void;
   setIsPlaying: (isPlaying: boolean) => void;
   setHasAnimationFrames: (hasFrames: boolean) => void;
   handleFrameChange: (frame: number, total: number) => void;
@@ -93,7 +84,6 @@ type ViewerLayoutProps = {
     metadata: IkAppliedMetadata,
   ) => void;
   ikDragSuppressed?: boolean;
-  handleViewerResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
   setSelectedJoint: (joint: string | null) => void;
   setSelectedLink: (link: string | null) => void;
   setHoveredJoint: (joint: string | null) => void;
@@ -103,7 +93,6 @@ type ViewerLayoutProps = {
   handleVizUrdfChange: (content: string) => void;
   updateUrdfFile: (content: string) => void;
   getExportUrdfContent: () => string;
-  setCurrentFrame: (frame: number) => void;
   thumbnailMode?: boolean;
   onFixMissingMeshRefs?: () => void;
   runtimeRobotBasePose?: RobotBasePose | null;
@@ -123,7 +112,6 @@ export const ViewerLayout = ({
   rightSidebarWidth,
   showUrdfEditor,
   urdfEditorSplitView,
-  recordingViewHeight,
   urdfContentVersion,
   urdfFile,
   assemblySecondaryModels,
@@ -154,15 +142,9 @@ export const ViewerLayout = ({
   vizUrdfContent,
   urdfViewMode,
   endEffectorLink,
-  viewerEpisode,
-  datasetConstraintSettings,
-  currentFrame,
-  episodeSaveHandler,
-  onViewerOpenChange,
   setUrdfEditorSplitView,
   setUrdfViewMode,
   setShowUrdfEditor,
-  setMotionDataFile,
   setIsPlaying,
   setHasAnimationFrames,
   handleFrameChange,
@@ -172,7 +154,6 @@ export const ViewerLayout = ({
   setRobot,
   handleIkApplied,
   ikDragSuppressed = false,
-  handleViewerResizeStart,
   setSelectedJoint,
   setSelectedLink,
   setHoveredJoint,
@@ -182,7 +163,6 @@ export const ViewerLayout = ({
   handleVizUrdfChange,
   updateUrdfFile,
   getExportUrdfContent,
-  setCurrentFrame,
   onInertiaReliabilityChange,
   thumbnailMode = false,
   onFixMissingMeshRefs,
@@ -222,7 +202,6 @@ export const ViewerLayout = ({
     setHoveredLink,
     handleJointChange,
     handleRobotJointsLoaded,
-    setMotionDataFile,
     setIsPlaying,
     setHasAnimationFrames,
     handleFrameChange,
@@ -301,17 +280,7 @@ export const ViewerLayout = ({
             assemblyContactPairCount={assemblyContactPairCount}
             assemblySecondaryModelsCount={assemblySecondaryModels.length}
             primaryRobotName={urdfFile ? urdfFile.name.replace(/^viz-/, "") : "No primary robot"}
-            recordingViewHeight={recordingViewHeight}
-            handleViewerResizeStart={handleViewerResizeStart}
-            viewerEpisode={viewerEpisode}
-            onViewerOpenChange={onViewerOpenChange}
-            robotBoundingBox={robotBoundingBox}
-            robot={robot}
             jointLimits={jointLimits}
-            currentFrame={currentFrame}
-            setCurrentFrame={setCurrentFrame}
-            datasetConstraintSettings={datasetConstraintSettings}
-            episodeSaveHandler={episodeSaveHandler}
           />
         )}
       </div>

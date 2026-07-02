@@ -53,7 +53,6 @@ type Viewer3DPropsInput = {
     jointNames: string[],
     jointValues: Record<string, number>
   ) => void;
-  setMotionDataFile: (file: File | null) => void;
   setIsPlaying: (isPlaying: boolean) => void;
   setHasAnimationFrames: (hasFrames: boolean) => void;
   handleFrameChange: (frame: number, total: number) => void;
@@ -110,7 +109,6 @@ export const toViewer3DProps = ({
   setHoveredLink,
   handleJointChange,
   handleRobotJointsLoaded,
-  setMotionDataFile,
   setIsPlaying,
   setHasAnimationFrames,
   handleFrameChange,
@@ -148,7 +146,6 @@ export const toViewer3DProps = ({
   onLinkHover: readOnlyMode ? undefined : setHoveredLink,
   onJointChange: readOnlyMode ? (() => {}) : handleJointChange,
   onRobotJointsLoaded: handleRobotJointsLoaded,
-  onMotionFileChange: setMotionDataFile,
   onPlayingChange: setIsPlaying,
   onAnimationFramesChange: setHasAnimationFrames,
   onFrameChange: handleFrameChange,

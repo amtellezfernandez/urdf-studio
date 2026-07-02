@@ -13,6 +13,7 @@ import {
 } from "@/features/world-share/workspaceTransferApi";
 import {
   canOpenWorkspaceTarget,
+  type WorkspaceTransferAssetFormat,
   type WorkspaceTransferTargetId,
 } from "@/features/world-share/workspaceTransferParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
@@ -42,8 +43,82 @@ const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
 const formatWorkspaceAssetFormat = (format: string): string =>
   WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
 
+const describeWorkspaceAssetFormats = (
+  robotAssetFormat: WorkspaceTransferAssetFormat,
+  sceneAssetFormat: WorkspaceTransferAssetFormat
+): string => {
+  const robotFormat = formatWorkspaceAssetFormat(robotAssetFormat);
+  const sceneFormat = formatWorkspaceAssetFormat(sceneAssetFormat);
+  return robotFormat === sceneFormat ? robotFormat : `${robotFormat} + ${sceneFormat}`;
+};
+
 const formatSceneTransferSummary = (objectCount: number, cameraCount: number): string =>
   `${objectCount} obj · ${cameraCount} cam`;
+
+const resolveWorkspaceTransferTargetTransferLabel = (
+  descriptor: WorkspaceTransferTargetDescriptor
+): string => {
+  const assetFormats = describeWorkspaceAssetFormats(
+    descriptor.transferPolicy.robotAssetFormat,
+    descriptor.transferPolicy.sceneAssetFormat
+  );
+  switch (descriptor.transferPolicy.transferStrategy) {
+    case "direct":
+      if (
+        descriptor.transferPolicy.robotAssetFormat === "urdf" &&
+        descriptor.transferPolicy.sceneAssetFormat === "urdf"
+      ) {
+        return "Direct URDF";
+      }
+      return `Direct ${assetFormats}`;
+    case "convert":
+      return `Converts to ${assetFormats}`;
+    case "planned":
+      return `Planned ${assetFormats}`;
+    default:
+      return assetFormats;
+  }
+};
+
+const resolveWorkspaceTransferTargetTransferDescription = (
+  descriptor: WorkspaceTransferTargetDescriptor
+): string => {
+  const assetFormats = describeWorkspaceAssetFormats(
+    descriptor.transferPolicy.robotAssetFormat,
+    descriptor.transferPolicy.sceneAssetFormat
+  );
+  switch (descriptor.transferPolicy.transferStrategy) {
+    case "direct":
+      if (
+        descriptor.transferPolicy.robotAssetFormat === "urdf" &&
+        descriptor.transferPolicy.sceneAssetFormat === "urdf"
+      ) {
+        return "Uses the loaded URDF directly; no simulator-specific robot file is generated.";
+      }
+      return `Uses a ${assetFormats} workspace package for ${descriptor.label}.`;
+    case "convert":
+      return `URDF Studio writes a new ${assetFormats} simulator asset before opening ${descriptor.label}.`;
+    case "planned":
+      return `${descriptor.label} compatibility is listed, but opening is not enabled yet; it will require a ${assetFormats} simulator asset.`;
+    default:
+      return `${descriptor.label} uses ${assetFormats}.`;
+  }
+};
+
+const createsWorkspaceTransferAsset = (descriptor: WorkspaceTransferTargetDescriptor): boolean =>
+  descriptor.transferPolicy.transferStrategy !== "direct" ||
+  descriptor.transferPolicy.robotAssetFormat !== "urdf" ||
+  descriptor.transferPolicy.sceneAssetFormat !== "urdf";
+
+const resolveWorkspaceTransferTargetStatusLabel = (
+  descriptor: WorkspaceTransferTargetDescriptor,
+  status?: WorkspaceTransferTargetStatus
+): string => {
+  if (!canOpenWorkspaceTarget(descriptor)) return "planned";
+  if (status?.available === false) return status.status || "unavailable";
+  if (status?.available === true) return status.status || "ready";
+  return "checking";
+};
 
 const assertWorkspacePackageCarriesSceneObjects = (
   worldPackage: WorldScenePackageManifest,
@@ -224,11 +299,21 @@ export const useWorkspaceTransferLauncher = ({
       const isActive = lastOpenedTargetId === descriptor.targetId;
       const status = targetStatuses[descriptor.targetId];
       const canOpen = canOpenWorkspaceTarget(descriptor) && status?.available !== false;
-      const disabledLabel = `${descriptor.label} soon`;
+      const disabledLabel = !canOpenWorkspaceTarget(descriptor)
+        ? `${descriptor.label} planned`
+        : `${descriptor.label}: ${status?.status || "unavailable"}`;
       return {
         id: descriptor.targetId,
         label: descriptor.label,
+        targetKind: descriptor.targetKind,
         detail: resolveWorkspaceTransferTargetDetail(descriptor, sceneSummary, status),
+        robotAssetFormat: descriptor.transferPolicy.robotAssetFormat,
+        sceneAssetFormat: descriptor.transferPolicy.sceneAssetFormat,
+        transferStrategy: descriptor.transferPolicy.transferStrategy,
+        transferLabel: resolveWorkspaceTransferTargetTransferLabel(descriptor),
+        transferDescription: resolveWorkspaceTransferTargetTransferDescription(descriptor),
+        createsTransferAsset: createsWorkspaceTransferAsset(descriptor),
+        statusLabel: resolveWorkspaceTransferTargetStatusLabel(descriptor, status),
         openLabel: `Open in ${descriptor.label}`,
         openingLabel: `Opening ${descriptor.label}`,
         isBusy,

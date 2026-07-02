@@ -13,7 +13,7 @@ const GPU_MODE_STORAGE_KEY = "urdf-studio-gpu-mode";
  * Get initial GPU mode from:
  * 1. URL query parameter (?gpu=low or ?gpu=high)
  * 2. localStorage
- * 3. Default to "low"
+ * 3. Default to "high"
  */
 const getInitialGPUMode = (): GPUMode => {
   // Check URL parameter
@@ -29,7 +29,7 @@ const getInitialGPUMode = (): GPUMode => {
     return stored;
   }
 
-  return "low";
+  return "high";
 };
 
 interface GPUModeContextType {

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.models.simulator_runtime import (
+    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
     SimulatorId,
     SimulatorRuntimeStatus,
@@ -24,8 +25,10 @@ from backend.services.simulator_adapters.workspace_package import (
     prepare_simulator_workspace_package,
 )
 from backend.services.simulator_adapters.params import (
+    MJLAB_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_REPAIR_PARAMS,
+    SimulatorWorkspaceProcessParams,
 )
 from backend.services.simulator_adapters.workspace_process import start_prepared_workspace_process
 from backend.services.ilu_urdf import (
@@ -50,6 +53,14 @@ class PreparedMujocoWorkspace:
 
 def _mujoco_error(message: str) -> MujocoWorkspaceError:
     return MujocoWorkspaceError(message)
+
+
+def _workspace_process_for_mjcf_target(
+    simulator_id: SimulatorId,
+) -> SimulatorWorkspaceProcessParams:
+    if simulator_id == SIMULATOR_MJLAB_ID:
+        return MJLAB_WORKSPACE_PROCESS_PARAMS
+    return MUJOCO_WORKSPACE_PROCESS_PARAMS
 
 
 def _parse_float_attr(element: ET.Element, attr_name: str) -> float | None:
@@ -262,8 +273,12 @@ def start_mujoco_workspace(
     *,
     simulator_id: SimulatorId,
     simulator_label: str,
+    workspace_process: SimulatorWorkspaceProcessParams | None = None,
 ) -> SimulatorWorkspacePrepareResponse:
     runtime_spec = get_simulator_runtime_spec(simulator_id)
+    resolved_workspace_process = workspace_process or _workspace_process_for_mjcf_target(
+        simulator_id
+    )
     prepared = prepare_mujoco_workspace(
         request,
         simulator_id=simulator_id,
@@ -274,10 +289,15 @@ def start_mujoco_workspace(
         prepared=shared,
         simulator_asset_path=prepared.mjcf_path,
         simulator_asset_flag="--robot-mjcf",
-        workspace_process=MUJOCO_WORKSPACE_PROCESS_PARAMS,
+        workspace_process=resolved_workspace_process,
         error=_mujoco_error,
         simulator_label=simulator_label,
-        extra_simulator_args=("--robot-urdf", str(shared.robot_urdf_path)),
+        extra_simulator_args=(
+            "--robot-urdf",
+            str(shared.robot_urdf_path),
+            "--simulator-id",
+            simulator_id,
+        ),
     )
 
 

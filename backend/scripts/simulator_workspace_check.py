@@ -41,8 +41,8 @@ from backend.services.simulator_adapters.mujoco import PreparedMujocoWorkspace, 
 from backend.services.simulator_adapters.params import (
     BLENDER_WORKSPACE_PROCESS_PARAMS,
     GENESIS_WORKSPACE_PROCESS_PARAMS,
-    MUJOCO_WORKSPACE_PROCESS_PARAMS,
     PYBULLET_WORKSPACE_PROCESS_PARAMS,
+    SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SimulatorWorkspaceProcessParams,
 )
 from backend.services.simulator_adapters.pybullet import prepare_pybullet_workspace
@@ -411,9 +411,10 @@ def _prepare_mujoco_command(
     artifact_dir = prepared.shared_workspace.workspace_dir / "artifacts"
     camera_screenshot_dir = artifact_dir / "cameras"
     report_path = artifact_dir / "report.json"
+    workspace_process = SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID[simulator_id]
     return PreparedWorkspaceCommand(
         command=_module_command(
-            MUJOCO_WORKSPACE_PROCESS_PARAMS,
+            workspace_process,
             world_package_path=prepared.shared_workspace.world_package_path,
             robot_asset_flag="--robot-mjcf",
             robot_asset_path=prepared.mjcf_path,
@@ -429,7 +430,7 @@ def _prepare_mujoco_command(
             ),
             report_path=report_path,
         ),
-        ready_marker=MUJOCO_WORKSPACE_PROCESS_PARAMS.ready_log_marker,
+        ready_marker=workspace_process.ready_log_marker,
         expected_object_marker=f"world_objects={expectations.object_count}",
         expected_camera_log_marker=f"cameras={expectations.camera_count}",
         extra_expected_markers=(f"camera_screenshots={expectations.camera_count}",),

@@ -16,7 +16,11 @@ from backend.services.ilu_urdf import (
 )
 from backend.services.simulator_adapters import mujoco as mujoco_adapter
 from backend.services.simulator_adapters import workspace_process
-from backend.services.simulator_adapters.params import WORKSPACE_LAUNCH_FRAME_MAP
+from backend.services.simulator_adapters.params import (
+    MJLAB_WORKSPACE_PROCESS_PARAMS,
+    MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    WORKSPACE_LAUNCH_FRAME_MAP,
+)
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 
 
@@ -168,14 +172,18 @@ def test_prepare_mujoco_workspace_stages_raw_converter_output(monkeypatch, tmp_p
 
 
 @pytest.mark.parametrize(
-    "simulator_id,simulator_label",
-    [("mujoco", "MuJoCo"), ("mjlab", "MJLab")],
+    "simulator_id,simulator_label,expected_module_name",
+    [
+        ("mujoco", "MuJoCo", MUJOCO_WORKSPACE_PROCESS_PARAMS.module_name),
+        ("mjlab", "MJLab", MJLAB_WORKSPACE_PROCESS_PARAMS.module_name),
+    ],
 )
 def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
     monkeypatch,
     tmp_path: Path,
     simulator_id: str,
     simulator_label: str,
+    expected_module_name: str,
 ) -> None:
     fixture = _make_prepared_workspace_fixture(tmp_path)
     robot_mjcf_path = fixture.robot_dir / "robot.xml"
@@ -210,9 +218,11 @@ def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
 
     assert response.simulator_id == simulator_id
     assert response.pid == 4321
+    assert response.command[response.command.index("-m") + 1] == expected_module_name
     assert response.simulator_asset_path == str(robot_mjcf_path)
     assert "--robot-mjcf" in response.command
     assert "--robot-urdf" in response.command
+    assert response.command[response.command.index("--simulator-id") + 1] == simulator_id
     assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
     assert str(fixture.robot_urdf_path) in response.command
 

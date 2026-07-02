@@ -1,8 +1,5 @@
 import type { ComponentProps } from "react";
 import { Suspense, lazy } from "react";
-const ExportDialog = lazy(() =>
-  import("@/features/dataset/ExportDialog").then((module) => ({ default: module.ExportDialog }))
-);
 const PovCamerasOverlay = lazy(() =>
   import("@/features/layout/page/PovCamerasOverlay").then((module) => ({
     default: module.PovCamerasOverlay,
@@ -20,7 +17,6 @@ const HealthActionPanel = lazy(() =>
 );
 
 type PageOverlaysProps = {
-  exportDialogProps: ComponentProps<typeof import("@/features/dataset/ExportDialog").ExportDialog>;
   povCamerasOverlayProps: ComponentProps<
     typeof import("@/features/layout/page/PovCamerasOverlay").PovCamerasOverlay
   >;
@@ -33,7 +29,6 @@ type PageOverlaysProps = {
 };
 
 export const PageOverlays = ({
-  exportDialogProps,
   povCamerasOverlayProps,
   loadIssuesPanelProps,
   healthActionPanelProps,
@@ -41,7 +36,6 @@ export const PageOverlays = ({
   <Suspense fallback={null}>
     <HealthActionPanel {...healthActionPanelProps} />
     <LoadIssuesPanel {...loadIssuesPanelProps} />
-    <ExportDialog {...exportDialogProps} />
     <PovCamerasOverlay {...povCamerasOverlayProps} />
   </Suspense>
 );

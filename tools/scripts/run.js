@@ -49,12 +49,6 @@ import {
 } from './runParams.js';
 import { PYTHON_ENV_DIRNAME } from './setupParams.js';
 import {
-  applyUrdfOpsEnv,
-  buildUrdfOpsRuntime,
-  isUrdfOpsCheckoutAvailable,
-} from './urdfOpsIntegration.js';
-import { URDF_OPS_SKIP_START_ENV } from './urdfOpsParams.js';
-import {
   buildManagedSpawnOptions,
   terminateManagedProcess,
   terminateStaleUrdfStudioProcessGroups,
@@ -245,19 +239,6 @@ function writeBackendOutput(stream, data) {
   });
 }
 
-function writePrefixedDiagnosticOutput(prefix, stream, data) {
-  if (!verbose) {
-    return;
-  }
-  const output = data.toString();
-  const lines = output.split(/\r?\n/);
-  lines.forEach((line) => {
-    if (line.trim()) {
-      stream.write(`[${prefix}] ${line}\n`);
-    }
-  });
-}
-
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -316,17 +297,6 @@ async function waitForHttpReady({
   }
 
   throw new Error(`${label} did not become ready at ${url} within ${timeoutMs} ms.`);
-}
-
-async function isHttpReady(url) {
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(RUN_READY_REQUEST_TIMEOUT_MS),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
 }
 
 function findCargo() {
@@ -489,12 +459,6 @@ function isStaleProcessCleanupEnabled(env = process.env) {
   return !/^(1|true|yes)$/i.test(env[RUN_SKIP_STALE_PROCESS_CLEANUP_ENV] || '');
 }
 
-export function shouldStartUrdfOps(env = process.env) {
-  return !/^(1|true|yes)$/i.test(
-    env[URDF_OPS_SKIP_START_ENV] || env.URDF_OPS_SKIP_START || ''
-  );
-}
-
 async function cleanupStaleProcessGroups({ concurrentRobotGateway = false } = {}) {
   if (concurrentRobotGateway) {
     return [];
@@ -586,15 +550,7 @@ async function main() {
   const teamRuntimeConfig = parsedRunArgs.teamMode
     ? applyTeamModeRuntimeProfile(mergedRuntimeConfigBase, { publicHost: teamModeHost })
     : exposedFrontendRuntimeConfig;
-  const mergedRuntimeConfig = parsedRunArgs.teleopMode
-    ? {
-        ...teamRuntimeConfig,
-        teleop: {
-          ...teamRuntimeConfig.teleop,
-          enabled: true,
-        },
-      }
-    : teamRuntimeConfig;
+  const mergedRuntimeConfig = teamRuntimeConfig;
   const allowRemoteBinds = parsedRunArgs.allowRemote || parsedRunArgs.teamMode;
   const staleProcessGroups = await cleanupStaleProcessGroups({
     concurrentRobotGateway: Boolean(parsedRunArgs.robotName || parsedRunArgs.robotEnvFile),
@@ -603,9 +559,6 @@ async function main() {
     webPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.web || {}, 'port'),
     apiPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.api || {}, 'port'),
     ikdPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.ikd || {}, 'port'),
-    teleopHttpPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.teleop || {}, 'httpPort'),
-    teleopWebTransportPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.teleop || {}, 'webtransportPort'),
-    teleopNativeQuicPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.teleop || {}, 'nativeQuicPort'),
   });
   const runtimeConfig = recoveredPorts.runtimeConfig;
   const remoteExposureIssues = assertRemoteBindingsAllowed(runtimeConfig, {
@@ -700,16 +653,13 @@ async function main() {
     parsedRunArgs.robotName || parsedRunArgs.robotEnvFile
       ? clearLoadedRobotEnvOverlayValues({ ...process.env }, { sourceEnv: process.env })
       : process.env;
-  const opsRuntime = buildUrdfOpsRuntime({ studioRootDir: rootDir });
-  const shouldLaunchUrdfOps = shouldStartUrdfOps();
-  let env = applyRobotGatewayEnvSelection(
+  const env = applyRobotGatewayEnvSelection(
     applyRuntimeEnvOverrides(launcherEnv, runtimeConfig),
     {
       robotEnvFile: parsedRunArgs.robotEnvFile,
       robotName: parsedRunArgs.robotName,
     },
   );
-  env = applyUrdfOpsEnv(env, opsRuntime);
   const rosUrdfdomCandidates = [
     '/opt/ros/jazzy/lib/x86_64-linux-gnu',
     '/opt/ros/rolling/lib/x86_64-linux-gnu',
@@ -773,7 +723,6 @@ async function main() {
 
   // Start Python FastAPI backend
   const venvPython = join(rootDir, PYTHON_ENV_DIRNAME, 'bin', 'python3');
-  env.URDF_STUDIO_TRAINING_LEROBOT_PYTHON = venvPython;
   let pythonBackendProcess = null;
 
   if (existsSync(venvPython)) {
@@ -819,47 +768,6 @@ async function main() {
     throw new Error(`Python backend not started because ${PYTHON_ENV_DIRNAME} is missing. Run npm run setup first.`);
   }
 
-  // Start Rust teleop sidecar when explicitly enabled.
-  let teleopProcess = null;
-  if (runtimeConfig.teleop.enabled) {
-    if (!existsSync(ikdManifest)) {
-      log('  Live teleop relay could not start because this checkout is incomplete. Run `npm run setup` on this laptop.', colors.yellow);
-    } else if (!cargoPath) {
-      log('  Live teleop relay could not start because the local Rust runtime is missing. Run `npm run setup` on this laptop.', colors.yellow);
-    } else {
-      const teleopEnv = {
-        ...env,
-        TELEOP_SIDECAR_HTTP_BIND: `${runtimeConfig.teleop.host}:${runtimeConfig.teleop.httpPort}`,
-        TELEOP_SIDECAR_WEBTRANSPORT_BIND: `${runtimeConfig.teleop.host}:${runtimeConfig.teleop.webtransportPort}`,
-        TELEOP_SIDECAR_NATIVE_QUIC_BIND: `${runtimeConfig.teleop.host}:${runtimeConfig.teleop.nativeQuicPort}`,
-        TELEOP_SIDECAR_ENABLE_WEBTRANSPORT: 'true',
-      };
-      teleopProcess = spawn(
-        cargoPath,
-        ['run', '--manifest-path', ikdManifest, '--bin', 'teleop_sidecar'],
-        buildManagedSpawnOptions({
-          cwd: rootDir,
-          env: teleopEnv,
-          stdio: 'pipe',
-        })
-      );
-
-      teleopProcess.stdout.on('data', (data) => {
-        if (verbose) {
-          process.stdout.write(`[TELEOP] ${data}`);
-        }
-      });
-
-      teleopProcess.stderr.on('data', (data) => {
-        process.stderr.write(`[TELEOP] ${data}`);
-      });
-
-      teleopProcess.on('error', (error) => {
-        log(`  Live teleop relay failed to start: ${error.message}`, colors.yellow);
-      });
-    }
-  }
-
   // Start Rust IKD daemon if enabled.
   let ikdProcess = null;
   if (shouldStartIkd) {
@@ -903,96 +811,6 @@ async function main() {
     }
   }
 
-  let urdfOpsBackendProcess = null;
-  let urdfOpsFrontendProcess = null;
-  let reusedExistingUrdfOps = false;
-  if (shouldLaunchUrdfOps) {
-    if (!isUrdfOpsCheckoutAvailable(opsRuntime)) {
-      throw new Error(`URDF Ops checkout not found at ${opsRuntime.root}. Run npm run setup first.`);
-    }
-    if (!existsSync(opsRuntime.nodeModulesPath)) {
-      throw new Error(`URDF Ops dependencies are missing at ${opsRuntime.root}. Run npm run setup first.`);
-    }
-
-    const existingOpsBackendReady = await isHttpReady(opsRuntime.healthUrl);
-    const existingOpsFrontendReady = await isHttpReady(opsRuntime.webBaseUrl);
-    if (existingOpsBackendReady && existingOpsFrontendReady) {
-      reusedExistingUrdfOps = true;
-    } else if (existingOpsBackendReady || existingOpsFrontendReady) {
-      throw new Error(
-        `URDF Ops is partially running. Stop the existing Ops process or set ${URDF_OPS_SKIP_START_ENV}=1.`
-      );
-    } else {
-      urdfOpsBackendProcess = spawn(
-        venvPython,
-        [
-          '-m',
-          'uvicorn',
-          'backend.app:app',
-          '--host',
-          '127.0.0.1',
-          '--port',
-          String(opsRuntime.apiPort),
-        ],
-        buildManagedSpawnOptions({
-          cwd: opsRuntime.root,
-          env,
-          shell: false,
-          stdio: 'pipe',
-        })
-      );
-      urdfOpsBackendProcess.stdout.on('data', (data) => {
-        writePrefixedDiagnosticOutput('Ops API', process.stdout, data);
-      });
-      urdfOpsBackendProcess.stderr.on('data', (data) => {
-        writePrefixedDiagnosticOutput('Ops API', process.stderr, data);
-      });
-
-      try {
-        await waitForHttpReady({
-          url: opsRuntime.healthUrl,
-          label: 'URDF Ops backend',
-          processHandle: urdfOpsBackendProcess,
-          timeoutMs: RUN_BACKEND_READY_TIMEOUT_MS,
-        });
-      } catch (error) {
-        terminateManagedProcess(urdfOpsBackendProcess, 'SIGTERM');
-        throw error;
-      }
-
-      urdfOpsFrontendProcess = spawnNpm(['run', 'dev'], {
-        cwd: opsRuntime.root,
-        env,
-        stdio: 'pipe',
-      });
-      urdfOpsFrontendProcess.stdout.on('data', (data) => {
-        if (filterViteOutput(data)) {
-          writePrefixedDiagnosticOutput('Ops Web', process.stdout, data);
-        }
-      });
-      urdfOpsFrontendProcess.stderr.on('data', (data) => {
-        if (filterViteOutput(data)) {
-          writePrefixedDiagnosticOutput('Ops Web', process.stderr, data);
-        }
-      });
-
-      try {
-        await waitForHttpReady({
-          url: opsRuntime.webBaseUrl,
-          label: 'URDF Ops frontend',
-          processHandle: urdfOpsFrontendProcess,
-          timeoutMs: RUN_FRONTEND_READY_TIMEOUT_MS,
-        });
-      } catch (error) {
-        terminateManagedProcess(urdfOpsFrontendProcess, 'SIGTERM');
-        terminateManagedProcess(urdfOpsBackendProcess, 'SIGTERM');
-        throw error;
-      }
-    }
-  } else {
-    log(`  URDF Ops auto-start skipped because ${URDF_OPS_SKIP_START_ENV} is set.`, colors.yellow);
-  }
-
   // Start the dev server with filtered output
   const viteProcess = spawnNpm(['run', 'dev'], {
     cwd: rootDir,
@@ -1029,10 +847,7 @@ async function main() {
   } catch (error) {
     terminateManagedProcess(viteProcess, 'SIGTERM');
     terminateManagedProcess(pythonBackendProcess, 'SIGTERM');
-    terminateManagedProcess(teleopProcess, 'SIGTERM');
     terminateManagedProcess(ikdProcess, 'SIGTERM');
-    terminateManagedProcess(urdfOpsFrontendProcess, 'SIGTERM');
-    terminateManagedProcess(urdfOpsBackendProcess, 'SIGTERM');
     terminateManagedProcess(tunnelProcess, 'SIGTERM');
     if (camToSimIngressProxy) {
       camToSimIngressProxy.server.close();
@@ -1059,15 +874,6 @@ async function main() {
     teamSharingGateway: useTeamSharingGateway,
   })) {
     log(`  ${overviewLine}`, colors.gray);
-  }
-  if (shouldLaunchUrdfOps) {
-    log(`  Open URDF Ops: ${opsRuntime.webBaseUrl}`, colors.gray);
-    log(
-      reusedExistingUrdfOps
-        ? '  Training: Studio links reuse the already-running Ops session.'
-        : '  Training: Studio links open this synchronized Ops session.',
-      colors.gray
-    );
   }
   if (
     wslWindowsLocalhostAccess.status === 'relay-started' ||
@@ -1116,18 +922,10 @@ async function main() {
     }
     log(`  frontend URL: ${runtimeUrls.webBaseUrl}`, colors.gray);
     log(`  backend API: ${runtimeUrls.apiBaseUrl}`, colors.gray);
-    log(`  URDF Ops URL: ${opsRuntime.webBaseUrl}`, colors.gray);
-    log(`  URDF Ops API: ${opsRuntime.apiBaseUrl}`, colors.gray);
     if (shouldStartIkd) {
       log(`  native IKD: ${runtimeUrls.ikdBaseUrl}`, colors.gray);
     } else if (runtimeConfig.ikd.enabled && runtimeConfig.ikd.useForDrag && defaultSolverId === "ik-js") {
       log('  native IKD: disabled (default solver is ik-js)', colors.gray);
-    }
-    if (runtimeConfig.teleop.enabled) {
-      log(`  live teleop relay: ${runtimeUrls.teleopHttpBaseUrl}`, colors.gray);
-      log(`  fast browser channel: ${runtimeUrls.teleopWebTransportUrl}`, colors.gray);
-      log(`  native robot channel: ${runtimeUrls.teleopNativeQuicAddress}`, colors.gray);
-      log('  native robot channel requires TELEOP_SIDECAR_CERT_PEM, TELEOP_SIDECAR_KEY_PEM, and TELEOP_SIDECAR_NATIVE_CLIENT_CA_PEM.', colors.gray);
     }
     if (parsedRunArgs.teamMode) {
       for (const guideLine of buildTeamModeGuideLines({
@@ -1155,10 +953,7 @@ async function main() {
 
     terminateManagedProcess(viteProcess, signal);
     terminateManagedProcess(pythonBackendProcess, signal);
-    terminateManagedProcess(teleopProcess, signal);
     terminateManagedProcess(ikdProcess, signal);
-    terminateManagedProcess(urdfOpsFrontendProcess, signal);
-    terminateManagedProcess(urdfOpsBackendProcess, signal);
     terminateManagedProcess(tunnelProcess, signal);
     stopWslWindowsLocalhostRelay(wslWindowsLocalhostRelay);
     if (camToSimIngressProxy) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -11,6 +12,7 @@ from backend.models.simulator_runtime import (
     validate_simulator_relative_path,
 )
 from backend.models.world_scene_package import WorldArtifactRef, WorldRuntimeTarget
+from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.workspace_package import (
     _write_asset_file,
     prepare_simulator_workspace_package,
@@ -141,6 +143,73 @@ def test_prepare_simulator_workspace_normalizes_xacro_source_path(
         encoding="utf-8"
     ) == urdf_xml
     assert prepared.robot_urdf_path.name == "robot.urdf"
+
+
+def test_prepare_simulator_workspace_normalizes_root_relative_mesh_refs(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    urdf_xml = """
+    <robot name="demo">
+      <link name="base">
+        <visual>
+          <geometry>
+            <mesh filename="/meshes/base.stl"/>
+          </geometry>
+        </visual>
+      </link>
+    </robot>
+    """
+    observed: dict[str, str] = {}
+
+    def fake_bundle_mesh_assets_for_urdf_file(
+        *,
+        urdf_path: str,
+        urdf_xml: str,
+        out_path: str,
+        extra_search_roots: list[str] | None = None,
+    ) -> BundleMeshAssetsResult:
+        observed["urdf_xml"] = urdf_xml
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(urdf_xml, encoding="utf-8")
+        return BundleMeshAssetsResult(
+            success=True,
+            content=urdf_xml,
+            out_path=out_path,
+            assets_root=str(tmp_path / "assets"),
+            copied_files=1,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.bundle_mesh_assets_for_urdf_file",
+        fake_bundle_mesh_assets_for_urdf_file,
+    )
+
+    request = SimulatorWorkspacePrepareRequest(
+        world_package=make_world_package(urdf_xml),
+        mesh_assets=[
+            SimulatorMeshAssetUpload(
+                path="meshes/base.stl",
+                aliases=[],
+                content_base64="AA==",
+            )
+        ],
+    )
+
+    prepared = prepare_simulator_workspace_package(
+        request,
+        workspace_root=tmp_path,
+        error=ValueError,
+    )
+
+    assert 'filename="meshes/base.stl"' in observed["urdf_xml"]
+    assert 'filename="/meshes/base.stl"' not in observed["urdf_xml"]
+    assert 'filename="meshes/base.stl"' in prepared.robot_urdf_path.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_prepare_simulator_workspace_writes_schema_compatible_world_package(tmp_path) -> None:
