@@ -22,6 +22,8 @@ import {
   getSimulatorCompatibilityTarget,
   isManagedSimulatorInstallAllowed,
 } from './simulatorCompatibility.js';
+import { managedBuildTargets } from './simulatorContainerBuild.js';
+import { buildDockerBuildPlan, formatDockerRunCommand } from './simulatorDeployment.js';
 import {
   isTruthyEnvValue,
   selectInstalledSupersededPythonDependencies,
@@ -68,6 +70,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..', '..');
+const SIMULATOR_CONTAINER_SKIP_ENV = 'URDF_STUDIO_SKIP_SIMULATOR_CONTAINERS';
+const SIMULATOR_CONTAINER_FORCE_ENV = 'URDF_STUDIO_FORCE_SIMULATOR_CONTAINERS';
 const CMEEL_LAYOUT = {
   prefixDirname: 'cmeel.prefix',
   libDirname: 'lib',
@@ -1555,6 +1559,90 @@ async function installGenesisRuntime(simulatorCompatibilityReport = null) {
   });
 }
 
+function simulatorContainerImageExists(image, { spawnSyncImpl = spawnSync } = {}) {
+  if (!image) return false;
+  const result = spawnSyncImpl('docker', ['image', 'inspect', image], {
+    cwd: rootDir,
+    encoding: 'utf-8',
+    stdio: 'ignore',
+  });
+  return result.status === 0 && !result.error;
+}
+
+function runSimulatorContainerBuildPlan(plan, { spawnSyncImpl = spawnSync } = {}) {
+  return spawnSyncImpl(plan.command, plan.args, {
+    cwd: rootDir,
+    stdio: 'inherit',
+  });
+}
+
+async function installSimulatorContainers(
+  simulatorCompatibilityReport = null,
+  {
+    spawnSyncImpl = spawnSync,
+    imageExists = simulatorContainerImageExists,
+    runBuildPlan = runSimulatorContainerBuildPlan,
+  } = {}
+) {
+  if (isTruthyEnvValue(process.env[SIMULATOR_CONTAINER_SKIP_ENV])) {
+    return buildSetupResult({ installed: false, skipped: true, built: [], ready: [] });
+  }
+
+  const targets = managedBuildTargets(simulatorCompatibilityReport || { targets: {} });
+  if (targets.length === 0) {
+    return buildSetupResult({ installed: false, skipped: true, built: [], ready: [] });
+  }
+
+  const built = [];
+  const ready = [];
+  let announced = false;
+  for (const target of targets) {
+    const image = target.deployment.container?.image || target.deployment.image;
+    if (imageExists(image, { spawnSyncImpl })) {
+      ready.push(target.id);
+      continue;
+    }
+    if (!announced) {
+      logArrow('Preparing simulator container images');
+      announced = true;
+    }
+    const plan = buildDockerBuildPlan(target.deployment, { progress: process.env.DOCKER_PROGRESS || null });
+    logInfo(`Building ${target.label}: ${formatDockerRunCommand(plan)}`);
+    const result = runBuildPlan(plan, { spawnSyncImpl });
+    if (didSpawnSyncFail(result)) {
+      const forced = isTruthyEnvValue(process.env[SIMULATOR_CONTAINER_FORCE_ENV]);
+      log(forced ? `✗ Failed to build ${target.label} container image` : `Skipping ${target.label} container image`, colors.yellow);
+      logInfo(`Image: ${image}`);
+      if (!forced) {
+        logInfo(`Continuing without this container image. Set ${SIMULATOR_CONTAINER_FORCE_ENV}=1 to require it during setup.`);
+      }
+      return buildSetupResult({
+        ok: !forced,
+        changed: built.length > 0,
+        installed: false,
+        skipped: !forced,
+        fatal: forced,
+        built,
+        ready,
+        failed: target.id,
+      });
+    }
+    built.push(target.id);
+    ready.push(target.id);
+  }
+
+  if (built.length > 0) {
+    logSuccess(`Simulator container images ready: ${ready.join(', ')}`);
+  }
+  return buildSetupResult({
+    changed: built.length > 0,
+    installed: true,
+    skipped: false,
+    built,
+    ready,
+  });
+}
+
 async function installTwinDepsIfRequested() {
   const shouldInstallTwin =
     process.argv.includes('--twin') ||
@@ -1592,6 +1680,7 @@ async function runSetupSequence(overrides = {}) {
     installMjlabRuntime,
     installPybulletRuntime,
     installBlenderRuntime,
+    installSimulatorContainers,
     installTwinDepsIfRequested,
     checkIkd,
     setupHuggingFace,
@@ -1643,6 +1732,10 @@ async function runSetupSequence(overrides = {}) {
   if (shouldFailSetupForRuntimeResult(blenderRuntimeResult)) {
     throw new Error('Blender workspace runtime installation failed');
   }
+  const simulatorContainerResult = recordResult(await steps.installSimulatorContainers(simulatorCompatibilityReport));
+  if (shouldFailSetupForRuntimeResult(simulatorContainerResult)) {
+    throw new Error('Simulator container image setup failed');
+  }
   recordResult(await steps.installTwinDepsIfRequested());
   const ikdResult = recordResult(await steps.checkIkd());
   if (!isSetupStepReady(ikdResult)) {
@@ -1658,6 +1751,7 @@ async function runSetupSequence(overrides = {}) {
     mjlabRuntimeResult,
     pybulletRuntimeResult,
     blenderRuntimeResult,
+    simulatorContainerResult,
   };
 }
 
@@ -1690,7 +1784,9 @@ export {
   didSpawnSyncFail,
   findPythonForBackend,
   installBlenderRuntime,
+  installSimulatorContainers,
   prependNativeLibraryPath,
+  simulatorContainerImageExists,
   resolveBlenderExecutableForSetup,
   resolveManagedCmeelLibPathFromSitePackages,
   resolvePythonForBackendVenv,

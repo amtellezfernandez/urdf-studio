@@ -67,6 +67,11 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
       installed: true,
       skipped: false,
     },
+    simulatorContainerResult: {
+      ok: true,
+      installed: true,
+      skipped: false,
+    },
   });
 
   assert.deepEqual(sections[0], {
@@ -99,6 +104,10 @@ test('buildSetupSummarySections reports local and global ilu usage', () => {
     heading: 'Blender',
     lines: ['Blender workspace runtime is available.'],
   });
+  assert.deepEqual(sections[6], {
+    heading: 'Containers',
+    lines: ['Compatible simulator container images are ready.'],
+  });
 });
 
 test('buildSetupRoadmapSections reports setup steps without override labels', () => {
@@ -107,6 +116,6 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
   assert.equal(sections[0].heading, 'Setup steps');
   assert.ok(sections[0].lines.includes('Unified Python backend runtime'));
   assert.ok(sections[0].lines.includes('Simulator compatibility preflight'));
-  assert.ok(sections[0].lines.includes('Managed simulator runtimes supported by this machine'));
+  assert.ok(sections[0].lines.includes('Managed simulator runtimes and compatible container images'));
   assert.equal(sections.length, 1);
 });

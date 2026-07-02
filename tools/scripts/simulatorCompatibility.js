@@ -1409,7 +1409,11 @@ export function buildSimulatorCompatibilitySummary(report) {
     .map((id) => getSimulatorCompatibilityTarget(report, id))
     .filter(Boolean);
   const managedReady = allTargets.filter((target) => target.installable);
-  const notInstalled = allTargets.filter((target) => !target.installable);
+  const notInstalled = allTargets.filter(
+    (target) =>
+      !target.installable &&
+      !(target.compatible && target.deployment?.mode === DEPLOYMENT_MODES.container)
+  );
   const warnings = allTargets.flatMap((target) =>
     target.warnings.map((warning) => `${target.label}: ${warning}`)
   );

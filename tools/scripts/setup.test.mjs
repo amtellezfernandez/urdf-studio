@@ -5,6 +5,7 @@ import { delimiter, join } from 'node:path';
 import {
   assertIluRuntimeContract,
   didSpawnSyncFail,
+  installSimulatorContainers,
   prependNativeLibraryPath,
   resolveBlenderExecutableForSetup,
   resolveManagedCmeelLibPathFromSitePackages,
@@ -180,6 +181,7 @@ test('setup stops before backend dependency installation when unified Python set
       installMjlabRuntime: unreachable('installMjlabRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
+      installSimulatorContainers: unreachable('installSimulatorContainers'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
       checkIkd: unreachable('checkIkd'),
       setupHuggingFace: unreachable('setupHuggingFace'),
@@ -218,6 +220,7 @@ test('setup stops before workspace setup when i-love-urdf runtime check fails', 
       installMjlabRuntime: unreachable('installMjlabRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
+      installSimulatorContainers: unreachable('installSimulatorContainers'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
       checkIkd: unreachable('checkIkd'),
       setupHuggingFace: unreachable('setupHuggingFace'),
@@ -270,6 +273,12 @@ test('setup continues when optional simulator adapters are unavailable', async (
       skipped: false,
       fatal: false,
     }),
+    installSimulatorContainers: record('installSimulatorContainers', {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    }),
     installTwinDepsIfRequested: record('installTwinDepsIfRequested'),
     checkIkd: record('checkIkd'),
     setupHuggingFace: record('setupHuggingFace'),
@@ -294,6 +303,7 @@ test('setup continues when optional simulator adapters are unavailable', async (
     'installMjlabRuntime',
     'installPybulletRuntime',
     'installBlenderRuntime',
+    'installSimulatorContainers',
     'installTwinDepsIfRequested',
     'checkIkd',
     'setupHuggingFace',
@@ -314,6 +324,7 @@ test('setup reports no changes when everything is already ready', async () => {
     installMjlabRuntime: async () => ({ ...ready, installed: true, skipped: false }),
     installPybulletRuntime: async () => ({ ...ready, installed: true, skipped: false }),
     installBlenderRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installSimulatorContainers: async () => ({ ...ready, installed: true, skipped: false }),
     installTwinDepsIfRequested: async () => ready,
     checkIkd: async () => ready,
     setupHuggingFace: async () => ready,
@@ -336,6 +347,7 @@ test('setup reports changes when a step installs or repairs runtime files', asyn
     installMjlabRuntime: async () => ({ ...ready, installed: true, skipped: false }),
     installPybulletRuntime: async () => ({ ...ready, installed: true, skipped: false }),
     installBlenderRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installSimulatorContainers: async () => ({ ...ready, installed: true, skipped: false }),
     installTwinDepsIfRequested: async () => ready,
     checkIkd: async () => ready,
     setupHuggingFace: async () => ready,
@@ -373,6 +385,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
       installMjlabRuntime: unreachable('installMjlabRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
+      installSimulatorContainers: unreachable('installSimulatorContainers'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
       checkIkd: unreachable('checkIkd'),
       setupHuggingFace: unreachable('setupHuggingFace'),
@@ -390,4 +403,81 @@ test('setup fails when a forced simulator adapter install fails', async () => {
     'installBackendDeps',
     'installGenesisRuntime',
   ]);
+});
+
+function managedContainerReport() {
+  return {
+    targets: {
+      mjx: {
+        id: 'mjx',
+        label: 'MJX',
+        compatible: true,
+        deployment: {
+          mode: 'container',
+          accelerator: 'cuda13-jax',
+          image: 'ghcr.io/urdf-studio/sim-mjx:cuda13',
+          env: {},
+          container: {
+            image: 'ghcr.io/urdf-studio/sim-mjx:cuda13',
+            build: {
+              context: '.',
+              dockerfile: 'docker/sim-mjx/Dockerfile',
+              args: { JAX_CUDA_EXTRA: 'cuda13' },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+async function withMutedConsole(callback) {
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    return await callback();
+  } finally {
+    console.log = originalLog;
+  }
+}
+
+test('setup prepares missing compatible managed simulator container images', async () => {
+  const observedPlans = [];
+
+  const result = await withMutedConsole(() =>
+    installSimulatorContainers(managedContainerReport(), {
+      imageExists: () => false,
+      runBuildPlan: (plan) => {
+        observedPlans.push(plan);
+        return { status: 0, signal: null };
+      },
+    })
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.built, ['mjx']);
+  assert.deepEqual(result.ready, ['mjx']);
+  assert.equal(observedPlans.length, 1);
+  assert.equal(observedPlans[0].command, 'docker');
+  assert.ok(observedPlans[0].args.includes('JAX_CUDA_EXTRA=cuda13'));
+});
+
+test('setup skips simulator container builds when images already exist', async () => {
+  let buildCalled = false;
+
+  const result = await installSimulatorContainers(managedContainerReport(), {
+    imageExists: () => true,
+    runBuildPlan: () => {
+      buildCalled = true;
+      return { status: 0, signal: null };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, false);
+  assert.equal(result.installed, true);
+  assert.deepEqual(result.built, []);
+  assert.deepEqual(result.ready, ['mjx']);
+  assert.equal(buildCalled, false);
 });

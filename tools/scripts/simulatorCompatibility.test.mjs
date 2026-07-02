@@ -255,12 +255,11 @@ test('compatibility summary separates managed setup from external and planned ta
   assert.equal(isManagedSimulatorInstallAllowed(report, 'isaacsim'), false);
   const lines = formatSimulatorCompatibilitySummary(report);
   assert.match(lines.join('\n'), /Managed setup allowed: .*Genesis/);
-  assert.match(lines.join('\n'), /MJX \(container fast path\)/);
+  assert.doesNotMatch(lines.join('\n'), /Not installed by setup: .*MJX/);
   assert.match(lines.join('\n'), /Container images: .*MJX managed:ghcr\.io\/urdf-studio\/sim-mjx:cuda13/);
   assert.match(lines.join('\n'), /SAPIEN 2 managed:ghcr\.io\/urdf-studio\/sim-sapien:vulkan/);
   assert.match(lines.join('\n'), /Container launch plan: npm run simulator:container:plan/);
   assert.match(lines.join('\n'), /Isaac Sim official:nvcr\.io\/nvidia\/isaac-sim:6\.0\.0/);
-  assert.match(lines.join('\n'), /Isaac Sim \(external\)/);
 });
 
 test('compatibility keeps MJX on CUDA 12 JAX wheels for older NVIDIA drivers', () => {

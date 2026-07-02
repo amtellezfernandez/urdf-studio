@@ -45,7 +45,7 @@ export function buildSetupRoadmapSections() {
         'Node dependencies',
         'Unified Python backend runtime',
         'Simulator compatibility preflight',
-        'Managed simulator runtimes supported by this machine',
+        'Managed simulator runtimes and compatible container images',
         'Hugging Face and GitHub access',
       ],
     },
@@ -81,6 +81,7 @@ export function buildSetupSummarySections({
   genesisRuntimeResult = null,
   pybulletRuntimeResult = null,
   blenderRuntimeResult = null,
+  simulatorContainerResult = null,
 } = {}) {
   const iluLines = [`Local i-love-urdf CLI: ${LOCAL_ILU_COMMAND}`];
 
@@ -111,6 +112,13 @@ export function buildSetupSummarySections({
     unavailableLine: 'Blender workspace runtime is unavailable.',
     fallbackLine: 'Blender installs as a managed local runtime when supported.',
   });
+  const simulatorContainerLines = buildSimulatorRuntimeLines({
+    result: simulatorContainerResult,
+    skippedLine: 'Simulator container image setup was skipped for this run.',
+    installedLine: 'Compatible simulator container images are ready.',
+    unavailableLine: 'Simulator container image setup is unavailable.',
+    fallbackLine: 'Simulator container images are prepared when Docker and compatibility checks allow it.',
+  });
 
   return [
     {
@@ -139,6 +147,10 @@ export function buildSetupSummarySections({
     {
       heading: 'Blender',
       lines: blenderLines,
+    },
+    {
+      heading: 'Containers',
+      lines: simulatorContainerLines,
     },
   ];
 }
