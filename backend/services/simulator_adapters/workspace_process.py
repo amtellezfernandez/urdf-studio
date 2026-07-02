@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,29 +15,121 @@ from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
     wait_for_workspace_readiness,
 )
+from backend.services.simulator_adapters.workspace_launches import (
+    attach_workspace_launch_process,
+    begin_workspace_launch,
+    complete_workspace_launch,
+    is_workspace_launch_cancelled,
+    terminate_workspace_process,
+)
+from backend.services.simulator_adapters import simulator_acceleration
 from backend.services.simulator_adapters.params import (
     WORKSPACE_LAUNCH_FRAME_MAP,
     SimulatorWorkspaceProcessParams,
 )
 
 
-def build_simulator_workspace_env(cache_root: Path) -> dict[str, str]:
-    cache_root.mkdir(parents=True, exist_ok=True)
-    cache_dirs = {
-        "XDG_CACHE_HOME": cache_root / "xdg",
-        "MPLCONFIGDIR": cache_root / "matplotlib",
-        "NUMBA_CACHE_DIR": cache_root / "numba",
-        "TI_CACHE_HOME": cache_root / "taichi",
-        "TAICHI_CACHE_HOME": cache_root / "taichi",
-        "QUADRANTS_CACHE_DIR": cache_root / "quadrants",
-        "QDCACHE_DIR": cache_root / "quadrants",
-    }
-    for path in cache_dirs.values():
-        path.mkdir(parents=True, exist_ok=True)
+SIMULATOR_ACCELERATION_DISABLE_ENV = simulator_acceleration.SIMULATOR_ACCELERATION_DISABLE_ENV
+SIMULATOR_GPU_DEVICE_ENV = simulator_acceleration.SIMULATOR_GPU_DEVICE_ENV
 
-    env = os.environ.copy()
-    env.update({name: str(path) for name, path in cache_dirs.items()})
-    return env
+
+def build_simulator_workspace_env(cache_root: Path, simulator_id: str | None = None) -> dict[str, str]:
+    return simulator_acceleration.build_simulator_workspace_env(
+        cache_root,
+        simulator_id=simulator_id,
+    )
+
+
+def _cancelled_launch_error(label: str) -> str:
+    return f"{label} workspace launch was cancelled."
+
+
+def start_workspace_process_until_ready(
+    *,
+    command: Sequence[str],
+    prepared: PreparedSimulatorWorkspace,
+    workspace_process: SimulatorWorkspaceProcessParams,
+    simulator_id: str,
+    simulator_label: str,
+    log_path: Path,
+    error: Callable[[str], Exception],
+    launch_id: str | None = None,
+) -> subprocess.Popen:
+    if launch_id and not begin_workspace_launch(launch_id, simulator_id):
+        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
+        raise error(_cancelled_launch_error(simulator_label))
+    if launch_id and is_workspace_launch_cancelled(launch_id):
+        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
+        raise error(_cancelled_launch_error(simulator_label))
+
+    process: subprocess.Popen | None = None
+    try:
+        with log_path.open("ab", buffering=0) as log_file:
+            process = subprocess.Popen(
+                list(command),
+                cwd=BASE_DIR,
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                close_fds=True,
+                env=simulator_acceleration.build_simulator_workspace_env(
+                    prepared.workspace_dir / "runtime-cache",
+                    simulator_id=simulator_id,
+                ),
+            )
+        if launch_id and not attach_workspace_launch_process(launch_id, process):
+            raise error(_cancelled_launch_error(simulator_label))
+        wait_for_workspace_readiness(
+            process,
+            simulator_label=simulator_label,
+            log_path=log_path,
+            ready_log_marker=workspace_process.ready_log_marker,
+            log_tail_chars=workspace_process.log_tail_chars,
+            poll_sec=workspace_process.startup_poll_sec,
+            ready_timeout_sec=workspace_process.ready_timeout_sec,
+            post_ready_grace_sec=workspace_process.post_ready_grace_sec,
+            error=error,
+            should_cancel=(
+                (lambda: is_workspace_launch_cancelled(launch_id))
+                if launch_id is not None
+                else None
+            ),
+        )
+        if launch_id:
+            complete_workspace_launch(launch_id)
+        return process
+    except BaseException:
+        if process is not None and process.poll() is None:
+            terminate_workspace_process(process)
+        raise
+
+
+def build_workspace_prepare_response(
+    *,
+    runtime_spec: SimulatorRuntimeSpec,
+    prepared: PreparedSimulatorWorkspace,
+    process: subprocess.Popen,
+    command: Sequence[str],
+    log_path: Path,
+    simulator_asset_path: Path,
+) -> SimulatorWorkspacePrepareResponse:
+    return SimulatorWorkspacePrepareResponse(
+        simulator_id=runtime_spec.simulator_id,
+        started=True,
+        pid=process.pid,
+        command=list(command),
+        launch_mode="interactive_viewer",
+        log_path=str(log_path),
+        world_package_path=str(prepared.world_package_path),
+        robot_urdf_path=str(prepared.robot_urdf_path),
+        simulator_asset_path=str(simulator_asset_path),
+        simulator_asset_format=runtime_spec.transfer.workspace_asset_format(),
+        bundled_mesh_count=prepared.bundle_result.copied_files,
+        unresolved_mesh_refs=list(prepared.bundle_result.unresolved),
+        world_object_count=prepared.world_object_count,
+        camera_count=prepared.camera_count,
+    )
 
 
 def start_prepared_workspace_process(
@@ -50,7 +142,9 @@ def start_prepared_workspace_process(
     error: Callable[[str], Exception],
     simulator_label: str | None = None,
     extra_simulator_args: Sequence[str] = (),
+    launch_id: str | None = None,
 ) -> SimulatorWorkspacePrepareResponse:
+    resolved_simulator_label = simulator_label or runtime_spec.label
     log_path = prepared.workspace_dir / workspace_process.log_name
     command = [
         sys.executable,
@@ -65,38 +159,21 @@ def start_prepared_workspace_process(
         "--frame-map",
         WORKSPACE_LAUNCH_FRAME_MAP,
     ]
-    with log_path.open("ab", buffering=0) as log_file:
-        process = subprocess.Popen(
-            command,
-            cwd=BASE_DIR,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=build_simulator_workspace_env(prepared.workspace_dir / "runtime-cache"),
-        )
-    wait_for_workspace_readiness(
-        process,
-        simulator_label=simulator_label or runtime_spec.label,
-        log_path=log_path,
-        ready_log_marker=workspace_process.ready_log_marker,
-        log_tail_chars=workspace_process.log_tail_chars,
-        poll_sec=workspace_process.startup_poll_sec,
-        ready_timeout_sec=workspace_process.ready_timeout_sec,
-        post_ready_grace_sec=workspace_process.post_ready_grace_sec,
-        error=error,
-    )
-    return SimulatorWorkspacePrepareResponse(
-        simulator_id=runtime_spec.simulator_id,
-        started=True,
-        pid=process.pid,
+    process = start_workspace_process_until_ready(
         command=command,
-        log_path=str(log_path),
-        world_package_path=str(prepared.world_package_path),
-        robot_urdf_path=str(prepared.robot_urdf_path),
-        simulator_asset_path=str(simulator_asset_path),
-        simulator_asset_format=runtime_spec.transfer.workspace_asset_format(),
-        bundled_mesh_count=prepared.bundle_result.copied_files,
-        unresolved_mesh_refs=list(prepared.bundle_result.unresolved),
-        world_object_count=prepared.world_object_count,
-        camera_count=prepared.camera_count,
+        prepared=prepared,
+        workspace_process=workspace_process,
+        simulator_id=runtime_spec.simulator_id,
+        simulator_label=resolved_simulator_label,
+        log_path=log_path,
+        error=error,
+        launch_id=launch_id,
+    )
+    return build_workspace_prepare_response(
+        runtime_spec=runtime_spec,
+        prepared=prepared,
+        process=process,
+        command=command,
+        log_path=log_path,
+        simulator_asset_path=simulator_asset_path,
     )

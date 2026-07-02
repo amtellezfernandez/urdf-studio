@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 from pathlib import Path
 
 import pytest
@@ -16,8 +17,8 @@ from backend.services.ilu_urdf import (
 )
 from backend.services.simulator_adapters import mujoco as mujoco_adapter
 from backend.services.simulator_adapters import workspace_process
+from backend.services.simulator_adapters.mjlab import MJLAB_WORKSPACE_PROCESS_PARAMS
 from backend.services.simulator_adapters.params import (
-    MJLAB_WORKSPACE_PROCESS_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     WORKSPACE_LAUNCH_FRAME_MAP,
 )
@@ -38,6 +39,19 @@ class PreparedMujocoWorkspaceFixture:
 
 def _request() -> SimulatorWorkspacePrepareRequest:
     return make_workspace_prepare_request(DEMO_URDF)
+
+
+def test_mjlab_workspace_prepare_imports_shared_mujoco_runner() -> None:
+    module = importlib.import_module("backend.scripts.mjlab_workspace_prepare")
+    mujoco_workspace_prepare = importlib.import_module(
+        "backend.scripts.mujoco_workspace_prepare"
+    )
+
+    assert callable(module.main)
+    assert (
+        mujoco_workspace_prepare._workspace_ready_marker("mjlab")
+        == MJLAB_WORKSPACE_PROCESS_PARAMS.ready_log_marker
+    )
 
 
 def _make_prepared_workspace_fixture(
@@ -84,6 +98,7 @@ def _make_prepared_workspace_fixture(
             unresolved=(),
             error=None,
         ),
+        robot_urdf_xml=DEMO_URDF,
     )
     return PreparedMujocoWorkspaceFixture(
         prepared=prepared,
@@ -208,6 +223,11 @@ def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
         "Popen",
         lambda *args, **kwargs: _FakeProcess(),
     )
+    monkeypatch.setattr(
+        workspace_process.simulator_acceleration,
+        "build_simulator_workspace_env",
+        lambda cache_root, *, simulator_id=None: {},
+    )
     monkeypatch.setattr(workspace_process, "wait_for_workspace_readiness", lambda *args, **kwargs: None)
 
     response = mujoco_adapter.start_mujoco_workspace(
@@ -227,13 +247,22 @@ def test_start_mujoco_workspace_passes_canonical_urdf_to_viewer(
     assert str(fixture.robot_urdf_path) in response.command
 
 
-def test_stage_mjcf_mesh_assets_rejects_duplicate_basenames(tmp_path: Path) -> None:
+def test_stage_mjcf_mesh_assets_disambiguates_duplicate_basenames(tmp_path: Path) -> None:
     first_mesh = tmp_path / "first" / "base.stl"
     second_mesh = tmp_path / "second" / "base.stl"
     first_mesh.parent.mkdir()
     second_mesh.parent.mkdir()
     first_mesh.write_bytes(b"solid first\nendsolid first\n")
     second_mesh.write_bytes(b"solid second\nendsolid second\n")
+
+    mjcf_path = tmp_path / "robot.xml"
+    mjcf_path.write_text(
+        '<mujoco><asset>'
+        '<mesh name="assets_first_base" file="base.stl"/>'
+        '<mesh name="assets_second_base" file="base.stl"/>'
+        '</asset></mujoco>',
+        encoding="utf-8",
+    )
 
     bundle_result = BundleMeshAssetsResult(
         success=True,
@@ -259,8 +288,14 @@ def test_stage_mjcf_mesh_assets_rejects_duplicate_basenames(tmp_path: Path) -> N
         error=None,
     )
 
-    with pytest.raises(mujoco_adapter.MujocoWorkspaceError, match="duplicate mesh basenames"):
-        mujoco_adapter._stage_mjcf_mesh_assets(bundle_result, tmp_path / "robot.xml")
+    mujoco_adapter._stage_mjcf_mesh_assets(bundle_result, mjcf_path)
+
+    mesh_dir = mjcf_path.parent / "meshes"
+    staged = sorted(p.name for p in mesh_dir.iterdir())
+    assert staged == ["first__base.stl", "second__base.stl"]
+    mjcf_content = mjcf_path.read_text(encoding="utf-8")
+    assert 'name="assets_first_base" file="first__base.stl"' in mjcf_content
+    assert 'name="assets_second_base" file="second__base.stl"' in mjcf_content
 
 
 def test_apply_mjcf_workspace_repairs_removes_invalid_frame_body_inertial() -> None:

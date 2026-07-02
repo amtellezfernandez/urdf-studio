@@ -13,6 +13,8 @@ SimulatorAssetFormat = Literal["urdf", "mjcf", "mjx_mjcf", "usd", "native"]
 SimulatorWorkspaceAssetFormat = Literal["urdf", "mjcf", "usd", "native"]
 SimulatorTransferStrategy = Literal["direct", "convert", "planned"]
 SimulatorTargetKind = Literal["physics_simulator", "authoring_tool", "renderer"]
+SimulatorDependencyScope = Literal["workspace", "validation", "runtime"]
+SimulatorWorkspaceLaunchMode = Literal["interactive_viewer", "headless_check"]
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",
@@ -23,7 +25,6 @@ SIMULATOR_ID_VALUES = (
     "sapien2",
     "sapien3",
     "isaacsim",
-    "isaaclab",
     "newton",
     "blender",
     "robosplatter",
@@ -38,7 +39,6 @@ SimulatorId = Literal[*SIMULATOR_ID_VALUES]
     SIMULATOR_SAPIEN2_ID,
     SIMULATOR_SAPIEN3_ID,
     SIMULATOR_ISAACSIM_ID,
-    SIMULATOR_ISAACLAB_ID,
     SIMULATOR_NEWTON_ID,
     SIMULATOR_BLENDER_ID,
     SIMULATOR_ROBOSPLATTER_ID,
@@ -49,6 +49,14 @@ MAX_SIMULATOR_ASSET_ALIASES = 64
 MAX_SIMULATOR_PACKAGE_ROOTS = 128
 MAX_SIMULATOR_PACKAGE_ROOT_HINTS = 32
 SIMULATOR_RELATIVE_PATH_PATTERN = re.compile(r"^[^:\0]+$")
+SIMULATOR_WORKSPACE_LAUNCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def validate_simulator_workspace_launch_id(value: str, context: str = "launch id") -> str:
+    normalized = value.strip()
+    if not normalized or not SIMULATOR_WORKSPACE_LAUNCH_ID_PATTERN.fullmatch(normalized):
+        raise ValueError(f"{context} must be a portable launch identifier")
+    return normalized
 
 
 class SimulatorMeshAssetUpload(BaseModel):
@@ -80,6 +88,7 @@ class SimulatorWorkspacePrepareRequest(BaseModel):
         max_length=MAX_SIMULATOR_PACKAGE_ROOTS,
     )
     ilu_session_id: str | None = Field(default=None, max_length=128)
+    launch_id: str | None = Field(default=None, max_length=128)
 
     @field_validator("urdf_asset_path")
     @classmethod
@@ -87,6 +96,13 @@ class SimulatorWorkspacePrepareRequest(BaseModel):
         if value is None or not value.strip():
             return None
         return validate_simulator_relative_path(value, "URDF asset path")
+
+    @field_validator("launch_id")
+    @classmethod
+    def validate_launch_id(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return validate_simulator_workspace_launch_id(value)
 
     @field_validator("package_roots")
     @classmethod
@@ -111,6 +127,7 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
     started: bool
     pid: int
     command: list[str]
+    launch_mode: SimulatorWorkspaceLaunchMode = "interactive_viewer"
     log_path: str | None = None
     world_package_path: str
     robot_urdf_path: str
@@ -141,6 +158,8 @@ class SimulatorRuntimeCamelModel(BaseModel):
 class SimulatorRuntimeDependency(SimulatorRuntimeCamelModel):
     name: str
     available: bool
+    required: bool = True
+    scope: SimulatorDependencyScope = "workspace"
 
 
 class SimulatorRuntimeCapabilities(SimulatorRuntimeCamelModel):
@@ -163,6 +182,8 @@ class SimulatorRuntimeTransferPolicy(SimulatorRuntimeCamelModel):
 class SimulatorDependencySpec:
     name: str
     import_name: str
+    required: bool = True
+    scope: SimulatorDependencyScope = "workspace"
 
 
 @dataclass(frozen=True)
@@ -237,148 +258,6 @@ def _transfer(
         scene_asset_format=scene_asset_format or robot_asset_format,
         transfer_strategy=transfer_strategy,
     )
-
-
-def _dependency(name: str, import_name: str | None = None) -> SimulatorDependencySpec:
-    return SimulatorDependencySpec(name=name, import_name=import_name or name)
-
-
-def _runtime(
-    simulator_id: SimulatorId,
-    label: str,
-    robot_asset_format: SimulatorAssetFormat,
-    transfer_strategy: SimulatorTransferStrategy,
-    *,
-    target_kind: SimulatorTargetKind = "physics_simulator",
-    workspace_target: bool = False,
-    motion_validation: bool = False,
-    layout_round_trip: bool = False,
-    dependencies: tuple[SimulatorDependencySpec, ...] = (),
-) -> SimulatorRuntimeSpec:
-    return SimulatorRuntimeSpec(
-        simulator_id=simulator_id,
-        label=label,
-        transfer=_transfer(robot_asset_format, transfer_strategy),
-        target_kind=target_kind,
-        workspace_target=workspace_target,
-        motion_validation=motion_validation,
-        layout_round_trip=layout_round_trip,
-        dependencies=dependencies,
-    )
-
-
-SIMULATOR_RUNTIME_SPECS: tuple[SimulatorRuntimeSpec, ...] = (
-    _runtime(
-        SIMULATOR_GENESIS_ID,
-        "Genesis",
-        "urdf",
-        "direct",
-        workspace_target=True,
-        dependencies=(_dependency("genesis"),),
-    ),
-    _runtime(
-        SIMULATOR_MJLAB_ID,
-        "MJLab",
-        "mjcf",
-        "convert",
-        workspace_target=True,
-        motion_validation=True,
-        dependencies=(
-            _dependency("mjlab"),
-            _dependency("mujoco"),
-            _dependency("mujoco_warp"),
-        ),
-    ),
-    _runtime(
-        SIMULATOR_MUJOCO_ID,
-        "MuJoCo",
-        "mjcf",
-        "convert",
-        workspace_target=True,
-        dependencies=(_dependency("mujoco"),),
-    ),
-    _runtime(
-        SIMULATOR_MJX_ID,
-        "MJX",
-        "mjx_mjcf",
-        "planned",
-        dependencies=(
-            _dependency("mujoco"),
-            _dependency("jax"),
-        ),
-    ),
-    _runtime(
-        SIMULATOR_PYBULLET_ID,
-        "PyBullet",
-        "urdf",
-        "direct",
-        workspace_target=True,
-        dependencies=(_dependency("pybullet"),),
-    ),
-    _runtime(
-        SIMULATOR_SAPIEN2_ID,
-        "SAPIEN 2",
-        "urdf",
-        "planned",
-        dependencies=(_dependency("sapien"),),
-    ),
-    _runtime(
-        SIMULATOR_SAPIEN3_ID,
-        "SAPIEN 3",
-        "urdf",
-        "planned",
-        dependencies=(_dependency("sapien"),),
-    ),
-    _runtime(
-        SIMULATOR_ISAACSIM_ID,
-        "Isaac Sim",
-        "usd",
-        "planned",
-        dependencies=(_dependency("isaacsim"),),
-    ),
-    _runtime(
-        SIMULATOR_ISAACLAB_ID,
-        "Isaac Lab",
-        "usd",
-        "planned",
-        dependencies=(_dependency("isaaclab"),),
-    ),
-    _runtime(
-        SIMULATOR_NEWTON_ID,
-        "Newton",
-        "mjcf",
-        "planned",
-        dependencies=(_dependency("newton"),),
-    ),
-    _runtime(
-        SIMULATOR_BLENDER_ID,
-        "Blender",
-        "native",
-        "direct",
-        target_kind="authoring_tool",
-        workspace_target=True,
-        layout_round_trip=True,
-        dependencies=(_dependency("blender", "bpy"),),
-    ),
-    _runtime(
-        SIMULATOR_ROBOSPLATTER_ID,
-        "RoboSplatter",
-        "native",
-        "planned",
-        target_kind="renderer",
-        dependencies=(_dependency("robosplatter"),),
-    ),
-)
-SUPPORTED_SIMULATOR_IDS: tuple[SimulatorId, ...] = tuple(
-    spec.simulator_id for spec in SIMULATOR_RUNTIME_SPECS
-)
-SIMULATOR_RUNTIME_SPECS_BY_ID: dict[SimulatorId, SimulatorRuntimeSpec] = {
-    spec.simulator_id: spec for spec in SIMULATOR_RUNTIME_SPECS
-}
-
-
-def get_simulator_runtime_spec(simulator_id: SimulatorId) -> SimulatorRuntimeSpec:
-    return SIMULATOR_RUNTIME_SPECS_BY_ID[simulator_id]
 
 
 def validate_simulator_relative_path(value: str, label: str) -> str:

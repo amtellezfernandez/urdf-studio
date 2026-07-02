@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.models.simulator_runtime import (
     SIMULATOR_CANONICAL_FRAME_CONVENTION,
     SimulatorAssetFormat,
+    SimulatorDependencyScope,
     SimulatorId,
     SimulatorMeshAssetUpload,
     SimulatorRuntimeCapabilities,
@@ -17,9 +18,11 @@ from backend.models.simulator_runtime import (
     SimulatorTargetKind,
     SimulatorTransferStrategy,
     SimulatorWorkspaceAssetFormat,
+    SimulatorWorkspaceLaunchMode,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse as AdapterWorkspaceOpenResponse,
     WorkspaceChangeSetApplyResponse as AdapterWorkspaceChangeSetApplyResponse,
+    validate_simulator_workspace_launch_id,
 )
 from backend.models.world_scene_package import WorldScenePackageManifest
 
@@ -30,6 +33,7 @@ WorkspaceTransferWorkspaceAssetFormat = SimulatorWorkspaceAssetFormat
 WorkspaceTransferStrategy = SimulatorTransferStrategy
 WorkspaceTransferTargetKind = SimulatorTargetKind
 WorkspaceTransferMeshAssetUpload = SimulatorMeshAssetUpload
+WorkspaceTransferLaunchMode = SimulatorWorkspaceLaunchMode
 
 
 class WorkspaceTransferCamelModel(BaseModel):
@@ -39,13 +43,20 @@ class WorkspaceTransferCamelModel(BaseModel):
 class WorkspaceTransferDependency(WorkspaceTransferCamelModel):
     name: str
     available: bool
+    required: bool = True
+    scope: SimulatorDependencyScope = "workspace"
 
     @classmethod
     def from_runtime_dependency(
         cls,
         dependency: SimulatorRuntimeDependency,
     ) -> "WorkspaceTransferDependency":
-        return cls(name=dependency.name, available=dependency.available)
+        return cls(
+            name=dependency.name,
+            available=dependency.available,
+            required=dependency.required,
+            scope=dependency.scope,
+        )
 
 
 class WorkspaceTransferCapabilities(WorkspaceTransferCamelModel):
@@ -134,11 +145,41 @@ class WorkspaceOpenRequest(SimulatorWorkspacePrepareRequest):
     pass
 
 
+class WorkspaceLaunchCancelResponse(WorkspaceTransferCamelModel):
+    target_id: WorkspaceTransferTargetId = Field(..., alias="targetId")
+    launch_id: str = Field(..., alias="launchId")
+    cancelled: bool
+    process_stopped: bool = Field(default=False, alias="processStopped")
+    pid: int | None = None
+
+    @classmethod
+    def from_cancel_result(
+        cls,
+        *,
+        target_id: WorkspaceTransferTargetId,
+        launch_id: str,
+        cancelled: bool,
+        process_stopped: bool,
+        pid: int | None,
+    ) -> "WorkspaceLaunchCancelResponse":
+        return cls(
+            targetId=target_id,
+            launchId=validate_simulator_workspace_launch_id(launch_id),
+            cancelled=cancelled,
+            processStopped=process_stopped,
+            pid=pid,
+        )
+
+
 class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
     target_id: WorkspaceTransferTargetId = Field(..., alias="targetId")
     started: bool
     pid: int
     command: list[str]
+    launch_mode: WorkspaceTransferLaunchMode = Field(
+        default="interactive_viewer",
+        alias="launchMode",
+    )
     log_path: str | None = Field(default=None, alias="logPath")
     world_package_path: str = Field(..., alias="worldPackagePath")
     robot_urdf_path: str = Field(..., alias="robotUrdfPath")
@@ -162,6 +203,7 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
             started=response.started,
             pid=response.pid,
             command=response.command,
+            launchMode=response.launch_mode,
             logPath=response.log_path,
             worldPackagePath=response.world_package_path,
             robotUrdfPath=response.robot_urdf_path,

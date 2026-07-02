@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { loadThumbnailGitHubRobot } from "@/app/pages/index/thumbnailBootstrap";
 import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderState";
-import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 
 type ThumbnailBootstrapParams = {
   hasLoadedFiles: boolean;
@@ -12,7 +11,6 @@ type ThumbnailBootstrapParams = {
     options?: { preserveCameras?: boolean }
   ) => void | Promise<void>;
   runtimePreviewMode: boolean;
-  setGPUMode: (mode: GPUMode) => void;
   thumbnailMode: boolean;
   thumbnailParams: {
     demo: boolean;
@@ -26,7 +24,6 @@ export const useThumbnailBootstrap = ({
   loadBundledDemoRobot,
   loadFilesFromFolderWithFreshCameras,
   runtimePreviewMode,
-  setGPUMode,
   thumbnailMode,
   thumbnailParams,
 }: ThumbnailBootstrapParams) => {
@@ -34,7 +31,6 @@ export const useThumbnailBootstrap = ({
   const latestActionsRef = useRef({
     loadBundledDemoRobot,
     loadFilesFromFolderWithFreshCameras,
-    setGPUMode,
   });
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -42,9 +38,8 @@ export const useThumbnailBootstrap = ({
     latestActionsRef.current = {
       loadBundledDemoRobot,
       loadFilesFromFolderWithFreshCameras,
-      setGPUMode,
     };
-  }, [loadBundledDemoRobot, loadFilesFromFolderWithFreshCameras, setGPUMode]);
+  }, [loadBundledDemoRobot, loadFilesFromFolderWithFreshCameras]);
 
   useEffect(() => {
     const isBootstrapMode = thumbnailMode || runtimePreviewMode;
@@ -111,13 +106,6 @@ export const useThumbnailBootstrap = ({
         { reset: true }
       );
     }
-    if (thumbnailMode) {
-      latestActionsRef.current.setGPUMode("low");
-    }
-    if (runtimePreviewMode) {
-      latestActionsRef.current.setGPUMode("low");
-    }
-
     const loadRobot = thumbnailParams.demo
       ? latestActionsRef.current.loadBundledDemoRobot()
       : loadThumbnailGitHubRobot({

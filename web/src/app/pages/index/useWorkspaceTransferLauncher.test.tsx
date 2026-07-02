@@ -8,18 +8,24 @@ import type { WorldScenePackageManifest } from "@/features/world-share/worldScen
 import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTransferLauncher";
 
 const {
+  cancelWorkspaceTransferTargetLaunchMock,
   fetchWorkspaceTransferTargetsMock,
   fetchWorkspaceTransferTargetStatusMock,
   openWorkspaceTransferTargetMock,
   toastErrorMock,
+  toastWarningMock,
 } = vi.hoisted(() => ({
+  cancelWorkspaceTransferTargetLaunchMock: vi.fn(),
   fetchWorkspaceTransferTargetsMock: vi.fn(),
   fetchWorkspaceTransferTargetStatusMock: vi.fn(),
   openWorkspaceTransferTargetMock: vi.fn(),
   toastErrorMock: vi.fn(),
+  toastWarningMock: vi.fn(),
 }));
 
 vi.mock("@/features/world-share/workspaceTransferApi", () => ({
+  cancelWorkspaceTransferTargetLaunch: (...args: unknown[]) =>
+    cancelWorkspaceTransferTargetLaunchMock(...args),
   fetchWorkspaceTransferTargets: (...args: unknown[]) =>
     fetchWorkspaceTransferTargetsMock(...args),
   fetchWorkspaceTransferTargetStatus: (...args: unknown[]) =>
@@ -33,6 +39,7 @@ vi.mock("sonner", () => ({
     error: (...args: unknown[]) => toastErrorMock(...args),
     message: vi.fn(),
     success: vi.fn(),
+    warning: (...args: unknown[]) => toastWarningMock(...args),
   },
 }));
 
@@ -90,10 +97,12 @@ describe("useWorkspaceTransferLauncher", () => {
         IS_REACT_ACT_ENVIRONMENT?: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+    cancelWorkspaceTransferTargetLaunchMock.mockReset();
     fetchWorkspaceTransferTargetsMock.mockReset();
     fetchWorkspaceTransferTargetStatusMock.mockReset();
     openWorkspaceTransferTargetMock.mockReset();
     toastErrorMock.mockReset();
+    toastWarningMock.mockReset();
     fetchWorkspaceTransferTargetsMock.mockResolvedValue([blenderTarget]);
     fetchWorkspaceTransferTargetStatusMock.mockResolvedValue({
       targetId: "blender",
@@ -113,10 +122,29 @@ describe("useWorkspaceTransferLauncher", () => {
       worldObjectCount: 3,
       cameraCount: 0,
     });
+    cancelWorkspaceTransferTargetLaunchMock.mockResolvedValue({
+      targetId: "blender",
+      launchId: "launch-123",
+      cancelled: true,
+      processStopped: true,
+      pid: 1234,
+    });
   });
 
-  it("ensures the world layout before building the simulator package", async () => {
-    const ensureWorldLayoutForTransfer = vi.fn(async () => undefined);
+  const openedWorkspaceResponse = {
+    targetId: "blender",
+    started: true,
+    pid: 1234,
+    command: ["python", "-m", "backend.scripts.blender_workspace_prepare"],
+    worldPackagePath: "/tmp/world-package.json",
+    robotUrdfPath: "/tmp/robot.urdf",
+    bundledMeshCount: 0,
+    unresolvedMeshRefs: [],
+    worldObjectCount: 3,
+    cameraCount: 0,
+  };
+
+  it("opens a simulator from the current workspace package without mutating the scene first", async () => {
     const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
     let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
 
@@ -125,7 +153,6 @@ describe("useWorkspaceTransferLauncher", () => {
         activeUrdfPath: "robot.urdf",
         attachedIluSessionId: "",
         buildCurrentWorldScenePackageManifest,
-        ensureWorldLayoutForTransfer,
         meshFiles: {},
         originalUrdfContent: "<robot name=\"demo\"/>",
         packageRoots: {},
@@ -152,12 +179,8 @@ describe("useWorkspaceTransferLauncher", () => {
       await Promise.resolve();
     });
 
-    expect(ensureWorldLayoutForTransfer).toHaveBeenCalledOnce();
     expect(buildCurrentWorldScenePackageManifest).toHaveBeenCalledOnce();
     expect(openWorkspaceTransferTargetMock).toHaveBeenCalledOnce();
-    expect(
-      ensureWorldLayoutForTransfer.mock.invocationCallOrder[0]
-    ).toBeLessThan(buildCurrentWorldScenePackageManifest.mock.invocationCallOrder[0]);
     expect(
       buildCurrentWorldScenePackageManifest.mock.invocationCallOrder[0]
     ).toBeLessThan(openWorkspaceTransferTargetMock.mock.invocationCallOrder[0]);
@@ -167,9 +190,155 @@ describe("useWorkspaceTransferLauncher", () => {
     });
   });
 
-  it("does not open a simulator when world-layout preparation fails", async () => {
-    const ensureWorldLayoutForTransfer = vi.fn(async () => {
-      throw new Error("Default world layout transfer failed");
+  it("deduplicates rapid simulator open clicks before loading state commits", async () => {
+    let resolveOpen:
+      | ((value: typeof openedWorkspaceResponse) => void)
+      | undefined;
+    openWorkspaceTransferTargetMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOpen = resolve;
+      })
+    );
+    const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
+    let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
+
+    const Harness = () => {
+      hookValue = useWorkspaceTransferLauncher({
+        activeUrdfPath: "robot.urdf",
+        attachedIluSessionId: "",
+        buildCurrentWorldScenePackageManifest,
+        meshFiles: {},
+        originalUrdfContent: "<robot name=\"demo\"/>",
+        packageRoots: {},
+        vizUrdfContent: "<robot name=\"demo\"/>",
+        worldCameraCount: 0,
+        worldObjectCount: 0,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const openAction = hookValue?.workspaceTransfer.targets[0]?.onAction;
+    let firstOpen: Promise<void> | undefined;
+    let secondOpen: Promise<void> | undefined;
+    await act(async () => {
+      firstOpen = openAction?.() as Promise<void>;
+      secondOpen = openAction?.() as Promise<void>;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(buildCurrentWorldScenePackageManifest).toHaveBeenCalledOnce();
+    expect(openWorkspaceTransferTargetMock).toHaveBeenCalledOnce();
+    expect(hookValue?.workspaceTransfer.targets[0]?.isBusy).toBe(true);
+
+    await act(async () => {
+      resolveOpen?.(openedWorkspaceResponse);
+      await firstOpen;
+      await secondOpen;
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("aborts an in-flight simulator open when the stop action runs", async () => {
+    let observedSignal: AbortSignal | null = null;
+    let observedLaunchId: string | null = null;
+    openWorkspaceTransferTargetMock.mockImplementationOnce(
+      ({ launchId, signal }: { launchId?: string; signal?: AbortSignal }) => {
+        observedLaunchId = launchId ?? null;
+        observedSignal = signal ?? null;
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Workspace transfer cancelled.", "AbortError")),
+            { once: true }
+          );
+        });
+      }
+    );
+    const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
+    let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
+
+    const Harness = () => {
+      hookValue = useWorkspaceTransferLauncher({
+        activeUrdfPath: "robot.urdf",
+        attachedIluSessionId: "",
+        buildCurrentWorldScenePackageManifest,
+        meshFiles: {},
+        originalUrdfContent: "<robot name=\"demo\"/>",
+        packageRoots: {},
+        vizUrdfContent: "<robot name=\"demo\"/>",
+        worldCameraCount: 0,
+        worldObjectCount: 0,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    let launchPromise: Promise<void> | undefined;
+    await act(async () => {
+      launchPromise = hookValue?.workspaceTransfer.targets[0]?.onAction() as Promise<void>;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(openWorkspaceTransferTargetMock).toHaveBeenCalledOnce();
+    expect(hookValue?.workspaceTransfer.targets[0]?.isBusy).toBe(true);
+    expect(hookValue?.workspaceTransfer.targets[0]?.cancelLabel).toBe(
+      "Stop opening Blender"
+    );
+
+    await act(async () => {
+      hookValue?.workspaceTransfer.targets[0]?.onCancel?.();
+      await launchPromise;
+      await Promise.resolve();
+    });
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(observedLaunchId).toBeTruthy();
+    expect(cancelWorkspaceTransferTargetLaunchMock).toHaveBeenCalledWith({
+      targetId: "blender",
+      launchId: observedLaunchId,
+      targetLabel: "Blender",
+    });
+    expect(hookValue?.workspaceTransfer.targets[0]?.isBusy).toBe(false);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("warns when the simulator opens with unresolved mesh references", async () => {
+    openWorkspaceTransferTargetMock.mockResolvedValueOnce({
+      targetId: "blender",
+      started: true,
+      pid: 1234,
+      command: ["python", "-m", "backend.scripts.blender_workspace_prepare"],
+      worldPackagePath: "/tmp/world-package.json",
+      robotUrdfPath: "/tmp/robot.urdf",
+      bundledMeshCount: 0,
+      unresolvedMeshRefs: ["meshes/missing-left.stl", "meshes/missing-right.stl"],
+      worldObjectCount: 1,
+      cameraCount: 0,
     });
     const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
     let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
@@ -179,7 +348,6 @@ describe("useWorkspaceTransferLauncher", () => {
         activeUrdfPath: "robot.urdf",
         attachedIluSessionId: "",
         buildCurrentWorldScenePackageManifest,
-        ensureWorldLayoutForTransfer,
         meshFiles: {},
         originalUrdfContent: "<robot name=\"demo\"/>",
         packageRoots: {},
@@ -203,10 +371,9 @@ describe("useWorkspaceTransferLauncher", () => {
       await Promise.resolve();
     });
 
-    expect(ensureWorldLayoutForTransfer).toHaveBeenCalledOnce();
-    expect(buildCurrentWorldScenePackageManifest).not.toHaveBeenCalled();
-    expect(openWorkspaceTransferTargetMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).toHaveBeenCalledWith("Default world layout transfer failed");
+    expect(toastWarningMock).toHaveBeenCalledWith(
+      "2 meshes could not be resolved: meshes/missing-left.stl, meshes/missing-right.stl"
+    );
 
     await act(async () => {
       root.unmount();
@@ -214,7 +381,6 @@ describe("useWorkspaceTransferLauncher", () => {
   });
 
   it("blocks a robot-only transfer package when the Studio scene has objects", async () => {
-    const ensureWorldLayoutForTransfer = vi.fn(async () => undefined);
     const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
     let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
 
@@ -223,7 +389,6 @@ describe("useWorkspaceTransferLauncher", () => {
         activeUrdfPath: "robot.urdf",
         attachedIluSessionId: "",
         buildCurrentWorldScenePackageManifest,
-        ensureWorldLayoutForTransfer,
         meshFiles: {},
         originalUrdfContent: "<robot name=\"demo\"/>",
         packageRoots: {},
@@ -247,7 +412,6 @@ describe("useWorkspaceTransferLauncher", () => {
       await Promise.resolve();
     });
 
-    expect(ensureWorldLayoutForTransfer).toHaveBeenCalledOnce();
     expect(buildCurrentWorldScenePackageManifest).toHaveBeenCalledOnce();
     expect(openWorkspaceTransferTargetMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledWith(
@@ -260,7 +424,6 @@ describe("useWorkspaceTransferLauncher", () => {
   });
 
   it("blocks a robot-only transfer package when the live object store has objects", async () => {
-    const ensureWorldLayoutForTransfer = vi.fn(async () => undefined);
     const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
     const getWorldObjectCountForTransfer = vi.fn(() => 2);
     let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
@@ -270,7 +433,6 @@ describe("useWorkspaceTransferLauncher", () => {
         activeUrdfPath: "robot.urdf",
         attachedIluSessionId: "",
         buildCurrentWorldScenePackageManifest,
-        ensureWorldLayoutForTransfer,
         getWorldObjectCountForTransfer,
         meshFiles: {},
         originalUrdfContent: "<robot name=\"demo\"/>",
@@ -295,7 +457,6 @@ describe("useWorkspaceTransferLauncher", () => {
       await Promise.resolve();
     });
 
-    expect(ensureWorldLayoutForTransfer).toHaveBeenCalledOnce();
     expect(getWorldObjectCountForTransfer).toHaveBeenCalledOnce();
     expect(buildCurrentWorldScenePackageManifest).toHaveBeenCalledOnce();
     expect(openWorkspaceTransferTargetMock).not.toHaveBeenCalled();

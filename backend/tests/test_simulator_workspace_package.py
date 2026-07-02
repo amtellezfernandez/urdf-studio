@@ -17,6 +17,7 @@ from backend.services.simulator_adapters.workspace_package import (
     _write_asset_file,
     prepare_simulator_workspace_package,
 )
+from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
 from backend.services.world_scene_package_digest import (
     computed_world_snapshot_digest,
     declared_world_snapshot_digests,
@@ -210,6 +211,166 @@ def test_prepare_simulator_workspace_normalizes_root_relative_mesh_refs(
     assert 'filename="meshes/base.stl"' in prepared.robot_urdf_path.read_text(
         encoding="utf-8"
     )
+
+
+def test_prepare_simulator_workspace_normalizes_flat_root_relative_mesh_refs(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    urdf_xml = """
+    <robot name="demo">
+      <link name="base">
+        <visual>
+          <geometry>
+            <mesh filename="/base.stl"/>
+          </geometry>
+        </visual>
+      </link>
+    </robot>
+    """
+    observed: dict[str, str] = {}
+
+    def fake_bundle_mesh_assets_for_urdf_file(
+        *,
+        urdf_path: str,
+        urdf_xml: str,
+        out_path: str,
+        extra_search_roots: list[str] | None = None,
+    ) -> BundleMeshAssetsResult:
+        observed["urdf_xml"] = urdf_xml
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(urdf_xml, encoding="utf-8")
+        return BundleMeshAssetsResult(
+            success=True,
+            content=urdf_xml,
+            out_path=out_path,
+            assets_root=str(tmp_path / "assets"),
+            copied_files=1,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.bundle_mesh_assets_for_urdf_file",
+        fake_bundle_mesh_assets_for_urdf_file,
+    )
+
+    request = SimulatorWorkspacePrepareRequest(
+        world_package=make_world_package(urdf_xml),
+        mesh_assets=[
+            SimulatorMeshAssetUpload(
+                path="base.stl",
+                aliases=[],
+                content_base64="AA==",
+            )
+        ],
+    )
+
+    prepared = prepare_simulator_workspace_package(
+        request,
+        workspace_root=tmp_path,
+        error=ValueError,
+    )
+
+    assert 'filename="base.stl"' in observed["urdf_xml"]
+    assert 'filename="/base.stl"' not in observed["urdf_xml"]
+    assert 'filename="base.stl"' in prepared.robot_urdf_path.read_text(encoding="utf-8")
+
+
+def test_prepare_simulator_workspace_persists_shared_asset_roots(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    observed: dict[str, list[str]] = {}
+
+    def fake_bundle_mesh_assets_for_urdf_file(
+        *,
+        urdf_path: str,
+        urdf_xml: str,
+        out_path: str,
+        extra_search_roots: list[str] | None = None,
+    ) -> BundleMeshAssetsResult:
+        observed["extra_search_roots"] = extra_search_roots or []
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text(urdf_xml, encoding="utf-8")
+        return BundleMeshAssetsResult(
+            success=True,
+            content=urdf_xml,
+            out_path=out_path,
+            assets_root=str(tmp_path / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.bundle_mesh_assets_for_urdf_file",
+        fake_bundle_mesh_assets_for_urdf_file,
+    )
+
+    request = SimulatorWorkspacePrepareRequest(
+        world_package=_minimal_world_package(),
+        package_roots={"demo_description": ["robot_description"]},
+    )
+
+    prepared = prepare_simulator_workspace_package(
+        request,
+        workspace_root=tmp_path,
+        error=ValueError,
+    )
+
+    scene_roots = workspace_asset_roots(prepared.world_package_path, prepared.robot_urdf_path)
+    assert tuple(Path(root) for root in observed["extra_search_roots"]) == scene_roots
+    assert prepared.workspace_dir / "source" in scene_roots
+    assert prepared.workspace_dir / "source" / "robot_description" in scene_roots
+    assert prepared.robot_urdf_path.parent in scene_roots
+
+
+def test_prepare_simulator_workspace_removes_partial_workspace_on_bundle_error(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    def fail_bundle_mesh_assets_for_urdf_file(**_kwargs) -> BundleMeshAssetsResult:
+        raise RuntimeError("bundle exploded")
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.bundle_mesh_assets_for_urdf_file",
+        fail_bundle_mesh_assets_for_urdf_file,
+    )
+
+    request = SimulatorWorkspacePrepareRequest(
+        world_package=make_world_package(
+            """
+            <robot name="demo">
+              <link name="base">
+                <visual>
+                  <geometry>
+                    <mesh filename="/base.stl"/>
+                  </geometry>
+                </visual>
+              </link>
+            </robot>
+            """
+        ),
+        mesh_assets=[
+            SimulatorMeshAssetUpload(
+                path="base.stl",
+                aliases=[],
+                content_base64="AA==",
+            )
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="bundle exploded"):
+        prepare_simulator_workspace_package(
+            request,
+            workspace_root=tmp_path,
+            error=ValueError,
+        )
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_prepare_simulator_workspace_writes_schema_compatible_world_package(tmp_path) -> None:

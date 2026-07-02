@@ -17,13 +17,24 @@ from backend.services.simulator_adapters import workspace_process
 from backend.services.simulator_adapters.camera_intrinsics import PinholeCameraIntrinsics
 from backend.services.simulator_adapters.camera_transfer import SimCameraSpec, Transform
 from backend.services.simulator_adapters.params import WORKSPACE_LAUNCH_FRAME_MAP
+from backend.services.simulator_adapters.plugin import get_plugin
 from backend.services.simulator_adapters.pybullet_camera import (
     pybullet_camera_projection_matrix,
     pybullet_camera_view_matrix,
 )
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 from backend.services.world_layout_static_transfer import SimPrimitive
-from backend.scripts.pybullet_workspace_prepare import _add_primitive, _primitive_shape
+from backend.scripts import pybullet_workspace_prepare as pybullet_prepare
+from backend.scripts.pybullet_workspace_prepare import (
+    PYBULLET_STATIC_JOINT_HOLD_FORCE,
+    _add_primitive,
+    _configure_static_debug_viewer,
+    _require_pybullet_gui_environment,
+    _hold_robot_current_joint_positions,
+    _is_pybullet_connected,
+    _primitive_shape,
+    _should_step_workspace_once,
+)
 
 
 class _FakePybullet:
@@ -176,6 +187,126 @@ def test_pybullet_primitive_uses_canonical_dynamic_material_fields() -> None:
     }
 
 
+def test_pybullet_gui_static_viewer_disables_mouse_picking_and_realtime() -> None:
+    class _FakeRuntime:
+        COV_ENABLE_MOUSE_PICKING = 42
+        realtime_values: list[int] = []
+        debug_visualizer_calls: list[tuple[int, int]] = []
+
+        @classmethod
+        def setRealTimeSimulation(cls, value: int) -> None:
+            cls.realtime_values.append(value)
+
+        @classmethod
+        def configureDebugVisualizer(cls, flag: int, value: int) -> None:
+            cls.debug_visualizer_calls.append((flag, value))
+
+    _configure_static_debug_viewer(_FakeRuntime, no_viewer=False)
+
+    assert _FakeRuntime.realtime_values == [0]
+    assert _FakeRuntime.debug_visualizer_calls == [(42, 0)]
+
+
+def test_pybullet_gui_launch_requires_display(monkeypatch) -> None:
+    monkeypatch.setattr(pybullet_prepare.sys, "platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+
+    with pytest.raises(RuntimeError, match="no GUI display is available"):
+        _require_pybullet_gui_environment(no_viewer=False)
+
+    _require_pybullet_gui_environment(no_viewer=True)
+
+
+def test_pybullet_static_robot_holds_current_non_fixed_joint_positions() -> None:
+    class _FakeRuntime:
+        JOINT_FIXED = 4
+        POSITION_CONTROL = 7
+        control_calls: list[dict[str, object]] = []
+
+        @classmethod
+        def getNumJoints(cls, _robot_id: int) -> int:
+            return 3
+
+        @classmethod
+        def getJointInfo(cls, _robot_id: int, joint_index: int):
+            if joint_index == 0:
+                return (0, b"shoulder", 0, 0, 0, 0, 0, 0, -1.0, 1.0, 12.0)
+            if joint_index == 1:
+                return (1, b"fixed_mount", cls.JOINT_FIXED, -1, -1, 0, 0, 0, 0, 0, 0)
+            return (2, b"elbow", 0, 0, 0, 0, 0, 0, -1.0, 1.0, 0.0)
+
+        @classmethod
+        def getJointState(cls, _robot_id: int, joint_index: int):
+            return (0.25 if joint_index == 0 else -0.5, 0.0, (0.0, 0.0, 0.0), 0.0)
+
+        @classmethod
+        def setJointMotorControl2(cls, robot_id: int, jointIndex: int, **kwargs) -> None:
+            cls.control_calls.append({"robot_id": robot_id, "joint_index": jointIndex, **kwargs})
+
+    held_count = _hold_robot_current_joint_positions(_FakeRuntime, robot_id=99)
+
+    assert held_count == 2
+    assert _FakeRuntime.control_calls == [
+        {
+            "robot_id": 99,
+            "joint_index": 0,
+            "controlMode": 7,
+            "targetPosition": 0.25,
+            "targetVelocity": 0.0,
+            "force": 12.0,
+        },
+        {
+            "robot_id": 99,
+            "joint_index": 2,
+            "controlMode": 7,
+            "targetPosition": -0.5,
+            "targetVelocity": 0.0,
+            "force": PYBULLET_STATIC_JOINT_HOLD_FORCE,
+        },
+    ]
+
+
+def test_pybullet_default_gui_workspace_does_not_step_static_debug_view() -> None:
+    assert _should_step_workspace_once(
+        no_viewer=False,
+        free_base=False,
+        camera_screenshot_dir=None,
+        report_path=None,
+    ) is False
+    assert _should_step_workspace_once(
+        no_viewer=False,
+        free_base=True,
+        camera_screenshot_dir=None,
+        report_path=None,
+    ) is True
+    assert _should_step_workspace_once(
+        no_viewer=True,
+        free_base=False,
+        camera_screenshot_dir=None,
+        report_path=None,
+    ) is True
+
+
+def test_pybullet_connection_probe_supports_client_id_and_legacy_signatures() -> None:
+    class _ClientIdRuntime:
+        seen_client_id = None
+
+        @classmethod
+        def isConnected(cls, client_id: int) -> bool:
+            cls.seen_client_id = client_id
+            return True
+
+    class _LegacyRuntime:
+        @classmethod
+        def isConnected(cls) -> bool:
+            return False
+
+    assert _is_pybullet_connected(_ClientIdRuntime, client_id=17) is True
+    assert _ClientIdRuntime.seen_client_id == 17
+    assert _is_pybullet_connected(_LegacyRuntime, client_id=17) is False
+
+
 def test_pybullet_camera_projection_uses_pinhole_intrinsics() -> None:
     class _FakeRuntime:
         projection_kwargs = None
@@ -264,7 +395,7 @@ def test_simulator_workspace_process_uses_repo_local_runtime_cache(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setenv("XDG_CACHE_HOME", "/home/user/.cache")
+    monkeypatch.setenv("XDG_CACHE_HOME", "/var/tmp/existing-cache")
     cache_root = tmp_path / "runtime-cache"
 
     env = workspace_process.build_simulator_workspace_env(cache_root)
@@ -577,7 +708,8 @@ def test_prepare_pybullet_workspace_adds_fallback_visual_material_colors(
     assert cover_color.get("rgba") == "0.1 0.2 0.3 1.0"
 
 
-def test_start_pybullet_workspace_reports_direct_urdf_transfer(monkeypatch, tmp_path: Path) -> None:
+def test_pybullet_plugin_reports_direct_urdf_transfer(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("URDF_STUDIO_DISABLE_SIMULATOR_ACCELERATION", "1")
     workspace_dir = tmp_path / "workspace"
     robot_dir = workspace_dir / "robot"
     robot_dir.mkdir(parents=True)
@@ -608,11 +740,21 @@ def test_start_pybullet_workspace_reports_direct_urdf_transfer(monkeypatch, tmp_
         def poll(self) -> None:
             return None
 
-    monkeypatch.setattr(pybullet_adapter, "prepare_pybullet_workspace", lambda request: prepared)
-    monkeypatch.setattr(workspace_process.subprocess, "Popen", lambda *args, **kwargs: _FakeProcess())
+    monkeypatch.setattr(
+        workspace_package,
+        "prepare_simulator_workspace_package",
+        lambda _request, **_kwargs: prepared,
+    )
+    popen_calls = []
+
+    def _fake_popen(*args, **kwargs):
+        popen_calls.append((args, kwargs))
+        return _FakeProcess()
+
+    monkeypatch.setattr(workspace_process.subprocess, "Popen", _fake_popen)
     monkeypatch.setattr(workspace_process, "wait_for_workspace_readiness", lambda *args, **kwargs: None)
 
-    response = pybullet_adapter.start_pybullet_workspace(
+    response = get_plugin("pybullet").prepare_workspace(
         SimulatorWorkspacePrepareRequest(
             world_package=make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>"),
         )
@@ -620,7 +762,14 @@ def test_start_pybullet_workspace_reports_direct_urdf_transfer(monkeypatch, tmp_
 
     assert response.simulator_id == "pybullet"
     assert response.pid == 4321
+    assert response.launch_mode == "interactive_viewer"
     assert response.simulator_asset_path == str(robot_urdf_path)
     assert response.simulator_asset_format == "urdf"
     assert "--robot-urdf" in response.command
+    assert "--no-viewer" not in response.command
     assert response.command[response.command.index("--frame-map") + 1] == WORKSPACE_LAUNCH_FRAME_MAP
+    assert popen_calls
+    _args, kwargs = popen_calls[0]
+    assert kwargs["stdin"] == workspace_process.subprocess.DEVNULL
+    assert kwargs["start_new_session"] is True
+    assert kwargs["close_fds"] is True

@@ -1,11 +1,5 @@
 import { lazy } from "react";
 
-export const IkDebuggerPanel = lazy(() =>
-  import("@/features/ik/IkDebuggerPanel").then((module) => ({
-    default: module.IkDebuggerPanel,
-  }))
-);
-
 export const WorldPublishDialog = lazy(() =>
   import("@/features/world-share/WorldPublishDialog").then((module) => ({
     default: module.WorldPublishDialog,

@@ -94,6 +94,51 @@ npm run setup:check
 npm run setup -- --twin
 ```
 
+## WSL2 Simulator Setup
+
+Use WSL2, not WSL1. The core app, URDF loading, PyBullet, MuJoCo, MJLab, Genesis, MJX containers, and managed Blender are the supported WSL path when the host has the required display, GPU, and Docker features. Setup detects the machine first and skips or blocks simulator runtimes that are not a good match for the laptop.
+
+Before installing heavy simulator runtimes, check the basics inside WSL:
+
+```bash
+nvidia-smi
+docker version
+npm run simulator:compatibility
+npm run setup:check
+```
+
+If you want GPU-accelerated simulator containers, Docker must be available inside WSL and the NVIDIA container runtime must work:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+```
+
+WSL target behavior:
+
+- Genesis uses CUDA when `nvidia-smi` and `libcuda` are visible; otherwise it falls back to CPU. For interactive workspace opens, Genesis performance mode is off by default to avoid slow static-shape recompilation on every scene change; set `URDF_STUDIO_GENESIS_PERFORMANCE_MODE=1` only for long fixed-scene runs.
+- MuJoCo and MJLab use the desktop OpenGL path when WSLg/display is available, EGL when a headless NVIDIA GPU path is available, and OSMesa as the CPU fallback.
+- MJX uses a Docker fast path when Docker and the NVIDIA runtime are available. Inspect it with `npm run simulator:container:build -- mjx --print` and `npm run simulator:container:plan -- mjx --workspace <workspace-dir>`.
+- Blender uses a managed Linux runtime in WSL x64 when Blender is not already installed.
+- Isaac Sim is intentionally blocked inside WSL. Use native Linux with the official NVIDIA workflow, or an official Isaac Sim container on a compatible native Linux GPU host.
+- SAPIEN Vulkan rendering is intentionally blocked inside WSL. Use a native Linux GPU host with a Vulkan render device.
+
+Do not install every simulator globally. Run `npm run setup` and let URDF Studio choose the managed native runtimes for the current machine. Use `npm run simulator:container:plan -- <simulator-id>` to see the exact Docker command for simulator targets that should run in a container.
+
+To inspect one simulator target before installing or launching it:
+
+```bash
+npm run simulator:compatibility -- genesis
+npm run simulator:compatibility -- mjx
+```
+
+To prebuild every compatible managed simulator container for the current machine:
+
+```bash
+npm run simulator:container:build -- all --print
+npm run simulator:container:build -- all
+npm run simulator:container:plan -- all --workspace <workspace-dir>
+```
+
 ## Run Modes
 
 | Command | Use For |

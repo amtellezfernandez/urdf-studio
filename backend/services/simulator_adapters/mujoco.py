@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -7,28 +8,24 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.models.simulator_runtime import (
-    SIMULATOR_MJLAB_ID,
     SIMULATOR_MUJOCO_ID,
+    SimulatorDependencySpec,
     SimulatorId,
-    SimulatorRuntimeStatus,
     SimulatorWorkspacePrepareRequest,
     SimulatorWorkspacePrepareResponse,
-    get_simulator_runtime_spec,
 )
 from backend.services.simulator_adapters.base import (
-    SimulatorAdapter,
     SimulatorAdapterError,
-    build_simulator_runtime_status,
 )
+from backend.services.simulator_adapters.params import (
+    MUJOCO_SCENE_PARAMS,
+    MUJOCO_WORKSPACE_PROCESS_PARAMS,
+    MUJOCO_WORKSPACE_REPAIR_PARAMS,
+)
+from backend.services.simulator_adapters.plugin import MjcfSimulatorPlugin
 from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
     prepare_simulator_workspace_package,
-)
-from backend.services.simulator_adapters.params import (
-    MJLAB_WORKSPACE_PROCESS_PARAMS,
-    MUJOCO_WORKSPACE_PROCESS_PARAMS,
-    MUJOCO_WORKSPACE_REPAIR_PARAMS,
-    SimulatorWorkspaceProcessParams,
 )
 from backend.services.simulator_adapters.workspace_process import start_prepared_workspace_process
 from backend.services.ilu_urdf import (
@@ -36,9 +33,6 @@ from backend.services.ilu_urdf import (
     IluUrdfBridgeError,
     convert_urdf_to_mjcf,
 )
-
-
-MUJOCO_RUNTIME_SPEC = get_simulator_runtime_spec(SIMULATOR_MUJOCO_ID)
 
 
 class MujocoWorkspaceError(SimulatorAdapterError):
@@ -53,14 +47,6 @@ class PreparedMujocoWorkspace:
 
 def _mujoco_error(message: str) -> MujocoWorkspaceError:
     return MujocoWorkspaceError(message)
-
-
-def _workspace_process_for_mjcf_target(
-    simulator_id: SimulatorId,
-) -> SimulatorWorkspaceProcessParams:
-    if simulator_id == SIMULATOR_MJLAB_ID:
-        return MJLAB_WORKSPACE_PROCESS_PARAMS
-    return MUJOCO_WORKSPACE_PROCESS_PARAMS
 
 
 def _parse_float_attr(element: ET.Element, attr_name: str) -> float | None:
@@ -210,34 +196,90 @@ def apply_mjcf_workspace_repairs(mjcf_content: str) -> tuple[str, tuple[str, ...
     return ET.tostring(root, encoding="unicode"), tuple(warnings)
 
 
+def _unique_mesh_name(source_path: Path, robot_dir: Path) -> str:
+    try:
+        rel = source_path.relative_to(robot_dir)
+        parts = rel.parts
+    except ValueError:
+        parts = source_path.parts[-2:]
+    if len(parts) <= 1:
+        return source_path.name
+    dir_prefix = "__".join(part for part in parts[:-1] if part not in (".", ".."))
+    return f"{dir_prefix}__{source_path.name}" if dir_prefix else source_path.name
+
+
+def _mjcf_mesh_name_from_filename(filename: str) -> str:
+    normalized = filename.replace("\\", "/")
+    normalized = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", "", normalized)
+    normalized = re.sub(r"\.[^./]+$", "", normalized)
+    normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", normalized).strip("_")
+    return normalized or "mesh"
+
+
 def _stage_mjcf_mesh_assets(bundle_result: BundleMeshAssetsResult, mjcf_path: Path) -> None:
-    mesh_targets_by_name: dict[str, set[str]] = defaultdict(set)
-    for asset in bundle_result.bundled:
-        source_path = Path(asset.target_path)
-        mesh_targets_by_name[source_path.name].add(str(source_path.resolve()))
-
-    conflicting_names = [
-        mesh_name
-        for mesh_name, source_paths in mesh_targets_by_name.items()
-        if len(source_paths) > 1
-    ]
-    if conflicting_names:
-        names = ", ".join(sorted(conflicting_names)[:8])
-        suffix = "" if len(conflicting_names) <= 8 else " ..."
-        raise MujocoWorkspaceError(
-            f"MuJoCo MJCF conversion cannot stage duplicate mesh basenames: {names}{suffix}"
-        )
-
-    mesh_dir = mjcf_path.parent / "meshes"
+    robot_dir = mjcf_path.parent
+    mesh_dir = robot_dir / "meshes"
     mesh_dir.mkdir(parents=True, exist_ok=True)
-    for source_paths in mesh_targets_by_name.values():
-        source_path = Path(next(iter(source_paths)))
+
+    target_paths_by_basename: dict[str, list[Path]] = defaultdict(list)
+    for asset in bundle_result.bundled:
+        target_path = Path(asset.target_path).resolve()
+        if target_path not in target_paths_by_basename[target_path.name]:
+            target_paths_by_basename[target_path.name].append(target_path)
+
+    staged_name_by_source: dict[str, str] = {}
+    used_staged_names: set[str] = set()
+    for paths in target_paths_by_basename.values():
+        has_collision = len(paths) > 1
+        for target_path in paths:
+            candidate = (
+                _unique_mesh_name(target_path, robot_dir) if has_collision else target_path.name
+            )
+            if candidate in used_staged_names:
+                stem = Path(candidate).stem
+                suffix = Path(candidate).suffix
+                index = 2
+                while f"{stem}__{index}{suffix}" in used_staged_names:
+                    index += 1
+                candidate = f"{stem}__{index}{suffix}"
+            used_staged_names.add(candidate)
+            staged_name_by_source[str(target_path)] = candidate
+
+    for source_path_str, staged_name in staged_name_by_source.items():
+        source_path = Path(source_path_str)
         try:
-            shutil.copy2(source_path, mesh_dir / source_path.name)
+            shutil.copy2(source_path, mesh_dir / staged_name)
         except OSError as exc:
             raise MujocoWorkspaceError(
                 f"MuJoCo MJCF conversion could not stage mesh asset: {source_path.name}"
             ) from exc
+
+    staged_name_by_mjcf_mesh_name = {
+        _mjcf_mesh_name_from_filename(asset.rewritten): staged_name_by_source[str(Path(asset.target_path).resolve())]
+        for asset in bundle_result.bundled
+        if str(Path(asset.target_path).resolve()) in staged_name_by_source
+    }
+    if not staged_name_by_mjcf_mesh_name:
+        return
+    try:
+        root = ET.fromstring(mjcf_path.read_text(encoding="utf-8"))
+    except ET.ParseError:
+        return
+    changed = False
+    for mesh_el in root.findall(".//mesh"):
+        mesh_name = mesh_el.get("name")
+        if not mesh_name:
+            continue
+        staged_name = staged_name_by_mjcf_mesh_name.get(mesh_name)
+        if staged_name is None:
+            continue
+        attr = "file" if mesh_el.get("file") is not None else "filename"
+        if mesh_el.get(attr) == staged_name:
+            continue
+        mesh_el.set(attr, staged_name)
+        changed = True
+    if changed:
+        mjcf_path.write_text(ET.tostring(root, encoding="unicode"), encoding="utf-8")
 
 
 def prepare_mujoco_workspace(
@@ -251,8 +293,16 @@ def prepare_mujoco_workspace(
         error=_mujoco_error,
     )
     try:
-        conversion = convert_urdf_to_mjcf(prepared.robot_urdf_path.read_text(encoding="utf-8"))
-    except (OSError, IluUrdfBridgeError) as exc:
+        return _prepare_mujoco_workspace_inner(prepared)
+    except BaseException:
+        shutil.rmtree(prepared.workspace_dir, ignore_errors=True)
+        raise
+
+
+def _prepare_mujoco_workspace_inner(prepared: PreparedSimulatorWorkspace) -> PreparedMujocoWorkspace:
+    try:
+        conversion = convert_urdf_to_mjcf(prepared.robot_urdf_xml)
+    except IluUrdfBridgeError as exc:
         raise MujocoWorkspaceError(f"MuJoCo MJCF conversion failed: {exc}") from exc
 
     if not conversion.mjcf_content.strip():
@@ -273,51 +323,38 @@ def start_mujoco_workspace(
     *,
     simulator_id: SimulatorId,
     simulator_label: str,
-    workspace_process: SimulatorWorkspaceProcessParams | None = None,
 ) -> SimulatorWorkspacePrepareResponse:
-    runtime_spec = get_simulator_runtime_spec(simulator_id)
-    resolved_workspace_process = workspace_process or _workspace_process_for_mjcf_target(
-        simulator_id
-    )
+    from backend.services.simulator_adapters.plugin import get_plugin
+    plugin = get_plugin(simulator_id)
+    runtime_spec = plugin.as_runtime_spec()
     prepared = prepare_mujoco_workspace(
         request,
         simulator_id=simulator_id,
     )
     shared = prepared.shared_workspace
+    workspace_process = plugin.workspace_process or MUJOCO_WORKSPACE_PROCESS_PARAMS
     return start_prepared_workspace_process(
         runtime_spec=runtime_spec,
         prepared=shared,
         simulator_asset_path=prepared.mjcf_path,
         simulator_asset_flag="--robot-mjcf",
-        workspace_process=resolved_workspace_process,
+        workspace_process=workspace_process,
         error=_mujoco_error,
         simulator_label=simulator_label,
         extra_simulator_args=(
-            "--robot-urdf",
-            str(shared.robot_urdf_path),
-            "--simulator-id",
-            simulator_id,
+            "--robot-urdf", str(shared.robot_urdf_path),
+            "--simulator-id", simulator_id,
         ),
+        launch_id=request.launch_id,
     )
 
 
-class MujocoSimulatorAdapter:
-    simulator_id = MUJOCO_RUNTIME_SPEC.simulator_id
-    label = MUJOCO_RUNTIME_SPEC.label
-    capabilities = MUJOCO_RUNTIME_SPEC.capabilities_model()
-
-    def prepare_workspace(
-        self,
-        request: SimulatorWorkspacePrepareRequest,
-    ) -> SimulatorWorkspacePrepareResponse:
-        return start_mujoco_workspace(
-            request,
-            simulator_id=self.simulator_id,
-            simulator_label=self.label,
-        )
-
-    def runtime_status(self) -> SimulatorRuntimeStatus:
-        return build_simulator_runtime_status(MUJOCO_RUNTIME_SPEC)
-
-
-MUJOCO_SIMULATOR_ADAPTER: SimulatorAdapter = MujocoSimulatorAdapter()
+class MujocoPlugin(MjcfSimulatorPlugin):
+    simulator_id = SIMULATOR_MUJOCO_ID
+    label = "MuJoCo"
+    robot_asset_format = "mjcf"
+    transfer_strategy = "convert"
+    workspace_target = True
+    dependencies = (SimulatorDependencySpec(name="mujoco", import_name="mujoco"),)
+    workspace_process = MUJOCO_WORKSPACE_PROCESS_PARAMS
+    scene_params = MUJOCO_SCENE_PARAMS

@@ -9,9 +9,9 @@ import {
   SIDEBAR_MIN_WIDTH,
 } from "@/features/layout/jointListSidebarParams";
 import {
-  DEFAULT_RECORDING_VIEW_HEIGHT,
-  MIN_EPISODE_VIEWER_PANEL_HEIGHT,
-  MIN_MAIN_VIEWER_PANEL_HEIGHT,
+  DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
+  MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT,
+  MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
 } from "@/features/layout/page/constants";
 
 export const useLayout = () => {
@@ -19,10 +19,14 @@ export const useLayout = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
-  const [recordingViewHeight, setRecordingViewHeight] = useState(DEFAULT_RECORDING_VIEW_HEIGHT);
+  const [leftSidebarTopPanelHeight, setLeftSidebarTopPanelHeight] = useState(
+    DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT
+  );
   const lastSidebarResizePointerDownRef = useRef<{ t: number; x: number } | null>(null);
   const lastRightSidebarResizePointerDownRef = useRef<{ t: number; x: number } | null>(null);
-  const lastExpandedRecordingViewHeightRef = useRef(DEFAULT_RECORDING_VIEW_HEIGHT);
+  const lastExpandedLeftSidebarTopPanelHeightRef = useRef(
+    DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT
+  );
 
   const clampSidebarWidth = useCallback(
     (width: number) => Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)),
@@ -34,17 +38,18 @@ export const useLayout = () => {
     []
   );
 
-  const clampRecordingViewHeight = useCallback((height: number, containerHeight: number) => {
+  const clampLeftSidebarTopPanelHeight = useCallback((height: number, containerHeight: number) => {
     if (!Number.isFinite(height)) {
-      return DEFAULT_RECORDING_VIEW_HEIGHT;
+      return DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT;
     }
     if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
       return Math.min(0.95, Math.max(0.05, height));
     }
-    const minBottomRatio = Math.min(0.95, MIN_EPISODE_VIEWER_PANEL_HEIGHT / containerHeight);
-    const maxBottomRatioFromTop = 1 - MIN_MAIN_VIEWER_PANEL_HEIGHT / containerHeight;
-    const maxBottomRatio = Math.max(minBottomRatio, Math.min(0.95, maxBottomRatioFromTop));
-    return Math.min(maxBottomRatio, Math.max(minBottomRatio, height));
+    const minTopRatio = Math.min(0.95, MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT / containerHeight);
+    const maxTopRatioFromCamera =
+      1 - MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT / containerHeight;
+    const maxTopRatio = Math.max(minTopRatio, Math.min(0.95, maxTopRatioFromCamera));
+    return Math.min(maxTopRatio, Math.max(minTopRatio, height));
   }, []);
 
   const handleSidebarToggle = useCallback(() => {
@@ -159,38 +164,35 @@ export const useLayout = () => {
     [rightSidebarWidth, clampRightSidebarWidth]
   );
 
-  const handleViewerResizeStart = useCallback(
+  const handleLeftSidebarVerticalResizeStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
 
       const startY = event.clientY;
-      const container = event.currentTarget.closest(".flex.flex-col.h-full") as HTMLElement;
+      const container = event.currentTarget.closest(
+        "[data-left-sidebar-split-container='true']"
+      ) as HTMLElement | null;
       if (!container) return;
 
       const containerHeight = container.clientHeight;
       if (containerHeight <= 0) return;
 
       if (event.detail >= 2) {
-        if (recordingViewHeight <= 0.001) {
-          const target = clampRecordingViewHeight(
-            lastExpandedRecordingViewHeightRef.current,
-            containerHeight
-          );
-          setRecordingViewHeight(target);
-          lastExpandedRecordingViewHeightRef.current = target;
-        } else {
-          lastExpandedRecordingViewHeightRef.current = clampRecordingViewHeight(
-            recordingViewHeight,
-            containerHeight
-          );
-          setRecordingViewHeight(0);
-        }
+        const target = clampLeftSidebarTopPanelHeight(
+          DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
+          containerHeight
+        );
+        setLeftSidebarTopPanelHeight(target);
+        lastExpandedLeftSidebarTopPanelHeightRef.current = target;
         return;
       }
 
-      const startHeight = clampRecordingViewHeight(recordingViewHeight, containerHeight);
+      const startHeight = clampLeftSidebarTopPanelHeight(
+        leftSidebarTopPanelHeight,
+        containerHeight
+      );
       const originalCursor = document.body.style.cursor;
       const originalUserSelect = document.body.style.userSelect;
 
@@ -200,9 +202,9 @@ export const useLayout = () => {
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const delta = moveEvent.clientY - startY;
         const deltaRatio = delta / containerHeight;
-        const nextHeight = clampRecordingViewHeight(startHeight - deltaRatio, containerHeight);
-        setRecordingViewHeight(nextHeight);
-        lastExpandedRecordingViewHeightRef.current = nextHeight;
+        const nextHeight = clampLeftSidebarTopPanelHeight(startHeight + deltaRatio, containerHeight);
+        setLeftSidebarTopPanelHeight(nextHeight);
+        lastExpandedLeftSidebarTopPanelHeightRef.current = nextHeight;
       };
 
       const handlePointerUp = () => {
@@ -215,7 +217,7 @@ export const useLayout = () => {
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
     },
-    [recordingViewHeight, clampRecordingViewHeight]
+    [leftSidebarTopPanelHeight, clampLeftSidebarTopPanelHeight]
   );
 
   return {
@@ -227,13 +229,13 @@ export const useLayout = () => {
     setRightSidebarWidth,
     isRightSidebarCollapsed,
     setIsRightSidebarCollapsed,
-    recordingViewHeight,
-    setRecordingViewHeight,
-    clampRecordingViewHeight,
+    leftSidebarTopPanelHeight,
+    setLeftSidebarTopPanelHeight,
+    clampLeftSidebarTopPanelHeight,
     handleSidebarToggle,
     handleRightSidebarToggle,
     handleSidebarResizeStart,
     handleRightSidebarResizeStart,
-    handleViewerResizeStart,
+    handleLeftSidebarVerticalResizeStart,
   };
 };

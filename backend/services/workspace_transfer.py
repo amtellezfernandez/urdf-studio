@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from backend.models.simulator_runtime import (
     SIMULATOR_BLENDER_ID,
-    SIMULATOR_RUNTIME_SPECS,
     SimulatorId,
     SimulatorWorkspacePrepareRequest,
     WorkspaceChangeSetApplyRequest as AdapterWorkspaceChangeSetApplyRequest,
+    validate_simulator_workspace_launch_id,
 )
 from backend.models.workspace_transfer import (
     WorkspaceChangeSetApplyRequest,
     WorkspaceChangeSetApplyResponse,
+    WorkspaceLaunchCancelResponse,
     WorkspaceOpenRequest,
     WorkspaceOpenResponse,
     WorkspaceTransferTargetDescriptor,
@@ -22,10 +23,12 @@ from backend.services.simulator_adapters import (
     apply_simulator_workspace_change_set,
     get_simulator_adapter,
     get_simulator_runtime_status,
+    list_simulator_runtime_specs,
     normalize_simulator_workspace_prepare_request,
     prepare_simulator_workspace,
 )
 from backend.services.simulator_adapters.blender_change_sets import BLENDER_CHANGE_SET_SCHEMA
+from backend.services.simulator_adapters.workspace_launches import cancel_workspace_launch
 
 
 def _adapter_change_set_request(
@@ -45,6 +48,7 @@ def _workspace_open_request(request: WorkspaceOpenRequest) -> SimulatorWorkspace
             mesh_assets=request.mesh_assets,
             package_roots=request.package_roots,
             ilu_session_id=request.ilu_session_id,
+            launch_id=request.launch_id,
         )
     )
 
@@ -56,7 +60,7 @@ def _target_descriptor_for_spec(spec) -> WorkspaceTransferTargetDescriptor:
 
 def list_workspace_transfer_targets() -> WorkspaceTransferTargetListResponse:
     return WorkspaceTransferTargetListResponse(
-        targets=[_target_descriptor_for_spec(spec) for spec in SIMULATOR_RUNTIME_SPECS],
+        targets=[_target_descriptor_for_spec(spec) for spec in list_simulator_runtime_specs()],
     )
 
 
@@ -73,6 +77,24 @@ def open_workspace_transfer_target(
 ) -> WorkspaceOpenResponse:
     return WorkspaceOpenResponse.from_adapter_response(
         prepare_simulator_workspace(target_id, _workspace_open_request(request))
+    )
+
+
+def cancel_workspace_transfer_target_launch(
+    target_id: WorkspaceTransferTargetId,
+    launch_id: str,
+) -> WorkspaceLaunchCancelResponse:
+    normalized_launch_id = validate_simulator_workspace_launch_id(launch_id)
+    result = cancel_workspace_launch(
+        normalized_launch_id,
+        target_id=target_id,
+    )
+    return WorkspaceLaunchCancelResponse.from_cancel_result(
+        target_id=target_id,
+        launch_id=result.launch_id,
+        cancelled=result.cancelled,
+        process_stopped=result.process_stopped,
+        pid=result.pid,
     )
 
 

@@ -2,46 +2,36 @@ from __future__ import annotations
 
 from backend.models.simulator_runtime import (
     SIMULATOR_MJLAB_ID,
-    SimulatorRuntimeDependency,
-    SimulatorRuntimeStatus,
-    SimulatorWorkspacePrepareRequest,
-    SimulatorWorkspacePrepareResponse,
-    get_simulator_runtime_spec,
+    SimulatorDependencySpec,
 )
-from backend.services.simulator_adapters.base import SimulatorAdapter
-from backend.services.simulator_adapters.mujoco import start_mujoco_workspace
-from backend.services.teleop_mjlab import resolve_teleop_mjlab_runtime_status
+from backend.services.simulator_adapters.params import (
+    MJLAB_WORKSPACE_PROCESS_PARAMS,
+    MUJOCO_SCENE_PARAMS,
+)
+from backend.services.simulator_adapters.plugin import MjcfSimulatorPlugin
 
 
-MJLAB_RUNTIME_SPEC = get_simulator_runtime_spec(SIMULATOR_MJLAB_ID)
-
-
-class MjlabSimulatorAdapter:
-    simulator_id = MJLAB_RUNTIME_SPEC.simulator_id
-    label = MJLAB_RUNTIME_SPEC.label
-    capabilities = MJLAB_RUNTIME_SPEC.capabilities_model()
-
-    def prepare_workspace(
-        self,
-        request: SimulatorWorkspacePrepareRequest,
-    ) -> SimulatorWorkspacePrepareResponse:
-        return start_mujoco_workspace(
-            request,
-            simulator_id=self.simulator_id,
-            simulator_label=self.label,
-        )
-
-    def runtime_status(self) -> SimulatorRuntimeStatus:
-        status = resolve_teleop_mjlab_runtime_status()
-        return SimulatorRuntimeStatus(
-            runtimeName=self.simulator_id,
-            available=status.available,
-            status=status.status,
-            dependencies=[
-                SimulatorRuntimeDependency(name=dependency.name, available=dependency.available)
-                for dependency in status.dependencies
-            ],
-        )
-
-
-MJLAB_SIMULATOR_ADAPTER: SimulatorAdapter = MjlabSimulatorAdapter()
+class MjlabPlugin(MjcfSimulatorPlugin):
+    simulator_id = SIMULATOR_MJLAB_ID
+    label = "MJLab"
+    robot_asset_format = "mjcf"
+    transfer_strategy = "convert"
+    workspace_target = True
+    motion_validation = True
+    dependencies = (
+        SimulatorDependencySpec(name="mujoco", import_name="mujoco", scope="workspace"),
+        SimulatorDependencySpec(
+            name="mjlab",
+            import_name="mjlab",
+            required=False,
+            scope="validation",
+        ),
+        SimulatorDependencySpec(
+            name="mujoco_warp",
+            import_name="mujoco_warp",
+            required=False,
+            scope="validation",
+        ),
+    )
+    workspace_process = MJLAB_WORKSPACE_PROCESS_PARAMS
+    scene_params = MUJOCO_SCENE_PARAMS

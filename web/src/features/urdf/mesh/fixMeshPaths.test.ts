@@ -63,9 +63,11 @@ describe("fixMeshPaths", () => {
   });
 
   it("preserves file:// absolute paths", () => {
-    const urdf = BASE_URDF("file:///home/user/meshes/arm.stl");
+    const urdf = BASE_URDF("file:///opt/robot-assets/meshes/arm.stl");
     const result = fixMeshPaths(urdf);
-    expect(result.urdfContent).toContain('mesh filename="file:///home/user/meshes/arm.stl"');
+    expect(result.urdfContent).toContain(
+      'mesh filename="file:///opt/robot-assets/meshes/arm.stl"'
+    );
   });
 
   it("normalizes file:// relative paths", () => {
@@ -105,9 +107,11 @@ describe("fixMeshPaths", () => {
   });
 
   it("keeps absolute file:// paths intact even with duplicate slashes", () => {
-    const urdf = BASE_URDF("file:////home/user//meshes///arm.stl");
+    const urdf = BASE_URDF("file:////opt/robot-assets//meshes///arm.stl");
     const result = fixMeshPaths(urdf);
-    expect(result.urdfContent).toContain('mesh filename="file:///home/user/meshes/arm.stl"');
+    expect(result.urdfContent).toContain(
+      'mesh filename="file:///opt/robot-assets/meshes/arm.stl"'
+    );
   });
 
   it("fixes duplicate meshes consistently (visual + collision)", () => {

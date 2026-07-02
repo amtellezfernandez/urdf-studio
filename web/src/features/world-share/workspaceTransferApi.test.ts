@@ -4,6 +4,7 @@ import {
   applyWorkspaceTransferTargetChangeSet,
   applyWorkspaceChangeSet,
   buildWorkspaceTransferMeshAssetUploads,
+  cancelWorkspaceTransferTargetLaunch,
   fetchWorkspaceTransferTargetStatus,
   fetchWorkspaceTransferTargets,
   openWorkspaceTransferTarget,
@@ -80,6 +81,7 @@ describe("workspaceTransferApi", () => {
 
     const prepared = await openWorkspaceTransferTarget({
       targetId: "genesis",
+      launchId: "launch-123",
       worldPackage: createWorldPackage(),
       meshFiles: {},
       targetLabel: "Genesis",
@@ -91,7 +93,8 @@ describe("workspaceTransferApi", () => {
     expect(prepared.cameraCount).toBe(2);
     const requestBody = JSON.parse(
       guardedFetchMock.mock.calls[0][1].body as string
-    ) as { world_package: WorldScenePackageManifest };
+    ) as { launch_id: string; world_package: WorldScenePackageManifest };
+    expect(requestBody.launch_id).toBe("launch-123");
     expect(requestBody.world_package.artifacts).toContainEqual(expect.objectContaining({
       kind: "world_snapshot",
       digest_sha256: await computeWorldSnapshotDigest(requestBody.world_package.world_snapshot),
@@ -104,6 +107,70 @@ describe("workspaceTransferApi", () => {
       {
         requiredBackends: ["core-api"],
         context: "Open Genesis",
+      }
+    );
+  });
+
+  it("passes an abort signal to the workspace transfer open request", async () => {
+    guardedFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          targetId: "genesis",
+          started: true,
+          pid: 1234,
+          command: ["python", "-m", "backend.scripts.genesis_workspace_prepare"],
+          worldPackagePath: "/tmp/world-package.json",
+          robotUrdfPath: "/tmp/robot.urdf",
+          bundledMeshCount: 0,
+          unresolvedMeshRefs: [],
+          worldObjectCount: 0,
+          cameraCount: 0,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const controller = new AbortController();
+
+    await openWorkspaceTransferTarget({
+      targetId: "genesis",
+      worldPackage: createWorldPackage(),
+      meshFiles: {},
+      targetLabel: "Genesis",
+      signal: controller.signal,
+    });
+
+    expect(guardedFetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it("cancels a workspace transfer launch through the target endpoint", async () => {
+    guardedFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          targetId: "genesis",
+          launchId: "launch-123",
+          cancelled: true,
+          processStopped: true,
+          pid: 1234,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const response = await cancelWorkspaceTransferTargetLaunch({
+      targetId: "genesis",
+      launchId: "launch-123",
+      targetLabel: "Genesis",
+    });
+
+    expect(response.processStopped).toBe(true);
+    expect(guardedFetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/workspace-transfer/targets/genesis/launches/launch-123/cancel"),
+      expect.objectContaining({
+        method: "POST",
+      }),
+      {
+        requiredBackends: ["core-api"],
+        context: "Stop opening Genesis",
       }
     );
   });
@@ -203,12 +270,59 @@ describe("workspaceTransferApi", () => {
     expect(uploads[0].path).toBe("meshes/base.stl");
   });
 
-  it("rejects host-absolute browser mesh upload paths", async () => {
+  it("normalizes singular root-relative URDF mesh directory paths", async () => {
+    const mesh = new Blob(["solid standoff\nendsolid standoff\n"], { type: "model/stl" });
+
+    const uploads = await buildWorkspaceTransferMeshAssetUploads({
+      "/mesh/94868A713_NO-THREADS_Female-Threaded-Hex-Standoff.stl": mesh,
+    });
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].path).toBe("mesh/94868A713_NO-THREADS_Female-Threaded-Hex-Standoff.stl");
+  });
+
+  it.each([
+    [
+      "/models/94868A713_NO-THREADS_Female-Threaded-Hex-Standoff.stl",
+      "models/94868A713_NO-THREADS_Female-Threaded-Hex-Standoff.stl",
+    ],
+    ["/visual/base.stl", "visual/base.stl"],
+    ["/cad/vendor/bracket.obj", "cad/vendor/bracket.obj"],
+  ])("normalizes archive-root mesh upload path %s", async (path, expectedPath) => {
+    const mesh = new Blob(["solid asset\nendsolid asset\n"], { type: "model/stl" });
+
+    const uploads = await buildWorkspaceTransferMeshAssetUploads({
+      [path]: mesh,
+    });
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].path).toBe(expectedPath);
+  });
+
+  it("normalizes flat root-relative URDF mesh upload paths", async () => {
+    const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
+
+    const uploads = await buildWorkspaceTransferMeshAssetUploads({
+      "/94868A713_NO-THREADS_Female-Threaded-Hex-Standoff.stl": mesh,
+    });
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].path).toBe("94868A713_NO-THREADS_Female-Threaded-Hex-Standoff.stl");
+  });
+
+  it.each([
+    "/tmp/base.stl",
+    "/home/__USER__/base.stl",
+    "/Users/__USER__/base.stl",
+    "//server/share/base.stl",
+    "\\\\server\\share\\base.stl",
+    "C:\\tmp\\base.stl",
+  ])("rejects host-absolute browser mesh upload path %s", async (path) => {
     const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
 
     await expect(
       buildWorkspaceTransferMeshAssetUploads({
-        "/tmp/base.stl": mesh,
+        [path]: mesh,
       })
     ).rejects.toThrow("Workspace mesh asset path must be portable relative");
   });

@@ -5,14 +5,6 @@ from pathlib import Path
 from typing import TypeAlias
 
 from backend.core.paths import BASE_DIR
-from backend.models.simulator_runtime import (
-    SIMULATOR_BLENDER_ID,
-    SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
-    SIMULATOR_MUJOCO_ID,
-    SIMULATOR_PYBULLET_ID,
-    SimulatorId,
-)
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 
 
@@ -231,17 +223,26 @@ BLENDER_SCENE_PARAMS = BlenderSceneParams(
     workspace_mode="visual-layout-round-trip-v1",
 )
 
-SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID: dict[SimulatorId, SimulatorWorkspaceProcessParams] = {
-    SIMULATOR_GENESIS_ID: GENESIS_WORKSPACE_PROCESS_PARAMS,
-    SIMULATOR_MJLAB_ID: MJLAB_WORKSPACE_PROCESS_PARAMS,
-    SIMULATOR_MUJOCO_ID: MUJOCO_WORKSPACE_PROCESS_PARAMS,
-    SIMULATOR_PYBULLET_ID: PYBULLET_WORKSPACE_PROCESS_PARAMS,
-    SIMULATOR_BLENDER_ID: BLENDER_WORKSPACE_PROCESS_PARAMS,
-}
-SIMULATOR_SCENE_PARAMS_BY_ID: dict[SimulatorId, SimulatorSceneParams] = {
-    SIMULATOR_GENESIS_ID: GENESIS_SCENE_PARAMS,
-    SIMULATOR_MJLAB_ID: MUJOCO_SCENE_PARAMS,
-    SIMULATOR_MUJOCO_ID: MUJOCO_SCENE_PARAMS,
-    SIMULATOR_PYBULLET_ID: PYBULLET_SCENE_PARAMS,
-    SIMULATOR_BLENDER_ID: BLENDER_SCENE_PARAMS,
-}
+
+def __getattr__(name: str) -> object:
+    if name == "SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID":
+        import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
+        from backend.services.simulator_adapters.plugin import get_workspace_plugins
+        result = {
+            p.simulator_id: p.workspace_process
+            for p in get_workspace_plugins()
+            if p.workspace_process is not None
+        }
+        globals()["SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID"] = result
+        return result
+    if name == "SIMULATOR_SCENE_PARAMS_BY_ID":
+        import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
+        from backend.services.simulator_adapters.plugin import get_workspace_plugins
+        result = {
+            p.simulator_id: p.scene_params
+            for p in get_workspace_plugins()
+            if hasattr(p, "scene_params")
+        }
+        globals()["SIMULATOR_SCENE_PARAMS_BY_ID"] = result
+        return result
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

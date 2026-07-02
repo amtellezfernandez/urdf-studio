@@ -236,6 +236,12 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
             import bpy
 
             SESSION_PATH = Path({str(edit_session_path)!r})
+            GLB_Y_UP_TO_URDF_Z_UP_QUAT_WXYZ = (
+                math.sqrt(0.5),
+                -math.sqrt(0.5),
+                0.0,
+                0.0,
+            )
 
 
             def clear_scene():
@@ -591,6 +597,17 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 return rendered
 
 
+            def clear_parent_inverse(obj):
+                parent_inverse = getattr(obj, "matrix_parent_inverse", None)
+                identity = getattr(parent_inverse, "identity", None)
+                if identity is None:
+                    return
+                try:
+                    identity()
+                except Exception:
+                    return
+
+
             def lock_robot_object(obj, root=None):
                 obj["urdf_studio_kind"] = "robot_reference"
                 obj["urdf_studio_locked"] = True
@@ -601,6 +618,21 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 obj.lock_scale = (True, True, True)
                 if root is not None and obj is not root and obj.parent is None:
                     obj.parent = root
+                    clear_parent_inverse(obj)
+
+
+            def apply_robot_visual_root_transform(root, status):
+                if status != "glb":
+                    return
+                root.rotation_mode = "QUATERNION"
+                root.rotation_quaternion = GLB_Y_UP_TO_URDF_Z_UP_QUAT_WXYZ
+                root["urdf_studio_robot_visual_axis_correction"] = "glb_y_up_to_urdf_z_up"
+                update = getattr(getattr(bpy.context, "view_layer", None), "update", None)
+                if update is not None:
+                    try:
+                        update()
+                    except Exception:
+                        pass
 
 
             def import_visual_file(root, path, importer, status):
@@ -623,6 +655,7 @@ def build_blender_open_script(*, edit_session_path: Path) -> str:
                 imported = [obj for obj in bpy.data.objects if obj not in before_import]
                 for obj in imported:
                     lock_robot_object(obj, root)
+                apply_robot_visual_root_transform(root, status)
                 root["urdf_studio_robot_visual_status"] = f"{{status}}_imported"
                 root["urdf_studio_robot_visual_object_count"] = len(imported)
                 root["urdf_studio_robot_visual_path"] = str(path)

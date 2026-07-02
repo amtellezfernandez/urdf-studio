@@ -1004,10 +1004,12 @@ export const CoreFolderUploadScreen = ({
           <Button
             onClick={handlePlayDemoMotionClick}
             size="sm"
-            className="h-7 min-w-[170px] rounded-md border border-[#ff63d5]/25 bg-[#ff63d5]/[0.06] px-3 text-xs text-foreground hover:bg-[#ff63d5]/[0.1]"
+            className="h-9 min-w-[170px] rounded-md border border-border/70 bg-background/60 px-3 text-xs font-medium text-foreground shadow-none hover:border-border hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Play className="mr-1.5 h-3.5 w-3.5" />
-            Play Sample Motion
+            <span className="mr-2 inline-flex h-4 w-4 items-center justify-center text-muted-foreground">
+              <Play className="h-3.5 w-3.5" />
+            </span>
+            <span>Play Sample Motion</span>
           </Button>
         </div>
       </div>

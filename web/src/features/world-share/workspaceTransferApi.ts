@@ -21,6 +21,7 @@ export type WorkspaceOpenResponse = {
   started: boolean;
   pid: number;
   command: string[];
+  launchMode?: "interactive_viewer" | "headless_check";
   logPath?: string | null;
   worldPackagePath: string;
   robotUrdfPath: string;
@@ -32,11 +33,24 @@ export type WorkspaceOpenResponse = {
   cameraCount: number;
 };
 
+export type WorkspaceLaunchCancelResponse = {
+  targetId: WorkspaceTransferTargetId;
+  launchId: string;
+  cancelled: boolean;
+  processStopped: boolean;
+  pid?: number | null;
+};
+
 export type WorkspaceTransferTargetStatus = {
   targetId: WorkspaceTransferTargetId;
   available: boolean;
   status: string;
-  dependencies: { name: string; available: boolean }[];
+  dependencies: {
+    name: string;
+    available: boolean;
+    required?: boolean;
+    scope?: "workspace" | "validation" | "runtime";
+  }[];
 };
 
 export type WorkspaceTransferTargetListResponse = {
@@ -52,12 +66,24 @@ export type WorkspaceChangeSetApplyResponse = {
 
 export type OpenWorkspaceTransferTargetParams = {
   targetId: WorkspaceTransferTargetId;
+  launchId?: string | null;
   worldPackage: WorldScenePackageManifest;
   urdfAssetPath?: string | null;
   meshFiles: Record<string, Blob>;
   packageRoots?: Record<string, string[]>;
   iluSessionId?: string | null;
   targetLabel?: string | null;
+  signal?: AbortSignal;
+};
+
+export type CancelWorkspaceTransferTargetLaunchParams = {
+  targetId: WorkspaceTransferTargetId;
+  launchId: string;
+  targetLabel?: string | null;
+};
+
+type WorkspaceTransferAbortOptions = {
+  signal?: AbortSignal;
 };
 
 const workspaceTransferTargetPath = (
@@ -66,6 +92,32 @@ const workspaceTransferTargetPath = (
 ): string => `${workspaceTransferBasePath()}/targets/${targetId}${path}`;
 
 const workspaceTransferBasePath = (): string => "/workspace-transfer";
+
+const HOST_ABSOLUTE_ROOT_SEGMENTS = new Set([
+  "applications",
+  "bin",
+  "boot",
+  "dev",
+  "etc",
+  "home",
+  "library",
+  "media",
+  "mnt",
+  "opt",
+  "private",
+  "proc",
+  "program files",
+  "root",
+  "run",
+  "sbin",
+  "sys",
+  "system",
+  "tmp",
+  "users",
+  "usr",
+  "var",
+  "volumes",
+]);
 
 const loadWorldScenePackageBuilderModule = () =>
   import("@/features/world-share/worldScenePackageBuilder");
@@ -89,11 +141,17 @@ const normalizeUploadPath = (
 ): string | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
+  if (trimmed.startsWith("//")) return null;
+  if (trimmed.startsWith("\\\\")) return null;
   const slashNormalized = trimmed.replace(/\\/g, "/").replace(/\/+/g, "/");
   if (slashNormalized.startsWith("/")) {
     if (!allowRootRelativeAsset) return null;
     const rootRelative = slashNormalized.replace(/^\/+/, "");
-    if (!rootRelative.startsWith("meshes/") && !rootRelative.startsWith("assets/")) {
+    const [firstSegment] = rootRelative.split("/");
+    if (
+      !firstSegment ||
+      HOST_ABSOLUTE_ROOT_SEGMENTS.has(firstSegment.toLowerCase())
+    ) {
       return null;
     }
     return normalizeUploadPath(rootRelative);
@@ -141,7 +199,7 @@ const buildAssetAliases = (
         );
       }
     });
-    if (normalizedPath.startsWith("meshes/") || normalizedPath.startsWith("assets/")) {
+    if (normalizedPath.includes("/")) {
       addAlias(aliases, `${normalizedPackageName}/${normalizedPath}`);
     }
   });
@@ -159,12 +217,29 @@ const blobToBase64 = async (blob: Blob): Promise<string> => {
   return btoa(binary);
 };
 
+const createWorkspaceTransferAbortError = (): Error => {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException("Workspace transfer cancelled.", "AbortError");
+  }
+  const error = new Error("Workspace transfer cancelled.");
+  error.name = "AbortError";
+  return error;
+};
+
+const throwIfWorkspaceTransferAborted = (signal?: AbortSignal): void => {
+  if (signal?.aborted) {
+    throw createWorkspaceTransferAbortError();
+  }
+};
+
 export const buildWorkspaceTransferMeshAssetUploads = async (
   meshFiles: Record<string, Blob>,
-  packageRoots?: Record<string, string[]>
+  packageRoots?: Record<string, string[]>,
+  options: WorkspaceTransferAbortOptions = {}
 ): Promise<WorkspaceTransferMeshAssetUpload[]> => {
   const pathsByBlob = new Map<Blob, Set<string>>();
   const blobByAlias = new Map<string, Blob>();
+  throwIfWorkspaceTransferAborted(options.signal);
 
   Object.entries(meshFiles).forEach(([path, blob]) => {
     const aliases = buildAssetAliases(path, packageRoots);
@@ -180,12 +255,15 @@ export const buildWorkspaceTransferMeshAssetUploads = async (
 
   return Promise.all(
     [...pathsByBlob.entries()].map(async ([blob, paths]) => {
+      throwIfWorkspaceTransferAborted(options.signal);
       const sortedPaths = [...paths].sort((left, right) => left.localeCompare(right));
       const [path, ...aliases] = sortedPaths;
+      const contentBase64 = await blobToBase64(blob);
+      throwIfWorkspaceTransferAborted(options.signal);
       return {
         path,
         aliases: aliases.slice(0, WORKSPACE_TRANSFER_PARAMS.maxAssetAliases),
-        content_base64: await blobToBase64(blob),
+        content_base64: contentBase64,
         mime: blob.type || null,
       };
     })
@@ -206,15 +284,21 @@ const readErrorDetail = async (response: Response): Promise<string> => {
 
 export const openWorkspaceTransferTarget = async ({
   targetId,
+  launchId,
   worldPackage,
   urdfAssetPath,
   meshFiles,
   packageRoots,
   iluSessionId,
   targetLabel,
+  signal,
 }: OpenWorkspaceTransferTargetParams): Promise<WorkspaceOpenResponse> => {
-  const meshAssets = await buildWorkspaceTransferMeshAssetUploads(meshFiles, packageRoots);
+  const meshAssets = await buildWorkspaceTransferMeshAssetUploads(meshFiles, packageRoots, {
+    signal,
+  });
+  throwIfWorkspaceTransferAborted(signal);
   const transferWorldPackage = await refreshWorkspaceWorldPackageDigest(worldPackage);
+  throwIfWorkspaceTransferAborted(signal);
   const response = await guardedFetch(
     `${API_BASE_URL}${workspaceTransferTargetPath(targetId, "/open")}`,
     {
@@ -223,12 +307,14 @@ export const openWorkspaceTransferTarget = async ({
         Accept: "application/json",
         "Content-Type": "application/json",
       },
+      signal,
       body: JSON.stringify({
         world_package: transferWorldPackage,
         urdf_asset_path: urdfAssetPath || undefined,
         mesh_assets: meshAssets,
         package_roots: packageRoots ?? {},
         ilu_session_id: iluSessionId || undefined,
+        launch_id: launchId || undefined,
       }),
     },
     {
@@ -241,6 +327,34 @@ export const openWorkspaceTransferTarget = async ({
     throw new Error(detail || `${targetId} workspace open failed (${response.status})`);
   }
   return (await response.json()) as WorkspaceOpenResponse;
+};
+
+export const cancelWorkspaceTransferTargetLaunch = async ({
+  targetId,
+  launchId,
+  targetLabel,
+}: CancelWorkspaceTransferTargetLaunchParams): Promise<WorkspaceLaunchCancelResponse> => {
+  const response = await guardedFetch(
+    `${API_BASE_URL}${workspaceTransferTargetPath(
+      targetId,
+      `/launches/${encodeURIComponent(launchId)}/cancel`
+    )}`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+    {
+      requiredBackends: ["core-api"],
+      context: `Stop opening ${formatTargetName(targetId, targetLabel)}`,
+    }
+  );
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new Error(detail || `${targetId} workspace stop failed (${response.status})`);
+  }
+  return (await response.json()) as WorkspaceLaunchCancelResponse;
 };
 
 export const applyWorkspaceTransferTargetChangeSet = async (

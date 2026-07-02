@@ -1323,6 +1323,21 @@ def test_generated_blender_scripts_round_trip_with_fake_bpy(monkeypatch, tmp_pat
     assert len(world_objects) == 1
     assert len(camera_objects) == 1
     assert camera_objects[0].data.angle > 0.0
+    robot_root = next(
+        obj for obj in fake_bpy.data.objects if obj.name == "robot_urdf_locked_reference"
+    )
+    robot_root_quat = robot_root.rotation_quaternion
+    assert math.isclose(robot_root_quat.w, math.sqrt(0.5), abs_tol=1e-9)
+    assert math.isclose(robot_root_quat.x, -math.sqrt(0.5), abs_tol=1e-9)
+    assert math.isclose(robot_root_quat.y, 0.0, abs_tol=1e-9)
+    assert math.isclose(robot_root_quat.z, 0.0, abs_tol=1e-9)
+    assert robot_root["urdf_studio_robot_visual_axis_correction"] == "glb_y_up_to_urdf_z_up"
+    robot_visual_children = [
+        obj
+        for obj in fake_bpy.data.objects
+        if obj.parent is robot_root and obj.get("fake_import_path")
+    ]
+    assert len(robot_visual_children) == 1
 
     world_objects[0].location = [1.0, 2.0, 3.0]
     world_objects[0].scale = [0.5, 0.6, 0.7]
@@ -1949,7 +1964,8 @@ def test_blender_workspace_runner_prefers_x11_on_wsl_processes(
 def test_blender_runtime_status_reports_missing_executable(monkeypatch) -> None:
     monkeypatch.setattr(blender_adapter, "resolve_blender_executable", lambda: None)
 
-    status = blender_adapter.BLENDER_SIMULATOR_ADAPTER.runtime_status()
+    from backend.services.simulator_adapters.plugin import get_plugin
+    status = get_plugin(SIMULATOR_BLENDER_ID).runtime_status()
 
     assert status.runtime_name == SIMULATOR_BLENDER_ID
     assert status.available is False

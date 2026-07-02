@@ -1,14 +1,14 @@
 import { memo, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUpRight, ChevronsRight, Cuboid, LoaderCircle, Minus } from "lucide-react";
+import { ArrowUpRight, ChevronsRight, LoaderCircle, Minus, X } from "lucide-react";
 import { CameraPreviewPanel } from "@/features/layout/panels/CameraPreviewPanel";
 import type { MeshFiles } from "@/shared/types/feature";
 import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import type { AssemblyInspectorData } from "@/features/assembly/inspector/buildAssemblyInspectorData";
 import type {
-  HealthActionPanelWorkspaceTransferState,
+  WorkspaceTransferState,
   WorkspaceTransferTargetState,
-} from "@/features/layout/page/HealthActionPanelWorkspaceTransfer";
+} from "@/features/layout/page/workspaceTransferState";
 import { formatWorkspaceTransferAssetLabel } from "@/features/layout/page/workspaceTransferLabels";
 import { AssemblyLeftUnionPanel } from "@/features/assembly/workspace/AssemblyLeftUnionPanel";
 import { SIDEBAR_MIN_WIDTH } from "@/features/layout/jointListSidebarParams";
@@ -52,40 +52,53 @@ type LeftSidebarPanelProps = {
   isSidebarCollapsed: boolean;
   onToggleCollapse: () => void;
   meshFiles: MeshFiles;
+  topPanelHeight: number;
+  onVerticalResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onSidebarResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   urdfBasePath?: string;
   packageRoots?: PackageRootMap;
   cameraPreviewEmptyStateMessage?: string;
-  workspaceTransfer?: HealthActionPanelWorkspaceTransferState | null;
+  workspaceTransfer?: WorkspaceTransferState | null;
   workspaceLauncherNeedsAttention?: boolean;
   workspaceLauncherStatusLabel?: string;
   onOpenWorkspaceLauncher?: () => void;
 };
 
 const resolveSidebarWorkspaceTargets = (
-  workspaceTransfer: HealthActionPanelWorkspaceTransferState | null | undefined
+  workspaceTransfer: WorkspaceTransferState | null | undefined
 ): WorkspaceTransferTargetState[] => {
   return workspaceTransfer?.targets ?? [];
 };
 
 const getWorkspaceTransferBadgeClassName = (target: WorkspaceTransferTargetState) =>
   cn(
-    "max-w-14 truncate rounded-sm border px-1 py-0.5 text-[8px] leading-none",
+    "max-w-14 truncate rounded-[3px] border px-1.5 py-0.5 text-[8px] font-medium leading-none",
     target.transferStrategy === "planned"
-      ? "border-neutral-700/70 bg-neutral-900/70 text-neutral-400"
+      ? "border-border/35 bg-transparent text-muted-foreground/70"
       : target.createsTransferAsset
-        ? "border-border/45 bg-background/35 text-muted-foreground"
-        : "border-border/45 bg-background/35 text-foreground/80"
+        ? "border-border/45 bg-background/20 text-muted-foreground"
+        : "border-border/45 bg-background/25 text-foreground/75"
   );
 
 const getWorkspaceTransferTargetClassName = (target: WorkspaceTransferTargetState) =>
   cn(
-    "flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left transition-colors",
+    "group flex min-h-7 w-full min-w-0 items-center gap-2 border-b border-border/25 px-2 py-1 text-left transition-colors last:border-b-0",
     target.canOpen
-      ? "border-border/60 bg-background/55 text-foreground hover:border-border hover:bg-muted/35"
-      : "border-border/35 bg-muted/15 text-muted-foreground/70",
-    target.isActive && "border-slate-500/70 bg-slate-700/25 text-slate-100",
-    (!target.canOpen || target.isBusy) && "disabled:cursor-not-allowed disabled:opacity-100"
+      ? "text-foreground hover:bg-muted/20"
+      : "text-muted-foreground/70",
+    target.isActive && "bg-muted/25 text-foreground",
+    !target.canOpen && "disabled:cursor-not-allowed disabled:opacity-100",
+    target.isBusy && "bg-muted/20"
+  );
+
+const getWorkspaceTransferStatusDotClassName = (target: WorkspaceTransferTargetState) =>
+  cn(
+    "h-1.5 w-1.5 shrink-0 rounded-full",
+    target.isBusy
+      ? "bg-sky-300"
+      : target.canOpen
+        ? "bg-emerald-300/80"
+        : "bg-muted-foreground/40"
   );
 
 const WorkspaceTransferTargetButton = ({
@@ -93,37 +106,47 @@ const WorkspaceTransferTargetButton = ({
 }: {
   target: WorkspaceTransferTargetState;
 }) => {
-  const title = `${target.detail}. ${target.transferDescription} Status: ${target.statusLabel}.`;
+  const title =
+    target.isBusy && target.onCancel
+      ? target.cancelLabel ?? `Stop opening ${target.label}`
+      : `${target.detail}. ${target.transferDescription} Status: ${target.statusLabel}.`;
   return (
     <button
       type="button"
-      onClick={target.onAction}
-      disabled={!target.canOpen || target.isBusy}
+      onClick={target.isBusy && target.onCancel ? target.onCancel : target.onAction}
+      disabled={!target.canOpen}
       className={getWorkspaceTransferTargetClassName(target)}
-      aria-label={target.canOpen ? target.openLabel : target.disabledLabel}
+      aria-label={
+        target.canOpen
+          ? target.isBusy
+            ? target.cancelLabel ?? `Stop opening ${target.label}`
+            : target.openLabel
+          : target.disabledLabel
+      }
       title={title}
     >
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-border/40 bg-background/45 text-muted-foreground">
-        {target.isBusy ? (
-          <LoaderCircle className="h-2.5 w-2.5 animate-spin" aria-hidden="true" />
-        ) : (
-          <Cuboid className="h-2.5 w-2.5" aria-hidden="true" />
-        )}
-      </span>
-      <span className="flex min-w-0 flex-1 items-center justify-between gap-1">
-        <span className="min-w-0 truncate text-[9px] font-medium leading-tight">
-          {target.isBusy ? target.openingLabel : target.label}
-        </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1">
-          <span className={getWorkspaceTransferBadgeClassName(target)}>
-            {formatWorkspaceTransferAssetLabel(target)}
+      <span className={getWorkspaceTransferStatusDotClassName(target)} aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          {target.isBusy ? (
+            <LoaderCircle className="h-2.5 w-2.5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+          ) : null}
+          <span className="min-w-0 truncate text-[10px] font-medium leading-tight">
+            {target.isBusy ? target.openingLabel : target.label}
           </span>
-          {target.canOpen ? (
-            <ArrowUpRight className="h-2.5 w-2.5 text-muted-foreground/65" aria-hidden="true" />
-          ) : (
-            <Minus className="h-2.5 w-2.5 text-muted-foreground/45" aria-hidden="true" />
-          )}
         </span>
+      </span>
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span className={getWorkspaceTransferBadgeClassName(target)}>
+          {formatWorkspaceTransferAssetLabel(target)}
+        </span>
+        {target.isBusy && target.onCancel ? (
+          <X className="h-3 w-3 text-muted-foreground/65 transition-colors group-hover:text-foreground" aria-hidden="true" />
+        ) : target.canOpen ? (
+          <ArrowUpRight className="h-3 w-3 text-muted-foreground/55 transition-colors group-hover:text-foreground" aria-hidden="true" />
+        ) : (
+          <Minus className="h-3 w-3 text-muted-foreground/40" aria-hidden="true" />
+        )}
       </span>
     </button>
   );
@@ -145,6 +168,8 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
     isSidebarCollapsed,
     onToggleCollapse,
     meshFiles,
+    topPanelHeight,
+    onVerticalResizeStart,
     onSidebarResizeStart,
     urdfBasePath,
     packageRoots,
@@ -192,6 +217,7 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
       CollapseIcon={ChevronsRight}
     >
       <div
+        data-left-sidebar-split-container="true"
         className="sidebar-panel fixed left-0 z-30 flex flex-col border-r border-border/35 bg-[hsl(var(--sidebar-bg))] shadow-xl backdrop-blur-sm transition-transform duration-200 ease-out"
         style={{
           width: sidebarWidth,
@@ -203,53 +229,68 @@ const LeftSidebarPanelBase = (props: LeftSidebarPanelProps) => {
         }}
         aria-hidden={isSidebarCollapsed}
       >
-        <div className="shrink-0 border-b border-border/40 p-2">
-          <div className="rounded-md border border-border/60 bg-background/55 p-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Open In
+        <div
+          className="min-h-0 shrink-0 overflow-hidden border-b border-border/25"
+          style={{ flexBasis: `${topPanelHeight * 100}%` }}
+        >
+          <div className="flex h-full min-h-0 flex-col p-2">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/45 bg-background/45">
+              <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/30 px-2 py-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Open In
+                  </div>
+                  <div className="mt-1 truncate text-xs text-foreground">
+                    Simulators + tools
+                  </div>
+                  <div className="mt-0.5 truncate text-[9px] text-muted-foreground">
+                    {workspaceTargetSummary}
+                  </div>
                 </div>
-                <div className="mt-1 truncate text-xs text-foreground">
-                  Simulators + tools
-                </div>
-                <div className="mt-0.5 truncate text-[9px] text-muted-foreground">
-                  {workspaceTargetSummary}
-                </div>
+                <button
+                  type="button"
+                  onClick={onOpenWorkspaceLauncher}
+                  disabled={!onOpenWorkspaceLauncher}
+                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border/55 bg-background/35 px-2 text-[10px] font-medium text-foreground transition-colors hover:border-border/80 hover:bg-muted/25 disabled:cursor-not-allowed disabled:opacity-45"
+                  aria-label="Open In"
+                  title={
+                    workspaceLauncherStatusLabel
+                      ? `Open In: ${workspaceLauncherStatusLabel}`
+                      : "Open In"
+                  }
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      workspaceLauncherNeedsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
+                    }`}
+                  />
+                  <ArrowUpRight className="h-3 w-3" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={onOpenWorkspaceLauncher}
-                disabled={!onOpenWorkspaceLauncher}
-                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
-                aria-label="Open In"
-                title={
-                  workspaceLauncherStatusLabel
-                    ? `Open In: ${workspaceLauncherStatusLabel}`
-                    : "Open In"
-                }
-              >
-                <span
-                  aria-hidden="true"
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    workspaceLauncherNeedsAttention ? "bg-amber-300/90" : "bg-emerald-300/80"
-                  }`}
-                />
-                <ArrowUpRight className="h-3 w-3" />
-              </button>
+              {workspaceTargets.length > 0 ? (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {workspaceTargets.map((target) => (
+                    <WorkspaceTransferTargetButton key={target.id} target={target} />
+                  ))}
+                </div>
+              ) : (
+                <div className="px-2 py-2 text-[9px] leading-snug text-muted-foreground">
+                  Start the backend to list compatible simulators and tools.
+                </div>
+              )}
             </div>
-            {workspaceTargets.length > 0 ? (
-              <div className="mt-2 max-h-80 space-y-0.5 overflow-y-auto pr-0.5">
-                {workspaceTargets.map((target) => (
-                  <WorkspaceTransferTargetButton key={target.id} target={target} />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-2 rounded-md border border-dashed border-border/45 bg-muted/15 px-2 py-1.5 text-[9px] leading-snug text-muted-foreground">
-                Start the backend to list compatible simulators and tools.
-              </div>
-            )}
           </div>
+        </div>
+        <div
+          onPointerDown={onVerticalResizeStart}
+          className="group relative z-10 h-2 shrink-0 cursor-row-resize bg-border/15 transition-colors hover:bg-border/35"
+          title="Drag to resize cameras"
+          aria-label="Resize cameras panel"
+          role="separator"
+          aria-orientation="horizontal"
+        >
+          <div className="absolute inset-x-0 top-1/2 mx-auto h-0.5 w-12 -translate-y-1/2 rounded-full bg-border/45 transition-colors group-hover:bg-border/80" />
         </div>
         <div className="min-h-0 flex-1">
           <CameraPreviewPanel

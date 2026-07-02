@@ -54,9 +54,12 @@ type LeftSidebarWorkflowParams = {
   isSidebarCollapsed: LeftSidebarProps["isSidebarCollapsed"];
   onToggleSidebarCollapse: LeftSidebarProps["onToggleCollapse"];
   meshFiles: LeftSidebarProps["meshFiles"];
+  leftSidebarTopPanelHeight: LeftSidebarProps["topPanelHeight"];
+  onLeftSidebarVerticalResizeStart: LeftSidebarProps["onVerticalResizeStart"];
   onSidebarResizeStart: LeftSidebarProps["onSidebarResizeStart"];
   urdfBasePath: LeftSidebarProps["urdfBasePath"];
   packageRoots: LeftSidebarProps["packageRoots"];
+  workspaceTransfer: LeftSidebarProps["workspaceTransfer"];
 };
 
 type ViewerPaneParams = {
@@ -167,10 +170,12 @@ const buildLeftSidebarProps = (params: UseIndexPageLayoutPropsParams): LeftSideb
   isSidebarCollapsed: params.isSidebarCollapsed,
   onToggleCollapse: params.onToggleSidebarCollapse,
   meshFiles: params.meshFiles,
+  topPanelHeight: params.leftSidebarTopPanelHeight,
+  onVerticalResizeStart: params.onLeftSidebarVerticalResizeStart,
   onSidebarResizeStart: params.onSidebarResizeStart,
   urdfBasePath: params.urdfBasePath,
   packageRoots: params.packageRoots,
-  workspaceTransfer: params.healthActionPanelProps.workspaceTransfer,
+  workspaceTransfer: params.workspaceTransfer,
   workspaceLauncherNeedsAttention: params.topNavBarProps.workspaceLauncherNeedsAttention,
   workspaceLauncherStatusLabel: params.topNavBarProps.workspaceLauncherStatusLabel,
   onOpenWorkspaceLauncher: params.topNavBarProps.onOpenWorkspaceLauncher,

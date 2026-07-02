@@ -8,6 +8,10 @@ import {
 export type GPUMode = "high" | "low";
 
 const GPU_MODE_STORAGE_KEY = "urdf-studio-gpu-mode";
+const DEFAULT_GPU_MODE: GPUMode = "high";
+
+const parseGPUMode = (value: string | null): GPUMode | null =>
+  value === "low" || value === "high" ? value : null;
 
 /**
  * Get initial GPU mode from:
@@ -16,20 +20,18 @@ const GPU_MODE_STORAGE_KEY = "urdf-studio-gpu-mode";
  * 3. Default to "high"
  */
 const getInitialGPUMode = (): GPUMode => {
-  // Check URL parameter
   const urlParams = new URLSearchParams(window.location.search);
-  const urlMode = urlParams.get("gpu");
-  if (urlMode === "low" || urlMode === "high") {
+  const urlMode = parseGPUMode(urlParams.get("gpu"));
+  if (urlMode) {
     return urlMode;
   }
 
-  // Check localStorage
-  const stored = readBrowserStorageItem(GPU_MODE_STORAGE_KEY) as GPUMode | null;
-  if (stored === "low" || stored === "high") {
+  const stored = parseGPUMode(readBrowserStorageItem(GPU_MODE_STORAGE_KEY));
+  if (stored) {
     return stored;
   }
 
-  return "high";
+  return DEFAULT_GPU_MODE;
 };
 
 interface GPUModeContextType {

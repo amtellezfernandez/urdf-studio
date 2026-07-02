@@ -6,6 +6,7 @@ from backend.core.simulator_security import require_simulator_operator_access_as
 from backend.models.workspace_transfer import (
     WorkspaceChangeSetApplyRequest,
     WorkspaceChangeSetApplyResponse,
+    WorkspaceLaunchCancelResponse,
     WorkspaceOpenRequest,
     WorkspaceOpenResponse,
     WorkspaceTransferTargetId,
@@ -18,6 +19,7 @@ from backend.services.simulator_adapters import (
 from backend.services.workspace_transfer import (
     apply_workspace_transfer_change_set,
     apply_workspace_transfer_target_change_set,
+    cancel_workspace_transfer_target_launch,
     get_workspace_transfer_target_status,
     list_workspace_transfer_targets,
     open_workspace_transfer_target,
@@ -34,11 +36,6 @@ async def list_workspace_transfer_targets_route(
     return list_workspace_transfer_targets()
 
 
-@router.get(
-    "/targets/{target_id}/runtime",
-    response_model=WorkspaceTransferTargetStatus,
-    include_in_schema=False,
-)
 @router.get("/targets/{target_id}/status", response_model=WorkspaceTransferTargetStatus)
 async def get_workspace_transfer_target_status_route(
     target_id: WorkspaceTransferTargetId,
@@ -60,6 +57,21 @@ async def open_workspace_transfer_target_route(
         return open_workspace_transfer_target(target_id, request)
     except SimulatorAdapterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post(
+    "/targets/{target_id}/launches/{launch_id}/cancel",
+    response_model=WorkspaceLaunchCancelResponse,
+)
+async def cancel_workspace_transfer_target_launch_route(
+    target_id: WorkspaceTransferTargetId,
+    launch_id: str,
+    _access: None = Depends(require_simulator_operator_access_async),
+) -> WorkspaceLaunchCancelResponse:
+    try:
+        return cancel_workspace_transfer_target_launch(target_id, launch_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post(

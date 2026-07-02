@@ -9,6 +9,9 @@ import type { MeshFiles } from "@/shared/types/feature";
 
 type CameraPreviewMode = "all" | "focus" | "list";
 
+const CAMERA_PREVIEW_MAX_ALL_CANDIDATES = 10;
+const CAMERA_PREVIEW_MAX_ALL_CANVASES = 4;
+
 type CameraPreviewPanelProps = {
   cameraPreviewEmptyStateMessage?: string;
   cameras: Camera[];
@@ -75,7 +78,10 @@ export const CameraPreviewPanel = ({
   const allPreviewRef = useRef<HTMLDivElement | null>(null);
   const [allPreviewSize, setAllPreviewSize] = useState({ width: 0, height: 0 });
   const urdfContent = vizUrdf || originalUrdf || null;
-  const visibleCameras = useMemo(() => cameras.slice(0, 10), [cameras]);
+  const allPreviewCandidates = useMemo(
+    () => cameras.slice(0, CAMERA_PREVIEW_MAX_ALL_CANDIDATES),
+    [cameras]
+  );
   const activeCameraId = useMemo(
     () =>
       panelCameraId && cameras.some((camera) => camera.id === panelCameraId)
@@ -83,13 +89,27 @@ export const CameraPreviewPanel = ({
         : cameras[0]?.id ?? null,
     [cameras, panelCameraId]
   );
+  const allPreviewCameras = useMemo(() => {
+    const cappedCameras = allPreviewCandidates.slice(0, CAMERA_PREVIEW_MAX_ALL_CANVASES);
+    if (!activeCameraId || cappedCameras.some((camera) => camera.id === activeCameraId)) {
+      return cappedCameras;
+    }
+
+    const activeCamera = cameras.find((camera) => camera.id === activeCameraId);
+    return activeCamera
+      ? [activeCamera, ...cappedCameras.slice(0, CAMERA_PREVIEW_MAX_ALL_CANVASES - 1)]
+      : cappedCameras;
+  }, [activeCameraId, allPreviewCandidates, cameras]);
+  const hiddenAllPreviewCount = Math.max(0, cameras.length - allPreviewCameras.length);
+  const allPreviewTileCount =
+    allPreviewCameras.length + (hiddenAllPreviewCount > 0 ? 1 : 0);
   const allPreviewColumns = useMemo(
-    () => chooseAllPreviewColumns(visibleCameras, allPreviewSize),
-    [allPreviewSize, visibleCameras]
+    () => chooseAllPreviewColumns(allPreviewCameras, allPreviewSize),
+    [allPreviewCameras, allPreviewSize]
   );
   const allPreviewRows = useMemo(
-    () => Math.max(1, Math.ceil(visibleCameras.length / allPreviewColumns)),
-    [allPreviewColumns, visibleCameras.length]
+    () => Math.max(1, Math.ceil(Math.max(1, allPreviewTileCount) / allPreviewColumns)),
+    [allPreviewColumns, allPreviewTileCount]
   );
 
   useEffect(() => {
@@ -126,7 +146,7 @@ export const CameraPreviewPanel = ({
     const observer = new ResizeObserver(updateSize);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [previewMode, visibleCameras.length]);
+  }, [previewMode, allPreviewTileCount]);
 
   const handleCameraSelect = (cameraId: string, nextMode?: CameraPreviewMode) => {
     setPanelCameraId(cameraId);
@@ -206,7 +226,7 @@ export const CameraPreviewPanel = ({
           ) : previewMode === "list" ? (
             <div className="h-full min-h-0 min-w-0 overflow-y-auto rounded-md border border-border/60 bg-background/40">
               <div className="divide-y divide-border/30">
-                {visibleCameras.map((camera) => {
+                {cameras.map((camera) => {
                   const isSelected = activeCameraId === camera.id;
                   const width = camera.intrinsics?.width ?? 0;
                   const height = camera.intrinsics?.height ?? 0;
@@ -249,7 +269,7 @@ export const CameraPreviewPanel = ({
                   gridTemplateRows: `repeat(${allPreviewRows}, minmax(0, 1fr))`,
                 }}
               >
-                {visibleCameras.map((camera) => (
+                {allPreviewCameras.map((camera) => (
                   <div
                     key={camera.id}
                     className={`h-full min-h-0 min-w-0 overflow-hidden rounded-md border p-0.5 ${
@@ -280,6 +300,16 @@ export const CameraPreviewPanel = ({
                     </div>
                   </div>
                 ))}
+                {hiddenAllPreviewCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode("list")}
+                    className="flex h-full min-h-0 min-w-0 flex-col items-center justify-center rounded-md border border-border/60 bg-background/40 text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground"
+                  >
+                    <span className="text-[12px] font-medium">+{hiddenAllPreviewCount}</span>
+                    <span className="text-[8px] uppercase">List</span>
+                  </button>
+                ) : null}
               </div>
             </div>
           )}

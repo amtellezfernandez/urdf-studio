@@ -255,6 +255,7 @@ export const CameraViewportPreview = ({
     if (!cameraId) return cameras[0] ?? null;
     return cameras.find((camera) => camera.id === cameraId) ?? null;
   }, [cameraId, cameras]);
+  const hasCameraConfig = cameraConfig !== null;
   const normalizedIntrinsics = useMemo(
     () => (cameraConfig ? normalizeCameraIntrinsics(cameraConfig.intrinsics) : null),
     [cameraConfig]
@@ -336,7 +337,7 @@ export const CameraViewportPreview = ({
     setSceneRadius(null);
     setRobot(null);
     robotRef.current = null;
-    if (!urdfContent || !cameraConfig) return;
+    if (!urdfContent || !hasCameraConfig) return;
 
     const abortController = new AbortController();
     const loader = new URDFLoader();
@@ -377,7 +378,7 @@ export const CameraViewportPreview = ({
       materialApplyScheduler.cancel();
       abortController.abort();
     };
-  }, [cameraConfig, gpuMode, meshFiles, packageRoots, urdfBasePath, urdfContent]);
+  }, [gpuMode, hasCameraConfig, meshFiles, packageRoots, urdfBasePath, urdfContent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -449,7 +450,6 @@ export const CameraViewportPreview = ({
           style={frameStyle}
         >
           <Canvas
-            key={cameraConfig.id}
             camera={{
               position: [0, 0, 2],
               fov: normalizedIntrinsics?.fov_deg ?? cameraConfig.intrinsics.fov_deg,

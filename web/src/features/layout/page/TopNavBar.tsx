@@ -6,7 +6,6 @@ import { FileUtilsMenus } from "@/features/layout/page/top-nav/FileUtilsMenus";
 import { WorldsMenu } from "@/features/layout/page/top-nav/WorldsMenu";
 import { ViewMenu } from "@/features/layout/page/top-nav/ViewMenu";
 import { CreateMenu } from "@/features/layout/page/top-nav/CreateMenu";
-import { IkMenu } from "@/features/layout/page/top-nav/IkMenu";
 import type { TopNavBarProps } from "@/features/layout/page/top-nav/types";
 import {
   getWorkspaceModeUiPolicy,
@@ -114,16 +113,6 @@ export const TopNavBar = (props: TopNavBarProps) => {
               <CreateMenu
                 openObjectCreator={props.openObjectCreator}
                 setShowCameraCreator={props.setShowCameraCreator}
-              />
-            ) : null}
-
-            {workspaceModeUi.showStudioChrome ? (
-              <IkMenu
-                isIkPanelOpen={props.isIkPanelOpen}
-                onOpenIkPanel={props.onOpenIkPanel}
-                selectedIkSolverId={props.selectedIkSolverId}
-                ikSolverOptions={props.ikSolverOptions}
-                onSelectIkSolver={props.onSelectIkSolver}
               />
             ) : null}
           </>

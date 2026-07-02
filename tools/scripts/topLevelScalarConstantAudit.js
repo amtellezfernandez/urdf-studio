@@ -13,12 +13,14 @@ const baselinePath = path.join(__dirname, "topLevelScalarConstantBaseline.json")
 const AUDIT_PARAMS = {
   ignoredDirectories: [
     ".cache",
+    ".claude",
     ".git",
     ".pytest_cache",
     ".ruff_cache",
     ".uv-cache",
     ".venv",
     ".venv-lerobot",
+    ".venv-sim311",
     "dist",
     "node_modules",
     "third_party",
@@ -31,6 +33,8 @@ const AUDIT_PARAMS = {
   baselineSignatureSeparator: "\0",
 };
 const IGNORED_DIRECTORIES = new Set(AUDIT_PARAMS.ignoredDirectories);
+const isIgnoredDirectory = (name) =>
+  IGNORED_DIRECTORIES.has(name) || name.startsWith(".venv-");
 
 const parseArgs = () => {
   const args = new Set(process.argv.slice(2));
@@ -44,7 +48,7 @@ const toRel = (absolutePath) => path.relative(root, absolutePath).replace(/\\/g,
 
 const walkSourceFiles = (directory, files = []) => {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (entry.isDirectory() && IGNORED_DIRECTORIES.has(entry.name)) {
+    if (entry.isDirectory() && isIgnoredDirectory(entry.name)) {
       continue;
     }
 

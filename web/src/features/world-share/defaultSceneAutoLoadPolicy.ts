@@ -32,5 +32,5 @@ export const shouldAutoImportDefaultWorldLayout = ({
   if (!defaultWorldLayoutUrl.trim()) return false;
   // Explicit imports always win over implicit defaults.
   if (hasExplicitWorldImport || hasExplicitWorldLayoutImport) return false;
-  return true;
+  return _demoMode && _demoAutoload;
 };

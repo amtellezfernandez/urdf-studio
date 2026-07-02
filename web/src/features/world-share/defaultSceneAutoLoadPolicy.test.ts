@@ -38,7 +38,7 @@ describe("shouldAutoImportDefaultWorldLayout", () => {
     ).toBe(true);
   });
 
-  it("loads default world layout once in normal mode without explicit imports", () => {
+  it("does not load default world layout in normal mode without explicit imports", () => {
     expect(
       shouldAutoImportDefaultWorldLayout({
         alreadyApplied: false,
@@ -49,7 +49,7 @@ describe("shouldAutoImportDefaultWorldLayout", () => {
         hasExplicitWorldImport: false,
         hasExplicitWorldLayoutImport: false,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("skips default world layout when explicit world layout import exists", () => {

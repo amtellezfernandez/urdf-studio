@@ -71,11 +71,6 @@ const createProps = (): TopNavBarProps => ({
   exportCamerasAsJSON: vi.fn(),
   exportCamerasAsYAML: vi.fn(),
   hasCamerasToExport: false,
-  isIkPanelOpen: false,
-  onOpenIkPanel: vi.fn(),
-  selectedIkSolverId: "ik-js",
-  ikSolverOptions: [{ id: "ik-js", label: "IK JS" }],
-  onSelectIkSolver: vi.fn(),
   workspaceLauncherStatusLabel: "Physics Warning",
   workspaceLauncherNeedsAttention: true,
   onOpenWorkspaceLauncher: vi.fn(),
@@ -127,6 +122,7 @@ describe("TopNavBar", () => {
     expect(container.textContent).not.toContain("Browser token entry");
     expect(container.textContent).toContain("Open In");
     expect(container.textContent).not.toContain("Review");
+    expect(container.querySelector('button[title^="IK"]')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -199,37 +195,7 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("uses teleop connection state, not popup visibility, for leader and follower colors", async () => {
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = {
-      ...createProps(),
-      leaderInputConnected: true,
-      leaderInputPanelOpen: false,
-      followerHardwareConnected: false,
-      followerHardwarePanelOpen: true,
-    };
-
-    await renderTopNavBar(root, props);
-
-    const buttons = Array.from(container.querySelectorAll("button"));
-    const leaderButton = buttons.find(
-      (button) => button.textContent === "Controller",
-    );
-    const followerButton = buttons.find(
-      (button) => button.textContent === "Robot",
-    );
-
-    expect(leaderButton?.className).toContain("border-emerald-500/35");
-    expect(followerButton?.className).not.toContain("border-emerald-500/35");
-    expect(followerButton?.className).toContain("bg-muted/30");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("surfaces world rollout actions from the Worlds menu", async () => {
+  it("surfaces world rollout actions from the Scene menu", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const props = {
@@ -243,13 +209,13 @@ describe("TopNavBar", () => {
 
     await renderTopNavBar(root, props);
 
-    const worldsButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Worlds"
+    const sceneButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Scene"
     );
-    expect(worldsButton).toBeTruthy();
+    expect(sceneButton).toBeTruthy();
 
     await act(async () => {
-      worldsButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+      sceneButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
     });
 
     const rolloutMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
@@ -267,7 +233,7 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("surfaces workspace change import from the Worlds menu", async () => {
+  it("surfaces workspace change import from the Scene menu", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     const props = {
@@ -278,13 +244,13 @@ describe("TopNavBar", () => {
 
     await renderTopNavBar(root, props);
 
-    const worldsButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Worlds"
+    const sceneButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Scene"
     );
-    expect(worldsButton).toBeTruthy();
+    expect(sceneButton).toBeTruthy();
 
     await act(async () => {
-      worldsButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+      sceneButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
     });
 
     const workspaceChangeMenuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
@@ -322,362 +288,4 @@ describe("TopNavBar", () => {
     });
   });
 
-  it("mounts the share menu only after collaboration actions are ready", async () => {
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const baseProps = createProps();
-    const propsWithShare = {
-      ...baseProps,
-      collaborationOwner: true,
-      collaborationStatus: "connected" as const,
-      onCreateCollaborationLink: vi.fn(),
-      onEmailCollaborationLink: vi.fn(),
-      onResetCollaborationLink: vi.fn(),
-    };
-
-    await renderTopNavBar(root, baseProps);
-    expect(container.querySelector('button[aria-label="Share"]')).toBeNull();
-
-    await renderTopNavBar(root, propsWithShare);
-    const shareButton = container.querySelector('button[aria-label="Share"]');
-    expect(shareButton).toBeTruthy();
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("keeps share link labels stable while an invite action is in flight", async () => {
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = {
-      ...createProps(),
-      collaborationInviteAction: "creating" as const,
-      collaborationOwner: true,
-      collaborationStatus: "idle" as const,
-      onCreateCollaborationLink: vi.fn(),
-      onEmailCollaborationLink: vi.fn(),
-      onResetCollaborationLink: vi.fn(),
-      onSetCollaborationSharingEnabled: vi.fn(),
-    };
-
-    await renderTopNavBar(root, props);
-
-    const shareButton = container.querySelector('button[aria-label="Share"]');
-    expect(shareButton).toBeTruthy();
-    expect(shareButton?.getAttribute("title")).toBe("Share");
-    expect(shareButton?.className).toContain("text-muted-foreground");
-
-    await act(async () => {
-      shareButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-    });
-
-    expect(document.body.textContent).toContain("Share");
-    expect(document.body.textContent).not.toContain("Creating link...");
-    expect(document.body.textContent).toContain("Local only");
-    expect(document.body.textContent).toContain("Localhost links only work on this computer. Restart Studio to enable network links for Wi-Fi or Tailnet.");
-    expect(document.body.textContent).toContain("People with access");
-    expect(document.body.textContent).toContain("Titular");
-    expect(document.body.textContent).toContain("Anyone with view link");
-    expect(document.body.textContent).toContain("Anyone with edit link");
-    expect(document.body.textContent).toContain("Link sharing is off");
-    expect(document.body.textContent).toContain("Inactive");
-    expect(document.body.textContent).not.toContain("Private workspace");
-    expect(document.body.textContent).not.toContain("Team workspace");
-    const copyButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Copy link"),
-    ) as HTMLButtonElement | undefined;
-    expect(copyButton).toBeTruthy();
-    expect(copyButton?.disabled).toBe(true);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-
-  it("turns Team sharing on in-session and uses the network invite URL", async () => {
-    const teamUrl = "http://192.168.1.40:5173";
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            available: true,
-            enabled: false,
-            localUrl: "http://localhost:5173",
-            teamUrl,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            available: true,
-            enabled: true,
-            localUrl: "http://localhost:5173",
-            teamUrl,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            available: true,
-            enabled: false,
-            localUrl: "http://localhost:5173",
-            teamUrl,
-          }),
-        ),
-      );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = {
-      ...createProps(),
-      collaborationOwner: true,
-      collaborationStatus: "connected" as const,
-      onCreateCollaborationLink: vi.fn(),
-      onEmailCollaborationLink: vi.fn(),
-      onResetCollaborationLink: vi.fn(),
-      onSetCollaborationSharingEnabled: vi.fn(),
-    };
-
-    await renderTopNavBar(root, props);
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const shareButton = container.querySelector('button[aria-label="Share"]');
-    expect(shareButton).toBeTruthy();
-    await act(async () => {
-      shareButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-    });
-
-    const reactivateSharingButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent === "Reactivate sharing",
-    );
-    expect(reactivateSharingButton).toBeTruthy();
-
-    await act(async () => {
-      reactivateSharingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/__urdf_team_sharing",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ enabled: true }) }),
-    );
-
-    expect(document.body.textContent).toContain(
-      "Network link is on. This link works for devices on the same Wi-Fi or Tailnet.",
-    );
-
-    const emptySendButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent === "Send",
-    ) as HTMLButtonElement | undefined;
-    expect(emptySendButton?.disabled).toBe(true);
-    expect(props.onEmailCollaborationLink).not.toHaveBeenCalled();
-
-    expect(document.body.textContent).toContain("Anyone with view link");
-    expect(document.body.textContent).toContain("Anyone with edit link");
-    expect(document.body.textContent).toContain("Choose permissions for this invite.");
-    expect(document.body.textContent).toContain("Teleop is for trusted operators only.");
-
-    const permissionSelect = Array.from(document.body.querySelectorAll("select")).find(
-      (select) => select.value === "viewer",
-    ) as HTMLSelectElement | undefined;
-    expect(permissionSelect).toBeTruthy();
-    await act(async () => {
-      if (permissionSelect) permissionSelect.value = "editor";
-      permissionSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(permissionSelect?.value).toBe("editor");
-
-    await act(async () => {
-      if (permissionSelect) permissionSelect.value = "viewer_teleop";
-      permissionSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(permissionSelect?.value).toBe("viewer_teleop");
-    expect(document.body.textContent).toContain("Can view + teleop");
-
-    let copyLinkButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Copy link"),
-    ) as HTMLButtonElement | undefined;
-    if (!copyLinkButton) {
-      await act(async () => {
-        shareButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-      });
-      copyLinkButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Copy link"),
-      ) as HTMLButtonElement | undefined;
-    }
-    expect(copyLinkButton).toBeTruthy();
-    expect(copyLinkButton?.disabled).toBe(false);
-    await act(async () => {
-      copyLinkButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(props.onCreateCollaborationLink).toHaveBeenCalledWith(teamUrl, "viewer_teleop");
-
-    const stopSharingButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent === "Stop sharing",
-    ) as HTMLButtonElement | undefined;
-    expect(stopSharingButton).toBeTruthy();
-    expect(stopSharingButton?.disabled).toBe(false);
-    await act(async () => {
-      stopSharingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(props.onSetCollaborationSharingEnabled).toHaveBeenCalledWith(false);
-    expect(fetchMock).not.toHaveBeenLastCalledWith(
-      "/__urdf_team_sharing",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ enabled: false }) }),
-    );
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("pauses reusable network links without turning off the network gateway", async () => {
-    const teamUrl = "http://192.168.1.40:5173";
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          available: true,
-          enabled: true,
-          localUrl: "http://localhost:5173",
-          teamUrl,
-        }),
-      ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = {
-      ...createProps(),
-      collaborationOwner: true,
-      collaborationSharingEnabled: false,
-      collaborationStatus: "connected" as const,
-      onCreateCollaborationLink: vi.fn(),
-      onEmailCollaborationLink: vi.fn(),
-      onResetCollaborationLink: vi.fn(),
-      onSetCollaborationSharingEnabled: vi.fn(),
-    };
-
-    await renderTopNavBar(root, props);
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const shareButton = container.querySelector('button[aria-label="Share"]');
-    await act(async () => {
-      shareButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-    });
-
-    expect(document.body.textContent).toContain("Sharing is paused");
-    expect(document.body.textContent).toContain("Existing links stay reusable");
-    expect(document.body.textContent).toContain("Temporarily unavailable");
-    expect(document.body.textContent).toContain("Paused");
-    const copyLinkButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Copy link"),
-    ) as HTMLButtonElement | undefined;
-    expect(copyLinkButton?.disabled).toBe(true);
-
-    const reactivateSharingButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent === "Reactivate sharing",
-    ) as HTMLButtonElement | undefined;
-    expect(reactivateSharingButton?.disabled).toBe(false);
-    await act(async () => {
-      reactivateSharingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(props.onSetCollaborationSharingEnabled).toHaveBeenCalledWith(true);
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/__urdf_team_sharing",
-      expect.objectContaining({ method: "POST" }),
-    );
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("keeps localhost sharing local-only behind a grey share menu", async () => {
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    const props = {
-      ...createProps(),
-      collaborationOwner: true,
-      collaborationPeerCount: 3,
-      collaborationStatus: "connected" as const,
-      onCreateCollaborationLink: vi.fn(),
-      onEmailCollaborationLink: vi.fn(),
-      onResetCollaborationLink: vi.fn(),
-      onSetCollaborationSharingEnabled: vi.fn(),
-    };
-
-    await renderTopNavBar(root, props);
-
-    expect(container.textContent).not.toContain("Live session");
-    expect(container.textContent).not.toContain("Lock editing");
-    expect(container.textContent).not.toContain("Rotate link");
-    expect(container.textContent).not.toContain("Team workspace");
-
-    const shareButton = container.querySelector('button[aria-label="Share"]');
-    expect(shareButton).toBeTruthy();
-    expect(shareButton?.getAttribute("title")).toBe("Share");
-    expect(shareButton?.textContent).toContain("3");
-
-    await act(async () => {
-      shareButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-    });
-
-    expect(document.body.textContent).toContain("Share");
-    expect(document.body.textContent).toContain("2 guests connected");
-    expect(document.body.textContent).toContain("Local only");
-    expect(document.body.textContent).toContain("Localhost links only work on this computer. Restart Studio to enable network links for Wi-Fi or Tailnet.");
-    expect(document.body.textContent).toContain("People with access");
-    expect(document.body.textContent).toContain("Titular");
-    expect(document.body.textContent).toContain("Anyone with view link");
-    expect(document.body.textContent).toContain("Anyone with edit link");
-    expect(document.body.textContent).toContain("Link sharing is off");
-    expect(document.body.textContent).toContain("Inactive");
-    expect(document.body.textContent).toContain("Reactivate sharing");
-    expect(document.body.textContent).toContain("Reset link");
-    const menuText = document.body.textContent ?? "";
-    expect(menuText.indexOf("People with access")).toBeLessThan(menuText.indexOf("Link sharing"));
-    expect(menuText.indexOf("Link sharing")).toBeLessThan(menuText.indexOf("Add more people"));
-    expect(document.body.textContent).not.toContain("Private workspace");
-    expect(document.body.textContent).not.toContain("Team workspace");
-
-    const emailInput = document.body.querySelector("input") as HTMLInputElement | null;
-    expect(emailInput?.placeholder).toBe("Reactivate sharing first");
-    expect(emailInput?.disabled).toBe(true);
-    expect(props.onEmailCollaborationLink).not.toHaveBeenCalled();
-
-    const copyLinkButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Copy link"),
-    ) as HTMLButtonElement | undefined;
-    expect(copyLinkButton).toBeTruthy();
-    expect(copyLinkButton?.disabled).toBe(true);
-
-    const resetLinkButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
-      button.textContent === "Reset link",
-    );
-    expect(resetLinkButton).toBeTruthy();
-    await act(async () => {
-      resetLinkButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(props.onCreateCollaborationLink).not.toHaveBeenCalled();
-    expect(props.onResetCollaborationLink).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
 });

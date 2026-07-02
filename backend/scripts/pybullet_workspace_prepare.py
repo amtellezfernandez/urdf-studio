@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 import time
 from pathlib import Path
 from typing import Any, Sequence
@@ -28,6 +30,8 @@ from backend.services.simulator_adapters.world_mesh_assets import resolve_declar
 from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutFrameMap
 from backend.services.world_layout_transfer_types import WorldLayoutTransferError
 
+PYBULLET_STATIC_JOINT_HOLD_FORCE = 500.0
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare a URDF Studio workspace in PyBullet.")
@@ -52,10 +56,9 @@ def _apply_initial_joint_positions(
     applied_count = 0
     joint_indices_by_name: dict[str, int] = {}
     for joint_index in range(pybullet.getNumJoints(robot_id)):
-        joint_info = pybullet.getJointInfo(robot_id, joint_index)
-        raw_name = joint_info[1]
-        joint_name = raw_name.decode("utf-8", errors="replace") if isinstance(raw_name, bytes) else str(raw_name)
-        joint_indices_by_name[joint_name] = joint_index
+        joint_indices_by_name[
+            _joint_name_from_info(pybullet.getJointInfo(robot_id, joint_index))
+        ] = joint_index
 
     for joint_name, position in joint_positions.items():
         joint_index = joint_indices_by_name.get(joint_name)
@@ -64,6 +67,91 @@ def _apply_initial_joint_positions(
         pybullet.resetJointState(robot_id, joint_index, float(position))
         applied_count += 1
     return applied_count
+
+
+def _joint_name_from_info(joint_info: Sequence[Any]) -> str:
+    raw_name = joint_info[1]
+    return raw_name.decode("utf-8", errors="replace") if isinstance(raw_name, bytes) else str(raw_name)
+
+
+def _has_gui_display_environment() -> bool:
+    if sys.platform in {"win32", "darwin"}:
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _require_pybullet_gui_environment(*, no_viewer: bool) -> None:
+    if no_viewer or _has_gui_display_environment():
+        return
+    raise RuntimeError(
+        "PyBullet interactive viewer requested, but no GUI display is available. "
+        "Set DISPLAY or WAYLAND_DISPLAY before using Open; headless mode is reserved "
+        "for workspace validation checks."
+    )
+
+
+def _configure_static_debug_viewer(pybullet: Any, *, no_viewer: bool) -> None:
+    if no_viewer:
+        return
+    set_real_time = getattr(pybullet, "setRealTimeSimulation", None)
+    if set_real_time is not None:
+        set_real_time(0)
+    configure_debug_visualizer = getattr(pybullet, "configureDebugVisualizer", None)
+    mouse_picking_flag = getattr(pybullet, "COV_ENABLE_MOUSE_PICKING", None)
+    if configure_debug_visualizer is not None and mouse_picking_flag is not None:
+        configure_debug_visualizer(mouse_picking_flag, 0)
+
+
+def _hold_robot_current_joint_positions(pybullet: Any, robot_id: int) -> int:
+    position_control = getattr(pybullet, "POSITION_CONTROL", None)
+    set_joint_motor_control = getattr(pybullet, "setJointMotorControl2", None)
+    get_joint_state = getattr(pybullet, "getJointState", None)
+    if position_control is None or set_joint_motor_control is None or get_joint_state is None:
+        return 0
+    fixed_joint_type = getattr(pybullet, "JOINT_FIXED", None)
+    held_count = 0
+    for joint_index in range(pybullet.getNumJoints(robot_id)):
+        joint_info = pybullet.getJointInfo(robot_id, joint_index)
+        if fixed_joint_type is not None and joint_info[2] == fixed_joint_type:
+            continue
+        joint_state = get_joint_state(robot_id, joint_index)
+        target_position = float(joint_state[0])
+        max_force = joint_info[10] if len(joint_info) > 10 else None
+        force = (
+            float(max_force)
+            if is_finite_number(max_force) and float(max_force) > 0.0
+            else PYBULLET_STATIC_JOINT_HOLD_FORCE
+        )
+        set_joint_motor_control(
+            robot_id,
+            joint_index,
+            controlMode=position_control,
+            targetPosition=target_position,
+            targetVelocity=0.0,
+            force=force,
+        )
+        held_count += 1
+    return held_count
+
+
+def _should_step_workspace_once(
+    *,
+    no_viewer: bool,
+    free_base: bool,
+    camera_screenshot_dir: Path | None,
+    report_path: Path | None,
+) -> bool:
+    return no_viewer or free_base or camera_screenshot_dir is not None or report_path is not None
+
+
+def _is_pybullet_connected(pybullet: Any, client_id: int) -> bool:
+    is_connected = getattr(pybullet, "isConnected", None)
+    if is_connected is None:
+        return True
+    try:
+        return bool(is_connected(client_id))
+    except TypeError:
+        return bool(is_connected())
 
 
 def _primitive_shape(
@@ -187,11 +275,14 @@ def prepare_pybullet_workspace_scene(
         print(f"[pybullet-workspace] warning: {warning}", flush=True)
     cameras = simulator_scene.cameras
 
+    _require_pybullet_gui_environment(no_viewer=no_viewer)
     connection_mode = pybullet.DIRECT if no_viewer else pybullet.GUI
+    connection_label = "direct" if no_viewer else "gui"
     client_id = pybullet.connect(connection_mode)
     if client_id < 0:
-        raise RuntimeError("PyBullet could not open a simulation connection.")
+        raise RuntimeError(f"PyBullet could not open a {connection_label} simulation connection.")
     try:
+        _configure_static_debug_viewer(pybullet, no_viewer=no_viewer)
         pybullet.setAdditionalSearchPath(pybullet_data.getDataPath())
         pybullet.setGravity(*PYBULLET_SCENE_PARAMS.gravity_xyz)
         if not no_floor:
@@ -207,6 +298,7 @@ def prepare_pybullet_workspace_scene(
             robot_id,
             simulator_scene.robot.joint_positions,
         )
+        held_joints = _hold_robot_current_joint_positions(pybullet, robot_id)
         object_ids = [
             _add_primitive(pybullet, primitive, asset_roots=simulator_scene.robot.asset_roots)
             for primitive in simulator_scene.primitives
@@ -216,7 +308,13 @@ def prepare_pybullet_workspace_scene(
             if show_camera_markers
             else []
         )
-        pybullet.stepSimulation()
+        if _should_step_workspace_once(
+            no_viewer=no_viewer,
+            free_base=free_base,
+            camera_screenshot_dir=camera_screenshot_dir,
+            report_path=report_path,
+        ):
+            pybullet.stepSimulation()
         camera_screenshot_count = 0
         if camera_screenshot_dir is not None:
             camera_screenshot_count = write_pybullet_camera_screenshots(
@@ -231,8 +329,10 @@ def prepare_pybullet_workspace_scene(
             f"package={simulator_scene.world_package.package_id}@{simulator_scene.world_package.version} "
             f"robot_joints={pybullet.getNumJoints(robot_id)} world_objects={len(object_ids)} "
             f"cameras={len(cameras)} camera_markers={len(camera_marker_ids)} "
+            f"connection_mode={connection_label} "
             f"frame_map={simulator_scene.frame_map} requested_frame_map={simulator_scene.requested_frame_map} "
-            f"applied_initial_joints={applied_joints}",
+            f"applied_initial_joints={applied_joints} held_joints={held_joints} "
+            f"static_view={not free_base}",
             flush=True,
         )
         if camera_screenshot_dir is not None:
@@ -244,7 +344,7 @@ def prepare_pybullet_workspace_scene(
                 simulator_id=SIMULATOR_PYBULLET_ID,
                 simulator_label="PyBullet",
                 runtime={
-                    "connection_mode": "direct" if no_viewer else "gui",
+                    "connection_mode": connection_label,
                     "client_id": client_id,
                     "robot_id": robot_id,
                     "robot_joints": pybullet.getNumJoints(robot_id),
@@ -253,6 +353,8 @@ def prepare_pybullet_workspace_scene(
                     "camera_markers": len(camera_marker_ids),
                     "camera_screenshots": camera_screenshot_count,
                     "applied_initial_joints": applied_joints,
+                    "held_joints": held_joints,
+                    "static_view": not free_base,
                     "free_base": free_base,
                     "floor": not no_floor,
                 },
@@ -265,7 +367,10 @@ def prepare_pybullet_workspace_scene(
 
         deadline = time.monotonic() + duration_sec if duration_sec > 0 else None
         while True:
-            pybullet.stepSimulation()
+            if not _is_pybullet_connected(pybullet, client_id):
+                break
+            if free_base:
+                pybullet.stepSimulation()
             if deadline is not None and time.monotonic() >= deadline:
                 break
             if no_viewer:

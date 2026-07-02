@@ -34,7 +34,13 @@ from backend.services.simulator_adapters.genesis_scene import add_mesh_entity_if
 from backend.services.simulator_adapters import workspace_package
 from backend.services.world_layout_static_transfer import SimPrimitive
 from backend.scripts import genesis_workspace_prepare
-from backend.scripts.genesis_workspace_prepare import _resolve_genesis_backend
+from backend.scripts.genesis_workspace_prepare import (
+    _genesis_performance_mode,
+    _resolve_genesis_backend,
+    genesis_overview_viewer_pose,
+    should_add_genesis_scene_cameras,
+    should_step_genesis_workspace,
+)
 
 
 def test_genesis_robot_morph_prefers_staged_urdf_materials(tmp_path: Path) -> None:
@@ -328,6 +334,81 @@ def test_genesis_camera_viewer_pose_uses_camera_pov() -> None:
     assert lookat == (1.0, 2.0, 2.0)
     assert up == (0.0, 1.0, 0.0)
     assert fov == 65.0
+
+
+def test_genesis_overview_viewer_pose_fits_scene_instead_of_scene_camera_pov() -> None:
+    primitive = SimPrimitive(
+        source_id="crate",
+        source_name="Crate",
+        sim_name="wl_crate",
+        source_type="cube",
+        sim_type="box",
+        position_xyz=(1.0, -0.5, 0.2),
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        size_xyz=(0.4, 0.2, 0.6),
+        rgba=(0.1, 0.2, 0.3, 1.0),
+        collision=True,
+    )
+
+    camera_pos, camera_lookat, camera_up, camera_fov = genesis_overview_viewer_pose(
+        (primitive,)
+    )
+
+    assert camera_lookat[0] > 0.0
+    assert camera_lookat[2] > 0.0
+    assert camera_pos[2] >= camera_lookat[2]
+    assert camera_up == (0.0, 0.0, 1.0)
+    assert camera_fov > 0.0
+
+
+def test_genesis_interactive_open_is_static_unless_artifacts_or_duration_require_steps(
+    tmp_path: Path,
+) -> None:
+    assert should_step_genesis_workspace(
+        no_viewer=False,
+        duration_sec=0.0,
+        screenshot_path=None,
+        camera_screenshot_dir=None,
+        sensor_screenshot_dir=None,
+        report_path=None,
+    ) is False
+    assert should_step_genesis_workspace(
+        no_viewer=True,
+        duration_sec=0.0,
+        screenshot_path=None,
+        camera_screenshot_dir=None,
+        sensor_screenshot_dir=None,
+        report_path=None,
+    ) is True
+    assert should_step_genesis_workspace(
+        no_viewer=False,
+        duration_sec=1.0,
+        screenshot_path=None,
+        camera_screenshot_dir=None,
+        sensor_screenshot_dir=None,
+        report_path=None,
+    ) is True
+    assert should_step_genesis_workspace(
+        no_viewer=False,
+        duration_sec=0.0,
+        screenshot_path=tmp_path / "viewer.png",
+        camera_screenshot_dir=None,
+        sensor_screenshot_dir=None,
+        report_path=None,
+    ) is True
+
+
+def test_genesis_scene_cameras_are_lazy_for_interactive_open(tmp_path: Path) -> None:
+    assert should_add_genesis_scene_cameras(camera_screenshot_dir=None) is False
+    assert should_add_genesis_scene_cameras(camera_screenshot_dir=tmp_path / "cameras") is True
+
+
+def test_genesis_performance_mode_is_explicit_opt_in(monkeypatch) -> None:
+    monkeypatch.delenv("URDF_STUDIO_GENESIS_PERFORMANCE_MODE", raising=False)
+    assert _genesis_performance_mode() is False
+
+    monkeypatch.setenv("URDF_STUDIO_GENESIS_PERFORMANCE_MODE", "1")
+    assert _genesis_performance_mode() is True
 
 
 def test_genesis_workspace_camera_attaches_to_native_robot_link() -> None:

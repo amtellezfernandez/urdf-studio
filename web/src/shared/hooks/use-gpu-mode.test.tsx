@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { GPUModeProvider, useGPUMode } from "@/shared/hooks/use-gpu-mode";
 
@@ -35,6 +35,55 @@ const GpuModeProbe = () => {
 };
 
 describe("GPUModeProvider", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("defaults to high performance without a saved preference", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(
+          GPUModeProvider,
+          null,
+          createElement(GpuModeProbe),
+        ),
+      );
+    });
+
+    expect(container.textContent).toBe("high");
+    expect(window.localStorage.getItem("urdf-studio-gpu-mode")).toBe("high");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("uses the saved GPU preference when the user chose one", async () => {
+    window.localStorage.setItem("urdf-studio-gpu-mode", "low");
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(
+          GPUModeProvider,
+          null,
+          createElement(GpuModeProbe),
+        ),
+      );
+    });
+
+    expect(container.textContent).toBe("low");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("renders with defaults when localStorage is blocked", async () => {
     await withBlockedLocalStorage(async () => {
       const container = document.createElement("div");

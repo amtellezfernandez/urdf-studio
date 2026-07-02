@@ -42,29 +42,31 @@ export function WorldsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className={cn(menuTriggerClass, "ml-1")}>Worlds</button>
+        <button className={cn(menuTriggerClass, "ml-1")} title="Scene package and layout tools">
+          Scene
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className={cn("w-56", menuContentClass)}>
         <DropdownMenuItem onClick={onValidateCurrentWorldScenePackage} className={menuItemClass}>
-          Validate World Package
+          Validate Scene Package
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportCurrentWorldScenePackage} className={menuItemClass}>
-          Export World Package
+          Export Scene Package
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportWorldScenePackage} className={menuItemClass}>
-          Import World Package
+          Import Scene Package
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onPublishCurrentWorldScenePackage} className={menuItemClass}>
-          Publish World Package
+          Publish Scene Package
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onListWorldScenePackages} className={menuItemClass}>
-          List World Packages
+          Browse Scene Packages
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportCurrentWorldSceneLayer} className={menuItemClass}>
-          Export World Layout (JSON)
+          Export Layout JSON
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportSceneLayerFromUrl} className={menuItemClass}>
-          Import World Layout
+          Import Layout JSON
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onImportWorkspaceChangeSet} className={menuItemClass}>
           Import Workspace Changes

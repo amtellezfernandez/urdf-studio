@@ -2,26 +2,24 @@ from __future__ import annotations
 
 from backend.models.simulator_runtime import (
     SIMULATOR_PYBULLET_ID,
+    SimulatorDependencySpec,
     SimulatorWorkspacePrepareRequest,
-    SimulatorWorkspacePrepareResponse,
-    get_simulator_runtime_spec,
 )
 from backend.services.simulator_adapters.base import (
-    SimulatorAdapter,
     SimulatorAdapterError,
 )
-from backend.services.simulator_adapters.direct_urdf import (
-    start_direct_urdf_workspace,
-    make_direct_urdf_simulator_adapter,
-    prepare_direct_urdf_workspace,
+from backend.services.simulator_adapters.direct_urdf import prepare_direct_urdf_workspace
+from backend.services.simulator_adapters.params import (
+    PYBULLET_SCENE_PARAMS,
+    PYBULLET_WORKSPACE_PROCESS_PARAMS,
 )
-from backend.services.simulator_adapters.workspace_package import (
-    PreparedSimulatorWorkspace,
+from backend.services.simulator_adapters.plugin import DirectUrdfSimulatorPlugin
+from backend.services.simulator_adapters.workspace_check_spec import (
+    PreparedWorkspaceCommand,
+    _prepare_direct_urdf_command,
 )
-from backend.services.simulator_adapters.params import PYBULLET_WORKSPACE_PROCESS_PARAMS
-
-
-PYBULLET_RUNTIME_SPEC = get_simulator_runtime_spec(SIMULATOR_PYBULLET_ID)
+from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
+from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
 
 
 class PyBulletWorkspaceError(SimulatorAdapterError):
@@ -40,21 +38,38 @@ def prepare_pybullet_workspace(request: SimulatorWorkspacePrepareRequest) -> Pre
     )
 
 
-def start_pybullet_workspace(
-    request: SimulatorWorkspacePrepareRequest,
-) -> SimulatorWorkspacePrepareResponse:
-    return start_direct_urdf_workspace(
-        request,
-        runtime_spec=PYBULLET_RUNTIME_SPEC,
-        workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
-        error=_pybullet_error,
-        prepare_workspace_package_fn=prepare_pybullet_workspace,
-    )
+class PyBulletPlugin(DirectUrdfSimulatorPlugin):
+    simulator_id = SIMULATOR_PYBULLET_ID
+    label = "PyBullet"
+    robot_asset_format = "urdf"
+    transfer_strategy = "direct"
+    workspace_target = True
+    dependencies = (SimulatorDependencySpec(name="pybullet", import_name="pybullet"),)
+    workspace_process = PYBULLET_WORKSPACE_PROCESS_PARAMS
+    workspace_error_class = PyBulletWorkspaceError
+    scene_params = PYBULLET_SCENE_PARAMS
 
-
-PYBULLET_SIMULATOR_ADAPTER: SimulatorAdapter = make_direct_urdf_simulator_adapter(
-    runtime_spec=PYBULLET_RUNTIME_SPEC,
-    workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
-    error=_pybullet_error,
-    prepare_workspace_package_fn=prepare_pybullet_workspace,
-)
+    def build_check_command(
+        self,
+        request: SimulatorWorkspacePrepareRequest,
+        expectations: WorkspaceExpectations,
+    ) -> PreparedWorkspaceCommand:
+        prepared = prepare_pybullet_workspace(request)
+        screenshot_dir = prepared.workspace_dir / "artifacts"
+        camera_screenshot_dir = screenshot_dir / "cameras"
+        report_path = screenshot_dir / "report.json"
+        return _prepare_direct_urdf_command(
+            prepared,
+            simulator_id=SIMULATOR_PYBULLET_ID,
+            workspace_process=PYBULLET_WORKSPACE_PROCESS_PARAMS,
+            object_marker=f"world_objects={expectations.object_count}",
+            extra_expected_markers=(f"camera_screenshots={expectations.camera_count}",),
+            extra_args=(
+                "--camera-screenshot-dir",
+                str(camera_screenshot_dir),
+            ),
+            expected_image_dirs=((camera_screenshot_dir, expectations.camera_count),),
+            expectations=expectations,
+            expected_report_path=report_path,
+            expected_report_artifact_dir_keys=("camera_screenshot_dir",),
+        )

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
-  HealthActionPanelWorkspaceTransferState,
+  WorkspaceTransferState,
   WorkspaceTransferTargetState,
-} from "@/features/layout/page/HealthActionPanelWorkspaceTransfer";
+} from "@/features/layout/page/workspaceTransferState";
 import {
+  cancelWorkspaceTransferTargetLaunch,
   fetchWorkspaceTransferTargets,
   fetchWorkspaceTransferTargetStatus,
   openWorkspaceTransferTarget,
@@ -22,7 +23,6 @@ type UseWorkspaceTransferLauncherParams = {
   activeUrdfPath: string | null;
   attachedIluSessionId: string;
   buildCurrentWorldScenePackageManifest: () => Promise<WorldScenePackageManifest>;
-  ensureWorldLayoutForTransfer?: () => Promise<void>;
   getWorldObjectCountForTransfer?: () => number;
   meshFiles: Record<string, Blob>;
   originalUrdfContent: string;
@@ -30,6 +30,13 @@ type UseWorkspaceTransferLauncherParams = {
   vizUrdfContent: string;
   worldCameraCount: number;
   worldObjectCount: number;
+};
+
+type WorkspaceTransferLaunch = {
+  targetId: WorkspaceTransferTargetId;
+  targetLabel: string;
+  launchId: string;
+  controller: AbortController;
 };
 
 const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
@@ -130,6 +137,41 @@ const assertWorkspacePackageCarriesSceneObjects = (
   );
 };
 
+const isWorkspaceTransferAbortError = (error: unknown): boolean => {
+  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
+    return error.name === "AbortError";
+  }
+  return error instanceof Error && error.name === "AbortError";
+};
+
+const throwIfWorkspaceTransferAborted = (signal: AbortSignal): void => {
+  if (!signal.aborted) return;
+  if (typeof DOMException !== "undefined") {
+    throw new DOMException("Workspace transfer cancelled.", "AbortError");
+  }
+  const error = new Error("Workspace transfer cancelled.");
+  error.name = "AbortError";
+  throw error;
+};
+
+const createWorkspaceTransferLaunchId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const timestamp = Date.now().toString(36);
+  const entropy = Math.random().toString(36).slice(2);
+  return `launch-${timestamp}-${entropy}`;
+};
+
+const stopWorkspaceTransferLaunch = (launch: WorkspaceTransferLaunch): void => {
+  launch.controller.abort();
+  void cancelWorkspaceTransferTargetLaunch({
+    targetId: launch.targetId,
+    launchId: launch.launchId,
+    targetLabel: launch.targetLabel,
+  }).catch(() => undefined);
+};
+
 const resolveWorkspaceTransferTargetDetail = (
   descriptor: WorkspaceTransferTargetDescriptor,
   sceneSummary: string,
@@ -152,7 +194,6 @@ export const useWorkspaceTransferLauncher = ({
   activeUrdfPath,
   attachedIluSessionId,
   buildCurrentWorldScenePackageManifest,
-  ensureWorldLayoutForTransfer,
   getWorldObjectCountForTransfer,
   meshFiles,
   originalUrdfContent,
@@ -162,6 +203,7 @@ export const useWorkspaceTransferLauncher = ({
   worldObjectCount,
 }: UseWorkspaceTransferLauncherParams) => {
   const [loadingTargetId, setLoadingTargetId] = useState<WorkspaceTransferTargetId | null>(null);
+  const activeLaunchRef = useRef<WorkspaceTransferLaunch | null>(null);
   const [lastOpenedTargetId, setLastOpenedTargetId] =
     useState<WorkspaceTransferTargetId | null>(null);
   const [targetDescriptors, setTargetDescriptors] = useState<WorkspaceTransferTargetDescriptor[]>(
@@ -230,9 +272,27 @@ export const useWorkspaceTransferLauncher = ({
     };
   }, [targetDescriptors]);
 
+  useEffect(() => {
+    return () => {
+      const activeLaunch = activeLaunchRef.current;
+      if (activeLaunch) {
+        stopWorkspaceTransferLaunch(activeLaunch);
+      }
+      activeLaunchRef.current = null;
+    };
+  }, []);
+
+  const cancelOpenTarget = useCallback((targetId: WorkspaceTransferTargetId) => {
+    const activeLaunch = activeLaunchRef.current;
+    if (!activeLaunch || activeLaunch.targetId !== targetId) return;
+    stopWorkspaceTransferLaunch(activeLaunch);
+    activeLaunchRef.current = null;
+    setLoadingTargetId(null);
+  }, []);
+
   const handleOpenTarget = useCallback(
     async (descriptor: WorkspaceTransferTargetDescriptor) => {
-      if (loadingTargetId !== null) return;
+      if (activeLaunchRef.current !== null) return;
       const status = targetStatuses[descriptor.targetId];
       if (!canOpenWorkspaceTarget(descriptor) || status?.available === false) {
         toast.message(`${descriptor.label} soon.`);
@@ -242,21 +302,33 @@ export const useWorkspaceTransferLauncher = ({
         toast.error(`Load a robot before opening ${descriptor.label}.`);
         return;
       }
+      const controller = new AbortController();
+      const launchId = createWorkspaceTransferLaunchId();
+      activeLaunchRef.current = {
+        targetId: descriptor.targetId,
+        targetLabel: descriptor.label,
+        launchId,
+        controller,
+      };
       setLoadingTargetId(descriptor.targetId);
       try {
-        await ensureWorldLayoutForTransfer?.();
         const liveWorldObjectCount = getWorldObjectCountForTransfer?.() ?? worldObjectCount;
         const worldPackage = await buildCurrentWorldScenePackageManifest();
+        throwIfWorkspaceTransferAborted(controller.signal);
         assertWorkspacePackageCarriesSceneObjects(worldPackage, liveWorldObjectCount);
         const prepared = await openWorkspaceTransferTarget({
           targetId: descriptor.targetId,
+          launchId,
           worldPackage,
           urdfAssetPath: activeUrdfPath ?? undefined,
           meshFiles,
           packageRoots,
           iluSessionId: attachedIluSessionId || undefined,
           targetLabel: descriptor.label,
+          signal: controller.signal,
         });
+        throwIfWorkspaceTransferAborted(controller.signal);
+        if (activeLaunchRef.current?.controller !== controller) return;
         setLastOpenedTargetId(descriptor.targetId);
         const openedSceneSummary = formatSceneTransferSummary(
           prepared.worldObjectCount,
@@ -271,20 +343,29 @@ export const useWorkspaceTransferLauncher = ({
         toast.success(
           `${descriptor.label} opened (pid ${prepared.pid}, ${openedSceneSummary}${meshSummary}).`
         );
+        if (prepared.unresolvedMeshRefs && prepared.unresolvedMeshRefs.length > 0) {
+          const listed = prepared.unresolvedMeshRefs.slice(0, 5).join(", ");
+          const extra = prepared.unresolvedMeshRefs.length > 5 ? ` +${prepared.unresolvedMeshRefs.length - 5} more` : "";
+          toast.warning(`${prepared.unresolvedMeshRefs.length} mesh${prepared.unresolvedMeshRefs.length === 1 ? "" : "es"} could not be resolved: ${listed}${extra}`);
+        }
       } catch (error) {
+        if (controller.signal.aborted || isWorkspaceTransferAbortError(error)) {
+          return;
+        }
         toast.error(error instanceof Error ? error.message : `Failed to open ${descriptor.label}`);
       } finally {
-        setLoadingTargetId(null);
+        if (activeLaunchRef.current?.controller === controller) {
+          activeLaunchRef.current = null;
+          setLoadingTargetId(null);
+        }
       }
     },
     [
       activeUrdfPath,
       attachedIluSessionId,
       buildCurrentWorldScenePackageManifest,
-      ensureWorldLayoutForTransfer,
       getWorldObjectCountForTransfer,
       meshFiles,
-      loadingTargetId,
       originalUrdfContent,
       packageRoots,
       targetStatuses,
@@ -293,7 +374,7 @@ export const useWorkspaceTransferLauncher = ({
     ]
   );
 
-  const workspaceTransfer: HealthActionPanelWorkspaceTransferState = useMemo(() => {
+  const workspaceTransfer: WorkspaceTransferState = useMemo(() => {
     const targets = targetDescriptors.map((descriptor): WorkspaceTransferTargetState => {
       const isBusy = loadingTargetId === descriptor.targetId;
       const isActive = lastOpenedTargetId === descriptor.targetId;
@@ -316,15 +397,18 @@ export const useWorkspaceTransferLauncher = ({
         statusLabel: resolveWorkspaceTransferTargetStatusLabel(descriptor, status),
         openLabel: `Open in ${descriptor.label}`,
         openingLabel: `Opening ${descriptor.label}`,
+        cancelLabel: `Stop opening ${descriptor.label}`,
         isBusy,
         isActive,
         canOpen,
         disabledLabel,
         onAction: () => handleOpenTarget(descriptor),
+        onCancel: () => cancelOpenTarget(descriptor.targetId),
       };
     });
     return { sceneSummary, targets };
   }, [
+    cancelOpenTarget,
     handleOpenTarget,
     lastOpenedTargetId,
     loadingTargetId,

@@ -19,20 +19,21 @@ from backend.core.simulator_security import SIMULATOR_TOKEN_HEADER
 from backend.services import workspace_transfer as workspace_transfer_service
 from backend.models.simulator_runtime import (
     SIMULATOR_CANONICAL_FRAME_CONVENTION,
-    SIMULATOR_RUNTIME_SPECS,
     SimulatorId,
     SimulatorRuntimeDependency,
     SimulatorRuntimeStatus,
     WorkspaceChangeSetApplyRequest,
     SimulatorWorkspacePrepareResponse,
 )
-from backend.models.workspace_transfer import WorkspaceOpenResponse
+from backend.models.workspace_transfer import WorkspaceLaunchCancelResponse, WorkspaceOpenResponse
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters import (
     SUPPORTED_SIMULATOR_IDS,
     WORKSPACE_SIMULATOR_IDS,
     get_simulator_adapter,
+    get_simulator_runtime_status,
     list_simulator_runtime_descriptors,
+    list_simulator_runtime_specs,
     normalize_simulator_workspace_change_set_request,
 )
 from backend.services.simulator_adapters.blender_change_sets import build_blender_change_set_source
@@ -227,8 +228,9 @@ def _blender_camera_change_payload(stable_id: str) -> dict:
 
 
 def test_simulator_registry_covers_literal_ids() -> None:
+    simulator_runtime_specs = list_simulator_runtime_specs()
     assert set(SUPPORTED_SIMULATOR_IDS) == set(get_args(SimulatorId))
-    assert [spec.simulator_id for spec in SIMULATOR_RUNTIME_SPECS] == list(SUPPORTED_SIMULATOR_IDS)
+    assert [spec.simulator_id for spec in simulator_runtime_specs] == list(SUPPORTED_SIMULATOR_IDS)
     descriptors = list_simulator_runtime_descriptors().simulators
 
     assert [descriptor.simulator_id for descriptor in descriptors] == list(SUPPORTED_SIMULATOR_IDS)
@@ -249,7 +251,6 @@ def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
         "sapien2": "urdf",
         "sapien3": "urdf",
         "isaacsim": "usd",
-        "isaaclab": "usd",
         "newton": "mjcf",
         "blender": "native",
         "robosplatter": "native",
@@ -263,13 +264,12 @@ def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
         "sapien2": "physics_simulator",
         "sapien3": "physics_simulator",
         "isaacsim": "physics_simulator",
-        "isaaclab": "physics_simulator",
         "newton": "physics_simulator",
         "blender": "authoring_tool",
         "robosplatter": "renderer",
     }
 
-    for spec in SIMULATOR_RUNTIME_SPECS:
+    for spec in list_simulator_runtime_specs():
         assert spec.target_kind == expected_target_kinds[spec.simulator_id]
         assert spec.transfer.frame_convention == SIMULATOR_CANONICAL_FRAME_CONVENTION
         assert spec.transfer.robot_asset_format == expected_robot_asset_formats[spec.simulator_id]
@@ -282,7 +282,7 @@ def test_simulator_registry_declares_transfer_policy_for_each_backend() -> None:
 def test_openable_simulator_runtime_params_are_centralized() -> None:
     openable_simulator_ids = {
         spec.simulator_id
-        for spec in SIMULATOR_RUNTIME_SPECS
+        for spec in list_simulator_runtime_specs()
         if spec.capabilities_model().workspace_target and spec.transfer.transfer_strategy != "planned"
     }
 
@@ -301,6 +301,61 @@ def test_openable_simulator_runtime_params_are_centralized() -> None:
             assert scene_params.viewer_step_hz > 0
         if hasattr(scene_params, "gravity_xyz"):
             assert len(scene_params.gravity_xyz) == 3
+
+
+def test_mjlab_workspace_status_uses_mujoco_workspace_dependency(monkeypatch) -> None:
+    from backend.services.simulator_adapters import base as simulator_adapter_base
+
+    def fake_is_python_module_available(import_name: str) -> bool:
+        return import_name == "mujoco"
+
+    monkeypatch.setattr(
+        simulator_adapter_base,
+        "is_python_module_available",
+        fake_is_python_module_available,
+    )
+
+    status = get_simulator_runtime_status("mjlab")
+
+    assert status.available is True
+    assert status.status == "ready"
+    assert [
+        (dependency.name, dependency.available, dependency.required, dependency.scope)
+        for dependency in status.dependencies
+    ] == [
+        ("mujoco", True, True, "workspace"),
+        ("mjlab", False, False, "validation"),
+        ("mujoco_warp", False, False, "validation"),
+    ]
+
+
+def test_simulator_runtime_status_can_probe_external_python(monkeypatch) -> None:
+    from backend.services.simulator_adapters import base as simulator_adapter_base
+
+    observed: list[tuple[str, str]] = []
+
+    def fake_is_python_module_available_in_python(
+        python_executable: str,
+        import_name: str,
+    ) -> bool:
+        observed.append((python_executable, import_name))
+        return import_name == "mujoco"
+
+    monkeypatch.setenv("STUDIO_MJLAB_PYTHON", "/opt/mjlab-env/bin/python")
+    monkeypatch.setattr(
+        simulator_adapter_base,
+        "is_python_module_available_in_python",
+        fake_is_python_module_available_in_python,
+    )
+
+    status = get_simulator_runtime_status("mjlab")
+
+    assert status.available is True
+    assert observed == [
+        ("/opt/mjlab-env/bin/python", "mujoco"),
+        ("/opt/mjlab-env/bin/python", "mjlab"),
+        ("/opt/mjlab-env/bin/python", "mujoco_warp"),
+    ]
 
 
 def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
@@ -333,9 +388,9 @@ def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     assert simulators[4]["simulatorId"] == "pybullet"
     assert simulators[4]["capabilities"]["workspaceTarget"] is True
     assert simulators[4]["transferPolicy"]["transferStrategy"] == "direct"
-    assert simulators[10]["simulatorId"] == "blender"
-    assert simulators[10]["targetKind"] == "authoring_tool"
-    assert simulators[10]["capabilities"]["layoutRoundTrip"] is True
+    blender = next(simulator for simulator in simulators if simulator["simulatorId"] == "blender")
+    assert blender["targetKind"] == "authoring_tool"
+    assert blender["capabilities"]["layoutRoundTrip"] is True
 
 
 def test_list_workspace_transfer_targets_returns_capability_descriptors() -> None:
@@ -348,9 +403,9 @@ def test_list_workspace_transfer_targets_returns_capability_descriptors() -> Non
     targets = response.json()["targets"]
     assert [target["targetId"] for target in targets] == list(SUPPORTED_SIMULATOR_IDS)
     assert targets[0]["targetKind"] == "physics_simulator"
-    assert targets[10]["targetId"] == "blender"
-    assert targets[10]["targetKind"] == "authoring_tool"
-    assert targets[10]["capabilities"]["layoutRoundTrip"] is True
+    blender = next(target for target in targets if target["targetId"] == "blender")
+    assert blender["targetKind"] == "authoring_tool"
+    assert blender["capabilities"]["layoutRoundTrip"] is True
 
 
 def test_workspace_transfer_targets_match_simulator_runtime_descriptors() -> None:
@@ -560,6 +615,7 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
     def fake_open_workspace_transfer_target(target_id, request):
         captured["target_id"] = target_id
         captured["request_title"] = request.world_package.title
+        captured["launch_id"] = request.launch_id
         return WorkspaceOpenResponse(
             targetId=target_id,
             started=True,
@@ -576,13 +632,15 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
         fake_open_workspace_transfer_target,
     )
 
+    payload = _open_request_payload()
+    payload["launch_id"] = "launch-123"
     with _patch_security_settings():
         response = asyncio.run(
             _request_json(
                 "POST",
                 "/workspace-transfer/targets/genesis/open",
                 headers=_operator_headers(),
-                json=_open_request_payload(),
+                json=payload,
             )
         )
 
@@ -592,6 +650,50 @@ def test_workspace_transfer_open_delegates_to_selected_adapter(monkeypatch) -> N
     assert captured == {
         "target_id": "genesis",
         "request_title": "Demo World",
+        "launch_id": "launch-123",
+    }
+
+
+def test_workspace_transfer_cancel_launch_delegates_to_launch_registry(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_cancel_workspace_transfer_target_launch(target_id, launch_id):
+        captured["target_id"] = target_id
+        captured["launch_id"] = launch_id
+        return WorkspaceLaunchCancelResponse(
+            targetId=target_id,
+            launchId=launch_id,
+            cancelled=True,
+            processStopped=True,
+            pid=1234,
+        )
+
+    monkeypatch.setattr(
+        workspace_transfer_api,
+        "cancel_workspace_transfer_target_launch",
+        fake_cancel_workspace_transfer_target_launch,
+    )
+
+    with _patch_security_settings():
+        response = asyncio.run(
+            _request_json(
+                "POST",
+                "/workspace-transfer/targets/genesis/launches/launch-123/cancel",
+                headers=_operator_headers(),
+            )
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "targetId": "genesis",
+        "launchId": "launch-123",
+        "cancelled": True,
+        "processStopped": True,
+        "pid": 1234,
+    }
+    assert captured == {
+        "target_id": "genesis",
+        "launch_id": "launch-123",
     }
 
 
@@ -665,35 +767,15 @@ def test_workspace_transfer_status_delegates_to_target_registry(monkeypatch) -> 
         "targetId": "genesis",
         "available": True,
         "status": "ready",
-        "dependencies": [{"name": "genesis", "available": True}],
+        "dependencies": [
+            {
+                "name": "genesis",
+                "available": True,
+                "required": True,
+                "scope": "workspace",
+            }
+        ],
     }
-
-
-def test_workspace_transfer_runtime_route_remains_compatible(monkeypatch) -> None:
-    def fake_get_simulator_runtime_status(simulator_id):
-        return SimulatorRuntimeStatus(
-            runtimeName=simulator_id,
-            available=True,
-            status="ready",
-            dependencies=[],
-        )
-
-    monkeypatch.setattr(
-        "backend.services.workspace_transfer.get_simulator_runtime_status",
-        fake_get_simulator_runtime_status,
-    )
-
-    with _patch_security_settings():
-        response = asyncio.run(
-            _request_json(
-                "GET",
-                "/workspace-transfer/targets/genesis/runtime",
-                headers=_operator_headers(),
-            )
-        )
-
-    assert response.status_code == 200
-    assert response.json()["targetId"] == "genesis"
 
 
 def test_optional_simulator_workspace_prepare_reports_missing_adapter() -> None:
@@ -724,7 +806,6 @@ def test_non_workspace_target_simulators_are_registered_but_not_openable() -> No
         "sapien2",
         "sapien3",
         "isaacsim",
-        "isaaclab",
         "newton",
         "robosplatter",
     ]

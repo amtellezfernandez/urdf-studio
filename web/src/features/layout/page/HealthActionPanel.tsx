@@ -72,10 +72,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shared/ui/tooltip";
 import { HEALTH_ACTION_PANEL_PARAMS } from "@/features/layout/page/healthActionPanelParams";
 import { HealthActionPanelHeader } from "@/features/layout/page/HealthActionPanelHeader";
-import {
-  HealthActionPanelWorkspaceTransfer,
-  type HealthActionPanelWorkspaceTransferState,
-} from "@/features/layout/page/HealthActionPanelWorkspaceTransfer";
 
 type SimStatusTone = "safe" | "warning" | "danger";
 
@@ -114,7 +110,6 @@ type CompatibilityRobotMirrorSelectionGroup = {
 type HealthActionPanelProps = {
   open: boolean;
   onClose?: () => void;
-  workspaceTransfer?: HealthActionPanelWorkspaceTransferState | null;
   statusTone?: SimStatusTone;
   statusLabel?: string | null;
   statusSummary?: string | null;
@@ -1551,7 +1546,6 @@ const resolveRepeatedInertiaSymmetryOutcome = ({
 export const HealthActionPanel = ({
   open,
   onClose,
-  workspaceTransfer = null,
   statusTone = "warning",
   statusLabel = null,
   statusSummary = null,
@@ -2105,13 +2099,6 @@ export const HealthActionPanel = ({
         />
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-          {workspaceTransfer ? (
-            <HealthActionPanelWorkspaceTransfer
-              className={CHECKLIST_CARD_CLASS}
-              {...workspaceTransfer}
-            />
-          ) : null}
-
           {hasSymmetryPlanesSection ? (
             <div data-section="symmetry-planes" className={CHECKLIST_CARD_CLASS}>
               <div className="text-[11px] font-medium text-foreground/85">Symmetry Planes</div>

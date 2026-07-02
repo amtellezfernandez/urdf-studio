@@ -6,7 +6,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -18,7 +18,6 @@ from backend.services.simulator_adapters.genesis_camera import (
     add_observation_camera_sensor,
     add_scene_camera,
     attach_scene_camera_to_robot_link,
-    camera_viewer_pose,
     read_observation_camera_sensor_images,
     write_camera_screenshots,
     write_sensor_screenshots,
@@ -48,9 +47,10 @@ from backend.services.simulator_adapters.world_scene import (
     prepare_simulator_scene,
     write_simulator_validation_report,
 )
-from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
+from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutFrameMap
 
 GENESIS_BACKEND_ENV = "URDF_STUDIO_GENESIS_BACKEND"
+GENESIS_PERFORMANCE_MODE_ENV = "URDF_STUDIO_GENESIS_PERFORMANCE_MODE"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -71,6 +71,14 @@ def _parse_args() -> argparse.Namespace:
 
 def _viewer_run_in_thread() -> bool:
     return sys.platform != "darwin"
+
+
+def _truthy_env(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _genesis_performance_mode() -> bool:
+    return _truthy_env(os.getenv(GENESIS_PERFORMANCE_MODE_ENV))
 
 
 def _torch_cuda_available() -> bool:
@@ -176,6 +184,49 @@ def _resolve_genesis_backend(gs) -> tuple[Any | None, str]:
     return getattr(gs, backend_name), requested
 
 
+def genesis_overview_viewer_pose(
+    primitives: Sequence[SimPrimitive],
+) -> tuple[
+    tuple[float, float, float],
+    tuple[float, float, float],
+    tuple[float, float, float],
+    float,
+]:
+    center, radius = scene_center_and_radius(primitives)
+    camera_pos = (
+        center[0] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[0],
+        center[1] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[1],
+        max(
+            center[2] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[2],
+            GENESIS_SCENE_PARAMS.viewer.min_camera_z_m,
+        ),
+    )
+    return camera_pos, center, (0.0, 0.0, 1.0), GENESIS_SCENE_PARAMS.viewer.fov_deg
+
+
+def should_step_genesis_workspace(
+    *,
+    no_viewer: bool,
+    duration_sec: float,
+    screenshot_path: Path | None,
+    camera_screenshot_dir: Path | None,
+    sensor_screenshot_dir: Path | None,
+    report_path: Path | None,
+) -> bool:
+    return (
+        no_viewer
+        or duration_sec > 0
+        or screenshot_path is not None
+        or camera_screenshot_dir is not None
+        or sensor_screenshot_dir is not None
+        or report_path is not None
+    )
+
+
+def should_add_genesis_scene_cameras(*, camera_screenshot_dir: Path | None) -> bool:
+    return camera_screenshot_dir is not None
+
+
 def prepare_genesis_workspace_scene(
     *,
     world_package_path: Path,
@@ -212,27 +263,23 @@ def prepare_genesis_workspace_scene(
     cameras = simulator_scene.cameras
 
     genesis_backend, genesis_backend_label = _resolve_genesis_backend(gs)
-    gs.init(backend=genesis_backend, logging_level="warning")
+    genesis_performance_mode = _genesis_performance_mode()
+    gs.init(
+        backend=genesis_backend,
+        precision="32",
+        logging_level="warning",
+        performance_mode=genesis_performance_mode,
+    )
     print(
         "[genesis-workspace] "
-        f"genesis_backend_request={genesis_backend_label} genesis_backend={getattr(gs, 'backend', None)}",
+        f"genesis_backend_request={genesis_backend_label} "
+        f"genesis_backend={getattr(gs, 'backend', None)} "
+        f"performance_mode={genesis_performance_mode}",
         flush=True,
     )
-    center, radius = scene_center_and_radius(simulator_scene.primitives)
-    viewer_camera_spec = cameras[0] if cameras and not no_viewer else None
-    camera_pos = (
-        center[0] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[0],
-        center[1] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[1],
-        max(
-            center[2] + radius * GENESIS_SCENE_PARAMS.viewer.camera_radius_scale_xyz[2],
-            GENESIS_SCENE_PARAMS.viewer.min_camera_z_m,
-        ),
+    camera_pos, camera_lookat, camera_up, camera_fov = genesis_overview_viewer_pose(
+        simulator_scene.primitives
     )
-    camera_lookat = center
-    camera_up = (0.0, 0.0, 1.0)
-    camera_fov = GENESIS_SCENE_PARAMS.viewer.fov_deg
-    if viewer_camera_spec is not None:
-        camera_pos, camera_lookat, camera_up, camera_fov = camera_viewer_pose(viewer_camera_spec)
     scene = gs.Scene(
         show_viewer=not no_viewer,
         sim_options=gs.options.SimOptions(
@@ -250,9 +297,11 @@ def prepare_genesis_workspace_scene(
             camera_lookat=camera_lookat,
             camera_up=camera_up,
             camera_fov=camera_fov,
+            max_FPS=int(GENESIS_SCENE_PARAMS.viewer.step_hz),
             run_in_thread=_viewer_run_in_thread(),
             enable_gui=True,
         ),
+        profiling_options=gs.options.ProfilingOptions(show_FPS=False),
         vis_options=gs.options.VisOptions(
             show_cameras=GENESIS_SCENE_PARAMS.visual.show_camera_helpers,
             ambient_light=GENESIS_SCENE_PARAMS.visual.ambient_light_rgb,
@@ -306,15 +355,22 @@ def prepare_genesis_workspace_scene(
         camera = scene.add_camera(
             res=screenshot_size,
             pos=camera_pos,
-            lookat=center,
-            up=(0.0, 0.0, 1.0),
-            fov=GENESIS_SCENE_PARAMS.viewer.fov_deg,
+            lookat=camera_lookat,
+            up=camera_up,
+            fov=camera_fov,
             GUI=False,
         )
-    scene_cameras = [
-        add_scene_camera(gs, scene, camera_spec, visible=not no_viewer)
-        for camera_spec in cameras
-    ]
+    should_add_scene_cameras = should_add_genesis_scene_cameras(
+        camera_screenshot_dir=camera_screenshot_dir
+    )
+    scene_cameras = (
+        [
+            add_scene_camera(gs, scene, camera_spec, visible=False)
+            for camera_spec in cameras
+        ]
+        if should_add_scene_cameras
+        else []
+    )
     attached_camera_count = sum(
         1
         for scene_camera, camera_spec in zip(scene_cameras, cameras)
@@ -345,12 +401,14 @@ def prepare_genesis_workspace_scene(
         flush=True,
     )
     print(
-        f"[genesis-workspace] cameras={len(scene_cameras)} attached_cameras={attached_camera_count}",
+        "[genesis-workspace] "
+        f"cameras={len(cameras)} scene_cameras={len(scene_cameras)} "
+        f"attached_cameras={attached_camera_count}",
         flush=True,
     )
     print(
         "[genesis-workspace] "
-        f"observation_cameras={len(observation_camera_sensors)} "
+        f"camera_gui_windows=0 observation_cameras={len(observation_camera_sensors)} "
         f"observation_sensors={'enabled' if should_add_observation_sensors else 'viewer-skipped'}",
         flush=True,
     )
@@ -367,31 +425,17 @@ def prepare_genesis_workspace_scene(
             f"links_to_keep={len(attachment_links)}",
             flush=True,
         )
-    if viewer_camera_spec is not None:
-        print(
-            "[genesis-workspace] "
-            f"viewer_camera_pov={viewer_camera_spec.sim_name} "
-            f"camera_gui_windows={len(scene_cameras)}",
-            flush=True,
-        )
-
-    camera_window_render_enabled = True
+    should_step_workspace = should_step_genesis_workspace(
+        no_viewer=no_viewer,
+        duration_sec=duration_sec,
+        screenshot_path=screenshot_path,
+        camera_screenshot_dir=camera_screenshot_dir,
+        sensor_screenshot_dir=sensor_screenshot_dir,
+        report_path=report_path,
+    )
 
     def step_runtime() -> None:
-        nonlocal camera_window_render_enabled
         scene.step()
-        if not no_viewer and camera_window_render_enabled:
-            for scene_camera in scene_cameras:
-                try:
-                    scene_camera.render(rgb=True, force_render=True)
-                except Exception as exc:
-                    print(
-                        "[genesis-workspace] warning: "
-                        f"camera POV window rendering disabled: {exc}",
-                        flush=True,
-                    )
-                    camera_window_render_enabled = False
-                    break
 
     try:
         initial_step_done = False
@@ -402,7 +446,8 @@ def prepare_genesis_workspace_scene(
         def ensure_initial_step() -> None:
             nonlocal initial_step_done, sensor_reads_reported, sensor_images, sensor_read_count
             if not initial_step_done:
-                step_runtime()
+                if should_step_workspace:
+                    step_runtime()
                 initial_step_done = True
             if not sensor_reads_reported:
                 sensor_read_count, sensor_images = read_observation_camera_sensor_images(
@@ -449,6 +494,7 @@ def prepare_genesis_workspace_scene(
                 runtime={
                     "backend_request": genesis_backend_label,
                     "backend": str(getattr(gs, "backend", None)),
+                    "performance_mode": genesis_performance_mode,
                     "robot_repair": {
                         "applied": robot_repair.applied,
                         "repair_id": robot_repair.repair_id,
@@ -457,8 +503,11 @@ def prepare_genesis_workspace_scene(
                     },
                     "controlled_dofs": controlled_dof_count,
                     "applied_initial_joints": applied_joints,
+                    "configured_cameras": len(cameras),
                     "scene_cameras": len(scene_cameras),
                     "attached_cameras": attached_camera_count,
+                    "camera_gui_windows": 0,
+                    "static_view": not should_step_workspace,
                     "observation_cameras": len(observation_camera_sensors),
                     "sensor_reads": sensor_read_count,
                     "camera_attachment_links": len(camera_attachment_links),
@@ -487,14 +536,17 @@ def prepare_genesis_workspace_scene(
 
         ensure_initial_step()
         if duration_sec <= 0:
-            print("[genesis-workspace] Genesis viewer opened. Press Ctrl-C to return.", flush=True)
+            print(
+                "[genesis-workspace] Genesis static viewer opened. Press Ctrl-C to return.",
+                flush=True,
+            )
             while True:
-                step_runtime()
                 time.sleep(1.0 / GENESIS_SCENE_PARAMS.viewer.step_hz)
 
         deadline = time.monotonic() + duration_sec
         while time.monotonic() < deadline:
-            step_runtime()
+            if should_step_workspace:
+                step_runtime()
             time.sleep(1.0 / GENESIS_SCENE_PARAMS.viewer.step_hz)
     except KeyboardInterrupt:
         return

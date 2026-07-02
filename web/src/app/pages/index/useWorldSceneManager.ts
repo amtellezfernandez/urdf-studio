@@ -606,45 +606,6 @@ export const useWorldSceneManager = ({
     [importWorldLayoutFromUrl]
   );
 
-  const ensureWorldLayoutForTransfer = useCallback(async () => {
-    if (
-      objectsRef.current.some(
-        (object) => object.source === WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE
-      )
-    ) {
-      return;
-    }
-    if (
-      (hasExplicitWorldImport || hasExplicitWorldLayoutImport) &&
-      objectsRef.current.length > 0
-    ) {
-      return;
-    }
-    const { worldLayout } = await readWorldSceneLayerFromUrl(
-      DEFAULT_WORLD_LAYOUT_URL,
-      "Default world layout transfer"
-    );
-    const layoutObjects = worldLayout.objects.map((object) => ({
-      id: object.id,
-      ...toImportedObjectParams({
-        ...object,
-        source: WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
-      }),
-    }));
-    if (layoutObjects.length === 0) return;
-    const layoutIds = new Set(layoutObjects.map((object) => object.id));
-    const preservedObjects = objectsRef.current.filter(
-      (object) =>
-        object.source !== WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE &&
-        !layoutIds.has(object.id)
-    );
-    applyCreatedObjects([...preservedObjects, ...layoutObjects]);
-  }, [
-    applyCreatedObjects,
-    hasExplicitWorldImport,
-    hasExplicitWorldLayoutImport,
-  ]);
-
   useEffect(() => {
     if (worldImportHandledRef.current || !hasExplicitWorldImport) return;
     worldImportHandledRef.current = true;
@@ -778,7 +739,6 @@ export const useWorldSceneManager = ({
   return {
     activeWorldSnapshotRef,
     buildCurrentWorldScenePackageManifest,
-    ensureWorldLayoutForTransfer,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,

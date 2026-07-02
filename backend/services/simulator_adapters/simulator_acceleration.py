@@ -1,0 +1,154 @@
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Sequence
+
+
+SIMULATOR_ACCELERATION_DISABLE_ENV = "URDF_STUDIO_DISABLE_SIMULATOR_ACCELERATION"
+SIMULATOR_GPU_DEVICE_ENV = "URDF_STUDIO_SIMULATOR_GPU_DEVICE"
+GENESIS_BACKEND_ENV = "URDF_STUDIO_GENESIS_BACKEND"
+GENESIS_PERFORMANCE_MODE_ENV = "URDF_STUDIO_GENESIS_PERFORMANCE_MODE"
+
+
+def _truthy_env(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _has_display_environment() -> bool:
+    if sys.platform in {"win32", "darwin"}:
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _command_succeeds(command: Sequence[str]) -> bool:
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def _has_nvidia_gpu() -> bool:
+    if _command_succeeds(("nvidia-smi", "-L")):
+        return True
+    wsl_nvidia_smi = Path("/usr/lib/wsl/lib/nvidia-smi")
+    return wsl_nvidia_smi.exists() and _command_succeeds((str(wsl_nvidia_smi), "-L"))
+
+
+def _cuda_driver_library_dirs() -> tuple[Path, ...]:
+    candidates = (
+        Path("/usr/lib/wsl/lib"),
+        Path("/usr/lib/x86_64-linux-gnu"),
+        Path("/usr/local/cuda/lib64"),
+    )
+    dirs: list[Path] = []
+    for directory in candidates:
+        if (directory / "libcuda.so").exists() or (directory / "libcuda.so.1").exists():
+            dirs.append(directory)
+    return tuple(dirs)
+
+
+def _has_cuda_driver_library() -> bool:
+    if _cuda_driver_library_dirs():
+        return True
+    try:
+        result = subprocess.run(
+            ("ldconfig", "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and "libcuda.so" in result.stdout
+
+
+def _has_nvidia_cuda_runtime() -> bool:
+    return _has_nvidia_gpu() and _has_cuda_driver_library()
+
+
+def _prepend_env_path(env: dict[str, str], key: str, value: str) -> None:
+    current = env.get(key, "")
+    entries = [entry for entry in current.split(os.pathsep) if entry]
+    if value in entries:
+        return
+    env[key] = os.pathsep.join([value, *entries])
+
+
+def _apply_nvidia_cuda_runtime_env(env: dict[str, str]) -> None:
+    for library_dir in reversed(_cuda_driver_library_dirs()):
+        _prepend_env_path(env, "LD_LIBRARY_PATH", str(library_dir))
+
+
+def _selected_gpu_device() -> str:
+    configured_device = os.environ.get(SIMULATOR_GPU_DEVICE_ENV, "").strip()
+    return configured_device or "0"
+
+
+def _set_default(env: dict[str, str], key: str, value: str) -> None:
+    if not env.get(key):
+        env[key] = value
+
+
+def apply_simulator_acceleration_env(env: dict[str, str], simulator_id: str | None) -> None:
+    if not simulator_id or _truthy_env(env.get(SIMULATOR_ACCELERATION_DISABLE_ENV)):
+        return
+
+    normalized_id = simulator_id.strip().lower()
+    has_nvidia_cuda = _has_nvidia_cuda_runtime()
+    gpu_device = _selected_gpu_device()
+    if has_nvidia_cuda:
+        _apply_nvidia_cuda_runtime_env(env)
+
+    if normalized_id == "genesis":
+        if has_nvidia_cuda:
+            _set_default(env, GENESIS_BACKEND_ENV, "gpu")
+            _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+            _set_default(env, "QD_VISIBLE_DEVICE", gpu_device)
+            _set_default(env, "EGL_DEVICE_ID", gpu_device)
+        return
+
+    if normalized_id in {"mujoco", "mjlab"}:
+        if sys.platform == "linux" and not _has_display_environment():
+            if has_nvidia_cuda:
+                _set_default(env, "MUJOCO_GL", "egl")
+                _set_default(env, "PYOPENGL_PLATFORM", "egl")
+                _set_default(env, "EGL_DEVICE_ID", gpu_device)
+            else:
+                _set_default(env, "MUJOCO_GL", "osmesa")
+        if normalized_id == "mjlab" and has_nvidia_cuda:
+            _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+        return
+
+    if normalized_id == "mjx" and has_nvidia_cuda:
+        _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+
+
+def build_simulator_workspace_env(cache_root: Path, simulator_id: str | None = None) -> dict[str, str]:
+    cache_root.mkdir(parents=True, exist_ok=True)
+    cache_dirs = {
+        "XDG_CACHE_HOME": cache_root / "xdg",
+        "MPLCONFIGDIR": cache_root / "matplotlib",
+        "NUMBA_CACHE_DIR": cache_root / "numba",
+        "TI_CACHE_HOME": cache_root / "taichi",
+        "TAICHI_CACHE_HOME": cache_root / "taichi",
+        "QUADRANTS_CACHE_DIR": cache_root / "quadrants",
+        "QDCACHE_DIR": cache_root / "quadrants",
+    }
+    for path in cache_dirs.values():
+        path.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env.update({name: str(path) for name, path in cache_dirs.items()})
+    apply_simulator_acceleration_env(env, simulator_id)
+    return env

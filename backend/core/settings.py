@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from backend.core.app_config import get_config_value, read_app_config
 from backend.services.dataset_alignment_params import DEFAULT_EMBODIMENT_REGISTRY_FILENAME
@@ -55,6 +56,10 @@ def _build_cors_origins(web_host: str, web_port: int) -> list[str]:
     if web_host in {"0.0.0.0", "::"}:
         candidates.update({"localhost", "127.0.0.1"})
     return [f"http://{host}:{web_port}" for host in sorted(candidates) if host]
+
+
+def _home_path(*parts: str) -> str:
+    return str(Path.home().joinpath(*parts))
 
 
 @dataclass(frozen=True)
@@ -171,12 +176,21 @@ def load_settings() -> Settings:
         "URDF_ZRA_ORCHESTRATOR_DEVICES_PATH",
         get_config_value(config, ["zraOrchestrator", "devicesPath"], ""),
     ).strip() or None
+    butterclaw_runtime_demo_enabled = _read_bool(
+        "URDF_STUDIO_RUNTIME_DEMO",
+        get_config_value(config, ["butterclaw", "runtimeDemoEnabled"], False),
+    )
+    butterclaw_repo_path = _read_str(
+        "URDF_BUTTERCLAW_REPO_PATH",
+        get_config_value(config, ["butterclaw", "repoPath"], _home_path("ButterClaw")),
+    )
+    butterclaw_repo_root = Path(butterclaw_repo_path).expanduser()
     butterclaw_current_map_path = _read_str(
         "URDF_BUTTERCLAW_CURRENT_MAP_PATH",
         get_config_value(
             config,
             ["butterclaw", "currentMapPath"],
-            "/home/am/dev/ButterClaw/map/current_map.md",
+            str(butterclaw_repo_root / "map" / "current_map.md"),
         ),
     )
     butterclaw_slam_pose_path = _read_str(
@@ -184,23 +198,15 @@ def load_settings() -> Settings:
         get_config_value(
             config,
             ["butterclaw", "slamPosePath"],
-            "/home/am/dev/ButterClaw/artifacts/slam_pose.json",
+            str(butterclaw_repo_root / "artifacts" / "slam_pose.json"),
         ),
-    )
-    butterclaw_runtime_demo_enabled = _read_bool(
-        "URDF_STUDIO_RUNTIME_DEMO",
-        get_config_value(config, ["butterclaw", "runtimeDemoEnabled"], False),
-    )
-    butterclaw_repo_path = _read_str(
-        "URDF_BUTTERCLAW_REPO_PATH",
-        get_config_value(config, ["butterclaw", "repoPath"], "/home/am/dev/ButterClaw"),
     )
     butterclaw_python_path = _read_str(
         "URDF_BUTTERCLAW_PYTHON_PATH",
         get_config_value(
             config,
             ["butterclaw", "pythonPath"],
-            "/home/am/dev/ButterClaw/.venv/bin/python",
+            str(butterclaw_repo_root / ".venv" / "bin" / "python"),
         ),
     )
     butterclaw_runtime_control_dir = _read_str(
@@ -208,7 +214,7 @@ def load_settings() -> Settings:
         get_config_value(
             config,
             ["butterclaw", "runtimeControlDir"],
-            "/home/am/dev/ButterClaw/artifacts/latest/sim_control",
+            str(butterclaw_repo_root / "artifacts" / "latest" / "sim_control"),
         ),
     )
     butterclaw_robot_runtime_root = _read_str(
@@ -216,7 +222,7 @@ def load_settings() -> Settings:
         get_config_value(
             config,
             ["butterclaw", "robotRuntimeRoot"],
-            "/home/am/.butterclaw/robot-runtime",
+            _home_path(".butterclaw", "robot-runtime"),
         ),
     )
     butterclaw_robot_remote_ip = _read_str(
@@ -280,7 +286,7 @@ def load_settings() -> Settings:
         get_config_value(
             config,
             ["verifiableRobotics", "repoPath"],
-            "/home/am/dev/verifiable-robotics-protocol",
+            _home_path("verifiable-robotics-protocol"),
         ),
     )
     verifiable_robotics_cargo_bin = _read_str(
@@ -288,7 +294,7 @@ def load_settings() -> Settings:
         get_config_value(
             config,
             ["verifiableRobotics", "cargoBin"],
-            "/home/am/.cargo/bin/cargo",
+            _home_path(".cargo", "bin", "cargo"),
         ),
     )
     verifiable_robotics_timeout_seconds = _read_int(

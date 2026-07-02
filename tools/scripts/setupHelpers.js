@@ -44,7 +44,8 @@ export function buildSetupRoadmapSections() {
       lines: [
         'Node dependencies',
         'Unified Python backend runtime',
-        'Simulator runtimes: Genesis, PyBullet, and Blender',
+        'Simulator compatibility preflight',
+        'Managed simulator runtimes supported by this machine',
         'Hugging Face and GitHub access',
       ],
     },

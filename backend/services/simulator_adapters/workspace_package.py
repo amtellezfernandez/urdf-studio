@@ -6,6 +6,7 @@ import hashlib
 import html
 import json
 import re
+import shutil
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -24,6 +25,10 @@ from backend.services.ilu_urdf import (
     IluUrdfBridgeError,
     bundle_mesh_assets_for_urdf_file,
 )
+from backend.services.simulator_adapters.workspace_paths import (
+    compute_workspace_asset_roots,
+    write_workspace_asset_roots,
+)
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
     world_scene_package_json_payload,
@@ -40,6 +45,7 @@ class PreparedSimulatorWorkspace:
     world_package_path: Path
     robot_urdf_path: Path
     bundle_result: BundleMeshAssetsResult
+    robot_urdf_xml: str = ""
     world_object_count: int = 0
     camera_count: int = 0
 
@@ -96,7 +102,10 @@ def _normalize_root_relative_urdf_mesh_filenames(urdf_xml: str) -> str:
         if not normalized_filename.startswith("/"):
             continue
         portable_filename = normalized_filename.lstrip("/")
-        if not portable_filename.startswith(ROOT_RELATIVE_URDF_MESH_PREFIXES):
+        # Accept paths under known prefixes (meshes/, assets/) OR flat filenames with no
+        # directory component; flat absolute paths like /model.stl are common in CAD exports.
+        # Reject multi-segment paths not under a known prefix (e.g. /tmp/model.stl).
+        if not portable_filename.startswith(ROOT_RELATIVE_URDF_MESH_PREFIXES) and "/" in portable_filename:
             continue
         mesh.set("filename", portable_filename)
         changed = True
@@ -302,6 +311,25 @@ def prepare_simulator_workspace_package(
     workspace_dir = _timestamped_workspace_dir(workspace_root)
     source_root = workspace_dir / "source"
     source_root.mkdir(parents=True, exist_ok=True)
+    try:
+        return _prepare_simulator_workspace_package_inner(
+            request,
+            workspace_dir=workspace_dir,
+            source_root=source_root,
+            error=error,
+        )
+    except BaseException:
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+        raise
+
+
+def _prepare_simulator_workspace_package_inner(
+    request: SimulatorWorkspacePrepareRequest,
+    *,
+    workspace_dir: Path,
+    source_root: Path,
+    error: Callable[[str], Exception],
+) -> PreparedSimulatorWorkspace:
     _write_uploaded_assets(source_root, request.mesh_assets, error=error)
     _write_package_root_hints(source_root, request.package_roots)
 
@@ -341,16 +369,18 @@ def prepare_simulator_workspace_package(
     extra_search_roots.extend(_package_root_hint_paths(source_root, request.package_roots))
 
     bundled_urdf_path = workspace_dir / "robot" / "robot.urdf"
+    workspace_asset_roots = compute_workspace_asset_roots(
+        workspace_dir=workspace_dir,
+        robot_urdf_path=bundled_urdf_path,
+        uploaded_asset_sources=tuple(extra_search_roots),
+    )
+    write_workspace_asset_roots(workspace_dir, workspace_asset_roots)
     try:
         bundle_result = bundle_mesh_assets_for_urdf_file(
             urdf_path=str(source_urdf_path),
             urdf_xml=robot_urdf_xml,
             out_path=str(bundled_urdf_path),
-            extra_search_roots=[
-                str(path)
-                for path in dict.fromkeys(path.resolve() for path in extra_search_roots)
-                if path.exists()
-            ],
+            extra_search_roots=[str(path) for path in workspace_asset_roots],
         )
     except IluUrdfBridgeError as exc:
         _raise(error, exc.detail)
@@ -371,6 +401,7 @@ def prepare_simulator_workspace_package(
         world_package_path=world_package_path,
         robot_urdf_path=bundled_urdf_path,
         bundle_result=bundle_result,
+        robot_urdf_xml=bundle_result.content,
         world_object_count=_transferable_world_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
     )
@@ -398,9 +429,12 @@ def wait_for_workspace_readiness(
     ready_timeout_sec: float,
     post_ready_grace_sec: float,
     error: Callable[[str], Exception],
+    should_cancel: Callable[[], bool] | None = None,
 ) -> None:
     deadline = time.monotonic() + ready_timeout_sec
     while time.monotonic() < deadline:
+        if should_cancel is not None and should_cancel():
+            _raise(error, f"{simulator_label} workspace launch was cancelled.")
         returncode = process.poll()
         if returncode is not None:
             _raise(
@@ -414,6 +448,8 @@ def wait_for_workspace_readiness(
             )
         if ready_log_marker in read_log_tail(log_path, tail_chars=log_tail_chars):
             time.sleep(post_ready_grace_sec)
+            if should_cancel is not None and should_cancel():
+                _raise(error, f"{simulator_label} workspace launch was cancelled.")
             returncode = process.poll()
             if returncode is not None:
                 _raise(
@@ -427,6 +463,8 @@ def wait_for_workspace_readiness(
                 )
             return
         time.sleep(poll_sec)
+    if should_cancel is not None and should_cancel():
+        _raise(error, f"{simulator_label} workspace launch was cancelled.")
     _raise(
         error,
         f"{simulator_label} workspace did not become ready within {ready_timeout_sec:.0f}s. "

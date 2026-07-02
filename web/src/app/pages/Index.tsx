@@ -1,4 +1,4 @@
-import { Suspense, useState, useCallback, useMemo, startTransition, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, startTransition, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useCameraStore } from "@/shared/store/useCameraStore";
@@ -13,7 +13,6 @@ import {
   useCameraPanels,
 } from "@/features/camera";
 import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
-import type { FileWithPath } from "@/shared/types/file";
 import type { URDFRobot } from "urdf-loader";
 import { useUrdfEditHandlers } from "@/features/layout/page/useUrdfEditHandlers";
 import { useUrdfUtilityHandlers } from "@/features/layout/page/useUrdfUtilityHandlers";
@@ -21,7 +20,12 @@ import { useUrdfMaterialHandlers } from "@/features/layout/page/useUrdfMaterialH
 import { PageLayout, type PageLayoutProps } from "@/features/layout/page/PageLayout";
 import type { CollaborationInviteAction } from "@/features/layout/page/top-nav/types";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
-import type { RotationAxis, UrdfViewMode, AngleUnit } from "@/shared/types/feature";
+import type {
+  AngleUnit,
+  InertialVisualizationSettings,
+  RotationAxis,
+  UrdfViewMode,
+} from "@/shared/types/feature";
 import { useUrdfLoader } from "@/features/urdf/loader/useUrdfLoader";
 import { useUrdfSelection } from "@/features/urdf/selection";
 import { useUrdfViewer } from "@/features/urdf/viewer";
@@ -30,7 +34,6 @@ import { useLayout } from "@/features/layout";
 import { useThemeAndGPUMode } from "@/features/theme";
 import { useWorkspaceController } from "@/features/workspace/useWorkspaceController";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
-import { resolveFeatureGateAvailability } from "@/shared/lib/featureGateUi";
 import { DEMO_MODE } from "@/shared/config/demo";
 import {
   isRunRuntimeDemoScanMessage,
@@ -56,9 +59,8 @@ import {
 import { normalizeMeshPathForMatch, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
 import { validateInertiaTensor } from "@/features/viewer/inertialMath";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
-import { TOP_NAV_HEIGHT } from "@/features/layout/page/constants";
 import { useButterClawRuntimePose } from "@/studio_ui/runtimeviz/useButterClawRuntimePose";
-import { ROBOT_NAME_PATTERN, parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
+import { parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
 import { useWorldSceneManager, downloadTextDocument } from "@/app/pages/index/useWorldSceneManager";
@@ -70,22 +72,8 @@ import { useIndexViewerProps } from "@/app/pages/index/useIndexViewerProps";
 import { resolveViewerDraftPreview } from "@/app/pages/index/viewerDraftPreview";
 import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTransferLauncher";
 import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
-import {
-  findURDFCandidates,
-  parseGitHubUrl,
-  resolveRepositoryXacroTargetPath,
-} from "@/features/urdf/github/githubRepo";
-import {
-  buildIluGitHubCandidateFileList,
-  fetchIluGitHubRepoFiles,
-} from "@/features/urdf/github/iluGitHubImport";
-import {
-  IkDebuggerPanel,
-  WorldPublishDialog,
-  WorldRegistryPanel,
-  WorldRolloutReviewPanel,
-  WorldSceneImportDialog,
-} from "@/app/pages/index/indexPageLazyComponents";
+import { IndexWorldDialogs } from "@/app/pages/index/IndexWorldDialogs";
+import { useIndexSourceLoaders } from "@/app/pages/index/useIndexSourceLoaders";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
@@ -213,38 +201,14 @@ import {
 import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
 
-type UrdfFileInput = FileList | File[];
+const EMPTY_EPISODE_JOINT_NAMES: string[] = [];
 
-const resolveRemoteUrdfFileUrl = (rawUrl: string): string => {
-  const parsed = new URL(rawUrl);
-  const host = parsed.hostname.toLowerCase();
-  const pathParts = parsed.pathname.split("/").filter(Boolean);
-
-  if ((host === "huggingface.co" || host === "www.huggingface.co" || host === "hf.co") && pathParts.includes("blob")) {
-    parsed.pathname = `/${pathParts.map((part) => part === "blob" ? "resolve" : part).join("/")}`;
-    return parsed.toString();
-  }
-
-  if (host === "github.com" && pathParts.length >= 5 && pathParts[2] === "blob") {
-    const [owner, repo, , branch, ...filePathParts] = pathParts;
-    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePathParts.join("/")}`;
-  }
-
-  return parsed.toString();
-};
-
-const inferRemoteUrdfFileName = (rawUrl: string): string => {
-  try {
-    const parsed = new URL(rawUrl);
-    const name = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
-    if (/\.(urdf|xacro|xml)$/i.test(name)) {
-      return name;
-    }
-  } catch {
-    // Fall through to the default name.
-  }
-  return "robot.urdf";
-};
+const cloneInertialVisualizationSettings = (
+  settings: InertialVisualizationSettings
+): InertialVisualizationSettings => ({
+  ...settings,
+  scopedLinkNames: settings.scopedLinkNames ? [...settings.scopedLinkNames] : null,
+});
 
 const Index = () => {
   const navigate = useNavigate();
@@ -252,8 +216,6 @@ const Index = () => {
   useIkRegistrySync({ enabled: FEATURE_GATES.ikRemoteSolve.enabled });
   const selectedIkSolverId = useIkSolverStore((state) => state.selectedSolverId);
   useIkdRuntimeAuto({ selectedSolverId: selectedIkSolverId });
-  const availableIkSolvers = useIkSolverStore((state) => state.availableSolvers);
-  const setSelectedIkSolverId = useIkSolverStore((state) => state.setSelectedSolverId);
   const { gpuMode, setGPUMode } = useThemeAndGPUMode();
   const workspaceController = useWorkspaceController();
   const workspaceMode = workspaceController.mode;
@@ -359,108 +321,18 @@ const Index = () => {
     onClearSelection: clearSelection,
     onAutoSelectEndEffector: setEndEffectorLink,
   });
-  const loadFilesFromFolderWithFreshCameras = useCallback(
-    async (fileList: UrdfFileInput, options?: { preserveCameras?: boolean }) => {
-      if (!options?.preserveCameras) {
-        clearCameras();
-      }
-      await loadFilesFromFolder(fileList as FileList);
-    },
-    [clearCameras, loadFilesFromFolder]
-  );
-  const handleLoadGitHubSource = useCallback(
-    async ({
-      repoUrl,
-      urdfPath,
-      token,
-    }: {
-      repoUrl: string;
-      urdfPath?: string;
-      token?: string;
-    }) => {
-      try {
-        const repoInfo = parseGitHubUrl(repoUrl);
-        if (!repoInfo) {
-          throw new Error("Enter a valid GitHub repository URL.");
-        }
-
-        const sourceInfo = {
-          owner: repoInfo.owner,
-          repo: repoInfo.repo,
-          path: repoInfo.path,
-          branch: repoInfo.branch,
-        };
-        const files = await fetchIluGitHubRepoFiles(sourceInfo, token);
-        const candidates = findURDFCandidates(files);
-        const requestedPath = urdfPath?.trim() ||
-          (repoInfo.path && /\.(urdf|xacro)$/i.test(repoInfo.path) ? repoInfo.path : "");
-        const candidatePath = requestedPath
-          ? resolveRepositoryXacroTargetPath(files, requestedPath)
-          : candidates[0]?.path;
-
-        if (!candidatePath) {
-          throw new Error("No URDF or Xacro file was found in that repository.");
-        }
-
-        const fileList = await buildIluGitHubCandidateFileList(
-          {
-            files,
-            owner: repoInfo.owner,
-            repo: repoInfo.repo,
-            branch: repoInfo.branch,
-            path: repoInfo.path,
-            token,
-          },
-          candidatePath
-        );
-
-        setGitHubSource({
-          owner: repoInfo.owner,
-          repo: repoInfo.repo,
-          branch: repoInfo.branch,
-          path: repoInfo.path,
-          token,
-          files,
-          urdfPath: candidatePath,
-        });
-        await loadFilesFromFolderWithFreshCameras(fileList);
-        toast.success(`Loaded ${candidatePath} from GitHub`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load GitHub repository.";
-        toast.error(message);
-      }
-    },
-    [loadFilesFromFolderWithFreshCameras, setGitHubSource]
-  );
-  const handleLoadUrlSource = useCallback(
-    async (url: string) => {
-      try {
-        const resolvedUrl = resolveRemoteUrdfFileUrl(url);
-        const response = await fetch(resolvedUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch URDF URL (${response.status})`);
-        }
-        const content = await response.text();
-        const file = new File([content], inferRemoteUrdfFileName(resolvedUrl), {
-          type: response.headers.get("content-type") || "application/xml",
-        });
-        clearGitHubSource();
-        await loadFilesFromFolderWithFreshCameras([file]);
-        toast.success("Loaded URDF from URL");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load URDF URL.";
-        toast.error(message);
-      }
-    },
-    [clearGitHubSource, loadFilesFromFolderWithFreshCameras]
-  );
-  const loadDemoUrdfTextWithFreshCameras = useCallback(
-    (content: string, options?: Parameters<typeof loadUrdfText>[1]) => {
-      clearCameras();
-      loadUrdfText(content, options);
-    },
-    [clearCameras, loadUrdfText]
-  );
+  const {
+    handleLoadGitHubSource,
+    handleLoadUrlSource,
+    loadDemoUrdfTextWithFreshCameras,
+    loadFilesFromFolderWithFreshCameras,
+  } = useIndexSourceLoaders({
+    clearCameras,
+    clearGitHubSource,
+    loadFilesFromFolder,
+    loadUrdfText,
+    setGitHubSource,
+  });
   const [urdfContentVersion, setUrdfContentVersion] = useState<number>(0);
   const markUrdfContentReloaded = useCallback(
     () => setUrdfContentVersion((prev) => prev + 1),
@@ -616,24 +488,23 @@ const Index = () => {
     setCollisionMergedLinks,
     collisionVisibility,
     setCollisionVisibility,
-    viewerSplitView,
     inertialVisualization,
     setInertialVisualization,
     handleFrameChange,
   } = useUrdfViewer();
-  const episodeJointNames = useMemo(() => [], []);
+  const simulationPrepInertialVisualizationBeforeOpenRef =
+    useRef<InertialVisualizationSettings | null>(null);
   const {
     sidebarWidth,
-    setSidebarWidth,
     isSidebarCollapsed,
-    setIsSidebarCollapsed,
     rightSidebarWidth,
-    setRightSidebarWidth,
     isRightSidebarCollapsed,
+    leftSidebarTopPanelHeight,
     handleSidebarToggle,
     handleRightSidebarToggle,
     handleSidebarResizeStart,
     handleRightSidebarResizeStart,
+    handleLeftSidebarVerticalResizeStart,
   } = useLayout();
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
@@ -658,7 +529,6 @@ const Index = () => {
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
   const [urdfEditorSplitView, setUrdfEditorSplitView] = useState(false);
   const [angleUnit, setAngleUnit] = useState<AngleUnit>("rad");
-  const [isIkPanelOpen, setIsIkPanelOpen] = useState(false);
   const [bakePreviewSession, setBakePreviewSession] = useState<UrdfBakePreviewSession | null>(null);
   const [canonicalSynthesisPreview, setCanonicalSynthesisPreview] =
     useState<CanonicalSynthesisPreviewSession | null>(null);
@@ -678,9 +548,6 @@ const Index = () => {
   const [simulationPrepResetPoseRequestKey, setSimulationPrepResetPoseRequestKey] = useState<
     string | null
   >(null);
-  const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 1280
-  );
   const hasCamerasToExport = cameras.length > 0;
   const canRevert = useMemo(
     () => Boolean(savedVizUrdfContent && savedVizUrdfContent !== vizUrdfContent),
@@ -718,19 +585,6 @@ const Index = () => {
     downloadTextDocument(exportCamerasToYAML(cameras), "camera-config.yaml", "text/yaml");
     toast.success(`Exported ${cameras.length} camera(s) to YAML`);
   }, [cameras, hasCamerasToExport]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   // Object creation state
   const {
     isOpen: objectCreatorOpen,
@@ -748,7 +602,6 @@ const Index = () => {
   );
   const {
     buildCurrentWorldScenePackageManifest,
-    ensureWorldLayoutForTransfer,
     handleExportCurrentWorldSceneLayer,
     handleExportCurrentWorldScenePackage,
     handleImportDefaultWorldLayoutFromDialog,
@@ -813,7 +666,6 @@ const Index = () => {
     activeUrdfPath,
     attachedIluSessionId,
     buildCurrentWorldScenePackageManifest,
-    ensureWorldLayoutForTransfer,
     getWorldObjectCountForTransfer: () => useObjectStore.getState().objects.length,
     meshFiles,
     originalUrdfContent,
@@ -847,7 +699,6 @@ const Index = () => {
     robotBoundingBox,
     runtimePreviewMode,
     runtimeRobotBasePose,
-    setGPUMode,
     setIsImportingWorldLayout,
     setWorldLayoutImportDialogOpen,
     setWorldLayoutImportUrlDraft,
@@ -1810,6 +1661,7 @@ const Index = () => {
   }, [hasPhysicsPreflightInputReady, loadPhysicsPreflight]);
 
   const resetSimulationPrepReviewState = useCallback(() => {
+    simulationPrepInertialVisualizationBeforeOpenRef.current = null;
     setShowHealthActionPanel(false);
     setHoveredInertiaVisualizationPreview(null);
     setActiveInertiaVisualizationScopeKey(null);
@@ -2504,22 +2356,46 @@ const Index = () => {
   }, [hasLoadedFiles, hasLoadReviewAttention, setShowLoadIssues, showLoadIssues]);
 
   const worldHubEnabled = isWorldHubConfigured();
-  const ikSolverOptions = (() => {
-    const options = [...availableIkSolvers];
-    if (!options.some((solver) => solver.id === selectedIkSolverId)) {
-      options.unshift({
-        id: selectedIkSolverId,
-        label: selectedIkSolverId,
+  const enableSimulationPrepViewerHighlights = useCallback(
+    (scopedLinkNames?: readonly string[] | null) => {
+      setInertialVisualization((current) => {
+        if (!simulationPrepInertialVisualizationBeforeOpenRef.current) {
+          simulationPrepInertialVisualizationBeforeOpenRef.current =
+            cloneInertialVisualizationSettings(current);
+        }
+        return withSimulationPrepInertiaVisualization(current, scopedLinkNames);
       });
-    }
-    return options.sort((lhs, rhs) =>
-      lhs.id === "ik-js" ? -1 : rhs.id === "ik-js" ? 1 : lhs.label.localeCompare(rhs.label)
-    );
-  })();
+    },
+    [setInertialVisualization]
+  );
+
+  const restoreSimulationPrepViewerHighlights = useCallback(() => {
+    setInertialVisualization((current) => {
+      const previous = simulationPrepInertialVisualizationBeforeOpenRef.current;
+      simulationPrepInertialVisualizationBeforeOpenRef.current = null;
+      if (previous) {
+        return cloneInertialVisualizationSettings(previous);
+      }
+      return current.scopedLinkNames === null
+        ? current
+        : syncSimulationPrepInertiaVisualizationScope(current);
+    });
+  }, [setInertialVisualization]);
+
+  const clearSimulationPrepViewerHighlights = useCallback(() => {
+    setHoveredInertiaVisualizationPreview(null);
+    setActiveInertiaVisualizationScopeKey(null);
+    restoreSimulationPrepViewerHighlights();
+  }, [restoreSimulationPrepViewerHighlights]);
+
+  const closeSimulationPrepPanel = useCallback(() => {
+    setShowHealthActionPanel(false);
+    clearSimulationPrepViewerHighlights();
+  }, [clearSimulationPrepViewerHighlights]);
 
   const openSimulationPrepPanel = () => {
     setShowLoadIssues(false);
-    setInertialVisualization((current) => withSimulationPrepInertiaVisualization(current));
+    enableSimulationPrepViewerHighlights();
     setHoveredInertiaVisualizationPreview(null);
     setActiveInertiaVisualizationScopeKey(null);
     setSimulationPrepResetPoseRequestKey(String(Date.now()));
@@ -2530,8 +2406,8 @@ const Index = () => {
     if (showHealthActionPanel) {
       return;
     }
-    setHoveredInertiaVisualizationPreview(null);
-  }, [showHealthActionPanel]);
+    clearSimulationPrepViewerHighlights();
+  }, [clearSimulationPrepViewerHighlights, showHealthActionPanel]);
 
   const handleToggleInertiaVisualizationScope = useCallback(
     (
@@ -2675,9 +2551,7 @@ const Index = () => {
         return;
       }
 
-      setInertialVisualization((current) =>
-        withSimulationPrepInertiaVisualization(current, symmetryScopedLinkNames)
-      );
+      enableSimulationPrepViewerHighlights(symmetryScopedLinkNames);
       setActiveInertiaVisualizationScopeKey(symmetryScopeKey);
       setShowHealthActionPanel(true);
       setRepeatedInertiaSymmetryActingChainKey(chainKey);
@@ -2731,11 +2605,11 @@ const Index = () => {
     },
     [
       applySimulationPrepUrdfUpdate,
+      enableSimulationPrepViewerHighlights,
       hasSimulationPrepFixActionInFlight,
       repeatedInertiaDiagnostics,
       setRepeatedInertiaSymmetryActingProgress,
       repeatedInertiaSymmetryLinkCentersLocal,
-      setInertialVisualization,
       setActiveInertiaVisualizationScopeKey,
       setShowHealthActionPanel,
       vizUrdfContent,
@@ -2756,12 +2630,7 @@ const Index = () => {
       return;
     }
     if (robotMirrorScopeKey) {
-      setInertialVisualization((current) =>
-        withSimulationPrepInertiaVisualization(
-          current,
-          robotMirrorVisualizationState.visualizationLinkNames
-        )
-      );
+      enableSimulationPrepViewerHighlights(robotMirrorVisualizationState.visualizationLinkNames);
       setActiveInertiaVisualizationScopeKey(robotMirrorScopeKey);
     }
     setShowHealthActionPanel(true);
@@ -2820,6 +2689,7 @@ const Index = () => {
     }
   }, [
     applySimulationPrepUrdfUpdate,
+    enableSimulationPrepViewerHighlights,
     hasSimulationPrepFixActionInFlight,
     repeatedInertiaSymmetryLinkCentersLocal,
     robotMirrorSelectionLinks,
@@ -2831,7 +2701,6 @@ const Index = () => {
     packageRoots,
     selectedRobotMirrorLinkNames,
     setActiveInertiaVisualizationScopeKey,
-    setInertialVisualization,
     setShowHealthActionPanel,
     urdfBasePath,
     vizUrdfContent,
@@ -2976,7 +2845,7 @@ const Index = () => {
     clearAssemblyPlacement();
     workspaceController.setMode("studio");
     setShowUrdfEditor(false);
-    setShowHealthActionPanel(false);
+    closeSimulationPrepPanel();
     setRobot(null);
     setRobotBoundingBox(null);
     navigate("/");
@@ -2986,6 +2855,7 @@ const Index = () => {
     clearCameras,
     clearGitHubSource,
     clearObjects,
+    closeSimulationPrepPanel,
     navigate,
     resetLoadedUrdf,
     setRobotBoundingBox,
@@ -3063,11 +2933,6 @@ const Index = () => {
     exportCamerasAsJSON,
     exportCamerasAsYAML,
     hasCamerasToExport,
-    isIkPanelOpen,
-    onOpenIkPanel: () => setIsIkPanelOpen(true),
-    selectedIkSolverId,
-    ikSolverOptions,
-    onSelectIkSolver: (solverId) => setSelectedIkSolverId(solverId as typeof selectedIkSolverId),
     workspaceLauncherStatusLabel: simulationPrepStatus.label,
     workspaceLauncherNeedsAttention: simulationPrepStatus.tone !== "safe",
     onOpenWorkspaceLauncher: openSimulationPrepPanel,
@@ -3113,8 +2978,7 @@ const Index = () => {
 
   const healthActionPanelProps: PageLayoutProps["healthActionPanelProps"] = {
     open: showHealthActionPanel,
-    onClose: () => setShowHealthActionPanel(false),
-    workspaceTransfer,
+    onClose: closeSimulationPrepPanel,
     statusTone: simulationPrepStatus.tone,
     statusLabel: simulationPrepStatus.label,
     statusSummary: simulationPrepStatus.summary,
@@ -3301,6 +3165,8 @@ const Index = () => {
     isSidebarCollapsed,
     onToggleSidebarCollapse: handleSidebarToggle,
     meshFiles,
+    leftSidebarTopPanelHeight,
+    onLeftSidebarVerticalResizeStart: handleLeftSidebarVerticalResizeStart,
     onCollisionVisibilityChange: setCollisionVisibility,
     rotationPlaneVisible,
     handleFrameChange,
@@ -3310,6 +3176,7 @@ const Index = () => {
     onSidebarResizeStart: handleSidebarResizeStart,
     urdfBasePath,
     packageRoots,
+    workspaceTransfer,
     isRightSidebarCollapsed,
     rightSidebarWidth,
     urdfEditorSplitView,
@@ -3332,7 +3199,7 @@ const Index = () => {
     simulationPrepResetPoseRequestKey,
     simulationPrepRobotMirrorVisualization: activeSimulationPrepRobotMirrorVisualization,
     simulationPrepRobotMirrorDeemphasizedLinkNames:
-      robotMirrorVisualizationState.deemphasizedVisualizationLinkNames,
+      showHealthActionPanel ? robotMirrorVisualizationState.deemphasizedVisualizationLinkNames : [],
     simulationPrepSymmetryVisualization: activeSimulationPrepSymmetryVisualization,
     simulationPrepSymmetryOverlayCenterMode: repeatedInertiaSymmetryCenterMode,
     urdfViewMode,
@@ -3355,7 +3222,7 @@ const Index = () => {
     onInertiaReliabilityChange: setInertiaReliability,
     thumbnailMode,
     onDuplicateAssemblyRobot: handleDuplicateAssemblyRobot,
-    episodeJointNames,
+    episodeJointNames: EMPTY_EPISODE_JOINT_NAMES,
     rightSidebarCollapsed: isRightSidebarCollapsed,
     onJointLimitsChange: handleJointLimitsChange,
     onJointLinkChange: handleJointLinkChange,
@@ -3432,100 +3299,38 @@ const Index = () => {
   if (!hasLoadedFiles || thumbnailMode || runtimePreviewMode) {
     return gatedModeView;
   }
-  const ikPanelWidth = Math.min(360, Math.max(220, viewportWidth - 16));
-  const preferredIkPanelRightOffset = isRightSidebarCollapsed ? 8 : rightSidebarWidth + 8;
-  const maxVisibleIkPanelRightOffset = Math.max(8, viewportWidth - ikPanelWidth - 8);
-  const ikPanelRightOffset = Math.min(preferredIkPanelRightOffset, maxVisibleIkPanelRightOffset);
-
   return (
     <>
       <PageLayout {...pageLayoutWithViewerDraft} />
-      {workspaceModeUi.showIkPanel && isIkPanelOpen ? (
-        <div
-          className="fixed z-50 rounded-md border border-border/40 bg-background/95 shadow-lg backdrop-blur-sm"
-          style={{
-            top: TOP_NAV_HEIGHT + 8,
-            right: ikPanelRightOffset,
-            width: ikPanelWidth,
-            maxHeight: "calc(100vh - 64px)",
-          }}
-        >
-          <div className="flex items-center gap-2 border-b border-border/30 px-2 py-1">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <div className="shrink-0 text-[11px] font-medium text-foreground">IK Solver</div>
-              <select
-                value={selectedIkSolverId}
-                onChange={(event) => setSelectedIkSolverId(event.target.value as typeof selectedIkSolverId)}
-                className="h-6 min-w-[130px] rounded border border-border/50 bg-background px-2 text-[10px] text-foreground"
-              >
-                {ikSolverOptions.map((solver) => (
-                  <option key={solver.id} value={solver.id}>
-                    {solver.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="ml-0.5 text-[8px] font-normal leading-none text-muted-foreground/60 hover:text-muted-foreground"
-                onClick={() => setIsIkPanelOpen(false)}
-                aria-label="Hide IK panel"
-                title="Hide panel"
-              >
-                hide
-              </button>
-            </div>
-          </div>
-          <div className="max-h-[calc(100vh-100px)] overflow-y-auto p-2 minimal-scrollbar">
-            <Suspense fallback={null}>
-              <IkDebuggerPanel
-                urdfContent={vizUrdfContent}
-                robot={robot}
-                endEffectorLink={endEffectorLink}
-                robotBoundingBox={robotBoundingBox}
-              />
-            </Suspense>
-          </div>
-        </div>
-      ) : null}
-      {workspaceModeUi.showWorldDialogs ? (
-        <Suspense fallback={null}>
-          <WorldRegistryPanel
-            open={worldRegistryOpen}
-            onOpenChange={setWorldRegistryOpen}
-            entries={worldRegistryEntries}
-            filterText={worldRegistryFilterText}
-            onFilterTextChange={setWorldRegistryFilterText}
-            loading={worldRegistryLoading}
-            onRefresh={refreshWorldRegistry}
-            onLoadPackage={handleLoadWorldScenePackageFromRegistry}
-            gate={resolveFeatureGateAvailability(FEATURE_GATES.worldsRegistry)}
-          />
-          <WorldPublishDialog
-            open={worldPublishDialogOpen}
-            onOpenChange={setWorldPublishDialogOpen}
-            publishTargetLabel={publishTargetLabel}
-            draft={worldPublishDraft}
-            onDraftChange={setWorldPublishDraft}
-            onSubmit={handleSubmitWorldPublishDialog}
-            isSubmitting={isPublishingWorldPackage}
-          />
-          <WorldSceneImportDialog
-            open={worldLayoutImportDialogOpen}
-            onOpenChange={setWorldLayoutImportDialogOpen}
-            worldLayoutUrl={worldLayoutImportUrlDraft}
-            onWorldLayoutUrlChange={setWorldLayoutImportUrlDraft}
-            onImportFromLink={handleImportWorldLayoutFromLinkDialog}
-            onImportDefaultWorld={handleImportDefaultWorldLayoutFromDialog}
-            onImportDemoWorld={handleImportDemoWorldLayoutFromDialog}
-            isSubmitting={isImportingWorldLayout}
-          />
-          <WorldRolloutReviewPanel
-            open={worldRolloutReviewOpen}
-            result={worldRolloutReview}
-            onClose={() => setWorldRolloutReviewOpen(false)}
-          />
-        </Suspense>
-      ) : null}
+      <IndexWorldDialogs
+        show={workspaceModeUi.showWorldDialogs}
+        worldRegistryOpen={worldRegistryOpen}
+        onWorldRegistryOpenChange={setWorldRegistryOpen}
+        worldRegistryEntries={worldRegistryEntries}
+        worldRegistryFilterText={worldRegistryFilterText}
+        onWorldRegistryFilterTextChange={setWorldRegistryFilterText}
+        worldRegistryLoading={worldRegistryLoading}
+        onRefreshWorldRegistry={refreshWorldRegistry}
+        onLoadWorldScenePackage={handleLoadWorldScenePackageFromRegistry}
+        worldPublishDialogOpen={worldPublishDialogOpen}
+        onWorldPublishDialogOpenChange={setWorldPublishDialogOpen}
+        publishTargetLabel={publishTargetLabel}
+        worldPublishDraft={worldPublishDraft}
+        onWorldPublishDraftChange={setWorldPublishDraft}
+        onSubmitWorldPublishDialog={handleSubmitWorldPublishDialog}
+        isPublishingWorldPackage={isPublishingWorldPackage}
+        worldLayoutImportDialogOpen={worldLayoutImportDialogOpen}
+        onWorldLayoutImportDialogOpenChange={setWorldLayoutImportDialogOpen}
+        worldLayoutImportUrlDraft={worldLayoutImportUrlDraft}
+        onWorldLayoutImportUrlDraftChange={setWorldLayoutImportUrlDraft}
+        onImportWorldLayoutFromLinkDialog={handleImportWorldLayoutFromLinkDialog}
+        onImportDefaultWorldLayoutFromDialog={handleImportDefaultWorldLayoutFromDialog}
+        onImportDemoWorldLayoutFromDialog={handleImportDemoWorldLayoutFromDialog}
+        isImportingWorldLayout={isImportingWorldLayout}
+        worldRolloutReviewOpen={worldRolloutReviewOpen}
+        worldRolloutReview={worldRolloutReview}
+        onWorldRolloutReviewOpenChange={setWorldRolloutReviewOpen}
+      />
     </>
   );
 };

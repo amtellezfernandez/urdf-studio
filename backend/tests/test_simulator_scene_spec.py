@@ -71,7 +71,7 @@ def test_prepare_simulator_scene_builds_canonical_scene_spec(tmp_path: Path) -> 
     assert scene.world_package.package_id == "demo_world"
     assert scene.robot.urdf_path == robot_urdf_path
     assert scene.robot.joint_positions == {"joint_1": 0.25}
-    assert scene.robot.asset_roots == (tmp_path / "source", tmp_path, tmp_path)
+    assert scene.robot.asset_roots == (tmp_path / "source", tmp_path)
     assert [primitive.sim_name for primitive in scene.primitives] == ["wl_crate"]
     assert [camera.sim_name for camera in scene.cameras] == ["base_camera"]
     assert scene.warnings == ()

@@ -84,11 +84,6 @@ export type TopNavBarProps = {
   exportCamerasAsJSON: () => void;
   exportCamerasAsYAML: () => void;
   hasCamerasToExport: boolean;
-  isIkPanelOpen: boolean;
-  onOpenIkPanel: () => void;
-  selectedIkSolverId: string;
-  ikSolverOptions: Array<{ id: string; label: string }>;
-  onSelectIkSolver: (solverId: string) => void;
   workspaceLauncherStatusLabel?: string;
   workspaceLauncherNeedsAttention?: boolean;
   onOpenWorkspaceLauncher?: () => void;

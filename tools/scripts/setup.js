@@ -17,7 +17,12 @@ import { execFileSync, execSync, spawnSync } from 'child_process';
 import readline from 'readline';
 import { maskToken, resolveSetupGitHubToken } from './githubAuth.js';
 import {
-  buildSetupSummarySections,
+  formatSimulatorCompatibilitySummary,
+  getSimulatorCompatibilityReport,
+  getSimulatorCompatibilityTarget,
+  isManagedSimulatorInstallAllowed,
+} from './simulatorCompatibility.js';
+import {
   isTruthyEnvValue,
   selectInstalledSupersededPythonDependencies,
   shouldInstallGlobalIlu,
@@ -47,6 +52,10 @@ import {
   GLOBAL_ILU_INSTALL_COMMAND,
   HUGGING_FACE_TOKEN_URL,
   LOCAL_ILU_COMMAND,
+  MJLAB_DEPENDENCIES,
+  MJLAB_FORCE_INSTALL_ENV,
+  MJLAB_SKIP_AUTO_INSTALL_ENV,
+  MJLAB_VERIFY_IMPORT_SCRIPT,
   MJX_SYSTEM_ID_DEPENDENCIES,
   PYBULLET_DEPENDENCIES,
   PYBULLET_FORCE_INSTALL_ENV,
@@ -81,17 +90,6 @@ const colors = {
   underline: '\x1b[4m',
 };
 
-const banner = `
-${colors.pinkBright}    __  ______  ____  ______   _____ __            ___    ${colors.reset}
-${colors.pinkBright}   / / / / __ \\/ __ \\/ ____/  / ___// /___  ______/ (_)___ ${colors.reset}
-${colors.pink}  / / / / /_/ / / / / /_      \\__ \\/ __/ / / / __  / / __ \\${colors.reset}
-${colors.pink} / /_/ / _, _/ /_/ / __/     ___/ / /_/ /_/ / /_/ / / /_/ /${colors.reset}
-${colors.pinkLight} \\____/_/ |_/_____/_/       /____/\\__/\\__,_/\\__,_/_/\\____/ ${colors.reset}
-${colors.reset}                                                            
-
-${colors.gray}─────────────────────────────────────────────────────────────${colors.reset}
-`;
-
 function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
@@ -111,6 +109,18 @@ function logInfo(message) {
 function logUrl(url, text) {
   const underline = '\x1b[4m';
   log(`  ${text}: ${colors.pinkBright}${underline}${url}${colors.reset}`);
+}
+
+function buildSetupResult({ ok = true, changed = false, ...rest } = {}) {
+  return { ok, changed, ...rest };
+}
+
+function isSetupStepReady(result) {
+  return result !== false && result?.ok !== false;
+}
+
+function didSetupStepChange(result) {
+  return Boolean(result?.changed);
 }
 
 function isInteractive() {
@@ -206,6 +216,17 @@ function question(query) {
   });
 }
 
+function shouldOfferTokenSetup() {
+  if (process.env.URDF_STUDIO_SKIP_TOKENS) {
+    return false;
+  }
+  return (
+    process.argv.includes('--auth') ||
+    process.argv.includes('--tokens') ||
+    isTruthyEnvValue(process.env.URDF_STUDIO_SETUP_TOKENS)
+  );
+}
+
 function getNpmCommand() {
   const npmExecPath = typeof process.env.npm_execpath === 'string' ? process.env.npm_execpath.trim() : '';
   if (npmExecPath) {
@@ -245,21 +266,26 @@ function runNpmInstallIn(cwd, args, options = {}) {
 }
 
 async function installDependencies() {
-  logArrow('Installing dependencies...');
-
   try {
+    let changed = false;
     const nodeModulesPath = join(rootDir, 'node_modules');
     const viteBin = join(nodeModulesPath, '.bin', 'vite');
     if (!existsSync(nodeModulesPath) || !existsSync(viteBin)) {
+      logArrow('Installing Node dependencies');
       runNpmInstall(['install', ...SETUP_NPM_INSTALL_FLAGS]);
+      changed = true;
     } else {
       const inquirerPath = join(rootDir, 'node_modules', 'inquirer');
       if (!existsSync(inquirerPath)) {
-        logInfo('Installing inquirer...');
+        logArrow('Installing missing setup dependency');
         runNpmInstall(['install', 'inquirer', ...SETUP_NPM_INSTALL_FLAGS]);
+        changed = true;
       }
     }
-    logSuccess('Dependencies installed successfully');
+    if (changed) {
+      logSuccess('Node dependencies ready');
+    }
+    return buildSetupResult({ changed });
   } catch (error) {
     log('✗ Failed to install dependencies', colors.yellow);
     throw error;
@@ -313,20 +339,15 @@ function assertIluRuntimeContract(
 }
 
 async function verifyIluRuntimeContract() {
-  log('');
-  logArrow('Checking i-love-urdf runtime');
-  log('');
-
   try {
     const modules = await import('./urdfCoreModules.js');
     assertIluRuntimeContract(modules);
-    logSuccess('i-love-urdf runtime ready');
-    return true;
+    return buildSetupResult();
   } catch (error) {
     log('✗ i-love-urdf runtime check failed', colors.yellow);
     logInfo(error?.message || String(error));
     logInfo('Run npm install, then rerun npm run setup.');
-    return false;
+    return buildSetupResult({ ok: false });
   }
 }
 
@@ -369,12 +390,12 @@ function saveConfig(config) {
 }
 
 async function setupHuggingFace() {
-  if (process.env.URDF_STUDIO_SKIP_TOKENS || !isInteractive()) {
-    return;
+  if (!shouldOfferTokenSetup() || !isInteractive()) {
+    return buildSetupResult();
   }
 
   log('');
-  logArrow('🤗 HuggingFace Authentication');
+  logArrow('Hugging Face authentication');
   log('');
   
   const config = loadConfig();
@@ -383,7 +404,7 @@ async function setupHuggingFace() {
 
   const hfAnswer = (await question('  Set up HuggingFace token now? (y/N): ')).trim().toLowerCase();
   if (hfAnswer !== 'y' && hfAnswer !== 'yes') {
-    return;
+    return buildSetupResult();
   }
 
   if (currentToken) {
@@ -402,11 +423,11 @@ async function setupHuggingFace() {
       delete config.huggingfaceToken;
       saveConfig(config);
       logSuccess('HuggingFace token removed');
-      return;
+      return buildSetupResult({ changed: true });
     }
     if (action !== 's' && action !== 'substitute' && action !== 'update') {
       logInfo('Token unchanged (keeping current token).');
-      return;
+      return buildSetupResult();
     }
   } else {
     logInfo('A token is required for uploading and managing datasets.');
@@ -445,16 +466,18 @@ async function setupHuggingFace() {
     saveConfig(config);
     logSuccess('HuggingFace token saved');
     logInfo(`   Location: ${colors.gray}${configPath}${colors.reset}`);
+    return buildSetupResult({ changed: true });
   }
+  return buildSetupResult();
 }
 
 async function setupGitHub() {
-  if (process.env.URDF_STUDIO_SKIP_TOKENS || !isInteractive()) {
-    return;
+  if (!shouldOfferTokenSetup() || !isInteractive()) {
+    return buildSetupResult();
   }
 
   log('');
-  logArrow('🐙 GitHub Access');
+  logArrow('GitHub access');
   log('');
   
   const config = loadConfig();
@@ -463,7 +486,7 @@ async function setupGitHub() {
 
   const ghAnswer = (await question('  Configure GitHub access now? (y/N): ')).trim().toLowerCase();
   if (ghAnswer !== 'y' && ghAnswer !== 'yes') {
-    return;
+    return buildSetupResult();
   }
 
   if (currentToken) {
@@ -482,11 +505,11 @@ async function setupGitHub() {
       delete config.githubToken;
       saveConfig(config);
       logSuccess('GitHub token removed');
-      return;
+      return buildSetupResult({ changed: true });
     }
     if (action !== 's' && action !== 'substitute' && action !== 'update') {
       logInfo('Token unchanged (keeping current token).');
-      return;
+      return buildSetupResult();
     }
   }
 
@@ -507,7 +530,7 @@ async function setupGitHub() {
     const detectedAction = (await question(`  Choose an option: ${colors.purpleBright}`)).trim().toLowerCase();
     if (detectedAction === '' || detectedAction === 'k' || detectedAction === 'keep') {
       logInfo('Detected GitHub access will be reused without saving a local token.');
-      return;
+      return buildSetupResult();
     }
     if (detectedAction === 's' || detectedAction === 'save') {
       config.githubToken = detectedGitHubAuth.token;
@@ -515,11 +538,11 @@ async function setupGitHub() {
       logSuccess('GitHub token saved');
       logInfo(`   Source: ${colors.gray}${detectedGitHubAuth.source}${colors.reset}`);
       logInfo(`   Location: ${colors.gray}${configPath}${colors.reset}`);
-      return;
+      return buildSetupResult({ changed: true });
     }
     if (detectedAction !== 'm' && detectedAction !== 'manual') {
       logInfo('Detected GitHub access not saved. You can still enter a token manually later.');
-      return;
+      return buildSetupResult();
     }
     logInfo('Detected GitHub access not saved. Enter a different token below if you still want a local fallback.');
     log('');
@@ -572,68 +595,50 @@ async function setupGitHub() {
     saveConfig(config);
     logSuccess('GitHub token saved');
     logInfo(`   Location: ${colors.gray}${configPath}${colors.reset}`);
+    return buildSetupResult({ changed: true });
   }
+  return buildSetupResult();
 }
 
 async function installOptionalGlobalIlu() {
   if (!shouldInstallGlobalIlu()) {
-    return {
+    return buildSetupResult({
       attempted: false,
       installed: false,
-    };
+    });
   }
 
   const localIluPackagePath = join(rootDir, 'node_modules', 'i-love-urdf');
   if (!existsSync(localIluPackagePath)) {
     log('✗ Global ilu install requested, but i-love-urdf is not installed locally.', colors.yellow);
     logInfo(`Local CLI still works via ${LOCAL_ILU_COMMAND}`);
-    return {
+    return buildSetupResult({
       attempted: true,
       installed: false,
-    };
+    });
   }
 
   log('');
-  logArrow('🧰 Installing global i-love-urdf CLI');
+  logArrow('Installing global i-love-urdf CLI');
   log('');
 
   try {
     runNpmInstall(['install', '-g', localIluPackagePath, ...SETUP_NPM_INSTALL_FLAGS]);
     logSuccess('Global ilu CLI installed');
-    return {
+    return buildSetupResult({
+      changed: true,
       attempted: true,
       installed: true,
-    };
+    });
   } catch (_error) {
     log('✗ Failed to install the global ilu CLI', colors.yellow);
     logInfo(`Retry later with: ${GLOBAL_ILU_INSTALL_COMMAND}`);
     logInfo(`Local CLI still works via ${LOCAL_ILU_COMMAND}`);
-    return {
+    return buildSetupResult({
       attempted: true,
       installed: false,
-    };
+    });
   }
-}
-
-function printSetupSummary({
-  globalIluResult,
-  genesisRuntimeResult,
-  pybulletRuntimeResult,
-  blenderRuntimeResult,
-} = {}) {
-  const sections = buildSetupSummarySections({
-    globalIluAttempted: Boolean(globalIluResult?.attempted),
-    globalIluInstalled: Boolean(globalIluResult?.installed),
-    genesisRuntimeResult,
-    pybulletRuntimeResult,
-    blenderRuntimeResult,
-  });
-  log('');
-  logArrow('Setup summary');
-  sections.forEach((section) => {
-    logInfo(`${section.heading}:`);
-    section.lines.forEach((line) => logInfo(`  ${line}`));
-  });
 }
 
 function findUv() {
@@ -696,7 +701,7 @@ function findCargo() {
 function ensureCargoPathInShellRc() {
   const home = process.env.HOME || '';
   if (!home) {
-    return;
+    return false;
   }
 
   const bashRc = join(home, '.bashrc');
@@ -729,6 +734,7 @@ function ensureCargoPathInShellRc() {
   if (!String(process.env.PATH || '').split(':').includes(cargoBin)) {
     process.env.PATH = `${cargoBin}:${process.env.PATH || ''}`;
   }
+  return needsAppend;
 }
 
 function shouldAutoInstallRust() {
@@ -758,23 +764,20 @@ function installRustToolchain() {
 }
 
 async function checkIkd() {
-  log('');
-  logArrow('🦀 Checking native IKD toolchain');
-  log('');
-
   const appConfig = loadAppConfig();
   const ikdConfig = appConfig?.ikd || {};
   const ikdEnabled = Boolean(ikdConfig.enabled);
   const ikdManifest = join(rootDir, 'ikd', 'Cargo.toml');
   const ikdPresent = existsSync(ikdManifest);
   let cargoPath = findCargo();
+  let changed = false;
 
   if (!ikdEnabled && !ikdPresent) {
-    logInfo('ikd is not enabled and native daemon files were not found.');
-    return true;
+    return buildSetupResult();
   }
 
   if (!ikdEnabled && ikdPresent) {
+    logArrow('Checking native IKD toolchain');
     logInfo('ikd is present in this repo. Installing Rust prerequisites automatically.');
   }
 
@@ -784,8 +787,10 @@ async function checkIkd() {
 
     if (shouldInstall) {
       try {
+        logArrow('Installing Rust toolchain');
         installRustToolchain();
-        ensureCargoPathInShellRc();
+        changed = true;
+        changed = ensureCargoPathInShellRc() || changed;
         cargoPath = findCargo();
       } catch (e) {
         log('✗ Rust auto-install failed.', colors.yellow);
@@ -798,11 +803,11 @@ async function checkIkd() {
       logInfo('Then restart your shell and run setup again.');
       logInfo('Auto-install is enabled by default; disable with URDF_STUDIO_SKIP_RUST_AUTO_INSTALL=1');
       logInfo('Or disable ikd with: config/app.config.json -> ikd.enabled=false');
-      return false;
+      return buildSetupResult({ ok: false, changed });
     }
   }
 
-  ensureCargoPathInShellRc();
+  changed = ensureCargoPathInShellRc() || changed;
   const cargoCheck = spawnSync(cargoPath, ['--version'], {
     cwd: rootDir,
     encoding: 'utf-8',
@@ -811,16 +816,15 @@ async function checkIkd() {
     printCapturedCommandOutput(cargoCheck);
     log('✗ cargo exists but failed to run.', colors.yellow);
     logInfo('Reinstall Rust toolchain or disable ikd in config/app.config.json.');
-    return false;
+    return buildSetupResult({ ok: false, changed });
   }
   if (!existsSync(ikdManifest)) {
     log('✗ ikd is enabled but ikd/Cargo.toml is missing.', colors.yellow);
     logInfo('Check your branch or set ikd.enabled=false.');
-    return false;
+    return buildSetupResult({ ok: false, changed });
   }
 
-  logSuccess('ikd toolchain prerequisites look good');
-  return true;
+  return buildSetupResult({ changed });
 }
 
 function getManagedPythonPath() {
@@ -828,10 +832,6 @@ function getManagedPythonPath() {
 }
 
 async function setupPythonBackendEnvironment() {
-  log('');
-  logArrow('🔍 Setting up unified Python backend environment');
-  log('');
-
   const venvPath = join(rootDir, PYTHON_ENV_DIRNAME);
   const venvPython = getManagedPythonPath();
 
@@ -842,21 +842,21 @@ async function setupPythonBackendEnvironment() {
     logInfo('Install uv with:');
     logInfo('  curl -LsSf https://astral.sh/uv/install.sh | sh');
     log('');
-    return false;
+    return buildSetupResult({ ok: false });
   }
 
   if (existsSync(venvPython)) {
-    logSuccess('Unified Python environment ready');
-    return true;
+    return buildSetupResult();
   }
 
   const pythonResolution = resolvePythonForBackendVenv();
   if (!pythonResolution) {
     log('✗ URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON must point to Python 3.12+.', colors.yellow);
     logPythonBootstrapHelp();
-    return false;
+    return buildSetupResult({ ok: false });
   }
 
+  logArrow('Setting up Python backend');
   if (pythonResolution.usesUvManagedPython) {
     logInfo('Using uv-managed Python 3.12 for the unified runtime.');
   }
@@ -868,12 +868,12 @@ async function setupPythonBackendEnvironment() {
       stdio: 'inherit',
       env: getUvEnv(),
     });
-    logSuccess('Unified Python environment ready');
-    return true;
+    logSuccess('Python backend environment ready');
+    return buildSetupResult({ changed: true });
   } catch (e) {
     log('✗ Failed to create unified Python environment', colors.yellow);
     logPythonBootstrapHelp();
-    return false;
+    return buildSetupResult({ ok: false });
   }
 }
 
@@ -933,28 +933,14 @@ function logPythonBootstrapHelp() {
   logInfo('Optional manual override: URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON=/path/to/python3.12');
 }
 
-function shouldInstallBackendNativeSimRuntime() {
+function shouldInstallBackendNativeSimRuntime(simulatorCompatibilityReport = null) {
   if (isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_SKIP_ENV])) {
     return false;
   }
   if (isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_FORCE_ENV])) {
     return true;
   }
-  return process.platform !== 'darwin';
-}
-
-function getBackendNativeSimSkipMessage() {
-  if (isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_SKIP_ENV])) {
-    return `Native simulation backend runtime skipped by ${BACKEND_NATIVE_SIM_SKIP_ENV}.`;
-  }
-  if (process.platform === 'darwin') {
-    return [
-      'Native simulation backend runtime skipped on macOS.',
-      'The pinned JAX/MJX system-id packages are not available for every macOS architecture.',
-      `Set ${BACKEND_NATIVE_SIM_FORCE_ENV}=1 to force install.`,
-    ].join(' ');
-  }
-  return `Native simulation backend runtime skipped. Set ${BACKEND_NATIVE_SIM_FORCE_ENV}=1 to force install.`;
+  return process.platform !== 'darwin' && isManagedSimulatorInstallAllowed(simulatorCompatibilityReport, 'mjx');
 }
 
 function shouldInstallBackendCollisionStack() {
@@ -967,26 +953,12 @@ function shouldInstallBackendCollisionStack() {
   return process.platform !== 'darwin';
 }
 
-function getBackendCollisionStackSkipMessage() {
-  if (isTruthyEnvValue(process.env[BACKEND_COLLISION_STACK_SKIP_ENV])) {
-    return `Backend collision stack skipped by ${BACKEND_COLLISION_STACK_SKIP_ENV}.`;
-  }
-  if (process.platform === 'darwin') {
-    return [
-      'Backend collision stack skipped on macOS.',
-      'The pinned Placo/Pinocchio native libraries are not consistently relocatable across macOS Python environments.',
-      `Set ${BACKEND_COLLISION_STACK_FORCE_ENV}=1 to force install.`,
-    ].join(' ');
-  }
-  return `Backend collision stack skipped. Set ${BACKEND_COLLISION_STACK_FORCE_ENV}=1 to force install.`;
-}
-
-function resolveBackendPythonDependencies() {
+function resolveBackendPythonDependencies(simulatorCompatibilityReport = null) {
   const baseDependencies = [...BACKEND_PYTHON_PORTABLE_DEPENDENCIES];
   if (shouldInstallBackendCollisionStack()) {
     baseDependencies.push(...BACKEND_PYTHON_PLACO_DEPENDENCIES);
   }
-  if (!shouldInstallBackendNativeSimRuntime()) {
+  if (!shouldInstallBackendNativeSimRuntime(simulatorCompatibilityReport)) {
     return baseDependencies;
   }
   return [
@@ -996,11 +968,11 @@ function resolveBackendPythonDependencies() {
   ];
 }
 
-function resolveBackendPythonVerifyImportScript() {
+function resolveBackendPythonVerifyImportScript(simulatorCompatibilityReport = null) {
   const portableScript = shouldInstallBackendCollisionStack()
     ? BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT
     : BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT;
-  if (!shouldInstallBackendNativeSimRuntime()) {
+  if (!shouldInstallBackendNativeSimRuntime(simulatorCompatibilityReport)) {
     return portableScript;
   }
   return [portableScript, BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT].join('\n');
@@ -1014,16 +986,6 @@ function shouldInstallGenesisRuntime() {
   });
 }
 
-function getGenesisRuntimeSkipMessage() {
-  if (isTruthyEnvValue(process.env[GENESIS_SKIP_AUTO_INSTALL_ENV])) {
-    return `Genesis workspace adapter runtime skipped by ${GENESIS_SKIP_AUTO_INSTALL_ENV}.`;
-  }
-  return [
-    `Genesis workspace adapter runtime skipped on ${process.platform}.`,
-    `Set ${GENESIS_FORCE_INSTALL_ENV}=1 to force install.`,
-  ].join(' ');
-}
-
 function shouldInstallPybulletRuntime() {
   return shouldInstallOptionalPythonRuntime({
     skipAutoInstallEnv: PYBULLET_SKIP_AUTO_INSTALL_ENV,
@@ -1032,18 +994,12 @@ function shouldInstallPybulletRuntime() {
   });
 }
 
-function getPybulletRuntimeSkipMessage() {
-  if (isTruthyEnvValue(process.env[PYBULLET_SKIP_AUTO_INSTALL_ENV])) {
-    return `PyBullet workspace adapter runtime skipped by ${PYBULLET_SKIP_AUTO_INSTALL_ENV}.`;
-  }
-  if (process.platform === 'darwin') {
-    return [
-      'PyBullet workspace adapter runtime skipped on macOS.',
-      'The pybullet source build fails against the current macOS SDK headers (bundled zlib fdopen macro collision).',
-      `Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`,
-    ].join(' ');
-  }
-  return `PyBullet workspace adapter runtime skipped. Set ${PYBULLET_FORCE_INSTALL_ENV}=1 to force install.`;
+function shouldInstallMjlabRuntime() {
+  return shouldInstallOptionalPythonRuntime({
+    skipAutoInstallEnv: MJLAB_SKIP_AUTO_INSTALL_ENV,
+    forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
+    defaultInstall: process.platform !== 'win32',
+  });
 }
 
 function getManagedBlenderRuntimeRoot() {
@@ -1152,13 +1108,6 @@ function shouldInstallBlenderRuntime() {
   return true;
 }
 
-function getBlenderRuntimeSkipMessage() {
-  if (isTruthyEnvValue(process.env[BLENDER_SKIP_AUTO_INSTALL_ENV])) {
-    return `Blender workspace runtime skipped by ${BLENDER_SKIP_AUTO_INSTALL_ENV}.`;
-  }
-  return `Blender workspace runtime skipped. Set ${BLENDER_FORCE_INSTALL_ENV}=1 to force install.`;
-}
-
 function installManagedLinuxBlenderRuntime() {
   if (process.platform !== 'linux' || process.arch !== 'x64') {
     throw new Error('Managed Blender install is currently available for Linux x64 only.');
@@ -1211,26 +1160,40 @@ function installManagedLinuxBlenderRuntime() {
   return executablePath;
 }
 
-async function installBlenderRuntime() {
-  log('');
-  logArrow('🎨 Installing Blender workspace runtime');
-  log('');
-
+async function installBlenderRuntime(simulatorCompatibilityReport = null) {
   const existingExecutable = resolveBlenderExecutableForSetup();
   if (existingExecutable) {
-    logSuccess(`Blender workspace runtime ready: ${existingExecutable}`);
-    return { ok: true, installed: true, skipped: false, executable: existingExecutable };
+    return buildSetupResult({
+      installed: true,
+      skipped: false,
+      executable: existingExecutable,
+    });
   }
 
   if (!shouldInstallBlenderRuntime()) {
-    logInfo(getBlenderRuntimeSkipMessage());
-    return { ok: true, installed: false, skipped: true };
+    return buildSetupResult({ installed: false, skipped: true });
+  }
+
+  const compatibilityResult = buildSimulatorCompatibilityInstallResult({
+    simulatorCompatibilityReport,
+    simulatorId: 'blender',
+    setupName: 'Blender',
+    forceInstallEnv: BLENDER_FORCE_INSTALL_ENV,
+  });
+  if (compatibilityResult) {
+    return compatibilityResult;
   }
 
   try {
+    logArrow('Installing Blender workspace runtime');
     const executable = installManagedLinuxBlenderRuntime();
     logSuccess(`Blender workspace runtime installed: ${executable}`);
-    return { ok: true, installed: true, skipped: false, executable };
+    return buildSetupResult({
+      changed: true,
+      installed: true,
+      skipped: false,
+      executable,
+    });
   } catch (error) {
     log('✗ Failed to install Blender workspace runtime', colors.yellow);
     logInfo(error?.message || String(error));
@@ -1332,28 +1295,87 @@ function shouldFailSetupForRuntimeResult(result) {
   return result?.ok === false && result.fatal !== false;
 }
 
+function checkSimulatorCompatibility() {
+  logArrow('Checking simulator compatibility');
+  const report = getSimulatorCompatibilityReport({
+    pythonExecutable: getManagedPythonPath(),
+  });
+  for (const line of formatSimulatorCompatibilitySummary(report)) {
+    logInfo(line);
+  }
+  return buildSetupResult({ report });
+}
+
+function formatSimulatorInstallBlock(target) {
+  if (!target) {
+    return 'No compatibility result was available for this simulator.';
+  }
+  if (target.reasons.length > 0) {
+    return target.reasons.join(' ');
+  }
+  if (target.setupMode === 'external') {
+    return `${target.label} is an external runtime and is not installed by URDF Studio setup.`;
+  }
+  if (target.setupMode === 'planned') {
+    return `${target.label} setup is planned but not available in this release.`;
+  }
+  if (target.setupMode === 'deprecated') {
+    return `${target.label} is deprecated and is not installed by setup.`;
+  }
+  return `${target.label} is not installable by setup on this machine.`;
+}
+
+function buildSimulatorCompatibilityInstallResult({
+  simulatorCompatibilityReport,
+  simulatorId,
+  setupName,
+  forceInstallEnv,
+}) {
+  if (!simulatorCompatibilityReport || isManagedSimulatorInstallAllowed(simulatorCompatibilityReport, simulatorId)) {
+    return null;
+  }
+
+  const target = getSimulatorCompatibilityTarget(simulatorCompatibilityReport, simulatorId);
+  const reason = formatSimulatorInstallBlock(target);
+  const forced = isTruthyEnvValue(process.env[forceInstallEnv]);
+  log(forced ? `✗ ${setupName} is not compatible with this machine` : `Skipping ${setupName}`, colors.yellow);
+  logInfo(reason);
+  if (!forced) {
+    logInfo(`Set ${forceInstallEnv}=1 only after fixing compatibility.`);
+  }
+  return buildSetupResult({
+    ok: !forced,
+    installed: false,
+    skipped: !forced,
+    fatal: forced,
+    compatibility: target,
+    reason,
+  });
+}
+
 async function installOptionalPythonRuntime({
   shouldInstall,
-  skipMessage,
-  icon,
   displayName,
   setupName,
+  simulatorId,
+  simulatorCompatibilityReport = null,
   dependencies,
   verifyImportScript,
   forceInstallEnv,
   manualInstallIntro = 'Try manually:',
 }) {
   if (!shouldInstall()) {
-    log('');
-    logArrow(`${icon} Checking ${displayName}`);
-    log('');
-    logInfo(skipMessage());
-    return { ok: true, installed: false, skipped: true };
+    return buildSetupResult({ installed: false, skipped: true });
   }
-
-  log('');
-  logArrow(`${icon} Installing ${displayName}`);
-  log('');
+  const compatibilityResult = buildSimulatorCompatibilityInstallResult({
+    simulatorCompatibilityReport,
+    simulatorId,
+    setupName,
+    forceInstallEnv,
+  });
+  if (compatibilityResult) {
+    return compatibilityResult;
+  }
 
   const venvPython = getManagedPythonPath();
   const uvPath = findUv();
@@ -1368,10 +1390,10 @@ async function installOptionalPythonRuntime({
 
   const existingRuntimeCheck = runPythonImportCheck(venvPython, verifyImportScript);
   if (existingRuntimeCheck.ok) {
-    logSuccess(`${displayName} ready`);
-    return { ok: true, installed: true, skipped: false };
+    return buildSetupResult({ installed: true, skipped: false });
   }
 
+  logArrow(`Installing ${displayName}`);
   if (existingRuntimeCheck.output) {
     logInfo(`${displayName} check failed; reinstalling packages.`);
   }
@@ -1390,7 +1412,7 @@ async function installOptionalPythonRuntime({
       throw new Error(installedRuntimeCheck.output || `${setupName} import check failed after install.`);
     }
     logSuccess(`${displayName} installed`);
-    return { ok: true, installed: true, skipped: false };
+    return buildSetupResult({ changed: true, installed: true, skipped: false });
   } catch (e) {
     log(`✗ Failed to install ${displayName}`, colors.yellow);
     logInfo(manualInstallIntro);
@@ -1405,45 +1427,64 @@ async function installOptionalPythonRuntime({
   }
 }
 
-async function installPybulletRuntime() {
+async function installPybulletRuntime(simulatorCompatibilityReport = null) {
   return installOptionalPythonRuntime({
     shouldInstall: shouldInstallPybulletRuntime,
-    skipMessage: getPybulletRuntimeSkipMessage,
-    icon: '🧱',
     displayName: 'PyBullet workspace adapter runtime',
     setupName: 'PyBullet',
+    simulatorId: 'pybullet',
+    simulatorCompatibilityReport,
     dependencies: PYBULLET_DEPENDENCIES,
     verifyImportScript: PYBULLET_VERIFY_IMPORT_SCRIPT,
     forceInstallEnv: PYBULLET_FORCE_INSTALL_ENV,
   });
 }
 
-async function installBackendDeps() {
-  log('');
-  logArrow('🔧 Installing backend Python dependencies');
-  log('');
+async function installMjlabRuntime(simulatorCompatibilityReport = null) {
+  return installOptionalPythonRuntime({
+    shouldInstall: shouldInstallMjlabRuntime,
+    displayName: 'MJLab validation runtime',
+    setupName: 'MJLab',
+    simulatorId: 'mjlab',
+    simulatorCompatibilityReport,
+    dependencies: MJLAB_DEPENDENCIES,
+    verifyImportScript: MJLAB_VERIFY_IMPORT_SCRIPT,
+    forceInstallEnv: MJLAB_FORCE_INSTALL_ENV,
+    manualInstallIntro: 'Try manually in a compatible Python environment:',
+  });
+}
 
+function shouldBlockForcedBackendNativeSimRuntime(simulatorCompatibilityReport = null) {
+  return (
+    isTruthyEnvValue(process.env[BACKEND_NATIVE_SIM_FORCE_ENV]) &&
+    !isManagedSimulatorInstallAllowed(simulatorCompatibilityReport, 'mjx')
+  );
+}
+
+async function installBackendDeps(simulatorCompatibilityReport = null) {
   const venvPython = getManagedPythonPath();
   const uvPath = findUv();
 
   if (!existsSync(venvPython)) {
     logInfo(`Unified Python environment not found at ${venvPython}. Run setup first.`);
-    return false;
+    return buildSetupResult({ ok: false });
   }
   if (!uvPath) {
     log('✗ uv not found. Please install uv first:', colors.yellow);
-    return false;
+    return buildSetupResult({ ok: false });
   }
 
-  const backendPythonDependencies = resolveBackendPythonDependencies();
-  const backendVerifyImportScript = resolveBackendPythonVerifyImportScript();
-  if (!shouldInstallBackendNativeSimRuntime()) {
-    logInfo(getBackendNativeSimSkipMessage());
-  }
-  if (!shouldInstallBackendCollisionStack()) {
-    logInfo(getBackendCollisionStackSkipMessage());
+  if (shouldBlockForcedBackendNativeSimRuntime(simulatorCompatibilityReport)) {
+    const target = getSimulatorCompatibilityTarget(simulatorCompatibilityReport, 'mjx');
+    log('✗ Native simulator dependencies are not compatible with this machine', colors.yellow);
+    logInfo(formatSimulatorInstallBlock(target));
+    return buildSetupResult({ ok: false });
   }
 
+  const backendPythonDependencies = resolveBackendPythonDependencies(simulatorCompatibilityReport);
+  const backendVerifyImportScript = resolveBackendPythonVerifyImportScript(simulatorCompatibilityReport);
+
+  let changed = false;
   try {
     const installedPackageNames = listInstalledPythonPackageNames(venvPython);
     const installedSupersededDependencies = selectInstalledSupersededPythonDependencies({
@@ -1462,16 +1503,19 @@ async function installBackendDeps() {
           env: getUvEnv(),
         }
       );
+      changed = true;
     }
   } catch (e) {
-    logInfo('Continuing after superseded backend package cleanup could not inspect or remove superseded packages.');
+    if (changed) {
+      logInfo('Continuing after superseded backend package cleanup could not inspect or remove superseded packages.');
+    }
   }
 
   const existingBackendCheck = runPythonImportCheck(venvPython, backendVerifyImportScript);
   if (existingBackendCheck.ok) {
-    logSuccess('Backend Python runtime ready');
-    return true;
+    return buildSetupResult({ changed });
   }
+  logArrow('Installing backend Python runtime');
   logInfo('Installing or repairing backend Python packages...');
   logInfo(`Installing: ${backendPythonDependencies.join(', ')}`);
 
@@ -1488,22 +1532,22 @@ async function installBackendDeps() {
       throw new Error(installedBackendCheck.output || 'Backend Python import check failed after install.');
     }
     logSuccess('Backend dependencies installed');
-    return true;
+    return buildSetupResult({ changed: true });
   } catch (e) {
     log('✗ Failed to install backend dependencies', colors.yellow);
     logInfo(`   You can try installing manually:`);
     logInfo(`     "${uvPath}" pip install --python ${PYTHON_ENV_DIRNAME}/bin/python3 ${backendPythonDependencies.map((dependency) => JSON.stringify(dependency)).join(' ')}`);
-    return false;
+    return buildSetupResult({ ok: false, changed });
   }
 }
 
-async function installGenesisRuntime() {
+async function installGenesisRuntime(simulatorCompatibilityReport = null) {
   return installOptionalPythonRuntime({
     shouldInstall: shouldInstallGenesisRuntime,
-    skipMessage: getGenesisRuntimeSkipMessage,
-    icon: '🌐',
     displayName: 'Genesis workspace adapter runtime',
     setupName: 'Genesis',
+    simulatorId: 'genesis',
+    simulatorCompatibilityReport,
     dependencies: GENESIS_PYTHON_DEPENDENCIES,
     verifyImportScript: GENESIS_VERIFY_IMPORT_SCRIPT,
     forceInstallEnv: GENESIS_FORCE_INSTALL_ENV,
@@ -1521,7 +1565,7 @@ async function installTwinDepsIfRequested() {
     process.env.TWIN === '1';
 
   if (!shouldInstallTwin) {
-    return;
+    return buildSetupResult();
   }
 
   const twinScript = join(rootDir, 'scripts', 'twin.js');
@@ -1531,9 +1575,10 @@ async function installTwinDepsIfRequested() {
   }
 
   log('');
-  logArrow('🧬 Installing VGGT ("twin") dependencies');
+  logArrow('Installing VGGT ("twin") dependencies');
   log('');
   execFileSync('node', [twinScript, '--twin'], { cwd: rootDir, stdio: 'inherit' });
+  return buildSetupResult({ changed: true });
 }
 
 async function runSetupSequence(overrides = {}) {
@@ -1541,8 +1586,10 @@ async function runSetupSequence(overrides = {}) {
     installDependencies,
     verifyIluRuntimeContract,
     setupPythonBackendEnvironment,
+    checkSimulatorCompatibility,
     installBackendDeps,
     installGenesisRuntime,
+    installMjlabRuntime,
     installPybulletRuntime,
     installBlenderRuntime,
     installTwinDepsIfRequested,
@@ -1553,61 +1600,72 @@ async function runSetupSequence(overrides = {}) {
     ...overrides,
   };
 
-  await steps.installDependencies();
-  const iluRuntimeReady = await steps.verifyIluRuntimeContract();
-  if (!iluRuntimeReady) {
+  const setupResults = [];
+  const recordResult = (result) => {
+    setupResults.push(result);
+    return result;
+  };
+
+  const dependenciesReady = recordResult(await steps.installDependencies());
+  if (!isSetupStepReady(dependenciesReady)) {
+    throw new Error('Node dependency installation failed');
+  }
+  const iluRuntimeReady = recordResult(await steps.verifyIluRuntimeContract());
+  if (!isSetupStepReady(iluRuntimeReady)) {
     throw new Error('i-love-urdf runtime setup failed');
   }
-  const pythonBackendEnvironmentReady = await steps.setupPythonBackendEnvironment();
-  if (!pythonBackendEnvironmentReady) {
+  const pythonBackendEnvironmentReady = recordResult(await steps.setupPythonBackendEnvironment());
+  if (!isSetupStepReady(pythonBackendEnvironmentReady)) {
     throw new Error('Unified Python environment setup failed');
   }
-  const backendDepsInstalled = await steps.installBackendDeps();
-  if (!backendDepsInstalled) {
+  const simulatorCompatibilityReady = recordResult(await steps.checkSimulatorCompatibility());
+  if (!isSetupStepReady(simulatorCompatibilityReady)) {
+    throw new Error('Simulator compatibility check failed');
+  }
+  const simulatorCompatibilityReport = simulatorCompatibilityReady?.report || null;
+  const backendDepsInstalled = recordResult(await steps.installBackendDeps(simulatorCompatibilityReport));
+  if (!isSetupStepReady(backendDepsInstalled)) {
     throw new Error('Backend dependencies installation failed');
   }
-  const genesisRuntimeResult = await steps.installGenesisRuntime();
+  const genesisRuntimeResult = recordResult(await steps.installGenesisRuntime(simulatorCompatibilityReport));
   if (shouldFailSetupForRuntimeResult(genesisRuntimeResult)) {
     throw new Error('Genesis workspace adapter runtime installation failed');
   }
-  const pybulletRuntimeResult = await steps.installPybulletRuntime();
+  const mjlabRuntimeResult = recordResult(await steps.installMjlabRuntime(simulatorCompatibilityReport));
+  if (shouldFailSetupForRuntimeResult(mjlabRuntimeResult)) {
+    throw new Error('MJLab validation runtime installation failed');
+  }
+  const pybulletRuntimeResult = recordResult(await steps.installPybulletRuntime(simulatorCompatibilityReport));
   if (shouldFailSetupForRuntimeResult(pybulletRuntimeResult)) {
     throw new Error('PyBullet workspace adapter runtime installation failed');
   }
-  const blenderRuntimeResult = await steps.installBlenderRuntime();
+  const blenderRuntimeResult = recordResult(await steps.installBlenderRuntime(simulatorCompatibilityReport));
   if (shouldFailSetupForRuntimeResult(blenderRuntimeResult)) {
     throw new Error('Blender workspace runtime installation failed');
   }
-  await steps.installTwinDepsIfRequested();
-  await steps.checkIkd();
-  await steps.setupHuggingFace();
-  await steps.setupGitHub();
-  const globalIluResult = await steps.installOptionalGlobalIlu();
+  recordResult(await steps.installTwinDepsIfRequested());
+  const ikdResult = recordResult(await steps.checkIkd());
+  if (!isSetupStepReady(ikdResult)) {
+    throw new Error('Native IKD toolchain setup failed');
+  }
+  recordResult(await steps.setupHuggingFace());
+  recordResult(await steps.setupGitHub());
+  const globalIluResult = recordResult(await steps.installOptionalGlobalIlu());
   return {
+    changed: setupResults.some(didSetupStepChange),
     globalIluResult,
     genesisRuntimeResult,
+    mjlabRuntimeResult,
     pybulletRuntimeResult,
     blenderRuntimeResult,
   };
 }
 
 async function main() {
-  console.log(banner);
-
   try {
-    const {
-      globalIluResult,
-      genesisRuntimeResult,
-      pybulletRuntimeResult,
-      blenderRuntimeResult,
-    } = await runSetupSequence();
-    logSuccess('Setup complete');
-    printSetupSummary({
-      globalIluResult,
-      genesisRuntimeResult,
-      pybulletRuntimeResult,
-      blenderRuntimeResult,
-    });
+    const { changed } = await runSetupSequence();
+    logSuccess(changed ? 'Setup complete' : 'All up to date');
+    logInfo('Run: npm run start');
   } catch (error) {
     log('');
     log('✗ Setup failed', colors.yellow);
@@ -1628,6 +1686,7 @@ if (isMainModule()) {
 
 export {
   assertIluRuntimeContract,
+  checkSimulatorCompatibility,
   didSpawnSyncFail,
   findPythonForBackend,
   installBlenderRuntime,

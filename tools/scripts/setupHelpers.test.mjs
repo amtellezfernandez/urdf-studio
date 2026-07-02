@@ -106,8 +106,7 @@ test('buildSetupRoadmapSections reports setup steps without override labels', ()
 
   assert.equal(sections[0].heading, 'Setup steps');
   assert.ok(sections[0].lines.includes('Unified Python backend runtime'));
-  assert.ok(
-    sections[0].lines.includes('Simulator runtimes: Genesis, PyBullet, and Blender')
-  );
+  assert.ok(sections[0].lines.includes('Simulator compatibility preflight'));
+  assert.ok(sections[0].lines.includes('Managed simulator runtimes supported by this machine'));
   assert.equal(sections.length, 1);
 });

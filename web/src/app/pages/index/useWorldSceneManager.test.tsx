@@ -111,33 +111,23 @@ describe("useWorldSceneManager", () => {
     });
   });
 
-  it("packages the default world layout in the same tick it is imported for transfer", async () => {
+  it("does not auto-import default background objects for normal loaded robots", async () => {
     const fixture = {
       urdf: '<robot name="demo"><link name="base"/></robot>',
     };
-    let manager: ReturnType<typeof useWorldSceneManager> | null = null;
 
     const Harness = () => {
-      const skipDefaultWorldLayoutAutoImportRef = useRef(true);
-      const [objects, setObjects] = useState<CreatedObject[]>([]);
-      const [cameras, setCameras] = useState<Camera[]>([]);
+      const skipDefaultWorldLayoutAutoImportRef = useRef(false);
+      const [objects] = useState<CreatedObject[]>([]);
+      const [cameras] = useState<Camera[]>([]);
       const [jointValues, setJointValues] = useState<Record<string, number>>({});
-      const nextGeneratedIdRef = useRef(0);
 
-      manager = useWorldSceneManager({
-        addCamera: (camera) => {
-          setCameras((previous) => [
-            ...previous,
-            { ...camera, id: `camera-${previous.length}` },
-          ]);
-        },
-        addObject: (object) => {
-          const fallbackId = `object-${nextGeneratedIdRef.current++}`;
-          setObjects((previous) => [...previous, toCreatedObject(object, fallbackId)]);
-        },
+      useWorldSceneManager({
+        addCamera: vi.fn(),
+        addObject: vi.fn(),
         cameras,
-        clearCameras: () => setCameras([]),
-        clearObjects: () => setObjects([]),
+        clearCameras: vi.fn(),
+        clearObjects: vi.fn(),
         hasExplicitWorldImport: false,
         hasExplicitWorldLayoutImport: false,
         hasLoadedFiles: true,
@@ -161,165 +151,7 @@ describe("useWorldSceneManager", () => {
       await Promise.resolve();
     });
 
-    let objects: Array<{ id: string; source: string }> = [];
-    await act(async () => {
-      await manager?.ensureWorldLayoutForTransfer();
-      const manifest = await manager?.buildCurrentWorldScenePackageManifest();
-      objects =
-        manifest?.world_snapshot.objects.map((object) => ({
-          id: object.id,
-          source: object.source,
-        })) ?? [];
-    });
-
-    expect(objects).toEqual([{ id: "layout-crate", source: "demo-world" }]);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("merges the default world layout for transfer when only user objects are present", async () => {
-    const fixture = {
-      urdf: '<robot name="demo"><link name="base"/></robot>',
-    };
-    const userObject: CreatedObject = {
-      id: "manual-target",
-      type: "point",
-      position: new Vector3(0.1, 0.2, 0.3),
-      rotation: normalizeWorldObjectRotationEuler(null),
-      size: new Vector3(0.04, 0.04, 0.04),
-      color: "#f472b6",
-      source: "user",
-      trackedJointName: null,
-      isIkTarget: true,
-      ikTargetType: "punctual",
-    };
-    let manager: ReturnType<typeof useWorldSceneManager> | null = null;
-
-    const Harness = () => {
-      const skipDefaultWorldLayoutAutoImportRef = useRef(true);
-      const [objects, setObjects] = useState<CreatedObject[]>([userObject]);
-      const [cameras, setCameras] = useState<Camera[]>([]);
-      const [jointValues, setJointValues] = useState<Record<string, number>>({});
-      const nextGeneratedIdRef = useRef(0);
-
-      manager = useWorldSceneManager({
-        addCamera: (camera) => {
-          setCameras((previous) => [
-            ...previous,
-            { ...camera, id: `camera-${previous.length}` },
-          ]);
-        },
-        addObject: (object) => {
-          const fallbackId = `object-${nextGeneratedIdRef.current++}`;
-          setObjects((previous) => [...previous, toCreatedObject(object, fallbackId)]);
-        },
-        cameras,
-        clearCameras: () => setCameras([]),
-        clearObjects: () => setObjects([]),
-        hasExplicitWorldImport: false,
-        hasExplicitWorldLayoutImport: false,
-        hasLoadedFiles: true,
-        jointValues,
-        objects,
-        originalUrdfContent: fixture.urdf,
-        resolvedRobotName: "demo",
-        skipDefaultWorldLayoutAutoImportRef,
-        setJointValues,
-        updateUrdfFile: vi.fn(),
-        vizUrdfContent: fixture.urdf,
-        worldImportParams: EMPTY_WORLD_IMPORT_PARAMS,
-      });
-      return null;
-    };
-
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(createElement(Harness));
-      await Promise.resolve();
-    });
-
-    let objects: Array<{ id: string; source: string }> = [];
-    await act(async () => {
-      await manager?.ensureWorldLayoutForTransfer();
-      const manifest = await manager?.buildCurrentWorldScenePackageManifest();
-      objects =
-        manifest?.world_snapshot.objects.map((object) => ({
-          id: object.id,
-          source: object.source,
-        })) ?? [];
-    });
-
-    expect(objects).toEqual([
-      { id: "manual-target", source: "user" },
-      { id: "layout-crate", source: "demo-world" },
-    ]);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("adds the default transfer layout when an explicit scene is empty", async () => {
-    const fixture = {
-      urdf: '<robot name="demo"><link name="base"/></robot>',
-    };
-    let manager: ReturnType<typeof useWorldSceneManager> | null = null;
-
-    const Harness = () => {
-      const skipDefaultWorldLayoutAutoImportRef = useRef(true);
-      const [objects, setObjects] = useState<CreatedObject[]>([]);
-      const [cameras, setCameras] = useState<Camera[]>([]);
-      const [jointValues, setJointValues] = useState<Record<string, number>>({});
-      const nextGeneratedIdRef = useRef(0);
-
-      manager = useWorldSceneManager({
-        addCamera: (camera) => {
-          setCameras((previous) => [
-            ...previous,
-            { ...camera, id: `camera-${previous.length}` },
-          ]);
-        },
-        addObject: (object) => {
-          const fallbackId = `object-${nextGeneratedIdRef.current++}`;
-          setObjects((previous) => [...previous, toCreatedObject(object, fallbackId)]);
-        },
-        cameras,
-        clearCameras: () => setCameras([]),
-        clearObjects: () => setObjects([]),
-        hasExplicitWorldImport: true,
-        hasExplicitWorldLayoutImport: false,
-        hasLoadedFiles: true,
-        jointValues,
-        objects,
-        originalUrdfContent: fixture.urdf,
-        resolvedRobotName: "demo",
-        skipDefaultWorldLayoutAutoImportRef,
-        setJointValues,
-        updateUrdfFile: vi.fn(),
-        vizUrdfContent: fixture.urdf,
-        worldImportParams: EMPTY_WORLD_IMPORT_PARAMS,
-      });
-      return null;
-    };
-
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(createElement(Harness));
-      await Promise.resolve();
-    });
-
-    let objectSources: string[] = [];
-    await act(async () => {
-      await manager?.ensureWorldLayoutForTransfer();
-      const manifest = await manager?.buildCurrentWorldScenePackageManifest();
-      objectSources = manifest?.world_snapshot.objects.map((object) => object.source) ?? [];
-    });
-
-    expect(objectSources).toEqual(["demo-world"]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();

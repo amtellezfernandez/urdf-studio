@@ -33,13 +33,16 @@ from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
 )
 
-WORKSPACE_SIMULATORS: tuple[SimulatorId, ...] = (
-    SIMULATOR_GENESIS_ID,
-    SIMULATOR_MJLAB_ID,
-    SIMULATOR_MUJOCO_ID,
-    SIMULATOR_PYBULLET_ID,
-    SIMULATOR_BLENDER_ID,
-)
+
+def __getattr__(name: str) -> object:
+    if name == "WORKSPACE_SIMULATORS":
+        from backend.services.simulator_adapters.plugin import get_workspace_plugins
+        result: tuple[SimulatorId, ...] = tuple(
+            p.simulator_id for p in get_workspace_plugins()
+        )
+        globals()["WORKSPACE_SIMULATORS"] = result
+        return result
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 WORKSPACE_FIXTURES = (
     "demo",
     "studio-y-up-axis",

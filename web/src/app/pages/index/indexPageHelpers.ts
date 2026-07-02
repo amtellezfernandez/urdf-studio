@@ -35,6 +35,42 @@ export const parseRobotNameFromUrdf = (urdfContent: string) => {
   return match?.[1] || null;
 };
 
+export const resolveRemoteUrdfFileUrl = (rawUrl: string): string => {
+  const parsed = new URL(rawUrl);
+  const host = parsed.hostname.toLowerCase();
+  const pathParts = parsed.pathname.split("/").filter(Boolean);
+
+  if (
+    (host === "huggingface.co" || host === "www.huggingface.co" || host === "hf.co") &&
+    pathParts.includes("blob")
+  ) {
+    parsed.pathname = `/${pathParts
+      .map((part) => part === "blob" ? "resolve" : part)
+      .join("/")}`;
+    return parsed.toString();
+  }
+
+  if (host === "github.com" && pathParts.length >= 5 && pathParts[2] === "blob") {
+    const [owner, repo, , branch, ...filePathParts] = pathParts;
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePathParts.join("/")}`;
+  }
+
+  return parsed.toString();
+};
+
+export const inferRemoteUrdfFileName = (rawUrl: string): string => {
+  try {
+    const parsed = new URL(rawUrl);
+    const name = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
+    if (/\.(urdf|xacro|xml)$/i.test(name)) {
+      return name;
+    }
+  } catch {
+    // Fall through to the default name.
+  }
+  return "robot.urdf";
+};
+
 export const toWorldLayoutFilename = (worldLayoutName: string): string => {
   const slug = worldLayoutName
     .trim()

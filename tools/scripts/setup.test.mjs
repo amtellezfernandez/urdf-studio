@@ -174,8 +174,10 @@ test('setup stops before backend dependency installation when unified Python set
       installDependencies: record('installDependencies'),
       verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', false),
+      checkSimulatorCompatibility: unreachable('checkSimulatorCompatibility'),
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
+      installMjlabRuntime: unreachable('installMjlabRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
@@ -210,8 +212,10 @@ test('setup stops before workspace setup when i-love-urdf runtime check fails', 
       installDependencies: record('installDependencies'),
       verifyIluRuntimeContract: record('verifyIluRuntimeContract', false),
       setupPythonBackendEnvironment: unreachable('setupPythonBackendEnvironment'),
+      checkSimulatorCompatibility: unreachable('checkSimulatorCompatibility'),
       installBackendDeps: unreachable('installBackendDeps'),
       installGenesisRuntime: unreachable('installGenesisRuntime'),
+      installMjlabRuntime: unreachable('installMjlabRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
@@ -240,8 +244,15 @@ test('setup continues when optional simulator adapters are unavailable', async (
     installDependencies: record('installDependencies'),
     verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
     setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
+    checkSimulatorCompatibility: record('checkSimulatorCompatibility', { report: { targets: {} } }),
     installBackendDeps: record('installBackendDeps', true),
     installGenesisRuntime: record('installGenesisRuntime', {
+      ok: false,
+      installed: false,
+      skipped: false,
+      fatal: false,
+    }),
+    installMjlabRuntime: record('installMjlabRuntime', {
       ok: false,
       installed: false,
       skipped: false,
@@ -270,14 +281,17 @@ test('setup continues when optional simulator adapters are unavailable', async (
   });
 
   assert.equal(result.genesisRuntimeResult.ok, false);
+  assert.equal(result.mjlabRuntimeResult.ok, false);
   assert.equal(result.pybulletRuntimeResult.ok, false);
   assert.equal(result.blenderRuntimeResult.ok, false);
   assert.deepEqual(calls, [
     'installDependencies',
     'verifyIluRuntimeContract',
     'setupPythonBackendEnvironment',
+    'checkSimulatorCompatibility',
     'installBackendDeps',
     'installGenesisRuntime',
+    'installMjlabRuntime',
     'installPybulletRuntime',
     'installBlenderRuntime',
     'installTwinDepsIfRequested',
@@ -286,6 +300,50 @@ test('setup continues when optional simulator adapters are unavailable', async (
     'setupGitHub',
     'installOptionalGlobalIlu',
   ]);
+});
+
+test('setup reports no changes when everything is already ready', async () => {
+  const ready = { ok: true, changed: false };
+  const result = await runSetupSequence({
+    installDependencies: async () => ready,
+    verifyIluRuntimeContract: async () => ready,
+    setupPythonBackendEnvironment: async () => ready,
+    checkSimulatorCompatibility: async () => ({ ok: true, changed: false, report: { targets: {} } }),
+    installBackendDeps: async () => ready,
+    installGenesisRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installMjlabRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installPybulletRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installBlenderRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installTwinDepsIfRequested: async () => ready,
+    checkIkd: async () => ready,
+    setupHuggingFace: async () => ready,
+    setupGitHub: async () => ready,
+    installOptionalGlobalIlu: async () => ({ ...ready, attempted: false, installed: false }),
+  });
+
+  assert.equal(result.changed, false);
+});
+
+test('setup reports changes when a step installs or repairs runtime files', async () => {
+  const ready = { ok: true, changed: false };
+  const result = await runSetupSequence({
+    installDependencies: async () => ready,
+    verifyIluRuntimeContract: async () => ready,
+    setupPythonBackendEnvironment: async () => ({ ok: true, changed: true }),
+    checkSimulatorCompatibility: async () => ({ ok: true, changed: false, report: { targets: {} } }),
+    installBackendDeps: async () => ready,
+    installGenesisRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installMjlabRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installPybulletRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installBlenderRuntime: async () => ({ ...ready, installed: true, skipped: false }),
+    installTwinDepsIfRequested: async () => ready,
+    checkIkd: async () => ready,
+    setupHuggingFace: async () => ready,
+    setupGitHub: async () => ready,
+    installOptionalGlobalIlu: async () => ({ ...ready, attempted: false, installed: false }),
+  });
+
+  assert.equal(result.changed, true);
 });
 
 test('setup fails when a forced simulator adapter install fails', async () => {
@@ -304,6 +362,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
       installDependencies: record('installDependencies'),
       verifyIluRuntimeContract: record('verifyIluRuntimeContract', true),
       setupPythonBackendEnvironment: record('setupPythonBackendEnvironment', true),
+      checkSimulatorCompatibility: record('checkSimulatorCompatibility', { report: { targets: {} } }),
       installBackendDeps: record('installBackendDeps', true),
       installGenesisRuntime: record('installGenesisRuntime', {
         ok: false,
@@ -311,6 +370,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
         skipped: false,
         fatal: true,
       }),
+      installMjlabRuntime: unreachable('installMjlabRuntime'),
       installPybulletRuntime: unreachable('installPybulletRuntime'),
       installBlenderRuntime: unreachable('installBlenderRuntime'),
       installTwinDepsIfRequested: unreachable('installTwinDepsIfRequested'),
@@ -326,6 +386,7 @@ test('setup fails when a forced simulator adapter install fails', async () => {
     'installDependencies',
     'verifyIluRuntimeContract',
     'setupPythonBackendEnvironment',
+    'checkSimulatorCompatibility',
     'installBackendDeps',
     'installGenesisRuntime',
   ]);

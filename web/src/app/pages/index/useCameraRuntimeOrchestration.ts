@@ -77,7 +77,6 @@ type UseCameraRuntimeOrchestrationParams = {
   robotBoundingBox: THREE.Box3 | null;
   runtimePreviewMode: boolean;
   runtimeRobotBasePose: RuntimePose;
-  setGPUMode: UseThumbnailBootstrapParams["setGPUMode"];
   setIsImportingWorldLayout: (value: boolean) => void;
   setWorldLayoutImportDialogOpen: (value: boolean) => void;
   setWorldLayoutImportUrlDraft: (value: string) => void;
@@ -112,7 +111,6 @@ export const useCameraRuntimeOrchestration = ({
   robotBoundingBox,
   runtimePreviewMode,
   runtimeRobotBasePose,
-  setGPUMode,
   setIsImportingWorldLayout,
   setWorldLayoutImportDialogOpen,
   setWorldLayoutImportUrlDraft,
@@ -390,7 +388,6 @@ export const useCameraRuntimeOrchestration = ({
     loadBundledDemoRobot,
     loadFilesFromFolderWithFreshCameras,
     runtimePreviewMode,
-    setGPUMode,
     thumbnailMode,
     thumbnailParams,
   });
