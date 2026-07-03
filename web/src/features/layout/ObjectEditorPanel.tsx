@@ -182,7 +182,7 @@ export const ObjectEditorPanel = ({
   const canUndoObjectEdit = useObjectStore((state) => state.canUndo);
   const canRedoObjectEdit = useObjectStore((state) => state.canRedo);
 
-  const obj = objects.find((object) => object.id === objectId);
+  const selectedObject = objects.find((object) => object.id === objectId);
   const toggleObjectTransformSpace = useCallback(() => {
     if (objectEditMode === "resize") {
       return;
@@ -202,13 +202,13 @@ export const ObjectEditorPanel = ({
     [setObjectTransformSpace]
   );
   const deleteEditedObject = useCallback(() => {
-    if (!obj) {
+    if (!selectedObject) {
       return;
     }
-    removeObject(obj.id);
-  }, [obj, removeObject]);
+    removeObject(selectedObject.id);
+  }, [removeObject, selectedObject]);
   useEffect(() => {
-    if (!obj) return;
+    if (!selectedObject) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isEditableKeyboardTarget(event.target)) return;
@@ -262,7 +262,7 @@ export const ObjectEditorPanel = ({
 
       const baseStep = event.metaKey || event.ctrlKey ? 0.002 : 0.01;
       const step = event.altKey ? 0.05 : baseStep;
-      const nextPosition = obj.position.clone();
+      const nextPosition = selectedObject.position.clone();
 
       switch (event.key) {
         case "ArrowLeft":
@@ -291,7 +291,7 @@ export const ObjectEditorPanel = ({
 
       event.preventDefault();
       event.stopPropagation();
-      updateObjectPosition(obj.id, nextPosition);
+      updateObjectPosition(selectedObject.id, nextPosition);
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -299,10 +299,10 @@ export const ObjectEditorPanel = ({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
-    obj,
     objectEditMode,
     objectTransformSpace,
     redoObjectEdit,
+    selectedObject,
     selectObjectEditMode,
     toggleObjectTransformSpace,
     undoObjectEdit,
@@ -322,49 +322,49 @@ export const ObjectEditorPanel = ({
     []
   );
 
-  if (!obj) return null;
+  if (!selectedObject) return null;
 
   const trackingReference = resolveTrackingReference({
     robot,
-    trackedName: obj.trackedJointName,
+    trackedName: selectedObject.trackedJointName,
     endEffectorLink,
   });
   const distance =
     trackingReference?.position !== null && trackingReference?.position !== undefined
-      ? obj.position.distanceTo(trackingReference.position)
+      ? selectedObject.position.distanceTo(trackingReference.position)
       : null;
   const useCompactStackedInputs = sidebarWidth < 272;
-  const normalizedOrbitStartPoint = normalizeOrbitStartPoint(obj.orbitTargetPoint);
+  const normalizedOrbitStartPoint = normalizeOrbitStartPoint(selectedObject.orbitTargetPoint);
   const orbitFields: ObjectOrbitFieldSpec[] = [
     {
       label: "Radius (m)",
-      value: obj.orbitRadius ?? 0.3,
-      onValueChange: (value) => updateOrbitParams(obj.id, { radius: value }),
+      value: selectedObject.orbitRadius ?? 0.3,
+      onValueChange: (value) => updateOrbitParams(selectedObject.id, { radius: value }),
       step: 0.01,
       min: 0.01,
     },
     {
       label: "Tilt (deg)",
-      value: obj.orbitInclination ?? 45,
-      onValueChange: (value) => updateOrbitParams(obj.id, { inclination: value }),
+      value: selectedObject.orbitInclination ?? 45,
+      onValueChange: (value) => updateOrbitParams(selectedObject.id, { inclination: value }),
       step: 5,
       min: -90,
       max: 90,
     },
     {
       label: "Start (deg)",
-      value: obj.orbitPhase ?? 0,
+      value: selectedObject.orbitPhase ?? 0,
       onValueChange: (value) =>
-        updateOrbitParams(obj.id, { phase: normalizeDegrees360(value) }),
+        updateOrbitParams(selectedObject.id, { phase: normalizeDegrees360(value) }),
       step: 15,
       min: 0,
       max: 360,
     },
     {
       label: "Arc (deg)",
-      value: obj.orbitSecondaryOffset ?? 180,
+      value: selectedObject.orbitSecondaryOffset ?? 180,
       onValueChange: (value) =>
-        updateOrbitParams(obj.id, { secondaryOffset: normalizeDegrees360(value) }),
+        updateOrbitParams(selectedObject.id, { secondaryOffset: normalizeDegrees360(value) }),
       step: 15,
       min: 0,
       max: 360,
@@ -376,7 +376,9 @@ export const ObjectEditorPanel = ({
       <BlenderPanel title={null} alwaysExpanded={true} className="text-[10px]">
         <div className="space-y-1">
           <BlenderPropertyRow label="Type" labelWidth="w-16">
-            <span className="text-[10px] text-[#d4d4d4]">{obj.type.charAt(0).toUpperCase() + obj.type.slice(1)}</span>
+            <span className="text-[10px] text-[#d4d4d4]">
+              {selectedObject.type.charAt(0).toUpperCase() + selectedObject.type.slice(1)}
+            </span>
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Edit" labelWidth="w-16">
@@ -424,11 +426,11 @@ export const ObjectEditorPanel = ({
 
           <BlenderPropertyRow label="Position" labelWidth="w-16" className="items-start">
             <ObjectVectorFields
-              vector={obj.position}
+              vector={selectedObject.position}
               useCompactStackedInputs={useCompactStackedInputs}
               onAxisValueChange={(axis, value) =>
-                updateObjectVectorAxis(obj.position, axis, value, (nextVector) =>
-                  updateObjectPosition(obj.id, nextVector)
+                updateObjectVectorAxis(selectedObject.position, axis, value, (nextVector) =>
+                  updateObjectPosition(selectedObject.id, nextVector)
                 )
               }
             />
@@ -436,12 +438,12 @@ export const ObjectEditorPanel = ({
 
           <BlenderPropertyRow label="Size" labelWidth="w-16" className="items-start">
             <ObjectVectorFields
-              vector={obj.size}
+              vector={selectedObject.size}
               useCompactStackedInputs={useCompactStackedInputs}
               min={0.01}
               onAxisValueChange={(axis, value) =>
-                updateObjectVectorAxis(obj.size, axis, value, (nextVector) =>
-                  updateObjectSize(obj.id, nextVector)
+                updateObjectVectorAxis(selectedObject.size, axis, value, (nextVector) =>
+                  updateObjectSize(selectedObject.id, nextVector)
                 )
               }
             />
@@ -450,19 +452,19 @@ export const ObjectEditorPanel = ({
           <BlenderPropertyRow label="Reference" labelWidth="w-16">
             <Select
               value={
-                obj.trackedJointName
-                  ? obj.trackedJointName
+                selectedObject.trackedJointName
+                  ? selectedObject.trackedJointName
                   : endEffectorLink
                     ? "__end_effector__"
                     : "none"
               }
               onValueChange={(value) => {
                 if (value === "none") {
-                  updateTrackedJoint(obj.id, null);
+                  updateTrackedJoint(selectedObject.id, null);
                 } else if (value === "__end_effector__") {
-                  updateTrackedJoint(obj.id, null);
+                  updateTrackedJoint(selectedObject.id, null);
                 } else {
-                  updateTrackedJoint(obj.id, value);
+                  updateTrackedJoint(selectedObject.id, value);
                 }
               }}
             >
@@ -500,8 +502,8 @@ export const ObjectEditorPanel = ({
 
           <BlenderPropertyRow label="Mode" labelWidth="w-16">
             <Select
-              value={obj.ikTargetType ?? "punctual"}
-              onValueChange={(value: "punctual" | "orbit") => updateIkTargetType(obj.id, value)}
+              value={selectedObject.ikTargetType ?? "punctual"}
+              onValueChange={(value: "punctual" | "orbit") => updateIkTargetType(selectedObject.id, value)}
             >
               <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                 <SelectValue />
@@ -517,13 +519,13 @@ export const ObjectEditorPanel = ({
             </Select>
           </BlenderPropertyRow>
 
-          {obj.ikTargetType === "orbit" && (
+          {selectedObject.ikTargetType === "orbit" && (
             <>
               <BlenderPropertyRow label="Start" labelWidth="w-16">
                 <Select
                   value={normalizedOrbitStartPoint}
                   onValueChange={(value: "primary" | "secondary") =>
-                    updateOrbitTargetPoint(obj.id, value)
+                    updateOrbitTargetPoint(selectedObject.id, value)
                   }
                 >
                   <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
