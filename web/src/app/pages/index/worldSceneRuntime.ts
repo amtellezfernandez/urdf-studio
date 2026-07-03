@@ -69,6 +69,22 @@ type WorldRolloutImportFileDraft = {
   text: string;
 };
 
+type WorldScenePackageImportParams = {
+  importUrl: string;
+  packageId: string;
+  version: string;
+};
+
+type WorldScenePackageVersionLoader = (
+  packageId: string,
+  version: string
+) => Promise<WorldScenePackageVersionRecord>;
+
+type LoadWorldScenePackageFromImportParamsOptions = {
+  fetchImplementation?: typeof fetch;
+  loadPackageVersion?: WorldScenePackageVersionLoader;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -489,6 +505,42 @@ export const fetchWorldScenePackageVersion = async (
 ): Promise<WorldScenePackageVersionRecord> => {
   const { getWorldScenePackageVersion } = await loadWorldScenePackageApiModule();
   return getWorldScenePackageVersion(packageId, version);
+};
+
+const readWorldScenePackageFromImportUrl = async (
+  importUrl: string,
+  fetchImplementation: typeof fetch
+) => {
+  const response = await fetchImplementation(importUrl, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Import link failed (HTTP ${response.status})`);
+  }
+  return readWorldSceneManifestPayload(await response.json());
+};
+
+export const loadWorldScenePackageFromImportParams = async (
+  importParams: WorldScenePackageImportParams,
+  options: LoadWorldScenePackageFromImportParamsOptions = {}
+): Promise<WorldScenePackageManifest> => {
+  const importUrl = importParams.importUrl.trim();
+  if (importUrl) {
+    return readWorldScenePackageFromImportUrl(
+      importUrl,
+      options.fetchImplementation ?? fetch
+    );
+  }
+
+  const packageId = importParams.packageId.trim();
+  const version = importParams.version.trim();
+  if (packageId && version) {
+    const loadPackageVersion = options.loadPackageVersion ?? fetchWorldScenePackageVersion;
+    const versionRecord = await loadPackageVersion(packageId, version);
+    return versionRecord.manifest;
+  }
+
+  throw new Error("Import link did not contain a valid world package manifest.");
 };
 
 export const readWorldSceneLayerFromUrl = async (

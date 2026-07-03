@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorldRolloutConfigFromDraft,
   createWorldRolloutCheckerProfile,
+  loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
   readWorldSceneManifestPayload,
   resolveWorldRolloutImportPayload,
@@ -139,6 +140,86 @@ describe("worldSceneRuntime world package import", () => {
         )
       )
     ).rejects.toThrow("world_snapshot.scenario_time_ms must be an integer");
+  });
+
+  it("loads world packages from import URLs", async () => {
+    const manifestPayload = createManifestPayload();
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      expect(input).toBe("https://example.test/world.json");
+      expect(init?.headers).toEqual({ Accept: "application/json" });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => manifestPayload,
+      } as Response;
+    };
+
+    const manifest = await loadWorldScenePackageFromImportParams(
+      {
+        importUrl: " https://example.test/world.json ",
+        packageId: "",
+        version: "",
+      },
+      { fetchImplementation }
+    );
+
+    expect(manifest.package_id).toBe("demo-scene");
+  });
+
+  it("loads world packages from registry package ids and versions", async () => {
+    const manifestPayload = createManifestPayload();
+    const manifest = await loadWorldScenePackageFromImportParams(
+      {
+        importUrl: "",
+        packageId: " demo-scene ",
+        version: " 0.1.0 ",
+      },
+      {
+        loadPackageVersion: async (packageId, version) => {
+          expect(packageId).toBe("demo-scene");
+          expect(version).toBe("0.1.0");
+          return {
+            package_id: packageId,
+            version,
+            digest_sha256: "a".repeat(64),
+            published_at: new Date().toISOString(),
+            manifest: manifestPayload,
+          };
+        },
+      }
+    );
+
+    expect(manifest).toBe(manifestPayload);
+  });
+
+  it("reports unavailable import URL responses", async () => {
+    const fetchImplementation: typeof fetch = async () =>
+      ({
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+      }) as Response;
+
+    await expect(
+      loadWorldScenePackageFromImportParams(
+        {
+          importUrl: "https://example.test/missing-world.json",
+          packageId: "",
+          version: "",
+        },
+        { fetchImplementation }
+      )
+    ).rejects.toThrow("Import link failed (HTTP 404)");
+  });
+
+  it("requires a complete world package import request", async () => {
+    await expect(
+      loadWorldScenePackageFromImportParams({
+        importUrl: "",
+        packageId: "demo-scene",
+        version: "",
+      })
+    ).rejects.toThrow("Import link did not contain a valid world package manifest.");
   });
 });
 

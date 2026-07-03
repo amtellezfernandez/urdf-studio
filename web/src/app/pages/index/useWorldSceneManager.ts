@@ -52,10 +52,10 @@ import {
   fetchWorldRegistryPackages,
   fetchWorldScenePackageVersion,
   importWorldRolloutResultPayload,
+  loadWorldScenePackageFromImportParams,
   parseWorldSceneManifestText,
   publishWorldScenePackage,
   readWorldSceneLayerFromUrl,
-  readWorldSceneManifestPayload,
   resolveWorldRolloutImportPayload,
   validateWorldScenePackageLocally,
   validateWorldScenePackageRemotely,
@@ -594,25 +594,7 @@ export const useWorldSceneManager = ({
     worldImportHandledRef.current = true;
     const loadFromLink = async () => {
       try {
-        let manifest: WorldScenePackageManifest | null = null;
-        if (worldImportParams.importUrl) {
-          const response = await fetch(worldImportParams.importUrl, {
-            headers: { Accept: "application/json" },
-          });
-          if (!response.ok) {
-            throw new Error(`Import link failed (HTTP ${response.status})`);
-          }
-          manifest = await readWorldSceneManifestPayload(await response.json());
-        } else if (worldImportParams.packageId && worldImportParams.version) {
-          const record = await fetchWorldScenePackageVersion(
-            worldImportParams.packageId,
-            worldImportParams.version
-          );
-          manifest = record.manifest;
-        }
-        if (!manifest) {
-          throw new Error("Import link did not contain a valid world package manifest.");
-        }
+        const manifest = await loadWorldScenePackageFromImportParams(worldImportParams);
         applyImportedWorldScenePackage(manifest);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to import world link");
