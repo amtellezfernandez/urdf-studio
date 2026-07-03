@@ -16,7 +16,6 @@ import { useUrdfEditHandlers } from "@/features/layout/page/useUrdfEditHandlers"
 import { useUrdfUtilityHandlers } from "@/features/layout/page/useUrdfUtilityHandlers";
 import { useUrdfMaterialHandlers } from "@/features/layout/page/useUrdfMaterialHandlers";
 import { PageLayout, type PageLayoutProps } from "@/features/layout/page/PageLayout";
-import type { CollaborationInviteAction } from "@/features/layout/page/top-nav/types";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
 import type { AngleUnit, RotationAxis, UrdfViewMode } from "@/shared/types/feature";
 import { useUrdfLoader } from "@/features/urdf/loader/useUrdfLoader";
@@ -79,12 +78,10 @@ import {
   useRepeatedInertiaSymmetryLinkCentersLocal,
   useStudioIssueReportUrl,
   type CanonicalSynthesisPreviewSession,
-  type CollaborationToastId,
   type FramePreflightSession,
   type InertialSynthesisSession,
   type PhysicsActionRequest,
   type PhysicsPreflightSession,
-  type PrepareCollaborationInviteLinkParams,
   type RepeatedInertiaGroupActionState,
   type RepeatedInertiaGroupOutcome,
   type RepeatedInertiaSymmetryOutcome,
@@ -117,9 +114,8 @@ import {
 import { IndexModeGate } from "@/app/pages/index/IndexModeGate";
 import { useIluCalibrationFocus } from "@/app/pages/index/useIluCalibrationFocus";
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
-import { describeCollaborationLinkAccess } from "@/features/collaboration/collaborationTransport";
 import { useUrdfCollaboration } from "@/features/collaboration/useUrdfCollaboration";
-import type { CollaborationLinkAccess } from "@/features/collaboration/collaborationTypes";
+import { useCollaborationInviteActions } from "@/app/pages/index/useCollaborationInviteActions";
 import { resolveSubstitutionReplacement } from "@/features/assembly/substitution/substitutionApply";
 import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
 import type { RobotFrameLintResult } from "@/features/urdf/lint/robotFrameLinter";
@@ -328,10 +324,6 @@ const Index = () => {
   const suppressDefaultWorldLayoutAutoImport = Boolean(
     activeDemoManifestPreferences.suppressDefaultWorldLayoutAutoImport
   );
-  const [collaborationInviteAction, setCollaborationInviteAction] =
-    useState<CollaborationInviteAction | null>(null);
-  const collaborationInviteActionRef =
-    useRef<CollaborationInviteAction | null>(null);
   const {
     collaborationOwner,
     collaborationOwnerToken,
@@ -589,6 +581,17 @@ const Index = () => {
     () => parseRobotNameFromUrdf(vizUrdfContent || originalUrdfContent),
     [vizUrdfContent, originalUrdfContent]
   );
+  const {
+    collaborationInviteAction,
+    handleCreateCollaborationLink,
+    handleEmailCollaborationLink,
+    handleResetCollaborationLink,
+  } = useCollaborationInviteActions({
+    collaborationStatus,
+    createShareLink: createCollaborationShareLink,
+    resolvedRobotName,
+    rotateShareLink: rotateCollaborationShareLink,
+  });
   const {
     buildCurrentWorldScenePackageManifest,
     handleExportCurrentWorldSceneLayer,
@@ -2482,129 +2485,6 @@ const Index = () => {
     async () => runRobotMirrorFix("orientation-only"),
     [runRobotMirrorFix]
   );
-  const prepareCollaborationInviteLink = useCallback(
-    async ({
-      action,
-      buildLink,
-      errorMessage,
-      loadingMessage,
-      onShareUrl,
-      successMessage,
-    }: PrepareCollaborationInviteLinkParams) => {
-      if (collaborationInviteActionRef.current) return;
-      collaborationInviteActionRef.current = action;
-      setCollaborationInviteAction(action);
-      const toastId = toast.loading(loadingMessage);
-      try {
-        const shareUrl = await buildLink();
-        const shouldShowSuccess = await onShareUrl(shareUrl, toastId);
-        if (shouldShowSuccess) {
-          toast.success(successMessage, { id: toastId });
-        }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : errorMessage, {
-          id: toastId,
-        });
-      } finally {
-        collaborationInviteActionRef.current = null;
-        setCollaborationInviteAction(null);
-      }
-    },
-    [],
-  );
-
-  const buildCurrentCollaborationShareLink = useCallback(
-    (baseUrl: string = window.location.href, access: CollaborationLinkAccess = "viewer") =>
-      createCollaborationShareLink({
-        access,
-        baseUrl,
-        label: resolvedRobotName
-          ? `${resolvedRobotName} live edit`
-          : "URDF Studio live edit",
-      }),
-    [createCollaborationShareLink, resolvedRobotName],
-  );
-
-  const copyCollaborationShareUrl = useCallback(
-    async (shareUrl: string, toastId: CollaborationToastId) => {
-      if (!navigator.clipboard?.writeText) {
-        toast.message("Copy this team invite link", {
-          description: shareUrl,
-          id: toastId,
-        });
-        return false;
-      }
-      await navigator.clipboard.writeText(shareUrl);
-      return true;
-    },
-    [],
-  );
-
-  const handleCreateCollaborationLink = useCallback(async (baseUrl?: string, access: CollaborationLinkAccess = "viewer") => {
-    const isCreatingRoom = collaborationStatus === "idle";
-    await prepareCollaborationInviteLink({
-      action: isCreatingRoom ? "creating" : "copying",
-      buildLink: () => buildCurrentCollaborationShareLink(baseUrl, access),
-      errorMessage: "Failed to prepare the share link.",
-      loadingMessage: isCreatingRoom
-        ? "Creating a room and copying the link..."
-        : "Copying the current share link...",
-      onShareUrl: copyCollaborationShareUrl,
-      successMessage: isCreatingRoom
-        ? `Room created. ${describeCollaborationLinkAccess(access)} link copied.`
-        : `${describeCollaborationLinkAccess(access)} link copied.`,
-    });
-  }, [
-    buildCurrentCollaborationShareLink,
-    collaborationStatus,
-    copyCollaborationShareUrl,
-    prepareCollaborationInviteLink,
-  ]);
-  const handleEmailCollaborationLink = useCallback(
-    async (email: string, baseUrl?: string, access: CollaborationLinkAccess = "viewer") => {
-      const targetEmail = email.trim();
-      if (!targetEmail) {
-        toast.error("Enter an email address before sending the invite.");
-        return;
-      }
-
-      await prepareCollaborationInviteLink({
-        action: "emailing",
-        buildLink: () => buildCurrentCollaborationShareLink(baseUrl, access),
-        errorMessage: "Failed to prepare the email invite.",
-        loadingMessage: "Preparing email invite...",
-        onShareUrl: async (shareUrl) => {
-          const subject = `URDF Studio ${describeCollaborationLinkAccess(access).toLowerCase()} link`;
-          const body = `Open this URDF Studio workspace: ${shareUrl}`;
-          const encodedEmail = encodeURIComponent(targetEmail);
-          const encodedSubject = encodeURIComponent(subject);
-          const encodedBody = encodeURIComponent(body);
-          window.location.href =
-            `mailto:${encodedEmail}?subject=${encodedSubject}&body=${encodedBody}`;
-          return true;
-        },
-        successMessage: "Email draft opened with the share link.",
-      });
-    },
-    [buildCurrentCollaborationShareLink, prepareCollaborationInviteLink],
-  );
-
-  const handleResetCollaborationLink = useCallback(async () => {
-    await prepareCollaborationInviteLink({
-      action: "resetting",
-      buildLink: () =>
-        rotateCollaborationShareLink({ baseUrl: window.location.href }),
-      errorMessage: "Failed to reset the share link.",
-      loadingMessage: "Resetting the link and revoking the old one...",
-      onShareUrl: copyCollaborationShareUrl,
-      successMessage: "New link copied. Old guest links no longer work.",
-    });
-  }, [
-    copyCollaborationShareUrl,
-    prepareCollaborationInviteLink,
-    rotateCollaborationShareLink,
-  ]);
-
   const handleGoHome = useCallback(() => {
     resetLoadedUrdf();
     clearCameras();

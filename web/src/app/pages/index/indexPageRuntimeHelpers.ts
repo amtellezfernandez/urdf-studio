@@ -1,10 +1,8 @@
 import { useMemo } from "react";
-import { toast } from "sonner";
 import * as THREE from "three";
 import { computeOwnedLinkLocalVisualBoundsCenter } from "@/features/camera/cameraAutoBounds";
 import { readCollaborationShareSessionFromUrl } from "@/features/collaboration/collaborationTransport";
 import type { CollaborationShareSession } from "@/features/collaboration/collaborationTypes";
-import type { CollaborationInviteAction } from "@/features/layout/page/top-nav/types";
 import type {
   InertialAuditSummary,
   InertialRepairMode,
@@ -167,17 +165,3 @@ export const useRepeatedInertiaSymmetryLinkCentersLocal = (
       ),
     [robot],
   );
-
-export type CollaborationToastId = ReturnType<typeof toast.loading>;
-
-export type PrepareCollaborationInviteLinkParams = {
-  action: CollaborationInviteAction;
-  buildLink: () => Promise<string>;
-  onShareUrl: (
-    shareUrl: string,
-    toastId: CollaborationToastId,
-  ) => Promise<boolean>;
-  loadingMessage: string;
-  successMessage: string;
-  errorMessage: string;
-};
