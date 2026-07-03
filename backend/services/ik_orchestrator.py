@@ -11,6 +11,7 @@ from backend.services.ik_config import get_ik_config, get_solver_tuning
 from backend.services.ik_orchestrator_utils import (
     build_orientation_attempts,
     build_seed_list,
+    position_gate_for_orientation_label,
 )
 from backend.services.ik_registry import default_solver_chain
 from backend.services.kinematics import (
@@ -44,26 +45,32 @@ def _score_solution(
     return max(diffs) if diffs else 0.0
 
 
-def solve_ik(req: IkSolveRequest) -> IKResponse:
-    base_req = compile_ik_request(req)
-    has_orientation = bool(base_req.target_rotation) or bool(base_req.target_wxyz)
-    orientation_mode = (req.orientation_mode or "prefer").lower()
+def solve_ik(solve_request: IkSolveRequest) -> IKResponse:
+    compiled_request = compile_ik_request(solve_request)
+    has_orientation = bool(compiled_request.target_rotation) or bool(
+        compiled_request.target_wxyz
+    )
+    orientation_mode = (solve_request.orientation_mode or "prefer").lower()
     if orientation_mode in ("required", "position_first") and not has_orientation:
         raise HTTPException(status_code=400, detail="Orientation required but not provided.")
 
     solver_chain = (
-        req.solver_chain
-        if req.solver_chain
-        else ([req.solver_id] if req.solver_id else default_solver_chain())
+        solve_request.solver_chain
+        if solve_request.solver_chain
+        else (
+            [solve_request.solver_id]
+            if solve_request.solver_id
+            else default_solver_chain()
+        )
     )
     if not solver_chain:
         raise HTTPException(status_code=400, detail="No IK solvers configured.")
 
     attempts = build_orientation_attempts(orientation_mode, has_orientation)
-    urdf_hash = _hash_urdf(req.urdf)
-    cache_key = (urdf_hash, base_req.target_link)
+    urdf_hash = _hash_urdf(solve_request.urdf)
+    cache_key = (urdf_hash, compiled_request.target_link)
     cached_solution = _LAST_SOLUTION_CACHE.get(cache_key)
-    seeds = build_seed_list(base_req.joint_values, cached_solution)
+    seed_candidates = build_seed_list(compiled_request.joint_values, cached_solution)
 
     best_response: Optional[IKResponse] = None
     best_score = float("inf")
@@ -80,19 +87,19 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
     blocked_reason_by_seed: Dict[Tuple[str, int], str] = {}
     require_chained = orientation_mode == "position_first"
     config = get_ik_config()
-    pos_tol = (
-        float(base_req.position_tolerance)
-        if base_req.position_tolerance is not None
+    position_tolerance = (
+        float(compiled_request.position_tolerance)
+        if compiled_request.position_tolerance is not None
         else float(config.tolerances.position_tolerance)
     )
-    rot_tol = (
-        float(base_req.orientation_tolerance)
-        if base_req.orientation_tolerance is not None
+    orientation_tolerance = (
+        float(compiled_request.orientation_tolerance)
+        if compiled_request.orientation_tolerance is not None
         else float(config.tolerances.orientation_tolerance)
     )
-    pos_gate_abs = 0.002
-    pos_gate_relaxed = max(0.003, 5.0 * pos_tol)
-    pos_gate_strict = max(pos_gate_abs, 3.0 * pos_tol)
+    absolute_position_gate = 0.002
+    relaxed_position_gate = max(0.003, 5.0 * position_tolerance)
+    strict_position_gate = max(absolute_position_gate, 3.0 * position_tolerance)
 
     def _quat_angle_error(target_wxyz: List[float], actual_wxyz: List[float]) -> float:
         tw, tx, ty, tz = target_wxyz
@@ -115,14 +122,14 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                 continue
             tuning = get_solver_tuning(solver_id)
             base_orientation_weight = (
-                float(base_req.orientation_weight)
-                if base_req.orientation_weight is not None
+                float(compiled_request.orientation_weight)
+                if compiled_request.orientation_weight is not None
                 else float(tuning.orientation_weight)
             )
             scaled_orientation_weight = (
                 0.0 if ignore_orientation else base_orientation_weight * orientation_scale
             )
-            for seed_index, (seed_source, seed) in enumerate(seeds):
+            for seed_index, (seed_source, seed) in enumerate(seed_candidates):
                 seed_key = (solver_id, seed_index)
                 chained_seed = previous_stage_solution.get(seed_key)
                 if require_chained and stage_index > 0 and chained_seed is None:
@@ -132,9 +139,11 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                     seed_to_use = chained_seed
                 else:
                     seed_to_use = seed
-                attempt_req = base_req.copy(update={"joint_values": seed_to_use})
+                attempt_request = compiled_request.copy(
+                    update={"joint_values": seed_to_use}
+                )
                 if ignore_orientation:
-                    attempt_req = attempt_req.copy(
+                    attempt_request = attempt_request.copy(
                         update={
                             "target_rotation": None,
                             "target_wxyz": None,
@@ -142,14 +151,14 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                         }
                     )
                 else:
-                    attempt_req = attempt_req.copy(
+                    attempt_request = attempt_request.copy(
                         update={"orientation_weight": scaled_orientation_weight}
                     )
                 try:
                     if solver_id == "placo":
-                        response = placo_inverse_kinematics(attempt_req)
+                        response = placo_inverse_kinematics(attempt_request)
                     elif solver_id == "amik":
-                        response = amik_ik(attempt_req)
+                        response = amik_ik(attempt_request)
                     else:
                         continue
                 except HTTPException as exc:
@@ -157,45 +166,55 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                     continue
 
                 try:
-                    pos_actual, wxyz_actual = compute_link_pose(
-                        base_req.urdf, response.solution, base_req.target_link
+                    actual_position, actual_wxyz = compute_link_pose(
+                        compiled_request.urdf,
+                        response.solution,
+                        compiled_request.target_link,
                     )
-                    pos_error = (
-                        ((pos_actual[0] - base_req.target_position[0]) ** 2
-                        + (pos_actual[1] - base_req.target_position[1]) ** 2
-                        + (pos_actual[2] - base_req.target_position[2]) ** 2) ** 0.5
+                    position_error = math.dist(
+                        actual_position, compiled_request.target_position
                     )
                 except HTTPException:
-                    pos_error = None
-                    wxyz_actual = None
+                    position_error = None
+                    actual_wxyz = None
 
-                target_wxyz = base_req.target_wxyz
-                if target_wxyz is None and base_req.target_rotation is not None:
+                target_wxyz = compiled_request.target_wxyz
+                if target_wxyz is None and compiled_request.target_rotation is not None:
                     try:
-                        target_wxyz = rotation_matrix_to_wxyz(base_req.target_rotation)
+                        target_wxyz = rotation_matrix_to_wxyz(
+                            compiled_request.target_rotation
+                        )
                     except Exception:
                         target_wxyz = None
 
-                rot_error = None
+                orientation_error = None
                 if (
                     target_wxyz is not None
-                    and wxyz_actual is not None
+                    and actual_wxyz is not None
                     and not ignore_orientation
                 ):
-                    rot_error = _quat_angle_error(target_wxyz, wxyz_actual)
+                    orientation_error = _quat_angle_error(target_wxyz, actual_wxyz)
 
-                gate = pos_gate_strict
-                if orientation_label in ("ignore", "no_orientation"):
-                    gate = pos_gate_relaxed
-                elif orientation_label == "relaxed":
-                    gate = pos_gate_strict
+                position_gate = position_gate_for_orientation_label(
+                    orientation_label,
+                    relaxed_gate=relaxed_position_gate,
+                    strict_gate=strict_position_gate,
+                )
 
-                if require_chained and pos_error is not None and pos_error <= gate:
+                if (
+                    require_chained
+                    and position_error is not None
+                    and position_error <= position_gate
+                ):
                     previous_stage_solution[seed_key] = response.solution
-                elif require_chained and pos_error is not None and pos_error > gate:
+                elif (
+                    require_chained
+                    and position_error is not None
+                    and position_error > position_gate
+                ):
                     blocked_reason_by_seed[seed_key] = (
                         "pos_gate_relaxed"
-                        if gate == pos_gate_relaxed
+                        if position_gate == relaxed_position_gate
                         else "pos_gate_strict"
                     )
                 score = _score_solution(response.solution, seed_to_use)
@@ -206,18 +225,26 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                     best_seed_source = seed_source
                     best_orientation_label = orientation_label
                     best_orientation_weight = float(scaled_orientation_weight)
-                    best_position_error = pos_error
+                    best_position_error = position_error
                     best_seed_index = seed_index
                     best_stage_index = stage_index
 
-                if pos_error is not None and pos_error <= pos_tol:
+                if position_error is not None and position_error <= position_tolerance:
                     should_return = False
                     if orientation_label in ("ignore", "no_orientation"):
                         should_return = True
-                    elif orientation_label == "relaxed" and rot_error is not None:
-                        should_return = rot_error <= (2.0 * rot_tol)
-                    elif orientation_label == "strict" and rot_error is not None:
-                        should_return = rot_error <= rot_tol
+                    elif (
+                        orientation_label == "relaxed"
+                        and orientation_error is not None
+                    ):
+                        should_return = orientation_error <= (
+                            2.0 * orientation_tolerance
+                        )
+                    elif (
+                        orientation_label == "strict"
+                        and orientation_error is not None
+                    ):
+                        should_return = orientation_error <= orientation_tolerance
 
                     if should_return:
                         diagnostics = response.diagnostics.copy(
@@ -225,7 +252,7 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                                 "solver_id": solver_id,
                                 "seed_source": seed_source,
                                 "continuity_penalty": score,
-                                "position_error": pos_error,
+                                "position_error": position_error,
                                 "escalation_blocked_reason": f"early_exit_{orientation_label}",
                             }
                         )
@@ -239,17 +266,17 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                                 "orientation_weight_effective": float(
                                     scaled_orientation_weight
                                 ),
-                                "position_tolerance": pos_tol,
-                                "orientation_tolerance": rot_tol,
-                                "position_gate_relaxed": pos_gate_relaxed,
-                                "position_gate_strict": pos_gate_strict,
+                                "position_tolerance": position_tolerance,
+                                "orientation_tolerance": orientation_tolerance,
+                                "position_gate_relaxed": relaxed_position_gate,
+                                "position_gate_strict": strict_position_gate,
                                 "escalation_blocked_reason": f"early_exit_{orientation_label}",
                             }
                         )
                         response.diagnostics = diagnostics
                         response.metadata = metadata
                         cache_hash = metadata.get("urdf_hash", urdf_hash)
-                        cache_key = (cache_hash, base_req.target_link)
+                        cache_key = (cache_hash, compiled_request.target_link)
                         _LAST_SOLUTION_CACHE[cache_key] = response.solution
                         return response
 
@@ -279,10 +306,10 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
             "solver_chain": solver_chain,
             "orientation_strategy": best_orientation_label,
             "orientation_weight_effective": best_orientation_weight,
-            "position_tolerance": pos_tol,
-            "orientation_tolerance": rot_tol,
-            "position_gate_relaxed": pos_gate_relaxed,
-            "position_gate_strict": pos_gate_strict,
+            "position_tolerance": position_tolerance,
+            "orientation_tolerance": orientation_tolerance,
+            "position_gate_relaxed": relaxed_position_gate,
+            "position_gate_strict": strict_position_gate,
             "escalation_blocked_reason": blocked_reason,
         }
     )
@@ -291,6 +318,6 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
     best_response.metadata = metadata
 
     cache_hash = metadata.get("urdf_hash", urdf_hash)
-    cache_key = (cache_hash, base_req.target_link)
+    cache_key = (cache_hash, compiled_request.target_link)
     _LAST_SOLUTION_CACHE[cache_key] = best_response.solution
     return best_response

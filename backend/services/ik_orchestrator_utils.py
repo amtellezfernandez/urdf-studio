@@ -6,6 +6,14 @@ JointSeed = Dict[str, float]
 NamedJointSeed = Tuple[str, JointSeed]
 
 
+def position_gate_for_orientation_label(
+    orientation_label: str, relaxed_gate: float, strict_gate: float
+) -> float:
+    if orientation_label in ("ignore", "no_orientation"):
+        return relaxed_gate
+    return strict_gate
+
+
 def build_orientation_attempts(
     mode: str, has_orientation: bool
 ) -> List[Tuple[bool, float, str]]:

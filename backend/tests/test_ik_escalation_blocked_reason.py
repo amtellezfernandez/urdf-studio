@@ -1,4 +1,7 @@
-from backend.services.ik_orchestrator_utils import build_seed_list
+from backend.services.ik_orchestrator_utils import (
+    build_seed_list,
+    position_gate_for_orientation_label,
+)
 
 
 def _simulate_blocked_reason(
@@ -7,11 +10,9 @@ def _simulate_blocked_reason(
     pos_error: float,
     label: str,
 ) -> str | None:
-    gate = gate_relaxed
-    if label == "strict":
-        gate = gate_strict
-    if label == "relaxed":
-        gate = gate_strict
+    gate = position_gate_for_orientation_label(
+        label, relaxed_gate=gate_relaxed, strict_gate=gate_strict
+    )
     if pos_error > gate:
         return "pos_gate_relaxed" if gate == gate_relaxed else "pos_gate_strict"
     return None
@@ -31,4 +32,3 @@ def test_blocked_reason_strict_gate() -> None:
     gate_strict = 0.005
     blocked = _simulate_blocked_reason(gate_relaxed, gate_strict, 0.02, "strict")
     assert blocked == "pos_gate_strict"
-

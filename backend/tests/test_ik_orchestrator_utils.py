@@ -3,6 +3,7 @@ from backend.services.ik_orchestrator_utils import (
     build_seed_list,
     build_strategies,
     generate_jitter_seeds,
+    position_gate_for_orientation_label,
 )
 
 
@@ -64,3 +65,10 @@ def test_jitter_seed_values_are_deterministic() -> None:
         {"joint_b": -0.1, "joint_a": 1.1, "joint_c": -0.9, "joint_d": 2.0},
         {"joint_b": 0.1, "joint_a": 0.9, "joint_c": -1.1, "joint_d": 2.0},
     ]
+
+
+def test_position_gate_follows_orientation_strategy() -> None:
+    assert position_gate_for_orientation_label("ignore", 0.01, 0.005) == 0.01
+    assert position_gate_for_orientation_label("no_orientation", 0.01, 0.005) == 0.01
+    assert position_gate_for_orientation_label("relaxed", 0.01, 0.005) == 0.005
+    assert position_gate_for_orientation_label("strict", 0.01, 0.005) == 0.005
