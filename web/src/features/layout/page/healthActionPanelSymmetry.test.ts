@@ -7,6 +7,7 @@ import {
   buildRepeatedInertiaSymmetryBranchRowViewState,
   buildRepeatedInertiaSymmetryChainViewState,
   buildRepeatedInertiaSymmetryRepairText,
+  buildRobotMirrorSelectionMeshGroupViewStates,
   buildRobotMirrorSelectionStats,
   formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
   formatRepeatedInertiaSymmetryDistance,
@@ -322,6 +323,69 @@ describe("healthActionPanelSymmetry", () => {
         meshLabel: "Palm",
         radialExcludedCount: 0,
         selectionLinks: [selectionLinks[1]],
+      },
+    ]);
+  });
+
+  it("builds mirror selection row view state with selection and repair result text", () => {
+    const selectionLinks = [
+      createRobotMirrorSelectionLink({
+        counterpartLinkName: "right_tip",
+        linkName: "left_tip",
+        status: "review",
+      }),
+      createRobotMirrorSelectionLink({
+        linkName: "left_palm",
+        meshLabel: "Palm",
+      }),
+    ];
+
+    expect(
+      buildRobotMirrorSelectionMeshGroupViewStates({
+        linkResults: [
+          createRobotMirrorLinkResult({
+            finalResidualMeters: 0.001,
+            linkName: "left_tip",
+            movedDistanceMeters: 0.012,
+            orientationSkipReason: "ambiguous-axis",
+            planeNormalResidualRadians: 0.05,
+          }),
+        ],
+        selectedLinkNames: ["left_tip"],
+        selectionLinks,
+      })
+    ).toMatchObject([
+      {
+        meshLabel: "Finger",
+        radialExcludedCount: 0,
+        selectionLinkRows: [
+          {
+            counterpartLinkName: "right_tip",
+            isSelected: true,
+            key: "left_tip",
+            linkName: "left_tip",
+            resultMetrics: "move 12.0 mm • res 1.0 mm • rot 0.0° • axis 2.9°",
+            resultReason: "plane-normal axis was ambiguous",
+            resultSummary: "position only, kept orientation",
+            statusBadge: {
+              label: "attention",
+            },
+          },
+        ],
+      },
+      {
+        meshLabel: "Palm",
+        radialExcludedCount: 0,
+        selectionLinkRows: [
+          {
+            isSelected: false,
+            key: "left_palm",
+            resultMetrics: null,
+            resultReason: null,
+            resultSummary: null,
+            statusBadge: null,
+          },
+        ],
       },
     ]);
   });

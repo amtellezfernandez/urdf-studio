@@ -246,6 +246,59 @@ export const groupRobotMirrorSelectionLinksByMeshLabel = (
     }))
     .sort((left, right) => left.meshLabel.localeCompare(right.meshLabel));
 
+export type RobotMirrorSelectionLinkRowViewState = {
+  counterpartLinkName: string | null;
+  isSelected: boolean;
+  key: string;
+  linkName: string;
+  resultMetrics: string | null;
+  resultReason: string | null;
+  resultSummary: string | null;
+  selectionLink: RobotMirrorSelectionLink;
+  statusBadge: ReturnType<typeof resolveMirrorSelectionStatusBadge>;
+};
+
+export type RobotMirrorSelectionMeshGroupViewState = Omit<
+  RobotMirrorSelectionMeshGroup,
+  "selectionLinks"
+> & {
+  selectionLinkRows: RobotMirrorSelectionLinkRowViewState[];
+};
+
+export const buildRobotMirrorSelectionMeshGroupViewStates = ({
+  linkResults,
+  selectedLinkNames,
+  selectionLinks,
+}: {
+  linkResults: readonly RobotMirrorLinkResult[];
+  selectedLinkNames: readonly string[];
+  selectionLinks: readonly RobotMirrorSelectionLink[];
+}): RobotMirrorSelectionMeshGroupViewState[] => {
+  const selectedLinkNameSet = new Set(selectedLinkNames);
+  const linkResultByName = new Map(
+    linkResults.map((linkResult) => [linkResult.linkName, linkResult])
+  );
+
+  return groupRobotMirrorSelectionLinksByMeshLabel(selectionLinks).map((group) => ({
+    meshLabel: group.meshLabel,
+    radialExcludedCount: group.radialExcludedCount,
+    selectionLinkRows: group.selectionLinks.map((selectionLink) => {
+      const linkResult = linkResultByName.get(selectionLink.linkName) ?? null;
+      return {
+        counterpartLinkName: selectionLink.counterpartLinkName,
+        isSelected: selectedLinkNameSet.has(selectionLink.linkName),
+        key: selectionLink.linkName,
+        linkName: selectionLink.linkName,
+        resultMetrics: linkResult ? formatRobotMirrorLinkResultMetrics(linkResult) : null,
+        resultReason: linkResult ? formatRobotMirrorLinkResultReason(linkResult) : null,
+        resultSummary: linkResult ? formatRobotMirrorLinkResultSummary(linkResult) : null,
+        selectionLink,
+        statusBadge: resolveMirrorSelectionStatusBadge(selectionLink),
+      };
+    }),
+  }));
+};
+
 export const formatRepeatedInertiaSymmetryType = (
   chain: Pick<
     RepeatedInertiaSymmetryChain,

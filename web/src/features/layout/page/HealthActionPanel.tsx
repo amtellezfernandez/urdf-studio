@@ -81,6 +81,7 @@ import {
 import {
   buildCompatibilityRobotMirrorSelectionState,
   buildRepeatedInertiaSymmetryChainViewState,
+  buildRobotMirrorSelectionMeshGroupViewStates,
   buildRobotMirrorSelectionStats,
   formatMirrorSelectionLinkCount,
   formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
@@ -89,13 +90,8 @@ import {
   formatRepeatedInertiaSymmetryHeadline,
   formatRepeatedInertiaSymmetryRepairMode,
   formatRepeatedInertiaSymmetryType,
-  formatRobotMirrorLinkResultMetrics,
-  formatRobotMirrorLinkResultReason,
-  formatRobotMirrorLinkResultSummary,
   formatRobotMirrorPlaneLabel,
-  groupRobotMirrorSelectionLinksByMeshLabel,
   MIRROR_SELECTION_RADIAL_BADGE_CLASS,
-  resolveMirrorSelectionStatusBadge,
   shouldIgnoreVisualizationCardClick,
 } from "@/features/layout/page/healthActionPanelSymmetry";
 
@@ -582,12 +578,11 @@ export const HealthActionPanel = ({
     selectedLinkNames: effectiveSelectedRobotMirrorLinkNames,
     selectionLinks: displayRobotMirrorSelectionLinks,
   });
-  const robotMirrorSelectionLinksByMeshLabel = groupRobotMirrorSelectionLinksByMeshLabel(
-    displayRobotMirrorSelectionLinks
-  );
-  const robotMirrorOutcomeByLinkName = new Map(
-    robotMirrorOutcome?.linkResults?.map((linkResult) => [linkResult.linkName, linkResult]) ?? []
-  );
+  const robotMirrorSelectionMeshGroups = buildRobotMirrorSelectionMeshGroupViewStates({
+    linkResults: robotMirrorOutcome?.linkResults ?? [],
+    selectedLinkNames: effectiveSelectedRobotMirrorLinkNames,
+    selectionLinks: displayRobotMirrorSelectionLinks,
+  });
   const handleToggleRobotMirrorSelection = (selectionLink: RobotMirrorSelectionLink) => {
     if (onToggleRobotMirrorSelectionLink) {
       onToggleRobotMirrorSelectionLink(selectionLink.linkName);
@@ -742,8 +737,8 @@ export const HealthActionPanel = ({
                   <div className="mt-0.5 text-[9px] text-muted-foreground">
                     {formatRobotMirrorPlaneLabel(effectiveRobotMirrorSymmetryCheck.planeLabel)} •{" "}
                     {effectiveSelectedRobotMirrorLinkNames.length} selected •{" "}
-                    {robotMirrorSelectionLinksByMeshLabel.length} mesh group
-                    {robotMirrorSelectionLinksByMeshLabel.length === 1 ? "" : "s"}
+                    {robotMirrorSelectionMeshGroups.length} mesh group
+                    {robotMirrorSelectionMeshGroups.length === 1 ? "" : "s"}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -865,10 +860,10 @@ export const HealthActionPanel = ({
                       </span>
                     </div>
                     <div className="mt-1.5">
-                      {robotMirrorSelectionLinksByMeshLabel.length > 0 ? (
+                      {robotMirrorSelectionMeshGroups.length > 0 ? (
                         <div className="space-y-1">
-                          {robotMirrorSelectionLinksByMeshLabel.map(
-                            ({ meshLabel, radialExcludedCount, selectionLinks }) => {
+                          {robotMirrorSelectionMeshGroups.map(
+                            ({ meshLabel, radialExcludedCount, selectionLinkRows }) => {
                               return (
                                 <div key={meshLabel} className="rounded border border-border/15 bg-background/10">
                                   <div className="flex items-center justify-between gap-2 px-1.5 py-1 text-[9px] leading-tight">
@@ -876,7 +871,7 @@ export const HealthActionPanel = ({
                                       <span className="truncate">{meshLabel}</span>
                                       <span className="ml-1 text-muted-foreground">
                                         {formatMirrorSelectionLinkCount(
-                                          selectionLinks[0]?.groupLinkCount ?? 0
+                                          selectionLinkRows[0]?.selectionLink.groupLinkCount ?? 0
                                         )}
                                       </span>
                                     </div>
@@ -893,20 +888,20 @@ export const HealthActionPanel = ({
                                     ) : null}
                                   </div>
                                   <div className="border-t border-border/10">
-                                    {selectionLinks.map((selectionLink) => {
-                                      const isSelected = effectiveSelectedRobotMirrorLinkNames.includes(
-                                        selectionLink.linkName
-                                      );
-                                      const statusBadge = resolveMirrorSelectionStatusBadge(selectionLink);
-                                      const linkResult = robotMirrorOutcomeByLinkName.get(
-                                        selectionLink.linkName
-                                      );
-                                      const resultReason = linkResult
-                                        ? formatRobotMirrorLinkResultReason(linkResult)
-                                        : null;
+                                    {selectionLinkRows.map((rowState) => {
+                                      const {
+                                        counterpartLinkName,
+                                        isSelected,
+                                        linkName,
+                                        resultMetrics,
+                                        resultReason,
+                                        resultSummary,
+                                        selectionLink,
+                                        statusBadge,
+                                      } = rowState;
                                       return (
                                         <label
-                                          key={selectionLink.linkName}
+                                          key={rowState.key}
                                           className="flex items-center gap-1 px-1.5 py-0.5 text-[9px] leading-tight"
                                         >
                                           <Checkbox
@@ -916,13 +911,13 @@ export const HealthActionPanel = ({
                                             }
                                             aria-label={`${
                                               isSelected ? "Deselect" : "Select"
-                                            } mirror link ${selectionLink.linkName}`}
+                                            } mirror link ${linkName}`}
                                             className="mt-0"
                                           />
                                           <span className="min-w-0 flex-1">
                                             <span className="flex min-w-0 items-center gap-1 overflow-hidden">
                                               <span className="truncate font-medium text-foreground/85">
-                                                {selectionLink.linkName}
+                                                {linkName}
                                               </span>
                                               {statusBadge ? (
                                                 <span className={statusBadge.className}>
@@ -930,16 +925,15 @@ export const HealthActionPanel = ({
                                                   <span>{statusBadge.label}</span>
                                                 </span>
                                               ) : null}
-                                              {selectionLink.counterpartLinkName ? (
+                                              {counterpartLinkName ? (
                                                 <span className="truncate text-muted-foreground">
-                                                  peer {selectionLink.counterpartLinkName}
+                                                  peer {counterpartLinkName}
                                                 </span>
                                               ) : null}
                                             </span>
-                                            {linkResult ? (
+                                            {resultSummary && resultMetrics ? (
                                               <span className="mt-0.5 block truncate text-[8px] text-muted-foreground">
-                                                {formatRobotMirrorLinkResultSummary(linkResult)} •{" "}
-                                                {formatRobotMirrorLinkResultMetrics(linkResult)}
+                                                {resultSummary} • {resultMetrics}
                                                 {resultReason ? ` • ${resultReason}` : ""}
                                               </span>
                                             ) : null}
