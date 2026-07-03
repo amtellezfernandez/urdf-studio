@@ -4,8 +4,6 @@ import { toast } from "sonner";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import {
   autoComputeCameraPoseDefault,
-  exportCamerasToJSON,
-  exportCamerasToYAML,
   remapCameraPoseBetweenParentLinks,
   remapCameraPoseToParentJointFrame,
   resolveCameraParentLinkNameFromJoint,
@@ -60,6 +58,7 @@ import { useIndexPageLayoutProps } from "@/app/pages/index/useIndexPageLayoutPro
 import { useIndexViewerProps } from "@/app/pages/index/useIndexViewerProps";
 import { resolveViewerDraftPreview } from "@/app/pages/index/viewerDraftPreview";
 import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTransferLauncher";
+import { useCameraExportActions } from "@/app/pages/index/useCameraExportActions";
 import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
 import { IndexWorldDialogs } from "@/app/pages/index/IndexWorldDialogs";
 import { useIndexSourceLoaders } from "@/app/pages/index/useIndexSourceLoaders";
@@ -550,7 +549,11 @@ const Index = () => {
     setShowLoadIssues,
     setSimulationPrepResetPoseRequestKey,
   });
-  const hasCamerasToExport = cameras.length > 0;
+  const {
+    exportCamerasAsJSON,
+    exportCamerasAsYAML,
+    hasCamerasToExport,
+  } = useCameraExportActions({ cameras });
   const canRevert = useMemo(
     () => Boolean(savedVizUrdfContent && savedVizUrdfContent !== vizUrdfContent),
     [savedVizUrdfContent, vizUrdfContent],
@@ -571,22 +574,6 @@ const Index = () => {
     updateUrdfFileWithCollaboration(savedVizUrdfContent);
     toast.success("Reverted to last saved file");
   }, [savedVizUrdfContent, updateUrdfFileWithCollaboration]);
-  const exportCamerasAsJSON = useCallback(() => {
-    if (!hasCamerasToExport) {
-      toast.error("No cameras to export");
-      return;
-    }
-    downloadTextDocument(exportCamerasToJSON(cameras), "camera-config.json", "application/json");
-    toast.success(`Exported ${cameras.length} camera(s) to JSON`);
-  }, [cameras, hasCamerasToExport]);
-  const exportCamerasAsYAML = useCallback(() => {
-    if (!hasCamerasToExport) {
-      toast.error("No cameras to export");
-      return;
-    }
-    downloadTextDocument(exportCamerasToYAML(cameras), "camera-config.yaml", "text/yaml");
-    toast.success(`Exported ${cameras.length} camera(s) to YAML`);
-  }, [cameras, hasCamerasToExport]);
   // Object creation state
   const {
     isOpen: objectCreatorOpen,
