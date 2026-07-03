@@ -1,10 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import {
-  analyzeUrdfDocument,
-  type ParsedSensor,
-  type UrdfAnalysis,
-} from "@/shared/lib/urdfCore";
+import type { ParsedSensor, UrdfAnalysis } from "@/shared/lib/urdfCore";
 import {
   isSupportedMeshResource,
   isXacroPath,
@@ -12,11 +8,9 @@ import {
 } from "@/shared/lib/urdfCore";
 import {
   normalizeMeshPathForMatch,
-  parseURDF,
   type JointAxisMap,
   type JointLimits,
 } from "@/shared/lib/urdfBrowser";
-import { findAutoEndEffectorLinksFromAnalysis } from "@/features/layout/page/utils";
 import { DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
 import {
@@ -27,7 +21,6 @@ import { aliasRepeatedLinkMeshFiles } from "@/features/urdf/loader/repeatedMeshA
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
 import { formatUrdfMeshLoadDiagnostics } from "@/features/urdf/loader/urdfLoaderDiagnostics";
 import {
-  summarizeUrdfLoadIssues,
   type UrdfLoadIssueSummary,
 } from "@/features/urdf/loader/urdfLoadIssues";
 import { buildDebugMeshInfo } from "@/features/urdf/loader/urdfMeshDebugInfo";
@@ -39,6 +32,7 @@ import {
   createExpandedXacroUrdfFile,
   createLoadedUrdfFile,
 } from "@/features/urdf/loader/urdfFileFactory";
+import { analyzeLoadedUrdfContent } from "@/features/urdf/loader/loadedUrdfAnalysis";
 import {
   buildPackageRootsFromFiles,
   getBasePathFromRelativePath,
@@ -108,13 +102,10 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
 
   const updateUrdfFile = useCallback(
     (content: string, filename = DEFAULT_URDF_FILENAME) => {
-      const parsed = parseURDF(content);
-      const analysis = analyzeUrdfDocument(parsed.document);
-      const issueSummary = summarizeUrdfLoadIssues({
-        analysis,
-        packageRoots,
+      const { analysis, issueSummary, validationError } = analyzeLoadedUrdfContent({
         meshFiles,
-        parsedIsValid: parsed.isValid,
+        packageRoots,
+        parsedContent: content,
         urdfBasePath,
       });
       setVizUrdfContent(content);
@@ -123,7 +114,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
       setAvailableLinks(analysis.linkNames);
       setSensors(analysis.sensors);
       setUrdfAnalysis(analysis);
-      setUrdfValidationError(parsed.isValid ? null : parsed.error ?? "Invalid URDF");
+      setUrdfValidationError(validationError);
       setUrdfFile(createUrdfFile(content, filename));
       if (activeUrdfPath) {
         const normalizedActivePath = normalizeMeshPathForMatch(activeUrdfPath) || activeUrdfPath;
@@ -235,18 +226,10 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         [normalizedActivePath]: runtimeContent,
       };
 
-      const parsedUrdf = parseURDF(runtimeContent);
-      const analysis = analyzeUrdfDocument(parsedUrdf.document);
-      const autoEndEffectorCandidates = parsedUrdf.isValid
-        ? findAutoEndEffectorLinksFromAnalysis(analysis)
-        : [];
-      const autoEndEffector =
-        autoEndEffectorCandidates.length === 1 ? autoEndEffectorCandidates[0] : null;
-      const issueSummary = summarizeUrdfLoadIssues({
-        analysis,
+      const { analysis, autoEndEffector, issueSummary, validationError } = analyzeLoadedUrdfContent({
         meshFiles: nextMeshFiles,
         packageRoots: nextPackageRoots,
-        parsedIsValid: parsedUrdf.isValid,
+        parsedContent: runtimeContent,
         urdfBasePath: nextBasePath,
       });
 
@@ -264,7 +247,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         sensors: analysis.sensors,
         urdfContent: runtimeContent,
         urdfDocuments: nextUrdfDocuments,
-        validationError: parsedUrdf.isValid ? null : parsedUrdf.error ?? "Invalid URDF",
+        validationError,
       });
     },
     [applyLoadedUrdfState]
@@ -348,14 +331,6 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         const resolvedBasePath = getBasePathFromRelativePath(urdfRelativePath);
         const packageRootsRecord = await buildPackageRootsFromFiles(allFiles);
 
-        const parsedUrdf = parseURDF(originalContent);
-        const analysis = analyzeUrdfDocument(parsedUrdf.document);
-        const autoEndEffectorCandidates = parsedUrdf.isValid
-          ? findAutoEndEffectorLinksFromAnalysis(analysis)
-          : [];
-        const autoEndEffector =
-          autoEndEffectorCandidates.length === 1 ? autoEndEffectorCandidates[0] : null;
-
         const resourceFiles = allFiles.filter((file) => isSupportedMeshResource(file.name));
         const { meshAssets, meshes } = await indexMeshResources(resourceFiles, {}, {
           logFailures: true,
@@ -363,16 +338,14 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         });
 
         const runtimeMeshFiles = aliasRepeatedLinkMeshFiles(originalContent, meshes);
-        const urdfMeshReferences = analysis.meshReferences;
-        const debugInfo = buildDebugMeshInfo(meshAssets, runtimeMeshFiles, urdfMeshReferences);
-
-        const issueSummary = summarizeUrdfLoadIssues({
-          analysis,
+        const { analysis, autoEndEffector, issueSummary, validationError } = analyzeLoadedUrdfContent({
           meshFiles: runtimeMeshFiles,
           packageRoots: packageRootsRecord,
-          parsedIsValid: parsedUrdf.isValid,
+          parsedContent: originalContent,
           urdfBasePath: resolvedBasePath,
         });
+        const urdfMeshReferences = analysis.meshReferences;
+        const debugInfo = buildDebugMeshInfo(meshAssets, runtimeMeshFiles, urdfMeshReferences);
 
         applyLoadedUrdfState({
           activePath: urdfRelativePath,
@@ -388,7 +361,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
           sensors: analysis.sensors,
           urdfContent: originalContent,
           urdfDocuments: nextUrdfDocuments,
-          validationError: parsedUrdf.isValid ? null : parsedUrdf.error ?? "Invalid URDF",
+          validationError,
         });
 
         if (import.meta.env.DEV) {
@@ -449,13 +422,10 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         logRegistrations: true,
       });
 
-      const parsedUrdf = parseURDF(nextContent);
-      const analysis = analyzeUrdfDocument(parsedUrdf.document);
-      const issueSummary = summarizeUrdfLoadIssues({
-        analysis,
+      const { analysis, issueSummary } = analyzeLoadedUrdfContent({
         meshFiles: meshes,
         packageRoots: packageRootsRecord,
-        parsedIsValid: parsedUrdf.isValid,
+        parsedContent: nextContent,
         urdfBasePath: nextBasePath,
       });
 
@@ -496,13 +466,10 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
 
       const content = urdfContentOverride ?? vizUrdfContent;
       if (content.trim()) {
-        const parsed = parseURDF(content);
-        const analysis = analyzeUrdfDocument(parsed.document);
-        const issueSummary = summarizeUrdfLoadIssues({
-          analysis,
+        const { analysis, issueSummary } = analyzeLoadedUrdfContent({
           meshFiles: meshes,
           packageRoots,
-          parsedIsValid: parsed.isValid,
+          parsedContent: content,
           urdfBasePath,
         });
         setMissingPackageRefs(issueSummary.missingPackages);
