@@ -1,0 +1,36 @@
+{
+  "defaultAlpha": 1,
+  "rgbComponentCount": 3,
+  "rgbaComponentCount": 4,
+  "syntheticColorPalette": [
+    [0.74, 0.76, 0.72, 1.0],
+    [0.42, 0.46, 0.5, 1.0],
+    [0.2, 0.53, 0.43, 1.0],
+    [0.93, 0.7, 0.22, 1.0],
+    [0.13, 0.34, 0.5, 1.0]
+  ],
+  "semanticSyntheticColors": [
+    {
+      "terms": ["wheel", "tire", "tyre"],
+      "rgba": [0.04, 0.045, 0.05, 1.0]
+    },
+    {
+      "terms": ["camera", "lens", "sensor"],
+      "rgba": [0.06, 0.15, 0.24, 1.0]
+    },
+    {
+      "terms": ["battery", "lipo", "power"],
+      "rgba": [0.08, 0.09, 0.1, 1.0]
+    },
+    {
+      "terms": ["motor", "servo", "actuator"],
+      "rgba": [0.45, 0.48, 0.52, 1.0]
+    },
+    {
+      "terms": ["frame", "plate", "base", "mount", "bracket", "body", "chassis"],
+      "rgba": [0.66, 0.69, 0.64, 1.0]
+    }
+  ],
+  "fnv1a32OffsetBasis": 2166136261,
+  "fnv1a32Prime": 16777619
+}

@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { blobToBase64 } from "@/shared/lib/blobEncoding";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import {
   WORKSPACE_TRANSFER_PARAMS,
@@ -29,6 +30,7 @@ export type WorkspaceOpenResponse = {
   targetAssetFormat?: "urdf" | "mjcf" | "usd" | "native" | null;
   bundledMeshCount: number;
   unresolvedMeshRefs: string[];
+  workspaceWarnings?: string[];
   worldObjectCount: number;
   cameraCount: number;
 };
@@ -157,6 +159,7 @@ const normalizeUploadPath = (
     return normalizeUploadPath(rootRelative);
   }
   const normalized = slashNormalized;
+  if (normalized.startsWith("~")) return null;
   if (!normalized || normalized.includes("\0") || normalized.includes(":")) return null;
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length === 0 || parts.some((part) => part === "..")) return null;
@@ -205,16 +208,6 @@ const buildAssetAliases = (
   });
 
   return [...aliases];
-};
-
-const blobToBase64 = async (blob: Blob): Promise<string> => {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
 };
 
 const createWorkspaceTransferAbortError = (): Error => {

@@ -14,7 +14,6 @@ from backend.models.simulator_runtime import (
 from backend.models.world_scene_package import WorldArtifactRef, WorldRuntimeTarget
 from backend.services.ilu_urdf import BundleMeshAssetsResult
 from backend.services.simulator_adapters.workspace_package import (
-    _write_asset_file,
     prepare_simulator_workspace_package,
 )
 from backend.services.simulator_adapters.workspace_paths import workspace_asset_roots
@@ -46,6 +45,8 @@ def test_simulator_relative_path_normalizes_safe_relative_segments() -> None:
         "/tmp/crate.stl",
         "\\\\server\\share\\crate.stl",
         "C:\\tmp\\crate.stl",
+        "~/crate.stl",
+        "~user/crate.stl",
         "assets/../crate.stl",
         ".",
         "./",
@@ -75,16 +76,6 @@ def test_workspace_prepare_request_rejects_absolute_urdf_asset_path() -> None:
         SimulatorWorkspacePrepareRequest(
             world_package=_minimal_world_package(),
             urdf_asset_path="/tmp/robot.urdf",
-        )
-
-
-def test_write_asset_file_rejects_absolute_asset_path(tmp_path) -> None:
-    with pytest.raises(ValueError, match="asset path must be relative"):
-        _write_asset_file(
-            tmp_path,
-            "/tmp/crate.stl",
-            b"solid crate\nendsolid crate\n",
-            error=ValueError,
         )
 
 
@@ -373,6 +364,29 @@ def test_prepare_simulator_workspace_removes_partial_workspace_on_bundle_error(
     assert list(tmp_path.iterdir()) == []
 
 
+def test_prepare_simulator_workspace_removes_partial_workspace_on_source_root_error(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    original_mkdir = Path.mkdir
+
+    def fail_source_root_mkdir(self: Path, *args, **kwargs) -> None:
+        if self.name == "source" and self.parent.parent == tmp_path:
+            raise OSError("source root exploded")
+        original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_source_root_mkdir)
+
+    with pytest.raises(OSError, match="source root exploded"):
+        prepare_simulator_workspace_package(
+            SimulatorWorkspacePrepareRequest(world_package=_minimal_world_package()),
+            workspace_root=tmp_path,
+            error=ValueError,
+        )
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_prepare_simulator_workspace_writes_schema_compatible_world_package(tmp_path) -> None:
     world_package = make_world_package("<robot name=\"demo\"><link name=\"base\"/></robot>")
     world_package.runtime_targets = [WorldRuntimeTarget(name="blender", mode="python")]
@@ -433,3 +447,60 @@ def test_prepare_simulator_workspace_records_scene_counts(tmp_path) -> None:
 
     assert prepared.world_object_count == 1
     assert prepared.camera_count == 1
+
+
+def test_prepare_simulator_workspace_exposes_materialized_robot_urdf_xml(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    urdf_xml = """
+    <robot name="demo">
+      <material name="painted_red">
+        <color rgba="0.8 0.1 0.1 1.0"/>
+      </material>
+      <link name="base">
+        <visual>
+          <geometry>
+            <box size="0.1 0.1 0.1"/>
+          </geometry>
+          <material name="painted_red"/>
+        </visual>
+      </link>
+    </robot>
+    """
+
+    def fake_bundle_mesh_assets_for_urdf_file(
+        *,
+        urdf_path: str,
+        urdf_xml: str,
+        out_path: str,
+        extra_search_roots: list[str] | None = None,
+    ) -> BundleMeshAssetsResult:
+        output_path = Path(out_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(urdf_xml, encoding="utf-8")
+        return BundleMeshAssetsResult(
+            success=True,
+            content=urdf_xml,
+            out_path=out_path,
+            assets_root=str(tmp_path / "assets"),
+            copied_files=0,
+            bundled=(),
+            unresolved=(),
+            error=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.simulator_adapters.workspace_package.bundle_mesh_assets_for_urdf_file",
+        fake_bundle_mesh_assets_for_urdf_file,
+    )
+
+    prepared = prepare_simulator_workspace_package(
+        SimulatorWorkspacePrepareRequest(world_package=make_world_package(urdf_xml)),
+        workspace_root=tmp_path,
+        error=ValueError,
+    )
+
+    prepared_file_xml = prepared.robot_urdf_path.read_text(encoding="utf-8")
+    assert '<color rgba="0.8 0.1 0.1 1.0"' in prepared_file_xml
+    assert prepared.robot_urdf_xml == prepared_file_xml

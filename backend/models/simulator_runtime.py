@@ -135,6 +135,7 @@ class SimulatorWorkspacePrepareResponse(BaseModel):
     simulator_asset_format: SimulatorWorkspaceAssetFormat | None = None
     bundled_mesh_count: int = 0
     unresolved_mesh_refs: list[str] = Field(default_factory=list)
+    workspace_warnings: list[str] = Field(default_factory=list)
     world_object_count: int = Field(default=0, ge=0)
     camera_count: int = Field(default=0, ge=0)
 
@@ -266,10 +267,12 @@ def validate_simulator_relative_path(value: str, label: str) -> str:
         raise ValueError(f"{label} must be non-empty")
     if stripped.startswith(("/", "\\")):
         raise ValueError(f"{label} must be relative")
+    if stripped.startswith("~"):
+        raise ValueError(f"{label} must be portable relative")
     normalized = stripped.replace("\\", "/")
     normalized = re.sub(r"/+", "/", normalized)
     if not SIMULATOR_RELATIVE_PATH_PATTERN.match(normalized):
-        raise ValueError(f"{label} must be relative")
+        raise ValueError(f"{label} must be portable relative")
     parts = [part for part in normalized.split("/") if part and part != "."]
     if not parts:
         raise ValueError(f"{label} must be non-empty")

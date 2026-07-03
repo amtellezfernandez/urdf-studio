@@ -317,6 +317,8 @@ describe("workspaceTransferApi", () => {
     "//server/share/base.stl",
     "\\\\server\\share\\base.stl",
     "C:\\tmp\\base.stl",
+    "~/base.stl",
+    "~user/base.stl",
   ])("rejects host-absolute browser mesh upload path %s", async (path) => {
     const mesh = new Blob(["solid base\nendsolid base\n"], { type: "model/stl" });
 

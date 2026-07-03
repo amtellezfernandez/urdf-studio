@@ -42,7 +42,7 @@ def test_pybullet_opengl_diagnostic_warns_for_software_renderer() -> None:
 
 
 def test_pybullet_opengl_diagnostic_accepts_gpu_renderer() -> None:
-    assert pybullet_opengl_warnings("GL_RENDERER=NVIDIA RTX 5080\n") == ()
+    assert pybullet_opengl_warnings("GL_RENDERER=NVIDIA GPU Renderer\n") == ()
 
 
 def test_pybullet_opengl_diagnostic_accepts_glxinfo_renderer_line() -> None:
@@ -95,7 +95,7 @@ def test_pybullet_runtime_diagnostic_prefers_current_glxinfo_over_stale_log(
         return subprocess.CompletedProcess(
             args=args,
             returncode=0,
-            stdout="OpenGL renderer string: NVIDIA RTX 5080\n",
+            stdout="OpenGL renderer string: NVIDIA GPU Renderer\n",
             stderr="",
         )
 
