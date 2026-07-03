@@ -88,6 +88,12 @@ import {
   type RepeatedInertiaSymmetryOutcome,
 } from "@/app/pages/index/indexPageRuntimeHelpers";
 import {
+  buildBakeDraftFingerprint,
+  buildCanonicalDraftFingerprint,
+  buildOrientationReviewState,
+  buildPhysicsDraftFingerprint,
+} from "@/app/pages/index/simulationPrepDerivations";
+import {
   createDefaultInertialVisualizationSettings,
   createEmptyRobotMirrorVisualizationState,
   buildRobotMirrorSymmetryVisualizationScopeKey,
@@ -114,15 +120,7 @@ import { useUrdfCollaboration } from "@/features/collaboration/useUrdfCollaborat
 import type { CollaborationLinkAccess } from "@/features/collaboration/collaborationTypes";
 import { resolveSubstitutionReplacement } from "@/features/assembly/substitution/substitutionApply";
 import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
-import {
-  buildOrientationStatus,
-  buildOrientationReviewSummary,
-  getActionableOrientationSuggestion,
-} from "@/shared/lib/orientationReview";
-import {
-  buildRobotFramePolicySummary,
-  type RobotFrameLintResult,
-} from "@/features/urdf/lint/robotFrameLinter";
+import type { RobotFrameLintResult } from "@/features/urdf/lint/robotFrameLinter";
 import {
   buildUrdfBakePreviewStats,
   buildVirtualBakePreview,
@@ -159,7 +157,6 @@ import { ROBOT_MASTERING_PREFLIGHT_DEBOUNCE_MS } from "@/features/urdf/inertia/r
 import {
   buildSimulationPrepUpdateToastPlan,
   buildSimulationPrepPhysicsActionStatusMap,
-  buildSimulationPrepDraftFingerprint,
   buildPhysicsDraftSummaryText,
   buildPhysicsIssueSummary,
   buildSimulationPrepStatus,
@@ -956,44 +953,20 @@ const Index = () => {
 
   const orientationCard = framePreflightSession?.orientationCard ?? null;
   const robotFrameLint: RobotFrameLintResult | null = framePreflightSession?.frameLint ?? null;
-  const orientationSuggestion = useMemo(
-    () => getActionableOrientationSuggestion(orientationCard),
-    [orientationCard]
+  const orientationReviewState = useMemo(
+    () =>
+      buildOrientationReviewState({
+        orientationCard,
+        robotFrameLint,
+      }),
+    [orientationCard, robotFrameLint]
   );
-  const orientationNeedsAttention = Boolean(
-    orientationSuggestion || (robotFrameLint && robotFrameLint.verdict !== "canonical")
-  );
-  const orientationSummary = useMemo(() => {
-    const orientationReviewSummary = buildOrientationReviewSummary(orientationCard);
-    const framePolicySummary = buildRobotFramePolicySummary(robotFrameLint);
-
-    if (!orientationReviewSummary) {
-      return framePolicySummary;
-    }
-    if (!framePolicySummary || robotFrameLint?.verdict === "canonical") {
-      return orientationReviewSummary;
-    }
-
-    return `${orientationReviewSummary} ${framePolicySummary}`;
-  }, [orientationCard, robotFrameLint]);
-  const orientationStatus = useMemo(
-    () => {
-      const status = buildOrientationStatus(orientationCard);
-      if (!status) {
-        return null;
-      }
-      return {
-        ...status,
-        summary: orientationSummary ?? status.summary,
-      };
-    },
-    [orientationCard, orientationSummary]
-  );
-  const canAlignOrientation = useMemo(
-    () => Boolean(orientationSuggestion && robotFrameLint?.rewriteSafe),
-    [orientationSuggestion, robotFrameLint]
-  );
-  const canPreviewBakeVisualTransforms = robotFrameLint?.verdict === "unsafe-to-rewrite";
+  const orientationNeedsAttention = orientationReviewState.needsAttention;
+  const orientationSummary = orientationReviewState.summary;
+  const orientationStatus = orientationReviewState.status;
+  const canAlignOrientation = orientationReviewState.canAlignOrientation;
+  const canPreviewBakeVisualTransforms =
+    orientationReviewState.canPreviewBakeVisualTransforms;
   const bakePreviewStats = useMemo(
     () => (bakePreviewSession ? buildUrdfBakePreviewStats(bakePreviewSession) : null),
     [bakePreviewSession]
@@ -1795,42 +1768,24 @@ const Index = () => {
   );
   const physicsDraftFingerprint = useMemo(
     () =>
-      inertialSynthesisSummary
-        ? buildSimulationPrepDraftFingerprint([
-            inertialSynthesisSummary.densityPresetId,
-            inertialSynthesisSummary.repairMode,
-            inertialSynthesisSummary.synthesizedLinkCount,
-            inertialSynthesisSummary.voxelFallbackLinkCount,
-            inertialMassDeltaSummary?.changedLinkCount ?? 0,
-            inertialMassDeltaSummary?.totalMassAfterKg?.toFixed(3) ?? "none",
-          ])
-        : "no-physics-draft",
+      buildPhysicsDraftFingerprint({
+        inertialMassDeltaSummary,
+        inertialSynthesisSummary,
+      }),
     [inertialMassDeltaSummary, inertialSynthesisSummary]
   );
   const bakeDraftFingerprint = useMemo(
     () =>
-      bakePreviewSession
-        ? buildSimulationPrepDraftFingerprint([
-            bakePreviewStats?.entryCount ?? 0,
-            bakePreviewStats?.meshBackedEntryCount ?? 0,
-            bakePreviewStats?.linkNames.length ?? 0,
-            bakePreviewSession.stagedContent.length,
-          ])
-        : "no-bake-draft",
+      buildBakeDraftFingerprint({
+        bakePreviewSession,
+        entryCount: bakePreviewStats?.entryCount ?? 0,
+        linkCount: bakePreviewStats?.linkNames.length ?? 0,
+        meshBackedEntryCount: bakePreviewStats?.meshBackedEntryCount ?? 0,
+      }),
     [bakePreviewSession, bakePreviewStats]
   );
   const canonicalDraftFingerprint = useMemo(
-    () =>
-      canonicalSynthesisPreview
-        ? buildSimulationPrepDraftFingerprint([
-            canonicalSynthesisPreview.preview.robotName,
-            canonicalSynthesisPreview.preview.rootLinkName,
-            canonicalSynthesisPreview.preview.linkCount,
-            canonicalSynthesisPreview.preview.jointCount,
-            canonicalSynthesisPreview.preview.supportPlane.confidence?.toFixed(2) ?? "none",
-            canonicalSynthesisPreview.draftContent.length,
-          ])
-        : "no-canonical-draft",
+    () => buildCanonicalDraftFingerprint(canonicalSynthesisPreview),
     [canonicalSynthesisPreview]
   );
   const resolvedPhysicsAuditSummary = physicsPreflightSession?.auditSummary ?? inertialAuditSummary;
