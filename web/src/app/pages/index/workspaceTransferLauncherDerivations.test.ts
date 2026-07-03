@@ -1,0 +1,128 @@
+import { describe, expect, it, vi } from "vitest";
+import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
+import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorkspaceTransferTargetDescriptor } from "@/features/world-share/workspaceTransferApi";
+import {
+  assertWorkspacePackageCarriesSceneObjects,
+  buildWorkspaceTransferTargetState,
+  canLaunchWorkspaceTransferTarget,
+  formatSceneTransferSummary,
+  resolveWorkspaceTransferTargetStatusLabel,
+} from "@/app/pages/index/workspaceTransferLauncherDerivations";
+
+const createTargetDescriptor = (
+  overrides: Partial<WorkspaceTransferTargetDescriptor> = {},
+): WorkspaceTransferTargetDescriptor => ({
+  targetId: "pybullet",
+  label: "PyBullet",
+  targetKind: "physics_simulator",
+  capabilities: {
+    workspaceTarget: true,
+    motionValidation: false,
+    layoutRoundTrip: false,
+  },
+  transferPolicy: {
+    robotAssetFormat: "urdf",
+    sceneAssetFormat: "urdf",
+    frameConvention: "ros-rep-103",
+    transferStrategy: "direct",
+  },
+  ...overrides,
+});
+
+const createWorldPackage = (
+  objects: WorldScenePackageManifest["world_snapshot"]["objects"] = [],
+): WorldScenePackageManifest => ({
+  schema_version: WORLD_SCENE_PACKAGE_SCHEMA_VERSION,
+  package_id: "demo-world",
+  version: "1.0.0",
+  title: "Demo World",
+  created_at: "2026-01-01T00:00:00.000Z",
+  runtime_targets: [],
+  interface: {
+    observation_modalities: ["state"],
+    action_semantics: "joint_position",
+    timestep_ms: 10,
+    frame_convention: "ros-rep-103",
+  },
+  artifacts: [],
+  world_snapshot: {
+    urdf_xml: "<robot name=\"demo\"><link name=\"base\"/></robot>",
+    joint_positions: {},
+    cameras: [],
+    objects,
+    scenario_time_ms: 0,
+    scenario_duration_ms: 0,
+  },
+  provenance: {},
+  security: {
+    signature_ref: null,
+    attestation_refs: [],
+    sbom_ref: null,
+  },
+});
+
+describe("workspaceTransferLauncherDerivations", () => {
+  it("formats compact scene summaries", () => {
+    expect(formatSceneTransferSummary(13, 2)).toBe("13 obj · 2 cam");
+  });
+
+  it("keeps degraded available targets openable and marked for attention", () => {
+    const descriptor = createTargetDescriptor();
+    const status = {
+      targetId: descriptor.targetId,
+      available: true,
+      status: "ready, display degraded: software OpenGL",
+      dependencies: [],
+    };
+    const targetState = buildWorkspaceTransferTargetState({
+      descriptor,
+      lastOpenedTargetId: null,
+      loadingTargetId: descriptor.targetId,
+      onCancelTarget: vi.fn(),
+      onOpenTarget: vi.fn(),
+      sceneSummary: formatSceneTransferSummary(3, 1),
+      status,
+    });
+
+    expect(canLaunchWorkspaceTransferTarget(descriptor, status)).toBe(true);
+    expect(targetState.canOpen).toBe(true);
+    expect(targetState.isBusy).toBe(true);
+    expect(targetState.needsAttention).toBe(true);
+    expect(targetState.detail).toBe("URDF simulation workspace · 3 obj · 1 cam");
+    expect(targetState.statusLabel).toBe("ready, display degraded: software OpenGL");
+  });
+
+  it("labels unavailable and planned targets distinctly", () => {
+    const unavailableDescriptor = createTargetDescriptor();
+    const unavailableStatus = {
+      targetId: unavailableDescriptor.targetId,
+      available: false,
+      status: "missing display",
+      dependencies: [],
+    };
+    const plannedDescriptor = createTargetDescriptor({
+      capabilities: {
+        workspaceTarget: false,
+        motionValidation: false,
+        layoutRoundTrip: false,
+      },
+    });
+
+    expect(resolveWorkspaceTransferTargetStatusLabel(unavailableDescriptor, unavailableStatus)).toBe(
+      "missing display",
+    );
+    expect(resolveWorkspaceTransferTargetStatusLabel(plannedDescriptor)).toBe("planned");
+    expect(canLaunchWorkspaceTransferTarget(plannedDescriptor)).toBe(false);
+  });
+
+  it("blocks empty scene packages when Studio has objects", () => {
+    expect(() => assertWorkspacePackageCarriesSceneObjects(createWorldPackage(), 2)).toThrow(
+      "Workspace transfer blocked: Studio has world objects, but the generated scene package is empty.",
+    );
+  });
+
+  it("accepts empty scene packages when Studio has no objects", () => {
+    expect(() => assertWorkspacePackageCarriesSceneObjects(createWorldPackage(), 0)).not.toThrow();
+  });
+});

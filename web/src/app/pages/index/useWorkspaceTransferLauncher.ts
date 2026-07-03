@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type {
-  WorkspaceTransferState,
-  WorkspaceTransferTargetState,
-} from "@/features/layout/page/workspaceTransferState";
+import type { WorkspaceTransferState } from "@/features/layout/page/workspaceTransferState";
 import {
   cancelWorkspaceTransferTargetLaunch,
   fetchWorkspaceTransferTargets,
@@ -12,13 +9,15 @@ import {
   type WorkspaceTransferTargetDescriptor,
   type WorkspaceTransferTargetStatus,
 } from "@/features/world-share/workspaceTransferApi";
-import {
-  canOpenWorkspaceTarget,
-  type WorkspaceTransferAssetFormat,
-  type WorkspaceTransferTargetId,
-} from "@/features/world-share/workspaceTransferParams";
+import type { WorkspaceTransferTargetId } from "@/features/world-share/workspaceTransferParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
 import { WORKSPACE_TRANSFER_LAUNCHER_PARAMS } from "@/app/pages/index/workspaceTransferLauncherParams";
+import {
+  assertWorkspacePackageCarriesSceneObjects,
+  buildWorkspaceTransferTargetState,
+  canLaunchWorkspaceTransferTarget,
+  formatSceneTransferSummary,
+} from "@/app/pages/index/workspaceTransferLauncherDerivations";
 
 type UseWorkspaceTransferLauncherParams = {
   activeUrdfPath: string | null;
@@ -38,87 +37,6 @@ type WorkspaceTransferLaunch = {
   targetLabel: string;
   launchId: string;
   controller: AbortController;
-};
-
-const WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS = new Map<string, string>([
-  ["urdf", "URDF"],
-  ["mjcf", "MJCF"],
-  ["mjx_mjcf", "MJX MJCF"],
-  ["usd", "USD"],
-  ["native", "native"],
-]);
-
-const formatWorkspaceAssetFormat = (format: string): string =>
-  WORKSPACE_TRANSFER_ASSET_FORMAT_LABELS.get(format) ?? format.toUpperCase();
-
-const describeWorkspaceAssetFormats = (
-  robotAssetFormat: WorkspaceTransferAssetFormat,
-  sceneAssetFormat: WorkspaceTransferAssetFormat
-): string => {
-  const robotFormat = formatWorkspaceAssetFormat(robotAssetFormat);
-  const sceneFormat = formatWorkspaceAssetFormat(sceneAssetFormat);
-  return robotFormat === sceneFormat ? robotFormat : `${robotFormat} + ${sceneFormat}`;
-};
-
-const formatSceneTransferSummary = (objectCount: number, cameraCount: number): string =>
-  `${objectCount} obj · ${cameraCount} cam`;
-
-const resolveWorkspaceTransferTargetTransferDescription = (
-  descriptor: WorkspaceTransferTargetDescriptor
-): string => {
-  const assetFormats = describeWorkspaceAssetFormats(
-    descriptor.transferPolicy.robotAssetFormat,
-    descriptor.transferPolicy.sceneAssetFormat
-  );
-  switch (descriptor.transferPolicy.transferStrategy) {
-    case "direct":
-      if (
-        descriptor.transferPolicy.robotAssetFormat === "urdf" &&
-        descriptor.transferPolicy.sceneAssetFormat === "urdf"
-      ) {
-        return "Uses the loaded URDF directly; no simulator-specific robot file is generated.";
-      }
-      return `Uses a ${assetFormats} workspace package for ${descriptor.label}.`;
-    case "convert":
-      return `URDF Studio writes a new ${assetFormats} simulator asset before opening ${descriptor.label}.`;
-    case "planned":
-      return `${descriptor.label} compatibility is listed, but opening is not enabled yet; it will require a ${assetFormats} simulator asset.`;
-    default:
-      return `${descriptor.label} uses ${assetFormats}.`;
-  }
-};
-
-const createsWorkspaceTransferAsset = (descriptor: WorkspaceTransferTargetDescriptor): boolean =>
-  descriptor.transferPolicy.transferStrategy !== "direct" ||
-  descriptor.transferPolicy.robotAssetFormat !== "urdf" ||
-  descriptor.transferPolicy.sceneAssetFormat !== "urdf";
-
-const resolveWorkspaceTransferTargetStatusLabel = (
-  descriptor: WorkspaceTransferTargetDescriptor,
-  status?: WorkspaceTransferTargetStatus
-): string => {
-  if (!canOpenWorkspaceTarget(descriptor)) return "planned";
-  if (status?.available === false) return status.status || "unavailable";
-  if (status?.available === true) return status.status || "ready";
-  return "checking";
-};
-
-const workspaceTransferTargetNeedsAttention = (
-  status?: WorkspaceTransferTargetStatus
-): boolean => {
-  if (status?.available !== true) return false;
-  const normalizedStatus = status.status.trim().toLowerCase();
-  return normalizedStatus !== "" && normalizedStatus !== "ready";
-};
-
-const assertWorkspacePackageCarriesSceneObjects = (
-  worldPackage: WorldScenePackageManifest,
-  studioWorldObjectCount: number
-): void => {
-  if (studioWorldObjectCount <= 0 || worldPackage.world_snapshot.objects.length > 0) return;
-  throw new Error(
-    "Workspace transfer blocked: Studio has world objects, but the generated scene package is empty."
-  );
 };
 
 const isWorkspaceTransferAbortError = (error: unknown): boolean => {
@@ -173,24 +91,6 @@ const toastWorkspaceWarnings = (warnings: string[] | undefined): void => {
     .forEach((warning) => {
       toast.warning(warning);
     });
-};
-
-const resolveWorkspaceTransferTargetDetail = (
-  descriptor: WorkspaceTransferTargetDescriptor,
-  sceneSummary: string,
-  status?: WorkspaceTransferTargetStatus
-): string => {
-  const assetFormat = formatWorkspaceAssetFormat(descriptor.transferPolicy.robotAssetFormat);
-  const baseDetail = (() => {
-    if (!canOpenWorkspaceTarget(descriptor)) return `${assetFormat} soon`;
-    if (status && !status.available) return `${assetFormat} soon`;
-    if (descriptor.capabilities.layoutRoundTrip) return `${assetFormat} layout round trip`;
-    if (descriptor.capabilities.motionValidation) return `${assetFormat} validation workspace`;
-    if (descriptor.targetKind === "physics_simulator") return `${assetFormat} simulation workspace`;
-    if (descriptor.targetKind === "renderer") return `${assetFormat} visual workspace`;
-    return `${assetFormat} open`;
-  })();
-  return `${baseDetail} · ${sceneSummary}`;
 };
 
 export const useWorkspaceTransferLauncher = ({
@@ -297,7 +197,7 @@ export const useWorkspaceTransferLauncher = ({
     async (descriptor: WorkspaceTransferTargetDescriptor) => {
       if (activeLaunchRef.current !== null) return;
       const status = targetStatuses[descriptor.targetId];
-      if (!canOpenWorkspaceTarget(descriptor) || status?.available === false) {
+      if (!canLaunchWorkspaceTransferTarget(descriptor, status)) {
         toast.message(`${descriptor.label} soon.`);
         return;
       }
@@ -375,37 +275,17 @@ export const useWorkspaceTransferLauncher = ({
   );
 
   const workspaceTransfer: WorkspaceTransferState = useMemo(() => {
-    const targets = targetDescriptors.map((descriptor): WorkspaceTransferTargetState => {
-      const isBusy = loadingTargetId === descriptor.targetId;
-      const isActive = lastOpenedTargetId === descriptor.targetId;
-      const status = targetStatuses[descriptor.targetId];
-      const canOpen = canOpenWorkspaceTarget(descriptor) && status?.available !== false;
-      const disabledLabel = !canOpenWorkspaceTarget(descriptor)
-        ? `${descriptor.label} planned`
-        : `${descriptor.label}: ${status?.status || "unavailable"}`;
-      return {
-        id: descriptor.targetId,
-        label: descriptor.label,
-        targetKind: descriptor.targetKind,
-        detail: resolveWorkspaceTransferTargetDetail(descriptor, sceneSummary, status),
-        robotAssetFormat: descriptor.transferPolicy.robotAssetFormat,
-        sceneAssetFormat: descriptor.transferPolicy.sceneAssetFormat,
-        transferStrategy: descriptor.transferPolicy.transferStrategy,
-        transferDescription: resolveWorkspaceTransferTargetTransferDescription(descriptor),
-        createsTransferAsset: createsWorkspaceTransferAsset(descriptor),
-        statusLabel: resolveWorkspaceTransferTargetStatusLabel(descriptor, status),
-        openLabel: `Open in ${descriptor.label}`,
-        openingLabel: `Opening ${descriptor.label}`,
-        cancelLabel: `Stop opening ${descriptor.label}`,
-        isBusy,
-        isActive,
-        needsAttention: workspaceTransferTargetNeedsAttention(status),
-        canOpen,
-        disabledLabel,
-        onAction: () => handleOpenTarget(descriptor),
-        onCancel: () => cancelOpenTarget(descriptor.targetId),
-      };
-    });
+    const targets = targetDescriptors.map((descriptor) =>
+      buildWorkspaceTransferTargetState({
+        descriptor,
+        lastOpenedTargetId,
+        loadingTargetId,
+        onCancelTarget: cancelOpenTarget,
+        onOpenTarget: handleOpenTarget,
+        sceneSummary,
+        status: targetStatuses[descriptor.targetId],
+      })
+    );
     return { sceneSummary, targets };
   }, [
     cancelOpenTarget,
