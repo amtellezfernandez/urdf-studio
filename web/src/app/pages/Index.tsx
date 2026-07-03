@@ -71,6 +71,7 @@ import {
   buildMeshRootHints,
   hasLoadReviewAttention,
 } from "@/app/pages/index/loadReviewDerivations";
+import { useLoadReviewPanelController } from "@/app/pages/index/useLoadReviewPanelController";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
@@ -2252,37 +2253,15 @@ const Index = () => {
     collisionMeshStats,
     orientationNeedsAttention,
   });
-  const autoOpenedLoadReviewKeyRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!hasLoadedFiles || !hasLoadReviewAttentionFlag) {
-      return;
-    }
-    const loadReviewKey = [
-      activeUrdfPath ?? "",
-      urdfFile?.name ?? "",
-      String(urdfFile?.lastModified ?? 0),
-    ].join("::");
-    if (autoOpenedLoadReviewKeyRef.current === loadReviewKey) {
-      return;
-    }
-    autoOpenedLoadReviewKeyRef.current = loadReviewKey;
-    setShowLoadIssues(true);
-  }, [
+  useLoadReviewPanelController({
     activeUrdfPath,
     hasLoadedFiles,
-    hasLoadReviewAttentionFlag,
+    hasLoadReviewAttention: hasLoadReviewAttentionFlag,
     setShowLoadIssues,
+    showLoadIssues,
     urdfFile,
-  ]);
-
-  useEffect(() => {
-    if (!showLoadIssues || !hasLoadedFiles || hasLoadReviewAttentionFlag) {
-      return;
-    }
-
-    setShowLoadIssues(false);
-  }, [hasLoadedFiles, hasLoadReviewAttentionFlag, setShowLoadIssues, showLoadIssues]);
+  });
 
   const worldHubEnabled = isWorldHubConfigured();
   const enableSimulationPrepViewerHighlights = useCallback(
