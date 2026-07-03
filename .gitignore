@@ -1,40 +1,63 @@
-node_modules
+# Dependencies and managed runtimes
+node_modules/
+web/node_modules/
 .cache/
+.i-love-urdf/
+.uv-cache/
+.venv/
+.venv-*/
+/ikd/target/
+
+# Local agent, test, and tool caches
+.agents/
+.claude/
+.codex/
+.pytest_cache/
+.ruff_cache/
+*.tsbuildinfo
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Local environment and machine-specific config
 .env
 .env.*
 !.env.example
 !.env.*.example
+.npmrc
 .urdf-studio-config.json
 .urdf-studio-version-check.json
-.npmrc
-.venv
-.uv-cache
-amd-hackathon/
-reports/
+.urdf-studio-embodiment-registry.json
+
+# Build outputs and generated reports
+dist/
 **/dist/
+reports/
 bun.lockb
-**/__pycache__/
-*.pyc
-*.pyo
-*.tsbuildinfo
-third_party/robot_viewer/
-third_party/genesis/
-third_party/unitree_ros/
-third_party/abb/
-third_party/ros2_bridge_project/
 **/b2_description.urdf
-/ikd/target/
-third_party/rviz/
-third_party/refiner-main/
-third_party/weightslab/
-third_party/image-blaster/
-third_party/splat-collider-builder/
-third_party/third-person-controller-splat/
+
+# Local external source trees and experiments
+amd-hackathon/
 pyroki/
 vggt/
 cam-to-sim/
+third_party/abb/
+third_party/genesis/
+third_party/image-blaster/
+third_party/lerobot/
+third_party/lerobot-dataset-visualizer/
+third_party/linkforge/
+third_party/mujoco-sysid/
+third_party/refiner-main/
+third_party/robot_viewer/
+third_party/ros2_bridge_project/
+third_party/rviz/
+third_party/splat-collider-builder/
+third_party/third-person-controller-splat/
+third_party/unitree_ros/
+third_party/viewport/
+third_party/weightslab/
 
-# Machine-specific xacro runtime (wrappers point to local venv paths)
-.i-love-urdf/
-.venv-*/
-dist/
+# OS metadata
+.DS_Store
+**/.DS_Store
