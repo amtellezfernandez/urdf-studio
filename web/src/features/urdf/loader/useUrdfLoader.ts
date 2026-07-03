@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import type { FileWithPath } from "@/shared/types/file";
 import {
   analyzeUrdfDocument,
   type ParsedSensor,
@@ -10,7 +9,6 @@ import {
   buildPackageRootsFromRepositoryFiles,
   buildRepositoryFileEntriesFromPaths,
   extractPackageNameFromPackageXml,
-  isSupportedMeshExtension,
   isSupportedMeshResource,
   isXacroPath,
   normalizeExpandedUrdfPath,
@@ -22,7 +20,7 @@ import {
   type JointLimits,
 } from "@/shared/lib/urdfBrowser";
 import { findAutoEndEffectorLinksFromAnalysis } from "@/features/layout/page/utils";
-import { COMMON_MESH_FOLDERS, DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
+import { DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
 import { createVizFilename } from "../utils/addJointColors";
 import {
@@ -31,18 +29,16 @@ import {
 } from "@/features/urdf/xacro/xacroClient";
 import { aliasRepeatedLinkMeshFiles } from "@/features/urdf/loader/repeatedMeshAlias";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
-import {
-  formatMeshRegistrationDebugLine,
-  formatUrdfMeshLoadDiagnostics,
-} from "@/features/urdf/loader/urdfLoaderDiagnostics";
+import { formatUrdfMeshLoadDiagnostics } from "@/features/urdf/loader/urdfLoaderDiagnostics";
 import {
   summarizeUrdfLoadIssues,
   type UrdfLoadIssueSummary,
 } from "@/features/urdf/loader/urdfLoadIssues";
+import { buildDebugMeshInfo } from "@/features/urdf/loader/urdfMeshDebugInfo";
 import {
-  buildDebugMeshInfo,
-  type IndexedMeshAsset,
-} from "@/features/urdf/loader/urdfMeshDebugInfo";
+  getFileRelativePath,
+  indexMeshResources,
+} from "@/features/urdf/loader/urdfMeshIndex";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
@@ -72,11 +68,6 @@ type ApplyLoadedUrdfStateParams = {
   validationError: string | null;
 };
 
-const getFileRelativePath = (file: File): string => {
-  const fileWithPath = file as FileWithPath;
-  return fileWithPath.webkitRelativePath || file.name;
-};
-
 const getBasePathFromRelativePath = (relativePath: string): string => {
   const normalized = normalizeMeshPathForMatch(relativePath);
   if (!normalized) return "";
@@ -84,143 +75,6 @@ const getBasePathFromRelativePath = (relativePath: string): string => {
   if (parts.length <= 1) return "";
   parts.pop();
   return parts.join("/");
-};
-
-const registerMeshKey = (
-  meshes: MeshFiles,
-  collisionKeys: Set<string>,
-  key: string,
-  blob: Blob
-) => {
-  if (!key) return;
-  if (collisionKeys.has(key)) {
-    return;
-  }
-  const existing = meshes[key];
-  if (existing && existing !== blob) {
-    collisionKeys.add(key);
-    delete meshes[key];
-    return;
-  }
-  meshes[key] = blob;
-};
-
-const registerMeshFilePaths = (
-  meshes: MeshFiles,
-  collisionKeys: Set<string>,
-  relativePath: string,
-  filename: string,
-  blob: Blob
-) => {
-  const normalizedPath = relativePath.replace(/^\/+|\/+$/g, "");
-  const pathParts = normalizedPath.split("/").filter(Boolean);
-
-  registerMeshKey(meshes, collisionKeys, filename, blob);
-  registerMeshKey(meshes, collisionKeys, normalizedPath, blob);
-  registerMeshKey(meshes, collisionKeys, `/${normalizedPath}`, blob);
-
-  if (relativePath !== normalizedPath) {
-    registerMeshKey(meshes, collisionKeys, relativePath, blob);
-    const noLeadingSlash = relativePath.replace(/^\/+/, "");
-    if (noLeadingSlash !== relativePath && noLeadingSlash !== normalizedPath) {
-      registerMeshKey(meshes, collisionKeys, noLeadingSlash, blob);
-    }
-  }
-
-  if (pathParts.length > 1) {
-    const lastFolderAndFile = `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
-    if (lastFolderAndFile !== normalizedPath) {
-      registerMeshKey(meshes, collisionKeys, lastFolderAndFile, blob);
-      registerMeshKey(meshes, collisionKeys, `/${lastFolderAndFile}`, blob);
-    }
-
-    for (let i = 0; i < pathParts.length; i++) {
-      const suffixPath = pathParts.slice(i).join("/");
-      registerMeshKey(meshes, collisionKeys, suffixPath, blob);
-      registerMeshKey(meshes, collisionKeys, `/${suffixPath}`, blob);
-    }
-
-    const withoutFirst = pathParts.slice(1).join("/");
-    registerMeshKey(meshes, collisionKeys, withoutFirst, blob);
-    registerMeshKey(meshes, collisionKeys, `/${withoutFirst}`, blob);
-  }
-
-  try {
-    const decodedPath = decodeURIComponent(normalizedPath);
-    if (decodedPath !== normalizedPath) {
-      registerMeshKey(meshes, collisionKeys, decodedPath, blob);
-      registerMeshKey(meshes, collisionKeys, `/${decodedPath}`, blob);
-    }
-  } catch {
-    // Ignore decode errors
-  }
-
-  for (const folder of COMMON_MESH_FOLDERS) {
-    registerMeshKey(meshes, collisionKeys, `${folder}/${filename}`, blob);
-    registerMeshKey(meshes, collisionKeys, `/${folder}/${filename}`, blob);
-  }
-};
-
-const warnOnAmbiguousMeshKeys = (collisionKeys: Set<string>) => {
-  if (!import.meta.env.DEV || collisionKeys.size === 0) {
-    return;
-  }
-  console.warn(
-    `Skipped ${collisionKeys.size} ambiguous mesh key(s) due to basename collisions.`,
-    Array.from(collisionKeys).slice(0, 10)
-  );
-};
-
-const indexMeshResources = async (
-  files: File[],
-  initialMeshes: MeshFiles,
-  options: {
-    logFailures?: boolean;
-    logRegistrations?: boolean;
-  } = {}
-): Promise<{ meshAssets: IndexedMeshAsset[]; meshes: MeshFiles }> => {
-  const meshes: MeshFiles = { ...initialMeshes };
-  const collisionKeys = new Set<string>();
-  const meshAssets = (
-    await Promise.all(
-      files.map(async (file): Promise<IndexedMeshAsset | null> => {
-        try {
-          const relativePath = getFileRelativePath(file);
-          const normalizedPath = relativePath.replace(/^\/+|\/+$/g, "");
-          const blob = new Blob([await file.arrayBuffer()]);
-
-          registerMeshFilePaths(meshes, collisionKeys, relativePath, file.name, blob);
-
-          if (import.meta.env.DEV && options.logRegistrations) {
-            console.debug(
-              formatMeshRegistrationDebugLine({
-                filename: file.name,
-                normalizedPath,
-                relativePath,
-              })
-            );
-          }
-
-          return isSupportedMeshExtension(file.name)
-            ? {
-                blob,
-                filename: file.name,
-                relativePath,
-              }
-            : null;
-        } catch (error) {
-          if (import.meta.env.DEV && options.logFailures) {
-            console.warn(`Failed to load mesh: ${file.name}`, error);
-          }
-          return null;
-        }
-      })
-    )
-  ).filter((asset): asset is IndexedMeshAsset => asset !== null);
-
-  warnOnAmbiguousMeshKeys(collisionKeys);
-
-  return { meshAssets, meshes };
 };
 
 const buildPackageRootsFromFiles = async (files: File[]) => {
