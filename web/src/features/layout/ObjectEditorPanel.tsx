@@ -10,6 +10,28 @@ import { LabeledNumberField } from "@/features/layout/sidebarNumberField";
 
 type ObjectEditMode = "move" | "rotate" | "resize";
 type ObjectTransformSpace = "world" | "local";
+type ObjectVectorAxis = "x" | "y" | "z";
+
+type ObjectVectorFieldsProps = {
+  min?: number;
+  onAxisValueChange: (axis: ObjectVectorAxis, value: number) => void;
+  useCompactStackedInputs: boolean;
+  vector: THREE.Vector3;
+};
+
+type ObjectOrbitFieldSpec = {
+  label: string;
+  max?: number;
+  min?: number;
+  onValueChange: (value: number) => void;
+  step: number;
+  value: number;
+};
+
+type ObjectOrbitFieldsProps = {
+  fields: ObjectOrbitFieldSpec[];
+  useCompactStackedInputs: boolean;
+};
 
 export interface ObjectEditorPanelProps {
   objectId: string;
@@ -35,6 +57,8 @@ const normalizeOrbitStartPoint = (
   value: "center" | "primary" | "secondary" | undefined
 ): "primary" | "secondary" => (value && value !== "center" ? value : "primary");
 
+const normalizeDegrees360 = (value: number): number => ((value % 360) + 360) % 360;
+
 const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
@@ -45,6 +69,94 @@ const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
     target.isContentEditable
   );
 };
+
+function ObjectVectorFields({
+  min,
+  onAxisValueChange,
+  useCompactStackedInputs,
+  vector,
+}: ObjectVectorFieldsProps) {
+  const axes: ObjectVectorAxis[] = ["x", "y", "z"];
+  if (useCompactStackedInputs) {
+    return (
+      <div className="space-y-1">
+        {axes.map((axis) => (
+          <LabeledNumberField
+            key={axis}
+            label={axis.toUpperCase()}
+            value={vector[axis]}
+            onValueChange={(value) => onAxisValueChange(axis, value)}
+            step={0.01}
+            min={min}
+            className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
+            labelClassName="w-3 text-[9px] text-muted-foreground/80"
+            wrapperClassName="flex items-center gap-1.5"
+          />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-3 gap-0.5">
+      {axes.map((axis) => (
+        <LabeledNumberField
+          key={axis}
+          label={axis.toUpperCase()}
+          value={vector[axis]}
+          onValueChange={(value) => onAxisValueChange(axis, value)}
+          step={0.01}
+          min={min}
+          className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
+          labelClassName="sr-only"
+          wrapperClassName="space-y-0"
+        />
+      ))}
+    </div>
+  );
+}
+
+function ObjectOrbitFields({
+  fields,
+  useCompactStackedInputs,
+}: ObjectOrbitFieldsProps) {
+  if (useCompactStackedInputs) {
+    return (
+      <div className="space-y-1">
+        {fields.map((field) => (
+          <LabeledNumberField
+            key={field.label}
+            label={field.label}
+            value={field.value}
+            onValueChange={field.onValueChange}
+            step={field.step}
+            min={field.min}
+            max={field.max}
+            className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
+            labelClassName="w-16 text-[9px] text-muted-foreground/80"
+            wrapperClassName="flex items-center gap-1.5"
+          />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-1">
+      {fields.map((field) => (
+        <LabeledNumberField
+          key={field.label}
+          label={field.label}
+          value={field.value}
+          onValueChange={field.onValueChange}
+          step={field.step}
+          min={field.min}
+          max={field.max}
+          className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
+          labelClassName={OBJECT_FIELD_LABEL_CLASS}
+        />
+      ))}
+    </div>
+  );
+}
 
 export const ObjectEditorPanel = ({
   objectId,
@@ -199,7 +311,7 @@ export const ObjectEditorPanel = ({
   const updateObjectVectorAxis = useCallback(
     (
       vector: THREE.Vector3,
-      axis: "x" | "y" | "z",
+      axis: ObjectVectorAxis,
       value: number,
       apply: (nextVector: THREE.Vector3) => void
     ) => {
@@ -223,6 +335,41 @@ export const ObjectEditorPanel = ({
       : null;
   const useCompactStackedInputs = sidebarWidth < 272;
   const normalizedOrbitStartPoint = normalizeOrbitStartPoint(obj.orbitTargetPoint);
+  const orbitFields: ObjectOrbitFieldSpec[] = [
+    {
+      label: "Radius (m)",
+      value: obj.orbitRadius ?? 0.3,
+      onValueChange: (value) => updateOrbitParams(obj.id, { radius: value }),
+      step: 0.01,
+      min: 0.01,
+    },
+    {
+      label: "Tilt (deg)",
+      value: obj.orbitInclination ?? 45,
+      onValueChange: (value) => updateOrbitParams(obj.id, { inclination: value }),
+      step: 5,
+      min: -90,
+      max: 90,
+    },
+    {
+      label: "Start (deg)",
+      value: obj.orbitPhase ?? 0,
+      onValueChange: (value) =>
+        updateOrbitParams(obj.id, { phase: normalizeDegrees360(value) }),
+      step: 15,
+      min: 0,
+      max: 360,
+    },
+    {
+      label: "Arc (deg)",
+      value: obj.orbitSecondaryOffset ?? 180,
+      onValueChange: (value) =>
+        updateOrbitParams(obj.id, { secondaryOffset: normalizeDegrees360(value) }),
+      step: 15,
+      min: 0,
+      max: 360,
+    },
+  ];
 
   return (
     <div className="p-0.5" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
@@ -276,185 +423,28 @@ export const ObjectEditorPanel = ({
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Position" labelWidth="w-16" className="items-start">
-            {useCompactStackedInputs ? (
-              <div className="space-y-1">
-                <LabeledNumberField
-                  label="X"
-                  value={obj.position.x}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.position, "x", val, (nextVector) =>
-                      updateObjectPosition(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                  labelClassName="w-3 text-[9px] text-muted-foreground/80"
-                  wrapperClassName="flex items-center gap-1.5"
-                />
-                <LabeledNumberField
-                  label="Y"
-                  value={obj.position.y}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.position, "y", val, (nextVector) =>
-                      updateObjectPosition(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                  labelClassName="w-3 text-[9px] text-muted-foreground/80"
-                  wrapperClassName="flex items-center gap-1.5"
-                />
-                <LabeledNumberField
-                  label="Z"
-                  value={obj.position.z}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.position, "z", val, (nextVector) =>
-                      updateObjectPosition(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                  labelClassName="w-3 text-[9px] text-muted-foreground/80"
-                  wrapperClassName="flex items-center gap-1.5"
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-0.5">
-                <LabeledNumberField
-                  label="X"
-                  value={obj.position.x}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.position, "x", val, (nextVector) =>
-                      updateObjectPosition(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                  labelClassName="sr-only"
-                  wrapperClassName="space-y-0"
-                />
-                <LabeledNumberField
-                  label="Y"
-                  value={obj.position.y}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.position, "y", val, (nextVector) =>
-                      updateObjectPosition(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                  labelClassName="sr-only"
-                  wrapperClassName="space-y-0"
-                />
-                <LabeledNumberField
-                  label="Z"
-                  value={obj.position.z}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.position, "z", val, (nextVector) =>
-                      updateObjectPosition(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                  labelClassName="sr-only"
-                  wrapperClassName="space-y-0"
-                />
-              </div>
-            )}
+            <ObjectVectorFields
+              vector={obj.position}
+              useCompactStackedInputs={useCompactStackedInputs}
+              onAxisValueChange={(axis, value) =>
+                updateObjectVectorAxis(obj.position, axis, value, (nextVector) =>
+                  updateObjectPosition(obj.id, nextVector)
+                )
+              }
+            />
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Size" labelWidth="w-16" className="items-start">
-            {useCompactStackedInputs ? (
-              <div className="space-y-1">
-                <LabeledNumberField
-                  label="X"
-                  value={obj.size.x}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.size, "x", val, (nextVector) =>
-                      updateObjectSize(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  min={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                  labelClassName="w-3 text-[9px] text-muted-foreground/80"
-                  wrapperClassName="flex items-center gap-1.5"
-                />
-                <LabeledNumberField
-                  label="Y"
-                  value={obj.size.y}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.size, "y", val, (nextVector) =>
-                      updateObjectSize(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  min={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                  labelClassName="w-3 text-[9px] text-muted-foreground/80"
-                  wrapperClassName="flex items-center gap-1.5"
-                />
-                <LabeledNumberField
-                  label="Z"
-                  value={obj.size.z}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.size, "z", val, (nextVector) =>
-                      updateObjectSize(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  min={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                  labelClassName="w-3 text-[9px] text-muted-foreground/80"
-                  wrapperClassName="flex items-center gap-1.5"
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-0.5">
-                <LabeledNumberField
-                  label="X"
-                  value={obj.size.x}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.size, "x", val, (nextVector) =>
-                      updateObjectSize(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  min={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                  labelClassName="sr-only"
-                  wrapperClassName="space-y-0"
-                />
-                <LabeledNumberField
-                  label="Y"
-                  value={obj.size.y}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.size, "y", val, (nextVector) =>
-                      updateObjectSize(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  min={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                  labelClassName="sr-only"
-                  wrapperClassName="space-y-0"
-                />
-                <LabeledNumberField
-                  label="Z"
-                  value={obj.size.z}
-                  onValueChange={(val) =>
-                    updateObjectVectorAxis(obj.size, "z", val, (nextVector) =>
-                      updateObjectSize(obj.id, nextVector)
-                    )
-                  }
-                  step={0.01}
-                  min={0.01}
-                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                  labelClassName="sr-only"
-                  wrapperClassName="space-y-0"
-                />
-              </div>
-            )}
+            <ObjectVectorFields
+              vector={obj.size}
+              useCompactStackedInputs={useCompactStackedInputs}
+              min={0.01}
+              onAxisValueChange={(axis, value) =>
+                updateObjectVectorAxis(obj.size, axis, value, (nextVector) =>
+                  updateObjectSize(obj.id, nextVector)
+                )
+              }
+            />
           </BlenderPropertyRow>
 
           <BlenderPropertyRow label="Reference" labelWidth="w-16">
@@ -555,103 +545,10 @@ export const ObjectEditorPanel = ({
                   <div className="text-[8.5px] text-muted-foreground/80 leading-tight">
                     Click object: robot moves to orbit start, then follows arc.
                   </div>
-                  {useCompactStackedInputs ? (
-                    <div className="space-y-1">
-                      <LabeledNumberField
-                        label="Radius (m)"
-                        value={obj.orbitRadius ?? 0.3}
-                        onValueChange={(val) => updateOrbitParams(obj.id, { radius: val })}
-                        step={0.01}
-                        min={0.01}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                        labelClassName="w-16 text-[9px] text-muted-foreground/80"
-                        wrapperClassName="flex items-center gap-1.5"
-                      />
-                      <LabeledNumberField
-                        label="Tilt (deg)"
-                        value={obj.orbitInclination ?? 45}
-                        onValueChange={(val) => updateOrbitParams(obj.id, { inclination: val })}
-                        step={5}
-                        min={-90}
-                        max={90}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                        labelClassName="w-16 text-[9px] text-muted-foreground/80"
-                        wrapperClassName="flex items-center gap-1.5"
-                      />
-                      <LabeledNumberField
-                        label="Start (deg)"
-                        value={obj.orbitPhase ?? 0}
-                        onValueChange={(val) =>
-                          updateOrbitParams(obj.id, { phase: ((val % 360) + 360) % 360 })
-                        }
-                        step={15}
-                        min={0}
-                        max={360}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                        labelClassName="w-16 text-[9px] text-muted-foreground/80"
-                        wrapperClassName="flex items-center gap-1.5"
-                      />
-                      <LabeledNumberField
-                        label="Arc (deg)"
-                        value={obj.orbitSecondaryOffset ?? 180}
-                        onValueChange={(val) =>
-                          updateOrbitParams(obj.id, { secondaryOffset: ((val % 360) + 360) % 360 })
-                        }
-                        step={15}
-                        min={0}
-                        max={360}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
-                        labelClassName="w-16 text-[9px] text-muted-foreground/80"
-                        wrapperClassName="flex items-center gap-1.5"
-                      />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1">
-                      <LabeledNumberField
-                        label="Radius (m)"
-                        value={obj.orbitRadius ?? 0.3}
-                        onValueChange={(val) => updateOrbitParams(obj.id, { radius: val })}
-                        step={0.01}
-                        min={0.01}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                        labelClassName={OBJECT_FIELD_LABEL_CLASS}
-                      />
-                      <LabeledNumberField
-                        label="Tilt (deg)"
-                        value={obj.orbitInclination ?? 45}
-                        onValueChange={(val) => updateOrbitParams(obj.id, { inclination: val })}
-                        step={5}
-                        min={-90}
-                        max={90}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                        labelClassName={OBJECT_FIELD_LABEL_CLASS}
-                      />
-                      <LabeledNumberField
-                        label="Start (deg)"
-                        value={obj.orbitPhase ?? 0}
-                        onValueChange={(val) =>
-                          updateOrbitParams(obj.id, { phase: ((val % 360) + 360) % 360 })
-                        }
-                        step={15}
-                        min={0}
-                        max={360}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                        labelClassName={OBJECT_FIELD_LABEL_CLASS}
-                      />
-                      <LabeledNumberField
-                        label="Arc (deg)"
-                        value={obj.orbitSecondaryOffset ?? 180}
-                        onValueChange={(val) =>
-                          updateOrbitParams(obj.id, { secondaryOffset: ((val % 360) + 360) % 360 })
-                        }
-                        step={15}
-                        min={0}
-                        max={360}
-                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
-                        labelClassName={OBJECT_FIELD_LABEL_CLASS}
-                      />
-                    </div>
-                  )}
+                  <ObjectOrbitFields
+                    fields={orbitFields}
+                    useCompactStackedInputs={useCompactStackedInputs}
+                  />
                 </div>
               </BlenderPropertyRow>
             </>
