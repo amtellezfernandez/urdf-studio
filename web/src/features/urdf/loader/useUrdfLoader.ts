@@ -1,11 +1,7 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import type { ParsedSensor, UrdfAnalysis } from "@/shared/lib/urdfCore";
-import {
-  isSupportedMeshResource,
-  isXacroPath,
-  normalizeExpandedUrdfPath,
-} from "@/shared/lib/urdfCore";
+import { isSupportedMeshResource } from "@/shared/lib/urdfCore";
 import {
   normalizeMeshPathForMatch,
   type JointAxisMap,
@@ -13,31 +9,20 @@ import {
 } from "@/shared/lib/urdfBrowser";
 import { DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
-import {
-  collectXacroSupportFiles,
-  expandXacro,
-} from "@/features/urdf/xacro/xacroClient";
 import { aliasRepeatedLinkMeshFiles } from "@/features/urdf/loader/repeatedMeshAlias";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
 import { formatUrdfMeshLoadDiagnostics } from "@/features/urdf/loader/urdfLoaderDiagnostics";
-import {
-  type UrdfLoadIssueSummary,
-} from "@/features/urdf/loader/urdfLoadIssues";
+import type { UrdfLoadIssueSummary } from "@/features/urdf/loader/urdfLoadIssues";
 import { buildDebugMeshInfo } from "@/features/urdf/loader/urdfMeshDebugInfo";
-import {
-  getFileRelativePath,
-  indexMeshResources,
-} from "@/features/urdf/loader/urdfMeshIndex";
-import {
-  createExpandedXacroUrdfFile,
-  createLoadedUrdfFile,
-} from "@/features/urdf/loader/urdfFileFactory";
+import { indexMeshResources } from "@/features/urdf/loader/urdfMeshIndex";
+import { createLoadedUrdfFile } from "@/features/urdf/loader/urdfFileFactory";
 import { analyzeLoadedUrdfContent } from "@/features/urdf/loader/loadedUrdfAnalysis";
 import {
   buildPackageRootsFromFiles,
   getBasePathFromRelativePath,
   readUrdfDocumentsFromFiles,
 } from "@/features/urdf/loader/urdfLoaderFiles";
+import { resolveFolderUrdfSource } from "@/features/urdf/loader/urdfFolderSource";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
@@ -260,74 +245,16 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         setPackageRoots({});
 
         const allFiles = Array.from(fileList);
-        const urdfFiles = allFiles.filter((file) => file.name.toLowerCase().endsWith(".urdf"));
-        const xacroFiles = allFiles.filter((file) => isXacroPath(file.name));
-
-        if (urdfFiles.length === 0 && xacroFiles.length === 0) {
-          throw new Error("No URDF or Xacro file found in selected folder");
-        }
-
-        if (urdfFiles.length > 1) {
-          console.warn(
-            `Multiple URDF files found (${urdfFiles.length}), using only the first one: ${urdfFiles[0].name}`
-          );
-        }
-
-        if (urdfFiles.length === 0 && xacroFiles.length > 1) {
-          console.warn(
-            `Multiple Xacro files found (${xacroFiles.length}), using only the first one: ${xacroFiles[0].name}`
-          );
-        }
-
-        let urdfFile: File;
-        let originalContent = "";
-        let urdfFilename = DEFAULT_URDF_FILENAME;
-        let urdfRelativePath = "";
-        const nextUrdfDocuments: Record<string, string> = {};
-
-        if (urdfFiles.length > 0) {
-          const urdfEntries = await Promise.all(
-            urdfFiles.map(async (candidateFile) => {
-              const rawPath = getFileRelativePath(candidateFile);
-              const normalizedPath = normalizeMeshPathForMatch(rawPath) || candidateFile.name;
-              const content = await candidateFile.text();
-              return {
-                file: candidateFile,
-                path: normalizedPath,
-                content,
-              };
-            })
-          );
-          urdfEntries.forEach((entry) => {
-            nextUrdfDocuments[entry.path] = entry.content;
-          });
-          urdfFile = urdfEntries[0].file;
-          originalContent = urdfEntries[0].content;
-          urdfFilename = urdfFile.name;
-          urdfRelativePath = urdfEntries[0].path;
-        } else {
-          const xacroFile = xacroFiles[0];
-          const xacroRelativePath = getFileRelativePath(xacroFile);
-          const supportFiles = collectXacroSupportFiles(fileList);
-          try {
-            const { urdf } = await expandXacro(xacroRelativePath, supportFiles);
-            originalContent = urdf;
-          } catch (error) {
-            const message = error instanceof Error ? error.message : "Failed to expand xacro file";
-            throw new Error(message);
-          }
-          urdfRelativePath = normalizeExpandedUrdfPath(xacroRelativePath);
-          urdfFilename = normalizeExpandedUrdfPath(xacroFile.name);
-          const normalizedUrdfPath = normalizeMeshPathForMatch(urdfRelativePath) || urdfRelativePath;
-          nextUrdfDocuments[normalizedUrdfPath] = originalContent;
-          urdfRelativePath = normalizedUrdfPath;
-          urdfFile = createExpandedXacroUrdfFile({
-            content: originalContent,
-            filename: urdfFilename,
-            relativePath: urdfRelativePath,
-          });
+        const source = await resolveFolderUrdfSource(fileList);
+        source.warnings.forEach((warning) => {
+          console.warn(warning);
+        });
+        if (source.expandedFromXacro) {
           toast.info("Expanded Xacro to URDF");
         }
+        const originalContent = source.urdfContent;
+        const urdfFilename = source.filename;
+        const urdfRelativePath = source.relativePath;
         const resolvedBasePath = getBasePathFromRelativePath(urdfRelativePath);
         const packageRootsRecord = await buildPackageRootsFromFiles(allFiles);
 
@@ -360,7 +287,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
           packageRoots: packageRootsRecord,
           sensors: analysis.sensors,
           urdfContent: originalContent,
-          urdfDocuments: nextUrdfDocuments,
+          urdfDocuments: source.urdfDocuments,
           validationError,
         });
 
