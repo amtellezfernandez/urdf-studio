@@ -64,10 +64,10 @@ import {
   PhysicsQuickActionCard,
 } from "@/features/layout/page/HealthActionPanelPhysicsActions";
 import {
+  buildPhysicsPanelActionLookup,
+  buildPhysicsPanelActionRowViewStates,
   buildPhysicsPanelActions,
-  getPhysicsActionButtonLabel,
-  getPhysicsActionStatus,
-  PHYSICS_ACTION_STATUS_LABELS,
+  findPhysicsPanelActionRowViewState,
   type PhysicsActionMaterialSelection,
   type PhysicsPanelAction,
   type PhysicsPanelActionKey,
@@ -498,17 +498,6 @@ export const HealthActionPanel = ({
   const showPhysicsActionButton =
     !physicsAuditSummary || physicsPanelActions.length > 0;
   const showInlinePhysicsActions = Boolean(physicsAuditSummary) && physicsPanelActions.length > 0;
-  const physicsActionByKey = Object.fromEntries(
-    physicsPanelActions.map((action) => [action.key, action])
-  ) as Partial<Record<PhysicsPanelActionKey, PhysicsPanelAction>>;
-  const voxelRecoveryAction = physicsPanelActions.find((action) => action.key === "voxel-recovery");
-  const regularizeAction = physicsPanelActions.find((action) => action.key === "psd-regularize");
-  const voxelRecoveryStatus = voxelRecoveryAction
-    ? getPhysicsActionStatus(physicsActionStatusByKey, voxelRecoveryAction.key)
-    : "idle";
-  const regularizeStatus = regularizeAction
-    ? getPhysicsActionStatus(physicsActionStatusByKey, regularizeAction.key)
-    : "idle";
   const hasPendingPhysicsAction = hasSimulationPrepPhysicsActionPending(physicsActionStatusByKey ?? {});
   const isAnySimulationPrepFixBusy =
     isSimulationPrepFixBusy ||
@@ -516,6 +505,22 @@ export const HealthActionPanel = ({
     repeatedInertiaActingGroupKey !== null ||
     repeatedInertiaSymmetryActingChainKey !== null ||
     isRobotMirrorActing;
+  const physicsActionByKey = buildPhysicsPanelActionLookup(physicsPanelActions);
+  const physicsPanelActionRows = buildPhysicsPanelActionRowViewStates({
+    actions: physicsPanelActions,
+    armedActionKey: armedPhysicsActionKey,
+    isAnySimulationPrepFixBusy,
+    selectedMaterials: selectedPhysicsMaterials,
+    statusByKey: physicsActionStatusByKey,
+  });
+  const voxelRecoveryActionRow = findPhysicsPanelActionRowViewState(
+    physicsPanelActionRows,
+    "voxel-recovery"
+  );
+  const regularizeActionRow = findPhysicsPanelActionRowViewState(
+    physicsPanelActionRows,
+    "psd-regularize"
+  );
   const handleSelectPhysicsMaterial = (
     actionKey: PhysicsPanelActionKey,
     materialId: InertialDensityPresetId
@@ -527,7 +532,8 @@ export const HealthActionPanel = ({
     setArmedPhysicsActionKey(actionKey);
 
     const action = physicsActionByKey[actionKey];
-    const actionStatus = getPhysicsActionStatus(physicsActionStatusByKey, actionKey);
+    const actionStatus =
+      findPhysicsPanelActionRowViewState(physicsPanelActionRows, actionKey)?.status ?? "idle";
     if (!action || actionStatus !== "idle") {
       return;
     }
@@ -1387,15 +1393,15 @@ export const HealthActionPanel = ({
                           {geometryDiagnosis.reasonSummaryText}
                         </span>
                       </div>
-                      {voxelRecoveryAction || regularizeAction ? (
+                      {voxelRecoveryActionRow || regularizeActionRow ? (
                         <div className="space-y-1.5">
-                          {voxelRecoveryAction ? (
+                          {voxelRecoveryActionRow ? (
                             <PhysicsQuickActionCard
-                              action={voxelRecoveryAction}
-                              status={voxelRecoveryStatus}
-                              isArmed={armedPhysicsActionKey === voxelRecoveryAction.key}
-                              selectedMaterial={selectedPhysicsMaterials[voxelRecoveryAction.key] ?? null}
-                              disabled={isAnySimulationPrepFixBusy}
+                              action={voxelRecoveryActionRow.action}
+                              status={voxelRecoveryActionRow.status}
+                              isArmed={voxelRecoveryActionRow.isArmed}
+                              selectedMaterial={voxelRecoveryActionRow.selectedMaterial}
+                              disabled={voxelRecoveryActionRow.disabled}
                               onRun={(action, disabled) =>
                                 handleRunPhysicsAction({
                                   action,
@@ -1405,13 +1411,13 @@ export const HealthActionPanel = ({
                               onSelect={handleSelectPhysicsMaterial}
                             />
                           ) : null}
-                          {regularizeAction ? (
+                          {regularizeActionRow ? (
                             <PhysicsQuickActionCard
-                              action={regularizeAction}
-                              status={regularizeStatus}
-                              isArmed={armedPhysicsActionKey === regularizeAction.key}
-                              selectedMaterial={selectedPhysicsMaterials[regularizeAction.key] ?? null}
-                              disabled={isAnySimulationPrepFixBusy}
+                              action={regularizeActionRow.action}
+                              status={regularizeActionRow.status}
+                              isArmed={regularizeActionRow.isArmed}
+                              selectedMaterial={regularizeActionRow.selectedMaterial}
+                              disabled={regularizeActionRow.disabled}
                               onRun={(action, disabled) =>
                                 handleRunPhysicsAction({
                                   action,
@@ -1509,60 +1515,48 @@ export const HealthActionPanel = ({
             {physicsPlausibilitySummary?.excludedLinks.length ? null : showInlinePhysicsActions ? (
               <div className={PHYSICS_SECTION_CARD_CLASS}>
                 <div className="space-y-1.5">
-                  {physicsPanelActions.map((action) => {
-                    const actionStatus = getPhysicsActionStatus(physicsActionStatusByKey, action.key);
-                    const isArmed = armedPhysicsActionKey === action.key;
-                    const selectedMaterial = selectedPhysicsMaterials[action.key] ?? null;
-                    const actionDisabled =
-                      !action.available ||
-                      actionStatus !== "idle" ||
-                      hasPendingPhysicsAction ||
-                      isAnySimulationPrepFixBusy;
+                  {physicsPanelActionRows.map((rowState) => {
+                    const { action } = rowState;
                     return (
                       <div
-                        key={`button-${action.key}`}
+                        key={`button-${rowState.key}`}
                         className="rounded border border-border/60 bg-background/40 p-2 text-[11px]"
-                        aria-busy={actionStatus === "running"}
+                        aria-busy={rowState.isRunning}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="font-medium text-foreground">{action.title}</div>
                             <div className="mt-0.5 text-muted-foreground">{action.description}</div>
                           </div>
-                          {actionStatus === "running" ? (
+                          {rowState.runningLabel ? (
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                              <span>{PHYSICS_ACTION_STATUS_LABELS[action.key].running}</span>
+                              <span>{rowState.runningLabel}</span>
                             </div>
                           ) : null}
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 shrink-0 border-border/50 bg-transparent px-2.5 text-[10px] font-normal text-muted-foreground hover:text-foreground"
-                            disabled={actionDisabled}
+                            disabled={rowState.disabled}
                             aria-label={action.title}
                             onClick={() => {
                               handleRunPhysicsAction({
                                 action,
-                                disabled: actionDisabled,
+                                disabled: rowState.disabled,
                               });
                             }}
                           >
-                            {getPhysicsActionButtonLabel({
-                              action,
-                              status: actionStatus,
-                              isArmed,
-                              hasSelectedMaterial: selectedMaterial !== null,
-                            })}
+                            {rowState.buttonLabel}
                           </Button>
                         </div>
-                        {action.available && isArmed ? (
+                        {rowState.showMaterialPicker ? (
                           <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
                             <div className="text-[10px] text-muted-foreground">Choose a material to continue.</div>
                             <PhysicsMaterialPicker
                               actionKey={action.key}
-                              selectedMaterial={selectedMaterial}
-                              disabled={actionDisabled}
+                              selectedMaterial={rowState.selectedMaterial}
+                              disabled={rowState.disabled}
                               onSelect={handleSelectPhysicsMaterial}
                             />
                           </div>

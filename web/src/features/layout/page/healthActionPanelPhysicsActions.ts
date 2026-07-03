@@ -140,3 +140,66 @@ export const buildPhysicsPanelActions = ({
   }
   return actions;
 };
+
+export type PhysicsPanelActionRowViewState = {
+  action: PhysicsPanelAction;
+  buttonLabel: string;
+  disabled: boolean;
+  isArmed: boolean;
+  isRunning: boolean;
+  key: PhysicsPanelActionKey;
+  runningLabel: string | null;
+  selectedMaterial: InertialDensityPresetId | null;
+  showMaterialPicker: boolean;
+  status: SimulationPrepPhysicsActionStatus;
+};
+
+export const buildPhysicsPanelActionLookup = (
+  actions: readonly PhysicsPanelAction[]
+): Partial<Record<PhysicsPanelActionKey, PhysicsPanelAction>> =>
+  Object.fromEntries(actions.map((action) => [action.key, action])) as Partial<
+    Record<PhysicsPanelActionKey, PhysicsPanelAction>
+  >;
+
+export const buildPhysicsPanelActionRowViewStates = ({
+  actions,
+  armedActionKey,
+  isAnySimulationPrepFixBusy,
+  selectedMaterials,
+  statusByKey,
+}: {
+  actions: readonly PhysicsPanelAction[];
+  armedActionKey: PhysicsPanelActionKey | null;
+  isAnySimulationPrepFixBusy: boolean;
+  selectedMaterials: PhysicsActionMaterialSelection;
+  statusByKey: HealthActionPanelProps["physicsActionStatusByKey"];
+}): PhysicsPanelActionRowViewState[] =>
+  actions.map((action) => {
+    const status = getPhysicsActionStatus(statusByKey, action.key);
+    const isArmed = armedActionKey === action.key;
+    const selectedMaterial = selectedMaterials[action.key] ?? null;
+    const disabled = !action.available || status !== "idle" || isAnySimulationPrepFixBusy;
+    return {
+      action,
+      buttonLabel: getPhysicsActionButtonLabel({
+        action,
+        hasSelectedMaterial: selectedMaterial !== null,
+        isArmed,
+        status,
+      }),
+      disabled,
+      isArmed,
+      isRunning: status === "running",
+      key: action.key,
+      runningLabel: status === "running" ? PHYSICS_ACTION_STATUS_LABELS[action.key].running : null,
+      selectedMaterial,
+      showMaterialPicker: action.available && isArmed,
+      status,
+    };
+  });
+
+export const findPhysicsPanelActionRowViewState = (
+  rows: readonly PhysicsPanelActionRowViewState[],
+  actionKey: PhysicsPanelActionKey
+): PhysicsPanelActionRowViewState | null =>
+  rows.find((row) => row.key === actionKey) ?? null;
