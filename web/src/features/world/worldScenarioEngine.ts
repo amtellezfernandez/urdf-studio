@@ -195,18 +195,22 @@ export const buildWorldScenarioTimeline = (
     WORLD_SCENARIO_DURATION_MS,
     events[events.length - 1]?.endMs ?? 0
   );
-  const baseKeyOrder = staticWorld.objects.map((obj) => obj.key);
-  const baseIndexByKey = new Map(baseKeyOrder.map((key, idx) => [key, idx]));
+  const baseKeyOrder = staticWorld.objects.map((scenarioObject) => scenarioObject.key);
+  const baseIndexByKey = new Map(
+    baseKeyOrder.map((key, objectIndex) => [key, objectIndex])
+  );
 
   const sampleAt = (clockMs: number): WorldScenarioSnapshot => {
     const scenarioTime = normalizeScenarioTime(clockMs, durationMs);
-    const objects = staticWorld.objects.map((obj) => cloneObjectSpec(obj.spec));
+    const objects = staticWorld.objects.map((scenarioObject) =>
+      cloneObjectSpec(scenarioObject.spec)
+    );
     const targetPosition = staticWorld.baseTargetPosition.clone();
     const activeEventIds: string[] = [];
     const objectByKey = (key: string) => {
-      const idx = baseIndexByKey.get(key);
-      if (idx === undefined) return null;
-      return objects[idx] ?? null;
+      const objectIndex = baseIndexByKey.get(key);
+      if (objectIndex === undefined) return null;
+      return objects[objectIndex] ?? null;
     };
 
     const targetScan = eventById.get("target-scan");

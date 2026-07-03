@@ -23,12 +23,12 @@ describe("buildWorldScenarioLayout", () => {
     const second = buildWorldScenarioLayout({ ...params, seed: 42 });
 
     expect(first.objects).toHaveLength(second.objects.length);
-    first.objects.forEach((obj, idx) => {
-      const other = second.objects[idx];
-      expect(other?.type).toBe(obj.type);
-      expect(other?.color).toBe(obj.color);
-      expect(other?.position.toArray()).toEqual(obj.position.toArray());
-      expect(other?.size.toArray()).toEqual(obj.size.toArray());
+    first.objects.forEach((scenarioObject, objectIndex) => {
+      const other = second.objects[objectIndex];
+      expect(other?.type).toBe(scenarioObject.type);
+      expect(other?.color).toBe(scenarioObject.color);
+      expect(other?.position.toArray()).toEqual(scenarioObject.position.toArray());
+      expect(other?.size.toArray()).toEqual(scenarioObject.size.toArray());
     });
     expect(first.targetPosition.toArray()).toEqual(second.targetPosition.toArray());
   });
@@ -37,10 +37,10 @@ describe("buildWorldScenarioLayout", () => {
     const first = buildWorldScenarioLayout({ ...params, seed: 42 });
     const second = buildWorldScenarioLayout({ ...params, seed: 43 });
 
-    const hasDifference = first.objects.some((obj, idx) => {
-      const other = second.objects[idx];
+    const hasDifference = first.objects.some((scenarioObject, objectIndex) => {
+      const other = second.objects[objectIndex];
       if (!other) return true;
-      return !obj.position.equals(other.position);
+      return !scenarioObject.position.equals(other.position);
     });
 
     expect(hasDifference).toBe(true);
@@ -54,9 +54,9 @@ describe("buildWorldScenarioLayout", () => {
         WORLD_SCENARIO_LAYOUT_PARAMS.keepOut.extraPadding
     );
 
-    layout.objects.forEach((obj) => {
-      const dx = obj.position.x - params.baseCenter.x;
-      const dy = obj.position.y - params.baseCenter.y;
+    layout.objects.forEach((scenarioObject) => {
+      const dx = scenarioObject.position.x - params.baseCenter.x;
+      const dy = scenarioObject.position.y - params.baseCenter.y;
       const planar = Math.hypot(dx, dy);
       expect(planar).toBeGreaterThanOrEqual(
         minPlanarDistance - WORLD_SCENARIO_NUMERIC_TOLERANCES.assertionMargin
@@ -66,15 +66,15 @@ describe("buildWorldScenarioLayout", () => {
 
   it("marks generated objects as world-scenario objects", () => {
     const layout = buildWorldScenarioLayout({ ...params, seed: 7 });
-    layout.objects.forEach((obj) => {
-      expect(obj.source).toBe(WORLD_SCENARIO_SOURCES.current);
+    layout.objects.forEach((scenarioObject) => {
+      expect(scenarioObject.source).toBe(WORLD_SCENARIO_SOURCES.current);
     });
   });
 
   it("keeps generated objects above the floor plane", () => {
     const layout = buildWorldScenarioLayout({ ...params, seed: 99 });
-    layout.objects.forEach((obj) => {
-      const minZ = obj.position.z - obj.size.z * 0.5;
+    layout.objects.forEach((scenarioObject) => {
+      const minZ = scenarioObject.position.z - scenarioObject.size.z * 0.5;
       expect(minZ).toBeGreaterThanOrEqual(
         params.baseZ - WORLD_SCENARIO_NUMERIC_TOLERANCES.assertionMargin
       );
