@@ -4,6 +4,8 @@ import {
   buildOverviewExtraNotes,
   buildOverviewLabelValueRows,
   buildPanelSubtitle,
+  buildPhysicsActionLabel,
+  buildPhysicsActionSummary,
   buildPlausibilityHeading,
 } from "@/features/layout/page/healthActionPanelOverview";
 import type { HealthActionPanelProps } from "@/features/layout/page/healthActionPanelTypes";
@@ -93,6 +95,52 @@ describe("healthActionPanelOverview", () => {
         skippedLinkCount: 3,
       })
     ).toBe("3 links were skipped in check. 2 passed voxel recovery precheck and 1 can use PSD regularization.");
+  });
+
+  it("summarizes the primary physics action state", () => {
+    expect(
+      buildPhysicsActionSummary({
+        onOpenGeneratePhysicsDialog: () => undefined,
+        physicsPreflightLoading: true,
+        physicsAuditSummary: null,
+        voxelRecoveryCount: 0,
+        nearMissCount: 0,
+      })
+    ).toEqual({
+      disabled: true,
+      summary: "Analyzing physics now. Wait for the audit before clicking.",
+    });
+    expect(
+      buildPhysicsActionSummary({
+        onOpenGeneratePhysicsDialog: () => undefined,
+        physicsPreflightLoading: false,
+        physicsAuditSummary: createAudit({ repairableLinkCount: 2 }),
+        voxelRecoveryCount: 0,
+        nearMissCount: 0,
+      })
+    ).toEqual({
+      disabled: false,
+      summary: "Repair 2 missing or invalid inertial links.",
+    });
+  });
+
+  it("labels the primary physics action from the best available repair path", () => {
+    expect(
+      buildPhysicsActionLabel({
+        physicsPreflightLoading: false,
+        physicsAuditSummary: null,
+        voxelRecoveryCount: 0,
+        nearMissCount: 0,
+      })
+    ).toBe("Run physics check");
+    expect(
+      buildPhysicsActionLabel({
+        physicsPreflightLoading: false,
+        physicsAuditSummary: createAudit({ repairableLinkCount: 0 }),
+        voxelRecoveryCount: 3,
+        nearMissCount: 1,
+      })
+    ).toBe("Recover 3 prechecked skipped inertial links");
   });
 
   it("builds compact overview rows with plausibility details", () => {

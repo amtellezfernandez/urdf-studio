@@ -53,6 +53,8 @@ import {
   buildOverviewExtraNotes,
   buildOverviewLabelValueRows,
   buildPanelSubtitle,
+  buildPhysicsActionLabel,
+  buildPhysicsActionSummary,
 } from "@/features/layout/page/healthActionPanelOverview";
 import {
   buildExcludedLinkGroups,
@@ -149,74 +151,6 @@ const STATUS_ICON = {
 } as const;
 
 const PHYSICS_SECTION_CARD_CLASS = HEALTH_ACTION_CLASS_NAMES.physicsSectionCard;
-
-const buildPhysicsActionSummary = ({
-  onOpenGeneratePhysicsDialog,
-  physicsPreflightLoading,
-  physicsAuditSummary,
-  voxelRecoveryCount,
-  nearMissCount,
-}: {
-  onOpenGeneratePhysicsDialog?: () => void | Promise<void>;
-  physicsPreflightLoading: boolean;
-  physicsAuditSummary: HealthActionPanelProps["physicsAuditSummary"];
-  voxelRecoveryCount: number;
-  nearMissCount: number;
-}): { summary: string; disabled: boolean } => {
-  if (onOpenGeneratePhysicsDialog && !physicsAuditSummary) {
-    return {
-      summary: physicsPreflightLoading
-        ? "Analyzing physics now. Wait for the audit before clicking."
-        : "Run the physics check before repairing masses.",
-      disabled: physicsPreflightLoading,
-    };
-  }
-  if (physicsAuditSummary && physicsAuditSummary.repairableLinkCount > 0 && onOpenGeneratePhysicsDialog) {
-    return {
-      summary: `Repair ${physicsAuditSummary.repairableLinkCount} missing or invalid inertial link${physicsAuditSummary.repairableLinkCount === 1 ? "" : "s"}.`,
-      disabled: false,
-    };
-  }
-  if (voxelRecoveryCount > 0 && onOpenGeneratePhysicsDialog) {
-    return {
-      summary:
-        nearMissCount > 0
-          ? `${voxelRecoveryCount} skipped link${voxelRecoveryCount === 1 ? "" : "s"} passed voxel precheck. ${nearMissCount} near-miss link${nearMissCount === 1 ? "" : "s"} can use PSD regularization.`
-          : `${voxelRecoveryCount} skipped link${voxelRecoveryCount === 1 ? "" : "s"} passed voxel precheck.`,
-      disabled: false,
-    };
-  }
-  return {
-    summary: "Physics check ready.",
-    disabled: false,
-  };
-};
-
-const buildPhysicsActionLabel = ({
-  physicsPreflightLoading,
-  physicsAuditSummary,
-  voxelRecoveryCount,
-  nearMissCount,
-}: {
-  physicsPreflightLoading: boolean;
-  physicsAuditSummary: HealthActionPanelProps["physicsAuditSummary"];
-  voxelRecoveryCount: number;
-  nearMissCount: number;
-}): string => {
-  if (!physicsAuditSummary) {
-    return physicsPreflightLoading ? "Analyzing physics check" : "Run physics check";
-  }
-  if (physicsAuditSummary.repairableLinkCount > 0) {
-    return `Recalculate ${physicsAuditSummary.repairableLinkCount} missing / invalid inertial link${physicsAuditSummary.repairableLinkCount === 1 ? "" : "s"}`;
-  }
-  if (voxelRecoveryCount > 0) {
-    return `Recover ${voxelRecoveryCount} prechecked skipped inertial link${voxelRecoveryCount === 1 ? "" : "s"}`;
-  }
-  if (nearMissCount > 0) {
-    return `Regularize ${nearMissCount} near-miss inertial link${nearMissCount === 1 ? "" : "s"}`;
-  }
-  return "Physics check complete";
-};
 
 const buildRecommendedAction = ({
   onRepairOrientation,

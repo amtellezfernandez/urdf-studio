@@ -81,6 +81,79 @@ export const buildGeneratePhysicsDialogDescription = ({
   return "No missing or invalid inertials were found.";
 };
 
+export type PhysicsActionSummary = {
+  disabled: boolean;
+  summary: string;
+};
+
+export const buildPhysicsActionSummary = ({
+  onOpenGeneratePhysicsDialog,
+  physicsPreflightLoading,
+  physicsAuditSummary,
+  voxelRecoveryCount,
+  nearMissCount,
+}: {
+  onOpenGeneratePhysicsDialog?: () => void | Promise<void>;
+  physicsPreflightLoading: boolean;
+  physicsAuditSummary: HealthActionPanelProps["physicsAuditSummary"];
+  voxelRecoveryCount: number;
+  nearMissCount: number;
+}): PhysicsActionSummary => {
+  if (onOpenGeneratePhysicsDialog && !physicsAuditSummary) {
+    return {
+      summary: physicsPreflightLoading
+        ? "Analyzing physics now. Wait for the audit before clicking."
+        : "Run the physics check before repairing masses.",
+      disabled: physicsPreflightLoading,
+    };
+  }
+  if (physicsAuditSummary && physicsAuditSummary.repairableLinkCount > 0 && onOpenGeneratePhysicsDialog) {
+    return {
+      summary: `Repair ${physicsAuditSummary.repairableLinkCount} missing or invalid inertial link${physicsAuditSummary.repairableLinkCount === 1 ? "" : "s"}.`,
+      disabled: false,
+    };
+  }
+  if (voxelRecoveryCount > 0 && onOpenGeneratePhysicsDialog) {
+    return {
+      summary:
+        nearMissCount > 0
+          ? `${voxelRecoveryCount} skipped link${voxelRecoveryCount === 1 ? "" : "s"} passed voxel precheck. ${nearMissCount} near-miss link${nearMissCount === 1 ? "" : "s"} can use PSD regularization.`
+          : `${voxelRecoveryCount} skipped link${voxelRecoveryCount === 1 ? "" : "s"} passed voxel precheck.`,
+      disabled: false,
+    };
+  }
+  return {
+    summary: "Physics check ready.",
+    disabled: false,
+  };
+};
+
+export const buildPhysicsActionLabel = ({
+  physicsPreflightLoading,
+  physicsAuditSummary,
+  voxelRecoveryCount,
+  nearMissCount,
+}: {
+  physicsPreflightLoading: boolean;
+  physicsAuditSummary: HealthActionPanelProps["physicsAuditSummary"];
+  voxelRecoveryCount: number;
+  nearMissCount: number;
+}): string => {
+  if (!physicsAuditSummary) {
+    return physicsPreflightLoading ? "Analyzing physics check" : "Run physics check";
+  }
+  if (physicsAuditSummary.repairableLinkCount > 0) {
+    return `Recalculate ${physicsAuditSummary.repairableLinkCount} missing / invalid inertial link${physicsAuditSummary.repairableLinkCount === 1 ? "" : "s"}`;
+  }
+  if (voxelRecoveryCount > 0) {
+    return `Recover ${voxelRecoveryCount} prechecked skipped inertial link${voxelRecoveryCount === 1 ? "" : "s"}`;
+  }
+  if (nearMissCount > 0) {
+    return `Regularize ${nearMissCount} near-miss inertial link${nearMissCount === 1 ? "" : "s"}`;
+  }
+  return "Physics check complete";
+};
+
 export const buildOverviewLabelValueRows = ({
   statusLabel,
   physicsIssueSummary,
