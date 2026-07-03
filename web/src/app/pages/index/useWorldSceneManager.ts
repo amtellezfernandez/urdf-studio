@@ -9,7 +9,6 @@ import type { Camera } from "@/shared/types/camera";
 import { shouldAutoImportDefaultWorldLayout } from "@/features/world-share/defaultSceneAutoLoadPolicy";
 import {
   WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE,
-  WORLD_SCENE_PACKAGE_DEFAULT_VERSION,
 } from "@/features/world-share/worldScenePackageParams";
 import {
   WORLD_ROLLOUT_IMPORT_ACCEPT,
@@ -32,10 +31,13 @@ import {
   readWorldLayoutBridgeRequest,
 } from "@/app/pages/index/worldSceneManagerBridge";
 import {
-  DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
   WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
   createDefaultWorldPublishDraft,
+  prepareWorldPublishManifestOverrides,
+  toWorldPublishFailureMessage,
   toWorldRegistryRecordKey,
+  toWorldPublishSuccessLabel,
+  toWorldPublishTargetLabel,
   type WorldPublishTarget,
 } from "@/app/pages/index/indexPageHelpers";
 import type { WorldImportParams } from "@/app/pages/index/useIndexPageParams";
@@ -329,15 +331,14 @@ export const useWorldSceneManager = ({
   }, [openWorldPublishDialog]);
 
   const handleSubmitWorldPublishDialog = useCallback(async () => {
-    const packageId = worldPublishDraft.packageId.trim();
-    if (!packageId) {
-      toast.error("Package ID is required");
+    const publishDraftPreparation = prepareWorldPublishManifestOverrides({
+      draft: worldPublishDraft,
+      resolvedRobotName,
+    });
+    if (publishDraftPreparation.ok === false) {
+      toast.error(publishDraftPreparation.errorMessage);
       return;
     }
-    const version = worldPublishDraft.version.trim() || WORLD_SCENE_PACKAGE_DEFAULT_VERSION;
-    const title =
-      worldPublishDraft.title.trim() || resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE;
-    const description = worldPublishDraft.description.trim() || undefined;
 
     setIsPublishingWorldPackage(true);
     try {
@@ -346,14 +347,11 @@ export const useWorldSceneManager = ({
       } else {
         requireFeatureGate(FEATURE_GATES.worldsRegistry, "World package publish");
       }
-      const manifest = await buildCurrentWorldScenePackageManifest({
-        package_id: packageId,
-        version,
-        title,
-        description,
-      });
+      const manifest = await buildCurrentWorldScenePackageManifest(
+        publishDraftPreparation.manifestOverrides
+      );
       const publish = await publishWorldScenePackage(manifest, worldPublishTarget);
-      const destinationLabel = worldPublishTarget === "hub" ? "Published to URDF Star" : "Published";
+      const destinationLabel = toWorldPublishSuccessLabel(worldPublishTarget);
       toast.success(
         `${destinationLabel} ${publish.package_id}@${publish.version} (${publish.digest_sha256.slice(0, 12)}...)`
       );
@@ -362,9 +360,7 @@ export const useWorldSceneManager = ({
       toast.error(
         error instanceof Error
           ? error.message
-          : worldPublishTarget === "hub"
-            ? "Failed to publish to URDF Star"
-            : "Failed to publish world package"
+          : toWorldPublishFailureMessage(worldPublishTarget)
       );
     } finally {
       setIsPublishingWorldPackage(false);
@@ -768,8 +764,7 @@ export const useWorldSceneManager = ({
     setWorldPublishDraft,
     setWorldRegistryFilterText,
     setWorldRegistryOpen,
-    publishTargetLabel:
-      worldPublishTarget === "hub" ? "URDF Star Hub" : "World Registry",
+    publishTargetLabel: toWorldPublishTargetLabel(worldPublishTarget),
     worldLayoutImportDialogOpen,
     worldLayoutImportUrlDraft,
     worldPublishDialogOpen,

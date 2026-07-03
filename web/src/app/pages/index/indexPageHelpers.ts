@@ -21,6 +21,23 @@ const MAX_RECENT_WORLD_LAYOUT_LINKS = INDEX_PAGE_HELPER_PARAMS.maxRecentWorldLay
 
 export type WorldPublishTarget = "registry" | "hub";
 
+export type WorldPublishManifestOverrides = {
+  package_id: string;
+  version: string;
+  title: string;
+  description?: string;
+};
+
+export type WorldPublishDraftPreparation =
+  | {
+      ok: true;
+      manifestOverrides: WorldPublishManifestOverrides;
+    }
+  | {
+      ok: false;
+      errorMessage: string;
+    };
+
 export const createDefaultWorldPublishDraft = (
   robotName: string | null
 ): WorldScenePublishDraft => ({
@@ -29,6 +46,46 @@ export const createDefaultWorldPublishDraft = (
   title: robotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
   description: "",
 });
+
+export const prepareWorldPublishManifestOverrides = ({
+  draft,
+  resolvedRobotName,
+}: {
+  draft: WorldScenePublishDraft;
+  resolvedRobotName: string | null;
+}): WorldPublishDraftPreparation => {
+  const packageId = draft.packageId.trim();
+  if (!packageId) {
+    return {
+      ok: false,
+      errorMessage: "Package ID is required",
+    };
+  }
+
+  const description = draft.description.trim();
+  const manifestOverrides: WorldPublishManifestOverrides = {
+    package_id: packageId,
+    version: draft.version.trim() || WORLD_SCENE_PACKAGE_DEFAULT_VERSION,
+    title: draft.title.trim() || resolvedRobotName || DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
+  };
+  if (description) {
+    manifestOverrides.description = description;
+  }
+
+  return {
+    ok: true,
+    manifestOverrides,
+  };
+};
+
+export const toWorldPublishTargetLabel = (target: WorldPublishTarget) =>
+  target === "hub" ? "URDF Star Hub" : "World Registry";
+
+export const toWorldPublishSuccessLabel = (target: WorldPublishTarget) =>
+  target === "hub" ? "Published to URDF Star" : "Published";
+
+export const toWorldPublishFailureMessage = (target: WorldPublishTarget) =>
+  target === "hub" ? "Failed to publish to URDF Star" : "Failed to publish world package";
 
 export const parseRobotNameFromUrdf = (urdfContent: string) => {
   const match = urdfContent.match(ROBOT_NAME_PATTERN);
