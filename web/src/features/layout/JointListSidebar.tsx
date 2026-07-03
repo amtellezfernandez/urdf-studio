@@ -11,7 +11,6 @@ import {
   Camera as CameraIcon,
   ChevronDown,
   ChevronRight,
-  GripVertical,
   X,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -52,7 +51,6 @@ import {
   buildMeshGroupedLinkSections,
   type LinkSidebarGroupingMode,
 } from "@/features/layout/linkSidebarGrouping";
-import { JointListItem } from "@/features/layout/JointListItem";
 import {
   TOP_NAV_HEIGHT,
   VIEWPORT_HEIGHT_WITH_TOP_NAV,
@@ -66,7 +64,6 @@ import { useStructureGroupEditor } from "@/features/layout/useStructureGroupEdit
 import {
   areStringSetsEqual,
   reconcileCollapsedSectionIds,
-  resolveVisibleSectionItemNames,
 } from "@/features/layout/structureSectionVisibility";
 import { resolveEffectiveEndEffectorLink } from "@/features/layout/endEffectorSelection";
 import {
@@ -80,7 +77,6 @@ import {
   JOINT_LIST_SIDEBAR_PARAMS,
 } from "@/features/layout/jointListSidebarParams";
 import { parseJointEffortLimits } from "@/features/layout/jointEffortLimits";
-import { StructureSectionShell } from "@/features/layout/StructureSectionShell";
 import { HierarchyTreeView } from "@/features/layout/HierarchyTreeView";
 import { WorldPanel } from "@/features/layout/WorldPanel";
 import { CameraEditorPanel } from "@/features/layout/CameraEditorPanel";
@@ -88,6 +84,7 @@ import { ObjectEditorPanel } from "@/features/layout/ObjectEditorPanel";
 import { LinkBatchEditorPanel } from "@/features/layout/LinkBatchEditorPanel";
 import { SidebarStructureControls } from "@/features/layout/SidebarStructureControls";
 import { LinkBrowserView } from "@/features/layout/LinkBrowserView";
+import { FlatJointBrowserView } from "@/features/layout/FlatJointBrowserView";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 
 const toggleStringSetValue = (previous: Set<string>, value: string) => {
@@ -1034,100 +1031,35 @@ export const JointListSidebar = ({
                 voxelDerivedInertialLinkSet={voxelDerivedInertialLinkSet}
               />
             ) : effectiveStructureViewMode === "flat" ? (
-              // Flat view
-              groupedJointsWithCustom.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-                  {searchQuery || typeFilter !== "all"
-                    ? "No joints match the filters"
-                    : "No joints available"}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {groupedJointsWithCustom.map((section) => {
-                    const isCollapsed = collapsedJointSectionIds.has(section.id);
-                    const visibleJointNames = resolveVisibleSectionItemNames({
-                      sectionItemNames: section.items,
-                      isSectionCollapsed: isCollapsed,
-                      activeItemNamesWhenCollapsed: activeMovingJointNames,
-                    });
-                    return (
-                    <StructureSectionShell
-                      key={section.id}
-                      sectionLabel={section.label}
-                      itemCount={section.items.length}
-                      canReassignStructureGroups={canReassignStructureGroups}
-                      isStructureDragActive={isStructureDragActive}
-                      activeStructureDropGroup={activeStructureDropGroup}
-                      onDragOver={handleStructureGroupDragOver}
-                      onDragLeave={handleStructureGroupDragLeave}
-                      onDrop={handleStructureGroupDrop}
-                      headerClassName="flex items-center justify-between gap-2 px-1 text-[9px] uppercase tracking-[0.06em] text-muted-foreground/75"
-                      renderHeaderContent={() => (
-                        <button
-                          type="button"
-                          className="flex min-w-0 items-center gap-1 text-left text-muted-foreground/85 hover:text-foreground"
-                          onClick={() => toggleJointSectionCollapse(section.id)}
-                          title={isCollapsed ? "Expand joint section" : "Collapse joint section"}
-                        >
-                          {isCollapsed ? (
-                            <ChevronRight className="h-3 w-3 shrink-0" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3 shrink-0" />
-                          )}
-                          <span className="truncate">{toGroupDisplayLabel(section.label)}</span>
-                        </button>
-                      )}
-                    >
-                      {visibleJointNames.map((jointName) => (
-                          <div
-                            key={jointName}
-                            draggable={canReassignStructureGroups}
-                            onDragStart={(event) =>
-                              handleStructureDragStart(event, {
-                                sourceType: "joint",
-                                sourceName: jointName,
-                                sourceGroupLabel: section.label,
-                              })
-                            }
-                            onDragEnd={handleStructureDragEnd}
-                            className={cn(canReassignStructureGroups && "cursor-grab active:cursor-grabbing")}
-                          >
-                            <div className="flex items-center gap-1">
-                              {canReassignStructureGroups ? (
-                                <span
-                                  className="inline-flex items-center px-1 text-muted-foreground/50"
-                                  title="Drag to move joint to another group"
-                                >
-                                  <GripVertical className="h-3 w-3" />
-                                </span>
-                              ) : null}
-                              <div className="min-w-0 flex-1">
-                                <JointListItem
-                                  jointName={jointName}
-                                  jointInfo={jointLimits[jointName]}
-                                  effortLimit={jointEffortLimits[jointName] ?? null}
-                                  onValueChange={() => {}} // Read-only
-                                  isDeleted={deletedJoints.has(jointName)}
-                                  isSelected={selectedJoint === jointName}
-                                  isHighlighted={hoveredJoint === jointName}
-                                  angleUnit={angleUnit}
-                                  onClick={() => selectSidebarJoint(jointName)}
-                                  onHover={onJointHover}
-                                  availableJoints={availableJoints}
-                                  colorJointNames={colorJointNames}
-                                  isVisible={visibleJoints.has(jointName)}
-                                  onVisibilityToggle={handleVisibilityToggle}
-                                  groupLabel={structureLabels.jointByName[jointName] ?? section.label ?? null}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </StructureSectionShell>
-                    );
-                  })}
-                </div>
-              )
+              <FlatJointBrowserView
+                activeMovingJointNames={activeMovingJointNames}
+                activeStructureDropGroup={activeStructureDropGroup}
+                angleUnit={angleUnit}
+                availableJoints={availableJoints}
+                canReassignStructureGroups={canReassignStructureGroups}
+                colorJointNames={colorJointNames}
+                collapsedJointSectionIds={collapsedJointSectionIds}
+                deletedJoints={deletedJoints}
+                groupedJointsWithCustom={groupedJointsWithCustom}
+                hoveredJoint={hoveredJoint}
+                isStructureDragActive={isStructureDragActive}
+                jointEffortLimits={jointEffortLimits}
+                jointLimits={jointLimits}
+                onJointHover={onJointHover}
+                onJointSelect={selectSidebarJoint}
+                onStructureDragEnd={handleStructureDragEnd}
+                onStructureDragStart={handleStructureDragStart}
+                onStructureGroupDragLeave={handleStructureGroupDragLeave}
+                onStructureGroupDragOver={handleStructureGroupDragOver}
+                onStructureGroupDrop={handleStructureGroupDrop}
+                onToggleJointSectionCollapse={toggleJointSectionCollapse}
+                onVisibilityToggle={handleVisibilityToggle}
+                searchQuery={searchQuery}
+                selectedJoint={selectedJoint}
+                structureJointLabels={structureLabels.jointByName}
+                typeFilter={typeFilter}
+                visibleJoints={visibleJoints}
+              />
             ) : (
               // Hierarchical view
               !hierarchyTree || filteredHierarchyJoints.length === 0 ? (
