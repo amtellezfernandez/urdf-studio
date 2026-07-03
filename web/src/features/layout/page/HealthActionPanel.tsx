@@ -27,30 +27,15 @@ import {
 import {
   buildRobotMirrorSymmetryVisualizationScopeKey,
   buildRepeatedInertiaVisualizationScopeKey,
-  buildRepeatedInertiaSymmetryFamilyOutcomeKey,
   buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey,
   collectRepeatedInertiaSymmetryFamilyLinkNames,
 } from "@/features/layout/page/simulationPrepViewerState";
 import { hasSimulationPrepPhysicsActionPending } from "@/features/layout/page/simulationPrepState";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
-import {
-  buildRepeatedInertiaSymmetryChainKey,
-  type RepeatedInertiaSymmetryChain,
-} from "@/features/layout/page/repeatedInertiaSymmetry";
-import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
-import type { RobotMirrorLinkResult } from "@/features/layout/page/robotMirrorSymmetryFix";
+import { buildRepeatedInertiaSymmetryChainKey } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
-import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 import { resolveRobotMirrorSimulationPrepViewState } from "@/features/layout/page/robotMirrorSimulationPrepViewState";
-import {
-  REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS,
-  type RepeatedInertiaSymmetryCenterMode,
-} from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
-import {
-  REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_ANGLE_ERROR_DEGREES,
-  REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_LATERAL_OFFSET_METERS,
-  REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_OFFSET_METERS,
-} from "@/features/layout/page/repeatedInertiaSymmetryParams";
+import { REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import { cn } from "@/shared/lib/utils";
 import {
   INERTIA_METRIC_PROBLEMATIC_THRESHOLD,
@@ -60,7 +45,6 @@ import { TooltipProvider } from "@/shared/ui/tooltip";
 import { HEALTH_ACTION_PANEL_PARAMS } from "@/features/layout/page/healthActionPanelParams";
 import { HealthActionPanelHeader } from "@/features/layout/page/HealthActionPanelHeader";
 import type {
-  CompatibilityRobotMirrorSelectionGroup,
   HealthActionPanelProps,
   SimStatusTone,
 } from "@/features/layout/page/healthActionPanelTypes";
@@ -93,6 +77,34 @@ import {
   type PhysicsPanelAction,
   type PhysicsPanelActionKey,
 } from "@/features/layout/page/healthActionPanelPhysicsActions";
+import {
+  buildCompatibilityRobotMirrorSelectionState,
+  formatMirrorSelectionLinkCount,
+  formatRepeatedInertiaSymmetryAngle,
+  formatRepeatedInertiaSymmetryAngleComparison,
+  formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
+  formatRepeatedInertiaSymmetryBranchLinks,
+  formatRepeatedInertiaSymmetryBranchSummary,
+  formatRepeatedInertiaSymmetryCenterMode,
+  formatRepeatedInertiaSymmetryDistance,
+  formatRepeatedInertiaSymmetryHeadline,
+  formatRepeatedInertiaSymmetryLinkOffsets,
+  formatRepeatedInertiaSymmetryOffsetSummary,
+  formatRepeatedInertiaSymmetryRadiusComparison,
+  formatRepeatedInertiaSymmetryRepairMode,
+  formatRepeatedInertiaSymmetryStatus,
+  formatRepeatedInertiaSymmetryType,
+  formatRobotMirrorLinkResultMetrics,
+  formatRobotMirrorLinkResultReason,
+  formatRobotMirrorLinkResultSummary,
+  formatRobotMirrorPlaneLabel,
+  MIRROR_SELECTION_RADIAL_BADGE_CLASS,
+  resolveMirrorSelectionStatusBadge,
+  resolveRepeatedInertiaSymmetryOutcome,
+  resolveRepeatedInertiaSymmetryRowToneClass,
+  resolveRepeatedInertiaSymmetryStatusBadgeClass,
+  shouldIgnoreVisualizationCardClick,
+} from "@/features/layout/page/healthActionPanelSymmetry";
 
 type RecommendedAction = {
   kind: "frame";
@@ -238,407 +250,6 @@ const VISUALIZATION_TOGGLE_BUTTON_BASE_CLASS = HEALTH_ACTION_CLASS_NAMES.visuali
 const VISUALIZATION_TOGGLE_BUTTON_ACTIVE_CLASS = HEALTH_ACTION_CLASS_NAMES.visualizationToggleButtonActive;
 const VISUALIZATION_TOGGLE_BUTTON_INACTIVE_CLASS = HEALTH_ACTION_CLASS_NAMES.visualizationToggleButtonInactive;
 const VISUALIZATION_TOGGLE_ICON_CLASS = HEALTH_ACTION_CLASS_NAMES.visualizationToggleIcon;
-
-const formatRepeatedInertiaSymmetryHeadline = (
-  chains: readonly RepeatedInertiaSymmetryChain[]
-): string => {
-  if (chains.length === 1) {
-    const branchCount = chains[0]?.branchCount ?? 0;
-    return `[1] repeated branch family found (${branchCount} repeated branch${
-      branchCount === 1 ? "" : "es"
-    }).`;
-  }
-  return `[${chains.length}] repeated branch famil${chains.length === 1 ? "y" : "ies"} found.`;
-};
-
-const formatRepeatedInertiaSymmetryDistance = (meters: number): string =>
-  `${(meters * 1000).toFixed(1)} mm`;
-const RADIANS_TO_DEGREES = HEALTH_ACTION_PANEL_PARAMS.radiansToDegrees;
-
-const formatRobotMirrorPlaneLabel = (
-  planeLabel: RobotMirrorSymmetryCheck["planeLabel"]
-): string => `${planeLabel.toUpperCase()} plane`;
-
-const formatMirrorSelectionLinkCount = (linkCount: number): string =>
-  `${linkCount} link${linkCount === 1 ? "" : "s"}`;
-
-const MIRROR_SELECTION_STATUS_BADGE_BASE_CLASS = HEALTH_ACTION_CLASS_NAMES.mirrorSelectionStatusBadgeBase;
-const MIRROR_SELECTION_RADIAL_BADGE_CLASS = HEALTH_ACTION_CLASS_NAMES.mirrorSelectionRadialBadge;
-
-const resolveMirrorSelectionStatusBadge = (
-  selectionLink: RobotMirrorSelectionLink
-):
-  | {
-      className: string;
-      icon: typeof AlertTriangle;
-      label: string;
-    }
-  | null => {
-  if (selectionLink.status === "review") {
-    return {
-      className: `${MIRROR_SELECTION_STATUS_BADGE_BASE_CLASS} border-amber-400/30 bg-amber-500/10 text-amber-100`,
-      icon: AlertTriangle,
-      label: "attention",
-    };
-  }
-  return null;
-};
-
-const formatRobotMirrorAngle = (radians: number): string =>
-  `${(radians * RADIANS_TO_DEGREES).toFixed(1)}°`;
-
-const formatRobotMirrorLinkResultSummary = (linkResult: RobotMirrorLinkResult): string => {
-  if (linkResult.repairMode === "ignored") {
-    return "no auto target";
-  }
-  if (linkResult.repairMode === "unchanged") {
-    return "already aligned";
-  }
-  if (linkResult.repairMode === "orientation-only") {
-    return "orientation only";
-  }
-  if (linkResult.repairMode === "inertia-center-only") {
-    return "inertia center only";
-  }
-  if (linkResult.repairMode === "inertia-center-and-orientation") {
-    return "inertia center + orientation";
-  }
-  if (linkResult.repairMode === "position-and-orientation") {
-    return "position + orientation";
-  }
-  if (linkResult.orientationSkipReason === "rotation-too-large") {
-    return "position only, kept orientation";
-  }
-  if (linkResult.orientationSkipReason === "ambiguous-axis") {
-    return "position only, kept orientation";
-  }
-  return "position only";
-};
-
-const formatRobotMirrorLinkResultReason = (linkResult: RobotMirrorLinkResult): string | null => {
-  if (linkResult.orientationSkipReason === "rotation-too-large") {
-    return "large rotation would be risky";
-  }
-  if (linkResult.orientationSkipReason === "ambiguous-axis") {
-    return "plane-normal axis was ambiguous";
-  }
-  if (linkResult.orientationSkipReason === "no-automatic-target") {
-    return "selected, but no automatic mirror target was available";
-  }
-  return null;
-};
-
-const formatRobotMirrorLinkResultMetrics = (linkResult: RobotMirrorLinkResult): string => {
-  const parts = [`move ${formatRepeatedInertiaSymmetryDistance(linkResult.movedDistanceMeters)}`];
-  if (linkResult.finalResidualMeters !== null) {
-    parts.push(`res ${formatRepeatedInertiaSymmetryDistance(linkResult.finalResidualMeters)}`);
-  }
-  if (linkResult.repairMode !== "ignored") {
-    parts.push(`rot ${formatRobotMirrorAngle(linkResult.rotationAppliedRadians)}`);
-  }
-  if (
-    linkResult.inertialOriginMovedDistanceMeters !== undefined &&
-    linkResult.inertialOriginMovedDistanceMeters > 0
-  ) {
-    parts.push(`com ${formatRepeatedInertiaSymmetryDistance(linkResult.inertialOriginMovedDistanceMeters)}`);
-  }
-  if (linkResult.planeNormalResidualRadians !== null) {
-    parts.push(`axis ${formatRobotMirrorAngle(linkResult.planeNormalResidualRadians)}`);
-  }
-  return parts.join(" • ");
-};
-
-const shouldIgnoreVisualizationCardClick = (target: EventTarget | null): boolean =>
-  target instanceof Element &&
-  Boolean(target.closest("button, input, label, a, textarea, select, [role='checkbox']"));
-
-const buildCompatibilityRobotMirrorSelectionState = ({
-  robotMirrorSelectionGroups,
-  selectedRobotMirrorGroupKeys,
-}: {
-  robotMirrorSelectionGroups: readonly CompatibilityRobotMirrorSelectionGroup[];
-  selectedRobotMirrorGroupKeys: readonly string[];
-}): {
-  selectedLinkNames: string[];
-  selectionLinks: RobotMirrorSelectionLink[];
-} => {
-  const selectedGroupKeySet = new Set(selectedRobotMirrorGroupKeys);
-  const selectedLinkNameSet = new Set<string>();
-  const selectionLinks = robotMirrorSelectionGroups.flatMap((group) => {
-    const groupLinkNames = toSortedUniqueRobotMirrorLinkNames(group.linkNames ?? []);
-    const meshLabel = group.meshLabel?.trim() || group.groupKey;
-    const isSelected = selectedGroupKeySet.has(group.groupKey);
-    if (isSelected) {
-      groupLinkNames.forEach((linkName) => selectedLinkNameSet.add(linkName));
-    }
-    return groupLinkNames.map((linkName) => ({
-      counterpartLinkName: null,
-      defaultExclusionReason: null,
-      groupKey: group.groupKey,
-      groupLinkCount: groupLinkNames.length,
-      linkName,
-      meshLabel,
-      preselected: isSelected,
-      status: "available" as const,
-    } satisfies RobotMirrorSelectionLink));
-  });
-
-  return {
-    selectedLinkNames: Array.from(selectedLinkNameSet).sort((left, right) =>
-      left.localeCompare(right)
-    ),
-    selectionLinks,
-  };
-};
-
-const formatRepeatedInertiaSymmetryType = (
-  chain: Pick<
-    RepeatedInertiaSymmetryChain,
-    "branchCount" | "expectedAngleDegrees" | "symmetryType"
-  >
-): string => {
-  if (chain.symmetryType === "radial" && chain.expectedAngleDegrees !== null) {
-    return `${chain.branchCount} repeated branches on ${chain.branchCount} branch planes (${chain.expectedAngleDegrees.toFixed(1)}° spacing)`;
-  }
-  if (chain.symmetryType === "mirror" && chain.expectedAngleDegrees !== null) {
-    return `mirror symmetry (${chain.expectedAngleDegrees.toFixed(1)}° separation)`;
-  }
-  if (chain.symmetryType === "linear") {
-    return `${chain.branchCount}-branch linear symmetry`;
-  }
-  return `${chain.branchCount}-branch symmetry`;
-};
-
-const formatRepeatedInertiaSymmetryCenterMode = (
-  centerMode: RepeatedInertiaSymmetryCenterMode
-): string =>
-  REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS.find((option) => option.value === centerMode)
-    ?.label ?? centerMode;
-
-const formatRepeatedInertiaSymmetryAngle = (degrees: number): string =>
-  `${degrees.toFixed(1)}°`;
-
-const formatRepeatedInertiaSymmetryRadiusComparison = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  const actualDistance = formatRepeatedInertiaSymmetryDistance(row.radialDistanceMeters);
-  if (row.idealRadialDistanceMeters === null) {
-    return actualDistance;
-  }
-  return `${actualDistance} → ${formatRepeatedInertiaSymmetryDistance(row.idealRadialDistanceMeters)}`;
-};
-
-const formatRepeatedInertiaSymmetryAngleComparison = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  const actualAngle = formatRepeatedInertiaSymmetryAngle(row.angleDegrees);
-  if (row.idealAngleDegrees === null) {
-    return actualAngle;
-  }
-  return `${actualAngle} → ${formatRepeatedInertiaSymmetryAngle(row.idealAngleDegrees)}`;
-};
-
-const formatRepeatedInertiaSymmetryLinkOffsets = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  const linkRows = Array.isArray(row.linkRows) ? row.linkRows : [];
-  if (linkRows.length === 0) {
-    return "No tracked link offsets.";
-  }
-  return linkRows
-    .map(
-      (linkRow) =>
-        `${linkRow.linkName} ${formatRepeatedInertiaSymmetryDistance(linkRow.offsetDistanceMeters ?? 0)}${
-          linkRow.radialOffsetMeters !== null || linkRow.lateralOffsetMeters !== null
-            ? ` (rad ${formatRepeatedInertiaSymmetrySignedDistance(linkRow.radialOffsetMeters)} • lat ${formatRepeatedInertiaSymmetryDistance(linkRow.lateralOffsetMeters ?? 0)})`
-            : ""
-        }`
-    )
-    .join(" • ");
-};
-
-const formatRepeatedInertiaSymmetrySignedDistance = (
-  meters: number | null
-): string => {
-  if (meters === null) {
-    return "n/a";
-  }
-  const signedPrefix = meters > 0 ? "+" : meters < 0 ? "-" : "";
-  return `${signedPrefix}${formatRepeatedInertiaSymmetryDistance(Math.abs(meters))}`;
-};
-
-const formatRepeatedInertiaSymmetryOffsetSummary = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  const total = formatRepeatedInertiaSymmetryDistance(row.offsetDistanceMeters ?? 0);
-  if (row.radialOffsetMeters === null || row.lateralOffsetMeters === null) {
-    return total;
-  }
-  return `${total} (rad ${formatRepeatedInertiaSymmetrySignedDistance(
-    row.radialOffsetMeters
-  )} • lat ${formatRepeatedInertiaSymmetryDistance(row.lateralOffsetMeters)})`;
-};
-
-const hasMeaningfulRepeatedInertiaSymmetryAlignmentError = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): boolean =>
-  (row.angularErrorDegrees ?? 0) > REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_ANGLE_ERROR_DEGREES ||
-  row.offsetDistanceMeters > REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_OFFSET_METERS ||
-  (row.lateralOffsetMeters ?? 0) > REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_LATERAL_OFFSET_METERS;
-
-const resolveRepeatedInertiaSymmetryStatusTone = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): "aligned" | "warning" | "danger" => {
-  if (row.status === "outlier") {
-    return "danger";
-  }
-  if (hasMeaningfulRepeatedInertiaSymmetryAlignmentError(row)) {
-    return "warning";
-  }
-  return "aligned";
-};
-
-const resolveRepeatedInertiaSymmetryDominantIssue = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): "aligned" | "angle" | "offset" | "outlier" => {
-  if (row.status === "outlier") {
-    return "outlier";
-  }
-  if (!hasMeaningfulRepeatedInertiaSymmetryAlignmentError(row)) {
-    return "aligned";
-  }
-  const angularRatio =
-    (row.angularErrorDegrees ?? 0) / REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_ANGLE_ERROR_DEGREES;
-  const totalOffsetRatio =
-    row.offsetDistanceMeters / REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_OFFSET_METERS;
-  const lateralOffsetRatio =
-    (row.lateralOffsetMeters ?? 0) /
-    REPEATED_INERTIA_SYMMETRY_STATUS_OK_MAX_LATERAL_OFFSET_METERS;
-  return angularRatio >= Math.max(totalOffsetRatio, lateralOffsetRatio) ? "angle" : "offset";
-};
-
-const formatRepeatedInertiaSymmetryStatus = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  switch (resolveRepeatedInertiaSymmetryDominantIssue(row)) {
-    case "aligned":
-      return "Aligned";
-    case "angle":
-      return "Angle";
-    case "offset":
-      return "Offset";
-    case "outlier":
-      return "Outlier";
-    default:
-      return "Aligned";
-  }
-};
-
-const resolveRepeatedInertiaSymmetryStatusBadgeClass = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  switch (resolveRepeatedInertiaSymmetryStatusTone(row)) {
-    case "aligned":
-      return "border-emerald-400/30 bg-emerald-500/10 text-emerald-100";
-    case "warning":
-      return "border-rose-400/30 bg-rose-500/10 text-rose-100";
-    case "danger":
-      return "border-amber-400/30 bg-amber-500/10 text-amber-100";
-    default:
-      return "border-border/30 bg-background/30 text-muted-foreground";
-  }
-};
-
-const resolveRepeatedInertiaSymmetryRowToneClass = (
-  row: RepeatedInertiaSymmetryChain["branchRows"][number]
-): string => {
-  switch (resolveRepeatedInertiaSymmetryStatusTone(row)) {
-    case "danger":
-      return "bg-amber-500/10 text-amber-100";
-    case "warning":
-      return "bg-rose-500/10 text-rose-100";
-    case "aligned":
-      return "text-muted-foreground";
-    default:
-      return "text-muted-foreground";
-  }
-};
-
-const formatRepeatedInertiaSymmetryBranchLinks = (
-  branchLinkGroup: RepeatedInertiaSymmetryChain["branchLinkGroups"][number]
-): string => branchLinkGroup.linkNames.join(", ");
-
-const formatRepeatedInertiaSymmetryBranchSummary = (
-  branchLinkGroup: RepeatedInertiaSymmetryChain["branchLinkGroups"][number]
-): string => {
-  if (branchLinkGroup.linkNames.length === 0) {
-    return branchLinkGroup.branchRootLinkName;
-  }
-  if (branchLinkGroup.linkNames.length === 1) {
-    return branchLinkGroup.linkNames[0];
-  }
-  return `${branchLinkGroup.linkNames[0]} -> ${branchLinkGroup.linkNames[branchLinkGroup.linkNames.length - 1]}`;
-};
-
-const formatRepeatedInertiaSymmetryRepairMode = (
-  repairPlan: RepeatedInertiaSymmetryChain["recommendedRepair"]
-): string => {
-  if (!repairPlan) {
-    return "Manual alignment";
-  }
-  return repairPlan.stepCount === 1 ? "1 joint move" : `${repairPlan.stepCount} joint moves`;
-};
-
-const formatRepeatedInertiaSymmetryAutoAlignButtonLabel = ({
-  completedProgress,
-  isActing,
-  progress,
-}: {
-  completedProgress?:
-    | {
-        appliedStepCount: number;
-        totalStepCount: number;
-      }
-    | null
-    | undefined;
-  isActing: boolean;
-  progress:
-    | {
-        appliedStepCount: number;
-        totalStepCount: number;
-      }
-    | null
-    | undefined;
-}): string => {
-  const effectiveProgress = isActing ? progress : completedProgress;
-  if (!isActing && !effectiveProgress) {
-    return "Auto Align";
-  }
-  if (effectiveProgress && effectiveProgress.totalStepCount > 0) {
-    const appliedStepCount = Math.min(
-      effectiveProgress.totalStepCount,
-      Math.max(0, effectiveProgress.appliedStepCount)
-    );
-    const jointMoveLabel =
-      effectiveProgress.totalStepCount === 1 ? "joint move" : "joint moves";
-    return `Auto Align ${appliedStepCount}/${effectiveProgress.totalStepCount} ${jointMoveLabel}`;
-  }
-  return "Auto Align";
-};
-
-const resolveRepeatedInertiaSymmetryOutcome = ({
-  chain,
-  outcomeByKey,
-}: {
-  chain: RepeatedInertiaSymmetryChain;
-  outcomeByKey: NonNullable<HealthActionPanelProps["repeatedInertiaSymmetryOutcomeByChainKey"]>;
-}) =>
-  outcomeByKey[
-    buildRepeatedInertiaSymmetryChainKey({
-      symmetryRootLinkName: chain.symmetryRootLinkName,
-      outlierBranchRootLinkName: chain.outlierBranchRootLinkName,
-    })
-  ] ?? outcomeByKey[buildRepeatedInertiaSymmetryFamilyOutcomeKey(chain)] ?? null;
 
 export const HealthActionPanel = ({
   open,
