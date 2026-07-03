@@ -18,7 +18,6 @@ import {
 import {
   normalizeMeshPathForMatch,
   parseURDF,
-  parseMeshReference,
   type JointAxisMap,
   type JointLimits,
 } from "@/shared/lib/urdfBrowser";
@@ -40,6 +39,10 @@ import {
   summarizeUrdfLoadIssues,
   type UrdfLoadIssueSummary,
 } from "@/features/urdf/loader/urdfLoadIssues";
+import {
+  buildDebugMeshInfo,
+  type IndexedMeshAsset,
+} from "@/features/urdf/loader/urdfMeshDebugInfo";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
@@ -158,12 +161,6 @@ const registerMeshFilePaths = (
   }
 };
 
-type IndexedMeshAsset = {
-  blob: Blob;
-  filename: string;
-  relativePath: string;
-};
-
 const warnOnAmbiguousMeshKeys = (collisionKeys: Set<string>) => {
   if (!import.meta.env.DEV || collisionKeys.size === 0) {
     return;
@@ -275,70 +272,6 @@ const readUrdfDocumentsFromFiles = async (files: File[]) => {
     documents[entry.path] = entry.content;
     return documents;
   }, {});
-};
-
-const buildDebugMeshInfo = (
-  meshAssets: IndexedMeshAsset[],
-  meshes: MeshFiles,
-  urdfMeshReferences: string[]
-): DebugMeshInfo[] => {
-  const registeredPathsByBlob = new Map<Blob, string[]>();
-  Object.entries(meshes).forEach(([path, blob]) => {
-    const existingPaths = registeredPathsByBlob.get(blob);
-    if (existingPaths) {
-      existingPaths.push(path);
-      return;
-    }
-    registeredPathsByBlob.set(blob, [path]);
-  });
-
-  const getReferenceMatchCandidates = (meshReference: string): string[] => {
-    const refInfo = parseMeshReference(meshReference);
-    if (refInfo.isAbsoluteFile) {
-      return [];
-    }
-
-    const candidates = new Set<string>();
-    const addPathCandidate = (value?: string) => {
-      if (!value) return;
-      const normalized = normalizeMeshPathForMatch(value)?.replace(/^\/+/, "");
-      if (!normalized) return;
-      candidates.add(normalized);
-    };
-
-    addPathCandidate(refInfo.path || refInfo.raw);
-
-    try {
-      addPathCandidate(decodeURIComponent(refInfo.path || refInfo.raw));
-    } catch {
-      // Ignore decode errors
-    }
-
-    return Array.from(candidates);
-  };
-
-  return meshAssets.map(({ blob, filename, relativePath }) => {
-    const registeredPaths = registeredPathsByBlob.get(blob) ?? [];
-    const matchedReference = urdfMeshReferences.find((reference) => {
-      const matchCandidates = getReferenceMatchCandidates(reference);
-      return registeredPaths.some((registeredPath) => {
-        const normalizedRegisteredPath = registeredPath.replace(/^\/+|\/+$/g, "");
-        return matchCandidates.some(
-          (candidate) =>
-            normalizedRegisteredPath === candidate ||
-            normalizedRegisteredPath.endsWith(`/${candidate}`)
-        );
-      });
-    });
-
-    return {
-      filename,
-      webkitRelativePath: relativePath,
-      found: matchedReference !== undefined,
-      urdfReference: matchedReference,
-      registeredPaths: registeredPaths.slice(0, 20),
-    };
-  });
 };
 
 export const extractMeshReferencesFromUrdfContent = (urdfContent: string): string[] => {
