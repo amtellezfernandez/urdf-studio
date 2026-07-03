@@ -63,12 +63,12 @@ export const SidebarStructureControls = ({
   typeFilter,
   urdfContentAvailable,
 }: SidebarStructureControlsProps) => {
-  const showSubgroupControls =
+  const shouldShowSubgroupControls =
     effectiveStructureViewMode === "links" || effectiveStructureViewMode === "flat";
-  const subgroupDisabled =
+  const isSubgroupActionDisabled =
     !canReassignStructureGroups ||
     (effectiveStructureViewMode === "links" && linkGroupingMode !== "body");
-  const subgroupTitle = !canReassignStructureGroups
+  const subgroupActionTitle = !canReassignStructureGroups
     ? "Group editing is unavailable"
     : effectiveStructureViewMode === "links" && linkGroupingMode !== "body"
       ? "Subgroups are only available in Body grouping"
@@ -151,13 +151,13 @@ export const SidebarStructureControls = ({
             </Select>
           ) : null}
 
-          {showSubgroupControls ? (
+          {shouldShowSubgroupControls ? (
             <button
               type="button"
               className={subgroupActionButtonClassName}
               onClick={onOpenSubgroupCreator}
-              disabled={subgroupDisabled}
-              title={subgroupTitle}
+              disabled={isSubgroupActionDisabled}
+              title={subgroupActionTitle}
             >
               <Plus className="h-3 w-3" />
               <span>Subgroup</span>
@@ -188,7 +188,7 @@ export const SidebarStructureControls = ({
             })}
           </div>
         ) : null}
-        {showSubgroupControls && isSubgroupCreatorOpen ? (
+        {shouldShowSubgroupControls && isSubgroupCreatorOpen ? (
           <div className="mt-1.5 flex items-center gap-1">
             <Input
               type="text"
