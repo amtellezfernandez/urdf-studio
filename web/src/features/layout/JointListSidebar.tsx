@@ -91,7 +91,6 @@ import {
   replaceMergedCollisionLinks,
 } from "@/features/viewer/collisionMergeSelection";
 import { useStructureGroupEditor } from "@/features/layout/useStructureGroupEditor";
-import { STRUCTURE_DROP_GROUP_LABEL_ATTRIBUTE } from "@/features/layout/structureDragDrop";
 import {
   areStringSetsEqual,
   reconcileCollapsedSectionIds,
@@ -109,6 +108,7 @@ import {
   JOINT_LIST_SIDEBAR_PARAMS,
 } from "@/features/layout/jointListSidebarParams";
 import { parseJointEffortLimits } from "@/features/layout/jointEffortLimits";
+import { StructureSectionShell } from "@/features/layout/StructureSectionShell";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 
 // Recursive component to render hierarchy tree
@@ -134,20 +134,6 @@ interface HierarchyTreeViewProps {
   structureLabels: RobotStructureLabels;
 }
 
-type StructureSectionShellProps = {
-  sectionLabel: string;
-  itemCount: number;
-  canReassignStructureGroups: boolean;
-  isStructureDragActive: boolean;
-  activeStructureDropGroup: string | null;
-  onDragOver: (event: React.DragEvent<HTMLElement>, sectionLabel: string) => void;
-  onDragLeave: (event: React.DragEvent<HTMLElement>, sectionLabel: string) => void;
-  onDrop: (event: React.DragEvent<HTMLElement>, sectionLabel: string) => void;
-  headerClassName: string;
-  renderHeaderContent: () => React.ReactNode;
-  children: React.ReactNode;
-};
-
 const toggleStringSetValue = (previous: Set<string>, value: string) => {
   const next = new Set(previous);
   if (next.has(value)) {
@@ -157,50 +143,6 @@ const toggleStringSetValue = (previous: Set<string>, value: string) => {
   }
   return next;
 };
-
-const StructureSectionShell = ({
-  sectionLabel,
-  itemCount,
-  canReassignStructureGroups,
-  isStructureDragActive,
-  activeStructureDropGroup,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  headerClassName,
-  renderHeaderContent,
-  children,
-}: StructureSectionShellProps) => (
-  <section
-    className={cn(
-      "space-y-0.5 rounded-sm",
-      canReassignStructureGroups &&
-        isStructureDragActive &&
-        activeStructureDropGroup !== sectionLabel &&
-        STRUCTURE_DROP_TARGET_BASE_CLASS,
-      canReassignStructureGroups &&
-        isStructureDragActive &&
-        activeStructureDropGroup !== sectionLabel &&
-        STRUCTURE_DROP_TARGET_IDLE_CLASS
-    )}
-    {...{ [STRUCTURE_DROP_GROUP_LABEL_ATTRIBUTE]: sectionLabel }}
-    onDragOver={(event) => onDragOver(event, sectionLabel)}
-    onDragLeave={(event) => onDragLeave(event, sectionLabel)}
-    onDrop={(event) => onDrop(event, sectionLabel)}
-  >
-    <div
-      className={cn(
-        headerClassName,
-        canReassignStructureGroups && STRUCTURE_DROP_TARGET_BASE_CLASS,
-        activeStructureDropGroup === sectionLabel && STRUCTURE_DROP_TARGET_ACTIVE_CLASS
-      )}
-    >
-      {renderHeaderContent()}
-      <span className="tabular-nums">{itemCount}</span>
-    </div>
-    {children}
-  </section>
-);
 
 const HIERARCHY_TREE_INDENT_PX = 8;
 const HIERARCHY_TREE_LINE_OFFSET_PX = 4;
@@ -620,9 +562,6 @@ const LINK_COLLAPSE_BUTTON_CLASS = JOINT_LIST_CLASS_NAMES.linkCollapseButton;
 const LINK_ACTION_CHIP_CLASS = JOINT_LIST_CLASS_NAMES.linkActionChip;
 const LINK_STATUS_CHIP_CLASS = JOINT_LIST_CLASS_NAMES.linkStatusChip;
 const LINK_BROWSER_TEXT_CLASS = JOINT_LIST_CLASS_NAMES.linkBrowserText;
-const STRUCTURE_DROP_TARGET_BASE_CLASS = JOINT_LIST_CLASS_NAMES.structureDropTargetBase;
-const STRUCTURE_DROP_TARGET_IDLE_CLASS = JOINT_LIST_CLASS_NAMES.structureDropTargetIdle;
-const STRUCTURE_DROP_TARGET_ACTIVE_CLASS = JOINT_LIST_CLASS_NAMES.structureDropTargetActive;
 const STRUCTURE_SUBGROUP_ACTION_BUTTON_CLASS = JOINT_LIST_CLASS_NAMES.structureSubgroupActionButton;
 const WORLD_OBJECT_SOURCE_ORDER: ReadonlyArray<NonNullable<CreatedObject["source"]>> =
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceOrder;
