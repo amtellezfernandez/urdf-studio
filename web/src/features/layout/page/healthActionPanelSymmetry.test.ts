@@ -4,6 +4,7 @@ import type { RobotMirrorLinkResult } from "@/features/layout/page/robotMirrorSy
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
 import {
   buildCompatibilityRobotMirrorSelectionState,
+  buildRepeatedInertiaSymmetryBranchRowViewState,
   buildRepeatedInertiaSymmetryChainViewState,
   buildRepeatedInertiaSymmetryRepairText,
   buildRobotMirrorSelectionStats,
@@ -182,6 +183,13 @@ describe("healthActionPanelSymmetry", () => {
       },
       visualizationLinkNames: ["branch_a_link", "branch_b_link"],
     });
+    expect(baseState.branchRows[0]).toMatchObject({
+      branchSummary: "branch_a_link",
+      branchTitle: "branch_a_link",
+      key: "root:branch_a",
+      representativeLinkName: "link_a",
+      statusText: "Aligned",
+    });
 
     expect(
       buildRepeatedInertiaSymmetryChainViewState({
@@ -210,6 +218,40 @@ describe("healthActionPanelSymmetry", () => {
         tone: "success",
       },
       progress: { appliedStepCount: 2, totalStepCount: 2 },
+    });
+  });
+
+  it("builds branch row display state with branch fallback and topology status", () => {
+    const chain = createRepeatedInertiaSymmetryChain({
+      branchLinkGroups: [
+        {
+          branchRootLinkName: "other_branch",
+          linkNames: ["other_link"],
+          status: "aligned",
+        },
+      ],
+    });
+    const row = createBranchRow({
+      angularErrorDegrees: 6,
+      branchRootLinkName: "missing_branch",
+      idealAngleDegrees: 180,
+      idealRadialDistanceMeters: 0.2,
+      offsetDistanceMeters: 0.003,
+      radialDistanceMeters: 0.15,
+      representativeLinkName: "fallback_link",
+      topologyMatchesFamily: false,
+    });
+
+    expect(buildRepeatedInertiaSymmetryBranchRowViewState({ chain, row })).toMatchObject({
+      angleText: "0.0° → 180.0° (6.0° err)",
+      branchSummary: "fallback_link",
+      branchTitle: "fallback_link",
+      key: "root:missing_branch",
+      offsetText: "3.0 mm (rad 0.0 mm • lat 0.0 mm)",
+      radiusText: "150.0 mm → 200.0 mm",
+      representativeLinkName: "fallback_link",
+      showTopologyBadge: true,
+      statusText: "Angle",
     });
   });
 

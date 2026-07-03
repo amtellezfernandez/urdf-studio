@@ -83,19 +83,11 @@ import {
   buildRepeatedInertiaSymmetryChainViewState,
   buildRobotMirrorSelectionStats,
   formatMirrorSelectionLinkCount,
-  formatRepeatedInertiaSymmetryAngle,
-  formatRepeatedInertiaSymmetryAngleComparison,
   formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
-  formatRepeatedInertiaSymmetryBranchLinks,
-  formatRepeatedInertiaSymmetryBranchSummary,
   formatRepeatedInertiaSymmetryCenterMode,
   formatRepeatedInertiaSymmetryDistance,
   formatRepeatedInertiaSymmetryHeadline,
-  formatRepeatedInertiaSymmetryLinkOffsets,
-  formatRepeatedInertiaSymmetryOffsetSummary,
-  formatRepeatedInertiaSymmetryRadiusComparison,
   formatRepeatedInertiaSymmetryRepairMode,
-  formatRepeatedInertiaSymmetryStatus,
   formatRepeatedInertiaSymmetryType,
   formatRobotMirrorLinkResultMetrics,
   formatRobotMirrorLinkResultReason,
@@ -104,8 +96,6 @@ import {
   groupRobotMirrorSelectionLinksByMeshLabel,
   MIRROR_SELECTION_RADIAL_BADGE_CLASS,
   resolveMirrorSelectionStatusBadge,
-  resolveRepeatedInertiaSymmetryRowToneClass,
-  resolveRepeatedInertiaSymmetryStatusBadgeClass,
   shouldIgnoreVisualizationCardClick,
 } from "@/features/layout/page/healthActionPanelSymmetry";
 
@@ -1299,52 +1289,30 @@ export const HealthActionPanel = ({
                                 <div>Offset</div>
                                 <div>Status</div>
                               </div>
-                              {chain.branchRows.map((row) => {
-                                const branchLinkGroup = chain.branchLinkGroups.find(
-                                  (candidate) =>
-                                    candidate.branchRootLinkName === row.branchRootLinkName
-                                );
-
+                              {chainState.branchRows.map((rowState) => {
                                 return (
                                   <div
-                                    key={`${chain.symmetryRootLinkName}:${row.branchRootLinkName}`}
-                                    className={`border-t border-border/20 px-2 py-1 text-[10px] ${resolveRepeatedInertiaSymmetryRowToneClass(
-                                      row
-                                    )}`}
+                                    key={rowState.key}
+                                    className={`border-t border-border/20 px-2 py-1 text-[10px] ${rowState.rowToneClass}`}
                                   >
                                     <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.1fr)_auto_auto_auto_auto] gap-x-3">
-                                      <div className="truncate">{row.representativeLinkName}</div>
+                                      <div className="truncate">{rowState.representativeLinkName}</div>
                                       <div
                                         className="truncate"
-                                        title={
-                                          branchLinkGroup
-                                            ? formatRepeatedInertiaSymmetryBranchLinks(branchLinkGroup)
-                                            : row.representativeLinkName
-                                        }
+                                        title={rowState.branchTitle}
                                       >
-                                        {branchLinkGroup
-                                          ? formatRepeatedInertiaSymmetryBranchSummary(branchLinkGroup)
-                                          : row.representativeLinkName}
+                                        {rowState.branchSummary}
                                       </div>
-                                      <div>{formatRepeatedInertiaSymmetryRadiusComparison(row)}</div>
-                                      <div>
-                                        {formatRepeatedInertiaSymmetryAngleComparison(row)}
-                                        {row.angularErrorDegrees !== null
-                                          ? ` (${formatRepeatedInertiaSymmetryAngle(row.angularErrorDegrees)} err)`
-                                          : ""}
-                                      </div>
-                                      <div>
-                                        {formatRepeatedInertiaSymmetryOffsetSummary(row)}
-                                      </div>
+                                      <div>{rowState.radiusText}</div>
+                                      <div>{rowState.angleText}</div>
+                                      <div>{rowState.offsetText}</div>
                                       <div className="flex items-center gap-1">
                                         <span
-                                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] ${resolveRepeatedInertiaSymmetryStatusBadgeClass(
-                                            row
-                                          )}`}
+                                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] ${rowState.statusBadgeClass}`}
                                         >
-                                          {formatRepeatedInertiaSymmetryStatus(row)}
+                                          {rowState.statusText}
                                         </span>
-                                        {!row.topologyMatchesFamily ? (
+                                        {rowState.showTopologyBadge ? (
                                           <span className="inline-flex items-center rounded-full border border-border/30 bg-background/30 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
                                             Topology
                                           </span>
@@ -1352,7 +1320,7 @@ export const HealthActionPanel = ({
                                       </div>
                                     </div>
                                     <div className="mt-1 truncate text-[9px] text-muted-foreground/90">
-                                      Offsets: {formatRepeatedInertiaSymmetryLinkOffsets(row)}
+                                      Offsets: {rowState.offsetsText}
                                     </div>
                                   </div>
                                 );

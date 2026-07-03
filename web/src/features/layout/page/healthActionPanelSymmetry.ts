@@ -444,6 +444,60 @@ export const formatRepeatedInertiaSymmetryRepairMode = (
   return repairPlan.stepCount === 1 ? "1 joint move" : `${repairPlan.stepCount} joint moves`;
 };
 
+export type RepeatedInertiaSymmetryBranchRowViewState = {
+  angleText: string;
+  branchSummary: string;
+  branchTitle: string;
+  key: string;
+  offsetText: string;
+  offsetsText: string;
+  radiusText: string;
+  representativeLinkName: string;
+  row: RepeatedInertiaSymmetryChain["branchRows"][number];
+  rowToneClass: string;
+  showTopologyBadge: boolean;
+  statusBadgeClass: string;
+  statusText: string;
+};
+
+export const buildRepeatedInertiaSymmetryBranchRowViewState = ({
+  chain,
+  row,
+}: {
+  chain: Pick<
+    RepeatedInertiaSymmetryChain,
+    "branchLinkGroups" | "symmetryRootLinkName"
+  >;
+  row: RepeatedInertiaSymmetryChain["branchRows"][number];
+}): RepeatedInertiaSymmetryBranchRowViewState => {
+  const branchLinkGroup = chain.branchLinkGroups.find(
+    (candidate) => candidate.branchRootLinkName === row.branchRootLinkName
+  );
+  const angleComparison = formatRepeatedInertiaSymmetryAngleComparison(row);
+  return {
+    angleText:
+      row.angularErrorDegrees !== null
+        ? `${angleComparison} (${formatRepeatedInertiaSymmetryAngle(row.angularErrorDegrees)} err)`
+        : angleComparison,
+    branchSummary: branchLinkGroup
+      ? formatRepeatedInertiaSymmetryBranchSummary(branchLinkGroup)
+      : row.representativeLinkName,
+    branchTitle: branchLinkGroup
+      ? formatRepeatedInertiaSymmetryBranchLinks(branchLinkGroup)
+      : row.representativeLinkName,
+    key: `${chain.symmetryRootLinkName}:${row.branchRootLinkName}`,
+    offsetText: formatRepeatedInertiaSymmetryOffsetSummary(row),
+    offsetsText: formatRepeatedInertiaSymmetryLinkOffsets(row),
+    radiusText: formatRepeatedInertiaSymmetryRadiusComparison(row),
+    representativeLinkName: row.representativeLinkName,
+    row,
+    rowToneClass: resolveRepeatedInertiaSymmetryRowToneClass(row),
+    showTopologyBadge: !row.topologyMatchesFamily,
+    statusBadgeClass: resolveRepeatedInertiaSymmetryStatusBadgeClass(row),
+    statusText: formatRepeatedInertiaSymmetryStatus(row),
+  };
+};
+
 export type RepeatedInertiaSymmetryRepairText = {
   detail: string;
   summary: string;
@@ -536,6 +590,7 @@ export const resolveRepeatedInertiaSymmetryOutcome = ({
   ] ?? outcomeByKey[buildRepeatedInertiaSymmetryFamilyOutcomeKey(chain)] ?? null;
 
 export type RepeatedInertiaSymmetryChainViewState = {
+  branchRows: RepeatedInertiaSymmetryBranchRowViewState[];
   chain: RepeatedInertiaSymmetryChain;
   chainKey: string;
   completedProgress: {
@@ -577,6 +632,9 @@ export const buildRepeatedInertiaSymmetryChainViewState = ({
   const scopeKey = buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain);
   const outcome = resolveRepeatedInertiaSymmetryOutcome({ chain, outcomeByKey });
   return {
+    branchRows: chain.branchRows.map((row) =>
+      buildRepeatedInertiaSymmetryBranchRowViewState({ chain, row })
+    ),
     chain,
     chainKey,
     completedProgress: outcome?.completedProgress ?? null,
