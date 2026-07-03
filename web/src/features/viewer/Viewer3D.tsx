@@ -42,6 +42,7 @@ import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBo
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
 import { CreatedObjects } from "@/features/viewer/components/CreatedObjects";
 import { IKResultDialog } from "@/features/viewer/components/IKResultDialog";
+import { ViewerEndEffectorSummary } from "@/features/viewer/components/ViewerEndEffectorSummary";
 import { ViewerInertiaLegend } from "@/features/viewer/components/ViewerInertiaLegend";
 import { ViewerJointTypesPanel } from "@/features/viewer/components/ViewerJointTypesPanel";
 import {
@@ -3607,27 +3608,11 @@ export const Viewer3D = ({
   // Use selectedLink from props
   const selectedLink = selectedLinkProp;
 
-  const formatVec3 = useCallback((vec: [number, number, number], digits = 4) => {
-    return `${vec[0].toFixed(digits)}, ${vec[1].toFixed(digits)}, ${vec[2].toFixed(digits)}`;
-  }, []);
-
   const comPosition = (() => {
     if (isAssemblyWorkspace) return null;
     const com = computeCenterOfMassWorld(robot, linkInertials);
     return com ? ([com.x, com.y, com.z] as [number, number, number]) : null;
   })();
-  const comPositionText = comPosition ? formatVec3(comPosition, 2) : "--";
-  const totalMassText =
-    inertialStats.totalMass > 0 ? `${inertialStats.totalMass.toFixed(2)} kg` : "--";
-
-  const eePositionText = endEffectorPose
-    ? formatVec3(endEffectorPose.position, 2)
-    : "--";
-  const eeHandlesText =
-    ikEndEffectorLinks.length > 0
-      ? ikEndEffectorLinks.map((linkName, index) => `${index + 1}:${linkName}`).join(" · ")
-      : "None";
-  const eeHeaderText = ikEndEffectorLinks.length === 1 ? "EE" : "EEs";
   const selectedCameraIdForCentering = useCameraStore((state) => state.selectedCameraId);
   const setLiveRobotBasePose = useRobotPoseStore((state) => state.setPose);
   const clearLiveRobotBasePose = useRobotPoseStore((state) => state.clearPose);
@@ -4928,19 +4913,15 @@ export const Viewer3D = ({
           />
         ) : null}
 
-        {viewerUi.showEndEffectorSummary && (
-          <div className="absolute bottom-4 left-4 z-20 max-w-[25rem] rounded border border-border/40 bg-background/92 px-1.5 py-1 shadow-sm backdrop-blur-sm">
-            <div className="truncate font-mono text-[8.5px] leading-tight text-foreground">
-              {eeHeaderText} ({ikEndEffectorLinks.length}) {eeHandlesText}
-            </div>
-            <div className="truncate font-mono text-[8.5px] leading-tight text-foreground/90">
-              Primary {primaryIkEndEffectorLink ?? "--"} {eePositionText}
-            </div>
-            <div className="truncate font-mono text-[8.5px] leading-tight text-foreground/90">
-              Mass {totalMassText} · COM {comPositionText}
-            </div>
-          </div>
-        )}
+        {viewerUi.showEndEffectorSummary ? (
+          <ViewerEndEffectorSummary
+            centerOfMassPosition={comPosition}
+            endEffectorLinks={ikEndEffectorLinks}
+            endEffectorPosition={endEffectorPose?.position ?? null}
+            primaryEndEffectorLink={primaryIkEndEffectorLink}
+            totalMassKg={inertialStats.totalMass}
+          />
+        ) : null}
         {showInertiaLegend ? (
           <ViewerInertiaLegend
             hasSymmetryVisualization={simulationPrepSymmetryVisualization !== null}
