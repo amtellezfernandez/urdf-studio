@@ -48,8 +48,7 @@ import {
   createAssemblySpec,
   validateAssemblySpec,
 } from "@/shared/lib/urdfCore";
-import { normalizeMeshPathForMatch, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
-import { validateInertiaTensor } from "@/features/viewer/inertialMath";
+import { normalizeMeshPathForMatch } from "@/shared/lib/urdfBrowser";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
 import { parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
@@ -66,6 +65,12 @@ import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTran
 import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
 import { IndexWorldDialogs } from "@/app/pages/index/IndexWorldDialogs";
 import { useIndexSourceLoaders } from "@/app/pages/index/useIndexSourceLoaders";
+import {
+  buildCollisionMeshStats,
+  buildInertialIssues,
+  buildMeshRootHints,
+  hasLoadReviewAttention,
+} from "@/app/pages/index/loadReviewDerivations";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
@@ -1756,66 +1761,9 @@ const Index = () => {
     [vizUrdfContent, originalVizUrdfContent]
   );
 
-  const meshRootHints = useMemo(() => {
-    if (debugMeshInfo.length === 0) return [];
-    const roots = new Set<string>();
-    const score = (path: string) => {
-      let value = 0;
-      if (path.includes("/meshes")) value += 2;
-      if (path.includes("/assets")) value += 2;
-      const depthPenalty = path.split("/").filter(Boolean).length;
-      return value * 100 - depthPenalty;
-    };
+  const meshRootHints = useMemo(() => buildMeshRootHints(debugMeshInfo), [debugMeshInfo]);
 
-    for (const info of debugMeshInfo) {
-      const normalized = normalizeMeshPathForMatch(info.webkitRelativePath || "");
-      if (!normalized) continue;
-      const parts = normalized.split("/").filter(Boolean);
-      if (parts.length <= 1) continue;
-      const dir = parts.slice(0, -1).join("/");
-      if (dir) roots.add(dir);
-      const meshesIndex = parts.lastIndexOf("meshes");
-      const assetsIndex = parts.lastIndexOf("assets");
-      const folderIndex = Math.max(meshesIndex, assetsIndex);
-      if (folderIndex !== -1) {
-        roots.add(parts.slice(0, folderIndex + 1).join("/"));
-      }
-    }
-
-    return Array.from(roots)
-      .sort((a, b) => score(b) - score(a))
-      .slice(0, 3);
-  }, [debugMeshInfo]);
-
-  const inertialIssues = useMemo(() => {
-    if (!urdfAnalysis?.isValid) {
-      return {
-        missing: [] as string[],
-        invalidMass: [] as string[],
-        invalidTensor: [] as string[],
-      };
-    }
-    const missing: string[] = [];
-    const invalidMass: string[] = [];
-    const invalidTensor: string[] = [];
-    urdfAnalysis.linkNames.forEach((linkName) => {
-      const data = urdfAnalysis.linkDataByName[linkName];
-      if (!data?.inertial) {
-        missing.push(linkName);
-        return;
-      }
-      const mass = Number(data.inertial.mass ?? 0);
-      if (!Number.isFinite(mass) || mass <= 0) {
-        invalidMass.push(linkName);
-        return;
-      }
-      const tensorCheck = validateInertiaTensor(data.inertial.inertia);
-      if (!tensorCheck.valid) {
-        invalidTensor.push(linkName);
-      }
-    });
-    return { missing, invalidMass, invalidTensor };
-  }, [urdfAnalysis]);
+  const inertialIssues = useMemo(() => buildInertialIssues(urdfAnalysis), [urdfAnalysis]);
   const simulationPrepStatus = useMemo(
     () =>
       buildSimulationPrepStatus({
@@ -2284,46 +2232,30 @@ const Index = () => {
   ]);
   const frameIssueSummary = orientationNeedsAttention ? orientationSummary : null;
 
-  const collisionMeshStats = useMemo(() => {
-    if (!urdfAnalysis?.isValid) {
-      return { total: 0, matched: 0, missing: [] as string[] };
-    }
-    let total = 0;
-    let matched = 0;
-    const missing: string[] = [];
-    urdfAnalysis.collisionEntries.forEach((entry) => {
-      if (entry.geometry.type !== "mesh") return;
-      total += 1;
-      const resolved = resolveMeshBlobFromReference(
-        entry.geometry.filename,
+  const collisionMeshStats = useMemo(
+    () =>
+      buildCollisionMeshStats({
+        urdfAnalysis,
         meshFiles,
         urdfBasePath,
-        packageRoots
-      );
-      if (resolved) {
-        matched += 1;
-      } else {
-        missing.push(entry.geometry.filename);
-      }
-    });
-    return { total, matched, missing };
-  }, [urdfAnalysis, meshFiles, urdfBasePath, packageRoots]);
-
-  const hasLoadReviewAttention = Boolean(
-    urdfValidationError ||
-      unmatchedURDFRefs.length > 0 ||
-      absoluteFileMeshRefs.length > 0 ||
-      missingPackageRefs.length > 0 ||
-      inertialIssues.missing.length > 0 ||
-      inertialIssues.invalidMass.length > 0 ||
-      inertialIssues.invalidTensor.length > 0 ||
-      collisionMeshStats.missing.length > 0 ||
-      orientationNeedsAttention
+        packageRoots,
+      }),
+    [urdfAnalysis, meshFiles, urdfBasePath, packageRoots]
   );
+
+  const hasLoadReviewAttentionFlag = hasLoadReviewAttention({
+    urdfValidationError,
+    unmatchedURDFRefs,
+    absoluteFileMeshRefs,
+    missingPackageRefs,
+    inertialIssues,
+    collisionMeshStats,
+    orientationNeedsAttention,
+  });
   const autoOpenedLoadReviewKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!hasLoadedFiles || !hasLoadReviewAttention) {
+    if (!hasLoadedFiles || !hasLoadReviewAttentionFlag) {
       return;
     }
     const loadReviewKey = [
@@ -2339,18 +2271,18 @@ const Index = () => {
   }, [
     activeUrdfPath,
     hasLoadedFiles,
-    hasLoadReviewAttention,
+    hasLoadReviewAttentionFlag,
     setShowLoadIssues,
     urdfFile,
   ]);
 
   useEffect(() => {
-    if (!showLoadIssues || !hasLoadedFiles || hasLoadReviewAttention) {
+    if (!showLoadIssues || !hasLoadedFiles || hasLoadReviewAttentionFlag) {
       return;
     }
 
     setShowLoadIssues(false);
-  }, [hasLoadedFiles, hasLoadReviewAttention, setShowLoadIssues, showLoadIssues]);
+  }, [hasLoadedFiles, hasLoadReviewAttentionFlag, setShowLoadIssues, showLoadIssues]);
 
   const worldHubEnabled = isWorldHubConfigured();
   const enableSimulationPrepViewerHighlights = useCallback(
