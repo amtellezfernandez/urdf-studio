@@ -497,8 +497,8 @@ def _safe_sim_name(value: str, used_names: set[str], fallback: str) -> str:
 def _duplicate_world_object_warnings(objects: Sequence[WorldLayoutObject]) -> tuple[str, ...]:
     warnings: list[str] = []
     for label, values in (
-        ("id", [obj.id for obj in objects]),
-        ("name", [obj.name for obj in objects]),
+        ("id", [world_object.id for world_object in objects]),
+        ("name", [world_object.name for world_object in objects]),
     ):
         counts = Counter(values)
         for value in sorted(item for item, count in counts.items() if count > 1):
@@ -510,20 +510,20 @@ def _duplicate_world_object_warnings(objects: Sequence[WorldLayoutObject]) -> tu
 
 
 def _primitive_simulation_fields(
-    obj: WorldLayoutObject,
+    world_object: WorldLayoutObject,
     *,
     collision: bool | None = None,
     fixed: bool | None = None,
 ) -> dict[str, Any]:
     return {
-        "collision": obj.collision if collision is None else collision,
-        "fixed": obj.fixed if fixed is None else fixed,
-        "mass_kg": obj.mass_kg,
-        "friction": obj.friction,
-        "restitution": obj.restitution,
-        "semantic_role": obj.semantic_role,
-        "asset_ref": obj.asset_ref,
-        "asset_scale_xyz": obj.asset_scale_xyz,
+        "collision": world_object.collision if collision is None else collision,
+        "fixed": world_object.fixed if fixed is None else fixed,
+        "mass_kg": world_object.mass_kg,
+        "friction": world_object.friction,
+        "restitution": world_object.restitution,
+        "semantic_role": world_object.semantic_role,
+        "asset_ref": world_object.asset_ref,
+        "asset_scale_xyz": world_object.asset_scale_xyz,
     }
 
 
@@ -537,112 +537,119 @@ def build_sim_primitives(
     used_names: set[str] = set()
     primitives: list[SimPrimitive] = []
     warnings: list[str] = list(_duplicate_world_object_warnings(layout.objects))
-    for index, obj in enumerate(layout.objects):
-        if obj.is_hidden and not include_hidden:
-            warnings.append(f"Skipped hidden object: {obj.id}")
+    for object_index, world_object in enumerate(layout.objects):
+        if world_object.is_hidden and not include_hidden:
+            warnings.append(f"Skipped hidden object: {world_object.id}")
             continue
-        sim_name = _safe_sim_name(obj.id, used_names, f"object_{index}")
-        rgba = _parse_rgba(obj.color)
-        position = _transform_position(obj.position_xyz, resolved_frame_map)
-        quat = _transform_quat_wxyz(obj.rotation_rpy_rad, resolved_frame_map)
-        if obj.primitive_type == "cube":
-            sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
+        simulation_name = _safe_sim_name(world_object.id, used_names, f"object_{object_index}")
+        object_rgba = _parse_rgba(world_object.color)
+        simulation_position = _transform_position(world_object.position_xyz, resolved_frame_map)
+        simulation_quat_wxyz = _transform_quat_wxyz(
+            world_object.rotation_rpy_rad,
+            resolved_frame_map,
+        )
+        if world_object.primitive_type == "cube":
+            simulation_size = _transform_size(world_object.size_xyz, resolved_frame_map)
             primitives.append(
                 SimPrimitive(
-                    source_id=obj.id,
-                    source_name=obj.name,
-                    sim_name=sim_name,
-                    source_type=obj.primitive_type,
+                    source_id=world_object.id,
+                    source_name=world_object.name,
+                    sim_name=simulation_name,
+                    source_type=world_object.primitive_type,
                     sim_type="box",
-                    position_xyz=position,
-                    quat_wxyz=quat,
-                    size_xyz=sim_size,
-                    rgba=rgba,
-                    **_primitive_simulation_fields(obj),
+                    position_xyz=simulation_position,
+                    quat_wxyz=simulation_quat_wxyz,
+                    size_xyz=simulation_size,
+                    rgba=object_rgba,
+                    **_primitive_simulation_fields(world_object),
                 )
             )
             continue
-        if obj.primitive_type == "sphere":
-            diameter = max(obj.size_xyz)
-            if len({round(component, 12) for component in obj.size_xyz}) > 1:
-                warnings.append(f"Normalized non-uniform sphere size for object: {obj.id}")
+        if world_object.primitive_type == "sphere":
+            diameter = max(world_object.size_xyz)
+            if len({round(component, 12) for component in world_object.size_xyz}) > 1:
+                warnings.append(f"Normalized non-uniform sphere size for object: {world_object.id}")
             primitives.append(
                 SimPrimitive(
-                    source_id=obj.id,
-                    source_name=obj.name,
-                    sim_name=sim_name,
-                    source_type=obj.primitive_type,
+                    source_id=world_object.id,
+                    source_name=world_object.name,
+                    sim_name=simulation_name,
+                    source_type=world_object.primitive_type,
                     sim_type="sphere",
-                    position_xyz=position,
-                    quat_wxyz=quat,
+                    position_xyz=simulation_position,
+                    quat_wxyz=simulation_quat_wxyz,
                     size_xyz=(diameter, diameter, diameter),
-                    rgba=rgba,
-                    **_primitive_simulation_fields(obj),
+                    rgba=object_rgba,
+                    **_primitive_simulation_fields(world_object),
                 )
             )
             continue
-        if obj.primitive_type == "cylinder":
-            sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
-            diameter = max(sim_size[0], sim_size[1])
-            if abs(sim_size[0] - sim_size[1]) > 1e-12:
-                warnings.append(f"Normalized non-uniform cylinder diameter for object: {obj.id}")
+        if world_object.primitive_type == "cylinder":
+            simulation_size = _transform_size(world_object.size_xyz, resolved_frame_map)
+            diameter = max(simulation_size[0], simulation_size[1])
+            if abs(simulation_size[0] - simulation_size[1]) > 1e-12:
+                warnings.append(
+                    f"Normalized non-uniform cylinder diameter for object: {world_object.id}"
+                )
             primitives.append(
                 SimPrimitive(
-                    source_id=obj.id,
-                    source_name=obj.name,
-                    sim_name=sim_name,
-                    source_type=obj.primitive_type,
+                    source_id=world_object.id,
+                    source_name=world_object.name,
+                    sim_name=simulation_name,
+                    source_type=world_object.primitive_type,
                     sim_type="cylinder",
-                    position_xyz=position,
-                    quat_wxyz=quat,
-                    size_xyz=(diameter, diameter, sim_size[2]),
-                    rgba=rgba,
-                    **_primitive_simulation_fields(obj),
+                    position_xyz=simulation_position,
+                    quat_wxyz=simulation_quat_wxyz,
+                    size_xyz=(diameter, diameter, simulation_size[2]),
+                    rgba=object_rgba,
+                    **_primitive_simulation_fields(world_object),
                 )
             )
             continue
-        if obj.primitive_type == "point":
-            diameter = max(obj.size_xyz)
-            warnings.append(f"Mapped point marker to non-colliding sphere: {obj.id}")
+        if world_object.primitive_type == "point":
+            diameter = max(world_object.size_xyz)
+            warnings.append(f"Mapped point marker to non-colliding sphere: {world_object.id}")
             primitives.append(
                 SimPrimitive(
-                    source_id=obj.id,
-                    source_name=obj.name,
-                    sim_name=sim_name,
-                    source_type=obj.primitive_type,
+                    source_id=world_object.id,
+                    source_name=world_object.name,
+                    sim_name=simulation_name,
+                    source_type=world_object.primitive_type,
                     sim_type="sphere",
-                    position_xyz=position,
-                    quat_wxyz=quat,
+                    position_xyz=simulation_position,
+                    quat_wxyz=simulation_quat_wxyz,
                     size_xyz=(diameter, diameter, diameter),
-                    rgba=rgba,
-                    **_primitive_simulation_fields(obj, collision=False, fixed=True),
+                    rgba=object_rgba,
+                    **_primitive_simulation_fields(world_object, collision=False, fixed=True),
                 )
             )
             continue
-        if obj.primitive_type == "mesh":
-            sim_size = _transform_size(obj.size_xyz, resolved_frame_map)
-            if obj.asset_ref is None:
+        if world_object.primitive_type == "mesh":
+            simulation_size = _transform_size(world_object.size_xyz, resolved_frame_map)
+            if world_object.asset_ref is None:
                 raise WorldLayoutTransferError(
-                    f"Mesh object requires asset_ref for simulator transfer: {obj.id}"
+                    f"Mesh object requires asset_ref for simulator transfer: {world_object.id}"
                 )
             else:
-                warnings.append(f"Mesh object keeps asset_ref for mesh-capable adapters: {obj.id}")
+                warnings.append(
+                    f"Mesh object keeps asset_ref for mesh-capable adapters: {world_object.id}"
+                )
             primitives.append(
                 SimPrimitive(
-                    source_id=obj.id,
-                    source_name=obj.name,
-                    sim_name=sim_name,
-                    source_type=obj.primitive_type,
+                    source_id=world_object.id,
+                    source_name=world_object.name,
+                    sim_name=simulation_name,
+                    source_type=world_object.primitive_type,
                     sim_type="box",
-                    position_xyz=position,
-                    quat_wxyz=quat,
-                    size_xyz=sim_size,
-                    rgba=rgba,
-                    **_primitive_simulation_fields(obj),
+                    position_xyz=simulation_position,
+                    quat_wxyz=simulation_quat_wxyz,
+                    size_xyz=simulation_size,
+                    rgba=object_rgba,
+                    **_primitive_simulation_fields(world_object),
                 )
             )
             continue
-        raise WorldLayoutTransferError(f"Unsupported primitive type: {obj.primitive_type}")
+        raise WorldLayoutTransferError(f"Unsupported primitive type: {world_object.primitive_type}")
     return tuple(primitives), tuple(warnings)
 
 
@@ -651,7 +658,9 @@ def count_transferable_world_objects(
     *,
     include_hidden: bool = False,
 ) -> int:
-    return sum(1 for obj in layout.objects if include_hidden or not obj.is_hidden)
+    return sum(
+        1 for world_object in layout.objects if include_hidden or not world_object.is_hidden
+    )
 
 
 def append_primitives_to_mujoco_mjcf(
