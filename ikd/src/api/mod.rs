@@ -7,7 +7,6 @@ use crate::app_state::AppState;
 
 pub mod approach;
 pub mod approach_ws;
-pub mod dataset_sessions;
 pub mod health;
 pub mod model;
 pub mod target;
@@ -22,31 +21,6 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/version", get(version::version))
-        .route("/datasets/sessions", post(dataset_sessions::create_session))
-        .route(
-            "/datasets/sessions/{session_id}/summary",
-            get(dataset_sessions::summary),
-        )
-        .route(
-            "/datasets/sessions/{session_id}/episodes",
-            get(dataset_sessions::list_episodes),
-        )
-        .route(
-            "/datasets/sessions/{session_id}/episodes/{episode_id}",
-            get(dataset_sessions::get_episode),
-        )
-        .route(
-            "/datasets/sessions/{session_id}/review",
-            get(dataset_sessions::review),
-        )
-        .route(
-            "/datasets/sessions/{session_id}/flags",
-            post(dataset_sessions::update_flags),
-        )
-        .route(
-            "/datasets/sessions/{session_id}/delete",
-            post(dataset_sessions::delete_episodes),
-        )
         .route("/model", post(model::load_model))
         .route("/target", post(target::post_target))
         .route("/approach/scene", post(approach::publish_scene))

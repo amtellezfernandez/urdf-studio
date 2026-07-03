@@ -4,9 +4,7 @@ pub mod approach;
 pub mod build_info;
 pub mod config;
 pub mod control;
-pub mod dataset_sessions;
 pub mod solver;
-pub mod teleop;
 pub mod types;
 pub mod world_bridge;
 

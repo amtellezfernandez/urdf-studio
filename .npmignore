@@ -39,6 +39,7 @@ amd-hackathon/
 pyroki/
 vggt/
 cam-to-sim/
+ikd/target/
 
 # Tests are kept in git but not shipped in the npm artifact
 backend/tests/

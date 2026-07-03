@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use chrono::Utc;
 use ikd::{
     app_state::AppState, approach::ApproachHub, build_info, config::IkdConfig, control::ControlHub,
-    dataset_sessions::DatasetSessionHub, world_bridge::WorldBridgeHub,
+    world_bridge::WorldBridgeHub,
 };
 use tracing::{error, info};
 
@@ -25,7 +25,6 @@ async fn main() {
         control,
         approach: ApproachHub::new(),
         world_bridge,
-        dataset_sessions: DatasetSessionHub::new(),
     };
 
     let router = ikd::build_router(state);

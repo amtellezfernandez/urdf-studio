@@ -6,9 +6,6 @@ use ikd::{
     build_info,
     config::IkdConfig,
     control::ControlHub,
-    dataset_sessions::{
-        DatasetSessionCreateRequest, DatasetSourceKind, DATASET_SESSION_SCHEMA_VERSION_V1,
-    },
     types::{OrientationPolicy, TargetMode, TargetRequest, SCHEMA_VERSION_V1},
     world_bridge::{WorldBridgeSessionCreateRequest, WORLD_BRIDGE_SCHEMA_VERSION_V1},
 };
@@ -50,7 +47,6 @@ const TEST_WORLD_SCENARIO_TIME_MS: u64 = 120;
 const TEST_WORLD_COMMAND_SEQUENCE: u64 = 7;
 const TEST_WORLD_JOINT_1_RAD: f64 = 0.3;
 const TEST_WORLD_JOINT_2_RAD: f64 = -0.1;
-const TEST_DATASET_SESSION_PAGE_LIMIT: u64 = 10;
 
 #[tokio::test]
 async fn health_and_version_endpoints_work() {
@@ -220,121 +216,6 @@ async fn world_bridge_http_and_ws_contract_works() {
 }
 
 #[tokio::test]
-async fn dataset_session_http_contract_works() {
-    let (base_url, _ws_url) = spawn_test_server().await;
-    let client = reqwest::Client::new();
-
-    let create_resp = client
-        .post(format!("{base_url}/datasets/sessions"))
-        .json(&DatasetSessionCreateRequest {
-            schema_version: DATASET_SESSION_SCHEMA_VERSION_V1.to_string(),
-            dataset_label: Some("demo-dataset".to_string()),
-            source_kind: DatasetSourceKind::Recorded,
-            source_name: Some("local-session".to_string()),
-            dataset_metadata: serde_json::json!({ "robot_type": "so101" }),
-            hf_source: None,
-            episodes: vec![
-                serde_json::from_value(serde_json::json!({
-                    "episode_id": "ep-1",
-                    "episode_number": 1,
-                    "frames": [
-                        { "timestamp": 0.0, "joint_positions": { "joint_1": 0.0 } },
-                        { "timestamp": 1000.0, "joint_positions": { "joint_1": 0.01 } }
-                    ],
-                    "metadata": { "joint_names": ["joint_1"] }
-                }))
-                .expect("valid episode request"),
-                serde_json::from_value(serde_json::json!({
-                    "episode_id": "ep-2",
-                    "episode_number": 2,
-                    "frames": [
-                        { "timestamp": 0.0, "joint_positions": { "joint_1": 0.0 } },
-                        { "timestamp": 3000.0, "joint_positions": { "joint_1": 1.0 } }
-                    ],
-                    "metadata": { "naming_status": "unnamed" }
-                }))
-                .expect("valid episode request"),
-            ],
-        })
-        .send()
-        .await
-        .expect("dataset session create request failed");
-    assert_eq!(create_resp.status(), StatusCode::OK);
-    let created: serde_json::Value = create_resp.json().await.expect("invalid create response");
-    let session_id = created["session_id"]
-        .as_str()
-        .expect("session_id should exist")
-        .to_string();
-
-    let summary = client
-        .get(format!("{base_url}/datasets/sessions/{session_id}/summary"))
-        .send()
-        .await
-        .expect("dataset session summary request failed");
-    assert_eq!(summary.status(), StatusCode::OK);
-
-    let episode_list = client
-        .get(format!(
-            "{base_url}/datasets/sessions/{session_id}/episodes?limit={TEST_DATASET_SESSION_PAGE_LIMIT}"
-        ))
-        .send()
-        .await
-        .expect("dataset session episode list request failed");
-    assert_eq!(episode_list.status(), StatusCode::OK);
-    let listed: serde_json::Value = episode_list
-        .json()
-        .await
-        .expect("invalid episode list response");
-    assert_eq!(listed["total"], 2);
-
-    let review = client
-        .get(format!("{base_url}/datasets/sessions/{session_id}/review"))
-        .send()
-        .await
-        .expect("dataset session review request failed");
-    assert_eq!(review.status(), StatusCode::OK);
-
-    let flags = client
-        .post(format!("{base_url}/datasets/sessions/{session_id}/flags"))
-        .json(&serde_json::json!({
-            "schema_version": DATASET_SESSION_SCHEMA_VERSION_V1,
-            "updates": [
-                {
-                    "episode_id": "ep-1",
-                    "flagged": true,
-                    "reasons": ["timing_irregularity"],
-                    "note": "review this"
-                }
-            ]
-        }))
-        .send()
-        .await
-        .expect("dataset session flag request failed");
-    assert_eq!(flags.status(), StatusCode::OK);
-
-    let episode_detail = client
-        .get(format!(
-            "{base_url}/datasets/sessions/{session_id}/episodes/{}",
-            "ep-1"
-        ))
-        .send()
-        .await
-        .expect("dataset session detail request failed");
-    assert_eq!(episode_detail.status(), StatusCode::OK);
-
-    let delete = client
-        .post(format!("{base_url}/datasets/sessions/{session_id}/delete"))
-        .json(&serde_json::json!({
-            "schema_version": DATASET_SESSION_SCHEMA_VERSION_V1,
-            "episode_ids": ["ep-2"]
-        }))
-        .send()
-        .await
-        .expect("dataset session delete request failed");
-    assert_eq!(delete.status(), StatusCode::OK);
-}
-
-#[tokio::test]
 async fn approach_scene_and_task_endpoints_lock_target_snapshot() {
     let (base_url, _ws_url) = spawn_test_server().await;
     let client = reqwest::Client::new();
@@ -497,7 +378,6 @@ async fn spawn_test_server() -> (String, String) {
         control,
         approach: ikd::approach::ApproachHub::new(),
         world_bridge: ikd::world_bridge::WorldBridgeHub::new(),
-        dataset_sessions: ikd::dataset_sessions::DatasetSessionHub::new(),
     };
 
     let app = ikd::build_router(state);
