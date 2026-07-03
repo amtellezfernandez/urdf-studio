@@ -171,10 +171,10 @@ export const getLiveRobotJoints = (
   const joints = robot.joints || {};
   const result: Record<string, number> = {};
   for (const name of Object.keys(joints)) {
-    const j = joints[name];
-    const val = resolveJointScalarValue(j);
-    if (typeof val === "number" && !Number.isNaN(val)) {
-      result[name] = val;
+    const joint = joints[name];
+    const scalarValue = resolveJointScalarValue(joint);
+    if (typeof scalarValue === "number" && !Number.isNaN(scalarValue)) {
+      result[name] = scalarValue;
     }
   }
   // Fallback to provided map if we missed anything
