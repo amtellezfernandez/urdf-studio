@@ -541,7 +541,7 @@ export const useIkSolver = ({
 
   const solveIkForTarget = useCallback(
     async (
-      obj: CreatedObject,
+      requestedTargetObject: CreatedObject,
       options?: {
         preserveRememberedBlockedTarget?: boolean;
       }
@@ -583,7 +583,7 @@ export const useIkSolver = ({
       );
 
       const lockedApproachTask = await lockIkdApproachTask({
-        object: obj,
+        object: requestedTargetObject,
         objects: worldObjects,
         orbitDefaults,
       });
@@ -592,7 +592,7 @@ export const useIkSolver = ({
         return;
       }
       activeIkdApproachTaskIdRef.current = lockedApproachTask.taskId;
-      const targetObj = lockedApproachTask.lockedObject;
+      const lockedTargetObject = lockedApproachTask.lockedObject;
       const objectTargetPosition = lockedApproachTask.objectTargetPositionWorld;
       const isOrbitTarget = lockedApproachTask.isOrbitTarget;
       const isBackendTaskInvalid = () => {
@@ -612,7 +612,7 @@ export const useIkSolver = ({
       setIkDialogOpen(false);
       setIkResult(null);
       setIkError(null);
-      setIkTargetName(targetObj.id);
+      setIkTargetName(lockedTargetObject.id);
       setIsIkRunning(true);
       setIkDebugState({
         roverApproachStatus: onBeforeObjectIkSolve ? "running" : "skipped",
@@ -641,7 +641,7 @@ export const useIkSolver = ({
           const preSolveStartedAtMs = performance.now();
           try {
             const preSolveResult = await onBeforeObjectIkSolve({
-              object: targetObj,
+              object: lockedTargetObject,
               targetPositionWorld,
               isOrbitTarget,
               targetKind,
@@ -662,7 +662,7 @@ export const useIkSolver = ({
             const normalizedPreSolveResult =
               normalizeIkObjectPreSolveResult(preSolveResult);
             if (shouldRememberBlockedTargetAfterPreSolve(normalizedPreSolveResult)) {
-              rememberedBlockedTargetRef.current = targetObj;
+              rememberedBlockedTargetRef.current = lockedTargetObject;
             } else if (
               normalizedPreSolveResult.status === "failed" ||
               normalizedPreSolveResult.status === "timeout"
@@ -740,7 +740,7 @@ export const useIkSolver = ({
         );
 
         let targetPosition = resolveIkObjectSolveTargetWorld({
-          object: targetObj,
+          object: lockedTargetObject,
           objectTargetPositionWorld: objectTargetPosition,
           isOrbitTarget,
           effectorWorldPosition: effPos,
@@ -783,7 +783,7 @@ export const useIkSolver = ({
             // Re-resolve the final contact target from the settled post-approach pose.
             // This allows the solver to switch faces when the original side would force a collision.
             targetPosition = resolveIkObjectSolveTargetWorld({
-              object: targetObj,
+              object: lockedTargetObject,
               objectTargetPositionWorld: objectTargetPosition,
               isOrbitTarget,
               effectorWorldPosition: effPos,
@@ -1039,8 +1039,8 @@ export const useIkSolver = ({
 
   // Follow orbit incrementally using previous IK solution as seed
   const solveIkForObject = useCallback(
-    async (obj: CreatedObject) => {
-      await solveIkForTarget(obj);
+    async (targetObject: CreatedObject) => {
+      await solveIkForTarget(targetObject);
     },
     [solveIkForTarget]
   );
@@ -1076,8 +1076,10 @@ export const useIkSolver = ({
         toast.info("IK is disabled.");
         return;
       }
-      const targetObj = useObjectStore.getState().objects.find((o) => o.id === targetObjectId);
-      if (!targetObj || targetObj.ikTargetType !== "orbit") {
+      const orbitTargetObject = useObjectStore
+        .getState()
+        .objects.find((worldObject) => worldObject.id === targetObjectId);
+      if (!orbitTargetObject || orbitTargetObject.ikTargetType !== "orbit") {
         toast.error("Target is not an orbit");
         return;
       }
@@ -1094,11 +1096,10 @@ export const useIkSolver = ({
 
       const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
 
-      // Determine which point was clicked and calculate the arc to traverse
-      const basePhase = targetObj.orbitPhase ?? orbitDefaults.phaseDeg;
+      const basePhase = orbitTargetObject.orbitPhase ?? orbitDefaults.phaseDeg;
       const secondaryOffset =
-        targetObj.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg;
-      const clickedPoint = targetObj.orbitTargetPoint; // "primary", "secondary", or "center"
+        orbitTargetObject.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg;
+      const clickedPoint = orbitTargetObject.orbitTargetPoint; // "primary", "secondary", or "center"
 
       if (clickedPoint === "center" || !clickedPoint) {
         toast.error("Please click on a primary or secondary orbit point first");
@@ -1138,7 +1139,7 @@ export const useIkSolver = ({
       const computeTargetPosition = (phaseDeg: number): [number, number, number] => {
         return clampTargetPositionToArmReach(
           resolveObjectOrbitPhaseWorldTarget({
-            object: targetObj,
+            object: orbitTargetObject,
             orbitDefaults,
             phaseDeg,
           })
@@ -1227,7 +1228,6 @@ export const useIkSolver = ({
         }
       };
 
-      // Start the orbit following
       orbitFollowAnimationRef.current = requestAnimationFrame(stepOrbit);
     },
     [
