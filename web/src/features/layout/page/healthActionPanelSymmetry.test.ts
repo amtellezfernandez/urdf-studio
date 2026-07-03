@@ -5,6 +5,7 @@ import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirro
 import {
   buildCompatibilityRobotMirrorSelectionState,
   buildRepeatedInertiaSymmetryChainViewState,
+  buildRepeatedInertiaSymmetryRepairText,
   buildRobotMirrorSelectionStats,
   formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
   formatRepeatedInertiaSymmetryDistance,
@@ -94,6 +95,19 @@ const createRepeatedInertiaSymmetryChain = (
   ...overrides,
 });
 
+const createRepeatedInertiaSymmetryRepairPlan = (
+  overrides: Partial<NonNullable<RepeatedInertiaSymmetryChain["recommendedRepair"]>> = {}
+): NonNullable<RepeatedInertiaSymmetryChain["recommendedRepair"]> => {
+  const repairPlan = createRepeatedInertiaSymmetryChain().recommendedRepair;
+  if (!repairPlan) {
+    throw new Error("Expected repeated inertia symmetry repair fixture.");
+  }
+  return {
+    ...repairPlan,
+    ...overrides,
+  };
+};
+
 const createRobotMirrorLinkResult = (
   overrides: Partial<RobotMirrorLinkResult> = {}
 ): RobotMirrorLinkResult => ({
@@ -162,6 +176,10 @@ describe("healthActionPanelSymmetry", () => {
       isVisualizationActive: false,
       outcome: null,
       progress: null,
+      repairText: {
+        detail: "Auto-fix checks up to 2 joints in order.",
+        summary: "Move branch_a",
+      },
       visualizationLinkNames: ["branch_a_link", "branch_b_link"],
     });
 
@@ -192,6 +210,36 @@ describe("healthActionPanelSymmetry", () => {
         tone: "success",
       },
       progress: { appliedStepCount: 2, totalStepCount: 2 },
+    });
+  });
+
+  it("formats repeated inertia symmetry repair text for repair and manual states", () => {
+    expect(buildRepeatedInertiaSymmetryRepairText(null)).toEqual({
+      detail:
+        "This branch is already aligned closely enough that no automatic radial step remains.",
+      summary: "No auto-align steps remain for this branch.",
+    });
+    expect(
+      buildRepeatedInertiaSymmetryRepairText(createRepeatedInertiaSymmetryRepairPlan({
+        articulatedBoundaryJointName: "elbow_joint",
+        blockedTargetLinkNames: ["finger_a", "finger_b"],
+        stepCount: 0,
+        targetLinkNames: ["finger_a", "finger_b"],
+      }))
+    ).toEqual({
+      detail:
+        "All 2 tracked targets sit past elbow_joint; auto-fix will not rewrite that articulation.",
+      summary: "Move branch_a",
+    });
+    expect(
+      buildRepeatedInertiaSymmetryRepairText(createRepeatedInertiaSymmetryRepairPlan({
+        blockedTargetLinkNames: ["finger_b"],
+        stepCount: 1,
+      }))
+    ).toEqual({
+      detail:
+        "Auto-fix can edit up to 1 joint in order; 1 connected target move with those rigid edits.",
+      summary: "Move branch_a",
     });
   });
 

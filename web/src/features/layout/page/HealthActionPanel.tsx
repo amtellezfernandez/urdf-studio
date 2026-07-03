@@ -1245,35 +1245,10 @@ export const HealthActionPanel = ({
                               <div className="mt-2 flex items-center justify-between gap-2 rounded border border-border/30 bg-background/20 px-2 py-1.5 text-[10px] text-muted-foreground">
                                 <div className="min-w-0">
                                   <div className="truncate text-foreground/85">
-                                    {chain.recommendedRepair?.summary ??
-                                      "No auto-align steps remain for this branch."}
+                                    {chainState.repairText.summary}
                                   </div>
                                   <div className="mt-0.5 truncate">
-                                    {chain.recommendedRepair
-                                      ? chain.recommendedRepair.blockedTargetLinkNames.length > 0
-                                        ? chain.recommendedRepair.stepCount > 0
-                                        ? `Auto-fix can edit up to ${chain.recommendedRepair.stepCount} joint${
-                                            chain.recommendedRepair.stepCount === 1 ? "" : "s"
-                                          } in order; ${
-                                            chain.recommendedRepair.blockedTargetLinkNames.length
-                                          } connected target${
-                                            chain.recommendedRepair.blockedTargetLinkNames.length ===
-                                            1
-                                              ? ""
-                                              : "s"
-                                          } move with those rigid edits.`
-                                        : `All ${chain.recommendedRepair.targetLinkNames.length} tracked target${
-                                            chain.recommendedRepair.targetLinkNames.length === 1
-                                              ? ""
-                                              : "s"
-                                          } sit past ${
-                                            chain.recommendedRepair.articulatedBoundaryJointName ??
-                                            "the articulated boundary"
-                                          }; auto-fix will not rewrite that articulation.`
-                                      : `Auto-fix checks up to ${chain.recommendedRepair.stepCount} joint${
-                                          chain.recommendedRepair.stepCount === 1 ? "" : "s"
-                                        } in order.`
-                                      : "This branch is already aligned closely enough that no automatic radial step remains."}
+                                    {chainState.repairText.detail}
                                   </div>
                                 </div>
                                 <Button

@@ -444,6 +444,46 @@ export const formatRepeatedInertiaSymmetryRepairMode = (
   return repairPlan.stepCount === 1 ? "1 joint move" : `${repairPlan.stepCount} joint moves`;
 };
 
+export type RepeatedInertiaSymmetryRepairText = {
+  detail: string;
+  summary: string;
+};
+
+export const buildRepeatedInertiaSymmetryRepairText = (
+  repairPlan: RepeatedInertiaSymmetryChain["recommendedRepair"]
+): RepeatedInertiaSymmetryRepairText => {
+  if (!repairPlan) {
+    return {
+      detail:
+        "This branch is already aligned closely enough that no automatic radial step remains.",
+      summary: "No auto-align steps remain for this branch.",
+    };
+  }
+
+  const jointLabel = repairPlan.stepCount === 1 ? "joint" : "joints";
+  if (repairPlan.blockedTargetLinkNames.length > 0) {
+    if (repairPlan.stepCount > 0) {
+      const connectedTargetLabel =
+        repairPlan.blockedTargetLinkNames.length === 1 ? "target" : "targets";
+      return {
+        detail: `Auto-fix can edit up to ${repairPlan.stepCount} ${jointLabel} in order; ${repairPlan.blockedTargetLinkNames.length} connected ${connectedTargetLabel} move with those rigid edits.`,
+        summary: repairPlan.summary,
+      };
+    }
+
+    const trackedTargetLabel = repairPlan.targetLinkNames.length === 1 ? "target" : "targets";
+    return {
+      detail: `All ${repairPlan.targetLinkNames.length} tracked ${trackedTargetLabel} sit past ${repairPlan.articulatedBoundaryJointName ?? "the articulated boundary"}; auto-fix will not rewrite that articulation.`,
+      summary: repairPlan.summary,
+    };
+  }
+
+  return {
+    detail: `Auto-fix checks up to ${repairPlan.stepCount} ${jointLabel} in order.`,
+    summary: repairPlan.summary,
+  };
+};
+
 export const formatRepeatedInertiaSymmetryAutoAlignButtonLabel = ({
   completedProgress,
   isActing,
@@ -512,6 +552,7 @@ export type RepeatedInertiaSymmetryChainViewState = {
     appliedStepCount: number;
     totalStepCount: number;
   } | null;
+  repairText: RepeatedInertiaSymmetryRepairText;
   scopeKey: string;
   visualizationLinkNames: string[];
 };
@@ -547,6 +588,7 @@ export const buildRepeatedInertiaSymmetryChainViewState = ({
       repeatedInertiaSymmetryActingProgress?.chainKey === chainKey
         ? repeatedInertiaSymmetryActingProgress
         : null,
+    repairText: buildRepeatedInertiaSymmetryRepairText(chain.recommendedRepair),
     scopeKey,
     visualizationLinkNames: collectRepeatedInertiaSymmetryFamilyLinkNames(chain),
   };
