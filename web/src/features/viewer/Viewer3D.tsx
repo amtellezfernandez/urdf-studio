@@ -6064,7 +6064,6 @@ export const Viewer3D = ({
   });
 
   useDragModeEffects({
-    dragMode: effectiveDragMode,
     isDragModeMenuOpen,
     setIsDragModeMenuOpen,
   });

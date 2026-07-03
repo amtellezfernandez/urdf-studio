@@ -40,7 +40,7 @@ export const recordPlaybackTrace = (
     typeof performance !== "undefined" ? performance.now() : Date.now();
   const entry: PlaybackTraceEntry = { type, at: timestamp, payload };
   pushTraceEntry(entry);
-  console.log("[playback]", entry);
+  console.debug("[playback]", entry);
 };
 
 const diffPlaybackState = (

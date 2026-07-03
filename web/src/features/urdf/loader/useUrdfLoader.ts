@@ -33,6 +33,10 @@ import {
 } from "@/features/urdf/xacro/xacroClient";
 import { aliasRepeatedLinkMeshFiles } from "@/features/urdf/loader/repeatedMeshAlias";
 import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
+import {
+  formatMeshRegistrationDebugLine,
+  formatUrdfMeshLoadDiagnostics,
+} from "@/features/urdf/loader/urdfLoaderDiagnostics";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
@@ -256,8 +260,12 @@ const indexMeshResources = async (
           registerMeshFilePaths(meshes, collisionKeys, relativePath, file.name, blob);
 
           if (import.meta.env.DEV && options.logRegistrations) {
-            console.log(
-              `Mesh ${file.name} registered with webkitRelativePath: "${relativePath}" (normalized: "${normalizedPath}")`
+            console.debug(
+              formatMeshRegistrationDebugLine({
+                filename: file.name,
+                normalizedPath,
+                relativePath,
+              })
             );
           }
 
@@ -730,29 +738,18 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         });
 
         if (import.meta.env.DEV) {
-          console.log(
-            `Loaded ${meshAssets.length} mesh files with ${Object.keys(meshes).length} total path variations`
-          );
-          console.log(
-            `URDF references: ${urdfMeshReferences.length} total, ${
-              debugInfo.filter((m) => m.found).length
-            } matched, ${issueSummary.unmatchedRefs.length} unmatched`
-          );
+          formatUrdfMeshLoadDiagnostics({
+            debugMeshInfo: debugInfo,
+            loadedMeshAssetCount: meshAssets.length,
+            totalPathVariationCount: Object.keys(meshes).length,
+            unmatchedRefCount: issueSummary.unmatchedRefs.length,
+            urdfMeshReferenceCount: urdfMeshReferences.length,
+          }).forEach((line) => {
+            console.debug(line);
+          });
           if (issueSummary.unmatchedRefs.length > 0) {
             console.warn("Unmatched URDF references:", issueSummary.unmatchedRefs);
           }
-          debugInfo.forEach((info) => {
-            const meshLabel = `${info.filename} (${info.webkitRelativePath})`;
-            console.log(`  ${meshLabel}: ${info.registeredPaths.length} path variations`);
-            console.log(`    Primary: ${info.registeredPaths[0] || "N/A"}`);
-            if (info.registeredPaths.length > 1) {
-              console.log(
-                `    Others: ${info.registeredPaths.slice(1, 10).join(", ")}${
-                  info.registeredPaths.length > 10 ? "..." : ""
-                }`
-              );
-            }
-          });
         }
 
         toast.success(`Loaded ${urdfFilename} with ${meshAssets.length} mesh files`);
