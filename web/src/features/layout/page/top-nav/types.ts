@@ -60,8 +60,8 @@ export type TopNavBarProps = {
   setShowUrdfEditor: (show: boolean) => void;
   urdfViewMode: UrdfViewMode;
   setUrdfViewMode: (mode: UrdfViewMode) => void;
-  showPovCameras: boolean;
-  setShowPovCameras: (show: boolean) => void;
+  isPovCamerasOverlayOpen: boolean;
+  onOpenPovCamerasOverlay: () => void;
   inertialVisualization: InertialVisualizationSettings;
   setInertialVisualization: Dispatch<SetStateAction<InertialVisualizationSettings>>;
   onValidateCurrentWorldScenePackage: () => void;
@@ -79,8 +79,8 @@ export type TopNavBarProps = {
   onListWorldScenePackages: () => void;
   onOpenWorldHubBrowser?: () => void;
   openObjectCreator: (type?: ObjectCreatorType) => void;
-  setShowCameraCreator: (show: boolean) => void;
-  setShowCameraUpload: (show: boolean) => void;
+  onOpenCameraCreator: () => void;
+  onOpenCameraUpload: () => void;
   exportCamerasAsJSON: () => void;
   exportCamerasAsYAML: () => void;
   hasCamerasToExport: boolean;

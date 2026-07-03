@@ -11,12 +11,12 @@ type CreationDialogsProps = {
   openObjectCreator: (type?: ObjectCreatorType) => void;
   closeObjectCreator: () => void;
   robotBoundingBox: THREE.Box3 | null;
-  showCameraCreator: boolean;
-  setShowCameraCreator: (open: boolean) => void;
+  isCameraCreatorOpen: boolean;
+  onCameraCreatorOpenChange: (open: boolean) => void;
   availableJoints: string[];
   robot: URDFRobot | null;
-  showCameraUpload: boolean;
-  setShowCameraUpload: (open: boolean) => void;
+  isCameraUploadOpen: boolean;
+  onCameraUploadOpenChange: (open: boolean) => void;
 };
 
 export const CreationDialogs = ({
@@ -25,12 +25,12 @@ export const CreationDialogs = ({
   openObjectCreator,
   closeObjectCreator,
   robotBoundingBox,
-  showCameraCreator,
-  setShowCameraCreator,
+  isCameraCreatorOpen,
+  onCameraCreatorOpenChange,
   availableJoints,
   robot,
-  showCameraUpload,
-  setShowCameraUpload,
+  isCameraUploadOpen,
+  onCameraUploadOpenChange,
 }: CreationDialogsProps) => (
   <>
     <ObjectCreator
@@ -41,12 +41,12 @@ export const CreationDialogs = ({
     />
 
     <CameraCreator
-      open={showCameraCreator}
-      onOpenChange={setShowCameraCreator}
+      open={isCameraCreatorOpen}
+      onOpenChange={onCameraCreatorOpenChange}
       availableJoints={availableJoints}
       robot={robot}
     />
 
-    <CameraConfigUpload open={showCameraUpload} onOpenChange={setShowCameraUpload} />
+    <CameraConfigUpload open={isCameraUploadOpen} onOpenChange={onCameraUploadOpenChange} />
   </>
 );

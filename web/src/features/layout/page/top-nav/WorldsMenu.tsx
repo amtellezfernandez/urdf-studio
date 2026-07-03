@@ -19,7 +19,7 @@ type WorldsMenuProps = Pick<
   | "onOpenWorldRolloutReview"
   | "exportCamerasAsJSON"
   | "hasCamerasToExport"
-  | "setShowCameraUpload"
+  | "onOpenCameraUpload"
 >;
 
 export function WorldsMenu({
@@ -37,7 +37,7 @@ export function WorldsMenu({
   onOpenWorldRolloutReview,
   exportCamerasAsJSON,
   hasCamerasToExport,
-  setShowCameraUpload,
+  onOpenCameraUpload,
 }: WorldsMenuProps) {
   return (
     <DropdownMenu>
@@ -98,7 +98,7 @@ export function WorldsMenu({
         >
           Export Camera Setup
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setShowCameraUpload(true)} className={menuItemClass}>
+        <DropdownMenuItem onClick={onOpenCameraUpload} className={menuItemClass}>
           Import Camera Setup
         </DropdownMenuItem>
       </DropdownMenuContent>

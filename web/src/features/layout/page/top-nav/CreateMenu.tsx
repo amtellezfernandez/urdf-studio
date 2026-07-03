@@ -11,9 +11,9 @@ import { cn } from "@/shared/lib/utils";
 import type { TopNavBarProps } from "./types";
 import { menuContentClass, menuItemClass, menuTriggerClass } from "./menuStyles";
 
-type CreateMenuProps = Pick<TopNavBarProps, "openObjectCreator" | "setShowCameraCreator">;
+type CreateMenuProps = Pick<TopNavBarProps, "openObjectCreator" | "onOpenCameraCreator">;
 
-export function CreateMenu({ openObjectCreator, setShowCameraCreator }: CreateMenuProps) {
+export function CreateMenu({ openObjectCreator, onOpenCameraCreator }: CreateMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -34,7 +34,7 @@ export function CreateMenu({ openObjectCreator, setShowCameraCreator }: CreateMe
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className={menuItemClass}>Camera</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={cn("w-48", menuContentClass)}>
-            <DropdownMenuItem onClick={() => setShowCameraCreator(true)} className={menuItemClass}>
+            <DropdownMenuItem onClick={onOpenCameraCreator} className={menuItemClass}>
               Add Camera
             </DropdownMenuItem>
           </DropdownMenuSubContent>

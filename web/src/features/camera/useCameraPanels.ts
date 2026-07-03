@@ -1,16 +1,16 @@
 import { useState } from "react";
 
 export const useCameraPanels = () => {
-  const [showCameraCreator, setShowCameraCreator] = useState(false);
-  const [showCameraUpload, setShowCameraUpload] = useState(false);
-  const [showPovCameras, setShowPovCameras] = useState(false);
+  const [isCameraCreatorOpen, setIsCameraCreatorOpen] = useState(false);
+  const [isCameraUploadOpen, setIsCameraUploadOpen] = useState(false);
+  const [isPovCamerasOverlayOpen, setIsPovCamerasOverlayOpen] = useState(false);
 
   return {
-    showCameraCreator,
-    setShowCameraCreator,
-    showCameraUpload,
-    setShowCameraUpload,
-    showPovCameras,
-    setShowPovCameras,
+    isCameraCreatorOpen,
+    setIsCameraCreatorOpen,
+    isCameraUploadOpen,
+    setIsCameraUploadOpen,
+    isPovCamerasOverlayOpen,
+    setIsPovCamerasOverlayOpen,
   };
 };

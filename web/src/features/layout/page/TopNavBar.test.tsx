@@ -45,8 +45,8 @@ const createProps = (): TopNavBarProps => ({
   setShowUrdfEditor: vi.fn(),
   urdfViewMode: "split",
   setUrdfViewMode: vi.fn(),
-  showPovCameras: false,
-  setShowPovCameras: vi.fn(),
+  isPovCamerasOverlayOpen: false,
+  onOpenPovCamerasOverlay: vi.fn(),
   inertialVisualization: {
     showGlobalCOM: false,
     showLinkCOM: false,
@@ -66,8 +66,8 @@ const createProps = (): TopNavBarProps => ({
   onListWorldScenePackages: vi.fn(),
   onOpenWorldHubBrowser: vi.fn(),
   openObjectCreator: vi.fn(),
-  setShowCameraCreator: vi.fn(),
-  setShowCameraUpload: vi.fn(),
+  onOpenCameraCreator: vi.fn(),
+  onOpenCameraUpload: vi.fn(),
   exportCamerasAsJSON: vi.fn(),
   exportCamerasAsYAML: vi.fn(),
   hasCamerasToExport: false,
@@ -262,6 +262,51 @@ describe("TopNavBar", () => {
       workspaceChangeMenuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(props.onImportWorkspaceChangeSet).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("routes camera scene and view actions through explicit open callbacks", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = {
+      ...createProps(),
+      showMenus: true,
+      onOpenCameraUpload: vi.fn(),
+      onOpenPovCamerasOverlay: vi.fn(),
+    };
+
+    await renderTopNavBar(root, props);
+
+    const openMenu = async (label: string) => {
+      const menuButton = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent === label
+      );
+      expect(menuButton).toBeTruthy();
+      await act(async () => {
+        menuButton?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+      });
+    };
+
+    const clickMenuItem = async (label: string) => {
+      const menuItem = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
+        (item) => item.textContent === label
+      );
+      expect(menuItem).toBeTruthy();
+      await act(async () => {
+        menuItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    };
+
+    await openMenu("Scene");
+    await clickMenuItem("Import Camera Setup");
+    expect(props.onOpenCameraUpload).toHaveBeenCalledTimes(1);
+
+    await openMenu("View");
+    await clickMenuItem("POV Cameras");
+    expect(props.onOpenPovCamerasOverlay).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

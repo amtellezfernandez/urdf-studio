@@ -822,12 +822,12 @@ const Index = () => {
   ]);
   // Camera creation state
   const {
-    showCameraCreator,
-    setShowCameraCreator,
-    showCameraUpload,
-    setShowCameraUpload,
-    showPovCameras,
-    setShowPovCameras,
+    isCameraCreatorOpen,
+    setIsCameraCreatorOpen,
+    isCameraUploadOpen,
+    setIsCameraUploadOpen,
+    isPovCamerasOverlayOpen,
+    setIsPovCamerasOverlayOpen,
   } = useCameraPanels();
 
   // Keep selection context in sync for auto end-effector selection and validity checks
@@ -2674,8 +2674,8 @@ const Index = () => {
     setShowUrdfEditor,
     urdfViewMode,
     setUrdfViewMode,
-    showPovCameras,
-    setShowPovCameras,
+    isPovCamerasOverlayOpen,
+    onOpenPovCamerasOverlay: () => setIsPovCamerasOverlayOpen(true),
     inertialVisualization,
     setInertialVisualization,
     onValidateCurrentWorldScenePackage: handleValidateCurrentWorldScenePackage,
@@ -2697,8 +2697,8 @@ const Index = () => {
     onListWorldScenePackages: handleListWorldScenePackages,
     onOpenWorldHubBrowser: handleOpenWorldHubBrowser,
     openObjectCreator,
-    setShowCameraCreator,
-    setShowCameraUpload,
+    onOpenCameraCreator: () => setIsCameraCreatorOpen(true),
+    onOpenCameraUpload: () => setIsCameraUploadOpen(true),
     exportCamerasAsJSON,
     exportCamerasAsYAML,
     hasCamerasToExport,
@@ -2874,10 +2874,10 @@ const Index = () => {
   };
 
   const povCamerasOverlayProps: PageLayoutProps["povCamerasOverlayProps"] = {
-    open: showPovCameras,
+    open: isPovCamerasOverlayOpen,
     cameras,
     selectedCameraId,
-    onClose: () => setShowPovCameras(false),
+    onClose: () => setIsPovCamerasOverlayOpen(false),
   };
 
   const creationDialogsProps: PageLayoutProps["creationDialogsProps"] = {
@@ -2886,12 +2886,12 @@ const Index = () => {
     openObjectCreator,
     closeObjectCreator,
     robotBoundingBox,
-    showCameraCreator,
-    setShowCameraCreator,
+    isCameraCreatorOpen,
+    onCameraCreatorOpenChange: setIsCameraCreatorOpen,
     availableJoints,
     robot,
-    showCameraUpload,
-    setShowCameraUpload,
+    isCameraUploadOpen,
+    onCameraUploadOpenChange: setIsCameraUploadOpen,
   };
 
   const { pageLayoutProps, viewerLayoutProps } = useIndexPageLayoutProps({

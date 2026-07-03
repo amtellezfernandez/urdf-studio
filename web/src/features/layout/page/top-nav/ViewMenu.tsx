@@ -37,8 +37,8 @@ type ViewMenuProps = Pick<
   | "setShowUrdfEditor"
   | "urdfViewMode"
   | "setUrdfViewMode"
-  | "showPovCameras"
-  | "setShowPovCameras"
+  | "isPovCamerasOverlayOpen"
+  | "onOpenPovCamerasOverlay"
   | "inertialVisualization"
   | "setInertialVisualization"
 > & {
@@ -70,8 +70,8 @@ export function ViewMenu({
   setShowUrdfEditor,
   urdfViewMode,
   setUrdfViewMode,
-  showPovCameras,
-  setShowPovCameras,
+  isPovCamerasOverlayOpen,
+  onOpenPovCamerasOverlay,
   inertialVisualization,
   setInertialVisualization,
   minimalMode = false,
@@ -282,8 +282,8 @@ export function ViewMenu({
           3D Visualization
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => setShowPovCameras(true)}
-          className={cn(menuItemClass, showPovCameras && "bg-[#3d3d3d] text-white")}
+          onClick={onOpenPovCamerasOverlay}
+          className={cn(menuItemClass, isPovCamerasOverlayOpen && "bg-[#3d3d3d] text-white")}
         >
           POV Cameras
         </DropdownMenuItem>

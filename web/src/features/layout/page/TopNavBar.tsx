@@ -71,7 +71,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
                 onOpenWorldRolloutReview={props.onOpenWorldRolloutReview}
                 exportCamerasAsJSON={props.exportCamerasAsJSON}
                 hasCamerasToExport={props.hasCamerasToExport}
-                setShowCameraUpload={props.setShowCameraUpload}
+                onOpenCameraUpload={props.onOpenCameraUpload}
               />
             ) : null}
 
@@ -102,8 +102,8 @@ export const TopNavBar = (props: TopNavBarProps) => {
                 setShowUrdfEditor={props.setShowUrdfEditor}
                 urdfViewMode={props.urdfViewMode}
                 setUrdfViewMode={props.setUrdfViewMode}
-                showPovCameras={props.showPovCameras}
-                setShowPovCameras={props.setShowPovCameras}
+                isPovCamerasOverlayOpen={props.isPovCamerasOverlayOpen}
+                onOpenPovCamerasOverlay={props.onOpenPovCamerasOverlay}
                 inertialVisualization={props.inertialVisualization}
                 setInertialVisualization={props.setInertialVisualization}
               />
@@ -112,7 +112,7 @@ export const TopNavBar = (props: TopNavBarProps) => {
             {workspaceModeUi.showStudioChrome ? (
               <CreateMenu
                 openObjectCreator={props.openObjectCreator}
-                setShowCameraCreator={props.setShowCameraCreator}
+                onOpenCameraCreator={props.onOpenCameraCreator}
               />
             ) : null}
           </>
