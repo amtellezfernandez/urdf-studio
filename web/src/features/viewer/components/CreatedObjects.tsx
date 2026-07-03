@@ -42,6 +42,98 @@ type CreatedObjectsProps = {
   robot: URDFRobot | null;
 };
 
+type ObjectPointerHandlers = {
+  onClick: (event: ThreeEvent<MouseEvent>, objectId: string) => void;
+  onDoubleClick: (objectId: string) => void;
+  onPointerEnter: (event: ThreeEvent<PointerEvent>, objectId: string) => void;
+  onPointerLeave: (event: ThreeEvent<PointerEvent>) => void;
+};
+
+type CreatedObjectBodyProps = ObjectPointerHandlers & {
+  edgeColor: string;
+  isEmphasized: boolean;
+  object: CreatedObject;
+  objectRotation: [number, number, number];
+  pointDisplayRadiusM: number;
+  targetTint: string;
+};
+
+function CreatedObjectBody({
+  edgeColor,
+  isEmphasized,
+  object,
+  objectRotation,
+  onClick,
+  onDoubleClick,
+  onPointerEnter,
+  onPointerLeave,
+  pointDisplayRadiusM,
+  targetTint,
+}: CreatedObjectBodyProps) {
+  const objectPosition: [number, number, number] = [
+    object.position.x,
+    object.position.y,
+    object.position.z,
+  ];
+  const pointerHandlers = {
+    onClick: (event: ThreeEvent<MouseEvent>) => onClick(event, object.id),
+    onDoubleClick: (event: ThreeEvent<MouseEvent>) => {
+      event.stopPropagation();
+      onDoubleClick(object.id);
+    },
+    onPointerOver: (event: ThreeEvent<PointerEvent>) => onPointerEnter(event, object.id),
+    onPointerMove: (event: ThreeEvent<PointerEvent>) => onPointerEnter(event, object.id),
+    onPointerOut: onPointerLeave,
+  };
+
+  if (object.type === "point") {
+    return (
+      <>
+        <mesh position={objectPosition} {...pointerHandlers}>
+          <sphereGeometry args={[pointDisplayRadiusM, 18, 12]} />
+          <meshStandardMaterial
+            color={targetTint}
+            transparent={true}
+            opacity={isEmphasized ? 0.98 : 0.85}
+            emissive={isEmphasized ? edgeColor : "#000000"}
+            emissiveIntensity={isEmphasized ? 0.52 : 0}
+            metalness={0.1}
+            roughness={0.5}
+          />
+        </mesh>
+        <lineSegments position={objectPosition}>
+          <edgesGeometry args={[new THREE.SphereGeometry(pointDisplayRadiusM, 12, 8)]} />
+          <lineBasicMaterial
+            color={isEmphasized ? edgeColor : "#aaaaaa"}
+            linewidth={2}
+          />
+        </lineSegments>
+      </>
+    );
+  }
+
+  return (
+    <mesh position={objectPosition} rotation={objectRotation} {...pointerHandlers}>
+      {object.type === "sphere" ? (
+        <sphereGeometry args={[object.size.x * 0.5, 24, 18]} />
+      ) : object.type === "cylinder" ? (
+        <cylinderGeometry
+          args={[object.size.x * 0.5, object.size.y * 0.5, object.size.z, 24]}
+        />
+      ) : (
+        <boxGeometry args={[object.size.x, object.size.y, object.size.z]} />
+      )}
+      <meshStandardMaterial
+        color={targetTint}
+        transparent={true}
+        opacity={isEmphasized ? 0.88 : 0.6}
+        emissive={isEmphasized ? edgeColor : "#000000"}
+        emissiveIntensity={isEmphasized ? 0.42 : 0}
+      />
+    </mesh>
+  );
+}
+
 export const CreatedObjects = ({
   robot,
   gpuMode = "high",
@@ -266,111 +358,18 @@ export const CreatedObjects = ({
                 onDragStateChange={onEditDragStateChange}
               />
             )}
-            {obj.type === "point" ? (
-              <>
-                <mesh
-                  position={[obj.position.x, obj.position.y, obj.position.z]}
-                  onClick={(e) => handleObjectClick(e, obj.id)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleObjectMoveRequest(obj.id);
-                  }}
-                  onPointerOver={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerMove={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerOut={(e) => handlePointerLeave(e)}
-                >
-                  <sphereGeometry args={[pointDisplayRadiusM, 18, 12]} />
-                  <meshStandardMaterial
-                    color={targetTint}
-                    transparent={true}
-                    opacity={isEmphasized ? 0.98 : 0.85}
-                    emissive={isEmphasized ? edgeColor : "#000000"}
-                    emissiveIntensity={isEmphasized ? 0.52 : 0}
-                    metalness={0.1}
-                    roughness={0.5}
-                  />
-                </mesh>
-                <lineSegments position={[obj.position.x, obj.position.y, obj.position.z]}>
-                  <edgesGeometry args={[new THREE.SphereGeometry(pointDisplayRadiusM, 12, 8)]} />
-                  <lineBasicMaterial
-                    color={isEmphasized ? edgeColor : "#aaaaaa"}
-                    linewidth={2}
-                  />
-                </lineSegments>
-              </>
-            ) : obj.type === "sphere" ? (
-              <>
-                <mesh
-                  position={[obj.position.x, obj.position.y, obj.position.z]}
-                  rotation={objectRotation}
-                  onClick={(e) => handleObjectClick(e, obj.id)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleObjectMoveRequest(obj.id);
-                  }}
-                  onPointerOver={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerMove={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerOut={(e) => handlePointerLeave(e)}
-                >
-                  <sphereGeometry args={[obj.size.x * 0.5, 24, 18]} />
-                  <meshStandardMaterial
-                    color={targetTint}
-                    transparent={true}
-                    opacity={isEmphasized ? 0.88 : 0.6}
-                    emissive={isEmphasized ? edgeColor : "#000000"}
-                    emissiveIntensity={isEmphasized ? 0.42 : 0}
-                  />
-                </mesh>
-              </>
-            ) : obj.type === "cylinder" ? (
-              <>
-                <mesh
-                  position={[obj.position.x, obj.position.y, obj.position.z]}
-                  rotation={objectRotation}
-                  onClick={(e) => handleObjectClick(e, obj.id)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleObjectMoveRequest(obj.id);
-                  }}
-                  onPointerOver={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerMove={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerOut={(e) => handlePointerLeave(e)}
-                >
-                  <cylinderGeometry args={[obj.size.x * 0.5, obj.size.y * 0.5, obj.size.z, 24]} />
-                  <meshStandardMaterial
-                    color={targetTint}
-                    transparent={true}
-                    opacity={isEmphasized ? 0.88 : 0.6}
-                    emissive={isEmphasized ? edgeColor : "#000000"}
-                    emissiveIntensity={isEmphasized ? 0.42 : 0}
-                  />
-                </mesh>
-              </>
-            ) : (
-              <>
-                <mesh
-                  position={[obj.position.x, obj.position.y, obj.position.z]}
-                  rotation={objectRotation}
-                  onClick={(e) => handleObjectClick(e, obj.id)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleObjectMoveRequest(obj.id);
-                  }}
-                  onPointerOver={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerMove={(e) => handlePointerEnter(e, obj.id)}
-                  onPointerOut={(e) => handlePointerLeave(e)}
-                >
-                  <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
-                  <meshStandardMaterial
-                    color={targetTint}
-                    transparent={true}
-                    opacity={isEmphasized ? 0.88 : 0.6}
-                    emissive={isEmphasized ? edgeColor : "#000000"}
-                    emissiveIntensity={isEmphasized ? 0.42 : 0}
-                  />
-                </mesh>
-              </>
-            )}
+            <CreatedObjectBody
+              object={obj}
+              objectRotation={objectRotation}
+              targetTint={targetTint}
+              edgeColor={edgeColor}
+              isEmphasized={isEmphasized}
+              pointDisplayRadiusM={pointDisplayRadiusM}
+              onClick={handleObjectClick}
+              onDoubleClick={handleObjectMoveRequest}
+              onPointerEnter={handlePointerEnter}
+              onPointerLeave={handlePointerLeave}
+            />
 
             <group position={[obj.position.x, obj.position.y, obj.position.z]}>
               <mesh raycast={() => null}>
