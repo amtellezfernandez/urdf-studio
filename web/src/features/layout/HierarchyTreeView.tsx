@@ -30,6 +30,29 @@ export interface HierarchyTreeViewProps {
   structureLabels: RobotStructureLabels;
 }
 
+type LinkWorldPose = {
+  position: { x: number; y: number; z: number };
+  quaternion: { w: number; x: number; y: number; z: number };
+};
+
+type TreeIndentedFrameProps = {
+  children: React.ReactNode;
+  connectorBottom?: string;
+  connectorDepth?: number;
+  paddingDepth: number;
+};
+
+type HierarchyLinkRowProps = {
+  isEndEffector: boolean;
+  isLeaf: boolean;
+  isSelected: boolean;
+  linkCoordinates: LinkWorldPose | null;
+  linkName: string;
+  onSelect: () => void;
+  onToggleEndEffector?: () => void;
+  structureLabel: string | null;
+};
+
 const HIERARCHY_TREE_PARAMS = JOINT_LIST_SIDEBAR_PARAMS.hierarchyTree;
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -38,6 +61,168 @@ const hexToRgba = (hex: string, alpha: number) => {
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
+
+function TreeBranchConnector({
+  bottom,
+  connectorDepth,
+}: {
+  bottom: string;
+  connectorDepth: number;
+}) {
+  const connectorLeft =
+    connectorDepth * HIERARCHY_TREE_PARAMS.indentPx +
+    HIERARCHY_TREE_PARAMS.lineOffsetPx;
+  return (
+    <>
+      <div
+        className="absolute top-1/2 bg-border/30"
+        style={{
+          left: `${connectorLeft}px`,
+          width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
+          height: "1px",
+        }}
+      />
+      <div
+        className="absolute bg-border/30"
+        style={{
+          left: `${connectorLeft}px`,
+          top: "0",
+          bottom,
+          width: "1px",
+        }}
+      />
+    </>
+  );
+}
+
+function TreeIndentedFrame({
+  children,
+  connectorBottom,
+  connectorDepth,
+  paddingDepth,
+}: TreeIndentedFrameProps) {
+  return (
+    <div
+      className="relative"
+      style={{ paddingLeft: `${paddingDepth * HIERARCHY_TREE_PARAMS.indentPx}px` }}
+    >
+      {connectorDepth !== undefined && connectorBottom ? (
+        <TreeBranchConnector
+          connectorDepth={connectorDepth}
+          bottom={connectorBottom}
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+function HierarchyLinkRow({
+  isEndEffector,
+  isLeaf,
+  isSelected,
+  linkCoordinates,
+  linkName,
+  onSelect,
+  onToggleEndEffector,
+  structureLabel,
+}: HierarchyLinkRowProps) {
+  return (
+    <div
+      className={cn(
+        "px-1.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
+        isSelected && "hover:bg-muted/30",
+        isLeaf && isEndEffector ? "py-1" : "py-0.5"
+      )}
+      style={
+        isSelected
+          ? {
+              backgroundColor: hexToRgba(HIERARCHY_TREE_PARAMS.linkColor, 0.15),
+            }
+          : undefined
+      }
+      onClick={onSelect}
+    >
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Link2
+          className={cn(
+            "h-3 w-3 shrink-0",
+            isSelected ? "text-primary" : "text-muted-foreground/60"
+          )}
+        />
+        <span
+          className={cn(
+            isLeaf && isEndEffector ? "text-[11px] font-semibold" : "text-[10px]",
+            "min-w-0 flex-1 truncate",
+            isSelected ? "" : "text-muted-foreground/60"
+          )}
+          style={
+            isSelected
+              ? { color: HIERARCHY_TREE_PARAMS.linkColor }
+              : undefined
+          }
+          title={linkName}
+        >
+          {linkName}
+        </span>
+        {structureLabel ? (
+          <span className="text-[7px] px-1 py-0 bg-muted/20 border border-border/40 text-muted-foreground rounded font-semibold uppercase tracking-[0.05em]">
+            {structureLabel}
+          </span>
+        ) : null}
+        {onToggleEndEffector ? (
+          <button
+            type="button"
+            className={cn(
+              "text-[7px] px-1 py-0 rounded border font-semibold uppercase tracking-[0.05em]",
+              isEndEffector
+                ? "border-primary/60 bg-primary/20 text-primary"
+                : "border-border/40 bg-muted/20 text-muted-foreground hover:text-foreground"
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleEndEffector();
+            }}
+            title={isEndEffector ? "Clear end-effector" : "Mark as end-effector"}
+          >
+            {isEndEffector ? "EE" : "Set EE"}
+          </button>
+        ) : null}
+        {isEndEffector && !onToggleEndEffector ? (
+          <span
+            className={cn(
+              "bg-primary/20 text-primary rounded",
+              isLeaf
+                ? "text-[8px] px-1 py-0.5 font-semibold"
+                : "text-[7px] px-0.5 py-0 font-medium"
+            )}
+          >
+            EE
+          </span>
+        ) : null}
+      </div>
+
+      {isLeaf && isEndEffector && linkCoordinates ? (
+        <div className="mt-1 pt-1 border-t border-border/30 space-y-0.5">
+          <div className="text-[9px] font-mono text-emerald-600">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">x:</span>
+              <span>{linkCoordinates.position.x.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">y:</span>
+              <span>{linkCoordinates.position.y.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">z:</span>
+              <span>{linkCoordinates.position.z.toFixed(4)}</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export const HierarchyTreeView = React.memo(({
   hierarchyTree,
@@ -95,7 +280,7 @@ export const HierarchyTreeView = React.memo(({
       const joints = hierarchyTree.linkToJoints.get(linkName) || [];
       const isEE = endEffectorLink === linkName;
 
-      let linkCoordinates: { position: { x: number; y: number; z: number }; quaternion: { w: number; x: number; y: number; z: number } } | null = null;
+      let linkCoordinates: LinkWorldPose | null = null;
       if (isEE && robot) {
         try {
           const linkObj = robot.links?.[linkName] ?? robot.getObjectByName?.(linkName);
@@ -117,205 +302,52 @@ export const HierarchyTreeView = React.memo(({
 
       if (joints.length === 0) {
         return (
-          <div
+          <TreeIndentedFrame
             key={`link-${linkName}-${depth}`}
-            className="relative"
-            style={{ paddingLeft: `${depth * HIERARCHY_TREE_PARAMS.indentPx}px` }}
+            paddingDepth={depth}
+            connectorDepth={depth > 0 ? depth - 1 : undefined}
+            connectorBottom={depth > 0 ? "50%" : undefined}
           >
-            {depth > 0 && (
-              <>
-                <div
-                  className="absolute top-1/2 bg-border/30"
-                  style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
-                    width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
-                    height: "1px",
-                  }}
-                />
-                <div
-                  className="absolute bg-border/30"
-                  style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
-                    top: "0",
-                    bottom: "50%",
-                    width: "1px",
-                  }}
-                />
-              </>
-            )}
-            <div
-              className={cn(
-                "px-1.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-                isSelected && "hover:bg-muted/30",
-                isEE ? "py-1" : "py-0.5"
-              )}
-              style={
-                isSelected
-                  ? {
-                      backgroundColor: hexToRgba(HIERARCHY_TREE_PARAMS.linkColor, 0.15),
-                    }
+            <HierarchyLinkRow
+              linkName={linkName}
+              isSelected={isSelected}
+              isEndEffector={isEE}
+              isLeaf={true}
+              structureLabel={structureLabel}
+              linkCoordinates={linkCoordinates}
+              onSelect={() => selectHierarchyLink(linkName)}
+              onToggleEndEffector={
+                onMarkAsEndEffector
+                  ? () => toggleEndEffectorForLink(linkName)
                   : undefined
               }
-              onClick={() => selectHierarchyLink(linkName)}
-            >
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Link2 className={cn("h-3 w-3 shrink-0", isSelected ? "text-primary" : "text-muted-foreground/60")} />
-                <span
-                  className={cn(
-                    isEE ? "text-[11px] font-semibold" : "text-[10px]",
-                    "min-w-0 flex-1 truncate",
-                    isSelected ? "" : "text-muted-foreground/60"
-                  )}
-                  style={
-                    isSelected
-                      ? { color: HIERARCHY_TREE_PARAMS.linkColor }
-                      : undefined
-                  }
-                  title={linkName}
-                >
-                  {linkName}
-                </span>
-                {structureLabel ? (
-                  <span className="text-[7px] px-1 py-0 bg-muted/20 border border-border/40 text-muted-foreground rounded font-semibold uppercase tracking-[0.05em]">
-                    {structureLabel}
-                  </span>
-                ) : null}
-                {onMarkAsEndEffector ? (
-                  <button
-                    type="button"
-                    className={cn(
-                      "text-[7px] px-1 py-0 rounded border font-semibold uppercase tracking-[0.05em]",
-                      isEE
-                        ? "border-primary/60 bg-primary/20 text-primary"
-                        : "border-border/40 bg-muted/20 text-muted-foreground hover:text-foreground"
-                    )}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleEndEffectorForLink(linkName);
-                    }}
-                    title={isEE ? "Clear end-effector" : "Mark as end-effector"}
-                  >
-                    {isEE ? "EE" : "Set EE"}
-                  </button>
-                ) : null}
-                {isEE && !onMarkAsEndEffector && (
-                  <span className="text-[8px] px-1 py-0.5 bg-primary/20 text-primary rounded font-semibold">
-                    EE
-                  </span>
-                )}
-              </div>
-
-              {isEE && linkCoordinates && (
-                <div className="mt-1 pt-1 border-t border-border/30 space-y-0.5">
-                  <div className="text-[9px] font-mono text-emerald-600">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">x:</span>
-                      <span>{linkCoordinates.position.x.toFixed(4)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">y:</span>
-                      <span>{linkCoordinates.position.y.toFixed(4)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">z:</span>
-                      <span>{linkCoordinates.position.z.toFixed(4)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+            />
+          </TreeIndentedFrame>
         );
       }
 
       return (
         <div key={`link-${linkName}-${depth}`}>
-          <div
-            className="relative"
-            style={{ paddingLeft: `${depth * HIERARCHY_TREE_PARAMS.indentPx}px` }}
+          <TreeIndentedFrame
+            paddingDepth={depth}
+            connectorDepth={depth > 0 ? depth - 1 : undefined}
+            connectorBottom={depth > 0 ? "0" : undefined}
           >
-            {depth > 0 && (
-              <>
-                <div
-                  className="absolute top-1/2 bg-border/30"
-                  style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
-                    width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
-                    height: "1px",
-                  }}
-                />
-                <div
-                  className="absolute bg-border/30"
-                  style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
-                    top: "0",
-                    bottom: "0",
-                    width: "1px",
-                  }}
-                />
-              </>
-            )}
-            <div
-              className={cn(
-                "px-1.5 py-0.5 cursor-pointer hover:bg-muted/20 rounded transition-colors",
-                isSelected && "hover:bg-muted/30"
-              )}
-              style={
-                isSelected
-                  ? {
-                      backgroundColor: hexToRgba(HIERARCHY_TREE_PARAMS.linkColor, 0.15),
-                    }
+            <HierarchyLinkRow
+              linkName={linkName}
+              isSelected={isSelected}
+              isEndEffector={isEE}
+              isLeaf={false}
+              structureLabel={structureLabel}
+              linkCoordinates={null}
+              onSelect={() => selectHierarchyLink(linkName)}
+              onToggleEndEffector={
+                onMarkAsEndEffector
+                  ? () => toggleEndEffectorForLink(linkName)
                   : undefined
               }
-              onClick={() => selectHierarchyLink(linkName)}
-            >
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Link2 className={cn("h-3 w-3 shrink-0", isSelected ? "text-primary" : "text-muted-foreground/60")} />
-                <span
-                  className={cn(
-                    "text-[10px] min-w-0 flex-1 truncate",
-                    isSelected ? "" : "text-muted-foreground/60"
-                  )}
-                  style={
-                    isSelected
-                      ? { color: HIERARCHY_TREE_PARAMS.linkColor }
-                      : undefined
-                  }
-                  title={linkName}
-                >
-                  {linkName}
-                </span>
-                {structureLabel ? (
-                  <span className="text-[7px] px-1 py-0 bg-muted/20 border border-border/40 text-muted-foreground rounded font-semibold uppercase tracking-[0.05em]">
-                    {structureLabel}
-                  </span>
-                ) : null}
-                {onMarkAsEndEffector ? (
-                  <button
-                    type="button"
-                    className={cn(
-                      "text-[7px] px-1 py-0 rounded border font-semibold uppercase tracking-[0.05em]",
-                      endEffectorLink === linkName
-                        ? "border-primary/60 bg-primary/20 text-primary"
-                        : "border-border/40 bg-muted/20 text-muted-foreground hover:text-foreground"
-                    )}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleEndEffectorForLink(linkName);
-                    }}
-                    title={endEffectorLink === linkName ? "Clear end-effector" : "Mark as end-effector"}
-                  >
-                    {endEffectorLink === linkName ? "EE" : "Set EE"}
-                  </button>
-                ) : null}
-                {endEffectorLink === linkName && !onMarkAsEndEffector && (
-                  <span className="text-[7px] px-0.5 py-0 bg-primary/20 text-primary rounded font-medium">
-                    EE
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+            />
+          </TreeIndentedFrame>
           {joints.map((joint, jointIndex) => {
             if (!joint || !joint.jointName || !joint.childLink) {
               return null;
@@ -327,29 +359,11 @@ export const HierarchyTreeView = React.memo(({
 
             return (
               <div key={`joint-${joint.jointName}`}>
-                <div
-                  className="relative"
-                  style={{ paddingLeft: `${(depth + 1) * HIERARCHY_TREE_PARAMS.indentPx}px` }}
+                <TreeIndentedFrame
+                  paddingDepth={depth + 1}
+                  connectorDepth={depth}
+                  connectorBottom={hasChildJoints || !isLastJoint ? "0" : "50%"}
                 >
-                  <>
-                    <div
-                      className="absolute top-1/2 bg-border/30"
-                      style={{
-                        left: `${depth * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
-                        width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
-                        height: "1px",
-                      }}
-                    />
-                    <div
-                      className="absolute bg-border/30"
-                      style={{
-                        left: `${depth * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
-                        top: "0",
-                        bottom: hasChildJoints || !isLastJoint ? "0" : "50%",
-                        width: "1px",
-                      }}
-                    />
-                  </>
                   <JointListItem
                     jointName={joint.jointName}
                     jointInfo={jointLimits[joint.jointName]}
@@ -369,7 +383,7 @@ export const HierarchyTreeView = React.memo(({
                     groupLabel={structureLabels.jointByName[joint.jointName] ?? null}
                     compact
                   />
-                </div>
+                </TreeIndentedFrame>
                 {renderLinkNode(joint.childLink, depth + 1, branchVisitedLinks)}
               </div>
             );
