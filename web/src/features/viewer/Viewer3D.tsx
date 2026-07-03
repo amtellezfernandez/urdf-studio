@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
-import { Camera, CircleHelp, Globe } from "lucide-react";
+import { Camera, Globe } from "lucide-react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
@@ -42,6 +42,7 @@ import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBo
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
 import { CreatedObjects } from "@/features/viewer/components/CreatedObjects";
 import { IKResultDialog } from "@/features/viewer/components/IKResultDialog";
+import { ViewerInertiaLegend } from "@/features/viewer/components/ViewerInertiaLegend";
 import { ViewerJointTypesPanel } from "@/features/viewer/components/ViewerJointTypesPanel";
 import {
   JointAxisIndicator,
@@ -133,20 +134,7 @@ import {
 } from "@/features/viewer/InertialVisualization";
 import { SimulationPrepSymmetryOverlay } from "@/features/viewer/SimulationPrepSymmetryOverlay";
 import { SimulationPrepRobotMirrorOverlay } from "@/features/viewer/SimulationPrepRobotMirrorOverlay";
-import {
-  SYMMETRY_OVERLAY_LEGEND_ITEMS,
-  SYMMETRY_OVERLAY_TOOLTIP_LINES,
-} from "@/features/viewer/symmetryVisualizationLegend";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shared/ui/tooltip";
-import {
-  INERTIA_BOX_OPACITY,
-  INERTIA_CENTER_MARKER_COLOR,
-  INERTIA_REFERENCE_BOX_COLOR,
-  INERTIA_SHAPE_FILL_COLOR_HEALTHY,
-  INERTIA_SHAPE_FILL_COLOR_PROBLEMATIC,
-  INERTIA_SHAPE_FILL_COLOR_WARNING,
-  INERTIA_VOLUME_EDGE_COLOR_HEALTHY,
-} from "@/features/viewer/inertialVisualizationParams";
+import { shouldShowViewerInertiaLegend } from "@/features/viewer/components/viewerInertiaLegendState";
 import {
   buildSimulationPrepMirrorCameraFrameKey,
   buildSimulationPrepMirrorCameraFrame,
@@ -322,29 +310,7 @@ const shouldHideCameraInReadOnlyRuntime = (camera: RobotCamera) => {
 };
 
 const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
-const HEX_COLOR_RADIX = 16;
-const HEX_COLOR_PAD_LENGTH = 6;
 const IK_APPLY_INPUT_SOURCE = "ik_apply";
-
-const HEX_COLOR_COMPONENT_MASK = 0xff;
-
-const formatHexColor = (color: number) =>
-  `#${color.toString(HEX_COLOR_RADIX).padStart(HEX_COLOR_PAD_LENGTH, "0")}`;
-
-const toRgbaColor = (color: number, alpha: number) => {
-  const red = (color >> 16) & HEX_COLOR_COMPONENT_MASK;
-  const green = (color >> 8) & HEX_COLOR_COMPONENT_MASK;
-  const blue = color & HEX_COLOR_COMPONENT_MASK;
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-};
-
-const INERTIA_OVERLAY_TOOLTIP_LINES = [
-  "shape fill: green to red based on how well the inertia box proportions fit the reference.",
-  "volume outline: compares the authored inertia size against the reference geometry.",
-  "center offset: shows the drift from the reference center to the inertia center.",
-  "reference geometry: comparison box from collision or mesh geometry.",
-  "mismatch: low, moderate, and high severity for shape and volume agreement.",
-] as const;
 
 const WORLD_OBJECT_EDIT_MODE_LABELS = {
   move: "Move",
@@ -3758,55 +3724,13 @@ export const Viewer3D = ({
     ]
   );
   const pointCloudGpuOverlayVisible = false;
-  const inertiaLegendItems = [
-    {
-      key: "shape",
-      label: "Shape fill",
-      borderColor: formatHexColor(INERTIA_SHAPE_FILL_COLOR_HEALTHY),
-      backgroundColor: toRgbaColor(INERTIA_SHAPE_FILL_COLOR_HEALTHY, INERTIA_BOX_OPACITY),
-      markerColor: null,
-    },
-    {
-      key: "volume",
-      label: "Volume outline",
-      borderColor: formatHexColor(INERTIA_VOLUME_EDGE_COLOR_HEALTHY),
-      backgroundColor: "transparent",
-      markerColor: null,
-    },
-    {
-      key: "center",
-      label: "Center offset",
-      borderColor: formatHexColor(INERTIA_CENTER_MARKER_COLOR),
-      backgroundColor: "transparent",
-      markerColor: formatHexColor(INERTIA_CENTER_MARKER_COLOR),
-    },
-  ];
-  const inertiaSeverityLegendItems = [
-    {
-      key: "low",
-      label: "Low",
-      color: formatHexColor(INERTIA_SHAPE_FILL_COLOR_HEALTHY),
-    },
-    {
-      key: "moderate",
-      label: "Moderate",
-      color: formatHexColor(INERTIA_SHAPE_FILL_COLOR_WARNING),
-    },
-    {
-      key: "high",
-      label: "High",
-      color: formatHexColor(INERTIA_SHAPE_FILL_COLOR_PROBLEMATIC),
-    },
-  ];
-  const inertiaReferenceColorHex = formatHexColor(INERTIA_REFERENCE_BOX_COLOR);
-  const showInertiaLegend =
-    viewerUi.showStudioSceneChrome &&
-    !thumbnailMode &&
-    (
-      inertialVisualization.showInertia ||
-      inertialVisualization.showReferenceGeometry ||
-      simulationPrepSymmetryVisualization !== null
-    );
+  const showInertiaLegend = shouldShowViewerInertiaLegend({
+    hasSymmetryVisualization: simulationPrepSymmetryVisualization !== null,
+    showInertia: inertialVisualization.showInertia,
+    showReferenceGeometry: inertialVisualization.showReferenceGeometry,
+    showStudioSceneChrome: viewerUi.showStudioSceneChrome,
+    thumbnailMode,
+  });
 
   useEffect(() => {
     if (!viewerUi.canPublishLiveRobotBasePose || !robot) {
@@ -5017,112 +4941,12 @@ export const Viewer3D = ({
             </div>
           </div>
         )}
-        {showInertiaLegend && (
-          <TooltipProvider delayDuration={100}>
-            <div className="absolute bottom-4 right-4 z-20 max-w-[28rem] rounded border border-border/40 bg-background/92 px-2.5 py-2 shadow-sm backdrop-blur-sm">
-              <div className="flex justify-end">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground/75 hover:text-foreground"
-                      aria-label="How viewer overlays work"
-                    >
-                      <CircleHelp className="h-3 w-3" aria-hidden="true" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="left"
-                    className="max-w-80 space-y-1.5 text-[11px] leading-snug text-muted-foreground"
-                  >
-                    {INERTIA_OVERLAY_TOOLTIP_LINES.map((line) => (
-                      <div key={line}>{line}</div>
-                    ))}
-                    {simulationPrepSymmetryVisualization !== null
-                      ? SYMMETRY_OVERLAY_TOOLTIP_LINES.map((line) => (
-                          <div key={line}>{line}</div>
-                        ))
-                      : null}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              {inertialVisualization.showInertia && (
-                <div className="mt-2">
-                  <div className="text-[8px] font-medium uppercase tracking-tight text-muted-foreground/75">
-                    Inertia
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] leading-none text-foreground/90">
-                    {inertiaLegendItems.map((item) => (
-                      <span key={item.key} className="inline-flex items-center gap-1">
-                        {item.markerColor ? (
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: item.markerColor }}
-                          />
-                        ) : (
-                          <span
-                            className="h-2 w-2 rounded-sm border"
-                            style={{
-                              borderColor: item.borderColor,
-                              backgroundColor: item.backgroundColor,
-                            }}
-                          />
-                        )}
-                        <span>{item.label}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {(inertialVisualization.showInertia || inertialVisualization.showReferenceGeometry) && (
-                <div className="mt-2">
-                  <div className="text-[8px] font-medium uppercase tracking-tight text-muted-foreground/75">
-                    Reference And Severity
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] leading-none text-foreground/90">
-                    {inertialVisualization.showReferenceGeometry && (
-                      <span className="inline-flex items-center gap-1">
-                        <span
-                          className="h-2 w-2 rounded-sm border bg-transparent"
-                          style={{ borderColor: inertiaReferenceColorHex }}
-                        />
-                        <span>Reference geometry</span>
-                      </span>
-                    )}
-                    {inertialVisualization.showInertia &&
-                      inertiaSeverityLegendItems.map((item) => (
-                        <span key={item.key} className="inline-flex items-center gap-1">
-                          <span
-                            className="h-2 w-2 rounded-sm"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <span>{item.label} mismatch</span>
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              )}
-              {simulationPrepSymmetryVisualization !== null && (
-                <div className="mt-2">
-                  <div className="text-[8px] font-medium uppercase tracking-tight text-muted-foreground/75">
-                    Symmetry
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] leading-none text-foreground/90">
-                    {SYMMETRY_OVERLAY_LEGEND_ITEMS.map((item) => (
-                      <span key={item.key} className="inline-flex items-center gap-1">
-                        <span
-                          className="block h-px w-4"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span>{item.label}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </TooltipProvider>
-        )}
+        {showInertiaLegend ? (
+          <ViewerInertiaLegend
+            hasSymmetryVisualization={simulationPrepSymmetryVisualization !== null}
+            inertialVisualization={inertialVisualization}
+          />
+        ) : null}
 
         <ViewerCanvasErrorBoundary>
         <Canvas

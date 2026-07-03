@@ -1,26 +1,25 @@
+import { numberToHexColor } from "@/shared/lib/color";
 import {
   SIMULATION_PREP_SYMMETRY_OVERLAY_AFFECTED_MARKER_COLOR,
   SIMULATION_PREP_SYMMETRY_OVERLAY_MISALIGNMENT_COLOR,
   SIMULATION_PREP_SYMMETRY_OVERLAY_SLOT_GUIDE_COLOR,
 } from "@/features/viewer/symmetryVisualizationParams";
 
-const formatViewerHexColor = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
-
 export const SYMMETRY_OVERLAY_LEGEND_ITEMS = [
   {
     key: "ideal-slots",
     label: "ideal slots",
-    color: formatViewerHexColor(SIMULATION_PREP_SYMMETRY_OVERLAY_SLOT_GUIDE_COLOR),
+    color: numberToHexColor(SIMULATION_PREP_SYMMETRY_OVERLAY_SLOT_GUIDE_COLOR),
   },
   {
     key: "misalignment",
     label: "misalignment",
-    color: formatViewerHexColor(SIMULATION_PREP_SYMMETRY_OVERLAY_MISALIGNMENT_COLOR),
+    color: numberToHexColor(SIMULATION_PREP_SYMMETRY_OVERLAY_MISALIGNMENT_COLOR),
   },
   {
     key: "affected",
     label: "affected links",
-    color: formatViewerHexColor(SIMULATION_PREP_SYMMETRY_OVERLAY_AFFECTED_MARKER_COLOR),
+    color: numberToHexColor(SIMULATION_PREP_SYMMETRY_OVERLAY_AFFECTED_MARKER_COLOR),
   },
 ] as const;
 
