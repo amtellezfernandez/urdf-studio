@@ -31,12 +31,8 @@ import {
   buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey,
   collectRepeatedInertiaSymmetryFamilyLinkNames,
 } from "@/features/layout/page/simulationPrepViewerState";
-import type { SimulationPrepPhysicsActionStatus } from "@/features/layout/page/simulationPrepState";
 import { hasSimulationPrepPhysicsActionPending } from "@/features/layout/page/simulationPrepState";
-import {
-  INERTIAL_SYNTHESIS_DENSITY_PRESETS,
-  type InertialDensityPresetId,
-} from "@/features/urdf/inertia/inertialSynthesisParams";
+import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 import {
   buildRepeatedInertiaSymmetryChainKey,
   type RepeatedInertiaSymmetryChain,
@@ -60,7 +56,7 @@ import {
   INERTIA_METRIC_PROBLEMATIC_THRESHOLD,
   INERTIA_METRIC_WARNING_THRESHOLD,
 } from "@/features/viewer/inertialVisualizationParams";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shared/ui/tooltip";
+import { TooltipProvider } from "@/shared/ui/tooltip";
 import { HEALTH_ACTION_PANEL_PARAMS } from "@/features/layout/page/healthActionPanelParams";
 import { HealthActionPanelHeader } from "@/features/layout/page/HealthActionPanelHeader";
 import type {
@@ -84,6 +80,19 @@ import {
   formatDiagnosticNumber,
   getPreparationVisualizationScope,
 } from "@/features/layout/page/healthActionPanelDiagnostics";
+import {
+  PhysicsMaterialPicker,
+  PhysicsQuickActionCard,
+} from "@/features/layout/page/HealthActionPanelPhysicsActions";
+import {
+  buildPhysicsPanelActions,
+  getPhysicsActionButtonLabel,
+  getPhysicsActionStatus,
+  PHYSICS_ACTION_STATUS_LABELS,
+  type PhysicsActionMaterialSelection,
+  type PhysicsPanelAction,
+  type PhysicsPanelActionKey,
+} from "@/features/layout/page/healthActionPanelPhysicsActions";
 
 type RecommendedAction = {
   kind: "frame";
@@ -97,27 +106,6 @@ type RecommendedAction = {
 
 const HEALTH_ACTION_CLASS_NAMES = HEALTH_ACTION_PANEL_PARAMS.classNames;
 const ADVANCED_EXPORT_SECTION_LABEL = HEALTH_ACTION_PANEL_PARAMS.labels.advancedExportSection;
-
-type MaterialOption = {
-  id: InertialDensityPresetId;
-  label: string;
-  description: string;
-};
-
-type PhysicsPanelAction = {
-  key: "repair-missing-invalid" | "replace-all" | "voxel-recovery" | "psd-regularize";
-  title: string;
-  description: string;
-  buttonLabel: string;
-  available: boolean;
-  onClick: (densityPresetId: InertialDensityPresetId) => void;
-};
-
-type PhysicsPanelActionKey = PhysicsPanelAction["key"];
-
-type PhysicsActionMaterialSelection = Partial<Record<PhysicsPanelActionKey, InertialDensityPresetId>>;
-
-const MATERIAL_OPTIONS: ReadonlyArray<MaterialOption> = HEALTH_ACTION_PANEL_PARAMS.materialOptions;
 
 const STATUS_TONE_CLASS: Record<SimStatusTone, string> = {
   safe: "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
@@ -148,162 +136,7 @@ const STATUS_ICON = {
   danger: AlertTriangle,
 } as const;
 
-const MATERIAL_BUTTON_GRID_CLASS = HEALTH_ACTION_CLASS_NAMES.materialButtonGrid;
-const MATERIAL_ACTION_BUTTON_CLASS = HEALTH_ACTION_CLASS_NAMES.materialActionButton;
 const PHYSICS_SECTION_CARD_CLASS = HEALTH_ACTION_CLASS_NAMES.physicsSectionCard;
-const PHYSICS_ACTION_CARD_CLASS = HEALTH_ACTION_CLASS_NAMES.physicsActionCard;
-const PHYSICS_ACTION_STATUS_LABELS: Record<
-  PhysicsPanelActionKey,
-  { queued: string; running: string }
-> = {
-  "repair-missing-invalid": { queued: "Queued", running: "Recalculating..." },
-  "replace-all": { queued: "Queued", running: "Recalculating..." },
-  "voxel-recovery": { queued: "Queued", running: "Recovering..." },
-  "psd-regularize": { queued: "Queued", running: "Regularizing..." },
-};
-
-const getPhysicsActionStatus = (
-  statusByKey: HealthActionPanelProps["physicsActionStatusByKey"],
-  actionKey: PhysicsPanelActionKey
-): SimulationPrepPhysicsActionStatus => statusByKey?.[actionKey] ?? "idle";
-
-const getPhysicsActionStatusLabel = (
-  actionKey: PhysicsPanelActionKey,
-  status: SimulationPrepPhysicsActionStatus,
-  idleLabel: string
-): string => {
-  if (status === "running") {
-    return PHYSICS_ACTION_STATUS_LABELS[actionKey].running;
-  }
-  if (status === "queued") {
-    return PHYSICS_ACTION_STATUS_LABELS[actionKey].queued;
-  }
-  return idleLabel;
-};
-
-const getPhysicsActionButtonLabel = ({
-  action,
-  status,
-  isArmed,
-  hasSelectedMaterial,
-}: {
-  action: PhysicsPanelAction;
-  status: SimulationPrepPhysicsActionStatus;
-  isArmed: boolean;
-  hasSelectedMaterial: boolean;
-}): string => {
-  if (!action.available) {
-    return "No Links Available";
-  }
-  if (status !== "idle") {
-    return getPhysicsActionStatusLabel(action.key, status, action.buttonLabel);
-  }
-  if (isArmed && !hasSelectedMaterial) {
-    return "Select Material";
-  }
-  return action.buttonLabel;
-};
-
-type PhysicsMaterialPickerProps = {
-  actionKey: PhysicsPanelActionKey;
-  selectedMaterial: InertialDensityPresetId | null;
-  disabled: boolean;
-  onSelect: (actionKey: PhysicsPanelActionKey, materialId: InertialDensityPresetId) => void;
-};
-
-const PhysicsMaterialPicker = ({
-  actionKey,
-  selectedMaterial,
-  disabled,
-  onSelect,
-}: PhysicsMaterialPickerProps) => (
-  <div className={MATERIAL_BUTTON_GRID_CLASS}>
-    {MATERIAL_OPTIONS.map((option) => (
-      <Tooltip key={`${actionKey}-${option.id}`} delayDuration={0}>
-        <TooltipTrigger asChild>
-          <Button
-            variant="outline"
-            className={`h-6 min-h-0 justify-center border-border/50 px-2 py-0 text-[10px] text-muted-foreground hover:text-foreground ${
-              selectedMaterial === option.id
-                ? "border-foreground/60 bg-muted/50 text-foreground"
-                : "bg-transparent"
-            }`}
-            aria-label={`${option.label} physics material`}
-            aria-pressed={selectedMaterial === option.id}
-            disabled={disabled}
-            onClick={() => onSelect(actionKey, option.id)}
-          >
-            <span className="font-normal">{option.label}</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">
-          {option.description} • {INERTIAL_SYNTHESIS_DENSITY_PRESETS[option.id].label}: ρ = {" "}
-          {INERTIAL_SYNTHESIS_DENSITY_PRESETS[option.id].densityKgPerM3.toLocaleString()} kg/m^3
-        </TooltipContent>
-      </Tooltip>
-    ))}
-  </div>
-);
-
-type PhysicsQuickActionCardProps = {
-  action: PhysicsPanelAction;
-  status: SimulationPrepPhysicsActionStatus;
-  isArmed: boolean;
-  selectedMaterial: InertialDensityPresetId | null;
-  disabled: boolean;
-  onRun: (action: PhysicsPanelAction, disabled: boolean) => void;
-  onSelect: (actionKey: PhysicsPanelActionKey, materialId: InertialDensityPresetId) => void;
-};
-
-const PhysicsQuickActionCard = ({
-  action,
-  status,
-  isArmed,
-  selectedMaterial,
-  disabled,
-  onRun,
-  onSelect,
-}: PhysicsQuickActionCardProps) => {
-  const isDisabled = disabled || !action.available || status !== "idle";
-  return (
-    <div className="space-y-1.5 rounded border border-border/30 bg-background/30 p-2">
-      <div className="flex items-center justify-between gap-2 text-[11px]">
-        <div className="min-w-0">
-          <div className="text-foreground/90">{action.title}</div>
-          <div className="mt-0.5 text-[10px] text-muted-foreground">{action.description}</div>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 shrink-0 border-border/50 bg-transparent px-2.5 text-[10px] font-normal text-muted-foreground hover:text-foreground"
-          disabled={isDisabled}
-          aria-label={action.title}
-          onClick={() => {
-            onRun(action, isDisabled);
-          }}
-        >
-          {getPhysicsActionButtonLabel({
-            action,
-            status,
-            isArmed,
-            hasSelectedMaterial: selectedMaterial !== null,
-          })}
-        </Button>
-      </div>
-      {action.available && isArmed ? (
-        <div className="space-y-1.5 border-t border-border/30 pt-1.5">
-          <div className="text-[10px] text-muted-foreground">Choose a material to continue.</div>
-          <PhysicsMaterialPicker
-            actionKey={action.key}
-            selectedMaterial={selectedMaterial}
-            disabled={isDisabled}
-            onSelect={onSelect}
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-};
 
 const buildPhysicsActionSummary = ({
   onOpenGeneratePhysicsDialog,
@@ -395,67 +228,6 @@ const buildRecommendedAction = ({
     };
   }
   return null;
-};
-
-const buildPhysicsPanelActions = ({
-  audit,
-  voxelRecoveryCount,
-  nearMissCount,
-  onGeneratePhysics,
-  onGenerateVoxelPhysics,
-  onGenerateRegularizedPhysics,
-}: {
-  audit: HealthActionPanelProps["physicsAuditSummary"];
-  voxelRecoveryCount: number;
-  nearMissCount: number;
-  onGeneratePhysics?: HealthActionPanelProps["onGeneratePhysics"];
-  onGenerateVoxelPhysics?: HealthActionPanelProps["onGenerateVoxelPhysics"];
-  onGenerateRegularizedPhysics?: HealthActionPanelProps["onGenerateRegularizedPhysics"];
-}): PhysicsPanelAction[] => {
-  const actions: PhysicsPanelAction[] = [];
-  if (audit?.repairableLinkCount && audit.repairableLinkCount > 0 && onGeneratePhysics) {
-    actions.push({
-      key: "repair-missing-invalid",
-      title: `Recalculate ${audit.repairableLinkCount} missing / invalid inertial link${audit.repairableLinkCount === 1 ? "" : "s"}`,
-      description: "Only recalculate links that are currently missing inertials or fail validation.",
-      buttonLabel: `Recalculate ${audit.repairableLinkCount} missing`,
-      available: true,
-      onClick: (densityPresetId) => onGeneratePhysics(densityPresetId, "repair-missing-invalid"),
-    });
-  }
-  if (onGenerateVoxelPhysics) {
-    actions.push({
-      key: "voxel-recovery",
-      title:
-        voxelRecoveryCount > 0
-          ? `Recover ${voxelRecoveryCount} skipped inertial link${voxelRecoveryCount === 1 ? "" : "s"}`
-          : "Recover skipped inertial links",
-      description:
-        voxelRecoveryCount > 0
-          ? `${voxelRecoveryCount} passed voxel precheck.`
-          : "No links available for voxel recovery.",
-      buttonLabel: "Recover",
-      available: voxelRecoveryCount > 0,
-      onClick: (densityPresetId) => onGenerateVoxelPhysics(densityPresetId),
-    });
-  }
-  if (onGenerateRegularizedPhysics) {
-    actions.push({
-      key: "psd-regularize",
-      title:
-        nearMissCount > 0
-          ? `Regularize ${nearMissCount} near-miss inertial link${nearMissCount === 1 ? "" : "s"}`
-          : "Regularize near-miss inertial links",
-      description:
-        nearMissCount > 0
-          ? "Only links with tiny spectral violations are healed. Hard failures stay blocked."
-          : "No links available for PSD regularization.",
-      buttonLabel: "Regularize",
-      available: nearMissCount > 0,
-      onClick: (densityPresetId) => onGenerateRegularizedPhysics(densityPresetId),
-    });
-  }
-  return actions;
 };
 
 const DIAGNOSIS_CARD_CLASS = HEALTH_ACTION_CLASS_NAMES.diagnosisCard;
