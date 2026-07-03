@@ -35,16 +35,8 @@ import { useThemeAndGPUMode } from "@/features/theme";
 import { useWorkspaceController } from "@/features/workspace/useWorkspaceController";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_MODE } from "@/shared/config/demo";
-import {
-  isRunRuntimeDemoScanMessage,
-  isSetRuntimeDemoSpeedMessage,
-  isSetRuntimeDemoTrajectoryMessage,
-  RUNTIME_POSE_SAMPLE_MESSAGE_TYPE,
-  SELECT_RUNTIME_OBJECT_MESSAGE_TYPE,
-} from "@/shared/contracts/previewBridge";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { useGitHubSourceStore } from "@/shared/store/useGitHubSourceStore";
-import { useButterClawRuntimeObjects } from "@/studio_ui/runtimeviz/useButterClawRuntimeObjects";
 import { useAssemblyStore } from "@/features/assembly/store/useAssemblyStore";
 import { useAssemblyPlacementStore } from "@/features/assembly/store/useAssemblyPlacementStore";
 import { useIkConfigSync } from "@/features/ik/useIkConfigSync";
@@ -59,12 +51,12 @@ import {
 import { normalizeMeshPathForMatch, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
 import { validateInertiaTensor } from "@/features/viewer/inertialMath";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
-import { useButterClawRuntimePose } from "@/studio_ui/runtimeviz/useButterClawRuntimePose";
 import { parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
 import { useWorldSceneManager, downloadTextDocument } from "@/app/pages/index/useWorldSceneManager";
 import { useCameraRuntimeOrchestration } from "@/app/pages/index/useCameraRuntimeOrchestration";
+import type { DemoManifestPreferencesLoad } from "@/app/pages/index/useDemoMotionFlow";
 import { useIluSessionBridge } from "@/app/pages/index/useIluSessionBridge";
 import { useIluAssemblyBridge } from "@/app/pages/index/useIluAssemblyBridge";
 import { useIndexPageLayoutProps } from "@/app/pages/index/useIndexPageLayoutProps";
@@ -201,8 +193,6 @@ import {
 import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
 
-const EMPTY_EPISODE_JOINT_NAMES: string[] = [];
-
 const cloneInertialVisualizationSettings = (
   settings: InertialVisualizationSettings
 ): InertialVisualizationSettings => ({
@@ -233,15 +223,9 @@ const Index = () => {
   const initialCollaborationSession = useInitialCollaborationSession();
   const hasExplicitWorldLayoutImport = worldImportParams.worldLayoutImportUrl.trim().length > 0;
   const skipDefaultWorldLayoutAutoImportRef = useRef(false);
+  const [demoManifestPreferencesLoad, setDemoManifestPreferencesLoad] =
+    useState<DemoManifestPreferencesLoad | null>(null);
   const thumbnailMode = thumbnailParams.enabled;
-  const runtimePreviewMode = thumbnailParams.preview;
-  useButterClawRuntimeObjects({
-    enabled: runtimePreviewMode,
-    demoMode: runtimePreviewMode && thumbnailParams.runtimeDemo,
-  });
-  const runtimeRobotBasePose = useButterClawRuntimePose({
-    enabled: runtimePreviewMode && !thumbnailParams.runtimeDemo,
-  });
   const cameras = useCameraStore((state) => state.cameras);
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const addCamera = useCameraStore((state) => state.addCamera);
@@ -338,6 +322,19 @@ const Index = () => {
     () => setUrdfContentVersion((prev) => prev + 1),
     []
   );
+  const handleDemoManifestPreferences = useCallback((load: DemoManifestPreferencesLoad) => {
+    setDemoManifestPreferencesLoad({
+      activePath: load.activePath,
+      preferences: { ...load.preferences },
+    });
+  }, []);
+  const activeDemoManifestPreferences: DemoManifestPreferencesLoad["preferences"] =
+    activeUrdfPath && demoManifestPreferencesLoad?.activePath === activeUrdfPath
+      ? demoManifestPreferencesLoad.preferences
+      : {};
+  const suppressDefaultWorldLayoutAutoImport = Boolean(
+    activeDemoManifestPreferences.suppressDefaultWorldLayoutAutoImport
+  );
   const [collaborationInviteAction, setCollaborationInviteAction] =
     useState<CollaborationInviteAction | null>(null);
   const collaborationInviteActionRef =
@@ -349,7 +346,6 @@ const Index = () => {
     collaborationSharingEnabled,
     collaborationSessionId,
     collaborationStatus,
-    collaborationTeleopCapabilityToken,
     createShareLink: createCollaborationShareLink,
     rotateShareLink: rotateCollaborationShareLink,
     setCollaborationSharingEnabled,
@@ -426,7 +422,6 @@ const Index = () => {
     workspaceMode,
   });
   const playbackHandlers = useViewerPlaybackStore((state) => state.handlers);
-  const handleDatasetActionsReady = useCallback(() => {}, []);
   const [inertiaReliability, setInertiaReliability] = useState<InertiaReliabilityEntry[]>([]);
   const [activeInertiaVisualizationScopeKey, setActiveInertiaVisualizationScopeKey] = useState<string | null>(null);
   const [hoveredInertiaVisualizationPreview, setHoveredInertiaVisualizationPreview] =
@@ -657,6 +652,7 @@ const Index = () => {
     originalUrdfContent,
     resolvedRobotName,
     skipDefaultWorldLayoutAutoImportRef,
+    suppressDefaultWorldLayoutAutoImport,
     setJointValues,
     updateUrdfFile: updateUrdfFileWithCollaboration,
     vizUrdfContent,
@@ -674,12 +670,8 @@ const Index = () => {
     worldCameraCount: cameras.length,
     worldObjectCount: objects.length,
   });
-  const {
-    effectiveRuntimePose,
-    handleImportDemoWorldLayoutFromDialog,
-    handlePlayDemoMotion,
-    runtimePreviewLoadError,
-  } = useCameraRuntimeOrchestration({
+  const { handleImportDemoWorldLayoutFromDialog, handlePlayDemoMotion } =
+    useCameraRuntimeOrchestration({
     activeUrdfPath,
     addCamera,
     addObject,
@@ -692,13 +684,18 @@ const Index = () => {
     jointLimits,
     loadDemoUrdfTextWithFreshCameras,
     loadFilesFromFolderWithFreshCameras,
+    onDemoManifestPreferences: handleDemoManifestPreferences,
     playbackHandlers,
+    prepareDemoWorldLayoutOnMotion: Boolean(
+      activeDemoManifestPreferences.prepareDemoWorldLayoutOnMotion
+    ),
     removeCamera,
     removeObject,
+    preserveDemoWorldLayoutOnMotion: Boolean(
+      activeDemoManifestPreferences.preserveDemoWorldLayoutOnMotion
+    ),
     robot,
     robotBoundingBox,
-    runtimePreviewMode,
-    runtimeRobotBasePose,
     setIsImportingWorldLayout,
     setWorldLayoutImportDialogOpen,
     setWorldLayoutImportUrlDraft,
@@ -3222,7 +3219,6 @@ const Index = () => {
     onInertiaReliabilityChange: setInertiaReliability,
     thumbnailMode,
     onDuplicateAssemblyRobot: handleDuplicateAssemblyRobot,
-    episodeJointNames: EMPTY_EPISODE_JOINT_NAMES,
     rightSidebarCollapsed: isRightSidebarCollapsed,
     onJointLimitsChange: handleJointLimitsChange,
     onJointLinkChange: handleJointLinkChange,
@@ -3272,8 +3268,7 @@ const Index = () => {
     },
   };
 
-  const { thumbnailViewerProps, runtimePreviewViewerProps } = useIndexViewerProps({
-    effectiveRuntimePose,
+  const { thumbnailViewerProps } = useIndexViewerProps({
     viewerLayoutProps: pageLayoutWithViewerDraft.viewerLayoutProps,
   });
 
@@ -3287,16 +3282,13 @@ const Index = () => {
       onLoadUrlSource={handleLoadUrlSource}
       onImportWorldLayout={handleImportWorldLayoutFromEntry}
       onPlayDemoMotion={handlePlayDemoMotion}
-      runtimePreviewMode={runtimePreviewMode}
-      runtimePreviewLoadError={runtimePreviewLoadError}
-      runtimePreviewViewerProps={runtimePreviewViewerProps}
       thumbnailMode={thumbnailMode}
       thumbnailViewerProps={thumbnailViewerProps}
       urdfContentVersion={urdfContentVersion}
       FolderUploadScreen={CoreFolderUploadScreen}
     />
   );
-  if (!hasLoadedFiles || thumbnailMode || runtimePreviewMode) {
+  if (!hasLoadedFiles || thumbnailMode) {
     return gatedModeView;
   }
   return (

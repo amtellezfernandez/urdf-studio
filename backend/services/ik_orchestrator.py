@@ -18,13 +18,13 @@ from backend.services.kinematics import (
     rotation_matrix_to_wxyz,
 )
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
-from backend.services.lerobot_kinematics import (
-    inverse_kinematics as lerobot_inverse_kinematics,
+from backend.services.placo_kinematics import (
+    inverse_kinematics as placo_inverse_kinematics,
 )
 from backend.services.task_compiler import compile_ik_request
 
 
-REMOTE_SOLVERS = {"lerobot-placo", "amik"}
+REMOTE_SOLVERS = {"placo", "amik"}
 _LAST_SOLUTION_CACHE: Dict[Tuple[str, str], Dict[str, float]] = {}
 
 
@@ -146,8 +146,8 @@ def solve_ik(req: IkSolveRequest) -> IKResponse:
                         update={"orientation_weight": scaled_orientation_weight}
                     )
                 try:
-                    if solver_id == "lerobot-placo":
-                        response = lerobot_inverse_kinematics(attempt_req)
+                    if solver_id == "placo":
+                        response = placo_inverse_kinematics(attempt_req)
                     elif solver_id == "amik":
                         response = amik_ik(attempt_req)
                     else:

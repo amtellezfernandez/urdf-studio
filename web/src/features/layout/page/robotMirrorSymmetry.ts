@@ -212,6 +212,25 @@ const buildPlaneParallelWorldQuaternion = ({
   };
 };
 
+const offsetPointBySignedPlaneDistance = ({
+  distanceScale,
+  normalWorld,
+  originWorld,
+  pointWorld,
+}: {
+  distanceScale: number;
+  normalWorld: THREE.Vector3;
+  originWorld: THREE.Vector3;
+  pointWorld: THREE.Vector3;
+}): THREE.Vector3 => {
+  const normalizedNormal = normalWorld.clone().normalize();
+  const signedDistanceMeters = pointWorld.clone().sub(originWorld).dot(normalizedNormal);
+  return pointWorld.clone().addScaledVector(
+    normalizedNormal,
+    distanceScale * signedDistanceMeters
+  );
+};
+
 const reflectPointAcrossPlane = ({
   normalWorld,
   originWorld,
@@ -221,9 +240,12 @@ const reflectPointAcrossPlane = ({
   originWorld: THREE.Vector3;
   pointWorld: THREE.Vector3;
 }): THREE.Vector3 => {
-  const normalizedNormal = normalWorld.clone().normalize();
-  const signedDistanceMeters = pointWorld.clone().sub(originWorld).dot(normalizedNormal);
-  return pointWorld.clone().addScaledVector(normalizedNormal, -2 * signedDistanceMeters);
+  return offsetPointBySignedPlaneDistance({
+    distanceScale: -2,
+    normalWorld,
+    originWorld,
+    pointWorld,
+  });
 };
 
 const projectPointOntoPlane = ({
@@ -235,9 +257,12 @@ const projectPointOntoPlane = ({
   originWorld: THREE.Vector3;
   pointWorld: THREE.Vector3;
 }): THREE.Vector3 => {
-  const normalizedNormal = normalWorld.clone().normalize();
-  const signedDistanceMeters = pointWorld.clone().sub(originWorld).dot(normalizedNormal);
-  return pointWorld.clone().addScaledVector(normalizedNormal, -signedDistanceMeters);
+  return offsetPointBySignedPlaneDistance({
+    distanceScale: -1,
+    normalWorld,
+    originWorld,
+    pointWorld,
+  });
 };
 
 const resolveRobotRootFrame = ({
@@ -313,6 +338,44 @@ const buildSupportEntries = ({
     })
     .filter((entry): entry is MirrorSupportEntry => entry !== null);
 
+type MirrorSupportSides = {
+  centeredEntries: MirrorSupportEntry[];
+  negativeEntries: MirrorSupportEntry[];
+  positiveEntries: MirrorSupportEntry[];
+};
+
+const splitSupportEntriesByPlaneSide = ({
+  maxCenterDistanceMeters,
+  sortNegativeEntriesByLinkName = false,
+  supportEntries,
+}: {
+  maxCenterDistanceMeters: number;
+  sortNegativeEntriesByLinkName?: boolean;
+  supportEntries: readonly MirrorSupportEntry[];
+}): MirrorSupportSides => {
+  const centeredEntries = supportEntries.filter(
+    (entry) => Math.abs(entry.signedDistanceMeters) <= maxCenterDistanceMeters
+  );
+  const positiveEntries = supportEntries
+    .filter((entry) => entry.signedDistanceMeters > maxCenterDistanceMeters)
+    .sort(
+      (left, right) =>
+        Math.abs(right.signedDistanceMeters) - Math.abs(left.signedDistanceMeters) ||
+        left.linkName.localeCompare(right.linkName)
+    );
+  const negativeEntries = supportEntries.filter(
+    (entry) => entry.signedDistanceMeters < -maxCenterDistanceMeters
+  );
+  if (sortNegativeEntriesByLinkName) {
+    negativeEntries.sort((left, right) => left.linkName.localeCompare(right.linkName));
+  }
+  return {
+    centeredEntries,
+    negativeEntries,
+    positiveEntries,
+  };
+};
+
 const buildGroupMirrorSupport = ({
   group,
   maxCenterDistanceMeters,
@@ -346,19 +409,10 @@ const buildGroupMirrorSupport = ({
   });
   const resolvedLinkNames = new Set(supportEntries.map((entry) => entry.linkName));
   const missingLinkNames = group.linkNames.filter((linkName) => !resolvedLinkNames.has(linkName));
-  const centeredEntries = supportEntries.filter(
-    (entry) => Math.abs(entry.signedDistanceMeters) <= maxCenterDistanceMeters
-  );
-  const positiveEntries = supportEntries
-    .filter((entry) => entry.signedDistanceMeters > maxCenterDistanceMeters)
-    .sort(
-      (left, right) =>
-        Math.abs(right.signedDistanceMeters) - Math.abs(left.signedDistanceMeters) ||
-        left.linkName.localeCompare(right.linkName)
-    );
-  const negativeEntries = supportEntries.filter(
-    (entry) => entry.signedDistanceMeters < -maxCenterDistanceMeters
-  );
+  const { centeredEntries, negativeEntries, positiveEntries } = splitSupportEntriesByPlaneSide({
+    maxCenterDistanceMeters,
+    supportEntries,
+  });
   const remainingNegativeEntries = [...negativeEntries];
   const matchedPairs: RobotMirrorSymmetryPair[] = [];
   const residualsMeters: number[] = [];
@@ -449,19 +503,11 @@ export const buildRobotMirrorSymmetryAlignmentTargets = ({
     originWorld: planeOriginWorld,
     robot,
   });
-  const centeredEntries = supportEntries.filter(
-    (entry) => Math.abs(entry.signedDistanceMeters) <= maxCenterDistanceMeters
-  );
-  const positiveEntries = supportEntries
-    .filter((entry) => entry.signedDistanceMeters > maxCenterDistanceMeters)
-    .sort(
-      (left, right) =>
-        Math.abs(right.signedDistanceMeters) - Math.abs(left.signedDistanceMeters) ||
-        left.linkName.localeCompare(right.linkName)
-    );
-  const negativeEntries = supportEntries
-    .filter((entry) => entry.signedDistanceMeters < -maxCenterDistanceMeters)
-    .sort((left, right) => left.linkName.localeCompare(right.linkName));
+  const { centeredEntries, negativeEntries, positiveEntries } = splitSupportEntriesByPlaneSide({
+    maxCenterDistanceMeters,
+    sortNegativeEntriesByLinkName: true,
+    supportEntries,
+  });
   const remainingNegativeEntries = [...negativeEntries];
   const alignmentTargetsByLinkName = new Map<string, RobotMirrorSymmetryAlignmentTarget>();
 

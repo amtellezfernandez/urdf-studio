@@ -740,7 +740,6 @@ def _build_gallery_published_repo(
             for robot in raw_robots
             if isinstance(robot, dict)
         ],
-        hfDatasets=_normalize_repo_metadata_list(repo_entry.get("hfDatasets") if isinstance(repo_entry, dict) else []),
         authorWebsite=_normalize_optional_text(repo_entry.get("authorWebsite")),
         authorX=_normalize_optional_text(repo_entry.get("authorX")),
         authorLinkedin=_normalize_optional_text(repo_entry.get("authorLinkedin")),
@@ -787,10 +786,6 @@ def _merge_gallery_repo_metadata(
         authorGithub=_normalize_optional_text(repo_entry.get("authorGithub")) or repo_metadata.author_github,
         contact=_normalize_optional_text(repo_entry.get("contact")) or repo_metadata.contact,
         extra=_normalize_optional_text(repo_entry.get("extra")) or repo_metadata.extra,
-        hfDatasets=(
-            _normalize_repo_metadata_list(repo_entry.get("hfDatasets") if isinstance(repo_entry, dict) else [])
-            or repo_metadata.hf_datasets
-        ),
         stars=repo_entry_stars if repo_entry_stars is not None else repo_metadata.stars,
         ownerLogin=_normalize_optional_text(repo_entry.get("ownerLogin")) or repo_metadata.owner_login,
         ownerAvatar=_normalize_optional_text(repo_entry.get("ownerAvatar")) or repo_metadata.owner_avatar,

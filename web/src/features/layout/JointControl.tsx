@@ -40,6 +40,12 @@ import { DEG_TO_RAD, RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { getJointLimitsError } from "@/shared/lib/jointLimits";
 import { resolveJointValueRange } from "@/features/layout/jointValueRange";
 import { JOINT_CONTROL_PARAMS } from "@/features/layout/jointControlParams";
+import { LimitAttributeStatusBadge } from "@/features/layout/jointLimitDebug";
+import {
+  getLimitAttributeInputTitle,
+  parseLimitAttributeDebugState,
+  parsePositiveScalar,
+} from "@/features/layout/jointLimitDebugState";
 import type { URDFRobot } from "urdf-loader";
 
 interface JointControlProps {
@@ -80,15 +86,6 @@ type JointLimitMetadata = JointLimitInfo & {
   velocity?: number | null;
 };
 
-type LimitAttributeStatus = "set" | "missing" | "invalid" | "zero";
-
-type LimitAttributeDebugState = {
-  raw: string | null;
-  status: LimitAttributeStatus;
-  value: number | null;
-};
-
-
 const LIGHT_GREEN = "#bbf7d0";
 const LIGHT_YELLOW = "#fef3c7";
 const LIGHT_RED = "#fecaca";
@@ -98,48 +95,6 @@ const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
   onXacroDetected: () => {},
   onOversize: () => {},
   onDepthExceeded: () => {},
-};
-
-const parsePositiveScalar = (value: string | number | null | undefined): number | null => {
-  const parsedValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
-};
-
-const parseLimitAttributeDebugState = (
-  value: string | number | null | undefined
-): LimitAttributeDebugState => {
-  if (value === null || value === undefined) {
-    return { raw: null, status: "missing", value: null };
-  }
-
-  const raw = typeof value === "number" ? String(value) : value.trim();
-  const parsedValue = typeof value === "number" ? value : Number(raw);
-  if (raw.length === 0 || !Number.isFinite(parsedValue)) {
-    return { raw, status: "invalid", value: null };
-  }
-  if (parsedValue < 0) {
-    return { raw, status: "invalid", value: parsedValue };
-  }
-  if (parsedValue === 0) {
-    return { raw, status: "zero", value: parsedValue };
-  }
-  return { raw, status: "set", value: parsedValue };
-};
-
-const getLimitAttributeInputTitle = (
-  attributeName: "effort" | "velocity",
-  attribute: LimitAttributeDebugState
-): string => {
-  if (attribute.status === "missing") {
-    return `URDF <limit ${attributeName}> is not set.`;
-  }
-  if (attribute.status === "invalid") {
-    return `URDF <limit ${attributeName}="${attribute.raw ?? ""}"> is invalid.`;
-  }
-  if (attribute.status === "zero") {
-    return `URDF <limit ${attributeName}="0"> is zero.`;
-  }
-  return `URDF <limit ${attributeName}="${attribute.raw ?? attribute.value}">`;
 };
 
 const roundToPrecision = (value: number, precision: number): number =>
@@ -194,32 +149,6 @@ const getJointValueColor = (value: number, min: number, max: number, hasBothLimi
   }
 
   return interpolateColor(LIGHT_YELLOW, LIGHT_RED, (clampedCloseness - 0.5) * 2);
-};
-
-const LimitAttributeStatusBadge = ({
-  attributeName,
-  state,
-}: {
-  attributeName: "effort" | "velocity";
-  state: LimitAttributeDebugState;
-}) => {
-  if (state.status === "set" || state.status === "missing") {
-    return null;
-  }
-
-  return (
-    <span
-      className={cn(
-        "rounded-sm border px-0.5 text-[7px] font-medium leading-3",
-        state.status === "invalid"
-          ? "border-red-400/35 bg-red-500/10 text-red-200"
-          : "border-amber-400/35 bg-amber-500/10 text-amber-200"
-      )}
-      title={getLimitAttributeInputTitle(attributeName, state)}
-    >
-      {state.status === "invalid" ? "bad" : "zero"}
-    </span>
-  );
 };
 
 export const JointControl = ({

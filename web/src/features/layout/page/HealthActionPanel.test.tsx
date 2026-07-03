@@ -3078,5 +3078,4 @@ describe("HealthActionPanel", () => {
       root.unmount();
     });
   });
-
 });

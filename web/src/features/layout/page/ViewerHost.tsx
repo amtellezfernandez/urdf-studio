@@ -16,9 +16,9 @@ import type { Viewer3DProps } from "@/features/viewer/Viewer3D";
 const Viewer3D = lazy(() =>
   import("@/features/viewer/Viewer3D").then((module) => ({ default: module.Viewer3D }))
 );
-const RosVizV2Viewer = lazy(() =>
-  import("@/studio_ui/rosviz/RosVizV2Viewer").then((module) => ({
-    default: module.RosVizV2Viewer,
+const RosVizViewer = lazy(() =>
+  import("@/studio_ui/rosviz/RosVizViewer").then((module) => ({
+    default: module.RosVizViewer,
   }))
 );
 
@@ -35,7 +35,7 @@ export const ViewerHost = ({
 }: ViewerHostProps) => {
   const rosVizFlagEnabled = useSyncExternalStore(
     subscribeFeatureFlags,
-    () => isFeatureFlagEnabled("rosVizV2"),
+    () => isFeatureFlagEnabled("rosViz"),
     () => false
   );
   const rosVizGate = useFeatureGateAvailability(FEATURE_GATES.rosVizRuntime);
@@ -48,8 +48,8 @@ export const ViewerHost = ({
     webGpuSupported: canUseWebGpu(),
   });
 
-  const runtimePrefix = runtimeDecision.runtime === "rosVizV2" ? "rosviz2" : "studio3d";
-  const ActiveViewer = runtimeDecision.runtime === "rosVizV2" ? RosVizV2Viewer : Viewer3D;
+  const runtimePrefix = runtimeDecision.runtime === "rosViz" ? "rosviz" : "studio3d";
+  const ActiveViewer = runtimeDecision.runtime === "rosViz" ? RosVizViewer : Viewer3D;
 
   return (
     <Suspense fallback={<div className={fallbackClassName} />}>

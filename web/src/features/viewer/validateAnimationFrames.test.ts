@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateAnimationFrames } from "@/features/viewer/validateAnimationFrames";
-import { createDemoEpisodes } from "@/shared/samples/demoMotion";
+import { createDemoMotionSequences } from "@/shared/samples/demoMotion";
 
 describe("validateAnimationFrames", () => {
   it("accepts valid monotonic frames", () => {
@@ -64,11 +64,11 @@ describe("validateAnimationFrames", () => {
     expect(result.warnings.join(" ")).toMatch(/missing joint keys/);
   });
 
-  it("demo episodes are valid", () => {
-    const episodes = createDemoEpisodes({ jointNames: ["j1", "j2"] });
-    expect(episodes.length).toBeGreaterThan(0);
-    episodes.forEach((episode) => {
-      const frames = episode.frames.map((frame) => ({
+  it("demo motion sequences are valid", () => {
+    const sequences = createDemoMotionSequences({ jointNames: ["j1", "j2"] });
+    expect(sequences.length).toBeGreaterThan(0);
+    sequences.forEach((sequence) => {
+      const frames = sequence.frames.map((frame) => ({
         timestamp: frame.timestamp,
         joints: frame.jointPositions,
       }));

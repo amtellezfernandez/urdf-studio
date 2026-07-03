@@ -86,7 +86,7 @@ describe("AdaptiveTrajectoryRuntime", () => {
     expect(updated.accelerationScale).toBeLessThan(initialProfile.accelerationScale);
 
     const restored = repository.load("robot-b::arm");
-    expect(restored?.episodes).toBe(1);
+    expect(restored?.completedRuns).toBe(1);
     expect(restored?.speedScale).toBeCloseTo(updated.speedScale, 6);
   });
 

@@ -24,6 +24,35 @@ type UseAssemblyWorkspaceStateParams = {
   vizUrdfContent: string;
 };
 
+const normalizeAssemblyUrdfPath = (urdfPath: string): string =>
+  normalizeMeshPathForMatch(urdfPath) || urdfPath;
+
+const resolveActiveAssemblyUrdfPath = (activeUrdfPath: string | null): string | null =>
+  activeUrdfPath && activeUrdfPath.length > 0 ? normalizeAssemblyUrdfPath(activeUrdfPath) : null;
+
+const resolveAssemblyRobotDocument = ({
+  robot,
+  normalizedActivePath,
+  urdfDocuments,
+  vizUrdfContent,
+}: {
+  robot: AssemblyRobotInstance;
+  normalizedActivePath: string | null;
+  urdfDocuments: Record<string, string>;
+  vizUrdfContent: string;
+}): { normalizedPath: string; content: string } => {
+  const normalizedPath = normalizeAssemblyUrdfPath(robot.urdfPath);
+  const content =
+    urdfDocuments[normalizedPath] ||
+    (normalizedActivePath && normalizedPath === normalizedActivePath ? vizUrdfContent : "");
+  return { normalizedPath, content };
+};
+
+const resolveAssemblyPrimaryRobot = (
+  assemblySelectedRobots: AssemblyRobotInstance[]
+): AssemblyRobotInstance | null =>
+  assemblySelectedRobots.find((robot) => robot.isPrimary) ?? assemblySelectedRobots[0] ?? null;
+
 export const useAssemblyWorkspaceState = ({
   activeUrdfPath,
   assemblyContactPairs,
@@ -66,21 +95,20 @@ export const useAssemblyWorkspaceState = ({
   const assemblySecondaryModels = useMemo<AssemblySecondaryModel[]>(() => {
     if (!isAssemblyWorkspace || assemblySelectedRobots.length <= 1) return [];
 
-    const normalizedActivePath =
-      activeUrdfPath && activeUrdfPath.length > 0
-        ? normalizeMeshPathForMatch(activeUrdfPath) || activeUrdfPath
-        : null;
-    const primaryInstance =
-      assemblySelectedRobots.find((robot) => robot.isPrimary) ?? assemblySelectedRobots[0];
+    const normalizedActivePath = resolveActiveAssemblyUrdfPath(activeUrdfPath);
+    const primaryInstance = resolveAssemblyPrimaryRobot(assemblySelectedRobots);
+    if (!primaryInstance) return [];
     const models: AssemblySecondaryModel[] = [];
 
     assemblySelectedRobots
       .filter((robot) => robot.instanceId !== primaryInstance.instanceId)
       .forEach((robot) => {
-        const normalizedPath = normalizeMeshPathForMatch(robot.urdfPath) || robot.urdfPath;
-        const content =
-          urdfDocuments[normalizedPath] ||
-          (normalizedActivePath && normalizedPath === normalizedActivePath ? vizUrdfContent : "");
+        const { normalizedPath, content } = resolveAssemblyRobotDocument({
+          robot,
+          normalizedActivePath,
+          urdfDocuments,
+          vizUrdfContent,
+        });
         if (!content?.trim()) return;
         models.push({
           id: robot.instanceId,
@@ -95,7 +123,8 @@ export const useAssemblyWorkspaceState = ({
 
   const assemblyPrimaryModel = useMemo(() => {
     if (!isAssemblyWorkspace || assemblySelectedRobots.length === 0) return null;
-    const primary = assemblySelectedRobots.find((robot) => robot.isPrimary) ?? assemblySelectedRobots[0];
+    const primary = resolveAssemblyPrimaryRobot(assemblySelectedRobots);
+    if (!primary) return null;
     return {
       id: primary.instanceId,
       name: primary.name,
@@ -108,19 +137,19 @@ export const useAssemblyWorkspaceState = ({
     const replacementRobot =
       assemblySelectedRobots.find((robot) => robot.role === "replacement") ?? null;
     if (!hostRobot || !replacementRobot) return null;
-    const normalizedActivePath =
-      activeUrdfPath && activeUrdfPath.length > 0
-        ? normalizeMeshPathForMatch(activeUrdfPath) || activeUrdfPath
-        : null;
-    const normalizedHostPath = normalizeMeshPathForMatch(hostRobot.urdfPath) || hostRobot.urdfPath;
-    const normalizedReplacementPath =
-      normalizeMeshPathForMatch(replacementRobot.urdfPath) || replacementRobot.urdfPath;
-    const hostUrdfContent =
-      urdfDocuments[normalizedHostPath] ||
-      (normalizedActivePath && normalizedHostPath === normalizedActivePath ? vizUrdfContent : "");
-    const replacementUrdfContent =
-      urdfDocuments[normalizedReplacementPath] ||
-      (normalizedActivePath && normalizedReplacementPath === normalizedActivePath ? vizUrdfContent : "");
+    const normalizedActivePath = resolveActiveAssemblyUrdfPath(activeUrdfPath);
+    const { content: hostUrdfContent } = resolveAssemblyRobotDocument({
+      robot: hostRobot,
+      normalizedActivePath,
+      urdfDocuments,
+      vizUrdfContent,
+    });
+    const { content: replacementUrdfContent } = resolveAssemblyRobotDocument({
+      robot: replacementRobot,
+      normalizedActivePath,
+      urdfDocuments,
+      vizUrdfContent,
+    });
     const hostLinkSummary = summarizeLinkOptions(hostUrdfContent);
     const replacementLinkSummary = summarizeLinkOptions(replacementUrdfContent);
     return {
@@ -155,17 +184,16 @@ export const useAssemblyWorkspaceState = ({
         return null;
       }
 
-      const normalizedActivePath =
-        activeUrdfPath && activeUrdfPath.length > 0
-          ? normalizeMeshPathForMatch(activeUrdfPath) || activeUrdfPath
-          : null;
+      const normalizedActivePath = resolveActiveAssemblyUrdfPath(activeUrdfPath);
       const models: AssemblyInspectorModel[] = [];
 
       assemblySelectedRobots.forEach((robot) => {
-        const normalizedPath = normalizeMeshPathForMatch(robot.urdfPath) || robot.urdfPath;
-        const content =
-          urdfDocuments[normalizedPath] ||
-          (normalizedActivePath && normalizedPath === normalizedActivePath ? vizUrdfContent : "");
+        const { content } = resolveAssemblyRobotDocument({
+          robot,
+          normalizedActivePath,
+          urdfDocuments,
+          vizUrdfContent,
+        });
         if (!content?.trim()) return;
         models.push({
           id: robot.instanceId,
@@ -180,10 +208,7 @@ export const useAssemblyWorkspaceState = ({
         allowUnion: assemblyHasPhysicalContact && assemblyProposalRequested,
         contactPairs: assemblyContactPairs,
         poses: assemblyPoses,
-        primaryRobotId:
-          assemblySelectedRobots.find((robot) => robot.isPrimary)?.instanceId ??
-          assemblySelectedRobots[0]?.instanceId ??
-          null,
+        primaryRobotId: resolveAssemblyPrimaryRobot(assemblySelectedRobots)?.instanceId ?? null,
         proposalRevision: assemblyProposalRevision,
       });
     },

@@ -12,7 +12,7 @@ type BackendGuardOptions = {
   context?: string;
 };
 
-export const requireBackends = ({ requiredBackends, context }: BackendGuardOptions): void => {
+const requireBackends = ({ requiredBackends, context }: BackendGuardOptions): void => {
   assertBackendsAvailable(requiredBackends, context);
 };
 

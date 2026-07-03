@@ -1,15 +1,11 @@
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
+import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 
 type RobotMirrorSimulationPrepViewState = {
   robotMirrorSelectionLinks: RobotMirrorSelectionLink[];
   robotMirrorSymmetryCheck: RobotMirrorSymmetryCheck | null;
 };
-
-const toSortedUniqueLinkNames = (linkNames: Iterable<string>): string[] =>
-  Array.from(new Set(Array.from(linkNames).map((linkName) => linkName.trim()).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right)
-  );
 
 export const resolveRobotMirrorSimulationPrepViewState = ({
   robotMirrorSelectionLinks,
@@ -27,12 +23,14 @@ export const resolveRobotMirrorSimulationPrepViewState = ({
     };
   }
 
-  const planeTouchingLinkNameSet = new Set(toSortedUniqueLinkNames(robotMirrorPlaneTouchingLinkNames));
+  const planeTouchingLinkNameSet = new Set(
+    toSortedUniqueRobotMirrorLinkNames(robotMirrorPlaneTouchingLinkNames)
+  );
   const promotedSelectionLinks = robotMirrorSelectionLinks.filter(
     (selectionLink) =>
       planeTouchingLinkNameSet.has(selectionLink.linkName) && selectionLink.status !== "paired"
   );
-  const promotedLinkNames = toSortedUniqueLinkNames(
+  const promotedLinkNames = toSortedUniqueRobotMirrorLinkNames(
     promotedSelectionLinks.map((selectionLink) => selectionLink.linkName)
   );
   if (promotedLinkNames.length === 0) {
@@ -76,11 +74,11 @@ export const resolveRobotMirrorSimulationPrepViewState = ({
         }
       : selectionLink
   );
-  const centeredLinkNames = toSortedUniqueLinkNames([
+  const centeredLinkNames = toSortedUniqueRobotMirrorLinkNames([
     ...robotMirrorSymmetryCheck.centeredLinkNames,
     ...promotedLinkNames,
   ]);
-  const supportedLinkNames = toSortedUniqueLinkNames([
+  const supportedLinkNames = toSortedUniqueRobotMirrorLinkNames([
     ...robotMirrorSymmetryCheck.supportedLinkNames,
     ...promotedLinkNames,
   ]);

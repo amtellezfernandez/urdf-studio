@@ -1284,7 +1284,7 @@ export const useIkSolver = ({
         endEffectorLink: targetEndEffectorLink,
       });
       const rawNextSafe = applyIkMotionSafety(rawNextJointValues);
-      // Visual smoothing only; store/recording keep the raw IK target.
+      // Visual smoothing only; persistent state keeps the raw IK target.
       const DRAG_VISUAL_ALPHA = 0.55;
       const eeKey = targetEndEffectorLink ?? "";
       const prev = dragSmoothedJointsRef.current.get(eeKey) ?? {};
@@ -1306,7 +1306,7 @@ export const useIkSolver = ({
         // Visual: apply smoothed values so the 3D robot glides.
         applyJointValues(robotAny, nextJointValues, { filter: false });
       }
-      // Store and recording get the raw solution.
+      // Persistent state receives the raw solution.
       setStoreJointValues(rawNextSafe);
       onIkApplied?.(rawNextSafe, {
         inputSource: IK_DRAG_INPUT_SOURCE,

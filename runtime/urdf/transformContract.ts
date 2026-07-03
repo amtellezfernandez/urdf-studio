@@ -5,7 +5,7 @@ export type TransformContract = {
   allowGeometryBake: boolean;
 };
 
-export const DEFAULT_TRANSFORM_CONTRACT: TransformContract = {
+const DEFAULT_TRANSFORM_CONTRACT: TransformContract = {
   strictParity: true,
   allowUrdfMutation: false,
   allowAxisRemap: false,

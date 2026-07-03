@@ -70,39 +70,6 @@ function parseHostValue(flag, rawValue) {
   return normalized;
 }
 
-function parseRobotNameValue(flag, rawValue) {
-  const normalized = typeof rawValue === 'string' ? rawValue.trim() : '';
-  if (
-    !normalized ||
-    normalized === '.' ||
-    normalized === '..' ||
-    normalized.startsWith('-') ||
-    normalized.includes('/') ||
-    normalized.includes('\\')
-  ) {
-    throw new Error(`${flag} requires a robot name such as openarm-a or so100-left-1`);
-  }
-  return normalized;
-}
-
-function parseRobotEnvFileValue(flag, rawValue) {
-  const normalized = typeof rawValue === 'string' ? rawValue.trim() : '';
-  if (
-    !normalized ||
-    normalized === '.' ||
-    normalized.startsWith('/') ||
-    normalized.startsWith('-') ||
-    normalized.includes('\\')
-  ) {
-    throw new Error(`${flag} requires a relative env file path`);
-  }
-  const parts = normalized.split('/');
-  if (parts.includes('..') || parts.includes('')) {
-    throw new Error(`${flag} requires a relative env file path`);
-  }
-  return normalized;
-}
-
 function assignOverride(overrides, section, key, value) {
   if (!overrides[section]) {
     overrides[section] = {};
@@ -123,18 +90,13 @@ function normalizeHost(host) {
 
 export function parseRunArgs(argv = process.argv.slice(2)) {
   const parsedRunArgs = {
-    ackPublicTunnel: false,
     ackRemoteExposure: false,
     allowRemote: false,
     allowOutdated: false,
-    dataMode: false,
     help: false,
     overrides: {},
-    runtimeDemoMode: false,
     teamHost: null,
     teamMode: false,
-    robotEnvFile: null,
-    robotName: null,
     unknownArgs: [],
   };
 
@@ -146,10 +108,6 @@ export function parseRunArgs(argv = process.argv.slice(2)) {
       parsedRunArgs.help = true;
       continue;
     }
-    if (flag === RUN_OPTION_FLAGS.dataMode) {
-      parsedRunArgs.dataMode = true;
-      continue;
-    }
     if (flag === RUN_OPTION_FLAGS.teamMode) {
       parsedRunArgs.teamMode = true;
       continue;
@@ -158,22 +116,6 @@ export function parseRunArgs(argv = process.argv.slice(2)) {
       const optionValue = requireOptionValue(flag, inlineValue, argv, index);
       parsedRunArgs.teamHost = parseHostValue(flag, optionValue.value);
       index = optionValue.nextIndex;
-      continue;
-    }
-    if (flag === RUN_OPTION_FLAGS.robot) {
-      const optionValue = requireOptionValue(flag, inlineValue, argv, index);
-      parsedRunArgs.robotName = parseRobotNameValue(flag, optionValue.value);
-      index = optionValue.nextIndex;
-      continue;
-    }
-    if (flag === RUN_OPTION_FLAGS.robotEnvFile) {
-      const optionValue = requireOptionValue(flag, inlineValue, argv, index);
-      parsedRunArgs.robotEnvFile = parseRobotEnvFileValue(flag, optionValue.value);
-      index = optionValue.nextIndex;
-      continue;
-    }
-    if (flag === RUN_OPTION_FLAGS.runtimeDemoMode) {
-      parsedRunArgs.runtimeDemoMode = true;
       continue;
     }
     if (flag === RUN_OPTION_FLAGS.allowRemote) {
@@ -188,11 +130,6 @@ export function parseRunArgs(argv = process.argv.slice(2)) {
       parsedRunArgs.ackRemoteExposure = true;
       continue;
     }
-    if (flag === RUN_OPTION_FLAGS.ackPublicTunnel) {
-      parsedRunArgs.ackPublicTunnel = true;
-      continue;
-    }
-
     const valueFlag = RUN_VALUE_FLAGS[flag];
     if (valueFlag) {
       const optionValue = requireOptionValue(flag, inlineValue, argv, index);
@@ -209,23 +146,6 @@ export function parseRunArgs(argv = process.argv.slice(2)) {
   }
 
   return parsedRunArgs;
-}
-
-export function applyRobotGatewayEnvSelection(
-  env,
-  { robotEnvFile = null, robotName = null } = {}
-) {
-  const nextEnv = { ...env };
-  if (robotEnvFile) {
-    nextEnv.URDF_ROBOT_GATEWAY_ENV_FILE = robotEnvFile;
-    delete nextEnv.URDF_ROBOT_GATEWAY_ENV;
-    return nextEnv;
-  }
-  if (robotName) {
-    nextEnv.URDF_ROBOT_GATEWAY_ENV = robotName;
-    delete nextEnv.URDF_ROBOT_GATEWAY_ENV_FILE;
-  }
-  return nextEnv;
 }
 
 export function resolveTeamModeHost({
@@ -313,11 +233,9 @@ export function resolveLocalNetworkUrl(runtimeConfig, { networkInterfaces = os.n
 }
 
 export function buildStartupOverviewLines({
-  dataMode = false,
   localNetworkUrl = null,
   remoteExposureIssues = [],
   runtimeConfig,
-  runtimeDemoMode = false,
   runtimeUrls,
   teamMode = false,
   teamSharingGateway = false,
@@ -377,13 +295,6 @@ export function buildStartupOverviewLines({
     } else if (hasSeparateLocalNetworkUrl) {
       lines.push(`Direct access: ${localNetworkUrl}`);
     }
-  }
-
-  if (dataMode) {
-    lines.push('Phone link: tunnel starts after the app is ready and is limited to camera/session upload.');
-  }
-  if (runtimeDemoMode) {
-    lines.push('Demo objects: enabled.');
   }
 
   return lines;
@@ -454,10 +365,8 @@ export function isTruthyEnvValue(value) {
 
 export function getMissingSecurityAcknowledgements(
   {
-    ackPublicTunnel = false,
     ackRemoteExposure = false,
     allowRemote = false,
-    dataMode = false,
   } = {},
   {
     env = process.env,
@@ -465,18 +374,6 @@ export function getMissingSecurityAcknowledgements(
   } = {}
 ) {
   const missingAcknowledgements = [];
-
-  if (
-    dataMode &&
-    !ackPublicTunnel &&
-    !isTruthyEnvValue(env[RUN_ACK_ENV_KEYS.publicTunnel])
-  ) {
-    missingAcknowledgements.push({
-      kind: 'publicTunnel',
-      flag: RUN_OPTION_FLAGS.ackPublicTunnel,
-      envKey: RUN_ACK_ENV_KEYS.publicTunnel,
-    });
-  }
 
   if (
     allowRemote &&
@@ -496,7 +393,6 @@ export function getMissingSecurityAcknowledgements(
 
 export function formatMissingAcknowledgementsMessage(missingAcknowledgements) {
   const labels = {
-    publicTunnel: 'public tunnel mode',
     remoteExposure: 'remote exposure mode',
   };
   return missingAcknowledgements
@@ -508,7 +404,6 @@ export function formatMissingAcknowledgementsMessage(missingAcknowledgements) {
 }
 
 export function buildSecurityPostureLines({
-  dataMode = false,
   remoteExposureIssues = [],
   runtimeConfig,
   teamSharingGateway = false,
@@ -519,11 +414,7 @@ export function buildSecurityPostureLines({
     `team sharing gate: ${teamSharingGateway ? 'remote frontend blocked until enabled' : 'disabled'}`,
   ];
 
-  lines.push(
-    `data mode: ${dataMode ? 'public tunnel enabled' : 'disabled'}`,
-    `data tunnel scope: ${dataMode ? 'cam-to-sim session ingress only' : 'disabled'}`,
-    `network exposure: ${remoteExposureIssues.length > 0 ? 'remote bind allowed' : 'loopback only'}`
-  );
+  lines.push(`network exposure: ${remoteExposureIssues.length > 0 ? 'remote bind allowed' : 'loopback only'}`);
   return lines;
 }
 
@@ -536,38 +427,6 @@ export function buildFrontendReadyUrl(runtimeConfig) {
     ? '127.0.0.1'
     : runtimeConfig.web.bindHost;
   return `http://${formatHostForUrl(readyHost)}:${runtimeConfig.web.port}`;
-}
-
-export function getStartupSecurityViolations(
-  {
-    dataMode = false,
-    remoteExposureIssues = [],
-  } = {},
-  {
-    env = process.env,
-  } = {}
-) {
-  const violations = [];
-  const simulatorApiToken =
-    typeof env.URDF_SIMULATOR_API_TOKEN === 'string' ? env.URDF_SIMULATOR_API_TOKEN.trim() : '';
-
-  if (dataMode && remoteExposureIssues.length > 0) {
-    violations.push(
-      'Data mode cannot be combined with non-loopback binds. Keep binds local and use the tunnel as the only exposure path.'
-    );
-  }
-
-  if (dataMode && !simulatorApiToken) {
-    violations.push(
-      'Data mode requires URDF_SIMULATOR_API_TOKEN so remote operator routes are not left unauthenticated.'
-    );
-  }
-
-  return violations;
-}
-
-export function formatStartupSecurityViolationsMessage(violations) {
-  return violations.join(' ');
 }
 
 export function applyRuntimeEnvOverrides(env, runtimeConfig) {

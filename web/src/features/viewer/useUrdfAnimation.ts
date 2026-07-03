@@ -314,7 +314,7 @@ export const useUrdfAnimation = ({
     }
 
     const currentFrame = animationFrames[frameIndex];
-    // Playback must be frame-locked so robot pose matches the episode timeline exactly.
+    // Playback must be frame-locked so robot pose matches the motion timeline exactly.
     const { joints: frameLockedDataJoints, hasNonFinite } = buildFrameLockedJointValues(
       lastAppliedDataJointsRef.current,
       currentFrame?.joints ?? {},

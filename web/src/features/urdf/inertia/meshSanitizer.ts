@@ -9,6 +9,7 @@ import {
   MESH_SANITIZER_SIGNIFICANT_MASS_LOSS_RATIO,
   MESH_SANITIZER_VERTEX_KEY_DECIMALS,
 } from "./meshSanitizerParams";
+import { collectWorldMeshTriangles } from "./meshTriangleCollector";
 
 /**
  * Performs conservative disconnected-island cleanup for URDF link meshes.
@@ -67,6 +68,11 @@ type MeshSanitizerOptions = {
   maxInertiaTraceChangeRatio?: number;
 };
 
+type MeshSanitizationResult = {
+  diagnostics: MeshSanitizationDiagnostics;
+  object: THREE.Object3D;
+};
+
 type TriangleMassProperties = {
   mass: number;
   centerOfMass: THREE.Vector3;
@@ -84,51 +90,14 @@ const toEdgeKey = (lhs: string, rhs: string): string => (lhs < rhs ? `${lhs}::${
 const computeSignedTriangleVolume = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number =>
   a.dot(new THREE.Vector3().crossVectors(b, c)) / 6;
 
-const collectMeshTriangles = (object: THREE.Object3D): MeshTriangleRecord[] => {
-  object.updateMatrixWorld(true);
-  const triangles: MeshTriangleRecord[] = [];
-  const vertexA = new THREE.Vector3();
-  const vertexB = new THREE.Vector3();
-  const vertexC = new THREE.Vector3();
-
-  object.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
-    const position = geometry?.getAttribute("position") as THREE.BufferAttribute | undefined;
-    if (!mesh.isMesh || !geometry || !position || position.itemSize < 3) {
-      return;
-    }
-
-    const matrix = mesh.matrixWorld.clone();
-    const pushTriangle = (aIndex: number, bIndex: number, cIndex: number) => {
-      const a = vertexA.fromBufferAttribute(position, aIndex).clone().applyMatrix4(matrix);
-      const b = vertexB.fromBufferAttribute(position, bIndex).clone().applyMatrix4(matrix);
-      const c = vertexC.fromBufferAttribute(position, cIndex).clone().applyMatrix4(matrix);
-      triangles.push({
-        a,
-        b,
-        c,
-        vertexKeys: [toVertexKey(a), toVertexKey(b), toVertexKey(c)],
-        signedVolume: computeSignedTriangleVolume(a, b, c),
-      });
-    };
-
-    const index = geometry.getIndex();
-    if (index) {
-      const indexArray = index.array;
-      for (let i = 0; i + 2 < indexArray.length; i += 3) {
-        pushTriangle(indexArray[i] as number, indexArray[i + 1] as number, indexArray[i + 2] as number);
-      }
-      return;
-    }
-
-    for (let i = 0; i + 2 < position.count; i += 3) {
-      pushTriangle(i, i + 1, i + 2);
-    }
-  });
-
-  return triangles;
-};
+const collectMeshTriangles = (object: THREE.Object3D): MeshTriangleRecord[] =>
+  collectWorldMeshTriangles(object).triangles.map(({ a, b, c }) => ({
+    a,
+    b,
+    c,
+    vertexKeys: [toVertexKey(a), toVertexKey(b), toVertexKey(c)],
+    signedVolume: computeSignedTriangleVolume(a, b, c),
+  }));
 
 const buildConnectedComponents = (triangles: MeshTriangleRecord[]): number[][] => {
   const edgeToTriangles = new Map<string, number[]>();
@@ -201,6 +170,32 @@ const createNotApplicableDeletionSafetyReport = (): MeshDeletionSafetyReport => 
     characteristicLengthMeters: 0,
   },
   reasons: [],
+});
+
+const createUnchangedSanitizationResult = ({
+  object,
+  originalTriangleCount,
+  originalVertexCount,
+  totalComponents,
+}: {
+  object: THREE.Object3D;
+  originalTriangleCount: number;
+  originalVertexCount: number;
+  totalComponents: number;
+}): MeshSanitizationResult => ({
+  object,
+  diagnostics: {
+    status: "unchanged",
+    massSignificance: "not-applicable",
+    originalVertexCount,
+    finalVertexCount: originalVertexCount,
+    originalTriangleCount,
+    finalTriangleCount: originalTriangleCount,
+    totalComponents,
+    removedComponents: 0,
+    volumeRetainedRatio: 1,
+    deletionSafetyReport: createNotApplicableDeletionSafetyReport(),
+  },
 });
 
 const createManualReviewDeletionSafetyReport = (reasons: string[]): MeshDeletionSafetyReport => ({
@@ -448,45 +443,27 @@ export const sanitizeMeshObject = (
     maxMassLossRatio = MESH_SANITIZER_MAX_MASS_LOSS_RATIO,
     maxInertiaTraceChangeRatio = MESH_SANITIZER_MAX_INERTIA_TRACE_CHANGE_RATIO,
   }: MeshSanitizerOptions = {}
-): { object: THREE.Object3D; diagnostics: MeshSanitizationDiagnostics } => {
+): MeshSanitizationResult => {
   const triangles = collectMeshTriangles(object);
   const originalVertexCount = countUniqueVertices(triangles);
   const originalTriangleCount = triangles.length;
   if (triangles.length === 0) {
-    return {
+    return createUnchangedSanitizationResult({
       object,
-      diagnostics: {
-        status: "unchanged",
-        massSignificance: "not-applicable",
-        originalVertexCount,
-        finalVertexCount: originalVertexCount,
-        originalTriangleCount,
-        finalTriangleCount: originalTriangleCount,
-        totalComponents: 0,
-        removedComponents: 0,
-        volumeRetainedRatio: 1,
-        deletionSafetyReport: createNotApplicableDeletionSafetyReport(),
-      },
-    };
+      originalTriangleCount,
+      originalVertexCount,
+      totalComponents: 0,
+    });
   }
 
   const components = buildConnectedComponents(triangles);
   if (components.length <= 1) {
-    return {
+    return createUnchangedSanitizationResult({
       object,
-      diagnostics: {
-        status: "unchanged",
-        massSignificance: "not-applicable",
-        originalVertexCount,
-        finalVertexCount: originalVertexCount,
-        originalTriangleCount,
-        finalTriangleCount: originalTriangleCount,
-        totalComponents: components.length,
-        removedComponents: 0,
-        volumeRetainedRatio: 1,
-        deletionSafetyReport: createNotApplicableDeletionSafetyReport(),
-      },
-    };
+      originalTriangleCount,
+      originalVertexCount,
+      totalComponents: components.length,
+    });
   }
 
   const componentVolumes = components.map((component) =>
@@ -495,21 +472,12 @@ export const sanitizeMeshObject = (
   const maxComponentVolume = Math.max(...componentVolumes);
   const totalVolume = componentVolumes.reduce((sum, volume) => sum + volume, 0);
   if (maxComponentVolume <= 0 || totalVolume <= 0) {
-    return {
+    return createUnchangedSanitizationResult({
       object,
-      diagnostics: {
-        status: "unchanged",
-        massSignificance: "not-applicable",
-        originalVertexCount,
-        finalVertexCount: originalVertexCount,
-        originalTriangleCount,
-        finalTriangleCount: originalTriangleCount,
-        totalComponents: components.length,
-        removedComponents: 0,
-        volumeRetainedRatio: 1,
-        deletionSafetyReport: createNotApplicableDeletionSafetyReport(),
-      },
-    };
+      originalTriangleCount,
+      originalVertexCount,
+      totalComponents: components.length,
+    });
   }
 
   const retainedTriangleIndices = new Set<number>();
@@ -527,21 +495,12 @@ export const sanitizeMeshObject = (
   });
 
   if (removedComponents === 0) {
-    return {
+    return createUnchangedSanitizationResult({
       object,
-      diagnostics: {
-        status: "unchanged",
-        massSignificance: "not-applicable",
-        originalVertexCount,
-        finalVertexCount: originalVertexCount,
-        originalTriangleCount,
-        finalTriangleCount: originalTriangleCount,
-        totalComponents: components.length,
-        removedComponents: 0,
-        volumeRetainedRatio: 1,
-        deletionSafetyReport: createNotApplicableDeletionSafetyReport(),
-      },
-    };
+      originalTriangleCount,
+      originalVertexCount,
+      totalComponents: components.length,
+    });
   }
 
   const retainedTriangles = triangles.filter((_, triangleIndex) => retainedTriangleIndices.has(triangleIndex));

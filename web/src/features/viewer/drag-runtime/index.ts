@@ -1,8 +1,5 @@
 export {
-  buildAdjacentLinkPairsFromAnalysis,
   buildChainJointNamesFromAnalysis,
-  buildCollisionProxiesFromRobot,
-  captureRobotJointState,
   createEmptyDragRuntimeCache,
   refreshRobotFrameCache,
   resolveReachRadiusFromAnalysis,
@@ -19,12 +16,3 @@ export {
   markDragSolveComplete,
   popNextDragSolveTicket,
 } from "./scheduler";
-export { evaluateFastSafety, selectBestFastCandidate } from "./safetyFast";
-export { validateReleasePose } from "./commitValidate";
-export type {
-  DragRuntimeCache,
-  DragRuntimeConfig,
-  DragSolveTicket,
-  DragTargetLocal,
-  FastSafetyResult,
-} from "./types";

@@ -67,7 +67,7 @@ class IKRequest(BaseModel):
 class IkSolveRequest(IKRequest):
     solver_id: str = Field(
         default="amik",
-        description="Solver id to use (e.g., amik, lerobot-placo).",
+        description="Solver id to use (e.g., amik, placo).",
     )
     solver_chain: Optional[List[str]] = Field(
         default=None,

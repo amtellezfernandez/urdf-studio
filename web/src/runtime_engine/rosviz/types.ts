@@ -15,26 +15,13 @@ export type RosVizTopicInfo = {
 
 export type RosVizDeterministicMode = "strict" | "smooth";
 export type RosVizModeProfile = "studio" | "ros_debug";
-export type RosVizDataSource = "live_ros" | "replay" | "episode";
-export type RosVizClockMode = "live" | "replay" | "scrub";
-export type RosVizSessionMode =
-  | "live_debug"
-  | "live_record"
-  | "replay_rosbag"
-  | "replay_episode"
-  | "replay_motion_only"
-  | "hybrid_compare";
-export type RosVizTimeSource = "ros_clock" | "bag_time" | "episode_time" | "wall_time";
-export type RosVizTransportSource =
-  | "ros_topics"
-  | "bag_reader"
-  | "episode_store"
-  | "motion_store"
-  | "hybrid_pipeline";
-export type RosVizRecordingState = "idle" | "armed" | "recording" | "finalizing";
+export type RosVizDataSource = "live_ros";
+export type RosVizClockMode = "live";
+export type RosVizSessionMode = "live_debug";
+export type RosVizTimeSource = "ros_clock";
+export type RosVizTransportSource = "ros_topics";
 
 export type RosVizRuntimeCapabilities = {
-  can_record: boolean;
   can_toggle_play: boolean;
   can_step: boolean;
   can_seek: boolean;
@@ -70,7 +57,6 @@ export type RosVizSessionState = {
   data_source: RosVizDataSource;
   time_source: RosVizTimeSource;
   transport_source: RosVizTransportSource;
-  recording_state: RosVizRecordingState;
   clock_mode: RosVizClockMode;
   is_playing: boolean;
   tick_index: number;

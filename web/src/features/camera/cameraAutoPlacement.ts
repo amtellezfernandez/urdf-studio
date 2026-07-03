@@ -27,16 +27,7 @@ const WORLD_UP_FALLBACK_AXIS = new THREE.Vector3(0, 1, 0);
 const RPY_ORDER = "ZYX" as const;
 
 const toFiniteTriplet = (value: THREE.Vector3): [number, number, number] => [value.x, value.y, value.z];
-const normalizePreferredForwardLocal = (value: THREE.Vector3 | null | undefined) => {
-  if (!value) return null;
-  if (!Number.isFinite(value.x) || !Number.isFinite(value.y) || !Number.isFinite(value.z)) {
-    return null;
-  }
-  if (value.lengthSq() < CAMERA_AUTO_OUTWARD_MIN_VECTOR_LENGTH) return null;
-  return value.clone().normalize();
-};
-
-const normalizePreferredUpLocal = (value: THREE.Vector3 | null | undefined) => {
+const normalizePreferredLocalDirection = (value: THREE.Vector3 | null | undefined) => {
   if (!value) return null;
   if (!Number.isFinite(value.x) || !Number.isFinite(value.y) || !Number.isFinite(value.z)) {
     return null;
@@ -164,10 +155,10 @@ export const resolveCameraPoseAtLocalPointFacingOutward = (
   robot: URDFRobot | null,
   options: ResolveCameraPoseAtLocalPointOptions = {}
 ): CameraLocalPose => {
-  const preferredForward = normalizePreferredForwardLocal(options.preferredForwardLocal);
+  const preferredForward = normalizePreferredLocalDirection(options.preferredForwardLocal);
   const outwardForward = resolveLocalForwardFacingOutward(linkObject, localPosition, robot);
-  const fallbackForward = normalizePreferredForwardLocal(options.fallbackForwardLocal);
-  const preferredUp = normalizePreferredUpLocal(options.preferredUpLocal);
+  const fallbackForward = normalizePreferredLocalDirection(options.fallbackForwardLocal);
+  const preferredUp = normalizePreferredLocalDirection(options.preferredUpLocal);
   const forwardDirection = resolveForwardDirection(preferredForward, outwardForward, fallbackForward);
   const localFallbackUp =
     Math.abs(DEFAULT_LOCAL_FORWARD.dot(DEFAULT_LOCAL_UP)) > CAMERA_AUTO_OUTWARD_UP_PARALLEL_DOT

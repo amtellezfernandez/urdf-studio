@@ -184,7 +184,9 @@ const filterObstaclesByExcludedIds = <T extends { id: string }>({
     excludedObstacleId,
     excludedObstacleIds,
   });
-  return obstacles.filter((obstacle) => !excludedObstacleIdSet.has(obstacle.id));
+  return obstacles.filter(
+    (obstacle) => !excludedObstacleIdSet.has(obstacle.id),
+  );
 };
 
 export const countIncludedObstacles = <T extends { id: string }>({
@@ -203,11 +205,12 @@ export const countIncludedObstacles = <T extends { id: string }>({
   }).length;
 
 const resolveRoverApproachNavigationTimeoutBonusMs = (
-  waypointCount: number
+  waypointCount: number,
 ): number =>
   Math.min(
     ROVER_APPROACH_NAVIGATION_CONFIG.maxTimeoutBonusMs,
-    Math.max(0, waypointCount) * ROVER_APPROACH_NAVIGATION_CONFIG.timeoutBonusPerWaypointMs
+    Math.max(0, waypointCount) *
+      ROVER_APPROACH_NAVIGATION_CONFIG.timeoutBonusPerWaypointMs,
   );
 
 function buildRouteResult(params: {
@@ -250,7 +253,9 @@ function buildRouteResult({
     pathClearanceM,
     minimumClearanceM: plannerSummary.minimumClearanceM,
     timeoutBonusMs:
-      mode === "path" ? resolveRoverApproachNavigationTimeoutBonusMs(waypointWorlds.length) : 0,
+      mode === "path"
+        ? resolveRoverApproachNavigationTimeoutBonusMs(waypointWorlds.length)
+        : 0,
     usedDetourFallback,
     plannerSummary,
   } as RoverApproachWorldRouteResult;
@@ -291,17 +296,81 @@ const resolveRoverApproachRoutePolylineClear = ({
   return true;
 };
 
+const resolveValidatedNavigationDecisionRoute = ({
+  mode,
+  segmentStartWorld,
+  waypointWorlds,
+  segmentEndWorld,
+  scene,
+  obstacles,
+  robotFootprint,
+  pathClearanceM,
+  plannerSummary,
+}: {
+  mode: "direct" | "path";
+  segmentStartWorld: THREE.Vector3;
+  waypointWorlds: THREE.Vector3[];
+  segmentEndWorld: THREE.Vector3;
+  scene: RoverApproachNavigationScene;
+  obstacles: RoverApproachPlanarObstacle[];
+  robotFootprint?: RoverApproachRobotFootprint;
+  pathClearanceM: number;
+  plannerSummary: RoverNavigationPlanSummary;
+}): RoverApproachWorldRouteResult => {
+  if (
+    !resolveRoverApproachRoutePolylineClear({
+      segmentStartWorld,
+      waypointWorlds,
+      segmentEndWorld,
+      scene,
+      obstacles,
+      robotFootprint,
+      pathClearanceM,
+    })
+  ) {
+    return buildRouteResult({
+      mode: "blocked",
+      waypointWorlds: [],
+      pathClearanceM,
+      usedDetourFallback: false,
+      plannerSummary: {
+        ...plannerSummary,
+        mode: "blocked",
+        plannerStage: "blocked",
+        blockedReason: "route-validation-failed",
+      },
+    });
+  }
+
+  if (mode === "direct") {
+    return buildRouteResult({
+      mode: "direct",
+      waypointWorlds,
+      pathClearanceM,
+      usedDetourFallback: false,
+      plannerSummary,
+    });
+  }
+
+  return buildRouteResult({
+    mode: "path",
+    waypointWorlds,
+    pathClearanceM,
+    usedDetourFallback: false,
+    plannerSummary,
+  });
+};
 
 export const toRoverApproachWorldVector3Tuple = (
-  value: THREE.Vector3
+  value: THREE.Vector3,
 ): RoverApproachWorldVector3Tuple => [value.x, value.y, value.z];
 
 export const fromRoverApproachWorldVector3Tuple = (
-  value: RoverApproachWorldVector3Tuple
+  value: RoverApproachWorldVector3Tuple,
 ): THREE.Vector3 => new THREE.Vector3(value[0], value[1], value[2]);
 
 export const serializeWorldObjectObstacleSource = (
-  object: WorldObjectObstacleSource
+  object: WorldObjectObstacleSource,
 ): SerializedWorldObjectObstacleSource => ({
   id: object.id,
   type: object.type,
@@ -314,27 +383,32 @@ export const serializeWorldObjectObstacleSource = (
 });
 
 export const deserializeWorldObjectObstacleSource = (
-  object: SerializedWorldObjectObstacleSource
+  object: SerializedWorldObjectObstacleSource,
 ): WorldObjectObstacleSource => ({
   id: object.id,
   type: object.type,
   position: fromRoverApproachWorldVector3Tuple(object.position),
   rotation: object.rotation
-    ? new THREE.Euler(object.rotation[0], object.rotation[1], object.rotation[2], "XYZ")
+    ? new THREE.Euler(
+        object.rotation[0],
+        object.rotation[1],
+        object.rotation[2],
+        "XYZ",
+      )
     : undefined,
   size: fromRoverApproachWorldVector3Tuple(object.size),
   isHidden: object.isHidden,
 });
 
 export const serializeRoverApproachWorldRouteResult = (
-  result: RoverApproachWorldRouteResult
+  result: RoverApproachWorldRouteResult,
 ): SerializedRoverApproachWorldRouteResult => ({
   ...result,
   waypointWorlds: result.waypointWorlds.map(toRoverApproachWorldVector3Tuple),
 });
 
 export const deserializeRoverApproachWorldRouteResult = (
-  result: SerializedRoverApproachWorldRouteResult
+  result: SerializedRoverApproachWorldRouteResult,
 ): RoverApproachWorldRouteResult => ({
   ...result,
   waypointWorlds: result.waypointWorlds.map(fromRoverApproachWorldVector3Tuple),
@@ -355,7 +429,7 @@ export const createRoverApproachWorldNavigationSceneCacheKey = ({
         size: object.size,
         isHidden: object.isHidden === true,
       })),
-    })
+    }),
   );
 
 export const buildRoverApproachWorldNavigationContext = ({
@@ -436,7 +510,8 @@ export const resolveRoverApproachWorldRoute = ({
   });
   const plannerSummary = toRoverNavigationPlanSummary(navigationDecision);
   if (navigationDecision.mode === "direct") {
-    return resolveRoverApproachRoutePolylineClear({
+    return resolveValidatedNavigationDecisionRoute({
+      mode: "direct",
       segmentStartWorld,
       waypointWorlds: [],
       segmentEndWorld,
@@ -444,30 +519,15 @@ export const resolveRoverApproachWorldRoute = ({
       obstacles,
       robotFootprint,
       pathClearanceM,
-    })
-      ? buildRouteResult({
-          mode: "direct",
-          waypointWorlds: [],
-          pathClearanceM,
-          usedDetourFallback: false,
-          plannerSummary,
-        })
-      : buildRouteResult({
-          mode: "blocked",
-          waypointWorlds: [],
-          pathClearanceM,
-          usedDetourFallback: false,
-          plannerSummary: {
-            ...plannerSummary,
-            mode: "blocked",
-            plannerStage: "blocked",
-            blockedReason: "route-validation-failed",
-          },
-        });
+      plannerSummary,
+    });
   }
   if (navigationDecision.mode === "path") {
-    const waypointWorlds = navigationDecision.waypointWorlds.map((waypoint) => waypoint.clone());
-    return resolveRoverApproachRoutePolylineClear({
+    const waypointWorlds = navigationDecision.waypointWorlds.map((waypoint) =>
+      waypoint.clone(),
+    );
+    return resolveValidatedNavigationDecisionRoute({
+      mode: "path",
       segmentStartWorld,
       waypointWorlds,
       segmentEndWorld,
@@ -475,26 +535,8 @@ export const resolveRoverApproachWorldRoute = ({
       obstacles,
       robotFootprint,
       pathClearanceM,
-    })
-      ? buildRouteResult({
-          mode: "path",
-          waypointWorlds,
-          pathClearanceM,
-          usedDetourFallback: false,
-          plannerSummary,
-        })
-      : buildRouteResult({
-          mode: "blocked",
-          waypointWorlds: [],
-          pathClearanceM,
-          usedDetourFallback: false,
-          plannerSummary: {
-            ...plannerSummary,
-            mode: "blocked",
-            plannerStage: "blocked",
-            blockedReason: "route-validation-failed",
-          },
-        });
+      plannerSummary,
+    });
   }
   if (plannerSummary.blockedReason !== "no-traversable-corridor") {
     return buildRouteResult({
@@ -513,7 +555,10 @@ export const resolveRoverApproachWorldRoute = ({
     obstacles,
     pathClearanceM,
   });
-  if (detourDecision.mode !== "detour" || detourDecision.waypointWorld === null) {
+  if (
+    detourDecision.mode !== "detour" ||
+    detourDecision.waypointWorld === null
+  ) {
     return buildRouteResult({
       mode: "blocked",
       waypointWorlds: [],
@@ -598,7 +643,7 @@ export const assessRoverApproachWorldSegmentClearance = ({
 
 export const resolveRoverApproachWorldRouteFromRequest = (
   request: RoverApproachWorldRouteRequest,
-  navigationContext?: RoverApproachWorldNavigationContext
+  navigationContext?: RoverApproachWorldNavigationContext,
 ): RoverApproachWorldRouteResult => {
   const upAxisWorld = fromRoverApproachWorldVector3Tuple(request.upAxisWorld);
   const context =
@@ -608,8 +653,12 @@ export const resolveRoverApproachWorldRouteFromRequest = (
       upAxisWorld,
     });
   return resolveRoverApproachWorldRoute({
-    segmentStartWorld: fromRoverApproachWorldVector3Tuple(request.segmentStartWorld),
-    segmentEndWorld: fromRoverApproachWorldVector3Tuple(request.segmentEndWorld),
+    segmentStartWorld: fromRoverApproachWorldVector3Tuple(
+      request.segmentStartWorld,
+    ),
+    segmentEndWorld: fromRoverApproachWorldVector3Tuple(
+      request.segmentEndWorld,
+    ),
     upAxisWorld,
     navigationContext: context,
     excludedObstacleId: request.excludedObstacleId,

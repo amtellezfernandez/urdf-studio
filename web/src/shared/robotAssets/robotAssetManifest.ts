@@ -13,14 +13,22 @@ export type RobotAssetManifestFileEntry = {
   mime?: string;
 };
 
+export type RobotAssetManifestPreferences = {
+  prepareDemoWorldLayoutOnMotion?: boolean;
+  preserveDemoWorldLayoutOnMotion?: boolean;
+  suppressDefaultWorldLayoutAutoImport?: boolean;
+};
+
 type RobotAssetManifest = {
   label?: string;
   files: RobotAssetManifestFileEntry[];
+  preferences: RobotAssetManifestPreferences;
 };
 
 export type ProgressiveRobotAssetFileList = {
   initialFileList: FileList;
   loadRemainingFileList: () => Promise<FileList>;
+  preferences: RobotAssetManifestPreferences;
 };
 
 export type RobotAssetManifestCopy = {
@@ -47,6 +55,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const readString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+
+const readBoolean = (value: unknown): boolean | null =>
+  typeof value === "boolean" ? value : null;
 
 const normalizeManifestPath = (value: string): string =>
   value
@@ -79,6 +90,32 @@ const toManifestFileEntry = (
   };
 };
 
+const parseManifestPreferences = (
+  value: unknown,
+  copy: RobotAssetManifestCopy
+): RobotAssetManifestPreferences => {
+  if (value === undefined) return {};
+  if (!isRecord(value)) {
+    throw new Error(`${copy.manifestLabel} manifest preferences must be an object.`);
+  }
+  const preferences: RobotAssetManifestPreferences = {};
+  const suppressDefaultWorldLayoutAutoImport = readBoolean(
+    value.suppressDefaultWorldLayoutAutoImport
+  );
+  if (suppressDefaultWorldLayoutAutoImport !== null) {
+    preferences.suppressDefaultWorldLayoutAutoImport = suppressDefaultWorldLayoutAutoImport;
+  }
+  const prepareDemoWorldLayoutOnMotion = readBoolean(value.prepareDemoWorldLayoutOnMotion);
+  if (prepareDemoWorldLayoutOnMotion !== null) {
+    preferences.prepareDemoWorldLayoutOnMotion = prepareDemoWorldLayoutOnMotion;
+  }
+  const preserveDemoWorldLayoutOnMotion = readBoolean(value.preserveDemoWorldLayoutOnMotion);
+  if (preserveDemoWorldLayoutOnMotion !== null) {
+    preferences.preserveDemoWorldLayoutOnMotion = preserveDemoWorldLayoutOnMotion;
+  }
+  return preferences;
+};
+
 const parseRobotAssetManifest = (
   payload: unknown,
   copy: RobotAssetManifestCopy
@@ -92,6 +129,7 @@ const parseRobotAssetManifest = (
   return {
     label: readString(payload.label) ?? undefined,
     files: payload.files.map((entry, index) => toManifestFileEntry(entry, index, copy)),
+    preferences: parseManifestPreferences(payload.preferences, copy),
   };
 };
 
@@ -294,6 +332,7 @@ export const loadRobotAssetFileListProgressivelyFromManifestUrl = async (
     ),
     loadRemainingFileList: () =>
       loadManifestEntriesAsFileList(absoluteManifestUrl, remainingEntries, fetchImpl, copy),
+    preferences: manifest.preferences,
   };
 };
 
@@ -310,11 +349,23 @@ const normalizeManifestUrlCandidates = (manifestUrls: readonly string[]): string
   return out;
 };
 
-export const loadRobotAssetFileListFromManifestUrls = async (
-  manifestUrls: readonly string[],
-  fetchImpl: typeof fetch = fetch,
-  copy: RobotAssetManifestCopy = DEFAULT_ROBOT_ASSET_MANIFEST_COPY
-): Promise<FileList> => {
+const loadFromManifestUrlCandidates = async<T>({
+  manifestUrls,
+  fetchImpl,
+  copy,
+  failurePrefix,
+  loadCandidate,
+}: {
+  manifestUrls: readonly string[];
+  fetchImpl: typeof fetch;
+  copy: RobotAssetManifestCopy;
+  failurePrefix: string;
+  loadCandidate: (
+    manifestUrl: string,
+    fetchImpl: typeof fetch,
+    copy: RobotAssetManifestCopy
+  ) => Promise<T>;
+}): Promise<T> => {
   const candidates = normalizeManifestUrlCandidates(manifestUrls);
   if (candidates.length === 0) {
     throw new Error(copy.noManifestUrlsConfigured);
@@ -323,35 +374,38 @@ export const loadRobotAssetFileListFromManifestUrls = async (
   const failures: string[] = [];
   for (const candidate of candidates) {
     try {
-      return await loadRobotAssetFileListFromManifestUrl(candidate, fetchImpl, copy);
+      return await loadCandidate(candidate, fetchImpl, copy);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       failures.push(`${candidate}: ${reason}`);
     }
   }
 
-  throw new Error(`${copy.bootstrapFailedPrefix} ${failures.join(" | ")}`);
+  throw new Error(`${failurePrefix} ${failures.join(" | ")}`);
 };
+
+export const loadRobotAssetFileListFromManifestUrls = async (
+  manifestUrls: readonly string[],
+  fetchImpl: typeof fetch = fetch,
+  copy: RobotAssetManifestCopy = DEFAULT_ROBOT_ASSET_MANIFEST_COPY
+): Promise<FileList> =>
+  loadFromManifestUrlCandidates({
+    manifestUrls,
+    fetchImpl,
+    copy,
+    failurePrefix: copy.bootstrapFailedPrefix,
+    loadCandidate: loadRobotAssetFileListFromManifestUrl,
+  });
 
 export const loadRobotAssetFileListProgressivelyFromManifestUrls = async (
   manifestUrls: readonly string[],
   fetchImpl: typeof fetch = fetch,
   copy: RobotAssetManifestCopy = DEFAULT_ROBOT_ASSET_MANIFEST_COPY
-): Promise<ProgressiveRobotAssetFileList> => {
-  const candidates = normalizeManifestUrlCandidates(manifestUrls);
-  if (candidates.length === 0) {
-    throw new Error(copy.noManifestUrlsConfigured);
-  }
-
-  const failures: string[] = [];
-  for (const candidate of candidates) {
-    try {
-      return await loadRobotAssetFileListProgressivelyFromManifestUrl(candidate, fetchImpl, copy);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      failures.push(`${candidate}: ${reason}`);
-    }
-  }
-
-  throw new Error(`${copy.progressiveBootstrapFailedPrefix} ${failures.join(" | ")}`);
-};
+): Promise<ProgressiveRobotAssetFileList> =>
+  loadFromManifestUrlCandidates({
+    manifestUrls,
+    fetchImpl,
+    copy,
+    failurePrefix: copy.progressiveBootstrapFailedPrefix,
+    loadCandidate: loadRobotAssetFileListProgressivelyFromManifestUrl,
+  });

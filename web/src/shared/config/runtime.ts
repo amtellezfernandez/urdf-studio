@@ -109,7 +109,6 @@ const resolvedConfig: ResolvedRuntimeConfig = {
 
 export const API_BASE_URL = resolvedConfig.apiBaseUrl;
 export const IKD_BASE_URL = resolvedConfig.ikdBaseUrl;
-export const IKD_WS_URL = resolvedConfig.ikdWsUrl;
 export const IKD_APPROACH_WS_URL = resolvedConfig.ikdApproachWsUrl;
 export const IKD_RUNTIME_CONFIG = resolvedConfig.ikd;
 export const IK_RUNTIME_CONFIG = resolvedConfig.ik;

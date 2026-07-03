@@ -22,6 +22,16 @@ export type IkMotionSafetyResult = {
   limitedJointNames: string[];
 };
 
+type FiniteJointTargetPair = {
+  currentValue: number;
+  targetValue: number;
+};
+
+type IkMotionSafetyDraft = {
+  nextJointValues: Record<string, number>;
+  limitedJointNames: Set<string>;
+};
+
 export const createIkMotionSafetyState = (): IkMotionSafetyState => ({
   lastTimestampMs: null,
   velocityByJoint: new Map<string, number>(),
@@ -66,28 +76,62 @@ const resolveDtSec = (
   return Math.min(dtSec, IK_MOTION_SAFETY_LIMITS.maxControlDtSec);
 };
 
+const readFiniteJointTargetPair = (
+  currentJointValues: Record<string, number>,
+  jointName: string,
+  targetValue: number
+): FiniteJointTargetPair | null => {
+  const currentValue = currentJointValues[jointName];
+  if (!Number.isFinite(currentValue) || !Number.isFinite(targetValue)) {
+    return null;
+  }
+  return {
+    currentValue: currentValue as number,
+    targetValue,
+  };
+};
+
+const toIkMotionSafetyResult = (
+  jointValues: Record<string, number>,
+  limitedJointNames: Set<string>
+): IkMotionSafetyResult => ({
+  jointValues,
+  limited: limitedJointNames.size > 0,
+  limitedJointNames: Array.from(limitedJointNames),
+});
+
+const createIkMotionSafetyDraft = (
+  targetJointValues: Record<string, number>
+): IkMotionSafetyDraft => ({
+  nextJointValues: { ...targetJointValues },
+  limitedJointNames: new Set<string>(),
+});
+
+const forEachFiniteJointTarget = (
+  currentJointValues: Record<string, number>,
+  targetJointValues: Record<string, number>,
+  visitor: (jointName: string, pair: FiniteJointTargetPair) => void
+) => {
+  Object.entries(targetJointValues).forEach(([jointName, targetValue]) => {
+    const pair = readFiniteJointTargetPair(currentJointValues, jointName, targetValue);
+    if (!pair) return;
+    visitor(jointName, pair);
+  });
+};
+
 const holdCurrentFiniteJointTargets = (
   currentJointValues: Record<string, number>,
   targetJointValues: Record<string, number>
 ): IkMotionSafetyResult => {
-  const nextJointValues: Record<string, number> = { ...targetJointValues };
-  const limitedJointNames = new Set<string>();
-  Object.entries(targetJointValues).forEach(([jointName, targetValue]) => {
-    const currentValue = currentJointValues[jointName];
-    if (!Number.isFinite(currentValue) || !Number.isFinite(targetValue)) {
+  const draft = createIkMotionSafetyDraft(targetJointValues);
+  forEachFiniteJointTarget(currentJointValues, targetJointValues, (jointName, pair) => {
+    if (Math.abs(pair.targetValue - pair.currentValue) <= Number.EPSILON) {
       return;
     }
-    if (Math.abs((targetValue as number) - (currentValue as number)) <= Number.EPSILON) {
-      return;
-    }
-    nextJointValues[jointName] = currentValue as number;
-    limitedJointNames.add(jointName);
+    draft.nextJointValues[jointName] = pair.currentValue;
+    draft.limitedJointNames.add(jointName);
   });
-  return {
-    jointValues: nextJointValues,
-    limited: limitedJointNames.size > 0,
-    limitedJointNames: Array.from(limitedJointNames),
-  };
+  return toIkMotionSafetyResult(draft.nextJointValues, draft.limitedJointNames);
 };
 
 const clampNextJointValueTowardTarget = (
@@ -127,16 +171,10 @@ export const limitIkJointTargetsToMotionSafety = ({
   }
 
   const accelerationLimit = resolveIkMotionSafetyAccelerationLimit();
-  const nextJointValues: Record<string, number> = { ...targetJointValues };
-  const limitedJointNames = new Set<string>();
+  const draft = createIkMotionSafetyDraft(targetJointValues);
 
-  Object.entries(targetJointValues).forEach(([jointName, targetValue]) => {
-    const currentValue = currentJointValues[jointName];
-    if (!Number.isFinite(currentValue) || !Number.isFinite(targetValue)) {
-      return;
-    }
-
-    const targetDelta = (targetValue as number) - (currentValue as number);
+  forEachFiniteJointTarget(currentJointValues, targetJointValues, (jointName, pair) => {
+    const targetDelta = pair.targetValue - pair.currentValue;
     if (
       Math.abs(targetDelta) <=
       IK_MOTION_SAFETY_LIMITS.stationaryJointDeltaRad
@@ -166,22 +204,18 @@ export const limitIkJointTargetsToMotionSafety = ({
       Math.max(minVelocity, requestedVelocity)
     );
     const nextValue = clampNextJointValueTowardTarget(
-      currentValue as number,
-      targetValue as number,
-      (currentValue as number) + clampedVelocity * dtSec
+      pair.currentValue,
+      pair.targetValue,
+      pair.currentValue + clampedVelocity * dtSec
     );
-    const appliedVelocity = (nextValue - (currentValue as number)) / dtSec;
+    const appliedVelocity = (nextValue - pair.currentValue) / dtSec;
     state.velocityByJoint.set(jointName, appliedVelocity);
-    if (Math.abs(nextValue - (targetValue as number)) <= Number.EPSILON) {
+    if (Math.abs(nextValue - pair.targetValue) <= Number.EPSILON) {
       return;
     }
-    nextJointValues[jointName] = nextValue;
-    limitedJointNames.add(jointName);
+    draft.nextJointValues[jointName] = nextValue;
+    draft.limitedJointNames.add(jointName);
   });
 
-  return {
-    jointValues: nextJointValues,
-    limited: limitedJointNames.size > 0,
-    limitedJointNames: Array.from(limitedJointNames),
-  };
+  return toIkMotionSafetyResult(draft.nextJointValues, draft.limitedJointNames);
 };

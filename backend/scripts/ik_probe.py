@@ -11,7 +11,7 @@ from backend.core.app_config import get_config_value, read_app_config
 from backend.models.kinematics import FKRequest, IKRequest
 from backend.services.kinematics import forward_kinematics
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
-from backend.services.lerobot_kinematics import _load_placo, inverse_kinematics as placo_ik
+from backend.services.placo_kinematics import _load_placo, inverse_kinematics as placo_ik
 
 
 def _load_sample_urdf(sample_id: str) -> str:

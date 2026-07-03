@@ -277,6 +277,11 @@ describe("loadDemoFileListFromManifestUrl", () => {
       if (url === MANIFEST_URL) {
         return new Response(
           JSON.stringify({
+            preferences: {
+              prepareDemoWorldLayoutOnMotion: true,
+              preserveDemoWorldLayoutOnMotion: true,
+              suppressDefaultWorldLayoutAutoImport: true,
+            },
             files: [
               { path: "robots/lekiwi.urdf", url: "robots/lekiwi.urdf", mime: "application/xml" },
               { path: "meshes/base.stl", url: "meshes/base.stl", mime: "model/stl" },
@@ -322,6 +327,11 @@ describe("loadDemoFileListFromManifestUrl", () => {
     expect(Array.from(progressiveFileList.initialFileList).map((file) => file.name)).toEqual([
       "lekiwi.urdf",
     ]);
+    expect(progressiveFileList.preferences).toEqual({
+      prepareDemoWorldLayoutOnMotion: true,
+      preserveDemoWorldLayoutOnMotion: true,
+      suppressDefaultWorldLayoutAutoImport: true,
+    });
 
     const remainingFiles = Array.from(await progressiveFileList.loadRemainingFileList());
 

@@ -3,8 +3,6 @@ import { guardedFetch } from "@/shared/lib/backendGuard";
 import { COLLABORATION_SESSION_TOKEN_HEADER } from "@/features/collaboration/collaborationTransport";
 import type {
   CollaborationAccessUpdateResponse,
-  CollaborationCapabilityIssueRequest,
-  CollaborationCapabilityIssueResponse,
   CollaborationEventRequest,
   CollaborationEventSnapshot,
   CollaborationSessionCreateResponse,
@@ -116,30 +114,5 @@ export const updateCollaborationAccess = async (
   return ensureJsonResponse<CollaborationAccessUpdateResponse>(
     response,
     "Collaboration access update",
-  );
-};
-
-export const issueCollaborationCapability = async (
-  session: CollaborationShareSession & { ownerToken: string },
-  request: CollaborationCapabilityIssueRequest,
-): Promise<CollaborationCapabilityIssueResponse> => {
-  const response = await guardedFetch(
-    `${COLLABORATION_ENDPOINT}/sessions/${encodeURIComponent(session.sessionId)}/capabilities`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        [COLLABORATION_SESSION_TOKEN_HEADER]: session.ownerToken,
-      },
-      body: JSON.stringify(request),
-    },
-    {
-      ...CORE_API_OPTIONS,
-      context: "Collaboration capability issue",
-    },
-  );
-  return ensureJsonResponse<CollaborationCapabilityIssueResponse>(
-    response,
-    "Collaboration capability issue",
   );
 };

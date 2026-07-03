@@ -67,7 +67,6 @@ import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { API_BASE_URL } from "@/shared/config/api";
 import { writeThumbnailRenderState } from "@/app/pages/index/thumbnailRenderState";
 import {
-  applyRobotBasePose,
   extractLinkPose,
   extractRobotBasePose,
   getDragModeDisplayName,
@@ -75,7 +74,6 @@ import {
   setEmissiveColor,
   type DragMode,
 } from "@/features/viewer/viewer-helpers";
-import { RESET_RUNTIME_TRACE_MESSAGE_TYPE } from "@/shared/contracts/previewBridge";
 import { useIkParamsStore } from "@/features/ik/useIkParamsStore";
 import { CollisionGeometries } from "@/features/viewer/CollisionGeometries";
 import { RoverApproachGuideLine } from "@/features/viewer/RoverApproachGuideLine";
@@ -115,10 +113,7 @@ import {
 } from "@/features/viewer/viewerDragModePolicy";
 import { resolveViewerPartSelection } from "@/features/viewer/viewerPartSelectionPolicy";
 import { shouldApplySimulationPrepResetPoseRequest } from "@/features/viewer/simulationPrepResetPosePolicy";
-import {
-  isLeKiwiRobotAsset,
-  resolveRemountPreservedFrameTimestamp,
-} from "@/features/viewer/demoRobotPolicy";
+import { resolveRemountPreservedFrameTimestamp } from "@/features/viewer/demoRobotPolicy";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 import { recordPlaybackTrace, usePlaybackDebugTrace } from "@/shared/debug/playbackTrace";
@@ -137,7 +132,7 @@ import { stripMeshSchemes } from "@/shared/lib/urdfBrowser";
 import type { RepeatedInertiaSymmetryChain } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RepeatedInertiaSymmetryCenterMode } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
-import type { InertialVisualizationSettings, RobotBasePose } from "@/shared/types/feature";
+import type { InertialVisualizationSettings } from "@/shared/types/feature";
 import {
   InertialVisualization,
   type InertiaReliabilityEntry,
@@ -319,7 +314,6 @@ export interface Viewer3DProps {
   thumbnailMode?: boolean;
   preferStudioRuntime?: boolean;
   readOnlyMode?: boolean;
-  runtimeRobotBasePose?: RobotBasePose | null;
   enableObjectActionsInReadOnly?: boolean;
   onInertiaReliabilityChange?: (entries: InertiaReliabilityEntry[]) => void;
 }
@@ -889,42 +883,38 @@ const CreatedObjects = ({
             )}
 
             {/* Object center-of-mass marker */}
-            {obj.source !== "runtime-restricted-area" && (
-              <group position={[obj.position.x, obj.position.y, obj.position.z]}>
-                <mesh raycast={() => null}>
-                  <sphereGeometry args={[comRadius, 14, 10]} />
-                  <meshBasicMaterial
-                    color="#ff63d5"
-                    transparent
-                    opacity={isEmphasized ? 0.42 : 0.3}
-                    depthWrite={false}
+            <group position={[obj.position.x, obj.position.y, obj.position.z]}>
+              <mesh raycast={() => null}>
+                <sphereGeometry args={[comRadius, 14, 10]} />
+                <meshBasicMaterial
+                  color="#ff63d5"
+                  transparent
+                  opacity={isEmphasized ? 0.42 : 0.3}
+                  depthWrite={false}
+                />
+              </mesh>
+              <lineSegments raycast={() => null} renderOrder={950}>
+                <bufferGeometry>
+                  <bufferAttribute
+                    attach="attributes-position"
+                    count={6}
+                    array={comCrossPositions}
+                    itemSize={3}
                   />
-                </mesh>
-                <lineSegments raycast={() => null} renderOrder={950}>
-                  <bufferGeometry>
-                    <bufferAttribute
-                      attach="attributes-position"
-                      count={6}
-                      array={comCrossPositions}
-                      itemSize={3}
-                    />
-                  </bufferGeometry>
-                  <lineBasicMaterial
-                    color="#ff63d5"
-                    transparent
-                    opacity={isEmphasized ? 0.5 : 0.34}
-                    depthTest={false}
-                    depthWrite={false}
-                  />
-                </lineSegments>
-              </group>
-            )}
+                </bufferGeometry>
+                <lineBasicMaterial
+                  color="#ff63d5"
+                  transparent
+                  opacity={isEmphasized ? 0.5 : 0.34}
+                  depthTest={false}
+                  depthWrite={false}
+                />
+              </lineSegments>
+            </group>
 
             {/* Distance visualization line - points to tracked joint center or closest robot point */}
             {robot &&
               endEffectorLink &&
-              obj.source !== "runtime-trajectory" &&
-              obj.source !== "runtime-restricted-area" &&
               (obj.trackedJointName || endEffectorLink) && (
               <TrackingLine
                 cubePos={obj.position}
@@ -3761,7 +3751,6 @@ export const Viewer3D = ({
   onObjectSelect,
   thumbnailMode = false,
   readOnlyMode = false,
-  runtimeRobotBasePose = null,
   enableObjectActionsInReadOnly = false,
   onInertiaReliabilityChange,
 }: Viewer3DProps) => {
@@ -3772,7 +3761,7 @@ export const Viewer3D = ({
   usePlaybackDebugTrace();
   const motionKernelEnabled = useSyncExternalStore(
     subscribeFeatureFlags,
-    () => isFeatureFlagEnabled("motionKernelV2"),
+    () => isFeatureFlagEnabled("motionKernel"),
     () => true
   );
   const [animationFrames, setAnimationFrames] = useState<
@@ -3818,10 +3807,6 @@ export const Viewer3D = ({
   const removeCameraConfig = useCameraStore((state) => state.removeCamera);
   const animationController = useAnimationController();
   const currentAnimationFrameIndexRef = animationController.currentFrameIndexRef;
-  const isProtectedDemoRobot = useMemo(
-    () => isLeKiwiRobotAsset(urdfFile?.name, robot?.name),
-    [robot?.name, urdfFile?.name]
-  );
   const storeJointValues = useJointStore((s) => s.jointValues);
   const availableJointNames = useJointStore((s) => s.availableJoints);
   const setStoreJointValues = useJointStore((s) => s.setJointValues);
@@ -4944,13 +4929,6 @@ export const Viewer3D = ({
     };
   }, [clearLiveRobotBasePose]);
 
-  useEffect(() => {
-    if (!readOnlyMode || !robot || !runtimeRobotBasePose) {
-      return;
-    }
-    applyRobotBasePose(robot, runtimeRobotBasePose);
-  }, [readOnlyMode, robot, runtimeRobotBasePose]);
-
   useOrbitControlsBindings({ controlsRef, robot });
   
   useRobotCameraCentering({
@@ -5691,7 +5669,7 @@ export const Viewer3D = ({
 
   const {
     handleRun,
-    handlePlayEpisode,
+    handlePlayFrames,
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,
@@ -6043,21 +6021,7 @@ export const Viewer3D = ({
   const handleResetPoseWithGlobalView = useCallback(() => {
     handleResetPoseToOrigin();
     selectGlobalCameraView();
-    if (readOnlyMode && typeof window !== "undefined" && window.parent !== window) {
-      window.parent.postMessage(
-        {
-          type: RESET_RUNTIME_TRACE_MESSAGE_TYPE,
-          requestId: String(Date.now()),
-          reason: "reset-pose",
-        },
-        window.location.origin
-      );
-    }
-  }, [
-    handleResetPoseToOrigin,
-    readOnlyMode,
-    selectGlobalCameraView,
-  ]);
+  }, [handleResetPoseToOrigin, selectGlobalCameraView]);
   const handleReadOnlyInteractionAttempt = useCallback(() => {
     const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (!shouldShowPreviewReadOnlyNotice(readOnlyNoticeShownAtRef.current, nowMs)) {
@@ -6093,7 +6057,7 @@ export const Viewer3D = ({
 
   useViewerWindowBindings({
     handleRun,
-    handlePlayEpisode,
+    handlePlayFrames,
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,

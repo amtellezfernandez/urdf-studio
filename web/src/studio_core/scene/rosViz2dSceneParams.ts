@@ -5,8 +5,8 @@ export type ViewTransform = {
 };
 
 export const ROSVIZ_CANVAS_PIXELS_PER_METER = 96;
-export const ROSVIZ_CANVAS_MIN_PIXELS_PER_METER = 24;
-export const ROSVIZ_CANVAS_MAX_PIXELS_PER_METER = 420;
+const ROSVIZ_CANVAS_MIN_PIXELS_PER_METER = 24;
+const ROSVIZ_CANVAS_MAX_PIXELS_PER_METER = 420;
 
 export const ROSVIZ_GRID_STEP_METERS = 0.5;
 export const ROSVIZ_GRID_LINE_COLOR = "rgba(148, 163, 184, 0.16)";

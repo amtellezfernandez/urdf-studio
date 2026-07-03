@@ -2,13 +2,10 @@ import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import {
   analyzeUrdf,
-  type InertialEntry,
   type LinkData,
   type UrdfAnalysis,
 } from "@/shared/lib/urdfCore";
 import { validateInertiaTensor } from "@/features/viewer/inertialMath";
-
-export type { InertialEntry };
 
 export type LinkInertial = {
   linkName: string;
@@ -157,11 +154,6 @@ export const computeInertialStats = (
     invalidMassLinks,
     invalidTensorLinks,
   };
-};
-
-export const parseInertialEntries = (urdfContent: string): InertialEntry[] => {
-  if (!urdfContent.trim()) return [];
-  return analyzeUrdf(urdfContent).inertials;
 };
 
 export const computeCenterOfMassWorld = (

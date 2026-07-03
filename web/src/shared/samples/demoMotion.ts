@@ -51,9 +51,8 @@ export type DemoMotionFrame = {
   jointPositions: Record<string, number>;
 };
 
-export type DemoMotionEpisode = {
+export type DemoMotionSequence = {
   id: string;
-  number: number;
   frames: DemoMotionFrame[];
   createdAt: number;
   metadata: {
@@ -156,7 +155,7 @@ const DEMO_PROFILES: DemoProfile[] = [
   },
 ];
 
-export const createDemoEpisodes = ({
+export const createDemoMotionSequences = ({
   jointNames,
   jointLimits,
   profiles = DEMO_PROFILES,
@@ -164,11 +163,11 @@ export const createDemoEpisodes = ({
   jointNames: string[];
   jointLimits?: JointLimits;
   profiles?: DemoProfile[];
-}): DemoMotionEpisode[] => {
+}): DemoMotionSequence[] => {
   const baseId = Date.now();
   const safeProfiles = profiles.slice(0, DEFAULT_DEMO_COUNT);
   const activeProfiles = safeProfiles.length > 1 ? safeProfiles.slice(1) : safeProfiles;
-  return activeProfiles.map((profile, index) => {
+  return activeProfiles.map((profile) => {
     const frames = createWaveFrames({
       jointNames,
       jointLimits,
@@ -180,7 +179,6 @@ export const createDemoEpisodes = ({
     const createdAt = Date.now();
     return {
       id: `demo-${profile.id}-${baseId}`,
-      number: index + 1,
       frames,
       createdAt,
       metadata: {
@@ -198,8 +196,8 @@ export const createDemoEpisodes = ({
   });
 };
 
-export const toDemoAnimationFrames = (episode: DemoMotionEpisode): AnimationFrame[] =>
-  episode.frames.map((frame) => ({
+export const toDemoAnimationFrames = (sequence: DemoMotionSequence): AnimationFrame[] =>
+  sequence.frames.map((frame) => ({
     timestamp: frame.timestamp,
     joints: frame.jointPositions,
   }));

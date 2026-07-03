@@ -59,11 +59,6 @@ class IluGalleryRepoMetadata(IluGalleryBaseModel):
     )
     contact: str = Field(default="")
     extra: str = Field(default="")
-    hf_datasets: list[str] = Field(
-        default_factory=list,
-        serialization_alias="hfDatasets",
-        validation_alias=AliasChoices("hfDatasets", "hf_datasets"),
-    )
     stars: int | None = Field(default=None, ge=0)
     owner_login: str | None = Field(
         default=None,
@@ -168,11 +163,6 @@ class IluGalleryPublishedRepo(IluGalleryBaseModel):
     demo: str = Field(default="")
     tags: list[str] = Field(default_factory=list)
     robots: list[IluGalleryPublishedRobot] = Field(default_factory=list)
-    hf_datasets: list[str] = Field(
-        default_factory=list,
-        serialization_alias="hfDatasets",
-        validation_alias=AliasChoices("hfDatasets", "hf_datasets"),
-    )
     author_website: str = Field(
         default="",
         serialization_alias="authorWebsite",

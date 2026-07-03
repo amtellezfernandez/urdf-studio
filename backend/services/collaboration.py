@@ -18,13 +18,6 @@ from backend.services.collaboration_journal import (
 from backend.models.collaboration import (
     CollaborationAccessUpdateRequest,
     CollaborationAccessUpdateResponse,
-    CollaborationCapabilityIssueRequest,
-    CollaborationCapabilityIssueResponse,
-    CollaborationCapabilityRevokeRequest,
-    CollaborationCapabilityRevokeResponse,
-    CollaborationCapabilityRole,
-    CollaborationCapabilityVerifyRequest,
-    CollaborationCapabilityVerifyResponse,
     CollaborationEventRequest,
     CollaborationEventSnapshot,
     CollaborationSessionCreateRequest,
@@ -36,12 +29,6 @@ from backend.models.collaboration import (
 from backend.services.collaboration_params import (
     COLLABORATION_ACCESS_PAUSED_MESSAGE,
     COLLABORATION_ACCESS_REVOKED_MESSAGE,
-    COLLABORATION_CAPABILITY_ALLOWED_TRANSPORTS_BY_ROLE,
-    COLLABORATION_CAPABILITY_DEFAULT_TRANSPORTS,
-    COLLABORATION_CAPABILITY_DEFAULT_TTL_MS,
-    COLLABORATION_CAPABILITY_MAX_TTL_MS,
-    COLLABORATION_CAPABILITY_MIN_TTL_MS,
-    COLLABORATION_CAPABILITY_TOKEN_BYTES,
     COLLABORATION_CLIENT_SEQUENCE_FIELD,
     COLLABORATION_CLIENT_SEQUENCE_MAX,
     COLLABORATION_CLIENT_SEQUENCE_MIN,
@@ -55,20 +42,18 @@ from backend.services.collaboration_params import (
     COLLABORATION_INITIAL_EVENT_ID,
     COLLABORATION_IDLE_TTL_MS,
     COLLABORATION_JOURNAL_EVENT_ACCESS_UPDATED,
-    COLLABORATION_JOURNAL_EVENT_CAPABILITY_ISSUED,
-    COLLABORATION_JOURNAL_EVENT_CAPABILITY_REVOKED,
     COLLABORATION_JOURNAL_EVENT_COLLABORATION_EVENT_ACCEPTED,
     COLLABORATION_JOURNAL_EVENT_SESSION_CREATED,
     COLLABORATION_LABEL_MAX_CHARS,
     COLLABORATION_MAX_ACTIVE_SESSIONS,
-    COLLABORATION_MAX_CAPABILITIES_PER_SESSION,
     COLLABORATION_MAX_EVENTS_PER_SESSION,
     COLLABORATION_MAX_PEERS_PER_SESSION,
-    COLLABORATION_MS_PER_SECOND,
     COLLABORATION_SESSION_ID_BYTES,
     COLLABORATION_SESSION_TOKEN_BYTES,
     COLLABORATION_WEBSOCKET_ACCESS_REVOKED_REASON,
 )
+
+
 class CollaborationValidationError(ValueError):
     pass
 
@@ -98,17 +83,6 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _utc_ms_to_iso(value_ms: int) -> str:
-    return (
-        datetime.fromtimestamp(
-            value_ms / COLLABORATION_MS_PER_SECOND,
-            timezone.utc,
-        )
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
-
-
 def _now_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
 
@@ -122,16 +96,6 @@ class _CollaborationPeer:
     websocket: WebSocket
     role: CollaborationSessionRole
     session_token: str
-
-
-@dataclass
-class _CollaborationCapability:
-    token: str
-    role: CollaborationCapabilityRole
-    expires_at_ms: int
-    issued_at: str
-    expires_at: str
-    allowed_transports: tuple[str, ...]
 
 
 @dataclass
@@ -152,7 +116,6 @@ class _CollaborationSession:
         default_factory=lambda: deque(maxlen=COLLABORATION_MAX_EVENTS_PER_SESSION)
     )
     peers: dict[str, _CollaborationPeer] = field(default_factory=dict)
-    capabilities: dict[str, _CollaborationCapability] = field(default_factory=dict)
     last_client_sequences: dict[str, int] = field(default_factory=dict)
     rejected_event_count: int = 0
     replay_rejected_event_count: int = 0
@@ -189,19 +152,6 @@ class CollaborationService:
         ]
         for session_id in expired_session_ids:
             self._sessions.pop(session_id, None)
-
-    def _prune_expired_capabilities_locked(
-        self,
-        session: _CollaborationSession,
-        now_ms: int,
-    ) -> None:
-        expired_tokens = [
-            token
-            for token, capability in session.capabilities.items()
-            if now_ms >= capability.expires_at_ms
-        ]
-        for token in expired_tokens:
-            session.capabilities.pop(token, None)
 
     def _normalize_label(self, value: str) -> str:
         normalized = value.strip()
@@ -251,76 +201,6 @@ class CollaborationService:
                 f"Collaboration event payload must be at most {COLLABORATION_EVENT_PAYLOAD_MAX_BYTES} bytes."
             )
         return payload
-
-    def _normalize_capability_ttl_ms(self, value: int | None) -> int:
-        if value is None:
-            return COLLABORATION_CAPABILITY_DEFAULT_TTL_MS
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise CollaborationValidationError(
-                "Collaboration capability TTL must be an integer."
-            )
-        if (
-            value < COLLABORATION_CAPABILITY_MIN_TTL_MS
-            or value > COLLABORATION_CAPABILITY_MAX_TTL_MS
-        ):
-            raise CollaborationValidationError(
-                "Collaboration capability TTL must be between "
-                f"{COLLABORATION_CAPABILITY_MIN_TTL_MS} and "
-                f"{COLLABORATION_CAPABILITY_MAX_TTL_MS} milliseconds."
-            )
-        return value
-
-    def _normalize_capability_transports(
-        self,
-        values: list[str],
-        role: CollaborationCapabilityRole,
-    ) -> tuple[str, ...]:
-        allowed_transports = COLLABORATION_CAPABILITY_ALLOWED_TRANSPORTS_BY_ROLE[role]
-        if not values:
-            return tuple(
-                transport
-                for transport in COLLABORATION_CAPABILITY_DEFAULT_TRANSPORTS
-                if transport in allowed_transports
-            ) or tuple(sorted(allowed_transports))
-        normalized_transports: list[str] = []
-        seen_transports: set[str] = set()
-        for value in values:
-            if not isinstance(value, str):
-                raise CollaborationValidationError(
-                    "Collaboration capability transport must be a string."
-                )
-            normalized = value.strip().lower()
-            if not normalized:
-                raise CollaborationValidationError(
-                    "Collaboration capability transport is required."
-                )
-            if normalized not in allowed_transports:
-                raise CollaborationValidationError(
-                    f"Unsupported collaboration capability transport for {role}: {normalized}."
-                )
-            if normalized in seen_transports:
-                continue
-            seen_transports.add(normalized)
-            normalized_transports.append(normalized)
-        return tuple(normalized_transports)
-
-    def _issue_capability_token_locked(self, session: _CollaborationSession) -> str:
-        token = _token_urlsafe(COLLABORATION_CAPABILITY_TOKEN_BYTES)
-        while token in session.capabilities:
-            token = _token_urlsafe(COLLABORATION_CAPABILITY_TOKEN_BYTES)
-        return token
-
-    def _pop_capabilities_for_role_locked(
-        self,
-        session: _CollaborationSession,
-        role: CollaborationCapabilityRole,
-    ) -> int:
-        revoked_count = 0
-        for token, capability in list(session.capabilities.items()):
-            if capability.role == role:
-                session.capabilities.pop(token, None)
-                revoked_count += COLLABORATION_COUNTER_INCREMENT
-        return revoked_count
 
     def _client_sequence(self, payload: dict[str, Any]) -> int | None:
         if COLLABORATION_CLIENT_SEQUENCE_FIELD not in payload:
@@ -482,7 +362,6 @@ class CollaborationService:
             peer_count=len(session.peers),
             event_count=len(session.events),
             last_event_id=session.next_event_id - COLLABORATION_COUNTER_INCREMENT,
-            live_transport=None,
         )
 
     def _stats_locked(
@@ -588,8 +467,6 @@ class CollaborationService:
         session_token: str | None,
     ) -> CollaborationAccessUpdateResult:
         now_ms = _now_ms()
-        editor_capability_revoked_count = 0
-        teleop_capability_revoked_count = 0
         with self._lock:
             self._prune_idle_sessions_locked(now_ms)
             session = self._get_session_locked(session_id)
@@ -610,24 +487,6 @@ class CollaborationService:
                     self._token_digest(session.editor_token)
                 )
                 session.editor_token = _token_urlsafe(COLLABORATION_SESSION_TOKEN_BYTES)
-            if request.editors_enabled is False or request.rotate_editor_token:
-                editor_capability_revoked_count = (
-                    self._pop_capabilities_for_role_locked(
-                        session,
-                        "room_editor",
-                    )
-                )
-            if (
-                request.sharing_enabled is False
-                or request.rotate_session_token
-                or request.rotate_editor_token
-            ):
-                teleop_capability_revoked_count = (
-                    self._pop_capabilities_for_role_locked(
-                        session,
-                        "teleop_operator",
-                    )
-                )
             revoked_peers = self._pop_inaccessible_guest_peers_locked(session)
             session.updated_at = _utc_now_iso()
             session.last_seen_ms = now_ms
@@ -648,8 +507,6 @@ class CollaborationService:
                 "rotated_editor_token": request.rotate_editor_token,
                 "rotated_session_token": request.rotate_session_token,
                 "revoked_peer_count": len(revoked_peers),
-                "revoked_room_editor_capability_count": editor_capability_revoked_count,
-                "revoked_teleop_operator_capability_count": teleop_capability_revoked_count,
             }
 
         self._append_journal_record(
@@ -659,155 +516,6 @@ class CollaborationService:
             details=journal_details,
         )
         return result
-
-    def issue_capability(
-        self,
-        session_id: str,
-        request: CollaborationCapabilityIssueRequest,
-        *,
-        session_token: str | None,
-    ) -> CollaborationCapabilityIssueResponse:
-        now_ms = _now_ms()
-        ttl_ms = self._normalize_capability_ttl_ms(request.ttl_ms)
-        allowed_transports = self._normalize_capability_transports(
-            request.allowed_transports,
-            request.role,
-        )
-        with self._lock:
-            self._prune_idle_sessions_locked(now_ms)
-            session = self._get_session_locked(session_id)
-            self._require_owner_access(session, session_token)
-            self._prune_expired_capabilities_locked(session, now_ms)
-            if len(session.capabilities) >= COLLABORATION_MAX_CAPABILITIES_PER_SESSION:
-                raise CollaborationCapacityError(
-                    "Collaboration capability capacity exceeded."
-                )
-            token = self._issue_capability_token_locked(session)
-            expires_at_ms = now_ms + ttl_ms
-            capability = _CollaborationCapability(
-                token=token,
-                role=request.role,
-                expires_at_ms=expires_at_ms,
-                issued_at=_utc_ms_to_iso(now_ms),
-                expires_at=_utc_ms_to_iso(expires_at_ms),
-                allowed_transports=allowed_transports,
-            )
-            session.capabilities[token] = capability
-            session.updated_at = capability.issued_at
-            session.last_seen_ms = now_ms
-            response = CollaborationCapabilityIssueResponse(
-                session_id=session.session_id,
-                role=capability.role,
-                capability_token=capability.token,
-                issued_at=capability.issued_at,
-                expires_at=capability.expires_at,
-                allowed_transports=list(capability.allowed_transports),
-            )
-            journal_details = {
-                "role": capability.role,
-                "expires_at": capability.expires_at,
-                "allowed_transports": list(capability.allowed_transports),
-                "capability_token_digest": collaboration_token_digest(capability.token),
-            }
-
-        self._append_journal_record(
-            event_type=COLLABORATION_JOURNAL_EVENT_CAPABILITY_ISSUED,
-            session_id=response.session_id,
-            occurred_at=response.issued_at,
-            details=journal_details,
-        )
-        return response
-
-    def verify_capability(
-        self,
-        session_id: str,
-        request: CollaborationCapabilityVerifyRequest,
-    ) -> CollaborationCapabilityVerifyResponse:
-        now_ms = _now_ms()
-        normalized_transport = None
-        if request.transport is not None:
-            normalized_transport = request.transport.strip().lower()
-            if not normalized_transport:
-                return CollaborationCapabilityVerifyResponse(
-                    active=False, session_id=session_id
-                )
-        if request.required_role is None or normalized_transport is None:
-            return CollaborationCapabilityVerifyResponse(
-                active=False, session_id=session_id
-            )
-        with self._lock:
-            self._prune_idle_sessions_locked(now_ms)
-            session = self._sessions.get(session_id.strip())
-            if session is None:
-                return CollaborationCapabilityVerifyResponse(
-                    active=False, session_id=session_id
-                )
-            if not session.sharing_enabled:
-                return CollaborationCapabilityVerifyResponse(
-                    active=False, session_id=session.session_id
-                )
-            self._prune_expired_capabilities_locked(session, now_ms)
-            capability = session.capabilities.get(request.capability_token.strip())
-            if capability is None:
-                return CollaborationCapabilityVerifyResponse(
-                    active=False, session_id=session.session_id
-                )
-            if (
-                request.required_role is not None
-                and capability.role != request.required_role
-            ):
-                return CollaborationCapabilityVerifyResponse(
-                    active=False, session_id=session.session_id
-                )
-            if (
-                normalized_transport
-                and normalized_transport not in capability.allowed_transports
-            ):
-                return CollaborationCapabilityVerifyResponse(
-                    active=False, session_id=session.session_id
-                )
-            session.last_seen_ms = now_ms
-            return CollaborationCapabilityVerifyResponse(
-                active=True,
-                session_id=session.session_id,
-                role=capability.role,
-                expires_at=capability.expires_at,
-                allowed_transports=list(capability.allowed_transports),
-            )
-
-    def revoke_capability(
-        self,
-        session_id: str,
-        request: CollaborationCapabilityRevokeRequest,
-        *,
-        session_token: str | None,
-    ) -> CollaborationCapabilityRevokeResponse:
-        now_ms = _now_ms()
-        capability_token = request.capability_token.strip()
-        with self._lock:
-            self._prune_idle_sessions_locked(now_ms)
-            session = self._get_session_locked(session_id)
-            self._require_owner_access(session, session_token)
-            self._prune_expired_capabilities_locked(session, now_ms)
-            revoked = session.capabilities.pop(capability_token, None) is not None
-            session.updated_at = _utc_ms_to_iso(now_ms)
-            session.last_seen_ms = now_ms
-            response = CollaborationCapabilityRevokeResponse(
-                session_id=session.session_id,
-                revoked=revoked,
-            )
-            journal_occurred_at = session.updated_at
-
-        self._append_journal_record(
-            event_type=COLLABORATION_JOURNAL_EVENT_CAPABILITY_REVOKED,
-            session_id=response.session_id,
-            occurred_at=journal_occurred_at,
-            details={
-                "revoked": revoked,
-                "capability_token_digest": collaboration_token_digest(capability_token),
-            },
-        )
-        return response
 
     def record_event(
         self,

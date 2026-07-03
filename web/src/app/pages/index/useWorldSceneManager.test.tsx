@@ -64,9 +64,9 @@ describe("useWorldSceneManager", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("does not auto-import default background objects for OpenArm robots", async () => {
+  it("does not auto-import default background objects when the active manifest suppresses them", async () => {
     const fixture = {
-      urdf: '<robot name="openarm"><link name="base"/></robot>',
+      urdf: '<robot name="demo"><link name="base"/></robot>',
     };
 
     const Harness = () => {
@@ -87,8 +87,9 @@ describe("useWorldSceneManager", () => {
         jointValues,
         objects,
         originalUrdfContent: fixture.urdf,
-        resolvedRobotName: "OpenArm",
+        resolvedRobotName: "demo",
         skipDefaultWorldLayoutAutoImportRef,
+        suppressDefaultWorldLayoutAutoImport: true,
         setJointValues,
         updateUrdfFile: vi.fn(),
         vizUrdfContent: fixture.urdf,

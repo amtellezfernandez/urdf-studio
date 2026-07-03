@@ -2,6 +2,7 @@ import type {
   SerializableWorldObject,
   WorldScenePackageManifest,
 } from "@/features/world-share/worldScenePackageTypes";
+import { WORLD_OBJECT_SOURCES } from "@/shared/types/worldObject";
 import {
   STATIC_WORLD_LAYOUT_KIND,
   STATIC_WORLD_LAYOUT_NON_STATIC_UNSUPPORTED_ERROR,
@@ -18,15 +19,6 @@ import {
 const WORLD_LAYOUT_VECTOR_COMPONENT_COUNT = 3 as const;
 const WORLD_LAYOUT_VECTOR_COMPONENT_LABELS = ["x", "y", "z"] as const;
 const WORLD_LAYOUT_SUPPORTED_OBJECT_TYPES = ["cube", "point", "sphere", "cylinder", "mesh"] as const;
-const WORLD_LAYOUT_SUPPORTED_OBJECT_SOURCES = [
-  "user",
-  "world-scenario",
-  "demo-world",
-  "runtime-detection",
-  "runtime-demo",
-  "runtime-restricted-area",
-  "runtime-trajectory",
-] as const;
 const WORLD_LAYOUT_SUPPORTED_ORBIT_TARGET_POINTS = ["center", "primary", "secondary"] as const;
 const WORLD_LAYOUT_SUPPORTED_IK_TARGET_TYPES = ["punctual", "orbit"] as const;
 const WORLD_CAMERA_FIELDS = ["id", "name", "parent_joint", "pose", "intrinsics"] as const;
@@ -425,10 +417,10 @@ const validateSerializableWorldObject = (value: unknown, objectIndex: number): s
   }
   if (
     value.source !== undefined &&
-    !isOneOf(value.source, WORLD_LAYOUT_SUPPORTED_OBJECT_SOURCES)
+    !isOneOf(value.source, WORLD_OBJECT_SOURCES)
   ) {
     errors.push(
-      `${objectLabel}.source must be one of: ${WORLD_LAYOUT_SUPPORTED_OBJECT_SOURCES.join(", ")}`
+      `${objectLabel}.source must be one of: ${WORLD_OBJECT_SOURCES.join(", ")}`
     );
   }
   if (value.tracked_joint_name !== undefined && !isNullableString(value.tracked_joint_name)) {
@@ -675,27 +667,31 @@ const toStaticWorldSceneLayerSnapshot = (
   environment: snapshot.environment,
 });
 
-export const coerceWorldSceneSnapshot = (
-  value: unknown
+const coerceWorldSceneSnapshotWithTiming = (
+  value: unknown,
+  isScenarioTimingValue: (value: unknown) => value is number,
 ): WorldScenePackageManifest["world_snapshot"] | null => {
   if (!isRecord(value)) return null;
   if (!isString(value.urdf_xml) || !isRecord(value.joint_positions)) return null;
   if (!Array.isArray(value.cameras) || !Array.isArray(value.objects)) return null;
-  if (!isIntegerNumber(value.scenario_time_ms) || !isIntegerNumber(value.scenario_duration_ms)) {
+  if (
+    !isScenarioTimingValue(value.scenario_time_ms) ||
+    !isScenarioTimingValue(value.scenario_duration_ms)
+  ) {
     return null;
   }
   return value as WorldScenePackageManifest["world_snapshot"];
 };
 
+export const coerceWorldSceneSnapshot = (
+  value: unknown
+): WorldScenePackageManifest["world_snapshot"] | null =>
+  coerceWorldSceneSnapshotWithTiming(value, isIntegerNumber);
+
 const coerceWorldSceneSnapshotCandidate = (
   value: unknown
-): WorldScenePackageManifest["world_snapshot"] | null => {
-  if (!isRecord(value)) return null;
-  if (!isString(value.urdf_xml) || !isRecord(value.joint_positions)) return null;
-  if (!Array.isArray(value.cameras) || !Array.isArray(value.objects)) return null;
-  if (!isNumber(value.scenario_time_ms) || !isNumber(value.scenario_duration_ms)) return null;
-  return value as WorldScenePackageManifest["world_snapshot"];
-};
+): WorldScenePackageManifest["world_snapshot"] | null =>
+  coerceWorldSceneSnapshotWithTiming(value, isNumber);
 
 export const isWorldSceneManifest = (
   payload: unknown

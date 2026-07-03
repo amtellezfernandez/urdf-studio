@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
-import type { EpisodePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
+import type { FramePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
 import type { AnimationController } from "@/features/viewer/useAnimationController";
 import { validateAnimationFrames } from "@/features/viewer/validateAnimationFrames";
 
@@ -18,6 +18,25 @@ type UsePlaybackHandlersParams = {
   animationController: AnimationController;
 };
 
+const reportPlayableAnimationFrameIssues = (
+  frames: AnimationFrame[] | null | undefined,
+  emptyMessage: string,
+): frames is AnimationFrame[] => {
+  if (!frames || frames.length === 0) {
+    toast.error(emptyMessage);
+    return false;
+  }
+  const validation = validateAnimationFrames(frames);
+  if (!validation.ok) {
+    toast.error(`Motion data invalid: ${validation.issues.join(", ")}`);
+    return false;
+  }
+  if (validation.warnings.length > 0) {
+    console.warn(`[Viewer3D] Motion data warnings: ${validation.warnings.join(", ")}`);
+  }
+  return true;
+};
+
 export const usePlaybackHandlers = ({
   animationFrames,
   robot,
@@ -31,21 +50,12 @@ export const usePlaybackHandlers = ({
 }: UsePlaybackHandlersParams) => {
   const handleRun = useCallback(
     (forceState?: boolean) => {
-      if (!animationFrames || animationFrames.length === 0) {
-        toast.error("Please upload a motion data file first");
+      if (!reportPlayableAnimationFrameIssues(animationFrames, "Please upload a motion data file first")) {
         return;
       }
       if (!robot) {
         toast.error("Please upload a URDF file first");
         return;
-      }
-      const validation = validateAnimationFrames(animationFrames);
-      if (!validation.ok) {
-        toast.error(`Motion data invalid: ${validation.issues.join(", ")}`);
-        return;
-      }
-      if (validation.warnings.length > 0) {
-        console.warn(`[Viewer3D] Motion data warnings: ${validation.warnings.join(", ")}`);
       }
       const newPlayingState = forceState !== undefined ? forceState : !isPlaying;
 
@@ -91,19 +101,10 @@ export const usePlaybackHandlers = ({
     ]
   );
 
-  const handlePlayEpisode = useCallback(
-    (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => {
-      if (!frames || frames.length === 0) {
-        toast.error("No frames to play");
+  const handlePlayFrames = useCallback(
+    (frames: AnimationFrame[], options?: FramePlaybackOptions) => {
+      if (!reportPlayableAnimationFrameIssues(frames, "No frames to play")) {
         return;
-      }
-      const validation = validateAnimationFrames(frames);
-      if (!validation.ok) {
-        toast.error(`Motion data invalid: ${validation.issues.join(", ")}`);
-        return;
-      }
-      if (validation.warnings.length > 0) {
-        console.warn(`[Viewer3D] Motion data warnings: ${validation.warnings.join(", ")}`);
       }
 
       // Playback must only start from explicit user intent.
@@ -212,7 +213,7 @@ export const usePlaybackHandlers = ({
 
   return {
     handleRun,
-    handlePlayEpisode,
+    handlePlayFrames,
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,

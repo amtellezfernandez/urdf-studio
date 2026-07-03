@@ -6,6 +6,7 @@ import {
   WORLD_SCENARIO_DURATION_MS,
   WORLD_SCENARIO_EVENTS,
   WORLD_SCENARIO_NUMERIC_TOLERANCES,
+  WORLD_SCENARIO_SOURCES,
 } from "./worldScenarioParams";
 
 const params = {
@@ -66,7 +67,7 @@ describe("buildWorldScenarioLayout", () => {
   it("marks generated objects as world-scenario objects", () => {
     const layout = buildWorldScenarioLayout({ ...params, seed: 7 });
     layout.objects.forEach((obj) => {
-      expect(obj.source).toBe("world-scenario");
+      expect(obj.source).toBe(WORLD_SCENARIO_SOURCES.current);
     });
   });
 

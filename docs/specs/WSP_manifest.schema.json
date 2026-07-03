@@ -121,11 +121,7 @@
           "enum": [
             "user",
             "world-scenario",
-            "demo-world",
-            "runtime-detection",
-            "runtime-demo",
-            "runtime-restricted-area",
-            "runtime-trajectory"
+            "demo-world"
           ]
         },
         "tracked_joint_name": { "type": ["string", "null"] },

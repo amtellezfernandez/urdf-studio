@@ -19,9 +19,9 @@ class SolverDefinition:
 
 
 SOLVER_DEFINITIONS: dict[str, SolverDefinition] = {
-    "lerobot-placo": SolverDefinition(
-        id="lerobot-placo",
-        label="LeRobot (Placo)",
+    "placo": SolverDefinition(
+        id="placo",
+        label="Placo",
         description="Placo-based IK service.",
         mode="remote",
         capabilities=["Pose", "Limits"],
@@ -59,8 +59,8 @@ def _definition_to_info(defn: SolverDefinition) -> IkSolverInfo:
 
 def list_available_solvers() -> List[IkSolverInfo]:
     solvers: List[IkSolverInfo] = []
-    if _placo_available() and "lerobot-placo" in SOLVER_DEFINITIONS:
-        solvers.append(_definition_to_info(SOLVER_DEFINITIONS["lerobot-placo"]))
+    if _placo_available() and "placo" in SOLVER_DEFINITIONS:
+        solvers.append(_definition_to_info(SOLVER_DEFINITIONS["placo"]))
     if "amik" in SOLVER_DEFINITIONS:
         solvers.append(_definition_to_info(SOLVER_DEFINITIONS["amik"]))
     return solvers

@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 type JointValues = Record<string, number>;
 
-export type DataZeroJointSource = "auto" | "lerobot";
+export type DataZeroJointSource = "auto" | "imported";
 
 export type JointTopology = {
   name: string;
@@ -38,7 +38,7 @@ interface JointStore {
   jointValues: JointValues;
   initialJointValues: JointValues;
   dataZeroJointValues: JointValues;
-  lerobotDataZeroJointValues: JointValues;
+  importedDataZeroJointValues: JointValues;
   dataZeroJointSource: DataZeroJointSource;
   jointUpdateTimes: Record<string, number>;
   availableJoints: string[];
@@ -58,7 +58,7 @@ interface JointStore {
   setJointValues: (values: JointValues) => void;
   setInitialJointValues: (values: JointValues) => void;
   setDataZeroJointValues: (values: JointValues) => void;
-  setLeRobotDataZeroJointValues: (values: JointValues) => void;
+  setImportedDataZeroJointValues: (values: JointValues) => void;
   setDataZeroJointSource: (source: DataZeroJointSource) => void;
   getActiveDataZeroJointValues: () => JointValues;
   setAvailableJoints: (joints: string[]) => void;
@@ -115,7 +115,7 @@ export const useJointStore = create<JointStore>((set, get) => ({
   jointValues: {},
   initialJointValues: {},
   dataZeroJointValues: {},
-  lerobotDataZeroJointValues: {},
+  importedDataZeroJointValues: {},
   dataZeroJointSource: "auto",
   jointUpdateTimes: {},
   availableJoints: [],
@@ -184,13 +184,13 @@ export const useJointStore = create<JointStore>((set, get) => ({
     }),
   setInitialJointValues: (values) => set({ initialJointValues: { ...values } }),
   setDataZeroJointValues: (values) => set({ dataZeroJointValues: { ...values } }),
-  setLeRobotDataZeroJointValues: (values) =>
-    set({ lerobotDataZeroJointValues: { ...values } }),
+  setImportedDataZeroJointValues: (values) =>
+    set({ importedDataZeroJointValues: { ...values } }),
   setDataZeroJointSource: (source) => set({ dataZeroJointSource: source }),
   getActiveDataZeroJointValues: () => {
     const state = get();
-    return state.dataZeroJointSource === "lerobot"
-      ? state.lerobotDataZeroJointValues
+    return state.dataZeroJointSource === "imported"
+      ? state.importedDataZeroJointValues
       : state.dataZeroJointValues;
   },
   setAvailableJoints: (joints) => set({ availableJoints: [...joints] }),

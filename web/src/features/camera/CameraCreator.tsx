@@ -1,16 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import {
   autoComputeCameraPoseDefault,
   remapCameraPoseToParentJointFrame,
   resolveCameraParentLinkNameFromJoint,
+  resolveRobotLinkObject,
 } from "@/features/camera";
 import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
+import { CAMERA_CREATOR_PARAMS } from "@/features/camera/cameraCreatorParams";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { URDFRobot } from "urdf-loader";
@@ -48,7 +62,11 @@ const CAMERA_PRESETS: Record<CameraPresetId, CameraPreset> = {
     description: "Close grasp camera on tool/gripper joints.",
     defaultName: "Gripper Top",
     intrinsics: { width: 640, height: 480, fovDeg: 70 },
-    poseOptions: { marginForward: 0.035, marginUp: 0.015, rollOffset: Math.PI / 2 },
+    poseOptions: {
+      marginForward: 0.035,
+      marginUp: 0.015,
+      rollOffset: Math.PI / 2,
+    },
     preferredJointPatterns: [
       /(wrist[_-]?flex|wrist.*flex|wrist|hand)/i,
       /(gripper_frame|tool0|tcp|end_effector|ee|gripper|tool)/i,
@@ -59,7 +77,11 @@ const CAMERA_PRESETS: Record<CameraPresetId, CameraPreset> = {
     description: "Forward monitor camera near base/shoulder joints.",
     defaultName: "Base Front",
     intrinsics: { width: 640, height: 480, fovDeg: 78 },
-    poseOptions: { marginForward: 0.06, marginUp: 0.03, rollOffset: Math.PI / 2 },
+    poseOptions: {
+      marginForward: 0.06,
+      marginUp: 0.03,
+      rollOffset: Math.PI / 2,
+    },
     preferredJointPatterns: [/(shoulder|base|waist|root)/i],
   },
   wrist_side: {
@@ -73,29 +95,79 @@ const CAMERA_PRESETS: Record<CameraPresetId, CameraPreset> = {
       rollOffset: Math.PI / 2,
       yawOffset: Math.PI / 6,
     },
-    preferredJointPatterns: [/(wrist|forearm|tool|gripper|hand)/i, /(elbow|arm)/i],
+    preferredJointPatterns: [
+      /(wrist|forearm|tool|gripper|hand)/i,
+      /(elbow|arm)/i,
+    ],
   },
   overview: {
     label: "Overview",
     description: "Wide context camera on base joints.",
     defaultName: "Overview",
     intrinsics: { width: 1280, height: 720, fovDeg: 92 },
-    poseOptions: { marginForward: 0.1, marginUp: 0.08, rollOffset: Math.PI / 2 },
+    poseOptions: {
+      marginForward: 0.1,
+      marginUp: 0.08,
+      rollOffset: Math.PI / 2,
+    },
     preferredJointPatterns: [/(base|root|world)/i, /(shoulder|waist)/i],
   },
 };
 
-const isLowPriorityJoint = (name: string) => /fixed|frame|dummy|target|origin|marker|site/i.test(name);
+const isLowPriorityJoint = (name: string) =>
+  /fixed|frame|dummy|target|origin|marker|site/i.test(name);
 const CAMERA_LINK_HINT_PATTERN = /(camera|cam|optic|sensor|lens)/i;
 const DEFAULT_LOCAL_CAMERA_CENTER_POSE = {
   xyz: [0, 0, 0] as [number, number, number],
   rpy: [0, 0, 0] as [number, number, number],
 };
 
-const findPreferredJoint = (availableJoints: string[], presetId: CameraPresetId) => {
+type CameraCreatorNumberField = {
+  axis: string;
+  value: number;
+  onChange: (value: number) => void;
+  parser?: (value: string) => number;
+};
+
+const parseFloatOrZero = (value: string) => parseFloat(value) || 0;
+const parseIntOrZero = (value: string) => parseInt(value, 10) || 0;
+
+const CameraCreatorNumberTriplet = ({
+  label,
+  step,
+  fields,
+}: {
+  label: string;
+  step: string;
+  fields: CameraCreatorNumberField[];
+}) => (
+  <div>
+    <Label className="text-[10px] text-[#9d9d9d] mb-1 block">{label}</Label>
+    <div className="grid grid-cols-3 gap-1.5">
+      {fields.map(({ axis, value, onChange, parser = parseFloatOrZero }) => (
+        <Input
+          key={axis}
+          aria-label={`${label} ${axis}`}
+          type="number"
+          step={step}
+          value={value}
+          onChange={(event) => onChange(parser(event.target.value))}
+          className={CAMERA_CREATOR_PARAMS.classNames.numberInput}
+        />
+      ))}
+    </div>
+  </div>
+);
+
+const findPreferredJoint = (
+  availableJoints: string[],
+  presetId: CameraPresetId,
+) => {
   const preset = CAMERA_PRESETS[presetId];
   for (const pattern of preset.preferredJointPatterns) {
-    const match = availableJoints.find((joint) => pattern.test(joint) && !isLowPriorityJoint(joint));
+    const match = availableJoints.find(
+      (joint) => pattern.test(joint) && !isLowPriorityJoint(joint),
+    );
     if (match) return match;
   }
 
@@ -108,21 +180,22 @@ const degToRad = (deg: number) => (deg * Math.PI) / 180;
 
 const computeLinkVisualCenterPose = (
   robot: URDFRobot,
-  linkName: string
+  linkName: string,
 ): { xyz: [number, number, number]; rpy: [number, number, number] } => {
-  const linkObject =
-    robot.links?.[linkName] ??
-    robot.getObjectByName?.(linkName) ??
-    robot.getObjectByName?.(decodeURIComponent(linkName));
+  const linkObject = resolveRobotLinkObject(robot, linkName);
   if (!linkObject) return DEFAULT_LOCAL_CAMERA_CENTER_POSE;
 
   try {
     linkObject.updateMatrixWorld(true);
-    const worldToLink = new THREE.Matrix4().copy(linkObject.matrixWorld).invert();
+    const worldToLink = new THREE.Matrix4()
+      .copy(linkObject.matrixWorld)
+      .invert();
     const localBounds = new THREE.Box3().makeEmpty();
 
     for (const child of linkObject.children ?? []) {
-      const isVisual = Boolean((child as { isURDFVisual?: boolean }).isURDFVisual);
+      const isVisual = Boolean(
+        (child as { isURDFVisual?: boolean }).isURDFVisual,
+      );
       if (!isVisual) continue;
       const childBounds = new THREE.Box3().setFromObject(child);
       if (childBounds.isEmpty()) continue;
@@ -145,7 +218,12 @@ const computeLinkVisualCenterPose = (
   }
 };
 
-export function CameraCreator({ open, onOpenChange, availableJoints, robot }: CameraCreatorProps) {
+export function CameraCreator({
+  open,
+  onOpenChange,
+  availableJoints,
+  robot,
+}: CameraCreatorProps) {
   const addCamera = useCameraStore((state) => state.addCamera);
   const cameras = useCameraStore((state) => state.cameras);
 
@@ -169,7 +247,8 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
   const buildUniqueName = useCallback(
     (baseName: string) => {
       const normalized = baseName.trim() || "Camera";
-      if (!cameras.some((camera) => camera.name === normalized)) return normalized;
+      if (!cameras.some((camera) => camera.name === normalized))
+        return normalized;
       let suffix = 2;
       let candidate = `${normalized} ${suffix}`;
       while (cameras.some((camera) => camera.name === candidate)) {
@@ -178,7 +257,7 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
       }
       return candidate;
     },
-    [cameras]
+    [cameras],
   );
 
   const proposePose = useCallback(
@@ -187,19 +266,21 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
       const parentLink = resolveCameraParentLinkNameFromJoint(robot, jointName);
       if (!parentLink) return;
       const useCameraCenterPose =
-        CAMERA_LINK_HINT_PATTERN.test(parentLink) || CAMERA_LINK_HINT_PATTERN.test(jointName);
+        CAMERA_LINK_HINT_PATTERN.test(parentLink) ||
+        CAMERA_LINK_HINT_PATTERN.test(jointName);
       const pose = useCameraCenterPose
         ? computeLinkVisualCenterPose(robot, parentLink)
-        : (
-            autoComputeCameraPoseDefault(robot, parentLink, CAMERA_PRESETS[preset].poseOptions) ??
-            autoComputeCameraPoseDefault(robot, parentLink)
-          );
+        : (autoComputeCameraPoseDefault(
+            robot,
+            parentLink,
+            CAMERA_PRESETS[preset].poseOptions,
+          ) ?? autoComputeCameraPoseDefault(robot, parentLink));
       if (!pose) return;
       const jointFramePose = remapCameraPoseToParentJointFrame(
         robot,
         jointName,
         parentLink,
-        pose
+        pose,
       );
 
       setPosX(jointFramePose.xyz[0]);
@@ -209,7 +290,7 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
       setPitch(radToDeg(jointFramePose.rpy[1]));
       setYaw(radToDeg(jointFramePose.rpy[2]));
     },
-    [robot]
+    [robot],
   );
 
   const applyPresetProposal = useCallback(
@@ -230,7 +311,7 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
       }
       proposePose(suggestedJoint, nextPreset);
     },
-    [availableJoints, buildUniqueName, nameTouched, proposePose]
+    [availableJoints, buildUniqueName, nameTouched, proposePose],
   );
 
   useEffect(() => {
@@ -283,7 +364,9 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4] max-w-md max-h-[85vh] overflow-y-auto p-3">
         <DialogHeader className="pb-1">
-          <DialogTitle className="text-sm text-[#d4d4d4] font-normal">Create Camera</DialogTitle>
+          <DialogTitle className="text-sm text-[#d4d4d4] font-normal">
+            Create Camera
+          </DialogTitle>
           <DialogDescription className="text-[11px] text-[#9d9d9d]">
             Start from a smart proposal, then tweak only if needed.
           </DialogDescription>
@@ -291,7 +374,10 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
 
         <div className="space-y-2.5">
           <div>
-            <Label htmlFor="camera-name" className="text-[10px] text-[#9d9d9d] mb-1 block">
+            <Label
+              htmlFor="camera-name"
+              className="text-[10px] text-[#9d9d9d] mb-1 block"
+            >
               Name
             </Label>
             <Input
@@ -308,36 +394,54 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
           </div>
 
           <div>
-            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Preset</Label>
+            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">
+              Preset
+            </Label>
             <Select value={presetId} onValueChange={handlePresetChange}>
               <SelectTrigger className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d]">
                 {Object.entries(CAMERA_PRESETS).map(([id, preset]) => (
-                  <SelectItem key={id} value={id} className="text-[11px] text-[#d4d4d4]">
+                  <SelectItem
+                    key={id}
+                    value={id}
+                    className="text-[11px] text-[#d4d4d4]"
+                  >
                     {preset.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="mt-1 text-[10px] text-[#8b8b8b]">{currentPreset.description}</p>
+            <p className="mt-1 text-[10px] text-[#8b8b8b]">
+              {currentPreset.description}
+            </p>
           </div>
 
           <div>
-            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Attach To Joint</Label>
+            <Label className="text-[10px] text-[#9d9d9d] mb-1 block">
+              Attach To Joint
+            </Label>
             <Select value={parentJoint} onValueChange={handleJointChange}>
               <SelectTrigger className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4]">
                 <SelectValue placeholder="Select joint..." />
               </SelectTrigger>
               <SelectContent className="bg-[#2a2a2a] border-[#3d3d3d]">
                 {availableJoints.length === 0 ? (
-                  <SelectItem value="no-joints" disabled className="text-[#9d9d9d]">
+                  <SelectItem
+                    value="no-joints"
+                    disabled
+                    className="text-[#9d9d9d]"
+                  >
                     No joints available
                   </SelectItem>
                 ) : (
                   availableJoints.map((jointName) => (
-                    <SelectItem key={jointName} value={jointName} className="text-[11px] text-[#d4d4d4]">
+                    <SelectItem
+                      key={jointName}
+                      value={jointName}
+                      className="text-[11px] text-[#d4d4d4]"
+                    >
                       {jointName}
                     </SelectItem>
                   ))
@@ -371,91 +475,52 @@ export function CameraCreator({ open, onOpenChange, availableJoints, robot }: Ca
             onClick={() => setAdvanced((prev) => !prev)}
             className="text-[10px] text-[#9d9d9d] hover:text-[#d4d4d4] underline underline-offset-2"
           >
-            {advanced ? "Hide advanced pose/intrinsics" : "Show advanced pose/intrinsics"}
+            {advanced
+              ? "Hide advanced pose/intrinsics"
+              : "Show advanced pose/intrinsics"}
           </button>
 
           {advanced && (
             <>
-              <div>
-                <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Position (m)</Label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={posX}
-                    onChange={(e) => setPosX(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={posY}
-                    onChange={(e) => setPosY(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={posZ}
-                    onChange={(e) => setPosZ(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                </div>
-              </div>
+              <CameraCreatorNumberTriplet
+                label="Position (m)"
+                step="0.01"
+                fields={[
+                  { axis: "X", value: posX, onChange: setPosX },
+                  { axis: "Y", value: posY, onChange: setPosY },
+                  { axis: "Z", value: posZ, onChange: setPosZ },
+                ]}
+              />
 
-              <div>
-                <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Rotation (deg)</Label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <Input
-                    type="number"
-                    step="1"
-                    value={roll}
-                    onChange={(e) => setRoll(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                  <Input
-                    type="number"
-                    step="1"
-                    value={pitch}
-                    onChange={(e) => setPitch(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                  <Input
-                    type="number"
-                    step="1"
-                    value={yaw}
-                    onChange={(e) => setYaw(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                </div>
-              </div>
+              <CameraCreatorNumberTriplet
+                label="Rotation (deg)"
+                step="1"
+                fields={[
+                  { axis: "Roll", value: roll, onChange: setRoll },
+                  { axis: "Pitch", value: pitch, onChange: setPitch },
+                  { axis: "Yaw", value: yaw, onChange: setYaw },
+                ]}
+              />
 
-              <div>
-                <Label className="text-[10px] text-[#9d9d9d] mb-1 block">Intrinsics</Label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <Input
-                    type="number"
-                    step="1"
-                    value={width}
-                    onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                  <Input
-                    type="number"
-                    step="1"
-                    value={height}
-                    onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                  <Input
-                    type="number"
-                    step="1"
-                    value={fovDeg}
-                    onChange={(e) => setFovDeg(parseFloat(e.target.value) || 0)}
-                    className="h-7 text-[11px] bg-[#1e1e1e] border-[#3d3d3d] text-[#d4d4d4] px-2"
-                  />
-                </div>
-              </div>
+              <CameraCreatorNumberTriplet
+                label="Intrinsics"
+                step="1"
+                fields={[
+                  {
+                    axis: "Width",
+                    value: width,
+                    onChange: setWidth,
+                    parser: parseIntOrZero,
+                  },
+                  {
+                    axis: "Height",
+                    value: height,
+                    onChange: setHeight,
+                    parser: parseIntOrZero,
+                  },
+                  { axis: "FOV", value: fovDeg, onChange: setFovDeg },
+                ]}
+              />
             </>
           )}
         </div>

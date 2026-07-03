@@ -208,6 +208,65 @@ export type InertiaBox = {
   center?: [number, number, number];
 };
 
+type Vector3Tuple = [number, number, number];
+
+const toSafeInertiaBoxSize = (
+  width: number,
+  height: number,
+  depth: number
+): Vector3Tuple | null => {
+  const size: Vector3Tuple = [
+    Math.max(width, INERTIA_REFERENCE_MIN_SIZE_METERS),
+    Math.max(height, INERTIA_REFERENCE_MIN_SIZE_METERS),
+    Math.max(depth, INERTIA_REFERENCE_MIN_SIZE_METERS),
+  ];
+
+  return size.every((dimension) => Number.isFinite(dimension)) ? size : null;
+};
+
+const createAxisAlignedInertiaBox = (
+  width: number,
+  height: number,
+  depth: number,
+  center: Vector3Tuple
+): InertiaBox | null => {
+  const size = toSafeInertiaBoxSize(width, height, depth);
+  if (!size) return null;
+
+  return {
+    size,
+    rotation: new THREE.Quaternion(),
+    center,
+  };
+};
+
+type NormalizedInertiaTensorComponents = {
+  Ixx: number;
+  Iyy: number;
+  Izz: number;
+  Ixy: number;
+  Ixz: number;
+  Iyz: number;
+};
+
+const readInertiaTensorComponents = (
+  inertia: InertiaTensor
+): NormalizedInertiaTensorComponents => ({
+  Ixx: inertia.ixx || 0,
+  Iyy: inertia.iyy || 0,
+  Izz: inertia.izz || 0,
+  Ixy: inertia.ixy || 0,
+  Ixz: inertia.ixz || 0,
+  Iyz: inertia.iyz || 0,
+});
+
+const hasFiniteInertiaDiagonal = (
+  components: Pick<NormalizedInertiaTensorComponents, "Ixx" | "Iyy" | "Izz">
+): boolean =>
+  Number.isFinite(components.Ixx) &&
+  Number.isFinite(components.Iyy) &&
+  Number.isFinite(components.Izz);
+
 export type ReliableInertiaStrategy =
   | "principal"
   | "inertial-frame"
@@ -449,19 +508,7 @@ const computeReferenceBoxFromSamples = (
 
     const center = min.clone().add(max).multiplyScalar(0.5);
     const size = max.clone().sub(min);
-    const safeWidth = Math.max(size.x, INERTIA_REFERENCE_MIN_SIZE_METERS);
-    const safeHeight = Math.max(size.y, INERTIA_REFERENCE_MIN_SIZE_METERS);
-    const safeDepth = Math.max(size.z, INERTIA_REFERENCE_MIN_SIZE_METERS);
-
-    if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight) || !Number.isFinite(safeDepth)) {
-      return null;
-    }
-
-    return {
-      size: [safeWidth, safeHeight, safeDepth],
-      rotation: new THREE.Quaternion(),
-      center: [center.x, center.y, center.z],
-    };
+    return createAxisAlignedInertiaBox(size.x, size.y, size.z, [center.x, center.y, center.z]);
   }
 
   const minProjection = [Infinity, Infinity, Infinity];
@@ -481,22 +528,12 @@ const computeReferenceBoxFromSamples = (
     orientedCenter.addScaledVector(axis, centerOffset);
   });
 
-  const safeWidth = Math.max(
+  const safeSize = toSafeInertiaBoxSize(
     maxProjection[0] - minProjection[0],
-    INERTIA_REFERENCE_MIN_SIZE_METERS
-  );
-  const safeHeight = Math.max(
     maxProjection[1] - minProjection[1],
-    INERTIA_REFERENCE_MIN_SIZE_METERS
+    maxProjection[2] - minProjection[2]
   );
-  const safeDepth = Math.max(
-    maxProjection[2] - minProjection[2],
-    INERTIA_REFERENCE_MIN_SIZE_METERS
-  );
-
-  if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight) || !Number.isFinite(safeDepth)) {
-    return null;
-  }
+  if (!safeSize) return null;
 
   const rotationMatrix = new THREE.Matrix4().set(
     referenceAxes[0].x, referenceAxes[1].x, referenceAxes[2].x, 0,
@@ -507,7 +544,7 @@ const computeReferenceBoxFromSamples = (
   const rotation = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
 
   return {
-    size: [safeWidth, safeHeight, safeDepth],
+    size: safeSize,
     rotation,
     center: [orientedCenter.x, orientedCenter.y, orientedCenter.z],
   };
@@ -599,28 +636,15 @@ const resolveStableNearDegeneratePrincipalRotation = (
     new THREE.Vector3(0, 1, 0).applyQuaternion(referenceRotation),
     new THREE.Vector3(0, 0, 1).applyQuaternion(referenceRotation),
   ];
-  const pickProjectedReferenceAxis = (uniqueAxis: THREE.Vector3): THREE.Vector3 => {
-    const planeNormal = uniqueAxis.clone().normalize();
-    const candidates = referenceAxes
-      .map((axis) => axis.clone().projectOnPlane(planeNormal))
-      .filter((axis) => axis.lengthSq() > EPS)
-      .sort((left, right) => right.lengthSq() - left.lengthSq());
-    if (candidates[0]) {
-      return candidates[0].normalize();
-    }
-    const fallbackSeed =
-      Math.abs(planeNormal.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
-    return fallbackSeed.projectOnPlane(planeNormal).normalize();
-  };
 
   if (smallestGap <= INERTIA_PRINCIPAL_AXIS_NEAR_DEGENERATE_RELATIVE_GAP_MAX) {
     const uniqueAxis = eigen.vectors[0].clone().normalize();
-    const secondaryAxis = pickProjectedReferenceAxis(uniqueAxis);
+    const secondaryAxis = pickProjectedAnchorAxis(uniqueAxis, referenceAxes);
     const tertiaryAxis = uniqueAxis.clone().cross(secondaryAxis).normalize();
     basis = [uniqueAxis, secondaryAxis, tertiaryAxis];
   } else if (largestGap <= INERTIA_PRINCIPAL_AXIS_NEAR_DEGENERATE_RELATIVE_GAP_MAX) {
     const uniqueAxis = eigen.vectors[2].clone().normalize();
-    const primaryAxis = pickProjectedReferenceAxis(uniqueAxis);
+    const primaryAxis = pickProjectedAnchorAxis(uniqueAxis, referenceAxes);
     const secondaryAxis = uniqueAxis.clone().cross(primaryAxis).normalize();
     basis = [primaryAxis, secondaryAxis, uniqueAxis];
   }
@@ -756,28 +780,15 @@ export const computeInertiaBoxInInertialFrame = (
   mass: number
 ): InertiaBox | null => {
   if (!Number.isFinite(mass) || mass <= 0) return null;
-  const Ixx = inertia.ixx || 0;
-  const Iyy = inertia.iyy || 0;
-  const Izz = inertia.izz || 0;
-  if (!Number.isFinite(Ixx) || !Number.isFinite(Iyy) || !Number.isFinite(Izz)) {
+  const { Ixx, Iyy, Izz } = readInertiaTensorComponents(inertia);
+  if (!hasFiniteInertiaDiagonal({ Ixx, Iyy, Izz })) {
     return null;
   }
   const factor = 6.0 / mass;
   const width = Math.sqrt(Math.max(0, factor * (Iyy + Izz - Ixx)));
   const height = Math.sqrt(Math.max(0, factor * (Ixx + Izz - Iyy)));
   const depth = Math.sqrt(Math.max(0, factor * (Ixx + Iyy - Izz)));
-  const minSize = INERTIA_REFERENCE_MIN_SIZE_METERS;
-  const safeWidth = Math.max(width, minSize);
-  const safeHeight = Math.max(height, minSize);
-  const safeDepth = Math.max(depth, minSize);
-  if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight) || !Number.isFinite(safeDepth)) {
-    return null;
-  }
-  return {
-    size: [safeWidth, safeHeight, safeDepth],
-    rotation: new THREE.Quaternion(),
-    center: [0, 0, 0],
-  };
+  return createAxisAlignedInertiaBox(width, height, depth, [0, 0, 0]);
 };
 
 export const computeInertiaBox = (
@@ -786,12 +797,7 @@ export const computeInertiaBox = (
 ): InertiaBox | null => {
   if (!Number.isFinite(mass) || mass <= 0) return null;
 
-  const Ixx = inertia.ixx || 0;
-  const Iyy = inertia.iyy || 0;
-  const Izz = inertia.izz || 0;
-  const Ixy = inertia.ixy || 0;
-  const Ixz = inertia.ixz || 0;
-  const Iyz = inertia.iyz || 0;
+  const { Ixx, Iyy, Izz, Ixy, Ixz, Iyz } = readInertiaTensorComponents(inertia);
 
   const minMassThreshold = INERTIA_LOW_MASS_THRESHOLD_KG;
   if (mass < minMassThreshold) {
@@ -842,10 +848,8 @@ export const computeInertiaBox = (
     return null;
   }
 
-  const minSize = INERTIA_REFERENCE_MIN_SIZE_METERS;
-  const safeWidth = Math.max(width, minSize);
-  const safeHeight = Math.max(height, minSize);
-  const safeDepth = Math.max(depth, minSize);
+  const safeSize = toSafeInertiaBoxSize(width, height, depth);
+  if (!safeSize) return null;
 
   const rotMatrix = new THREE.Matrix4().set(
     eigen.vectors[0].x, eigen.vectors[1].x, eigen.vectors[2].x, 0,
@@ -856,7 +860,7 @@ export const computeInertiaBox = (
   const rotation = new THREE.Quaternion().setFromRotationMatrix(rotMatrix);
 
   return {
-    size: [safeWidth, safeHeight, safeDepth],
+    size: safeSize,
     rotation,
     center: [0, 0, 0],
   };

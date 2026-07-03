@@ -1,6 +1,20 @@
 import { useCallback, useMemo } from "react";
 import * as THREE from "three";
 
+const resolveOrbitPointOffset = (
+  angleRad: number,
+  radius: number,
+  inclinationRad: number
+) => {
+  const x = Math.cos(angleRad) * radius;
+  const y = Math.sin(angleRad) * radius;
+  return new THREE.Vector3(
+    x,
+    y * Math.cos(inclinationRad),
+    y * Math.sin(inclinationRad)
+  );
+};
+
 export const OrbitVisualization = ({
   centerPosition,
   radius,
@@ -32,13 +46,7 @@ export const OrbitVisualization = ({
   const secondaryRad = normalizeAngle(((phase + secondaryPhaseOffsetDeg) * Math.PI) / 180);
 
   const getPoint = useCallback(
-    (angle: number) => {
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-      const z = y * Math.sin(inclinationRad);
-      const yAdjusted = y * Math.cos(inclinationRad);
-      return new THREE.Vector3(x, yAdjusted, z);
-    },
+    (angle: number) => resolveOrbitPointOffset(angle, radius, inclinationRad),
     [radius, inclinationRad]
   );
 
@@ -96,55 +104,18 @@ export const OrbitVisualization = ({
     return { solidPositions: solidFlat, hashedPositions: hashedFlat };
   }, [getPoint, primaryRad, secondaryRad, TWO_PI]);
 
-  // Calculate current position on orbit based on phase
-  const orbitTargetPosition = useMemo(() => {
-    const phaseRad = (phase * Math.PI) / 180;
-    const inclinationRad = (inclination * Math.PI) / 180;
-
-    const x = Math.cos(phaseRad) * radius;
-    const y = Math.sin(phaseRad) * radius;
-    const z = y * Math.sin(inclinationRad);
-    const yAdjusted = y * Math.cos(inclinationRad);
-
-    return new THREE.Vector3(
-      centerPosition.x + x,
-      centerPosition.y + yAdjusted,
-      centerPosition.z + z
-    );
-  }, [centerPosition, radius, inclination, phase]);
-
-  const secondaryTargetPosition = useMemo(() => {
-    const phaseRad = ((phase + secondaryPhaseOffsetDeg) * Math.PI) / 180;
-    const inclinationRad = (inclination * Math.PI) / 180;
-
-    const x = Math.cos(phaseRad) * radius;
-    const y = Math.sin(phaseRad) * radius;
-    const z = y * Math.sin(inclinationRad);
-    const yAdjusted = y * Math.cos(inclinationRad);
-
-    return new THREE.Vector3(
-      centerPosition.x + x,
-      centerPosition.y + yAdjusted,
-      centerPosition.z + z
-    );
-  }, [centerPosition, radius, inclination, phase, secondaryPhaseOffsetDeg]);
-
   const targetOffset = useMemo<[number, number, number]>(
-    () => [
-      orbitTargetPosition.x - centerPosition.x,
-      orbitTargetPosition.y - centerPosition.y,
-      orbitTargetPosition.z - centerPosition.z,
-    ],
-    [orbitTargetPosition, centerPosition]
+    () => getPoint((phase * Math.PI) / 180).toArray() as [number, number, number],
+    [getPoint, phase]
   );
 
   const secondaryTargetOffset = useMemo<[number, number, number]>(
-    () => [
-      secondaryTargetPosition.x - centerPosition.x,
-      secondaryTargetPosition.y - centerPosition.y,
-      secondaryTargetPosition.z - centerPosition.z,
+    () => getPoint(((phase + secondaryPhaseOffsetDeg) * Math.PI) / 180).toArray() as [
+      number,
+      number,
+      number,
     ],
-    [secondaryTargetPosition, centerPosition]
+    [getPoint, phase, secondaryPhaseOffsetDeg]
   );
 
   const radiusLinePositions = useMemo(

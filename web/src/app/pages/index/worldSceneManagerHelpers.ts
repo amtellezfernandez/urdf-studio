@@ -12,8 +12,7 @@ import {
   fetchWorldRolloutJob,
 } from "@/app/pages/index/worldSceneRuntime";
 
-export function downloadJsonDocument(payload: unknown, filename: string) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+function downloadBlobDocument(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -22,14 +21,36 @@ export function downloadJsonDocument(payload: unknown, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+export function downloadJsonDocument(payload: unknown, filename: string) {
+  downloadBlobDocument(
+    new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+    filename
+  );
+}
+
 export function downloadTextDocument(payload: string, filename: string, mimeType: string) {
-  const blob = new Blob([payload], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadBlobDocument(new Blob([payload], { type: mimeType }), filename);
+}
+
+export function openFileSelectionDialog({
+  accept,
+  multiple = false,
+  onFiles,
+}: {
+  accept: string;
+  multiple?: boolean;
+  onFiles: (files: File[]) => void | Promise<void>;
+}) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.multiple = multiple;
+  input.accept = accept;
+  input.onchange = () => {
+    const files = Array.from(input.files ?? []);
+    if (files.length === 0) return;
+    void onFiles(files);
+  };
+  input.click();
 }
 
 export function readWorldRolloutConfigDraft(defaultCheckerProfile: WorldRolloutCheckerProfile) {

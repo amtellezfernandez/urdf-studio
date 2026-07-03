@@ -34,15 +34,25 @@ from backend.services.world_scene_package_digest import (
 )
 
 
+def get_workspace_simulators() -> tuple[SimulatorId, ...]:
+    cached = globals().get("WORKSPACE_SIMULATORS")
+    if isinstance(cached, tuple):
+        return cached
+    from backend.services.simulator_adapters.plugin import get_workspace_plugins
+
+    result: tuple[SimulatorId, ...] = tuple(
+        p.simulator_id for p in get_workspace_plugins()
+    )
+    globals()["WORKSPACE_SIMULATORS"] = result
+    return result
+
+
 def __getattr__(name: str) -> object:
     if name == "WORKSPACE_SIMULATORS":
-        from backend.services.simulator_adapters.plugin import get_workspace_plugins
-        result: tuple[SimulatorId, ...] = tuple(
-            p.simulator_id for p in get_workspace_plugins()
-        )
-        globals()["WORKSPACE_SIMULATORS"] = result
-        return result
+        return get_workspace_simulators()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 WORKSPACE_FIXTURES = (
     "demo",
     "studio-y-up-axis",
@@ -127,7 +137,7 @@ def build_demo_workspace_request() -> SimulatorWorkspacePrepareRequest:
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         runtime_targets=[
             WorldRuntimeTarget(name=simulator_id, mode="python")
-            for simulator_id in WORKSPACE_SIMULATORS
+            for simulator_id in get_workspace_simulators()
         ],
         interface=WorldInterfaceSpec(
             observation_modalities=["state", "rgb"],

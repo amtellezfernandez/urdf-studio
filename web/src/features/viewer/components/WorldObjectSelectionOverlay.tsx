@@ -32,6 +32,33 @@ const resolvePointOverlayRadius = (size: THREE.Vector3) => {
   );
 };
 
+const SelectionOverlayMeshMaterial = ({
+  opacity,
+  wireframe = false,
+}: {
+  opacity: number;
+  wireframe?: boolean;
+}) => (
+  <meshBasicMaterial
+    color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
+    transparent
+    opacity={opacity}
+    depthTest={false}
+    depthWrite={false}
+    wireframe={wireframe}
+  />
+);
+
+const SelectionOverlayLineMaterial = ({ opacity }: { opacity: number }) => (
+  <lineBasicMaterial
+    color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
+    transparent
+    opacity={opacity}
+    depthTest={false}
+    depthWrite={false}
+  />
+);
+
 export const WorldObjectSelectionOverlay = ({
   object,
 }: WorldObjectSelectionOverlayProps) => {
@@ -44,42 +71,30 @@ export const WorldObjectSelectionOverlay = ({
   ];
   return object.type === "point" || object.type === "sphere" ? (
     <mesh position={position} rotation={rotation} raycast={() => null} renderOrder={960}>
-        <sphereGeometry
-          args={[
-            object.type === "point" ? resolvePointOverlayRadius(object.size) : object.size.x * 0.5,
-            20,
-            14,
-          ]}
-        />
-        <meshBasicMaterial
-          color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
-          transparent
-          opacity={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayOpacity}
-          depthTest={false}
-          depthWrite={false}
-          wireframe
-        />
-      </mesh>
+      <sphereGeometry
+        args={[
+          object.type === "point" ? resolvePointOverlayRadius(object.size) : object.size.x * 0.5,
+          20,
+          14,
+        ]}
+      />
+      <SelectionOverlayMeshMaterial
+        opacity={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayOpacity}
+        wireframe
+      />
+    </mesh>
   ) : object.type === "cylinder" ? (
     <>
       <mesh position={position} rotation={rotation} raycast={() => null} renderOrder={959}>
         <cylinderGeometry args={[object.size.x * 0.5, object.size.y * 0.5, object.size.z, 20]} />
-        <meshBasicMaterial
-          color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
-          transparent
+        <SelectionOverlayMeshMaterial
           opacity={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayFillOpacity}
-          depthTest={false}
-          depthWrite={false}
         />
       </mesh>
       <mesh position={position} rotation={rotation} raycast={() => null} renderOrder={960}>
         <cylinderGeometry args={[object.size.x * 0.5, object.size.y * 0.5, object.size.z, 20]} />
-        <meshBasicMaterial
-          color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
-          transparent
+        <SelectionOverlayMeshMaterial
           opacity={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayOpacity}
-          depthTest={false}
-          depthWrite={false}
           wireframe
         />
       </mesh>
@@ -93,12 +108,8 @@ export const WorldObjectSelectionOverlay = ({
         renderOrder={959}
       >
         <boxGeometry args={[object.size.x, object.size.y, object.size.z]} />
-        <meshBasicMaterial
-          color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
-          transparent
+        <SelectionOverlayMeshMaterial
           opacity={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayFillOpacity}
-          depthTest={false}
-          depthWrite={false}
         />
       </mesh>
       <lineSegments
@@ -108,12 +119,8 @@ export const WorldObjectSelectionOverlay = ({
         renderOrder={960}
       >
         <edgesGeometry args={[new THREE.BoxGeometry(...resolveCubeOverlaySize(object.size))]} />
-        <lineBasicMaterial
-          color={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayColor}
-          transparent
+        <SelectionOverlayLineMaterial
           opacity={WORLD_OBJECT_RENDER_PARAMS.selectionOverlayOpacity}
-          depthTest={false}
-          depthWrite={false}
         />
       </lineSegments>
     </>

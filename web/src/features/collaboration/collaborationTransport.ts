@@ -30,8 +30,6 @@ const COLLABORATION_SESSION_FRAGMENT_PARAM =
   COLLABORATION_TRANSPORT_PARAMS.sessionFragmentParam;
 const COLLABORATION_SESSION_TOKEN_FRAGMENT_PARAM =
   COLLABORATION_TRANSPORT_PARAMS.sessionTokenFragmentParam;
-const COLLABORATION_TELEOP_CAPABILITY_FRAGMENT_PARAM =
-  COLLABORATION_TRANSPORT_PARAMS.teleopCapabilityFragmentParam;
 const COLLABORATION_CLIENT_ID_QUERY_PARAM =
   COLLABORATION_TRANSPORT_PARAMS.clientIdQueryParam;
 
@@ -67,19 +65,11 @@ const resolveShareToken = (
 
 export const getCollaborationBaseAccess = (
   access: CollaborationLinkAccess,
-): CollaborationBaseAccess =>
-  access === "editor" || access === "editor_teleop" ? "editor" : "viewer";
-
-export const collaborationAccessIncludesTeleop = (
-  access: CollaborationLinkAccess,
-): boolean => access === "viewer_teleop" || access === "editor_teleop";
+): CollaborationBaseAccess => (access === "editor" ? "editor" : "viewer");
 
 export const describeCollaborationLinkAccess = (
   access: CollaborationLinkAccess,
-): string => {
-  const baseLabel = getCollaborationBaseAccess(access) === "editor" ? "Can edit" : "Can view";
-  return collaborationAccessIncludesTeleop(access) ? `${baseLabel} + teleop` : baseLabel;
-};
+): string => (getCollaborationBaseAccess(access) === "editor" ? "Can edit" : "Can view");
 
 export const buildCollaborationShareUrl = (
   session: CollaborationShareSession,
@@ -89,18 +79,9 @@ export const buildCollaborationShareUrl = (
   const url = parseCollaborationUrl(baseUrl, "Collaboration share");
   url.searchParams.delete(COLLABORATION_SESSION_FRAGMENT_PARAM);
   url.searchParams.delete(COLLABORATION_SESSION_TOKEN_FRAGMENT_PARAM);
-  url.searchParams.delete(COLLABORATION_TELEOP_CAPABILITY_FRAGMENT_PARAM);
   const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
   hashParams.set(COLLABORATION_SESSION_FRAGMENT_PARAM, session.sessionId);
   hashParams.set(COLLABORATION_SESSION_TOKEN_FRAGMENT_PARAM, resolveShareToken(session, access));
-  if (collaborationAccessIncludesTeleop(access)) {
-    if (!session.teleopCapabilityToken) {
-      throw new Error("Only the room owner can create teleop links.");
-    }
-    hashParams.set(COLLABORATION_TELEOP_CAPABILITY_FRAGMENT_PARAM, session.teleopCapabilityToken);
-  } else {
-    hashParams.delete(COLLABORATION_TELEOP_CAPABILITY_FRAGMENT_PARAM);
-  }
   url.hash = hashParams.toString();
   return url.toString();
 };
@@ -144,14 +125,10 @@ export const readCollaborationShareSessionFromUrl = (
   const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
   const sessionId = hashParams.get(COLLABORATION_SESSION_FRAGMENT_PARAM)?.trim();
   const sessionToken = hashParams.get(COLLABORATION_SESSION_TOKEN_FRAGMENT_PARAM)?.trim();
-  const teleopCapabilityToken = hashParams
-    .get(COLLABORATION_TELEOP_CAPABILITY_FRAGMENT_PARAM)
-    ?.trim();
   if (!sessionId || !sessionToken) return null;
   return {
     sessionId,
     sessionToken,
-    ...(teleopCapabilityToken ? { teleopCapabilityToken } : {}),
   };
 };
 

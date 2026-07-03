@@ -127,7 +127,7 @@ export const IKDragControls = ({
     return safeDecodeURIComponent(endEffectorLink);
   })();
   const debugTargetName = `ee-${handleIndex + 1}:${nativeTargetLink}`;
-  const nativeTeleop = {
+  const nativeIkRuntime = {
     error: null as string | null,
     lastTelemetry: null as DisabledNativeTelemetry | null,
   };
@@ -288,10 +288,10 @@ export const IKDragControls = ({
   ]);
 
   useEffect(() => {
-    if (!nativeEnabled || !isDragging || !nativeTeleop.lastTelemetry) {
+    if (!nativeEnabled || !isDragging || !nativeIkRuntime.lastTelemetry) {
       return;
     }
-    const telemetry = nativeTeleop.lastTelemetry;
+    const telemetry = nativeIkRuntime.lastTelemetry;
     const sequenceApplied = telemetry.sequence_applied;
     if (telemetry.stale_target || typeof sequenceApplied !== "number") {
       return;
@@ -301,7 +301,7 @@ export const IKDragControls = ({
     }
     lastNativeAppliedSequenceRef.current = sequenceApplied;
 
-    const q = nativeTeleop.lastTelemetry.q_rad;
+    const q = nativeIkRuntime.lastTelemetry.q_rad;
     if (q && Object.keys(q).length > 0) {
       const processed = processIkSolutionForApply(q);
       onIkSolved(processed, endEffectorLink);
@@ -310,21 +310,21 @@ export const IKDragControls = ({
     endEffectorLink,
     nativeEnabled,
     isDragging,
-    nativeTeleop.lastTelemetry,
+    nativeIkRuntime.lastTelemetry,
     onIkSolved,
     processIkSolutionForApply,
     robot,
   ]);
 
   useEffect(() => {
-    if (!nativeEnabled || !nativeTeleop.error) {
+    if (!nativeEnabled || !nativeIkRuntime.error) {
       return;
     }
     setIkDebugState({
       status: "error",
-      error: nativeTeleop.error,
+      error: nativeIkRuntime.error,
     });
-  }, [nativeEnabled, nativeTeleop.error, setIkDebugState]);
+  }, [nativeEnabled, nativeIkRuntime.error, setIkDebugState]);
 
   useEffect(() => {
     if (!nativeEnabled || !nativeConnected) {
@@ -838,7 +838,7 @@ export const IKDragControls = ({
       activePointerIdRef.current = event.pointerId;
       isSolvingRef.current = false;
       lastNativeAppliedSequenceRef.current =
-        nativeTeleop.lastTelemetry?.sequence_applied ?? -1;
+        nativeIkRuntime.lastTelemetry?.sequence_applied ?? -1;
       if (activeRequestIdRef.current) {
         cancelIk(activeRequestIdRef.current);
         activeRequestIdRef.current = null;
@@ -879,7 +879,7 @@ export const IKDragControls = ({
       enabled,
       camera,
       gl,
-      nativeTeleop.lastTelemetry,
+      nativeIkRuntime.lastTelemetry,
       onDragStateChange,
       updateDragTarget,
     ]

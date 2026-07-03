@@ -28,7 +28,7 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
 const readJointValue = (joint: URDFJoint) =>
-  Array.isArray(joint.jointValue) ? joint.jointValue[0] ?? 0 : 0;
+  Array.isArray(joint.jointValue) ? (joint.jointValue[0] ?? 0) : 0;
 
 const resolveLink = (robot: URDFRobot, linkName: string) => {
   const robotAny = robot as URDFRobot & {
@@ -68,7 +68,11 @@ const getRobot = (urdf: string) => {
   return promise;
 };
 
-const getJointChain = (robot: URDFRobot, linkName: string, cacheKey: string) => {
+const getJointChain = (
+  robot: URDFRobot,
+  linkName: string,
+  cacheKey: string,
+) => {
   const cached = CHAIN_CACHE.get(cacheKey);
   if (cached) return cached;
 
@@ -91,10 +95,13 @@ const getJointChain = (robot: URDFRobot, linkName: string, cacheKey: string) => 
 
 const extractSolution = (robot: URDFRobot) => {
   const result: Record<string, number> = {};
-  const joints = (robot as URDFRobot & { joints?: Record<string, URDFJoint> }).joints ?? {};
+  const joints =
+    (robot as URDFRobot & { joints?: Record<string, URDFJoint> }).joints ?? {};
   for (const [name, joint] of Object.entries(joints)) {
     if (!joint || joint.jointType === "fixed") continue;
-    const value = Array.isArray(joint.jointValue) ? joint.jointValue[0] : undefined;
+    const value = Array.isArray(joint.jointValue)
+      ? joint.jointValue[0]
+      : undefined;
     if (typeof value === "number" && Number.isFinite(value)) {
       result[name] = value;
     }
@@ -102,7 +109,10 @@ const extractSolution = (robot: URDFRobot) => {
   return result;
 };
 
-const applyJointValuesToRobot = (robot: URDFRobot, values: Record<string, number>) => {
+const applyJointValuesToRobot = (
+  robot: URDFRobot,
+  values: Record<string, number>,
+) => {
   if (typeof robot.setJointValues === "function") {
     robot.setJointValues(values);
     return;
@@ -120,9 +130,26 @@ const hasFiniteLimits = (joint: URDFJoint) =>
   Number.isFinite(joint.limit.upper) &&
   joint.limit.upper > joint.limit.lower;
 
+const applyJointLimitCenterBias = (
+  value: number,
+  joint: URDFJoint,
+  biasStrength: number,
+  deadband: number,
+) => {
+  if (!hasFiniteLimits(joint)) return value;
+  const lower = joint.limit.lower;
+  const upper = joint.limit.upper;
+  const center = (lower + upper) * 0.5;
+  const halfRange = Math.max((upper - lower) * 0.5, 1e-6);
+  const centerNorm = (value - center) / halfRange;
+  const bias =
+    -centerNorm * biasStrength * Math.max(0, Math.abs(centerNorm) - deadband);
+  return clamp(value + bias, lower, upper);
+};
+
 const buildSeedCandidates = (
   chain: URDFJoint[],
-  baseValues: Record<string, number>
+  baseValues: Record<string, number>,
 ) => {
   const centered: Record<string, number> = { ...baseValues };
   const lowerBiased: Record<string, number> = { ...baseValues };
@@ -130,7 +157,12 @@ const buildSeedCandidates = (
 
   chain.forEach((joint) => {
     const jointName = joint.name;
-    if (!jointName || joint.jointType === "continuous" || !hasFiniteLimits(joint)) return;
+    if (
+      !jointName ||
+      joint.jointType === "continuous" ||
+      !hasFiniteLimits(joint)
+    )
+      return;
     const lower = joint.limit.lower;
     const upper = joint.limit.upper;
     const span = upper - lower;
@@ -208,7 +240,7 @@ const shortestAngularDistance = (from: number, to: number) => {
 const computeContinuityPenalty = (
   chain: URDFJoint[],
   currentValues: Record<string, number>,
-  candidateValues: Record<string, number>
+  candidateValues: Record<string, number>,
 ) => {
   let sum = 0;
   let samples = 0;
@@ -222,7 +254,8 @@ const computeContinuityPenalty = (
 
     let normalizedDelta = 0;
     if (joint.jointType === "continuous") {
-      normalizedDelta = Math.abs(shortestAngularDistance(current, next)) / Math.PI;
+      normalizedDelta =
+        Math.abs(shortestAngularDistance(current, next)) / Math.PI;
     } else if (hasFiniteLimits(joint)) {
       const span = Math.max(joint.limit.upper - joint.limit.lower, 1e-6);
       normalizedDelta = Math.abs(next - current) / span;
@@ -245,11 +278,13 @@ const computeFloorPenalty = (points: THREE.Vector3[]) => {
     if (!Number.isFinite(z)) continue;
     if (z >= FLOOR_SOFT_CLEARANCE_M) continue;
     if (z >= FLOOR_HARD_CLEARANCE_M) {
-      const norm = (FLOOR_SOFT_CLEARANCE_M - z) / Math.max(FLOOR_SOFT_CLEARANCE_M, 1e-6);
+      const norm =
+        (FLOOR_SOFT_CLEARANCE_M - z) / Math.max(FLOOR_SOFT_CLEARANCE_M, 1e-6);
       total += norm * norm;
       continue;
     }
-    const under = (FLOOR_HARD_CLEARANCE_M - z) / Math.max(FLOOR_SOFT_CLEARANCE_M, 1e-6);
+    const under =
+      (FLOOR_HARD_CLEARANCE_M - z) / Math.max(FLOOR_SOFT_CLEARANCE_M, 1e-6);
     total += 2 + under * under * 2;
   }
   return total / Math.max(1, points.length);
@@ -274,7 +309,8 @@ const computeSelfCrowdingPenalty = (points: THREE.Vector3[]) => {
         total += norm * norm;
       } else {
         const under =
-          (SELF_CROWD_HARD_DIST_M - dist) / Math.max(SELF_CROWD_HARD_DIST_M, 1e-6);
+          (SELF_CROWD_HARD_DIST_M - dist) /
+          Math.max(SELF_CROWD_HARD_DIST_M, 1e-6);
         total += 2 + under * under * 2;
       }
       samples += 1;
@@ -284,7 +320,10 @@ const computeSelfCrowdingPenalty = (points: THREE.Vector3[]) => {
   return total / Math.max(1, samples);
 };
 
-const computeSpatialSafetyPenalty = (chain: URDFJoint[], endEffector: THREE.Object3D) => {
+const computeSpatialSafetyPenalty = (
+  chain: URDFJoint[],
+  endEffector: THREE.Object3D,
+) => {
   const points: THREE.Vector3[] = [];
   const point = new THREE.Vector3();
 
@@ -311,7 +350,7 @@ const runCcdForSeed = (
   target: THREE.Vector3,
   seed: { id: string; values: Record<string, number> },
   currentValues: Record<string, number>,
-  deadline: number
+  deadline: number,
 ): CandidateRunResult | null => {
   applyJointValuesToRobot(robot, seed.values);
   robot.updateMatrixWorld(true);
@@ -351,9 +390,15 @@ const runCcdForSeed = (
       joint.getWorldPosition(jointPos);
       toEnd.subVectors(endPos, jointPos);
       toTarget.subVectors(target, jointPos);
-      axisWorld.copy(joint.axis).transformDirection(joint.matrixWorld).normalize();
+      axisWorld
+        .copy(joint.axis)
+        .transformDirection(joint.matrixWorld)
+        .normalize();
 
-      if (!Number.isFinite(axisWorld.lengthSq()) || axisWorld.lengthSq() < 1e-8) {
+      if (
+        !Number.isFinite(axisWorld.lengthSq()) ||
+        axisWorld.lengthSq() < 1e-8
+      ) {
         continue;
       }
 
@@ -362,16 +407,12 @@ const runCcdForSeed = (
         const current = readJointValue(joint);
         const limited = clamp(alongAxis, -MAX_STEP_LINEAR, MAX_STEP_LINEAR);
         let next = current + limited;
-        if (hasFiniteLimits(joint)) {
-          const lower = joint.limit.lower;
-          const upper = joint.limit.upper;
-          const center = (lower + upper) * 0.5;
-          const halfRange = Math.max((upper - lower) * 0.5, 1e-6);
-          const centerNorm = (next - center) / halfRange;
-          const bias =
-            -centerNorm * LIMIT_CENTER_BIAS_LINEAR * Math.max(0, Math.abs(centerNorm) - 0.25);
-          next = clamp(next + bias, lower, upper);
-        }
+        next = applyJointLimitCenterBias(
+          next,
+          joint,
+          LIMIT_CENTER_BIAS_LINEAR,
+          0.25,
+        );
         joint.setJointValue(next);
       } else {
         axisScaled.copy(axisWorld).multiplyScalar(toEnd.dot(axisWorld));
@@ -396,15 +437,13 @@ const runCcdForSeed = (
         const delta = clamp(direction * angle, -MAX_STEP_RAD, MAX_STEP_RAD);
         const current = readJointValue(joint);
         let next = current + delta;
-        if (joint.jointType !== "continuous" && hasFiniteLimits(joint)) {
-          const lower = joint.limit.lower;
-          const upper = joint.limit.upper;
-          const center = (lower + upper) * 0.5;
-          const halfRange = Math.max((upper - lower) * 0.5, 1e-6);
-          const centerNorm = (next - center) / halfRange;
-          const bias =
-            -centerNorm * LIMIT_CENTER_BIAS_RAD * Math.max(0, Math.abs(centerNorm) - 0.22);
-          next = clamp(next + bias, lower, upper);
+        if (joint.jointType !== "continuous") {
+          next = applyJointLimitCenterBias(
+            next,
+            joint,
+            LIMIT_CENTER_BIAS_RAD,
+            0.22,
+          );
         }
         joint.setJointValue(next);
       }
@@ -424,7 +463,11 @@ const runCcdForSeed = (
   }
 
   const penalties = computePosturePenalty(chain);
-  const continuityPenalty = computeContinuityPenalty(chain, currentValues, solution);
+  const continuityPenalty = computeContinuityPenalty(
+    chain,
+    currentValues,
+    solution,
+  );
   const spatialPenalty = computeSpatialSafetyPenalty(chain, endEffector);
   const score =
     cost * 180 +
@@ -451,7 +494,7 @@ const runCcdForSeed = (
 export const solveWithIkJs = async (
   payload: IkSolvePayload,
   strategy: IkSolveStrategy,
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<SolveResult> => {
   const start = performance.now();
   const deadline = start + timeoutMs;
@@ -461,7 +504,11 @@ export const solveWithIkJs = async (
 
   const endEffector = resolveLink(robot, payload.targetLink);
   if (!endEffector) {
-    return { ok: false, error: "End effector not found", status: "solver_error" };
+    return {
+      ok: false,
+      error: "End effector not found",
+      status: "solver_error",
+    };
   }
 
   const cacheKey = `${payload.urdf.length}:${payload.targetLink}`;
@@ -483,7 +530,7 @@ export const solveWithIkJs = async (
       target,
       seed,
       payload.jointValues,
-      deadline
+      deadline,
     );
     if (!candidate) continue;
     if (!bestCandidate || candidate.score < bestCandidate.score) {

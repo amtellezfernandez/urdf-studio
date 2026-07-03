@@ -5,9 +5,13 @@ import type { URDFRobot } from "urdf-loader";
 import type { LinkData } from "@/shared/lib/urdfBrowser";
 import type { MeshFiles } from "@/shared/types/feature";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
-import { extractLinkInertialsFromLinkData, type LinkInertial } from "./computeCenterOfMass";
+import {
+  extractLinkInertialsFromLinkData,
+  type LinkInertial,
+} from "./computeCenterOfMass";
 import {
   computeReliableInertiaBox,
+  type InertiaBox,
   type InertiaVisualizationConfidence,
   type ReliableInertiaBox,
   type ReliableInertiaStrategy,
@@ -45,9 +49,7 @@ import {
   type LinkCollisionGeometryReference,
   type GeometryReferenceSource,
 } from "@/features/viewer/inertiaGeometryReference";
-import {
-  resolveInertiaCenterMarkerScale,
-} from "@/features/viewer/inertialVisualizationColor";
+import { resolveInertiaCenterMarkerScale } from "@/features/viewer/inertialVisualizationColor";
 import { buildInertiaVisualizationMetricGroups } from "@/features/viewer/inertialVisualizationGroups";
 
 export type InertiaReliabilityEntry = {
@@ -90,9 +92,24 @@ const createCrossGeometry = (size: number) => {
   const g = new THREE.BufferGeometry();
   const s = size * 2;
   const points = new Float32Array([
-    -s, 0, 0, s, 0, 0,
-    0, -s, 0, 0, s, 0,
-    0, 0, -s, 0, 0, s,
+    -s,
+    0,
+    0,
+    s,
+    0,
+    0,
+    0,
+    -s,
+    0,
+    0,
+    s,
+    0,
+    0,
+    0,
+    -s,
+    0,
+    0,
+    s,
   ]);
   g.setAttribute("position", new THREE.BufferAttribute(points, 3));
   return g;
@@ -118,7 +135,10 @@ export const InertialVisualization = ({
   onReliabilityChange,
 }: InertialVisualizationProps) => {
   void _jointValues;
-  const resolveLinkObject = useMemo(() => createLinkObjectResolver(robot), [robot]);
+  const resolveLinkObject = useMemo(
+    () => createLinkObjectResolver(robot),
+    [robot],
+  );
   const [geometryReferencesByLink, setGeometryReferencesByLink] = useState<
     Map<string, LinkCollisionGeometryReference>
   >(() => new Map());
@@ -163,7 +183,8 @@ export const InertialVisualization = ({
   const inertiaByIndex = useMemo(() => {
     const map = new Map<number, ReliableInertiaBox>();
     inertials.forEach((item, index) => {
-      const geometryReference = geometryReferencesByLink.get(item.linkName) ?? null;
+      const geometryReference =
+        geometryReferencesByLink.get(item.linkName) ?? null;
       const box = computeReliableInertiaBox({
         inertia: item.inertia,
         mass: item.mass,
@@ -195,42 +216,51 @@ export const InertialVisualization = ({
     });
     return entries;
   }, [inertials, inertiaByIndex]);
-  const inertiaIndices = useMemo(() => Array.from(inertiaByIndex.keys()), [inertiaByIndex]);
+  const inertiaIndices = useMemo(
+    () => Array.from(inertiaByIndex.keys()),
+    [inertiaByIndex],
+  );
   const scopedLinkNameSet = useMemo(
-    () => (scopedLinkNames && scopedLinkNames.length > 0 ? new Set(scopedLinkNames) : null),
-    [scopedLinkNames]
+    () =>
+      scopedLinkNames && scopedLinkNames.length > 0
+        ? new Set(scopedLinkNames)
+        : null,
+    [scopedLinkNames],
   );
   const deemphasizedOutlineLinkNameSet = useMemo(
     () =>
       deemphasizedOutlineLinkNames && deemphasizedOutlineLinkNames.length > 0
         ? new Set(deemphasizedOutlineLinkNames)
         : null,
-    [deemphasizedOutlineLinkNames]
+    [deemphasizedOutlineLinkNames],
   );
   const visibleLinkIndices = useMemo(
     () =>
       scopedLinkNameSet
-        ? inertiaIndices.filter((index) => scopedLinkNameSet.has(inertials[index]?.linkName))
+        ? inertiaIndices.filter((index) =>
+            scopedLinkNameSet.has(inertials[index]?.linkName),
+          )
         : inertiaIndices,
-    [inertiaIndices, inertials, scopedLinkNameSet]
+    [inertiaIndices, inertials, scopedLinkNameSet],
   );
   const deemphasizedVisibleLinkIndices = useMemo(
     () =>
       deemphasizedOutlineLinkNameSet
         ? visibleLinkIndices.filter((index) =>
-            deemphasizedOutlineLinkNameSet.has(inertials[index]?.linkName)
+            deemphasizedOutlineLinkNameSet.has(inertials[index]?.linkName),
           )
         : [],
-    [deemphasizedOutlineLinkNameSet, inertials, visibleLinkIndices]
+    [deemphasizedOutlineLinkNameSet, inertials, visibleLinkIndices],
   );
   const activeVisibleLinkIndices = useMemo(
     () =>
       deemphasizedOutlineLinkNameSet
         ? visibleLinkIndices.filter(
-            (index) => !deemphasizedOutlineLinkNameSet.has(inertials[index]?.linkName)
+            (index) =>
+              !deemphasizedOutlineLinkNameSet.has(inertials[index]?.linkName),
           )
         : visibleLinkIndices,
-    [deemphasizedOutlineLinkNameSet, inertials, visibleLinkIndices]
+    [deemphasizedOutlineLinkNameSet, inertials, visibleLinkIndices],
   );
   const shapeGroups = useMemo(
     () =>
@@ -239,7 +269,7 @@ export const InertialVisualization = ({
         inertiaByIndex,
         metric: "shape",
       }),
-    [activeVisibleLinkIndices, inertiaByIndex]
+    [activeVisibleLinkIndices, inertiaByIndex],
   );
   const volumeGroups = useMemo(
     () =>
@@ -248,11 +278,14 @@ export const InertialVisualization = ({
         inertiaByIndex,
         metric: "volume",
       }),
-    [activeVisibleLinkIndices, inertiaByIndex]
+    [activeVisibleLinkIndices, inertiaByIndex],
   );
   const referenceIndices = useMemo(
-    () => activeVisibleLinkIndices.filter((index) => Boolean(inertiaByIndex.get(index)?.referenceBox)),
-    [activeVisibleLinkIndices, inertiaByIndex]
+    () =>
+      activeVisibleLinkIndices.filter((index) =>
+        Boolean(inertiaByIndex.get(index)?.referenceBox),
+      ),
+    [activeVisibleLinkIndices, inertiaByIndex],
   );
 
   const globalRef = useRef<THREE.Group>(null);
@@ -272,12 +305,16 @@ export const InertialVisualization = ({
   const centerMarkerRef = useRef<THREE.InstancedMesh>(null);
   const referenceRef = useRef<THREE.InstancedMesh>(null);
   const deemphasizedOutlineRef = useRef<THREE.InstancedMesh>(null);
-  const transformCache = useRef<Array<{ position: THREE.Vector3; inertialWorldMatrix: THREE.Matrix4 }>>([]);
+  const transformCache = useRef<
+    Array<{ position: THREE.Vector3; inertialWorldMatrix: THREE.Matrix4 }>
+  >([]);
 
   const inertialMatrix = useRef(new THREE.Matrix4());
   const inertialWorldMatrix = useRef(new THREE.Matrix4());
   const tempMatrix = useRef(new THREE.Matrix4());
   const inertiaLocalBoxMatrix = useRef(new THREE.Matrix4());
+  const inertiaBoxCenter = useRef(new THREE.Vector3());
+  const inertiaBoxSize = useRef(new THREE.Vector3());
   const localCenter = useRef(new THREE.Vector3());
   const referenceCenter = useRef(new THREE.Vector3());
   const localOffsetMidpoint = useRef(new THREE.Vector3());
@@ -293,17 +330,17 @@ export const InertialVisualization = ({
 
   const crossGeometry = useMemo(
     () => createCrossGeometry(globalSize * 0.72),
-    [globalSize]
+    [globalSize],
   );
   const globalGeometry = useMemo(
     // Use a diamond-like glyph instead of a sphere for clearer COM semantics.
     () => new THREE.OctahedronGeometry(globalSize * 1.2, 0),
-    [globalSize]
+    [globalSize],
   );
   const linkComGeometry = useMemo(
     // A small octahedron reads as a marker glyph more clearly than a dot.
     () => new THREE.OctahedronGeometry(linkSize * 1.2, 0),
-    [linkSize]
+    [linkSize],
   );
   const centerMarkerGeometry = useMemo(
     () =>
@@ -311,9 +348,9 @@ export const InertialVisualization = ({
         1,
         1,
         1,
-        INERTIA_CENTER_OFFSET_LINE_RADIAL_SEGMENTS
+        INERTIA_CENTER_OFFSET_LINE_RADIAL_SEGMENTS,
       ),
-    []
+    [],
   );
   const inertiaGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
   const lineMaterial = useMemo(
@@ -325,7 +362,7 @@ export const InertialVisualization = ({
         depthTest: false,
         depthWrite: false,
       }),
-    []
+    [],
   );
 
   const globalMaterial = useMemo(
@@ -337,7 +374,7 @@ export const InertialVisualization = ({
         depthTest: false,
         depthWrite: false,
       }),
-    []
+    [],
   );
   const linkMaterial = useMemo(
     () =>
@@ -349,7 +386,7 @@ export const InertialVisualization = ({
         depthTest: false,
         depthWrite: false,
       }),
-    []
+    [],
   );
   const createInertiaMaterial = useMemo(
     () => (color: number, opacity: number, wireframe: boolean) => {
@@ -367,25 +404,57 @@ export const InertialVisualization = ({
         polygonOffsetUnits: wireframe ? -3 : -1,
       });
     },
-    [gpuMode]
+    [gpuMode],
   );
   const inertiaFillMaterialsByGroup = useMemo(
     () => ({
-      healthy: createInertiaMaterial(INERTIA_SHAPE_FILL_COLOR_HEALTHY, inertiaOpacity, false),
-      warning: createInertiaMaterial(INERTIA_SHAPE_FILL_COLOR_WARNING, inertiaOpacity, false),
-      problematic: createInertiaMaterial(INERTIA_SHAPE_FILL_COLOR_PROBLEMATIC, inertiaOpacity, false),
-      unverified: createInertiaMaterial(INERTIA_SHAPE_FILL_COLOR_UNVERIFIED, inertiaOpacity, false),
+      healthy: createInertiaMaterial(
+        INERTIA_SHAPE_FILL_COLOR_HEALTHY,
+        inertiaOpacity,
+        false,
+      ),
+      warning: createInertiaMaterial(
+        INERTIA_SHAPE_FILL_COLOR_WARNING,
+        inertiaOpacity,
+        false,
+      ),
+      problematic: createInertiaMaterial(
+        INERTIA_SHAPE_FILL_COLOR_PROBLEMATIC,
+        inertiaOpacity,
+        false,
+      ),
+      unverified: createInertiaMaterial(
+        INERTIA_SHAPE_FILL_COLOR_UNVERIFIED,
+        inertiaOpacity,
+        false,
+      ),
     }),
-    [createInertiaMaterial, inertiaOpacity]
+    [createInertiaMaterial, inertiaOpacity],
   );
   const inertiaEdgeMaterialsByGroup = useMemo(
     () => ({
-      healthy: createInertiaMaterial(INERTIA_VOLUME_EDGE_COLOR_HEALTHY, INERTIA_VOLUME_EDGE_OPACITY, true),
-      warning: createInertiaMaterial(INERTIA_VOLUME_EDGE_COLOR_WARNING, INERTIA_VOLUME_EDGE_OPACITY, true),
-      problematic: createInertiaMaterial(INERTIA_VOLUME_EDGE_COLOR_PROBLEMATIC, INERTIA_VOLUME_EDGE_OPACITY, true),
-      unverified: createInertiaMaterial(INERTIA_VOLUME_EDGE_COLOR_UNVERIFIED, INERTIA_VOLUME_EDGE_OPACITY, true),
+      healthy: createInertiaMaterial(
+        INERTIA_VOLUME_EDGE_COLOR_HEALTHY,
+        INERTIA_VOLUME_EDGE_OPACITY,
+        true,
+      ),
+      warning: createInertiaMaterial(
+        INERTIA_VOLUME_EDGE_COLOR_WARNING,
+        INERTIA_VOLUME_EDGE_OPACITY,
+        true,
+      ),
+      problematic: createInertiaMaterial(
+        INERTIA_VOLUME_EDGE_COLOR_PROBLEMATIC,
+        INERTIA_VOLUME_EDGE_OPACITY,
+        true,
+      ),
+      unverified: createInertiaMaterial(
+        INERTIA_VOLUME_EDGE_COLOR_UNVERIFIED,
+        INERTIA_VOLUME_EDGE_OPACITY,
+        true,
+      ),
     }),
-    [createInertiaMaterial]
+    [createInertiaMaterial],
   );
   const centerMarkerMaterial = useMemo(
     () =>
@@ -397,7 +466,7 @@ export const InertialVisualization = ({
         depthWrite: false,
         toneMapped: false,
       }),
-    []
+    [],
   );
   const referenceMaterial = useMemo(
     () =>
@@ -413,7 +482,7 @@ export const InertialVisualization = ({
         polygonOffsetFactor: -2,
         polygonOffsetUnits: -2,
       }),
-    []
+    [],
   );
   const deemphasizedOutlineMaterial = useMemo(
     () =>
@@ -429,7 +498,7 @@ export const InertialVisualization = ({
         polygonOffsetFactor: -4,
         polygonOffsetUnits: -4,
       }),
-    []
+    [],
   );
 
   useEffect(() => () => crossGeometry.dispose(), [crossGeometry]);
@@ -442,19 +511,26 @@ export const InertialVisualization = ({
   useEffect(() => () => linkMaterial.dispose(), [linkMaterial]);
   useEffect(
     () => () => {
-      Object.values(inertiaFillMaterialsByGroup).forEach((material) => material.dispose());
+      Object.values(inertiaFillMaterialsByGroup).forEach((material) =>
+        material.dispose(),
+      );
     },
-    [inertiaFillMaterialsByGroup]
+    [inertiaFillMaterialsByGroup],
   );
   useEffect(
     () => () => {
-      Object.values(inertiaEdgeMaterialsByGroup).forEach((material) => material.dispose());
+      Object.values(inertiaEdgeMaterialsByGroup).forEach((material) =>
+        material.dispose(),
+      );
     },
-    [inertiaEdgeMaterialsByGroup]
+    [inertiaEdgeMaterialsByGroup],
   );
   useEffect(() => () => centerMarkerMaterial.dispose(), [centerMarkerMaterial]);
   useEffect(() => () => referenceMaterial.dispose(), [referenceMaterial]);
-  useEffect(() => () => deemphasizedOutlineMaterial.dispose(), [deemphasizedOutlineMaterial]);
+  useEffect(
+    () => () => deemphasizedOutlineMaterial.dispose(),
+    [deemphasizedOutlineMaterial],
+  );
 
   useEffect(() => {
     if (linkComRef.current) {
@@ -473,7 +549,9 @@ export const InertialVisualization = ({
       referenceRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     }
     if (deemphasizedOutlineRef.current) {
-      deemphasizedOutlineRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      deemphasizedOutlineRef.current.instanceMatrix.setUsage(
+        THREE.DynamicDrawUsage,
+      );
     }
   }, [
     activeVisibleLinkIndices.length,
@@ -490,6 +568,49 @@ export const InertialVisualization = ({
     if (!onReliabilityChange) return;
     onReliabilityChange(showInertia ? reliabilityEntries : []);
   }, [onReliabilityChange, reliabilityEntries, showInertia]);
+
+  const writeInertiaBoxInstanceMatrix = (
+    mesh: THREE.InstancedMesh,
+    linkIndex: number,
+    instanceIndex: number,
+    box: InertiaBox,
+  ) => {
+    const transform = transformCache.current[linkIndex];
+    const center = box.center ?? [0, 0, 0];
+    inertiaBoxCenter.current.set(center[0], center[1], center[2]);
+    inertiaBoxSize.current.set(box.size[0], box.size[1], box.size[2]);
+    inertiaLocalBoxMatrix.current.compose(
+      inertiaBoxCenter.current,
+      box.rotation,
+      inertiaBoxSize.current,
+    );
+    tempMatrix.current.multiplyMatrices(
+      transform.inertialWorldMatrix,
+      inertiaLocalBoxMatrix.current,
+    );
+    mesh.setMatrixAt(instanceIndex, tempMatrix.current);
+  };
+
+  const writeInertiaBoxGroupMatrices = (
+    mesh: THREE.InstancedMesh | null | undefined,
+    linkIndices: readonly number[],
+    selectBox: (box: ReliableInertiaBox) => InertiaBox | null | undefined,
+  ) => {
+    if (!mesh) return;
+    linkIndices.forEach((linkIndex, instanceIndex) => {
+      const reliableBox = inertiaByIndex.get(linkIndex);
+      if (!reliableBox) return;
+      const selectedBox = selectBox(reliableBox);
+      if (!selectedBox) return;
+      writeInertiaBoxInstanceMatrix(
+        mesh,
+        linkIndex,
+        instanceIndex,
+        selectedBox,
+      );
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  };
 
   useFrame(() => {
     if (!robot || inertials.length === 0) {
@@ -526,19 +647,22 @@ export const InertialVisualization = ({
           xyz: item.origin,
           rpy: item.rpy,
         },
-        inertialMatrix.current
+        inertialMatrix.current,
       );
       composeWorldMatrixFromLinkAndLocal(
         linkObj.matrixWorld,
         inertialMatrix.current,
-        inertialWorldMatrix.current
+        inertialWorldMatrix.current,
       );
-      transformCache.current[index].inertialWorldMatrix.copy(inertialWorldMatrix.current);
-      transformCache.current[index].position.setFromMatrixPosition(inertialWorldMatrix.current);
+      transformCache.current[index].inertialWorldMatrix.copy(
+        inertialWorldMatrix.current,
+      );
+      transformCache.current[index].position.setFromMatrixPosition(
+        inertialWorldMatrix.current,
+      );
 
       sum.addScaledVector(transformCache.current[index].position, item.mass);
       totalMass += item.mass;
-
     });
 
     if (showLinkCom && linkComRef.current) {
@@ -546,7 +670,7 @@ export const InertialVisualization = ({
         tempMatrix.current.compose(
           transformCache.current[linkIndex].position,
           identityRotation.current,
-          unitScale.current
+          unitScale.current,
         );
         linkComRef.current?.setMatrixAt(instanceIndex, tempMatrix.current);
       });
@@ -556,55 +680,19 @@ export const InertialVisualization = ({
     if (showInertia) {
       const centerMesh = centerMarkerRef.current;
       shapeGroups.forEach((group) => {
-        const fillMesh = inertiaFillRefs.current[group.key];
-        if (!fillMesh) {
-          return;
-        }
-        group.indices.forEach((linkIndex, instanceIndex) => {
-          const box = inertiaByIndex.get(linkIndex);
-          if (!box) {
-            return;
-          }
-          const transform = transformCache.current[linkIndex];
-          const center = box.box.center ?? [0, 0, 0];
-          inertiaLocalBoxMatrix.current.compose(
-            new THREE.Vector3(center[0], center[1], center[2]),
-            box.box.rotation,
-            new THREE.Vector3(box.box.size[0], box.box.size[1], box.box.size[2])
-          );
-          tempMatrix.current.multiplyMatrices(
-            transform.inertialWorldMatrix,
-            inertiaLocalBoxMatrix.current
-          );
-          fillMesh.setMatrixAt(instanceIndex, tempMatrix.current);
-        });
-        fillMesh.instanceMatrix.needsUpdate = true;
+        writeInertiaBoxGroupMatrices(
+          inertiaFillRefs.current[group.key],
+          group.indices,
+          (box) => box.box,
+        );
       });
 
       volumeGroups.forEach((group) => {
-        const edgeMesh = inertiaEdgeRefs.current[group.key];
-        if (!edgeMesh) {
-          return;
-        }
-        group.indices.forEach((linkIndex, instanceIndex) => {
-          const box = inertiaByIndex.get(linkIndex);
-          if (!box) {
-            return;
-          }
-          const transform = transformCache.current[linkIndex];
-          const center = box.box.center ?? [0, 0, 0];
-          inertiaLocalBoxMatrix.current.compose(
-            new THREE.Vector3(center[0], center[1], center[2]),
-            box.box.rotation,
-            new THREE.Vector3(box.box.size[0], box.box.size[1], box.box.size[2])
-          );
-          tempMatrix.current.multiplyMatrices(
-            transform.inertialWorldMatrix,
-            inertiaLocalBoxMatrix.current
-          );
-          edgeMesh.setMatrixAt(instanceIndex, tempMatrix.current);
-        });
-        edgeMesh.instanceMatrix.needsUpdate = true;
+        writeInertiaBoxGroupMatrices(
+          inertiaEdgeRefs.current[group.key],
+          group.indices,
+          (box) => box.box,
+        );
       });
 
       if (centerMesh) {
@@ -620,14 +708,11 @@ export const InertialVisualization = ({
             centerOfMassOutsideReference: box.centerOfMassOutsideReference,
           });
           const reference = box.referenceBox?.center ?? null;
-          if (
-            !reference ||
-            markerScale <= 0
-          ) {
+          if (!reference || markerScale <= 0) {
             tempMatrix.current.compose(
               transform.position,
               identityRotation.current,
-              zeroScale.current
+              zeroScale.current,
             );
             centerMesh.setMatrixAt(instanceIndex, tempMatrix.current);
             return;
@@ -635,16 +720,23 @@ export const InertialVisualization = ({
 
           referenceCenter.current.set(reference[0], reference[1], reference[2]);
           localCenter.current.set(center[0], center[1], center[2]);
-          worldStart.current.copy(referenceCenter.current).applyMatrix4(transform.inertialWorldMatrix);
-          worldEnd.current.copy(localCenter.current).applyMatrix4(transform.inertialWorldMatrix);
-          worldOffsetDirection.current.subVectors(worldEnd.current, worldStart.current);
+          worldStart.current
+            .copy(referenceCenter.current)
+            .applyMatrix4(transform.inertialWorldMatrix);
+          worldEnd.current
+            .copy(localCenter.current)
+            .applyMatrix4(transform.inertialWorldMatrix);
+          worldOffsetDirection.current.subVectors(
+            worldEnd.current,
+            worldStart.current,
+          );
           const offsetLength = worldOffsetDirection.current.length();
 
           if (offsetLength <= INERTIA_CENTER_OFFSET_MIN_LENGTH_METERS) {
             tempMatrix.current.compose(
               worldStart.current,
               identityRotation.current,
-              zeroScale.current
+              zeroScale.current,
             );
             centerMesh.setMatrixAt(instanceIndex, tempMatrix.current);
             return;
@@ -653,7 +745,7 @@ export const InertialVisualization = ({
           worldOffsetDirection.current.normalize();
           offsetRotation.current.setFromUnitVectors(
             offsetAxis.current,
-            worldOffsetDirection.current
+            worldOffsetDirection.current,
           );
           localOffsetMidpoint.current
             .copy(worldStart.current)
@@ -661,12 +753,12 @@ export const InertialVisualization = ({
           centerMarkerScale.current.set(
             INERTIA_CENTER_MARKER_BASE_SIZE_METERS * markerScale,
             offsetLength,
-            INERTIA_CENTER_MARKER_BASE_SIZE_METERS * markerScale
+            INERTIA_CENTER_MARKER_BASE_SIZE_METERS * markerScale,
           );
           tempMatrix.current.compose(
             localOffsetMidpoint.current,
             offsetRotation.current,
-            centerMarkerScale.current
+            centerMarkerScale.current,
           );
           centerMesh.setMatrixAt(instanceIndex, tempMatrix.current);
         });
@@ -674,52 +766,20 @@ export const InertialVisualization = ({
       }
     }
 
-    if (showInertia && deemphasizedOutlineRef.current) {
-      deemphasizedVisibleLinkIndices.forEach((linkIndex, instanceIndex) => {
-        const box = inertiaByIndex.get(linkIndex);
-        if (!box) {
-          return;
-        }
-        const transform = transformCache.current[linkIndex];
-        const center = box.box.center ?? [0, 0, 0];
-        inertiaLocalBoxMatrix.current.compose(
-          new THREE.Vector3(center[0], center[1], center[2]),
-          box.box.rotation,
-          new THREE.Vector3(box.box.size[0], box.box.size[1], box.box.size[2])
-        );
-        tempMatrix.current.multiplyMatrices(
-          transform.inertialWorldMatrix,
-          inertiaLocalBoxMatrix.current
-        );
-        deemphasizedOutlineRef.current.setMatrixAt(instanceIndex, tempMatrix.current);
-      });
-      deemphasizedOutlineRef.current.instanceMatrix.needsUpdate = true;
+    if (showInertia) {
+      writeInertiaBoxGroupMatrices(
+        deemphasizedOutlineRef.current,
+        deemphasizedVisibleLinkIndices,
+        (box) => box.box,
+      );
     }
 
-    if (showReferenceGeometry && referenceRef.current) {
-      referenceIndices.forEach((linkIndex, instanceIndex) => {
-        const box = inertiaByIndex.get(linkIndex);
-        if (!box?.referenceBox) {
-          return;
-        }
-        const transform = transformCache.current[linkIndex];
-        const center = box.referenceBox.center ?? [0, 0, 0];
-        inertiaLocalBoxMatrix.current.compose(
-          new THREE.Vector3(center[0], center[1], center[2]),
-          box.referenceBox.rotation,
-          new THREE.Vector3(
-            box.referenceBox.size[0],
-            box.referenceBox.size[1],
-            box.referenceBox.size[2]
-          )
-        );
-        tempMatrix.current.multiplyMatrices(
-          transform.inertialWorldMatrix,
-          inertiaLocalBoxMatrix.current
-        );
-        referenceRef.current.setMatrixAt(instanceIndex, tempMatrix.current);
-      });
-      referenceRef.current.instanceMatrix.needsUpdate = true;
+    if (showReferenceGeometry) {
+      writeInertiaBoxGroupMatrices(
+        referenceRef.current,
+        referenceIndices,
+        (box) => box.referenceBox,
+      );
     }
 
     if (showGlobal && globalRef.current) {
@@ -734,15 +794,25 @@ export const InertialVisualization = ({
 
   const linkComCount = showLinkCom ? visibleLinkIndices.length : 0;
   const inertiaCount = showInertia ? activeVisibleLinkIndices.length : 0;
-  const deemphasizedOutlineCount = showInertia ? deemphasizedVisibleLinkIndices.length : 0;
+  const deemphasizedOutlineCount = showInertia
+    ? deemphasizedVisibleLinkIndices.length
+    : 0;
   const referenceCount = showReferenceGeometry ? referenceIndices.length : 0;
 
   return (
     <>
       {showGlobal && (
         <group ref={globalRef} visible={false} renderOrder={3000}>
-          <mesh geometry={globalGeometry} material={globalMaterial} renderOrder={3001} />
-          <lineSegments geometry={crossGeometry} material={lineMaterial} renderOrder={3002} />
+          <mesh
+            geometry={globalGeometry}
+            material={globalMaterial}
+            renderOrder={3001}
+          />
+          <lineSegments
+            geometry={crossGeometry}
+            material={lineMaterial}
+            renderOrder={3002}
+          />
         </group>
       )}
       {showLinkCom && linkComCount > 0 && (
@@ -760,10 +830,14 @@ export const InertialVisualization = ({
               ref={(mesh) => {
                 inertiaFillRefs.current[group.key] = mesh;
               }}
-              args={[inertiaGeometry, inertiaFillMaterialsByGroup[group.key], group.indices.length]}
+              args={[
+                inertiaGeometry,
+                inertiaFillMaterialsByGroup[group.key],
+                group.indices.length,
+              ]}
               renderOrder={2996}
             />
-          ) : null
+          ) : null,
         )}
       {showInertia &&
         volumeGroups.map((group) =>
@@ -773,15 +847,23 @@ export const InertialVisualization = ({
               ref={(mesh) => {
                 inertiaEdgeRefs.current[group.key] = mesh;
               }}
-              args={[inertiaGeometry, inertiaEdgeMaterialsByGroup[group.key], group.indices.length]}
+              args={[
+                inertiaGeometry,
+                inertiaEdgeMaterialsByGroup[group.key],
+                group.indices.length,
+              ]}
               renderOrder={2998}
             />
-          ) : null
+          ) : null,
         )}
       {showInertia && deemphasizedOutlineCount > 0 && (
         <instancedMesh
           ref={deemphasizedOutlineRef}
-          args={[inertiaGeometry, deemphasizedOutlineMaterial, deemphasizedOutlineCount]}
+          args={[
+            inertiaGeometry,
+            deemphasizedOutlineMaterial,
+            deemphasizedOutlineCount,
+          ]}
           renderOrder={2998}
         />
       )}

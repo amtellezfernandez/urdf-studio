@@ -3,16 +3,12 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import type { AssemblyInspectorData } from "@/features/assembly/inspector/buildAssemblyInspectorData";
 import { SidebarResizeHandle } from "@/features/layout/page/SidebarResizeHandle";
 import { TOP_NAV_HEIGHT, VIEWPORT_HEIGHT_WITH_TOP_NAV } from "@/features/layout/page/constants";
+import type { AssemblySubstitutionSession } from "@/features/assembly/workspace/assemblyWorkspaceTypes";
 
 type AssemblyRightRobotsPanelProps = {
   assemblyInspector: AssemblyInspectorData | null;
   onDuplicateAssemblyRobot?: (instanceId: string) => void;
-  substitutionSession?: {
-    hostRobotId: string;
-    hostRobotName: string;
-    replacementRobotId: string;
-    replacementRobotName: string;
-  } | null;
+  substitutionSession?: AssemblySubstitutionSession | null;
   rightSidebarWidth: number;
   isRightSidebarCollapsed: boolean;
   onToggleCollapse: () => void;

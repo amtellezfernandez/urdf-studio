@@ -7,6 +7,7 @@ import {
   type WorldObjectPrimitiveType,
 } from "./worldObjectGeometry";
 import { WORLD_OBJECT_STORE_PARAMS } from "./worldObjectStoreParams";
+import type { WorldObjectSource } from "@/shared/types/worldObject";
 
 export interface CreatedObject {
   id: string;
@@ -19,14 +20,7 @@ export interface CreatedObject {
   assetRef?: string;
   assetScale?: THREE.Vector3;
   isHidden?: boolean;
-  source?:
-    | "user"
-    | "world-scenario"
-    | "demo-world"
-    | "runtime-detection"
-    | "runtime-demo"
-    | "runtime-restricted-area"
-    | "runtime-trajectory";
+  source?: WorldObjectSource;
   trackedJointName: string | null;
   isIkTarget: boolean;
   ikTargetType?: "punctual" | "orbit";
@@ -37,6 +31,15 @@ export interface CreatedObject {
   orbitTargetPoint?: "center" | "primary" | "secondary"; // which point to use for IK
 }
 
+type ObjectMutationOptions = { trackHistory?: boolean };
+type CreatedObjectInput = Omit<CreatedObject, "id"> &
+  Partial<Pick<CreatedObject, "id">>;
+type CreatedObjectNormalizationOptions = {
+  id: string;
+  source: WorldObjectSource;
+  defaultIsIkTarget: boolean;
+};
+
 interface ObjectStore {
   objects: CreatedObject[];
   selectedObjectId: string | null;
@@ -45,38 +48,52 @@ interface ObjectStore {
   canUndo: boolean;
   canRedo: boolean;
   addObject: (
-    object: Omit<CreatedObject, "id"> & Partial<Pick<CreatedObject, "id">>,
-    options?: { trackHistory?: boolean; select?: boolean }
+    object: CreatedObjectInput,
+    options?: ObjectMutationOptions & { select?: boolean },
   ) => string;
-  duplicateObject: (id: string, options?: { trackHistory?: boolean }) => string | null;
-  removeObject: (id: string, options?: { trackHistory?: boolean }) => void;
+  duplicateObject: (
+    id: string,
+    options?: ObjectMutationOptions,
+  ) => string | null;
+  removeObject: (id: string, options?: ObjectMutationOptions) => void;
   updateObjectPosition: (
     id: string,
     position: THREE.Vector3,
-    options?: { trackHistory?: boolean }
+    options?: ObjectMutationOptions,
   ) => void;
   updateObjectRotation: (
     id: string,
     rotation: THREE.Euler,
-    options?: { trackHistory?: boolean }
+    options?: ObjectMutationOptions,
   ) => void;
   updateObjectSize: (
     id: string,
     size: THREE.Vector3,
-    options?: { trackHistory?: boolean }
+    options?: ObjectMutationOptions,
   ) => void;
   setObjectHidden: (id: string, isHidden: boolean) => void;
   updateTrackedJoint: (id: string, jointName: string | null) => void;
   updateIkTargetType: (id: string, ikTargetType: "punctual" | "orbit") => void;
-  updateOrbitParams: (id: string, params: { radius?: number; inclination?: number; phase?: number; secondaryOffset?: number }) => void;
-  updateOrbitTargetPoint: (id: string, targetPoint: "center" | "primary" | "secondary") => void;
+  updateOrbitParams: (
+    id: string,
+    params: {
+      radius?: number;
+      inclination?: number;
+      phase?: number;
+      secondaryOffset?: number;
+    },
+  ) => void;
+  updateOrbitTargetPoint: (
+    id: string,
+    targetPoint: "center" | "primary" | "secondary",
+  ) => void;
   setSelectedObject: (id: string | null) => void;
   setEditMode: (mode: "move" | "resize" | "rotate") => void;
   setTransformSpace: (space: "world" | "local") => void;
   clearObjects: () => void;
   replaceObjectsBySource: (
-    source: NonNullable<CreatedObject["source"]>,
-    objects: Omit<CreatedObject, "id">[]
+    source: WorldObjectSource,
+    objects: Omit<CreatedObject, "id">[],
   ) => void;
   undo: () => void;
   redo: () => void;
@@ -98,6 +115,9 @@ type ObjectStoreInternalState = {
   activeEditSnapshot: ObjectSnapshot | null;
 };
 
+type ObjectStoreState = ObjectStore & ObjectStoreInternalState;
+type ObjectStoreStatePatch = Partial<ObjectStoreState> | ObjectStoreState;
+
 const cloneCreatedObject = (object: CreatedObject): CreatedObject => ({
   ...object,
   position: object.position.clone(),
@@ -113,7 +133,7 @@ const cloneSnapshot = (snapshot: ObjectSnapshot): ObjectSnapshot => ({
 
 const optionalVectorEquals = (
   left: THREE.Vector3 | undefined,
-  right: THREE.Vector3 | undefined
+  right: THREE.Vector3 | undefined,
 ): boolean => {
   if (left === undefined || right === undefined) {
     return left === right;
@@ -121,13 +141,18 @@ const optionalVectorEquals = (
   return left.equals(right);
 };
 
-const captureSnapshot = (state: Pick<ObjectStore, "objects" | "selectedObjectId">): ObjectSnapshot =>
+const captureSnapshot = (
+  state: Pick<ObjectStore, "objects" | "selectedObjectId">,
+): ObjectSnapshot =>
   cloneSnapshot({
     objects: state.objects,
     selectedObjectId: state.selectedObjectId,
   });
 
-const snapshotsEqual = (left: ObjectSnapshot, right: ObjectSnapshot): boolean => {
+const snapshotsEqual = (
+  left: ObjectSnapshot,
+  right: ObjectSnapshot,
+): boolean => {
   if (left.selectedObjectId !== right.selectedObjectId) {
     return false;
   }
@@ -158,7 +183,7 @@ const snapshotsEqual = (left: ObjectSnapshot, right: ObjectSnapshot): boolean =>
       leftObject.orbitTargetPoint === rightObject.orbitTargetPoint &&
       leftObject.position.equals(rightObject.position) &&
       normalizeWorldObjectRotationEuler(leftObject.rotation).equals(
-        normalizeWorldObjectRotationEuler(rightObject.rotation)
+        normalizeWorldObjectRotationEuler(rightObject.rotation),
       ) &&
       leftObject.size.equals(rightObject.size)
     );
@@ -180,437 +205,436 @@ const nextGeneratedObjectId = (existingIds: Set<string>): string => {
 
 const resolveAddedObjectId = (
   object: Partial<Pick<CreatedObject, "id">>,
-  existingIds: Set<string>
+  existingIds: Set<string>,
 ): string => {
   const requestedId = typeof object.id === "string" ? object.id.trim() : "";
   if (requestedId && !existingIds.has(requestedId)) return requestedId;
   return nextGeneratedObjectId(existingIds);
 };
 
-export const useObjectStore = create<ObjectStore & ObjectStoreInternalState>((set, get) => ({
-  objects: [],
-  selectedObjectId: null,
-  editMode: "move",
-  transformSpace: "world",
-  canUndo: false,
-  canRedo: false,
-  undoStack: [],
-  redoStack: [],
-  activeEditSnapshot: null,
+const normalizeCreatedObject = (
+  object: CreatedObjectInput,
+  options: CreatedObjectNormalizationOptions,
+): CreatedObject => ({
+  ...object,
+  id: options.id,
+  position: normalizeWorldObjectPositionVector(object.position),
+  rotation: normalizeWorldObjectRotationEuler(object.rotation),
+  size: normalizeWorldObjectSizeVector({
+    type: object.type,
+    size: object.size,
+  }),
+  isHidden: object.isHidden === true,
+  source: options.source,
+  isIkTarget: object.isIkTarget ?? options.defaultIsIkTarget,
+  ikTargetType: object.ikTargetType ?? "punctual",
+  orbitRadius: object.orbitRadius ?? 0.3,
+  orbitInclination: object.orbitInclination ?? 45,
+  orbitPhase: object.orbitPhase ?? 0,
+  orbitSecondaryOffset: object.orbitSecondaryOffset ?? 180,
+  orbitTargetPoint: object.orbitTargetPoint ?? "primary",
+  label: object.label,
+  assetRef: object.assetRef,
+  assetScale: object.assetScale?.clone(),
+});
 
-  addObject: (object, options) => {
-    const state = get();
-    const previousSnapshot = captureSnapshot(state);
-    const id = resolveAddedObjectId(
-      object,
-      new Set(state.objects.map((existingObject) => existingObject.id))
-    );
-    const resolvedPosition = normalizeWorldObjectPositionVector(object.position);
-    const resolvedSize = normalizeWorldObjectSizeVector({
-      type: object.type,
-      size: object.size,
-    });
-    const newObject: CreatedObject = {
-      ...object,
-      id,
-      position: resolvedPosition,
-      rotation: normalizeWorldObjectRotationEuler(object.rotation),
-      size: resolvedSize,
-      isHidden: object.isHidden === true,
-      source: object.source ?? "user",
-      isIkTarget: object.isIkTarget ?? true,
-      ikTargetType: object.ikTargetType ?? "punctual",
-      orbitRadius: object.orbitRadius ?? 0.3,
-      orbitInclination: object.orbitInclination ?? 45,
-      orbitPhase: object.orbitPhase ?? 0,
-      orbitSecondaryOffset: object.orbitSecondaryOffset ?? 180,
-      orbitTargetPoint: object.orbitTargetPoint ?? "primary",
-      label: object.label,
-      assetRef: object.assetRef,
-      assetScale: object.assetScale?.clone(),
-    };
+const updateObjectById = (
+  objects: CreatedObject[],
+  id: string,
+  updater: (object: CreatedObject) => CreatedObject,
+): CreatedObject[] =>
+  objects.map((object) => (object.id === id ? updater(object) : object));
 
-    set((state) => {
-      const shouldSelectObject = options?.select !== false;
-      const nextSnapshot: ObjectSnapshot = {
-        objects: [...state.objects, cloneCreatedObject(newObject)],
-        selectedObjectId: shouldSelectObject ? id : state.selectedObjectId,
-      };
-      const trackHistory = options?.trackHistory !== false && !state.activeEditSnapshot;
-      const undoStack = trackHistory
-        ? trimUndoStack([...state.undoStack, previousSnapshot])
-        : state.undoStack;
-      return {
-        objects: nextSnapshot.objects,
-        selectedObjectId: nextSnapshot.selectedObjectId,
-        undoStack,
-        redoStack: trackHistory ? [] : state.redoStack,
-        canUndo: undoStack.length > 0,
-        canRedo: trackHistory ? false : state.redoStack.length > 0,
-      };
-    });
+const applyObjectSnapshotMutation = (
+  state: ObjectStoreState,
+  previousSnapshot: ObjectSnapshot,
+  nextSnapshot: ObjectSnapshot,
+  options?: ObjectMutationOptions,
+): ObjectStoreStatePatch => {
+  if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
+    return state;
+  }
+  const trackHistory =
+    options?.trackHistory !== false && !state.activeEditSnapshot;
+  const undoStack = trackHistory
+    ? trimUndoStack([...state.undoStack, previousSnapshot])
+    : state.undoStack;
+  return {
+    objects: nextSnapshot.objects,
+    selectedObjectId: nextSnapshot.selectedObjectId,
+    undoStack,
+    redoStack: trackHistory ? [] : state.redoStack,
+    canUndo: undoStack.length > 0,
+    canRedo: trackHistory ? false : state.redoStack.length > 0,
+  };
+};
 
-    return id;
-  },
+export const useObjectStore = create<ObjectStore & ObjectStoreInternalState>(
+  (set, get) => ({
+    objects: [],
+    selectedObjectId: null,
+    editMode: "move",
+    transformSpace: "world",
+    canUndo: false,
+    canRedo: false,
+    undoStack: [],
+    redoStack: [],
+    activeEditSnapshot: null,
 
-  duplicateObject: (id, options) => {
-    const previousSnapshot = captureSnapshot(get());
-    const sourceObject = get().objects.find((object) => object.id === id);
-    if (!sourceObject) {
-      return null;
-    }
-    const duplicateId = `object-${objectIdCounter++}`;
-    const offset = new THREE.Vector3(
-      WORLD_OBJECT_STORE_PARAMS.duplicateOffsetM.x,
-      WORLD_OBJECT_STORE_PARAMS.duplicateOffsetM.y,
-      WORLD_OBJECT_STORE_PARAMS.duplicateOffsetM.z
-    );
-    const duplicateObject = cloneCreatedObject({
-      ...sourceObject,
-      id: duplicateId,
-      position: normalizeWorldObjectPositionVector(sourceObject.position.clone().add(offset)),
-    });
+    addObject: (object, options) => {
+      const state = get();
+      const previousSnapshot = captureSnapshot(state);
+      const id = resolveAddedObjectId(
+        object,
+        new Set(state.objects.map((existingObject) => existingObject.id)),
+      );
+      const newObject = normalizeCreatedObject(object, {
+        id,
+        source: object.source ?? "user",
+        defaultIsIkTarget: true,
+      });
 
-    set((state) => {
-      const nextSnapshot: ObjectSnapshot = {
-        objects: [...state.objects, duplicateObject],
-        selectedObjectId: duplicateId,
-      };
-      if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
-        return state;
-      }
-      const trackHistory = options?.trackHistory !== false && !state.activeEditSnapshot;
-      const undoStack = trackHistory
-        ? trimUndoStack([...state.undoStack, previousSnapshot])
-        : state.undoStack;
-      return {
-        objects: nextSnapshot.objects,
-        selectedObjectId: nextSnapshot.selectedObjectId,
-        undoStack,
-        redoStack: trackHistory ? [] : state.redoStack,
-        canUndo: undoStack.length > 0,
-        canRedo: trackHistory ? false : state.redoStack.length > 0,
-      };
-    });
-
-    return duplicateId;
-  },
-
-  removeObject: (id, options) => {
-    const previousSnapshot = captureSnapshot(get());
-    set((state) => {
-      const nextSnapshot: ObjectSnapshot = {
-        objects: state.objects.filter((obj) => obj.id !== id),
-        selectedObjectId: state.selectedObjectId === id ? null : state.selectedObjectId,
-      };
-      if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
-        return state;
-      }
-      const trackHistory = options?.trackHistory !== false && !state.activeEditSnapshot;
-      const undoStack = trackHistory
-        ? trimUndoStack([...state.undoStack, previousSnapshot])
-        : state.undoStack;
-      return {
-        objects: nextSnapshot.objects,
-        selectedObjectId: nextSnapshot.selectedObjectId,
-        undoStack,
-        redoStack: trackHistory ? [] : state.redoStack,
-        canUndo: undoStack.length > 0,
-        canRedo: trackHistory ? false : state.redoStack.length > 0,
-      };
-    });
-  },
-
-  updateObjectPosition: (id, position, options) => {
-    const previousSnapshot = captureSnapshot(get());
-    const resolvedPosition = normalizeWorldObjectPositionVector(position);
-    set((state) => {
-      const nextSnapshot: ObjectSnapshot = {
-        objects: state.objects.map((obj) =>
-          obj.id === id ? { ...obj, position: resolvedPosition.clone() } : obj
-        ),
-        selectedObjectId: state.selectedObjectId,
-      };
-      if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
-        return state;
-      }
-      const trackHistory = options?.trackHistory !== false && !state.activeEditSnapshot;
-      const undoStack = trackHistory
-        ? trimUndoStack([...state.undoStack, previousSnapshot])
-        : state.undoStack;
-      return {
-        objects: nextSnapshot.objects,
-        undoStack,
-        redoStack: trackHistory ? [] : state.redoStack,
-        canUndo: undoStack.length > 0,
-        canRedo: trackHistory ? false : state.redoStack.length > 0,
-      };
-    });
-  },
-
-  updateObjectRotation: (id, rotation, options) => {
-    const previousSnapshot = captureSnapshot(get());
-    const resolvedRotation = normalizeWorldObjectRotationEuler(rotation);
-    set((state) => {
-      const nextSnapshot: ObjectSnapshot = {
-        objects: state.objects.map((obj) =>
-          obj.id === id ? { ...obj, rotation: resolvedRotation.clone() } : obj
-        ),
-        selectedObjectId: state.selectedObjectId,
-      };
-      if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
-        return state;
-      }
-      const trackHistory = options?.trackHistory !== false && !state.activeEditSnapshot;
-      const undoStack = trackHistory
-        ? trimUndoStack([...state.undoStack, previousSnapshot])
-        : state.undoStack;
-      return {
-        objects: nextSnapshot.objects,
-        undoStack,
-        redoStack: trackHistory ? [] : state.redoStack,
-        canUndo: undoStack.length > 0,
-        canRedo: trackHistory ? false : state.redoStack.length > 0,
-      };
-    });
-  },
-
-  updateObjectSize: (id, size, options) => {
-    const previousSnapshot = captureSnapshot(get());
-    set((state) => {
-      const nextSnapshot: ObjectSnapshot = {
-        objects: state.objects.map((obj) =>
-          obj.id === id
-            ? {
-                ...obj,
-                size: normalizeWorldObjectSizeVector({ type: obj.type, size }),
-              }
-            : obj
-        ),
-        selectedObjectId: state.selectedObjectId,
-      };
-      if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
-        return state;
-      }
-      const trackHistory = options?.trackHistory !== false && !state.activeEditSnapshot;
-      const undoStack = trackHistory
-        ? trimUndoStack([...state.undoStack, previousSnapshot])
-        : state.undoStack;
-      return {
-        objects: nextSnapshot.objects,
-        undoStack,
-        redoStack: trackHistory ? [] : state.redoStack,
-        canUndo: undoStack.length > 0,
-        canRedo: trackHistory ? false : state.redoStack.length > 0,
-      };
-    });
-  },
-
-  setObjectHidden: (id, isHidden) => {
-    set((state) => ({
-      objects: state.objects.map((obj) =>
-        obj.id === id ? { ...obj, isHidden } : obj
-      ),
-    }));
-  },
-
-  updateTrackedJoint: (id, jointName) => {
-    set((state) => ({
-      objects: state.objects.map((obj) =>
-        obj.id === id ? { ...obj, trackedJointName: jointName } : obj
-      ),
-    }));
-  },
-
-  updateIkTargetType: (id, ikTargetType) => {
-    set((state) => ({
-      objects: state.objects.map((obj) =>
-        obj.id === id ? { ...obj, ikTargetType } : obj
-      ),
-    }));
-  },
-
-  updateOrbitParams: (id, params) => {
-    set((state) => ({
-      objects: state.objects.map((obj) => {
-        if (obj.id !== id) return obj;
-        return {
-          ...obj,
-          orbitRadius: params.radius !== undefined ? params.radius : obj.orbitRadius,
-          orbitInclination: params.inclination !== undefined ? params.inclination : obj.orbitInclination,
-          orbitPhase: params.phase !== undefined ? params.phase : obj.orbitPhase,
-          orbitSecondaryOffset: params.secondaryOffset !== undefined ? params.secondaryOffset : obj.orbitSecondaryOffset,
+      set((state) => {
+        const shouldSelectObject = options?.select !== false;
+        const nextSnapshot: ObjectSnapshot = {
+          objects: [...state.objects, cloneCreatedObject(newObject)],
+          selectedObjectId: shouldSelectObject ? id : state.selectedObjectId,
         };
-      }),
-    }));
-  },
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
 
-  updateOrbitTargetPoint: (id, targetPoint) => {
-    set((state) => ({
-      objects: state.objects.map((obj) =>
-        obj.id === id ? { ...obj, orbitTargetPoint: targetPoint } : obj
-      ),
-    }));
-  },
+      return id;
+    },
 
-  setSelectedObject: (id) => {
-    set((state) => ({
-      selectedObjectId: id,
-      editMode: id === null ? state.editMode : "move",
-    }));
-  },
+    duplicateObject: (id, options) => {
+      const state = get();
+      const previousSnapshot = captureSnapshot(state);
+      const sourceObject = state.objects.find((object) => object.id === id);
+      if (!sourceObject) {
+        return null;
+      }
+      const duplicateId = nextGeneratedObjectId(
+        new Set(state.objects.map((object) => object.id)),
+      );
+      const offset = new THREE.Vector3(
+        WORLD_OBJECT_STORE_PARAMS.duplicateOffsetM.x,
+        WORLD_OBJECT_STORE_PARAMS.duplicateOffsetM.y,
+        WORLD_OBJECT_STORE_PARAMS.duplicateOffsetM.z,
+      );
+      const duplicateObject = cloneCreatedObject({
+        ...sourceObject,
+        id: duplicateId,
+        position: normalizeWorldObjectPositionVector(
+          sourceObject.position.clone().add(offset),
+        ),
+      });
 
-  setEditMode: (mode) => {
-    set({ editMode: mode });
-  },
+      set((state) => {
+        const nextSnapshot: ObjectSnapshot = {
+          objects: [...state.objects, duplicateObject],
+          selectedObjectId: duplicateId,
+        };
+        if (snapshotsEqual(previousSnapshot, nextSnapshot)) {
+          return state;
+        }
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
 
-  setTransformSpace: (space) => {
-    set({ transformSpace: space });
-  },
+      return duplicateId;
+    },
 
-  clearObjects: () => {
-    set({
-      objects: [],
-      selectedObjectId: null,
-      editMode: "move",
-      transformSpace: "world",
-      undoStack: [],
-      redoStack: [],
-      activeEditSnapshot: null,
-      canUndo: false,
-      canRedo: false,
-    });
-  },
+    removeObject: (id, options) => {
+      const previousSnapshot = captureSnapshot(get());
+      set((state) => {
+        const nextSnapshot: ObjectSnapshot = {
+          objects: state.objects.filter((obj) => obj.id !== id),
+          selectedObjectId:
+            state.selectedObjectId === id ? null : state.selectedObjectId,
+        };
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
+    },
 
-  replaceObjectsBySource: (source, objects) => {
-    const normalizedObjects: CreatedObject[] = objects.map((object, index) => ({
-      ...object,
-      id: `${source}-${index}`,
-      position: normalizeWorldObjectPositionVector(object.position),
-      rotation: normalizeWorldObjectRotationEuler(object.rotation),
-      size: normalizeWorldObjectSizeVector({
-        type: object.type,
-        size: object.size,
-      }),
-      source,
-      isHidden: object.isHidden === true,
-      isIkTarget: object.isIkTarget ?? false,
-      ikTargetType: object.ikTargetType ?? "punctual",
-      orbitRadius: object.orbitRadius ?? 0.3,
-      orbitInclination: object.orbitInclination ?? 45,
-      orbitPhase: object.orbitPhase ?? 0,
-      orbitSecondaryOffset: object.orbitSecondaryOffset ?? 180,
-      orbitTargetPoint: object.orbitTargetPoint ?? "primary",
-      label: object.label,
-    }));
-    set((state) => ({
-      objects: [
-        ...state.objects.filter((object) => object.source !== source),
-        ...normalizedObjects,
-      ],
-      editMode: "move",
-      transformSpace: "world",
-      selectedObjectId:
-        state.selectedObjectId &&
-        normalizedObjects.some((object) => object.id === state.selectedObjectId)
-          ? state.selectedObjectId
-          : state.selectedObjectId &&
-              state.objects.some(
-                (object) =>
-                  object.id === state.selectedObjectId && object.source !== source
-              )
+    updateObjectPosition: (id, position, options) => {
+      const previousSnapshot = captureSnapshot(get());
+      const resolvedPosition = normalizeWorldObjectPositionVector(position);
+      set((state) => {
+        const nextSnapshot: ObjectSnapshot = {
+          objects: updateObjectById(state.objects, id, (object) =>
+            cloneCreatedObject({ ...object, position: resolvedPosition }),
+          ),
+          selectedObjectId: state.selectedObjectId,
+        };
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
+    },
+
+    updateObjectRotation: (id, rotation, options) => {
+      const previousSnapshot = captureSnapshot(get());
+      const resolvedRotation = normalizeWorldObjectRotationEuler(rotation);
+      set((state) => {
+        const nextSnapshot: ObjectSnapshot = {
+          objects: updateObjectById(state.objects, id, (object) =>
+            cloneCreatedObject({ ...object, rotation: resolvedRotation }),
+          ),
+          selectedObjectId: state.selectedObjectId,
+        };
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
+    },
+
+    updateObjectSize: (id, size, options) => {
+      const previousSnapshot = captureSnapshot(get());
+      set((state) => {
+        const nextSnapshot: ObjectSnapshot = {
+          objects: updateObjectById(state.objects, id, (object) =>
+            cloneCreatedObject({
+              ...object,
+              size: normalizeWorldObjectSizeVector({ type: object.type, size }),
+            }),
+          ),
+          selectedObjectId: state.selectedObjectId,
+        };
+        return applyObjectSnapshotMutation(
+          state,
+          previousSnapshot,
+          nextSnapshot,
+          options,
+        );
+      });
+    },
+
+    setObjectHidden: (id, isHidden) => {
+      set((state) => ({
+        objects: updateObjectById(state.objects, id, (object) =>
+          cloneCreatedObject({ ...object, isHidden }),
+        ),
+      }));
+    },
+
+    updateTrackedJoint: (id, jointName) => {
+      set((state) => ({
+        objects: updateObjectById(state.objects, id, (object) =>
+          cloneCreatedObject({ ...object, trackedJointName: jointName }),
+        ),
+      }));
+    },
+
+    updateIkTargetType: (id, ikTargetType) => {
+      set((state) => ({
+        objects: updateObjectById(state.objects, id, (object) =>
+          cloneCreatedObject({ ...object, ikTargetType }),
+        ),
+      }));
+    },
+
+    updateOrbitParams: (id, params) => {
+      set((state) => ({
+        objects: updateObjectById(state.objects, id, (object) =>
+          cloneCreatedObject({
+            ...object,
+            orbitRadius:
+              params.radius !== undefined ? params.radius : object.orbitRadius,
+            orbitInclination:
+              params.inclination !== undefined
+                ? params.inclination
+                : object.orbitInclination,
+            orbitPhase:
+              params.phase !== undefined ? params.phase : object.orbitPhase,
+            orbitSecondaryOffset:
+              params.secondaryOffset !== undefined
+                ? params.secondaryOffset
+                : object.orbitSecondaryOffset,
+          }),
+        ),
+      }));
+    },
+
+    updateOrbitTargetPoint: (id, targetPoint) => {
+      set((state) => ({
+        objects: updateObjectById(state.objects, id, (object) =>
+          cloneCreatedObject({ ...object, orbitTargetPoint: targetPoint }),
+        ),
+      }));
+    },
+
+    setSelectedObject: (id) => {
+      set((state) => ({
+        selectedObjectId: id,
+        editMode: id === null ? state.editMode : "move",
+      }));
+    },
+
+    setEditMode: (mode) => {
+      set({ editMode: mode });
+    },
+
+    setTransformSpace: (space) => {
+      set({ transformSpace: space });
+    },
+
+    clearObjects: () => {
+      set({
+        objects: [],
+        selectedObjectId: null,
+        editMode: "move",
+        transformSpace: "world",
+        undoStack: [],
+        redoStack: [],
+        activeEditSnapshot: null,
+        canUndo: false,
+        canRedo: false,
+      });
+    },
+
+    replaceObjectsBySource: (source, objects) => {
+      const normalizedObjects: CreatedObject[] = objects.map((object, index) =>
+        normalizeCreatedObject(object, {
+          id: `${source}-${index}`,
+          source,
+          defaultIsIkTarget: false,
+        }),
+      );
+      set((state) => ({
+        objects: [
+          ...state.objects.filter((object) => object.source !== source),
+          ...normalizedObjects,
+        ],
+        editMode: "move",
+        transformSpace: "world",
+        selectedObjectId:
+          state.selectedObjectId &&
+          normalizedObjects.some(
+            (object) => object.id === state.selectedObjectId,
+          )
             ? state.selectedObjectId
-            : null,
-      undoStack: [],
-      redoStack: [],
-      activeEditSnapshot: null,
-      canUndo: false,
-      canRedo: false,
-    }));
-  },
+            : state.selectedObjectId &&
+                state.objects.some(
+                  (object) =>
+                    object.id === state.selectedObjectId &&
+                    object.source !== source,
+                )
+              ? state.selectedObjectId
+              : null,
+        undoStack: [],
+        redoStack: [],
+        activeEditSnapshot: null,
+        canUndo: false,
+        canRedo: false,
+      }));
+    },
 
-  undo: () => {
-    const state = get();
-    const previousSnapshot = state.undoStack[state.undoStack.length - 1];
-    if (!previousSnapshot) {
-      return;
-    }
-    const currentSnapshot = captureSnapshot(state);
-    const nextUndoStack = state.undoStack.slice(0, -1);
-    set({
-      objects: previousSnapshot.objects.map(cloneCreatedObject),
-      selectedObjectId: previousSnapshot.selectedObjectId,
-      undoStack: nextUndoStack,
-      redoStack: [...state.redoStack, currentSnapshot],
-      activeEditSnapshot: null,
-      canUndo: nextUndoStack.length > 0,
-      canRedo: true,
-    });
-  },
+    undo: () => {
+      const state = get();
+      const previousSnapshot = state.undoStack[state.undoStack.length - 1];
+      if (!previousSnapshot) {
+        return;
+      }
+      const currentSnapshot = captureSnapshot(state);
+      const nextUndoStack = state.undoStack.slice(0, -1);
+      set({
+        objects: previousSnapshot.objects.map(cloneCreatedObject),
+        selectedObjectId: previousSnapshot.selectedObjectId,
+        undoStack: nextUndoStack,
+        redoStack: [...state.redoStack, currentSnapshot],
+        activeEditSnapshot: null,
+        canUndo: nextUndoStack.length > 0,
+        canRedo: true,
+      });
+    },
 
-  redo: () => {
-    const state = get();
-    const nextSnapshot = state.redoStack[state.redoStack.length - 1];
-    if (!nextSnapshot) {
-      return;
-    }
-    const currentSnapshot = captureSnapshot(state);
-    const nextRedoStack = state.redoStack.slice(0, -1);
-    const nextUndoStack = trimUndoStack([...state.undoStack, currentSnapshot]);
-    set({
-      objects: nextSnapshot.objects.map(cloneCreatedObject),
-      selectedObjectId: nextSnapshot.selectedObjectId,
-      undoStack: nextUndoStack,
-      redoStack: nextRedoStack,
-      activeEditSnapshot: null,
-      canUndo: nextUndoStack.length > 0,
-      canRedo: nextRedoStack.length > 0,
-    });
-  },
+    redo: () => {
+      const state = get();
+      const nextSnapshot = state.redoStack[state.redoStack.length - 1];
+      if (!nextSnapshot) {
+        return;
+      }
+      const currentSnapshot = captureSnapshot(state);
+      const nextRedoStack = state.redoStack.slice(0, -1);
+      const nextUndoStack = trimUndoStack([
+        ...state.undoStack,
+        currentSnapshot,
+      ]);
+      set({
+        objects: nextSnapshot.objects.map(cloneCreatedObject),
+        selectedObjectId: nextSnapshot.selectedObjectId,
+        undoStack: nextUndoStack,
+        redoStack: nextRedoStack,
+        activeEditSnapshot: null,
+        canUndo: nextUndoStack.length > 0,
+        canRedo: nextRedoStack.length > 0,
+      });
+    },
 
-  beginEditSession: () => {
-    const state = get();
-    if (state.activeEditSnapshot) {
-      return;
-    }
-    set({
-      activeEditSnapshot: captureSnapshot(state),
-    });
-  },
+    beginEditSession: () => {
+      const state = get();
+      if (state.activeEditSnapshot) {
+        return;
+      }
+      set({
+        activeEditSnapshot: captureSnapshot(state),
+      });
+    },
 
-  endEditSession: () => {
-    const state = get();
-    const startSnapshot = state.activeEditSnapshot;
-    if (!startSnapshot) {
-      return;
-    }
-    const currentSnapshot = captureSnapshot(state);
-    if (snapshotsEqual(startSnapshot, currentSnapshot)) {
-      set({ activeEditSnapshot: null });
-      return;
-    }
-    const nextUndoStack = trimUndoStack([...state.undoStack, startSnapshot]);
-    set({
-      undoStack: nextUndoStack,
-      redoStack: [],
-      activeEditSnapshot: null,
-      canUndo: nextUndoStack.length > 0,
-      canRedo: false,
-    });
-  },
+    endEditSession: () => {
+      const state = get();
+      const startSnapshot = state.activeEditSnapshot;
+      if (!startSnapshot) {
+        return;
+      }
+      const currentSnapshot = captureSnapshot(state);
+      if (snapshotsEqual(startSnapshot, currentSnapshot)) {
+        set({ activeEditSnapshot: null });
+        return;
+      }
+      const nextUndoStack = trimUndoStack([...state.undoStack, startSnapshot]);
+      set({
+        undoStack: nextUndoStack,
+        redoStack: [],
+        activeEditSnapshot: null,
+        canUndo: nextUndoStack.length > 0,
+        canRedo: false,
+      });
+    },
 
-  cancelEditSession: () => {
-    const state = get();
-    const startSnapshot = state.activeEditSnapshot;
-    if (!startSnapshot) {
-      return;
-    }
-    set({
-      objects: startSnapshot.objects.map(cloneCreatedObject),
-      selectedObjectId: startSnapshot.selectedObjectId,
-      activeEditSnapshot: null,
-      canUndo: state.undoStack.length > 0,
-      canRedo: state.redoStack.length > 0,
-    });
-  },
-}));
+    cancelEditSession: () => {
+      const state = get();
+      const startSnapshot = state.activeEditSnapshot;
+      if (!startSnapshot) {
+        return;
+      }
+      set({
+        objects: startSnapshot.objects.map(cloneCreatedObject),
+        selectedObjectId: startSnapshot.selectedObjectId,
+        activeEditSnapshot: null,
+        canUndo: state.undoStack.length > 0,
+        canRedo: state.redoStack.length > 0,
+      });
+    },
+  }),
+);

@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
-import { resolveJointScalarValue } from "@/features/viewer/viewer-helpers";
 import {
   createIdentityRigidFrame,
   localToWorldPositionInFrame,
@@ -10,9 +9,7 @@ import {
   worldToLocalPositionInFrame,
   worldToLocalQuaternionInFrame,
 } from "@/shared/lib/spatialFrame";
-import type { CollisionProxyEntry, DragRuntimeCache } from "./types";
-
-export const toLinkPairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+import type { DragRuntimeCache } from "./types";
 
 export const safeDecodeURIComponent = (value: string) => {
   try {
@@ -24,18 +21,9 @@ export const safeDecodeURIComponent = (value: string) => {
 
 export const createEmptyDragRuntimeCache = (): DragRuntimeCache => ({
   chainJointNames: null,
-  adjacentLinkPairs: new Set<string>(),
-  collisionProxies: [],
   baseLinkName: null,
   reachRadius: null,
-  axesLocal: {
-    forward: new THREE.Vector3(1, 0, 0),
-    right: new THREE.Vector3(0, 1, 0),
-    up: new THREE.Vector3(0, 0, 1),
-  },
   robotWorldFrame: createIdentityRigidFrame(),
-  robotToWorldMatrix: new THREE.Matrix4().identity(),
-  worldToRobotMatrix: new THREE.Matrix4().identity(),
 });
 
 export const refreshRobotFrameCache = (cache: DragRuntimeCache, robot: URDFRobot | null) => {
@@ -43,14 +31,10 @@ export const refreshRobotFrameCache = (cache: DragRuntimeCache, robot: URDFRobot
     cache.robotWorldFrame.position.set(0, 0, 0);
     cache.robotWorldFrame.quaternion.set(0, 0, 0, 1);
     cache.robotWorldFrame.inverseQuaternion.set(0, 0, 0, 1);
-    cache.robotToWorldMatrix.identity();
-    cache.worldToRobotMatrix.identity();
     return;
   }
   robot.updateMatrixWorld(true);
   updateRigidFrameFromMatrixWorld(robot.matrixWorld, cache.robotWorldFrame);
-  cache.robotToWorldMatrix.copy(robot.matrixWorld);
-  cache.worldToRobotMatrix.copy(robot.matrixWorld).invert();
 };
 
 export const worldToRobotPosition = (
@@ -104,56 +88,6 @@ export const buildChainJointNamesFromAnalysis = (
     traversed += 1;
   }
   return chain.size > 0 ? chain : null;
-};
-
-export const buildAdjacentLinkPairsFromAnalysis = (
-  urdfAnalysis: UrdfAnalysis | null
-): Set<string> => {
-  const adjacent = new Set<string>();
-  if (!urdfAnalysis?.isValid) return adjacent;
-  urdfAnalysis.jointHierarchy.orderedJoints.forEach((joint) => {
-    if (!joint?.parentLink || !joint?.childLink) return;
-    adjacent.add(toLinkPairKey(joint.parentLink, joint.childLink));
-  });
-  return adjacent;
-};
-
-export const buildCollisionProxiesFromRobot = (robot: URDFRobot | null): CollisionProxyEntry[] => {
-  if (!robot) return [];
-  const proxies: CollisionProxyEntry[] = [];
-  const robotLinkNames = new Set(Object.keys(robot.links ?? {}));
-
-  const resolveOwningLink = (mesh: THREE.Mesh) => {
-    let cursor: THREE.Object3D | null = mesh;
-    while (cursor) {
-      const objectLike = cursor as { isURDFLink?: boolean; name?: string };
-      const name = objectLike.name ?? "";
-      if (objectLike.isURDFLink && name) return name;
-      if (robotLinkNames.has(name)) return name;
-      cursor = cursor.parent;
-    }
-    return null;
-  };
-
-  robot.traverse((node) => {
-    const mesh = node as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.geometry) return;
-    const geometry = mesh.geometry as THREE.BufferGeometry;
-    if (!geometry.boundingSphere) {
-      geometry.computeBoundingSphere();
-    }
-    if (!geometry.boundingSphere) return;
-    const linkName = resolveOwningLink(mesh);
-    if (!linkName) return;
-    proxies.push({
-      mesh,
-      linkName,
-      localSphereCenter: geometry.boundingSphere.center.clone(),
-      localSphereRadius: geometry.boundingSphere.radius,
-    });
-  });
-
-  return proxies;
 };
 
 type ResolveReachRadiusParams = {
@@ -231,16 +165,4 @@ export const resolveReachRadiusFromAnalysis = ({
   } catch {
     return { baseLinkName: null, reachRadius: null };
   }
-};
-
-export const captureRobotJointState = (robot: URDFRobot | null): Record<string, number> => {
-  if (!robot) return {};
-  const snapshot: Record<string, number> = {};
-  Object.entries(robot.joints ?? {}).forEach(([jointName, joint]) => {
-    const current = resolveJointScalarValue(joint);
-    if (Number.isFinite(current)) {
-      snapshot[jointName] = current as number;
-    }
-  });
-  return snapshot;
 };

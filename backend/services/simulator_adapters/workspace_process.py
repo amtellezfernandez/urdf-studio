@@ -15,6 +15,9 @@ from backend.services.simulator_adapters.workspace_package import (
     PreparedSimulatorWorkspace,
     wait_for_workspace_readiness,
 )
+from backend.services.simulator_adapters.workspace_diagnostics import (
+    read_workspace_launch_warnings,
+)
 from backend.services.simulator_adapters.workspace_launches import (
     attach_workspace_launch_process,
     begin_workspace_launch,
@@ -127,6 +130,10 @@ def build_workspace_prepare_response(
         simulator_asset_format=runtime_spec.transfer.workspace_asset_format(),
         bundled_mesh_count=prepared.bundle_result.copied_files,
         unresolved_mesh_refs=list(prepared.bundle_result.unresolved),
+        workspace_warnings=read_workspace_launch_warnings(
+            runtime_spec.simulator_id,
+            log_path,
+        ),
         world_object_count=prepared.world_object_count,
         camera_count=prepared.camera_count,
     )

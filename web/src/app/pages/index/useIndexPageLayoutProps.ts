@@ -119,7 +119,6 @@ type RightSidebarParams = {
   onDuplicateAssemblyRobot: RightSidebarProps["onDuplicateAssemblyRobot"];
   substitutionSession: RightSidebarProps["substitutionSession"];
   onApplySubstitution: RightSidebarProps["onApplySubstitution"];
-  episodeJointNames: RightSidebarProps["episodeJointNames"];
   hoveredLink: RightSidebarProps["hoveredLink"];
   rightSidebarCollapsed: RightSidebarProps["isRightSidebarCollapsed"];
   onJointLimitsChange: RightSidebarProps["onJointLimitsChange"];
@@ -256,7 +255,6 @@ const buildRightSidebarProps = (params: UseIndexPageLayoutPropsParams): RightSid
   substitutionSession: params.substitutionSession,
   onApplySubstitution: params.onApplySubstitution,
   availableJoints: params.availableJoints,
-  episodeJointNames: params.episodeJointNames,
   availableLinks: params.availableLinks,
   jointLimits: params.jointLimits,
   selectedJoint: params.selectedJoint,

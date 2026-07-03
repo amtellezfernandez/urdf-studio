@@ -35,7 +35,6 @@ export const FEATURE_GATES = {
   worldsHubRegistry: createFeatureGate(["world-hub-api"]),
   xacroExpansion: createFeatureGate(["core-api"]),
   ikRemoteSolve: createFeatureGate(["core-api"]),
-  ikdNativeTeleop: createFeatureGate(["ikd"]),
   rosVizRuntime: createFeatureGate(["core-api"]),
 } as const;
 

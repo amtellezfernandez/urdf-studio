@@ -1,6 +1,6 @@
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
 import { recordPlaybackTrace } from "@/shared/debug/playbackTrace";
-import { useViewerPlaybackStore, type EpisodePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
+import { useViewerPlaybackStore, type FramePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
 
 export const viewerPlayback = {
   playAnimation: (forceState?: boolean) => {
@@ -15,20 +15,18 @@ export const viewerPlayback = {
     recordPlaybackTrace("cmd:clearAnimation");
     useViewerPlaybackStore.getState().clearAnimation();
   },
-  playEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => {
+  playFrames: (frames: AnimationFrame[], options?: FramePlaybackOptions) => {
     const traceOptions = options
       ? {
           autoplay: options.autoplay,
           startFrame: options.startFrame,
-          playbackEpisodeId: options.playbackEpisode?.id ?? null,
-          playbackEpisodeFrameCount: options.playbackEpisode?.frames.length ?? null,
         }
       : undefined;
-    recordPlaybackTrace("cmd:playEpisode", {
+    recordPlaybackTrace("cmd:playFrames", {
       frameCount: frames.length,
       options: traceOptions,
     });
-    useViewerPlaybackStore.getState().playEpisode(frames, options);
+    useViewerPlaybackStore.getState().playFrames(frames, options);
   },
   setFrame: (frameIndex: number) => {
     recordPlaybackTrace("cmd:setFrame", { frameIndex });

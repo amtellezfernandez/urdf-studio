@@ -81,7 +81,7 @@ describe("resolveRobotJointName", () => {
     expect(resolveRobotJointName(robot, "shoulder_pan")).toBe("shoulder_pan_joint");
   });
 
-  it("resolves unique prefixed URDF names from LeRobot joint names", () => {
+  it("resolves unique prefixed URDF names from imported joint aliases", () => {
     expect(
       resolveRobotJointName(
         createRobotMock(["arm_shoulder_pan", "arm_elbow_flex"]).robot,

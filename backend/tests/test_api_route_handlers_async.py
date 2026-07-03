@@ -7,8 +7,6 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1] / "api"
 SYNC_SECURITY_DEPENDENCIES = {
     "require_simulator_operator_access",
-    "require_robot_gateway_control_access",
-    "require_robot_gateway_local_workstation_access",
 }
 
 

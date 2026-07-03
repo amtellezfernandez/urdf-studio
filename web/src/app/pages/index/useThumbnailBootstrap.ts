@@ -10,7 +10,6 @@ type ThumbnailBootstrapParams = {
     files: FileList,
     options?: { preserveCameras?: boolean }
   ) => void | Promise<void>;
-  runtimePreviewMode: boolean;
   thumbnailMode: boolean;
   thumbnailParams: {
     demo: boolean;
@@ -23,7 +22,6 @@ export const useThumbnailBootstrap = ({
   hasLoadedFiles,
   loadBundledDemoRobot,
   loadFilesFromFolderWithFreshCameras,
-  runtimePreviewMode,
   thumbnailMode,
   thumbnailParams,
 }: ThumbnailBootstrapParams) => {
@@ -42,8 +40,7 @@ export const useThumbnailBootstrap = ({
   }, [loadBundledDemoRobot, loadFilesFromFolderWithFreshCameras]);
 
   useEffect(() => {
-    const isBootstrapMode = thumbnailMode || runtimePreviewMode;
-    if (!isBootstrapMode) {
+    if (!thumbnailMode) {
       thumbnailLoadRef.current = null;
       setLoadError(null);
       return;
@@ -78,7 +75,7 @@ export const useThumbnailBootstrap = ({
     };
 
     const loadSignature = [
-      thumbnailMode ? "thumb" : "runtime-preview",
+      "thumb",
       thumbnailParams.demo ? "demo" : thumbnailParams.repoUrl,
       thumbnailParams.urdfTarget,
       "backend-auth",
@@ -127,7 +124,6 @@ export const useThumbnailBootstrap = ({
     };
   }, [
     hasLoadedFiles,
-    runtimePreviewMode,
     thumbnailMode,
     thumbnailParams.demo,
     thumbnailParams.repoUrl,

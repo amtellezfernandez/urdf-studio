@@ -13,7 +13,6 @@ export type WorkspaceTransferTargetState = {
   robotAssetFormat: WorkspaceTransferAssetFormat;
   sceneAssetFormat: WorkspaceTransferAssetFormat;
   transferStrategy: WorkspaceTransferStrategy;
-  transferLabel: string;
   transferDescription: string;
   createsTransferAsset: boolean;
   statusLabel: string;
@@ -22,6 +21,7 @@ export type WorkspaceTransferTargetState = {
   cancelLabel?: string;
   isBusy: boolean;
   isActive?: boolean;
+  needsAttention?: boolean;
   canOpen: boolean;
   disabledLabel: string;
   onAction: () => void | Promise<void>;

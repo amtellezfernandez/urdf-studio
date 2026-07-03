@@ -1,10 +1,8 @@
-import type { IkResponsePayload } from "@/features/viewer/ik-types";
 import { isMetricsEnabled } from "@/shared/lib/metrics";
-import { guardedFetch } from "@/shared/lib/backendGuard";
-import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { buildIkStrategies, type OrientationMode } from "./registry";
 import type { IkSolveRequest, IkSolveResponse, IkSolveStrategy } from "./types";
 import { solveWithIkfast } from "./ikfastSolver";
+import { requestIkRemoteSolve } from "./ikRemoteSolve";
 
 type SolveMessage = {
   type: "solve";
@@ -35,26 +33,12 @@ const postResult = (response: IkSolveResponse) => {
   self.postMessage(response);
 };
 
-const parseErrorMessage = async (response: Response) => {
-  try {
-    const data = await response.json();
-    return data?.detail || data?.error || response.statusText;
-  } catch {
-    return response.statusText;
-  }
-};
-
 const solveWithBackend = async (
   request: IkSolveRequest,
   solverChain: IkSolveStrategy["solverId"][],
   orientationMode: OrientationMode,
   remainingMs: number,
-): Promise<{
-  ok: boolean;
-  result?: IkResponsePayload;
-  error?: string;
-  status?: IkSolveResponse["status"];
-}> => {
+): Promise<Omit<IkSolveResponse, "requestId">> => {
   const start = metricsEnabled ? performance.now() : 0;
   const controller = new AbortController();
   inFlightControllers.set(request.requestId, controller);
@@ -63,40 +47,22 @@ const solveWithBackend = async (
   let okFlag = false;
 
   try {
-    const payload = {
-      urdf: request.payload.urdf,
-      joint_values: request.payload.jointValues,
-      target_link: request.payload.targetLink,
-      target_position: request.payload.targetPosition,
-      target_rotation: request.payload.targetRotation ?? null,
-      target_wxyz: request.payload.targetWxyz ?? null,
-      solver_chain: solverChain,
-      orientation_mode: orientationMode,
-    };
-
-    const response = await guardedFetch(`${request.apiBaseUrl}/ik/solve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const result = await requestIkRemoteSolve({
+      apiBaseUrl: request.apiBaseUrl,
+      payload: request.payload,
+      solverChain,
+      orientationMode,
       signal: controller.signal,
-    }, {
-      requiredBackends: FEATURE_GATES.ikRemoteSolve.requiredBackends,
       context: "IK worker remote solve",
     });
 
-    if (!response.ok) {
-      status = "solver_error";
-      return { ok: false, error: await parseErrorMessage(response), status };
-    }
-
-    const data = (await response.json()) as IkResponsePayload;
-    if (!data?.solution) {
-      status = "solver_error";
-      return { ok: false, error: "IK solve returned no solution", status };
+    if (result.ok === false) {
+      status = result.status;
+      return result;
     }
 
     okFlag = true;
-    return { ok: true, result: data };
+    return result;
   } catch (error) {
     if (controller.signal.aborted) {
       status = cancelledRequests.has(request.requestId) ? "cancelled" : "timeout";

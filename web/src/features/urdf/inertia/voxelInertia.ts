@@ -4,6 +4,7 @@ import {
   VOXEL_INERTIA_GRID_RESOLUTION,
   VOXEL_INERTIA_RAY_EPSILON,
 } from "./voxelInertiaParams";
+import { collectWorldMeshTriangles } from "./meshTriangleCollector";
 
 export type VoxelMassProperties = {
   mass: number;
@@ -79,60 +80,24 @@ const shiftInertiaFromPoint = (
 ): THREE.Matrix3 => addMatrix3(inertiaAtPoint, scaleMatrix3(buildParallelAxisMatrix(mass, offset), -1));
 
 const collectTriangles = (object: THREE.Object3D): { triangles: TriangleRecord[]; bounds: THREE.Box3 | null } => {
-  object.updateMatrixWorld(true);
-  const triangles: TriangleRecord[] = [];
-  const bounds = new THREE.Box3();
-  let hasBounds = false;
-  const vertexA = new THREE.Vector3();
-  const vertexB = new THREE.Vector3();
-  const vertexC = new THREE.Vector3();
-
-  object.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
-    const position = geometry?.getAttribute("position") as THREE.BufferAttribute | undefined;
-    if (!mesh.isMesh || !geometry || !position || position.itemSize < 3) {
-      return;
-    }
-    const matrix = mesh.matrixWorld.clone();
-    const index = geometry.getIndex();
-    const pushTriangle = (aIndex: number, bIndex: number, cIndex: number) => {
-      const a = vertexA.fromBufferAttribute(position, aIndex).clone().applyMatrix4(matrix);
-      const b = vertexB.fromBufferAttribute(position, bIndex).clone().applyMatrix4(matrix);
-      const c = vertexC.fromBufferAttribute(position, cIndex).clone().applyMatrix4(matrix);
-      const min = new THREE.Vector3(
-        Math.min(a.x, b.x, c.x),
-        Math.min(a.y, b.y, c.y),
-        Math.min(a.z, b.z, c.z)
-      );
-      const max = new THREE.Vector3(
+  const collection = collectWorldMeshTriangles(object);
+  return {
+    bounds: collection.bounds,
+    triangles: collection.triangles.map(({ a, b, c }) => ({
+      a,
+      b,
+      c,
+      max: new THREE.Vector3(
         Math.max(a.x, b.x, c.x),
         Math.max(a.y, b.y, c.y),
         Math.max(a.z, b.z, c.z)
-      );
-      triangles.push({ a, b, c, min, max });
-      bounds.expandByPoint(a);
-      bounds.expandByPoint(b);
-      bounds.expandByPoint(c);
-      hasBounds = true;
-    };
-
-    if (index) {
-      const indexArray = index.array;
-      for (let i = 0; i + 2 < indexArray.length; i += 3) {
-        pushTriangle(indexArray[i] as number, indexArray[i + 1] as number, indexArray[i + 2] as number);
-      }
-      return;
-    }
-
-    for (let i = 0; i + 2 < position.count; i += 3) {
-      pushTriangle(i, i + 1, i + 2);
-    }
-  });
-
-  return {
-    triangles,
-    bounds: hasBounds ? bounds : null,
+      ),
+      min: new THREE.Vector3(
+        Math.min(a.x, b.x, c.x),
+        Math.min(a.y, b.y, c.y),
+        Math.min(a.z, b.z, c.z)
+      ),
+    })),
   };
 };
 

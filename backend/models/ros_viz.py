@@ -18,25 +18,11 @@ from backend.ros_viz.params import (
 
 DeterministicMode = Literal["strict", "smooth"]
 RosVizModeProfile = Literal["studio", "ros_debug"]
-RosVizDataSource = Literal["live_ros", "replay", "episode"]
-RosVizClockMode = Literal["live", "replay", "scrub"]
-RosVizSessionMode = Literal[
-    "live_debug",
-    "live_record",
-    "replay_rosbag",
-    "replay_episode",
-    "replay_motion_only",
-    "hybrid_compare",
-]
-RosVizTimeSource = Literal["ros_clock", "bag_time", "episode_time", "wall_time"]
-RosVizTransportSource = Literal[
-    "ros_topics",
-    "bag_reader",
-    "episode_store",
-    "motion_store",
-    "hybrid_pipeline",
-]
-RosVizRecordingState = Literal["idle", "armed", "recording", "finalizing"]
+RosVizDataSource = Literal["live_ros"]
+RosVizClockMode = Literal["live"]
+RosVizSessionMode = Literal["live_debug"]
+RosVizTimeSource = Literal["ros_clock"]
+RosVizTransportSource = Literal["ros_topics"]
 
 
 class RosVizQosProfile(BaseModel):
@@ -57,7 +43,6 @@ class RosVizTopicInfo(BaseModel):
 
 
 class RosVizRuntimeCapabilities(BaseModel):
-    can_record: bool = False
     can_toggle_play: bool = False
     can_step: bool = False
     can_seek: bool = False
@@ -67,7 +52,6 @@ class RosVizRuntimeCapabilities(BaseModel):
 class RosVizSessionCreateRequest(BaseModel):
     fixed_frame: str = Field(default=DEFAULT_FIXED_FRAME, min_length=1)
     ros_domain_id: int | None = Field(default=None, ge=0)
-    replay_source: str | None = None
     deterministic_mode: DeterministicMode = DEFAULT_DETERMINISTIC_MODE
     mode_profile: RosVizModeProfile = "ros_debug"
     data_source: RosVizDataSource = "live_ros"
@@ -107,7 +91,6 @@ class RosVizSessionStateResponse(BaseModel):
     data_source: RosVizDataSource = "live_ros"
     time_source: RosVizTimeSource = "ros_clock"
     transport_source: RosVizTransportSource = "ros_topics"
-    recording_state: RosVizRecordingState = "idle"
     clock_mode: RosVizClockMode = DEFAULT_CLOCK_MODE
     is_playing: bool = True
     tick_index: int = Field(default=0, ge=0)

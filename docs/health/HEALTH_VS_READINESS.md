@@ -13,8 +13,8 @@ Primary UI:
 
 ## Readiness
 
-Readiness means the system is actually safe and valid for the intended operation mode
-(live debug, live record, replay, hybrid compare), with correct data/time semantics.
+Readiness means the system is actually safe and valid for the intended live debug
+operation mode, with correct data/time semantics.
 
 Readiness is stricter than "connected".
 

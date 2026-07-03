@@ -31,7 +31,7 @@ const safeDecode = (value: string) => {
   }
 };
 
-const resolveNamedParentLinkObject = (
+export const resolveRobotLinkObject = (
   robot: URDFRobot | null,
   parentLinkName: string
 ): THREE.Object3D | null => {
@@ -210,8 +210,8 @@ export const remapCameraPoseBetweenParentLinks = (
 ) => {
   if (!robot || fromParentLinkName === toParentLinkName) return pose;
   return remapPoseBetweenFrames(
-    resolveNamedParentLinkObject(robot, fromParentLinkName),
-    resolveNamedParentLinkObject(robot, toParentLinkName),
+    resolveRobotLinkObject(robot, fromParentLinkName),
+    resolveRobotLinkObject(robot, toParentLinkName),
     pose
   );
 };
@@ -238,7 +238,7 @@ export const remapCameraPoseToParentJointFrame = (
 ) => {
   if (!robot || !parentJointName.trim() || !fromParentLinkName.trim()) return pose;
   return remapPoseBetweenFrames(
-    resolveNamedParentLinkObject(robot, fromParentLinkName),
+    resolveRobotLinkObject(robot, fromParentLinkName),
     resolveCameraParentJointObject(robot, parentJointName),
     pose
   );

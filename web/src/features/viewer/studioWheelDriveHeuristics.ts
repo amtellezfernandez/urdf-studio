@@ -94,11 +94,12 @@ const addAttrValuesToSet = (
   destination: Set<string>,
   root: Document,
   selector: string,
-  attrName: string
+  attrName: string,
+  shouldInclude: (value: string) => boolean = () => true
 ) => {
   root.querySelectorAll(selector).forEach((element) => {
     const value = element.getAttribute(attrName)?.trim();
-    if (!value) return;
+    if (!value || !shouldInclude(value)) return;
     destination.add(value);
   });
 };
@@ -109,11 +110,13 @@ const addWheelLikeAttrValuesToSet = (
   selector: string,
   attrName: string
 ) => {
-  root.querySelectorAll(selector).forEach((element) => {
-    const value = element.getAttribute(attrName)?.trim();
-    if (!value || !STUDIO_VENDOR_WHEEL_HINT_NAME_TOKEN_REGEX.test(value)) return;
-    destination.add(value);
-  });
+  addAttrValuesToSet(
+    destination,
+    root,
+    selector,
+    attrName,
+    (value) => STUDIO_VENDOR_WHEEL_HINT_NAME_TOKEN_REGEX.test(value)
+  );
 };
 
 const addAutoDriveHintAttrValuesToSet = (destination: Set<string>, root: Document) => {
@@ -162,6 +165,61 @@ type StudioDriveJointHintsPersistResult =
   | { success: true; content: string; driveJointNames: string[] }
   | { success: false; content: string; reason: "parse-error" | "missing-robot" };
 
+type MutableStudioDriveHintsUrdf =
+  | { success: true; xmlDoc: Document; robotElement: Element }
+  | { success: false; reason: "parse-error" | "missing-robot" };
+
+const readMutableStudioDriveHintsUrdf = (
+  urdfContent: string
+): MutableStudioDriveHintsUrdf => {
+  if (typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") {
+    return { success: false, reason: "parse-error" };
+  }
+
+  const xmlDoc = new DOMParser().parseFromString(urdfContent, "application/xml");
+  if (xmlDoc.querySelector("parsererror")) {
+    return { success: false, reason: "parse-error" };
+  }
+  const robotElement = xmlDoc.querySelector("robot");
+  if (!robotElement) {
+    return { success: false, reason: "missing-robot" };
+  }
+  return { success: true, xmlDoc, robotElement };
+};
+
+const createStudioDriveHintsControlElement = (
+  xmlDoc: Document,
+  driveJointNames: readonly string[]
+): Element => {
+  const ros2ControlElement = xmlDoc.createElement("ros2_control");
+  ros2ControlElement.setAttribute("name", STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME);
+  ros2ControlElement.setAttribute("type", STUDIO_AUTO_DRIVE_HINT_CONTROL_TYPE);
+  driveJointNames.forEach((jointName) => {
+    const jointElement = xmlDoc.createElement("joint");
+    jointElement.setAttribute("name", jointName);
+    ros2ControlElement.appendChild(jointElement);
+  });
+  return ros2ControlElement;
+};
+
+const appendStudioDriveHintsControlElement = (
+  xmlDoc: Document,
+  robotElement: Element,
+  driveJointNames: readonly string[]
+) => {
+  robotElement.appendChild(
+    createStudioDriveHintsControlElement(xmlDoc, driveJointNames)
+  );
+};
+
+const removeStudioDriveHintsControlElements = (xmlDoc: Document) => {
+  xmlDoc
+    .querySelectorAll(`ros2_control[name="${STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME}"]`)
+    .forEach((element) => {
+      element.parentNode?.removeChild(element);
+    });
+};
+
 export const applyStudioDriveJointHintsToUrdf = (
   urdfContent: string,
   driveJointNames: string[]
@@ -186,31 +244,19 @@ export const applyStudioDriveJointHintsToUrdf = (
     };
   }
 
-  if (typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") {
-    return { success: false, content: urdfContent, reason: "parse-error" };
-  }
-
   try {
-    const xmlDoc = new DOMParser().parseFromString(urdfContent, "application/xml");
-    if (xmlDoc.querySelector("parsererror")) {
-      return { success: false, content: urdfContent, reason: "parse-error" };
-    }
-    const robotElement = xmlDoc.querySelector("robot");
-    if (!robotElement) {
-      return { success: false, content: urdfContent, reason: "missing-robot" };
+    const parsed = readMutableStudioDriveHintsUrdf(urdfContent);
+    if (parsed.success === false) {
+      return { success: false, content: urdfContent, reason: parsed.reason };
     }
 
-    const ros2ControlElement = xmlDoc.createElement("ros2_control");
-    ros2ControlElement.setAttribute("name", STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME);
-    ros2ControlElement.setAttribute("type", STUDIO_AUTO_DRIVE_HINT_CONTROL_TYPE);
-    normalizedDriveJointNames.forEach((jointName) => {
-      const jointElement = xmlDoc.createElement("joint");
-      jointElement.setAttribute("name", jointName);
-      ros2ControlElement.appendChild(jointElement);
-    });
-    robotElement.appendChild(ros2ControlElement);
+    appendStudioDriveHintsControlElement(
+      parsed.xmlDoc,
+      parsed.robotElement,
+      normalizedDriveJointNames
+    );
 
-    const serialized = new XMLSerializer().serializeToString(xmlDoc);
+    const serialized = new XMLSerializer().serializeToString(parsed.xmlDoc);
     return {
       success: true,
       applied: true,
@@ -227,39 +273,24 @@ export const persistStudioDriveJointHintsToUrdf = (
   driveJointNames: string[]
 ): StudioDriveJointHintsPersistResult => {
   const normalizedDriveJointNames = toSortedUniqueJointNames(driveJointNames);
-  if (typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") {
-    return { success: false, content: urdfContent, reason: "parse-error" };
-  }
 
   try {
-    const xmlDoc = new DOMParser().parseFromString(urdfContent, "application/xml");
-    if (xmlDoc.querySelector("parsererror")) {
-      return { success: false, content: urdfContent, reason: "parse-error" };
-    }
-    const robotElement = xmlDoc.querySelector("robot");
-    if (!robotElement) {
-      return { success: false, content: urdfContent, reason: "missing-robot" };
+    const parsed = readMutableStudioDriveHintsUrdf(urdfContent);
+    if (parsed.success === false) {
+      return { success: false, content: urdfContent, reason: parsed.reason };
     }
 
-    xmlDoc
-      .querySelectorAll(`ros2_control[name="${STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME}"]`)
-      .forEach((element) => {
-        element.parentNode?.removeChild(element);
-      });
+    removeStudioDriveHintsControlElements(parsed.xmlDoc);
 
     if (normalizedDriveJointNames.length > 0) {
-      const ros2ControlElement = xmlDoc.createElement("ros2_control");
-      ros2ControlElement.setAttribute("name", STUDIO_AUTO_DRIVE_HINT_CONTROL_NAME);
-      ros2ControlElement.setAttribute("type", STUDIO_AUTO_DRIVE_HINT_CONTROL_TYPE);
-      normalizedDriveJointNames.forEach((jointName) => {
-        const jointElement = xmlDoc.createElement("joint");
-        jointElement.setAttribute("name", jointName);
-        ros2ControlElement.appendChild(jointElement);
-      });
-      robotElement.appendChild(ros2ControlElement);
+      appendStudioDriveHintsControlElement(
+        parsed.xmlDoc,
+        parsed.robotElement,
+        normalizedDriveJointNames
+      );
     }
 
-    const serialized = new XMLSerializer().serializeToString(xmlDoc);
+    const serialized = new XMLSerializer().serializeToString(parsed.xmlDoc);
     return {
       success: true,
       content: serialized,

@@ -5,22 +5,23 @@ import { DEMO_AUTOLOAD, DEMO_LOCAL_MANIFEST_URL, DEMO_MANIFEST_URL, DEMO_MODE } 
 import {
   loadDemoFileListFromManifestUrls,
   loadDemoFileListProgressivelyFromManifestUrls,
+  type DemoRobotAssetPreferences,
 } from "@/app/pages/index/demoBootstrap";
 import {
-  shouldPrepareLeKiwiDemoScene,
-  shouldPreserveScenarioWorldLayoutOnDemoMotion,
+  shouldPrepareDemoWorldLayoutOnMotion,
+  shouldPreserveDemoWorldLayoutOnMotion,
 } from "@/app/pages/index/demoMotionPolicy";
 import { resolveDemoJointNames } from "@/app/pages/index/demoMotionHelpers";
-import { createDemoEpisodes, toDemoAnimationFrames } from "@/shared/samples/demoMotion";
+import { createDemoMotionSequences, toDemoAnimationFrames } from "@/shared/samples/demoMotion";
 import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { URDFRobot } from "urdf-loader";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
-import type { EpisodePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
+import type { FramePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
 
 type DemoPlaybackHandlers = {
-  playEpisode?: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
+  playFrames?: (frames: AnimationFrame[], options?: FramePlaybackOptions) => void;
 };
 
 type DemoUrdfTextLoadOptions = {
@@ -37,6 +38,11 @@ type DemoAssetHydrateOptions = {
   urdfContent?: string;
 };
 
+export type DemoManifestPreferencesLoad = {
+  activePath: string;
+  preferences: DemoRobotAssetPreferences;
+};
+
 type UseDemoMotionFlowParams = {
   activeUrdfPath: string | null;
   availableJoints: string[];
@@ -45,7 +51,6 @@ type UseDemoMotionFlowParams = {
     files: FileList,
     options?: DemoAssetHydrateOptions
   ) => Promise<boolean>;
-  isLeKiwiDemoRobot: boolean;
   jointLimits: JointLimits;
   loadDemoUrdfTextWithFreshCameras?: (
     content: string,
@@ -55,8 +60,11 @@ type UseDemoMotionFlowParams = {
     files: FileList,
     options?: { preserveCameras?: boolean }
   ) => void | Promise<void>;
+  onDemoManifestPreferences?: (load: DemoManifestPreferencesLoad) => void;
   playbackHandlers: DemoPlaybackHandlers;
+  prepareDemoWorldLayoutOnMotion?: boolean;
   prepareDemoScene: () => boolean;
+  preserveDemoWorldLayoutOnMotion?: boolean;
   robot: URDFRobot | null;
   skipDefaultWorldLayoutAutoImportRef: MutableRefObject<boolean>;
   urdfAnalysis: UrdfAnalysis | null;
@@ -78,12 +86,14 @@ export const useDemoMotionFlow = ({
   availableJoints,
   hasLoadedFiles,
   hydrateDemoAssetsFromFiles,
-  isLeKiwiDemoRobot,
   jointLimits,
   loadDemoUrdfTextWithFreshCameras,
   loadFilesFromFolderWithFreshCameras,
+  onDemoManifestPreferences,
   playbackHandlers,
+  prepareDemoWorldLayoutOnMotion = false,
   prepareDemoScene,
+  preserveDemoWorldLayoutOnMotion = false,
   robot,
   skipDefaultWorldLayoutAutoImportRef,
   urdfAnalysis,
@@ -131,6 +141,10 @@ export const useDemoMotionFlow = ({
 
       const urdfContent = await urdfFile.text();
       const activePath = getFileRelativePath(urdfFile);
+      onDemoManifestPreferences?.({
+        activePath,
+        preferences: progressiveFileList.preferences,
+      });
       loadDemoUrdfTextWithFreshCameras(urdfContent, {
         activePath,
         filename: urdfFile.name,
@@ -161,13 +175,14 @@ export const useDemoMotionFlow = ({
     hydrateDemoAssetsFromFiles,
     loadDemoUrdfTextWithFreshCameras,
     loadFilesFromFolderWithFreshCameras,
+    onDemoManifestPreferences,
   ]);
 
   const loadDemoBootstrapRobot = useCallback(async () => {
     await loadBundledDemoRobot();
   }, [loadBundledDemoRobot]);
 
-  const playDemoEpisode = useCallback(
+  const playDemoMotionSequence = useCallback(
     (
       jointNames: string[],
       options?: {
@@ -184,16 +199,18 @@ export const useDemoMotionFlow = ({
       const applyInitialFrame = options?.applyInitialFrame ?? autoplay;
       const openViewer = options?.openViewer ?? true;
 
-      const demoEpisodes = createDemoEpisodes({
+      const demoMotionSequences = createDemoMotionSequences({
         jointNames,
         jointLimits,
       });
-      const firstEpisode = demoEpisodes[0];
+      const firstSequence = demoMotionSequences[0];
 
-      const shouldPrepareDemoScene = shouldPrepareLeKiwiDemoScene(isLeKiwiDemoRobot);
+      const shouldPrepareDemoScene = shouldPrepareDemoWorldLayoutOnMotion(
+        prepareDemoWorldLayoutOnMotion
+      );
       const didPrepare = shouldPrepareDemoScene ? prepareDemoScene() : true;
       setPendingDemoScene(shouldPrepareDemoScene && !didPrepare);
-      if (!firstEpisode) {
+      if (!firstSequence) {
         toast.error("Demo motion has no frames.");
         return;
       }
@@ -202,12 +219,12 @@ export const useDemoMotionFlow = ({
         return;
       }
 
-      const demoFrames = toDemoAnimationFrames(firstEpisode);
+      const demoFrames = toDemoAnimationFrames(firstSequence);
 
       const playbackRequestId = pendingDemoPlaybackRequestRef.current + 1;
       pendingDemoPlaybackRequestRef.current = playbackRequestId;
-      if (playbackHandlers.playEpisode) {
-        viewerPlayback.playEpisode(demoFrames, { autoplay, applyInitialFrame });
+      if (playbackHandlers.playFrames) {
+        viewerPlayback.playFrames(demoFrames, { autoplay, applyInitialFrame });
         appliedDemoPlaybackRequestRef.current = playbackRequestId;
         setPendingDemoPlaybackFrames(null);
       } else {
@@ -217,9 +234,9 @@ export const useDemoMotionFlow = ({
       }
     },
     [
-      isLeKiwiDemoRobot,
       jointLimits,
-      playbackHandlers.playEpisode,
+      playbackHandlers.playFrames,
+      prepareDemoWorldLayoutOnMotion,
       prepareDemoScene,
     ]
   );
@@ -227,21 +244,21 @@ export const useDemoMotionFlow = ({
   const triggerDemoPlaybackFromLauncher = useCallback(
     (jointNames: string[]) => {
       const shouldAutoplay = demoMotionLoadedRef.current;
-      playDemoEpisode(jointNames, {
+      playDemoMotionSequence(jointNames, {
         autoplay: shouldAutoplay,
         applyInitialFrame: shouldAutoplay,
         openViewer: true,
       });
       demoMotionLoadedRef.current = true;
     },
-    [playDemoEpisode]
+    [playDemoMotionSequence]
   );
 
   const handlePlayDemoMotion = useCallback(() => {
     if (
-      shouldPreserveScenarioWorldLayoutOnDemoMotion({
+      shouldPreserveDemoWorldLayoutOnMotion({
         hasLoadedFiles,
-        isLeKiwiDemoRobot,
+        preserveDemoWorldLayoutOnMotion,
       })
     ) {
       // Demo motion needs ownership of spawned scenario objects.
@@ -268,9 +285,9 @@ export const useDemoMotionFlow = ({
     triggerDemoPlaybackFromLauncher(jointNames);
   }, [
     hasLoadedFiles,
-    isLeKiwiDemoRobot,
     loadDemoBootstrapRobot,
     pendingDemoMotion,
+    preserveDemoWorldLayoutOnMotion,
     resolveCurrentDemoJointNames,
     skipDefaultWorldLayoutAutoImportRef,
     triggerDemoPlaybackFromLauncher,
@@ -290,12 +307,12 @@ export const useDemoMotionFlow = ({
     if (!hasLoadedFiles) return;
     const jointNames = resolveCurrentDemoJointNames();
     if (jointNames.length === 0) return;
-    playDemoEpisode(jointNames, {
+    playDemoMotionSequence(jointNames, {
       autoplay: false,
       openViewer: false,
     });
     demoMotionPrimedRef.current = true;
-  }, [hasLoadedFiles, playDemoEpisode, resolveCurrentDemoJointNames]);
+  }, [hasLoadedFiles, playDemoMotionSequence, resolveCurrentDemoJointNames]);
 
   useEffect(() => {
     if (!pendingDemoMotion || !hasLoadedFiles) return;
@@ -312,7 +329,7 @@ export const useDemoMotionFlow = ({
 
   useEffect(() => {
     if (!pendingDemoScene) return;
-    if (!shouldPrepareLeKiwiDemoScene(isLeKiwiDemoRobot)) {
+    if (!shouldPrepareDemoWorldLayoutOnMotion(prepareDemoWorldLayoutOnMotion)) {
       setPendingDemoScene(false);
       return;
     }
@@ -320,15 +337,15 @@ export const useDemoMotionFlow = ({
     if (didPrepare) {
       setPendingDemoScene(false);
     }
-  }, [isLeKiwiDemoRobot, pendingDemoScene, prepareDemoScene]);
+  }, [pendingDemoScene, prepareDemoScene, prepareDemoWorldLayoutOnMotion]);
 
   useEffect(() => {
     if (!pendingDemoPlaybackFrames) return;
-    if (!playbackHandlers.playEpisode) return;
+    if (!playbackHandlers.playFrames) return;
     if (appliedDemoPlaybackRequestRef.current === pendingDemoPlaybackRequestRef.current) {
       return;
     }
-    viewerPlayback.playEpisode(pendingDemoPlaybackFrames, {
+    viewerPlayback.playFrames(pendingDemoPlaybackFrames, {
       autoplay: pendingDemoPlaybackAutoplay,
       applyInitialFrame: pendingDemoPlaybackApplyInitialFrame,
     });
@@ -338,7 +355,7 @@ export const useDemoMotionFlow = ({
     pendingDemoPlaybackApplyInitialFrame,
     pendingDemoPlaybackAutoplay,
     pendingDemoPlaybackFrames,
-    playbackHandlers.playEpisode,
+    playbackHandlers.playFrames,
   ]);
 
   return {

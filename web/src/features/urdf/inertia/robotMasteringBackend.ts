@@ -1,147 +1,43 @@
 import { analyzeUrdf } from "@/shared/lib/urdfCore";
 import { getIluRobotOrientationCard } from "@/shared/lib/iluStudio";
-import { lintRobotFrame, type RobotFrameLintResult } from "@/features/urdf/lint/robotFrameLinter";
+import { lintRobotFrame } from "@/features/urdf/lint/robotFrameLinter";
 import { executeMeshBakePlan } from "@/features/urdf/bake/meshBakeProcessor";
 import { buildCanonicalSynthesisDraft } from "@/features/urdf/synthesis/canonicalSynthesisDraft";
 import {
   buildInertialAuditSummary,
   buildInertialPlausibilitySummary,
   synthesizeInertialsFromGeometry,
-  type InertialMeshSolveMode,
-  type InertialPlausibilitySummary,
-  type InertialRepairMode,
-  type InertialSynthesisResult,
-  type InertialAuditSummary,
 } from "@/features/urdf/inertia/inertialSynthesis";
 import { buildInertialSynthesisDraft } from "@/features/urdf/inertia/inertialSynthesisDraft";
-import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
-import type { RobotOrientationCard } from "@/shared/lib/urdfCore";
-import type { UrdfBakedMeshPlan } from "@/features/urdf/bake/virtualBake";
 import type {
   CapturedKinematicState,
-  KinematicSynthesisPreview,
 } from "@/features/urdf/synthesis/kinematicSynthesizer";
 import { synthesizeKinematicPreviewFromCapturedState } from "@/features/urdf/synthesis/kinematicSynthesizer";
 import type {
-  SupportPlaneAxis,
   SupportPlaneOptimizationResult,
 } from "@/features/urdf/synthesis/supportPlaneOptimization";
+import {
+  serializeBlobPayload,
+  type SerializedBlobPayload,
+} from "@/shared/lib/blobEncoding";
+import type {
+  RobotMasteringBakeExportExecuteInput,
+  RobotMasteringBakeExportExecuteOutput,
+  RobotMasteringCanonicalSynthesisInput,
+  RobotMasteringCanonicalSynthesisOutput,
+  RobotMasteringFramePreflightOutput,
+  RobotMasteringGeneratePhysicsInput,
+  RobotMasteringGeneratePhysicsOutput,
+  RobotMasteringGeneratePhysicsPreflightInput,
+  RobotMasteringGeneratePhysicsPreflightOutput,
+} from "@/features/urdf/inertia/robotMasteringContracts";
 import * as THREE from "three";
 
-export type RobotMasteringGeneratePhysicsInput = {
-  sourceUrdf: string;
-  meshFiles: Record<string, Blob>;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-  densityPresetId: InertialDensityPresetId;
-  repairMode: InertialRepairMode;
-  linkNames?: string[];
-  meshSolveMode?: InertialMeshSolveMode;
-  regularizeNearMissTensors?: boolean;
-  canonicalizeRepeatedMeshes?: boolean;
-};
-
-export type RobotMasteringGeneratePhysicsOutput = {
-  draftUrdfContent: string;
-  auditSummary: InertialAuditSummary | null;
-  synthesisResult: InertialSynthesisResult;
-  plausibilitySummary: InertialPlausibilitySummary | null;
-};
-
-export type RobotMasteringGeneratePhysicsPreflightOutput = {
-  auditSummary: InertialAuditSummary | null;
-  plausibilitySummary: InertialPlausibilitySummary | null;
-};
-
-export type RobotMasteringFramePreflightOutput = {
-  orientationCard: RobotOrientationCard | null;
-  frameLint: RobotFrameLintResult | null;
-};
-
-export type RobotMasteringBakeExportExecuteInput = {
-  planEntries: UrdfBakedMeshPlan["entries"];
-  planConflicts: UrdfBakedMeshPlan["conflicts"];
-  meshFiles: Record<string, Blob>;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-};
-
-type SerializedBlob = {
-  base64Content: string;
-  mimeType: string | null;
-};
-
-type SerializedSidecar = {
-  filename: string;
-  blob: SerializedBlob;
-};
-
-type SerializedOverride = {
-  sourceReference: string;
-  resolvedPath: string;
-  outputFilename: string;
-  blob: SerializedBlob;
-  sidecars: SerializedSidecar[];
-};
-
-export type RobotMasteringBakeExportExecuteOutput = {
-  overrides: SerializedOverride[];
-  unsupported: Awaited<ReturnType<typeof executeMeshBakePlan>>["unsupported"];
-};
-
-export type RobotMasteringCanonicalSynthesisInput = {
-  sourceUrdf: string;
-  synthesisSourceUrdf: string;
-  robotName: string | null;
-  capturedLinkWorldPoses: CapturedKinematicState["capturedLinkWorldPoses"];
-  supportPlane: {
-    success: boolean;
-    confidence: number;
-    evidence: string;
-    inferredUpAxis?: SupportPlaneAxis | null;
-    inferredUpSign?: 1 | -1 | null;
-    targetUpAxis?: "z" | null;
-    targetUpSign?: 1 | null;
-    fallbackReason?: string | null;
-  };
-};
-
-export type RobotMasteringCanonicalSynthesisOutput = {
-  preview: {
-    robotName: string | null;
-    rootLinkName: string;
-    linkCount: number;
-    jointCount: number;
-    supportPlane: RobotMasteringCanonicalSynthesisInput["supportPlane"];
-    links: KinematicSynthesisPreview["links"];
-    joints: KinematicSynthesisPreview["joints"];
-    sampleJoints: KinematicSynthesisPreview["sampleJoints"];
-  };
-  draftContent: string;
-};
-
-const blobToBase64 = async (blob: Blob): Promise<string> =>
-  await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => {
-      reject(reader.error ?? new Error("Failed to serialize baked mesh blob."));
-    };
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      const commaIndex = dataUrl.indexOf(",");
-      if (commaIndex < 0) {
-        reject(new Error("Failed to encode baked mesh blob."));
-        return;
-      }
-      resolve(dataUrl.slice(commaIndex + 1));
-    };
-    reader.readAsDataURL(blob);
+const serializeBlob = async (blob: Blob): Promise<SerializedBlobPayload> =>
+  await serializeBlobPayload(blob, {
+    readErrorMessage: "Failed to serialize baked mesh blob.",
+    encodeErrorMessage: "Failed to encode baked mesh blob.",
   });
-
-const serializeBlob = async (blob: Blob): Promise<SerializedBlob> => ({
-  base64Content: await blobToBase64(blob),
-  mimeType: blob.type || null,
-});
 
 export const runBakeExportExecute = async ({
   planEntries,
@@ -271,10 +167,7 @@ export const runGeneratePhysicsPreflight = async ({
   meshFiles,
   urdfBasePath,
   packageRoots,
-}: Omit<
-  RobotMasteringGeneratePhysicsInput,
-  "densityPresetId" | "repairMode"
->): Promise<RobotMasteringGeneratePhysicsPreflightOutput> => {
+}: RobotMasteringGeneratePhysicsPreflightInput): Promise<RobotMasteringGeneratePhysicsPreflightOutput> => {
   const urdfAnalysis = analyzeUrdf(sourceUrdf);
   if (!urdfAnalysis?.isValid) {
     throw new Error("Failed to analyze URDF for backend physics preflight.");

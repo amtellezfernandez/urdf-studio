@@ -31,6 +31,14 @@ function readGitHubCliCommand(args, spawnSyncImpl = spawnSync) {
   return `${result.stdout || ''}${result.stderr || ''}`;
 }
 
+function resolveGitHubToken({ candidates, spawnSyncImpl }) {
+  const resolved = resolveTokenFromCandidates(candidates);
+  if (resolved.token) {
+    return resolved;
+  }
+  return readGitHubCliToken({ spawnSyncImpl });
+}
+
 export function maskToken(token) {
   const normalized = normalizeToken(token);
   if (!normalized) return '';
@@ -77,16 +85,15 @@ export function resolveFrontendGitHubToken({
   env = process.env,
   spawnSyncImpl = spawnSync,
 } = {}) {
-  const resolved = resolveTokenFromCandidates([
-    { source: 'VITE_GITHUB_TOKEN', value: env.VITE_GITHUB_TOKEN },
-    { source: 'GITHUB_TOKEN', value: env.GITHUB_TOKEN },
-    { source: 'GH_TOKEN', value: env.GH_TOKEN },
-    { source: 'saved config', value: configToken },
-  ]);
-  if (resolved.token) {
-    return resolved;
-  }
-  return readGitHubCliToken({ spawnSyncImpl });
+  return resolveGitHubToken({
+    candidates: [
+      { source: 'VITE_GITHUB_TOKEN', value: env.VITE_GITHUB_TOKEN },
+      { source: 'GITHUB_TOKEN', value: env.GITHUB_TOKEN },
+      { source: 'GH_TOKEN', value: env.GH_TOKEN },
+      { source: 'saved config', value: configToken },
+    ],
+    spawnSyncImpl,
+  });
 }
 
 export function resolveBackendGitHubToken({
@@ -94,25 +101,23 @@ export function resolveBackendGitHubToken({
   env = process.env,
   spawnSyncImpl = spawnSync,
 } = {}) {
-  const resolved = resolveTokenFromCandidates([
-    { source: 'URDF_GITHUB_TOKEN', value: env.URDF_GITHUB_TOKEN },
-    { source: 'GITHUB_TOKEN', value: env.GITHUB_TOKEN },
-    { source: 'GH_TOKEN', value: env.GH_TOKEN },
-    { source: 'saved config', value: configToken },
-  ]);
-  if (resolved.token) {
-    return resolved;
-  }
-  return readGitHubCliToken({ spawnSyncImpl });
+  return resolveGitHubToken({
+    candidates: [
+      { source: 'URDF_GITHUB_TOKEN', value: env.URDF_GITHUB_TOKEN },
+      { source: 'GITHUB_TOKEN', value: env.GITHUB_TOKEN },
+      { source: 'GH_TOKEN', value: env.GH_TOKEN },
+      { source: 'saved config', value: configToken },
+    ],
+    spawnSyncImpl,
+  });
 }
 
 export function resolveSetupGitHubToken({ env = process.env, spawnSyncImpl = spawnSync } = {}) {
-  const resolved = resolveTokenFromCandidates([
-    { source: 'GITHUB_TOKEN', value: env.GITHUB_TOKEN },
-    { source: 'GH_TOKEN', value: env.GH_TOKEN },
-  ]);
-  if (resolved.token) {
-    return resolved;
-  }
-  return readGitHubCliToken({ spawnSyncImpl });
+  return resolveGitHubToken({
+    candidates: [
+      { source: 'GITHUB_TOKEN', value: env.GITHUB_TOKEN },
+      { source: 'GH_TOKEN', value: env.GH_TOKEN },
+    ],
+    spawnSyncImpl,
+  });
 }

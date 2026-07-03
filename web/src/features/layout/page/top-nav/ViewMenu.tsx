@@ -125,16 +125,16 @@ export function ViewMenu({
                   Studio 3D
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => onRendererRuntimeChange("rosVizV2")}
+                  onClick={() => onRendererRuntimeChange("rosViz")}
                   disabled={rosVizItemDisabled}
                   title={rosVizItemTitle}
                   className={cn(
                     menuItemClass,
-                    rendererRuntime === "rosVizV2" && "bg-[#3d3d3d] text-white",
+                    rendererRuntime === "rosViz" && "bg-[#3d3d3d] text-white",
                     rosVizItemDisabled && "opacity-50 cursor-not-allowed"
                   )}
                 >
-                  ROS viz v2
+                  ROS Viz
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>

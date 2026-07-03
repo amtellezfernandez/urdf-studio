@@ -32,7 +32,65 @@ export type RoverApproachObjectContactGoalCandidate = {
   targetMarginSq: number;
 };
 
-const resolvePreferredDirectionCount = (targetKind: RoverApproachContactTargetKind): number =>
+type WorldObjectGeometry = ReturnType<typeof resolveWorldObjectGeometry>;
+
+type ContactGoalRequest = {
+  object: WorldObjectObstacleSource;
+  worldObjects: WorldObjectObstacleSource[];
+  basePositionWorld: THREE.Vector3;
+  targetWorld: THREE.Vector3;
+  upAxisWorld: THREE.Vector3;
+  navigationContext: RoverApproachWorldNavigationContext;
+  roverBaseRadiusM: number;
+  robotFootprint?: RoverApproachRobotFootprint;
+  targetKind?: RoverApproachContactTargetKind;
+};
+
+type ResolvedContactGoalRequest = Required<
+  Pick<ContactGoalRequest, "targetKind">
+> &
+  Omit<ContactGoalRequest, "targetKind"> & {
+    objectGeometry: WorldObjectGeometry;
+    preferredDirectionCount: number;
+    excludedObstacleIds: string[];
+  };
+
+type ContactGoalCandidateSelection = {
+  bestCandidate: RoverApproachObjectContactGoalCandidate | null;
+  bestPreferredCandidate: RoverApproachObjectContactGoalCandidate | null;
+};
+
+type ContactOriginResolutionParams = {
+  object: WorldObjectObstacleSource;
+  worldObjects: WorldObjectObstacleSource[];
+  basePositionWorld: THREE.Vector3;
+  roverBaseRadiusM: number;
+  robotFootprint?: RoverApproachRobotFootprint;
+  upAxisWorld: THREE.Vector3;
+};
+
+type ContactRouteCandidateParams = {
+  request: ResolvedContactGoalRequest;
+  directionWorld: THREE.Vector3;
+  directionIndex: number;
+  goalWorld: THREE.Vector3;
+  route: RoverApproachWorldRouteResult;
+};
+
+type ContactGoalOffsetParams = {
+  object: WorldObjectObstacleSource;
+  objectGeometry: WorldObjectGeometry;
+  targetWorld: THREE.Vector3;
+  directionWorld: THREE.Vector3;
+  targetKind: RoverApproachContactTargetKind;
+  roverBaseRadiusM: number;
+  robotFootprint?: RoverApproachRobotFootprint;
+  upAxisWorld: THREE.Vector3;
+};
+
+const resolvePreferredDirectionCount = (
+  targetKind: RoverApproachContactTargetKind,
+): number =>
   targetKind === "surface-point"
     ? ROVER_APPROACH_CONTACT_GOAL_PARAMS.surfacePointPreferredDirectionCount
     : ROVER_APPROACH_CONTACT_GOAL_PARAMS.preferredDirectionCount;
@@ -41,19 +99,25 @@ const CONTACT_GOAL_ROUTE_EXCLUDED_OBSTACLE_ID: string | null = null;
 const CONTACT_GOAL_ROUTE_PATH_CLEARANCE_M =
   ROVER_APPROACH_CONTACT_GOAL_PARAMS.routePathClearanceM;
 
-const projectVectorOntoPlane = (vector: THREE.Vector3, planeNormal: THREE.Vector3) => {
+const projectVectorOntoPlane = (
+  vector: THREE.Vector3,
+  planeNormal: THREE.Vector3,
+) => {
   const normalizedPlaneNormal = planeNormal.clone().normalize();
   return vector.sub(
-    normalizedPlaneNormal.multiplyScalar(vector.dot(normalizedPlaneNormal))
+    normalizedPlaneNormal.multiplyScalar(vector.dot(normalizedPlaneNormal)),
   );
 };
 
 const normalizePlanarDirection = (
   value: THREE.Vector3,
-  upAxisWorld: THREE.Vector3
+  upAxisWorld: THREE.Vector3,
 ): THREE.Vector3 | null => {
   const planar = projectVectorOntoPlane(value.clone(), upAxisWorld);
-  if (planar.lengthSq() <= ROVER_APPROACH_CONTACT_GOAL_PARAMS.directionLengthEpsilonSq) {
+  if (
+    planar.lengthSq() <=
+    ROVER_APPROACH_CONTACT_GOAL_PARAMS.directionLengthEpsilonSq
+  ) {
     return null;
   }
   return planar.normalize();
@@ -72,7 +136,7 @@ const pushUniqueDirection = ({
   const duplicate = directions.some(
     (direction) =>
       direction.dot(candidate) >=
-      ROVER_APPROACH_CONTACT_GOAL_PARAMS.directionDuplicateDotThreshold
+      ROVER_APPROACH_CONTACT_GOAL_PARAMS.directionDuplicateDotThreshold,
   );
   if (!duplicate) {
     directions.push(candidate);
@@ -98,14 +162,14 @@ const resolveCandidateDirectionsWorld = ({
       directions,
       candidate: normalizePlanarDirection(
         targetWorld.clone().sub(object.position),
-        upAxisWorld
+        upAxisWorld,
       ),
     });
     pushUniqueDirection({
       directions,
       candidate: normalizePlanarDirection(
         targetWorld.clone().sub(basePositionWorld),
-        upAxisWorld
+        upAxisWorld,
       ),
     });
     return directions;
@@ -114,7 +178,7 @@ const resolveCandidateDirectionsWorld = ({
     directions,
     candidate: normalizePlanarDirection(
       basePositionWorld.clone().sub(targetWorld),
-      upAxisWorld
+      upAxisWorld,
     ),
   });
   const rotation = object.rotation ?? new THREE.Euler(0, 0, 0, "XYZ");
@@ -130,7 +194,7 @@ const resolveCandidateDirectionsWorld = ({
       directions,
       candidate: normalizePlanarDirection(
         axisLocal.clone().applyQuaternion(rotationQuaternion),
-        upAxisWorld
+        upAxisWorld,
       ),
     });
   });
@@ -140,12 +204,14 @@ const resolveCandidateDirectionsWorld = ({
     sampleIndex += 1
   ) {
     const theta =
-      (sampleIndex / ROVER_APPROACH_CONTACT_GOAL_PARAMS.sampledDirectionCount) * Math.PI * 2;
+      (sampleIndex / ROVER_APPROACH_CONTACT_GOAL_PARAMS.sampledDirectionCount) *
+      Math.PI *
+      2;
     pushUniqueDirection({
       directions,
       candidate: normalizePlanarDirection(
         new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0),
-        upAxisWorld
+        upAxisWorld,
       ),
     });
   }
@@ -155,16 +221,15 @@ const resolveCandidateDirectionsWorld = ({
 const resolvePlanarDistanceSq = (
   first: THREE.Vector3,
   second: THREE.Vector3,
-  upAxisWorld: THREE.Vector3
-) =>
-  projectVectorOntoPlane(first.clone().sub(second), upAxisWorld).lengthSq();
+  upAxisWorld: THREE.Vector3,
+) => projectVectorOntoPlane(first.clone().sub(second), upAxisWorld).lengthSq();
 
 const shouldUseCompactTargetSurfaceCorridor = ({
   object,
   objectGeometry,
 }: {
   object: WorldObjectObstacleSource;
-  objectGeometry: ReturnType<typeof resolveWorldObjectGeometry>;
+  objectGeometry: WorldObjectGeometry;
 }): boolean => {
   if (object.type === "point") {
     return true;
@@ -175,7 +240,10 @@ const shouldUseCompactTargetSurfaceCorridor = ({
   ].sort((left, right) => left - right);
   const planarMinExtent = planarExtents[0] ?? 0;
   const planarMaxExtent = planarExtents[1] ?? 0;
-  if (planarMinExtent <= ROVER_APPROACH_CONTACT_GOAL_PARAMS.directionLengthEpsilonSq) {
+  if (
+    planarMinExtent <=
+    ROVER_APPROACH_CONTACT_GOAL_PARAMS.directionLengthEpsilonSq
+  ) {
     return false;
   }
   return (
@@ -194,7 +262,7 @@ const resolveContactCorridorTargetWorld = ({
   targetKind,
 }: {
   object: WorldObjectObstacleSource;
-  objectGeometry: ReturnType<typeof resolveWorldObjectGeometry>;
+  objectGeometry: WorldObjectGeometry;
   targetWorld: THREE.Vector3;
   directionWorld: THREE.Vector3;
   targetKind: RoverApproachContactTargetKind;
@@ -218,7 +286,9 @@ const resolveContactCorridorTargetWorld = ({
     },
     targetDirectionPlanarWorld: directionWorld,
   });
-  return targetWorld.clone().addScaledVector(directionWorld, approachDistance.supportRadiusM);
+  return targetWorld
+    .clone()
+    .addScaledVector(directionWorld, approachDistance.supportRadiusM);
 };
 
 const resolveContactGoalOffsetM = ({
@@ -230,16 +300,7 @@ const resolveContactGoalOffsetM = ({
   roverBaseRadiusM,
   robotFootprint,
   upAxisWorld,
-}: {
-  object: WorldObjectObstacleSource;
-  objectGeometry: ReturnType<typeof resolveWorldObjectGeometry>;
-  targetWorld: THREE.Vector3;
-  directionWorld: THREE.Vector3;
-  targetKind: RoverApproachContactTargetKind;
-  roverBaseRadiusM: number;
-  robotFootprint?: RoverApproachRobotFootprint;
-  upAxisWorld: THREE.Vector3;
-}) => {
+}: ContactGoalOffsetParams) => {
   const robotSupportRadiusM = Math.max(
     roverBaseRadiusM,
     resolveRoverApproachFootprintSupportRadiusM({
@@ -247,10 +308,12 @@ const resolveContactGoalOffsetM = ({
       forwardWorld: directionWorld,
       upAxisWorld,
       targetDirectionWorld: directionWorld,
-    })
+    }),
   );
   if (targetKind === "surface-point") {
-    return robotSupportRadiusM + ROVER_APPROACH_CONFIG.objectContactSurfaceStandoffM;
+    return (
+      robotSupportRadiusM + ROVER_APPROACH_CONFIG.objectContactSurfaceStandoffM
+    );
   }
   const approachDistance = resolveRoverPlanarObjectApproachDistance({
     object: {
@@ -266,6 +329,30 @@ const resolveContactGoalOffsetM = ({
     ROVER_APPROACH_CONFIG.objectContactSurfaceStandoffM
   );
 };
+
+const resolveContactGoalWorld = ({
+  object,
+  objectGeometry,
+  targetWorld,
+  directionWorld,
+  targetKind,
+  roverBaseRadiusM,
+  robotFootprint,
+  upAxisWorld,
+}: ContactGoalOffsetParams) =>
+  targetWorld.clone().addScaledVector(
+    directionWorld,
+    resolveContactGoalOffsetM({
+      object,
+      objectGeometry,
+      targetWorld,
+      directionWorld,
+      targetKind,
+      roverBaseRadiusM,
+      robotFootprint,
+      upAxisWorld,
+    }),
+  );
 
 const isRouteClearWithTargetObstaclePresent = ({
   basePositionWorld,
@@ -306,14 +393,7 @@ const resolveContactOriginObstacleId = ({
   roverBaseRadiusM,
   robotFootprint,
   upAxisWorld,
-}: {
-  object: WorldObjectObstacleSource;
-  worldObjects: WorldObjectObstacleSource[];
-  basePositionWorld: THREE.Vector3;
-  roverBaseRadiusM: number;
-  robotFootprint?: RoverApproachRobotFootprint;
-  upAxisWorld: THREE.Vector3;
-}): string | null => {
+}: ContactOriginResolutionParams): string | null => {
   let bestMatch: { id: string; deltaM: number } | null = null;
   worldObjects.forEach((candidateObject) => {
     if (candidateObject.id === object.id || candidateObject.isHidden === true) {
@@ -322,7 +402,7 @@ const resolveContactOriginObstacleId = ({
     const candidateGeometry = resolveWorldObjectGeometry(candidateObject);
     const candidateDirectionWorld = normalizePlanarDirection(
       basePositionWorld.clone().sub(candidateObject.position),
-      upAxisWorld
+      upAxisWorld,
     );
     if (!candidateDirectionWorld) {
       return;
@@ -338,10 +418,17 @@ const resolveContactOriginObstacleId = ({
       upAxisWorld,
     });
     const actualContactDistanceM = Math.sqrt(
-      resolvePlanarDistanceSq(basePositionWorld, candidateObject.position, upAxisWorld)
+      resolvePlanarDistanceSq(
+        basePositionWorld,
+        candidateObject.position,
+        upAxisWorld,
+      ),
     );
     const deltaM = Math.abs(actualContactDistanceM - expectedContactDistanceM);
-    if (deltaM > ROVER_APPROACH_CONTACT_GOAL_PARAMS.contactSourceDetectionToleranceM) {
+    if (
+      deltaM >
+      ROVER_APPROACH_CONTACT_GOAL_PARAMS.contactSourceDetectionToleranceM
+    ) {
       return;
     }
     if (bestMatch === null || deltaM < bestMatch.deltaM) {
@@ -361,14 +448,7 @@ const resolveContactGoalExcludedObstacleIds = ({
   roverBaseRadiusM,
   robotFootprint,
   upAxisWorld,
-}: {
-  object: WorldObjectObstacleSource;
-  worldObjects: WorldObjectObstacleSource[];
-  basePositionWorld: THREE.Vector3;
-  roverBaseRadiusM: number;
-  robotFootprint?: RoverApproachRobotFootprint;
-  upAxisWorld: THREE.Vector3;
-}): string[] => {
+}: ContactOriginResolutionParams): string[] => {
   const contactOriginObstacleId = resolveContactOriginObstacleId({
     object,
     worldObjects,
@@ -377,7 +457,33 @@ const resolveContactGoalExcludedObstacleIds = ({
     robotFootprint,
     upAxisWorld,
   });
-  return [object.id, contactOriginObstacleId].filter((id): id is string => Boolean(id));
+  return [object.id, contactOriginObstacleId].filter((id): id is string =>
+    Boolean(id),
+  );
+};
+
+const resolveNearestOtherPlanarDistanceSq = ({
+  goalWorld,
+  object,
+  worldObjects,
+  upAxisWorld,
+}: {
+  goalWorld: THREE.Vector3;
+  object: WorldObjectObstacleSource;
+  worldObjects: WorldObjectObstacleSource[];
+  upAxisWorld: THREE.Vector3;
+}) => {
+  let nearestOtherDistanceSq = Number.POSITIVE_INFINITY;
+  worldObjects.forEach((otherObject) => {
+    if (otherObject.id === object.id || otherObject.isHidden === true) {
+      return;
+    }
+    nearestOtherDistanceSq = Math.min(
+      nearestOtherDistanceSq,
+      resolvePlanarDistanceSq(goalWorld, otherObject.position, upAxisWorld),
+    );
+  });
+  return nearestOtherDistanceSq;
 };
 
 const isCandidateBetter = ({
@@ -397,10 +503,12 @@ const isCandidateBetter = ({
   }
   if (
     Math.abs(
-      candidate.route.waypointWorlds.length - best.route.waypointWorlds.length
+      candidate.route.waypointWorlds.length - best.route.waypointWorlds.length,
     ) > ROVER_APPROACH_CONTACT_GOAL_PARAMS.routeWaypointCountTieBias
   ) {
-    return candidate.route.waypointWorlds.length < best.route.waypointWorlds.length;
+    return (
+      candidate.route.waypointWorlds.length < best.route.waypointWorlds.length
+    );
   }
   if (candidate.directionIndex !== best.directionIndex) {
     return candidate.directionIndex < best.directionIndex;
@@ -426,7 +534,7 @@ const isCandidateBetter = ({
   return false;
 };
 
-export const resolveRoverApproachObjectContactGoal = ({
+const resolveContactGoalRequest = ({
   object,
   worldObjects,
   basePositionWorld,
@@ -436,298 +544,254 @@ export const resolveRoverApproachObjectContactGoal = ({
   roverBaseRadiusM,
   robotFootprint,
   targetKind = "object-center",
-}: {
-  object: WorldObjectObstacleSource;
-  worldObjects: WorldObjectObstacleSource[];
-  basePositionWorld: THREE.Vector3;
-  targetWorld: THREE.Vector3;
-  upAxisWorld: THREE.Vector3;
-  navigationContext: RoverApproachWorldNavigationContext;
-  roverBaseRadiusM: number;
-  robotFootprint?: RoverApproachRobotFootprint;
-  targetKind?: RoverApproachContactTargetKind;
-}): RoverApproachObjectContactGoalCandidate | null => {
+}: ContactGoalRequest): ResolvedContactGoalRequest => {
   const objectGeometry = resolveWorldObjectGeometry(object);
-  const candidateDirections = resolveCandidateDirectionsWorld({
-    object,
-    basePositionWorld,
-    targetWorld,
-    upAxisWorld,
-    targetKind,
-  });
-  const preferredDirectionCount = resolvePreferredDirectionCount(targetKind);
-  let bestCandidate: RoverApproachObjectContactGoalCandidate | null = null;
-  let bestPreferredCandidate: RoverApproachObjectContactGoalCandidate | null = null;
-  const excludedObstacleIds = resolveContactGoalExcludedObstacleIds({
+  return {
     object,
     worldObjects,
     basePositionWorld,
+    targetWorld,
+    upAxisWorld,
+    navigationContext,
     roverBaseRadiusM,
     robotFootprint,
-    upAxisWorld,
-  });
-
-  candidateDirections.forEach((directionWorld, directionIndex) => {
-    const goalWorld = targetWorld
-      .clone()
-      .addScaledVector(
-        directionWorld,
-        resolveContactGoalOffsetM({
-          object,
-          objectGeometry,
-          targetWorld,
-          directionWorld,
-          targetKind,
-          roverBaseRadiusM,
-          robotFootprint,
-          upAxisWorld,
-        })
-      );
-    const route = resolveRoverApproachWorldRoute({
-      segmentStartWorld: basePositionWorld,
-      segmentEndWorld: goalWorld,
-      upAxisWorld,
-      navigationContext,
-      excludedObstacleId: object.id,
-      excludedObstacleIds,
+    targetKind,
+    objectGeometry,
+    preferredDirectionCount: resolvePreferredDirectionCount(targetKind),
+    excludedObstacleIds: resolveContactGoalExcludedObstacleIds({
+      object,
+      worldObjects,
+      basePositionWorld,
       roverBaseRadiusM,
       robotFootprint,
-      isObjectContactTarget: true,
-    });
-    if (route.mode === "blocked") {
-      return;
-    }
-    if (
-      !isRouteClearWithTargetObstaclePresent({
-        basePositionWorld,
-        goalWorld,
-        route,
-        navigationContext,
-        excludedObstacleIds,
-        robotFootprint,
-      })
-    ) {
-      return;
-    }
-    const contactCorridorTargetWorld = resolveContactCorridorTargetWorld({
-      object,
-      objectGeometry,
-      targetWorld,
-      directionWorld,
-      targetKind,
-    });
-    const finalCorridorAssessment = assessRoverApproachWorldSegmentClearance({
-      segmentStartWorld: goalWorld,
-      segmentEndWorld: contactCorridorTargetWorld,
+      upAxisWorld,
+    }),
+  };
+};
+
+const resolveContactCandidateFromRoute = ({
+  request,
+  directionWorld,
+  directionIndex,
+  goalWorld,
+  route,
+}: ContactRouteCandidateParams): RoverApproachObjectContactGoalCandidate | null => {
+  const {
+    object,
+    objectGeometry,
+    worldObjects,
+    basePositionWorld,
+    targetWorld,
+    upAxisWorld,
+    navigationContext,
+    robotFootprint,
+    targetKind,
+    excludedObstacleIds,
+  } = request;
+  if (route.mode === "blocked") {
+    return null;
+  }
+  if (
+    !isRouteClearWithTargetObstaclePresent({
+      basePositionWorld,
+      goalWorld,
+      route,
       navigationContext,
-      excludedObstacleId: object.id,
       excludedObstacleIds,
       robotFootprint,
-      pathClearanceM: CONTACT_GOAL_ROUTE_PATH_CLEARANCE_M,
-    });
-    if (!finalCorridorAssessment.isClear) {
-      return;
-    }
-    const targetDistanceSq = resolvePlanarDistanceSq(goalWorld, targetWorld, upAxisWorld);
-    let nearestOtherDistanceSq = Number.POSITIVE_INFINITY;
-    worldObjects.forEach((otherObject) => {
-      if (otherObject.id === object.id || otherObject.isHidden === true) {
-        return;
-      }
-      nearestOtherDistanceSq = Math.min(
-        nearestOtherDistanceSq,
-        resolvePlanarDistanceSq(goalWorld, otherObject.position, upAxisWorld)
-      );
-    });
-    const candidate: RoverApproachObjectContactGoalCandidate = {
-      directionIndex,
-      directionWorld: directionWorld.clone(),
-      goalWorld,
-      targetWorld: targetWorld.clone(),
-      route,
-      targetDistanceSq,
-      nearestOtherDistanceSq,
-      targetMarginSq: nearestOtherDistanceSq - targetDistanceSq,
-    };
-    if (
-      isCandidateBetter({
-        candidate,
-        best: bestCandidate,
-        basePositionWorld,
-      })
-    ) {
-      bestCandidate = candidate;
-    }
-    if (
-      directionIndex < preferredDirectionCount &&
-      isCandidateBetter({
-        candidate,
-        best: bestPreferredCandidate,
-        basePositionWorld,
-      })
-    ) {
-      bestPreferredCandidate = candidate;
-    }
+    })
+  ) {
+    return null;
+  }
+  const contactCorridorTargetWorld = resolveContactCorridorTargetWorld({
+    object,
+    objectGeometry,
+    targetWorld,
+    directionWorld,
+    targetKind,
   });
+  const finalCorridorAssessment = assessRoverApproachWorldSegmentClearance({
+    segmentStartWorld: goalWorld,
+    segmentEndWorld: contactCorridorTargetWorld,
+    navigationContext,
+    excludedObstacleId: object.id,
+    excludedObstacleIds,
+    robotFootprint,
+    pathClearanceM: CONTACT_GOAL_ROUTE_PATH_CLEARANCE_M,
+  });
+  if (!finalCorridorAssessment.isClear) {
+    return null;
+  }
+  const targetDistanceSq = resolvePlanarDistanceSq(
+    goalWorld,
+    targetWorld,
+    upAxisWorld,
+  );
+  const nearestOtherDistanceSq = resolveNearestOtherPlanarDistanceSq({
+    goalWorld,
+    object,
+    worldObjects,
+    upAxisWorld,
+  });
+  return {
+    directionIndex,
+    directionWorld: directionWorld.clone(),
+    goalWorld,
+    targetWorld: targetWorld.clone(),
+    route,
+    targetDistanceSq,
+    nearestOtherDistanceSq,
+    targetMarginSq: nearestOtherDistanceSq - targetDistanceSq,
+  };
+};
 
-  return bestPreferredCandidate ?? bestCandidate;
+const applyContactCandidateSelection = ({
+  candidate,
+  selection,
+  preferredDirectionCount,
+  basePositionWorld,
+}: {
+  candidate: RoverApproachObjectContactGoalCandidate;
+  selection: ContactGoalCandidateSelection;
+  preferredDirectionCount: number;
+  basePositionWorld: THREE.Vector3;
+}): ContactGoalCandidateSelection => ({
+  bestCandidate: isCandidateBetter({
+    candidate,
+    best: selection.bestCandidate,
+    basePositionWorld,
+  })
+    ? candidate
+    : selection.bestCandidate,
+  bestPreferredCandidate:
+    candidate.directionIndex < preferredDirectionCount &&
+    isCandidateBetter({
+      candidate,
+      best: selection.bestPreferredCandidate,
+      basePositionWorld,
+    })
+      ? candidate
+      : selection.bestPreferredCandidate,
+});
+
+const selectedContactGoalCandidate = ({
+  bestPreferredCandidate,
+  bestCandidate,
+}: ContactGoalCandidateSelection) => bestPreferredCandidate ?? bestCandidate;
+
+const applyResolvedRouteCandidateSelection = ({
+  selection,
+  ...candidateParams
+}: ContactRouteCandidateParams & {
+  selection: ContactGoalCandidateSelection;
+}): ContactGoalCandidateSelection => {
+  const candidate = resolveContactCandidateFromRoute(candidateParams);
+  if (!candidate) return selection;
+  return applyContactCandidateSelection({
+    candidate,
+    selection,
+    preferredDirectionCount: candidateParams.request.preferredDirectionCount,
+    basePositionWorld: candidateParams.request.basePositionWorld,
+  });
+};
+
+export const resolveRoverApproachObjectContactGoal = (
+  params: ContactGoalRequest,
+): RoverApproachObjectContactGoalCandidate | null => {
+  const request = resolveContactGoalRequest(params);
+  const candidateDirections = resolveCandidateDirectionsWorld(request);
+  let selection: ContactGoalCandidateSelection = {
+    bestCandidate: null,
+    bestPreferredCandidate: null,
+  };
+
+  for (const [
+    directionIndex,
+    directionWorld,
+  ] of candidateDirections.entries()) {
+    const goalWorld = resolveContactGoalWorld({
+      ...request,
+      directionWorld,
+    });
+    const route = resolveRoverApproachWorldRoute({
+      segmentStartWorld: request.basePositionWorld,
+      segmentEndWorld: goalWorld,
+      upAxisWorld: request.upAxisWorld,
+      navigationContext: request.navigationContext,
+      excludedObstacleId: request.object.id,
+      excludedObstacleIds: request.excludedObstacleIds,
+      roverBaseRadiusM: request.roverBaseRadiusM,
+      robotFootprint: request.robotFootprint,
+      isObjectContactTarget: true,
+    });
+    selection = applyResolvedRouteCandidateSelection({
+      selection,
+      request,
+      directionWorld,
+      directionIndex,
+      goalWorld,
+      route,
+    });
+  }
+
+  return selectedContactGoalCandidate(selection);
 };
 
 export const resolveRoverApproachObjectContactGoalAsync = async ({
-  object,
-  worldObjects,
-  basePositionWorld,
-  targetWorld,
-  upAxisWorld,
-  navigationContext,
-  roverBaseRadiusM,
-  robotFootprint,
-  targetKind = "object-center",
   signal,
-}: {
-  object: WorldObjectObstacleSource;
-  worldObjects: WorldObjectObstacleSource[];
-  basePositionWorld: THREE.Vector3;
-  targetWorld: THREE.Vector3;
-  upAxisWorld: THREE.Vector3;
-  navigationContext: RoverApproachWorldNavigationContext;
-  roverBaseRadiusM: number;
-  robotFootprint?: RoverApproachRobotFootprint;
-  targetKind?: RoverApproachContactTargetKind;
+  ...params
+}: ContactGoalRequest & {
   signal?: AbortSignal;
 }): Promise<RoverApproachObjectContactGoalCandidate | null> => {
-  const objectGeometry = resolveWorldObjectGeometry(object);
-  const candidateDirections = resolveCandidateDirectionsWorld({
-    object,
-    basePositionWorld,
-    targetWorld,
-    upAxisWorld,
-    targetKind,
-  });
-  const serializedWorldObjects = worldObjects.map(serializeWorldObjectObstacleSource);
-  const preferredDirectionCount = resolvePreferredDirectionCount(targetKind);
-  let bestCandidate: RoverApproachObjectContactGoalCandidate | null = null;
-  let bestPreferredCandidate: RoverApproachObjectContactGoalCandidate | null = null;
-  const excludedObstacleIds = resolveContactGoalExcludedObstacleIds({
-    object,
-    worldObjects,
-    basePositionWorld,
-    roverBaseRadiusM,
-    robotFootprint,
-    upAxisWorld,
-  });
+  const request = resolveContactGoalRequest(params);
+  const candidateDirections = resolveCandidateDirectionsWorld(request);
+  const serializedWorldObjects = request.worldObjects.map(
+    serializeWorldObjectObstacleSource,
+  );
+  let selection: ContactGoalCandidateSelection = {
+    bestCandidate: null,
+    bestPreferredCandidate: null,
+  };
 
-  for (const [directionIndex, directionWorld] of candidateDirections.entries()) {
+  for (const [
+    directionIndex,
+    directionWorld,
+  ] of candidateDirections.entries()) {
     if (signal?.aborted) {
       return null;
     }
-    const goalWorld = targetWorld
-      .clone()
-      .addScaledVector(
-        directionWorld,
-        resolveContactGoalOffsetM({
-          object,
-          objectGeometry,
-          targetWorld,
-          directionWorld,
-          targetKind,
-          roverBaseRadiusM,
-          robotFootprint,
-          upAxisWorld,
-        })
-      );
+    const goalWorld = resolveContactGoalWorld({
+      ...request,
+      directionWorld,
+    });
     const route = await resolveRoverApproachWorldRouteAsync(
       {
         objects: serializedWorldObjects,
-        upAxisWorld: toRoverApproachWorldVector3Tuple(upAxisWorld),
-        segmentStartWorld: toRoverApproachWorldVector3Tuple(basePositionWorld),
+        upAxisWorld: toRoverApproachWorldVector3Tuple(request.upAxisWorld),
+        segmentStartWorld: toRoverApproachWorldVector3Tuple(
+          request.basePositionWorld,
+        ),
         segmentEndWorld: toRoverApproachWorldVector3Tuple(goalWorld),
-        excludedObstacleId: object.id,
-        excludedObstacleIds,
-        roverBaseRadiusM,
-        robotFootprint,
+        excludedObstacleId: request.object.id,
+        excludedObstacleIds: request.excludedObstacleIds,
+        roverBaseRadiusM: request.roverBaseRadiusM,
+        robotFootprint: request.robotFootprint,
         isObjectContactTarget: true,
       },
-      signal
+      signal,
     );
     if (route === null) {
       return null;
     }
-    if (route.mode === "blocked") {
-      continue;
-    }
-    if (
-      !isRouteClearWithTargetObstaclePresent({
-        basePositionWorld,
-        goalWorld,
-        route,
-        navigationContext,
-        excludedObstacleIds,
-        robotFootprint,
-      })
-    ) {
-      continue;
-    }
-    const contactCorridorTargetWorld = resolveContactCorridorTargetWorld({
-      object,
-      objectGeometry,
-      targetWorld,
+    selection = applyResolvedRouteCandidateSelection({
+      selection,
+      request,
       directionWorld,
-      targetKind,
-    });
-    const finalCorridorAssessment = assessRoverApproachWorldSegmentClearance({
-      segmentStartWorld: goalWorld,
-      segmentEndWorld: contactCorridorTargetWorld,
-      navigationContext,
-      excludedObstacleId: object.id,
-      excludedObstacleIds,
-      robotFootprint,
-      pathClearanceM: CONTACT_GOAL_ROUTE_PATH_CLEARANCE_M,
-    });
-    if (!finalCorridorAssessment.isClear) {
-      continue;
-    }
-    const targetDistanceSq = resolvePlanarDistanceSq(goalWorld, targetWorld, upAxisWorld);
-    let nearestOtherDistanceSq = Number.POSITIVE_INFINITY;
-    worldObjects.forEach((otherObject) => {
-      if (otherObject.id === object.id || otherObject.isHidden === true) {
-        return;
-      }
-      nearestOtherDistanceSq = Math.min(
-        nearestOtherDistanceSq,
-        resolvePlanarDistanceSq(goalWorld, otherObject.position, upAxisWorld)
-      );
-    });
-    const candidate: RoverApproachObjectContactGoalCandidate = {
       directionIndex,
-      directionWorld: directionWorld.clone(),
       goalWorld,
-      targetWorld: targetWorld.clone(),
       route,
-      targetDistanceSq,
-      nearestOtherDistanceSq,
-      targetMarginSq: nearestOtherDistanceSq - targetDistanceSq,
-    };
-    if (
-      isCandidateBetter({
-        candidate,
-        best: bestCandidate,
-        basePositionWorld,
-      })
-    ) {
-      bestCandidate = candidate;
-    }
-    if (
-      directionIndex < preferredDirectionCount &&
-      isCandidateBetter({
-        candidate,
-        best: bestPreferredCandidate,
-        basePositionWorld,
-      })
-    ) {
-      bestPreferredCandidate = candidate;
-    }
+    });
   }
 
-  return bestPreferredCandidate ?? bestCandidate;
+  return selectedContactGoalCandidate(selection);
 };

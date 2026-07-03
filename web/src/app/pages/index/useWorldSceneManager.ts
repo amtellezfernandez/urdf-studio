@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toast } from "sonner";
 import { requireFeatureGate } from "@/shared/lib/backendGuard";
-import { isOpenArmRobotAsset } from "@/shared/lib/robotAssetIdentity";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { DEMO_AUTOLOAD, DEMO_MODE } from "@/shared/config/demo";
 import { DEFAULT_WORLD_LAYOUT_URL } from "@/shared/config/scenes";
@@ -30,7 +29,7 @@ import type { CreatedObject } from "@/features/objects";
 import {
   APPLY_WORLD_LAYOUT_RESULT_MESSAGE_TYPE,
   isApplyWorldLayoutMessage,
-} from "@/shared/contracts/previewBridge";
+} from "@/shared/contracts/worldLayoutBridge";
 import {
   DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
   WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
@@ -61,6 +60,7 @@ import {
 import {
   downloadJsonDocument,
   downloadTextDocument,
+  openFileSelectionDialog,
   readWorldRolloutConfigDraft,
   toImportedObjectParams,
   waitForWorldRolloutJob,
@@ -84,6 +84,7 @@ type UseWorldSceneManagerParams = {
   originalUrdfContent: string;
   resolvedRobotName: string | null;
   skipDefaultWorldLayoutAutoImportRef: MutableRefObject<boolean>;
+  suppressDefaultWorldLayoutAutoImport?: boolean;
   setJointValues: (values: Record<string, number>) => void;
   updateUrdfFile: (content: string, filename?: string) => void;
   vizUrdfContent: string;
@@ -107,6 +108,7 @@ export const useWorldSceneManager = ({
   originalUrdfContent,
   resolvedRobotName,
   skipDefaultWorldLayoutAutoImportRef,
+  suppressDefaultWorldLayoutAutoImport = false,
   setJointValues,
   updateUrdfFile,
   vizUrdfContent,
@@ -267,28 +269,27 @@ export const useWorldSceneManager = ({
   }, [buildWorldRolloutInputs]);
 
   const handleImportWorldRolloutResults = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = WORLD_ROLLOUT_IMPORT_ACCEPT;
-    input.onchange = async () => {
-      const files = Array.from(input.files ?? []);
-      if (files.length === 0) return;
-      try {
-        const payload = resolveWorldRolloutImportPayload(
-          await Promise.all(files.map(async (file) => ({ name: file.name, text: await file.text() })))
-        );
-        const imported = await importWorldRolloutResultPayload(payload);
-        setWorldRolloutReview(imported);
-        setWorldRolloutReviewOpen(true);
-        toast.success(
-          `World rollout imported: ${imported.decision_count} decisions, ${imported.stop_count} stops, ${imported.escalation_count} escalations`
-        );
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to import rollout results");
-      }
-    };
-    input.click();
+    openFileSelectionDialog({
+      accept: WORLD_ROLLOUT_IMPORT_ACCEPT,
+      multiple: true,
+      onFiles: async (files) => {
+        try {
+          const payload = resolveWorldRolloutImportPayload(
+            await Promise.all(
+              files.map(async (file) => ({ name: file.name, text: await file.text() }))
+            )
+          );
+          const imported = await importWorldRolloutResultPayload(payload);
+          setWorldRolloutReview(imported);
+          setWorldRolloutReviewOpen(true);
+          toast.success(
+            `World rollout imported: ${imported.decision_count} decisions, ${imported.stop_count} stops, ${imported.escalation_count} escalations`
+          );
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to import rollout results");
+        }
+      },
+    });
   }, []);
 
   const handleExportCurrentWorldSceneLayer = useCallback(async () => {
@@ -444,46 +445,42 @@ export const useWorldSceneManager = ({
   );
 
   const handleImportWorldScenePackage = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = WORLD_SCENE_PACKAGE_IMPORT_ACCEPT;
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        const raw = await file.text();
-        const manifest = await parseWorldSceneManifestText(raw);
-        applyImportedWorldScenePackage(manifest);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to import world package");
-      }
-    };
-    input.click();
+    openFileSelectionDialog({
+      accept: WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
+      onFiles: async ([file]) => {
+        if (!file) return;
+        try {
+          const raw = await file.text();
+          const manifest = await parseWorldSceneManifestText(raw);
+          applyImportedWorldScenePackage(manifest);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to import world package");
+        }
+      },
+    });
   }, [applyImportedWorldScenePackage]);
 
   const handleImportWorkspaceChangeSet = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = WORLD_SCENE_PACKAGE_IMPORT_ACCEPT;
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        const currentWorldPackage = await buildCurrentWorldScenePackageManifest();
-        const changeSet = JSON.parse(await file.text()) as unknown;
-        const applied = await applyWorkspaceChangeSet(currentWorldPackage, changeSet);
-        applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
-        setActiveWorldSnapshotRef(null);
-        const reviewOnly =
-          applied.reviewOnlyCount > 0 ? `, ${applied.reviewOnlyCount} review-only` : "";
-        toast.success(
-          `Imported workspace changes: ${applied.appliedChangeCount} object changes${reviewOnly}`
-        );
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to import workspace changes");
-      }
-    };
-    input.click();
+    openFileSelectionDialog({
+      accept: WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
+      onFiles: async ([file]) => {
+        if (!file) return;
+        try {
+          const currentWorldPackage = await buildCurrentWorldScenePackageManifest();
+          const changeSet = JSON.parse(await file.text()) as unknown;
+          const applied = await applyWorkspaceChangeSet(currentWorldPackage, changeSet);
+          applyWorldSceneObjects(applied.world_package.world_snapshot.objects);
+          setActiveWorldSnapshotRef(null);
+          const reviewOnly =
+            applied.reviewOnlyCount > 0 ? `, ${applied.reviewOnlyCount} review-only` : "";
+          toast.success(
+            `Imported workspace changes: ${applied.appliedChangeCount} object changes${reviewOnly}`
+          );
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to import workspace changes");
+        }
+      },
+    });
   }, [applyWorldSceneObjects, buildCurrentWorldScenePackageManifest, setActiveWorldSnapshotRef]);
 
   const refreshWorldRegistry = useCallback(async () => {
@@ -664,7 +661,7 @@ export const useWorldSceneManager = ({
       demoAutoload: DEMO_AUTOLOAD,
       hasExplicitWorldImport,
       hasExplicitWorldLayoutImport,
-      suppressAutoImport: isOpenArmRobotAsset(resolvedRobotName),
+      suppressAutoImport: suppressDefaultWorldLayoutAutoImport,
     });
     if (!shouldAutoLoad) return;
     defaultWorldLayoutAppliedRef.current = true;
@@ -688,6 +685,7 @@ export const useWorldSceneManager = ({
     importWorldLayoutFromUrl,
     resolvedRobotName,
     skipDefaultWorldLayoutAutoImportRef,
+    suppressDefaultWorldLayoutAutoImport,
   ]);
 
   useEffect(() => {

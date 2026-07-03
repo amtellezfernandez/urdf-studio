@@ -32,6 +32,9 @@ from backend.services.simulator_adapters.genesis_robot import (
 )
 from backend.services.simulator_adapters.genesis_scene import add_mesh_entity_if_available
 from backend.services.simulator_adapters import workspace_package
+from backend.services.simulator_adapters.urdf_material_policy import (
+    materialize_urdf_visual_material_colors,
+)
 from backend.services.world_layout_static_transfer import SimPrimitive
 from backend.scripts import genesis_workspace_prepare
 from backend.scripts.genesis_workspace_prepare import (
@@ -638,7 +641,7 @@ def test_genesis_renders_prepared_lekiwi_visual_material_colors(tmp_path: Path) 
     mesh_dir = tmp_path / "meshes"
     robot_urdf_path.write_text((demo_dir / "lekiwi.urdf").read_text(encoding="utf-8"), encoding="utf-8")
     shutil.copytree(demo_dir / "meshes", mesh_dir)
-    workspace_package._prepare_urdf_visual_material_colors(robot_urdf_path)
+    materialize_urdf_visual_material_colors(robot_urdf_path)
 
     try:
         gs.init(backend=gs.cpu, logging_level="warning")

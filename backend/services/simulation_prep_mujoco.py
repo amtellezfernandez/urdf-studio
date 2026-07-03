@@ -465,7 +465,7 @@ def run_simulation_prep_validation(
         import mujoco  # noqa: F401
         mujoco_available = True
     except ImportError:
-        warnings.append("MuJoCo is not installed. Install with: uv pip install --python .venv-lerobot/bin/python3 mujoco")
+        warnings.append("MuJoCo is not installed. Install with: uv pip install --python .venv/bin/python3 mujoco")
 
     try:
         rewritten_urdf = _rewrite_mesh_paths_to_basenames(urdf_content)

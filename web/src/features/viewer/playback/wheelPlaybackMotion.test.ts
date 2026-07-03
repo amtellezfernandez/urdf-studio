@@ -12,7 +12,7 @@ const LARGE_TRAVEL_INPUT = 10;
 const CLAMP_TEST_DT_SECONDS = 0.1;
 
 describe("resolveWheelPlaybackBodyMotion", () => {
-  it("disables heuristic chassis replay when episodes do not record base pose", () => {
+  it("disables heuristic chassis motion when frames do not include base pose", () => {
     expect(
       WHEEL_PLAYBACK_MOTION_PARAMS.allowBaseMotionSynthesisWithoutBasePose
     ).toBe(false);

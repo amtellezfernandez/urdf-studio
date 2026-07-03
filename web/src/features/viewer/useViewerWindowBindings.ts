@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
-import type { EpisodePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
+import type { FramePlaybackOptions } from "@/shared/store/useViewerPlaybackStore";
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
 
 type UseViewerWindowBindingsParams = {
   handleRun: (forceState?: boolean) => void;
-  handlePlayEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
+  handlePlayFrames: (frames: AnimationFrame[], options?: FramePlaybackOptions) => void;
   handleStopAnimation: () => void;
   handleClearAnimation: () => void;
   handleSetFrame: (frameIndex: number) => void;
@@ -13,7 +13,7 @@ type UseViewerWindowBindingsParams = {
 
 export const useViewerWindowBindings = ({
   handleRun,
-  handlePlayEpisode,
+  handlePlayFrames,
   handleStopAnimation,
   handleClearAnimation,
   handleSetFrame,
@@ -24,7 +24,7 @@ export const useViewerWindowBindings = ({
   useEffect(() => {
     registerHandlers({
       playAnimation: handleRun,
-      playEpisode: handlePlayEpisode,
+      playFrames: handlePlayFrames,
       stopAnimation: handleStopAnimation,
       clearAnimation: handleClearAnimation,
       setFrame: handleSetFrame,
@@ -33,7 +33,7 @@ export const useViewerWindowBindings = ({
   }, [
     clearHandlers,
     handleRun,
-    handlePlayEpisode,
+    handlePlayFrames,
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,

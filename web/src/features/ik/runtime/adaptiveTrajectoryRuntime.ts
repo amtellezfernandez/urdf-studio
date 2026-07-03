@@ -14,14 +14,14 @@ export type TrajectoryJointSpec = {
 export type AdaptiveTrajectoryProfile = {
   speedScale: number;
   accelerationScale: number;
-  episodes: number;
+  completedRuns: number;
   updatedAtMs: number;
 };
 
 const DEFAULT_ADAPTIVE_TRAJECTORY_PROFILE: Readonly<AdaptiveTrajectoryProfile> = {
   speedScale: 1,
   accelerationScale: 1,
-  episodes: 0,
+  completedRuns: 0,
   updatedAtMs: 0,
 };
 
@@ -73,7 +73,7 @@ const sanitizeProfile = (
       0.8,
       1.8
     ),
-    episodes: Math.max(0, Math.trunc(profile.episodes ?? 0)),
+    completedRuns: Math.max(0, Math.trunc(profile.completedRuns ?? 0)),
     updatedAtMs: Number.isFinite(profile.updatedAtMs) ? profile.updatedAtMs : 0,
   };
 };
@@ -335,7 +335,7 @@ export class AdaptiveTrajectoryRuntime {
       );
     }
 
-    this.profile.episodes += 1;
+    this.profile.completedRuns += 1;
     this.profile.updatedAtMs = Date.now();
     this.config.repository?.save(this.config.contextKey, this.profile);
     return this.getProfile();

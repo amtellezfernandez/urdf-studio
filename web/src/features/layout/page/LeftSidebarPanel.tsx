@@ -6,6 +6,10 @@ import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import type { AssemblyInspectorData } from "@/features/assembly/inspector/buildAssemblyInspectorData";
 import type {
+  AssemblySubstitutionApplyHandler,
+  AssemblySubstitutionSession,
+} from "@/features/assembly/workspace/assemblyWorkspaceTypes";
+import type {
   WorkspaceTransferState,
   WorkspaceTransferTargetState,
 } from "@/features/layout/page/workspaceTransferState";
@@ -28,18 +32,8 @@ type LeftSidebarPanelProps = {
   assemblyContactPairCount: number;
   assemblyProposalRequested: boolean;
   onRequestAssemblyProposal: () => void;
-  substitutionSession?: {
-    hostRobotName: string;
-    hostUrdfContent: string;
-    hostLinkOptions: string[];
-    replacementRobotName: string;
-    replacementUrdfContent: string;
-    replacementUrdfPath: string;
-    replacementLinkOptions: string[];
-    replacementRootLinkOptions: string[];
-    packageRoots?: PackageRootMap;
-  } | null;
-  onApplySubstitution?: (hostRootLink: string, replacementRootLink: string) => void;
+  substitutionSession?: AssemblySubstitutionSession | null;
+  onApplySubstitution?: AssemblySubstitutionApplyHandler;
   isLoading: boolean;
   availableJoints: string[];
   availableLinks: string[];
@@ -96,6 +90,8 @@ const getWorkspaceTransferStatusDotClassName = (target: WorkspaceTransferTargetS
     "h-1.5 w-1.5 shrink-0 rounded-full",
     target.isBusy
       ? "bg-sky-300"
+      : target.needsAttention
+        ? "bg-amber-300/90"
       : target.canOpen
         ? "bg-emerald-300/80"
         : "bg-muted-foreground/40"

@@ -7,6 +7,7 @@ import { normalizeCameraIntrinsics } from "@/shared/lib/cameraIntrinsics";
 import {
   remapCameraPoseToParentJointFrame,
   resolveCameraParentJointNameFromLink,
+  resolveRobotLinkObject,
 } from "./cameraWorldPose";
 import { partitionFallbackDemoCameras } from "./cameraAutoCleanup";
 import { resolveAutoCameraLinks } from "./cameraAutoTargets";
@@ -112,24 +113,9 @@ export const useCameraAutoGeneration = ({
     [robot, urdfAnalysis?.jointHierarchy?.orderedJoints]
   );
 
-  const resolveRobotLinkObject = useCallback(
-    (linkName: string) => {
-      if (!robot) return null;
-      const decoded = decodeUriComponentSafe(linkName);
-      return (
-        robot.links?.[linkName] ??
-        robot.links?.[decoded] ??
-        robot.getObjectByName?.(linkName) ??
-        (decoded !== linkName ? robot.getObjectByName?.(decoded) : null) ??
-        null
-      );
-    },
-    [robot]
-  );
-
   const resolveLinkCenterPose = useCallback(
     (linkName: string): LinkCenterResolution => {
-      const linkObject = resolveRobotLinkObject(linkName);
+      const linkObject = resolveRobotLinkObject(robot, linkName);
       if (!linkObject) {
         return { pose: toSafeCameraPose(), hasGeometry: false };
       }
@@ -209,7 +195,7 @@ export const useCameraAutoGeneration = ({
         return { pose: toSafeCameraPose(), hasGeometry: false };
       }
     },
-    [resolveRobotLinkObject, robot]
+    [robot]
   );
 
   const resolveCameraPrefixMounts = useCallback(() => {

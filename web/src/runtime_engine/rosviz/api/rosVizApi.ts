@@ -19,7 +19,6 @@ import type {
 type RosVizCreateSessionRequest = {
   fixed_frame?: string;
   ros_domain_id?: number;
-  replay_source?: string;
   deterministic_mode?: RosVizDeterministicMode;
   mode_profile?: RosVizModeProfile;
   data_source?: RosVizDataSource;

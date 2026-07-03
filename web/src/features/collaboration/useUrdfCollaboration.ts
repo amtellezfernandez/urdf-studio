@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   createCollaborationSession,
-  issueCollaborationCapability,
   postCollaborationEvent,
   updateCollaborationAccess,
 } from "@/features/collaboration/collaborationApi";
@@ -10,7 +9,6 @@ import {
   buildCollaborationShareUrl,
   buildCollaborationWebSocketProtocols,
   buildCollaborationWebSocketUrl,
-  collaborationAccessIncludesTeleop,
   getOrCreateCollaborationClientId,
 } from "@/features/collaboration/collaborationTransport";
 import {
@@ -48,12 +46,7 @@ import {
   COLLABORATION_URDF_SNAPSHOT_REQUEST_EVENT_TYPE,
   COLLABORATION_WEBSOCKET_UNAUTHORIZED_CLOSE_CODE,
 } from "@/features/collaboration/collaborationParams";
-
-type LoadUrdfTextOptions = {
-  activePath?: string;
-  basePath?: string;
-  filename?: string;
-};
+import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
 
 type UrdfCollaborationStatus = "idle" | "connecting" | "connected" | "error";
 
@@ -74,8 +67,6 @@ type CreateShareLinkParams = {
   baseUrl: string;
   label: string;
 };
-
-const COLLABORATION_TELEOP_ALLOWED_TRANSPORTS = ["moq"];
 
 type SyncedUrdfState = {
   content: string;
@@ -225,6 +216,22 @@ export const useUrdfCollaboration = ({
     [commitClientSequence],
   );
 
+  const publishPendingCollaborationEvent = useCallback(
+    async (pendingEvent: PendingCollaborationEvent) => {
+      if (sendCollaborationEvent(websocketRef.current, pendingEvent.request)) {
+        commitPublishedEvent(pendingEvent);
+        return;
+      }
+      if (!session?.ownerToken) {
+        pendingEventRef.current = pendingEvent;
+        return;
+      }
+      await postCollaborationEvent(session, pendingEvent.request);
+      commitPublishedEvent(pendingEvent);
+    },
+    [commitPublishedEvent, session],
+  );
+
   const rememberRemoteSequence = useCallback(
     (event: CollaborationEventSnapshot, clientSequence: number): boolean => {
       if (event.client_id === clientId) return false;
@@ -288,18 +295,14 @@ export const useUrdfCollaboration = ({
         clientSequence,
         syncedUrdf: nextSyncedUrdf,
       };
-      if (sendCollaborationEvent(websocketRef.current, request)) {
-        commitPublishedEvent(pendingEvent);
-        return;
-      }
-      if (!session.ownerToken) {
-        pendingEventRef.current = pendingEvent;
-        return;
-      }
-      await postCollaborationEvent(session, request);
-      commitPublishedEvent(pendingEvent);
+      await publishPendingCollaborationEvent(pendingEvent);
     },
-    [clientId, commitPublishedEvent, peekNextClientSequence, session],
+    [
+      clientId,
+      peekNextClientSequence,
+      publishPendingCollaborationEvent,
+      session,
+    ],
   );
 
   const publishUrdfUpdate = useCallback(
@@ -351,21 +354,12 @@ export const useUrdfCollaboration = ({
           contentHash: patch.resultHash,
         },
       };
-      if (sendCollaborationEvent(websocketRef.current, request)) {
-        commitPublishedEvent(pendingEvent);
-        return;
-      }
-      if (!session.ownerToken) {
-        pendingEventRef.current = pendingEvent;
-        return;
-      }
-      await postCollaborationEvent(session, request);
-      commitPublishedEvent(pendingEvent);
+      await publishPendingCollaborationEvent(pendingEvent);
     },
     [
       clientId,
-      commitPublishedEvent,
       peekNextClientSequence,
+      publishPendingCollaborationEvent,
       publishUrdfSnapshot,
       session,
     ],
@@ -676,30 +670,7 @@ export const useUrdfCollaboration = ({
         }
       }
 
-      const shareSession: CollaborationShareSession = { ...activeSession };
-      if (collaborationAccessIncludesTeleop(access)) {
-        if (!activeSession.ownerToken) {
-          throw new Error("Only the room owner can create teleop links.");
-        }
-        const capability = await issueCollaborationCapability(
-          {
-            ...activeSession,
-            ownerToken: activeSession.ownerToken,
-          },
-          {
-            role: "teleop_operator",
-            allowed_transports: COLLABORATION_TELEOP_ALLOWED_TRANSPORTS,
-          },
-        );
-        shareSession.teleopCapabilityToken = capability.capability_token;
-        activeSession = {
-          ...activeSession,
-          teleopCapabilityToken: capability.capability_token,
-        };
-        setSession(activeSession);
-      }
-
-      return buildCollaborationShareUrl(shareSession, baseUrl, access);
+      return buildCollaborationShareUrl(activeSession, baseUrl, access);
     },
     [clientId, commitPublishedEvent, peekNextClientSequence, session],
   );
@@ -728,13 +699,6 @@ export const useUrdfCollaboration = ({
         peerCount: response.snapshot.peer_count,
         sharingEnabled: response.snapshot.sharing_enabled,
       };
-      if (
-        request.sharing_enabled === false ||
-        request.rotate_session_token ||
-        request.rotate_editor_token
-      ) {
-        delete nextSession.teleopCapabilityToken;
-      }
       setSession(nextSession);
       return nextSession;
     },
@@ -769,7 +733,6 @@ export const useUrdfCollaboration = ({
     collaborationSharingEnabled: session?.sharingEnabled ?? true,
     collaborationSessionId: session?.sessionId ?? null,
     collaborationStatus: status,
-    collaborationTeleopCapabilityToken: session?.teleopCapabilityToken ?? null,
     createShareLink,
     rotateShareLink,
     setCollaborationSharingEnabled,

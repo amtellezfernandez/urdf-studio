@@ -9,7 +9,7 @@ import {
 import { solveWithIkfast } from "./ikfastSolver";
 import { solveWithIkJs } from "./ikJsSolver";
 import { FEATURE_GATES } from "@/shared/config/featureGates";
-import { guardedFetch } from "@/shared/lib/backendGuard";
+import { requestIkRemoteSolve } from "./ikRemoteSolve";
 import type {
   IkOrientationPayload,
   IkSolvePayload,
@@ -46,15 +46,6 @@ const buildRequestId = () => {
   return `ik-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 };
 
-const parseErrorMessage = async (response: Response) => {
-  try {
-    const data = await response.json();
-    return data?.detail || data?.error || response.statusText;
-  } catch {
-    return response.statusText;
-  }
-};
-
 const solveWithBackend = async (
   apiBaseUrl: string,
   payload: IkSolvePayload,
@@ -62,50 +53,24 @@ const solveWithBackend = async (
   orientationMode: OrientationMode,
   timeoutMs: number
 ): Promise<IkSolveResponse> => {
-  const ikRemoteGate = FEATURE_GATES.ikRemoteSolve;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await guardedFetch(`${apiBaseUrl}/ik/solve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        urdf: payload.urdf,
-        joint_values: payload.jointValues,
-        target_link: payload.targetLink,
-        target_position: payload.targetPosition,
-        target_rotation: payload.targetRotation ?? null,
-        target_wxyz: payload.targetWxyz ?? null,
-        solver_chain: solverChain,
-        orientation_mode: orientationMode,
-      }),
+    const result = await requestIkRemoteSolve({
+      apiBaseUrl,
+      payload,
+      solverChain,
+      orientationMode,
       signal: controller.signal,
-    }, {
-      requiredBackends: ikRemoteGate.requiredBackends,
       context: "IK remote solve",
     });
 
-    if (!response.ok) {
-      return {
-        requestId: "local",
-        ok: false,
-        error: await parseErrorMessage(response),
-        status: "solver_error",
-      };
+    if (result.ok === true) {
+      return { requestId: "local", ok: true, result: result.result };
     }
 
-    const data = (await response.json()) as IkResponsePayload;
-    if (!data?.solution) {
-      return {
-        requestId: "local",
-        ok: false,
-        error: "IK solve returned no solution",
-        status: "solver_error",
-      };
-    }
-
-    return { requestId: "local", ok: true, result: data };
+    return { requestId: "local", ok: false, error: result.error, status: result.status };
   } catch (error) {
     if (controller.signal.aborted) {
       return {
@@ -131,6 +96,22 @@ const LOCAL_SOLVER_IDS = new Set<IkSolveStrategy["solverId"]>([
   "ik-js",
 ]);
 
+const solveWithLocalStrategy = async (
+  payload: IkSolvePayload,
+  strategy: IkSolveStrategy,
+  remainingMs: number
+) => {
+  if (strategy.solverId === "ikfast-wasm") {
+    return solveWithIkfast(payload, strategy, remainingMs);
+  }
+
+  if (strategy.solverId === "ik-js") {
+    return solveWithIkJs(payload, strategy, remainingMs);
+  }
+
+  return { ok: false, error: `Unknown solver: ${strategy.solverId}`, status: "solver_error" as const };
+};
+
 const solveWithLocalStrategies = async (
   payload: IkSolvePayload,
   strategies: IkSolveStrategy[],
@@ -147,25 +128,12 @@ const solveWithLocalStrategies = async (
       return { ok: false, error: "IK solve timed out", status: "timeout" };
     }
 
-    if (strategy.solverId === "ikfast-wasm") {
-      const result = await solveWithIkfast(payload, strategy, remaining);
-      if (result.ok && result.result) {
-        return { ok: true, result: result.result };
-      }
-      lastError = result.error ?? lastError;
-      lastStatus = result.status;
-      continue;
+    const result = await solveWithLocalStrategy(payload, strategy, remaining);
+    if (result.ok && result.result) {
+      return { ok: true, result: result.result };
     }
-
-    if (strategy.solverId === "ik-js") {
-      const result = await solveWithIkJs(payload, strategy, remaining);
-      if (result.ok && result.result) {
-        return { ok: true, result: result.result };
-      }
-      lastError = result.error ?? lastError;
-      lastStatus = result.status;
-      continue;
-    }
+    lastError = result.error ?? lastError;
+    lastStatus = result.status;
   }
 
   return { ok: false, error: lastError, status: lastStatus };

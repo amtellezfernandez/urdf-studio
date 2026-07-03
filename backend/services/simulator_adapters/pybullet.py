@@ -3,6 +3,8 @@ from __future__ import annotations
 from backend.models.simulator_runtime import (
     SIMULATOR_PYBULLET_ID,
     SimulatorDependencySpec,
+    SimulatorRuntimeDependency,
+    SimulatorRuntimeStatus,
     SimulatorWorkspacePrepareRequest,
 )
 from backend.services.simulator_adapters.base import (
@@ -17,6 +19,10 @@ from backend.services.simulator_adapters.plugin import DirectUrdfSimulatorPlugin
 from backend.services.simulator_adapters.workspace_check_spec import (
     PreparedWorkspaceCommand,
     _prepare_direct_urdf_command,
+)
+from backend.services.simulator_adapters.workspace_diagnostics import (
+    PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME,
+    pybullet_runtime_opengl_warnings,
 )
 from backend.services.simulator_adapters.workspace_expectations import WorkspaceExpectations
 from backend.services.simulator_adapters.workspace_package import PreparedSimulatorWorkspace
@@ -48,6 +54,36 @@ class PyBulletPlugin(DirectUrdfSimulatorPlugin):
     workspace_process = PYBULLET_WORKSPACE_PROCESS_PARAMS
     workspace_error_class = PyBulletWorkspaceError
     scene_params = PYBULLET_SCENE_PARAMS
+
+    def runtime_status(self) -> SimulatorRuntimeStatus:
+        status = super().runtime_status()
+        if not status.available:
+            return status
+        warnings = pybullet_runtime_opengl_warnings(
+            workspace_root=PYBULLET_WORKSPACE_PROCESS_PARAMS.workspace_root,
+            log_name=PYBULLET_WORKSPACE_PROCESS_PARAMS.log_name,
+        )
+        if not warnings:
+            return status
+        dependencies = list(status.dependencies)
+        if not any(
+            dependency.name == PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME
+            for dependency in dependencies
+        ):
+            dependencies.append(
+                SimulatorRuntimeDependency(
+                    name=PYBULLET_HARDWARE_OPENGL_DIAGNOSTIC_NAME,
+                    available=False,
+                    required=False,
+                    scope="runtime",
+                )
+            )
+        return status.model_copy(
+            update={
+                "status": "ready, display degraded: software OpenGL",
+                "dependencies": dependencies,
+            }
+        )
 
     def build_check_command(
         self,

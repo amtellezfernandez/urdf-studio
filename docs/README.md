@@ -10,7 +10,6 @@ This index is for product documentation: how to install, launch, operate, and un
 
 ## Advanced Operation
 
-- [Teleoperation](TELEOPERATION.md)
 - [Team Session Setup](TEAM_SESSION_SETUP.md)
 - [Health vs Readiness](health/HEALTH_VS_READINESS.md)
 

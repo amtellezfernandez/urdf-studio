@@ -4,7 +4,7 @@ This guide explains how to launch URDF Studio, use the main workspace, and troub
 
 ## Mental Model
 
-URDF Studio is a local robotics workspace and transfer workbench. Start it with one command, load or author a robot-world scene once, then use `Open In` to move that scene into validated external targets such as Genesis, MuJoCo, PyBullet, or Blender.
+URDF Studio is a local robotics workspace and transfer workbench. Start it with one command, load or author a robot-world scene once, then use `Simulation Prep` to move that scene into validated external targets such as Genesis, MuJoCo, PyBullet, or Blender.
 
 The launcher manages the supporting local services for you. In normal use, you only need the Studio URL printed in the terminal.
 
@@ -13,20 +13,16 @@ The launcher manages the supporting local services for you. In normal use, you o
 The fastest way to understand the product is to load the sample motion and watch how the UI fills in.
 
 <p align="center">
-  <img src="assets/quickstart-load.gif" alt="URDF Studio loading the sample robot and episode workspace" width="900">
+  <img src="assets/quickstart-load.gif" alt="URDF Studio loading the sample robot workspace" width="900">
 </p>
 
-The workspace is built for repeated robotics work: a 3D viewer in the center, dataset and playback controls on the left, and scene/joint detail on the right.
+The workspace is built for repeated robotics work: a 3D viewer in the center, focused inspection controls around it, and scene/joint/simulator detail in the sidebars.
 
 <p align="center">
   <img src="assets/workspace-tour.gif" alt="URDF Studio workspace with robot inspection panels and scene controls" width="900">
 </p>
 
-Episode replay keeps the robot pose, frame counter, graph cursor, and joint curves synchronized.
-
-<p align="center">
-  <img src="assets/episode-replay.gif" alt="URDF Studio episode replay with synchronized graph cursor" width="900">
-</p>
+Use the sample motion as a quick health check: the robot pose, joint values, velocity fields, scene tree, and camera list should update together.
 
 ## First Launch
 
@@ -53,32 +49,29 @@ Open the Studio URL in your browser.
 1. Open `http://127.0.0.1:5173`.
 2. Click `Play Sample Motion`.
 3. Wait for the sample robot to load.
-4. In the `Episodes` panel, click the play button on episode `1`.
-5. Confirm:
+4. Confirm:
    - the play button changes to pause
-   - the frame counter advances
    - the robot moves
-   - the episode graph cursor moves smoothly
+   - joint angle and velocity values update
+   - cameras appear in the camera list
+5. Open `Simulation Prep` and confirm compatible targets show a prepared file type.
 
-If this works, the viewer, dataset replay, graph overlay, and local launch are usable.
+If this works, the viewer, joint state pipeline, camera panel, simulator preparation, and local launch are usable.
 
 ## Workspace Map
 
 ### Top Bar
 
-- `File`, `Utils`, `Worlds`, `View`, `Dataset`, `Create`, `IK`: main action menus.
-- `Open In`: open the current robot-world scene in validated transfer targets.
-- `Cams`, `Leader`, `Follower`: camera and teleoperation setup.
+- `File`, `Utils`, `Worlds`, `View`, and `Create`: main action menus.
+- `Simulation Prep`: inspect and open the current robot-world scene in validated transfer targets.
+- Camera controls: inspect and manage scene cameras.
 - Share/action icons: session and collaboration controls.
 
 ### Left Sidebar
 
-- `Record`: starts recording workflows.
-- FPS and target FPS controls: runtime timing controls.
-- Dataset policy and limit correction: how imported/replayed data is treated.
-- `Playback`: global playback controls.
-- `Episodes`: per-episode replay, retake, export, delete, and ordering.
-- Replay zero mode: choose target robot zero pose or raw dataset pose.
+- Camera list and camera view controls.
+- Sample motion playback state.
+- Scene helper controls that need quick access while inspecting the 3D view.
 
 ### Center Viewer
 
@@ -87,18 +80,13 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 - `Reset Pose` resets the active robot pose.
 - Wheel/drive controls appear when the active robot supports them.
 
-### Episode Graph
-
-- Shows frame/time, effective FPS, selected signals, and replay cursor.
-- Velocity/limit markers identify review problems.
-- Edit mode exposes timeline and joint-curve editing tools.
-
 ### Right Sidebar
 
 - World object list and scene hierarchy.
 - Joint/link/object tabs.
 - Active selection details.
-- Joint values and runtime telemetry when available.
+- Joint values, velocity, effort, limits, and runtime telemetry when available.
+- Simulator targets and workspace preparation status.
 
 ## Core Workflows
 
@@ -113,8 +101,8 @@ If this works, the viewer, dataset replay, graph overlay, and local launch are u
 ### Use The Built-In Sample
 
 1. Click `Play Sample Motion`.
-2. Use the episode list to play the first or second episode.
-3. Watch the graph and 3D robot together. They should stay synchronized.
+2. Inspect the joint tree, velocity/effort fields, cameras, and scene objects.
+3. Open `Simulation Prep` to check which targets are ready on the current machine.
 
 ### Export Robot Files
 
@@ -122,26 +110,20 @@ Use `File` -> `Export` to write URDF, Xacro, MJCF, USD, meshes, and camera confi
 
 ### Edit A Layout In Blender
 
-1. Open the `Open In` panel and click `Blender`.
+1. Open `Simulation Prep` and click `Blender`.
 2. In Blender, use the locked robot visual reference and edit world object transforms and dimensions.
 3. Run the generated `export_blender_changes.py` script from that Blender session.
 4. Back in Studio, use `Worlds` -> `Import Workspace Changes` and select `blender-change-set.json`.
 
 Studio writes `robot-reference.glb` for Blender-native robot visuals and `robot-reference.usda` for interchange metadata. Studio applies validated world object transforms, dimensions, display colors, camera poses, camera FOV, new Blender objects, and deleted source objects/cameras from the same source scene. New Blender mesh objects import as Studio mesh world objects when they carry a portable relative `asset_ref`; otherwise they import as colored cube world objects. Robot kinematics, inertials, collisions, transmissions, material-domain edits, and mesh-domain edits stay under Studio review.
 
-### Replay Dataset Episodes
+### Prepare A Simulator Workspace
 
-1. Load a dataset or sample motion.
-2. Choose replay zero mode:
-   - `Target`: apply loaded target robot zero pose.
-   - `Raw`: match the dataset visualizer convention.
-3. Play one episode.
-4. Check:
-   - frame counter
-   - elapsed time
-   - graph cursor
-   - velocity/limit markers
-   - joint values in the right sidebar
+1. Load a robot-world scene.
+2. Open `Simulation Prep`.
+3. Choose a compatible target such as Blender, PyBullet, MuJoCo, MJLab, or Genesis.
+4. Review whether the target uses URDF directly or needs a converted workspace file.
+5. Open the target or run the generated workspace check command when validating a machine.
 
 ### Share A Session
 
@@ -162,7 +144,6 @@ Use Share again to pause sharing, reset links, or change access.
 | `npm run setup` | Install dependencies and local runtime |
 | `npm run start` | Start the local app |
 | `npm run team` | Start a trusted-network team session |
-| `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run start -- --help` | Runtime options |
 
 ## Troubleshooting
@@ -200,15 +181,15 @@ npm run start -- --web-port 3001
 - Retry with `npm run team -- --team-host <server-laptop-ip>`.
 - Check local firewall prompts for Node.
 
-### Sample Loads But Replay Does Not Move
+### Sample Motion Does Not Move
 
 - Use `npm run start`.
-- Confirm the first episode button changes to pause.
-- Confirm frame counters advance.
+- Confirm `Play Sample Motion` toggles to pause.
+- Confirm joint angle and velocity values update.
 - Refresh the page and repeat the smoke test.
 
 ## Good Defaults
 
 - Use `npm run start` for demos, verification, and real work.
 - Keep remote sharing off unless you are intentionally sharing on a trusted network.
-- Use the sample motion as the first regression check after playback changes.
+- Use the sample motion and simulator preparation panel as the first regression check after workspace changes.

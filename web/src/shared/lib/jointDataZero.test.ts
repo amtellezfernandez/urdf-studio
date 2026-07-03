@@ -15,7 +15,7 @@ const TEST_JOINT_DATA_ZERO = {
 } as const;
 
 describe("jointDataZero", () => {
-  it("maps dataset joint values into viewer joint values from the captured zero pose", () => {
+  it("maps source joint values into viewer joint values from the captured zero pose", () => {
     expect(
       applyJointDataZeroOffset({
         jointValues: {
@@ -38,7 +38,7 @@ describe("jointDataZero", () => {
     });
   });
 
-  it("maps viewer joint values back into dataset values relative to zero pose", () => {
+  it("maps viewer joint values back into source values relative to zero pose", () => {
     const dataJointValues = removeJointDataZeroOffset({
       jointValues: {
         shoulder:

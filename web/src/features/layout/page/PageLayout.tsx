@@ -1,20 +1,10 @@
 import type { ComponentProps } from "react";
-import { PageShell } from "@/features/layout/page/PageShell";
+import { PageShell, type PageShellProps } from "@/features/layout/page/PageShell";
 import { PageOverlays } from "@/features/layout/page/PageOverlays";
 import { PageDialogs } from "@/features/layout/page/PageDialogs";
 import { WorkspacePanels } from "@/features/layout/page/WorkspacePanels";
 
-export type PageLayoutProps = {
-  isLoading: boolean;
-  topNavBarProps: ComponentProps<typeof import("@/features/layout/page/TopNavBar").TopNavBar>;
-  leftSidebarProps: ComponentProps<typeof import("@/features/layout/page/LeftSidebarPanel").LeftSidebarPanel>;
-  viewerLayoutProps: ComponentProps<typeof import("@/features/layout/page/ViewerLayout").ViewerLayout>;
-  rightSidebarProps: ComponentProps<
-    typeof import("@/features/layout/page/RightSidebarPanel").RightSidebarPanel
-  >;
-  urdfStatusBannerProps: ComponentProps<
-    typeof import("@/features/layout/page/UrdfStatusBanner").UrdfStatusBanner
-  >;
+export type PageLayoutProps = PageShellProps & {
   loadIssuesPanelProps: ComponentProps<
     typeof import("@/features/layout/page/LoadIssuesPanel").LoadIssuesPanel
   >;

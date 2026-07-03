@@ -24,15 +24,8 @@ const readManifest = (path) => {
   }
 };
 
-const postJson = async (path, payload) => {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+const requestJson = async (path, options = {}) => {
+  const response = await fetch(`${apiBaseUrl}${path}`, options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     fail(`${response.status} ${response.statusText}: ${JSON.stringify(data)}`);
@@ -40,15 +33,19 @@ const postJson = async (path, payload) => {
   return data;
 };
 
+const postJson = async (path, payload) => requestJson(path, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
+  body: JSON.stringify(payload),
+});
+
 const getJson = async (path) => {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  return requestJson(path, {
     headers: { Accept: "application/json" },
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    fail(`${response.status} ${response.statusText}: ${JSON.stringify(data)}`);
-  }
-  return data;
 };
 
 const runValidate = async (manifestPath) => {

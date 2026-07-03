@@ -8,13 +8,12 @@ export enum RosVizStreamFrameType {
   DIAGNOSTIC_EVENT = 7,
 }
 
-export const ROSVIZ_STREAM_HEADER_BYTES = 32;
+const ROSVIZ_STREAM_HEADER_BYTES = 32;
 export const ROSVIZ_STREAM_SEQUENCE_STEP = 1;
 export const ROSVIZ_STREAM_WS_SUBPROTOCOL = "urdf-studio.rosviz.v1";
 export const ROSVIZ_STREAM_TICKET_SUBPROTOCOL_PREFIX = "ticket.";
 
 export const ROSVIZ_STREAM_FLAG_PAYLOAD_JSON = 1 << 0;
-export const ROSVIZ_STREAM_FLAG_PAYLOAD_FLATBUFFER = 1 << 1;
 
 const TYPE_OFFSET = 0;
 const FLAGS_OFFSET = 4;

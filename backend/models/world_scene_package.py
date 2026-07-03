@@ -239,10 +239,6 @@ WORLD_OBJECT_SOURCES = {
     "user",
     "world-scenario",
     "demo-world",
-    "runtime-detection",
-    "runtime-demo",
-    "runtime-restricted-area",
-    "runtime-trajectory",
 }
 WORLD_OBJECT_IK_TARGET_TYPES = {"punctual", "orbit"}
 WORLD_OBJECT_ORBIT_TARGET_POINTS = {"center", "primary", "secondary"}

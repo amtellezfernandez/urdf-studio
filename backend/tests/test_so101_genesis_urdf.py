@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,9 +12,12 @@ from backend.services.simulator_adapters.robot_repairs import (
     genesis_robot_compatibility_patch_ids_from_world_package,
     materialize_genesis_robot_urdf_report,
 )
-from backend.services.so101_genesis_urdf import (
+from backend.services.simulator_adapters.robot_repair_profiles import (
+    SO101_GENESIS_GRIPPER_PROXY_COLLISION_PROFILE,
     SO101_FIXED_GRIPPER_PAD_NAME,
-    materialize_so101_genesis_urdf_report,
+)
+from backend.services.simulator_adapters.urdf_collision_proxy_repair import (
+    materialize_urdf_collision_proxy_repair_report,
 )
 from backend.services.simulator_adapters.workspace_request_sources import (
     build_demo_workspace_request,
@@ -40,32 +44,42 @@ def _write_gripper_urdf(tmp_path: Path, *, robot_name: str, mesh_filename: str) 
     return urdf_path
 
 
-def test_so101_genesis_repair_requires_so101_identity(tmp_path: Path) -> None:
+def test_collision_proxy_repair_profile_requires_declared_identity(tmp_path: Path) -> None:
     urdf_path = _write_gripper_urdf(
         tmp_path,
         robot_name="custom_gripper",
         mesh_filename="assets/custom_gripper.stl",
     )
 
-    result = materialize_so101_genesis_urdf_report(
+    profile = replace(
+        SO101_GENESIS_GRIPPER_PROXY_COLLISION_PROFILE,
+        cache_dir=tmp_path / "cache",
+    )
+
+    result = materialize_urdf_collision_proxy_repair_report(
         urdf_path,
-        output_dir=tmp_path / "cache",
+        profile=profile,
     )
 
     assert result.applied is False
     assert result.path == urdf_path.resolve()
 
 
-def test_so101_genesis_repair_applies_to_identified_so101(tmp_path: Path) -> None:
+def test_collision_proxy_repair_profile_applies_to_matching_robot(tmp_path: Path) -> None:
     urdf_path = _write_gripper_urdf(
         tmp_path,
         robot_name="so101_new_calib",
         mesh_filename="assets/moving_jaw_so101_v1.stl",
     )
 
-    result = materialize_so101_genesis_urdf_report(
+    profile = replace(
+        SO101_GENESIS_GRIPPER_PROXY_COLLISION_PROFILE,
+        cache_dir=tmp_path / "cache",
+    )
+
+    result = materialize_urdf_collision_proxy_repair_report(
         urdf_path,
-        output_dir=tmp_path / "cache",
+        profile=profile,
     )
 
     assert result.applied is True

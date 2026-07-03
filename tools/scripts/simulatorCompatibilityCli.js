@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-import { pathToFileURL } from 'url';
-import { resolve } from 'path';
-
+import { readOptionValue, runCliMain } from './cliHelpers.js';
 import {
   DEPLOYMENT_MODES,
   summarizeDeployment,
@@ -13,14 +11,6 @@ import {
   getSimulatorCompatibilityReport,
   getSimulatorCompatibilityTarget,
 } from './simulatorCompatibility.js';
-
-function readOptionValue(args, index, flag) {
-  const value = args[index + 1];
-  if (!value || value.startsWith('--')) {
-    throw new Error(`${flag} requires a value.`);
-  }
-  return value;
-}
 
 export function parseSimulatorCompatibilityCliArgs(args) {
   const options = {
@@ -161,15 +151,4 @@ function main() {
   console.log(formatSimulatorCompatibilityCliReport(report, { targetId: options.targetId }).join('\n'));
 }
 
-function isMainModule() {
-  return Boolean(process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href);
-}
-
-if (isMainModule()) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  }
-}
+runCliMain(import.meta.url, main);

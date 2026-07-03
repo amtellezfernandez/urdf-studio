@@ -20,24 +20,6 @@ export const filterLinksForSidebar = ({
   return searchFilteredLinks.filter((linkName) => voxelDerivedInertialLinkSet.has(linkName));
 };
 
-export const resolveVoxelOnlySelectedLink = ({
-  currentSelectedLink,
-  filteredLinks,
-  voxelOnly,
-}: {
-  currentSelectedLink: string | null;
-  filteredLinks: string[];
-  voxelOnly: boolean;
-}) => {
-  if (!voxelOnly || filteredLinks.length === 0) {
-    return currentSelectedLink;
-  }
-  if (currentSelectedLink && filteredLinks.includes(currentSelectedLink)) {
-    return currentSelectedLink;
-  }
-  return filteredLinks[0] ?? null;
-};
-
 export const resolveLinkSidebarInteractionState = ({
   currentViewMode,
   simulationPrepPanelOpen,

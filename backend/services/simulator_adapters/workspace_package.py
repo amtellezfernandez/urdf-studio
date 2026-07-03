@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-import base64
-import binascii
-import hashlib
-import html
 import json
-import re
 import shutil
 import subprocess
 import time
@@ -15,9 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from backend.models.simulator_runtime import (
-    SimulatorMeshAssetUpload,
     SimulatorWorkspacePrepareRequest,
-    validate_simulator_relative_path,
 )
 from backend.services.ilu_session import IluSessionError, get_ilu_session_local_urdf_source_context
 from backend.services.ilu_urdf import (
@@ -28,6 +21,20 @@ from backend.services.ilu_urdf import (
 from backend.services.simulator_adapters.workspace_paths import (
     compute_workspace_asset_roots,
     write_workspace_asset_roots,
+)
+from backend.services.simulator_adapters.urdf_workspace_paths import (
+    normalize_resolved_urdf_asset_path,
+    normalize_root_relative_urdf_mesh_filenames,
+)
+from backend.services.simulator_adapters.urdf_material_policy import (
+    materialize_urdf_visual_material_colors,
+)
+from backend.services.simulator_adapters.workspace_asset_staging import (
+    normalize_workspace_asset_path,
+    package_root_hint_paths,
+    write_package_root_hints,
+    write_uploaded_workspace_assets,
+    write_workspace_asset_file,
 )
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
@@ -49,23 +56,6 @@ class PreparedSimulatorWorkspace:
     world_object_count: int = 0
     camera_count: int = 0
 
-URDF_VISUAL_SYNTHETIC_COLOR_PALETTE = (
-    "0.74 0.76 0.72 1.0",
-    "0.42 0.46 0.50 1.0",
-    "0.20 0.53 0.43 1.0",
-    "0.93 0.70 0.22 1.0",
-    "0.13 0.34 0.50 1.0",
-)
-
-URDF_VISUAL_SEMANTIC_SYNTHETIC_COLORS = (
-    (("wheel", "tire", "tyre"), "0.04 0.045 0.05 1.0"),
-    (("camera", "lens", "sensor"), "0.06 0.15 0.24 1.0"),
-    (("battery", "lipo", "power"), "0.08 0.09 0.10 1.0"),
-    (("motor", "servo", "actuator"), "0.45 0.48 0.52 1.0"),
-    (("frame", "plate", "base", "mount", "bracket", "body", "chassis"), "0.66 0.69 0.64 1.0"),
-)
-ROOT_RELATIVE_URDF_MESH_PREFIXES = ("meshes/", "assets/")
-
 
 def _timestamped_workspace_dir(workspace_root: Path) -> Path:
     path = workspace_root / f"workspace-{time.time_ns()}"
@@ -73,50 +63,9 @@ def _timestamped_workspace_dir(workspace_root: Path) -> Path:
     return path
 
 
-def _normalize_relative_path(value: str) -> str:
-    return validate_simulator_relative_path(value, "asset path")
-
-
-def _normalize_resolved_urdf_asset_path(value: str | None) -> str:
-    normalized = _normalize_relative_path(value or "robot.urdf")
-    lowered = normalized.lower()
-    if lowered.endswith(".urdf.xacro"):
-        return f"{normalized[:-len('.urdf.xacro')]}.urdf"
-    if lowered.endswith(".xacro"):
-        return f"{normalized[:-len('.xacro')]}.urdf"
-    return normalized
-
-
-def _normalize_root_relative_urdf_mesh_filenames(urdf_xml: str) -> str:
-    try:
-        root = ET.fromstring(urdf_xml)
-    except ET.ParseError:
-        return urdf_xml
-
-    changed = False
-    for mesh in root.findall(".//mesh"):
-        filename = mesh.get("filename")
-        if not filename:
-            continue
-        normalized_filename = filename.strip().replace("\\", "/")
-        if not normalized_filename.startswith("/"):
-            continue
-        portable_filename = normalized_filename.lstrip("/")
-        # Accept paths under known prefixes (meshes/, assets/) OR flat filenames with no
-        # directory component; flat absolute paths like /model.stl are common in CAD exports.
-        # Reject multi-segment paths not under a known prefix (e.g. /tmp/model.stl).
-        if not portable_filename.startswith(ROOT_RELATIVE_URDF_MESH_PREFIXES) and "/" in portable_filename:
-            continue
-        mesh.set("filename", portable_filename)
-        changed = True
-
-    if not changed:
-        return urdf_xml
-    return ET.tostring(root, encoding="unicode")
-
-
 def _raise(error: Callable[[str], Exception], message: str) -> None:
     raise error(message)
+
 
 def normalize_simulator_workspace_package_request(
     request: SimulatorWorkspacePrepareRequest,
@@ -134,171 +83,11 @@ def normalize_simulator_workspace_package_request(
     return normalized_request
 
 
-def _write_asset_file(
-    root: Path,
-    relative_path: str,
-    content: bytes,
-    *,
-    error: Callable[[str], Exception],
-) -> Path:
-    output_path = (root / _normalize_relative_path(relative_path)).resolve()
-    try:
-        output_path.relative_to(root.resolve())
-    except ValueError:
-        _raise(error, f"Invalid asset path: {relative_path}")
-    if output_path.exists():
-        existing = output_path.read_bytes()
-        if existing != content:
-            _raise(error, f"Conflicting uploaded asset path: {relative_path}")
-        return output_path
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(content)
-    return output_path
-
-
-def _decode_asset(
-    asset: SimulatorMeshAssetUpload,
-    *,
-    error: Callable[[str], Exception],
-) -> bytes:
-    try:
-        return base64.b64decode(asset.content_base64, validate=True)
-    except binascii.Error:
-        _raise(error, f"Invalid base64 mesh asset: {asset.path}")
-
-
-def _write_uploaded_assets(
-    source_root: Path,
-    assets: list[SimulatorMeshAssetUpload],
-    *,
-    error: Callable[[str], Exception],
-) -> None:
-    for asset in assets:
-        content = _decode_asset(asset, error=error)
-        written_paths = {asset.path, *asset.aliases}
-        for relative_path in written_paths:
-            _write_asset_file(source_root, relative_path, content, error=error)
-
-
-def _write_package_root_hints(
-    source_root: Path,
-    package_roots: dict[str, list[str]],
-) -> None:
-    for package_name, roots in package_roots.items():
-        normalized_package_name = package_name.strip()
-        if not normalized_package_name:
-            continue
-        for root in roots:
-            candidate = (source_root / _normalize_relative_path(root)).resolve()
-            try:
-                candidate.relative_to(source_root.resolve())
-            except ValueError:
-                continue
-            candidate.mkdir(parents=True, exist_ok=True)
-            package_xml = candidate / "package.xml"
-            if package_xml.exists():
-                continue
-            package_xml.write_text(
-                (
-                    "<?xml version=\"1.0\"?>\n"
-                    "<package format=\"3\">\n"
-                    f"  <name>{html.escape(normalized_package_name)}</name>\n"
-                    "  <version>0.0.0</version>\n"
-                    "  <description>URDF Studio simulator workspace package hint</description>\n"
-                    "  <maintainer email=\"noreply@localhost\">URDF Studio</maintainer>\n"
-                    "  <license>UNSPECIFIED</license>\n"
-                    "</package>\n"
-                ),
-                encoding="utf-8",
-            )
-
-
-def _package_root_hint_paths(source_root: Path, package_roots: dict[str, list[str]]) -> list[Path]:
-    paths: list[Path] = []
-    for roots in package_roots.values():
-        for root in roots:
-            candidate = (source_root / _normalize_relative_path(root)).resolve()
-            try:
-                candidate.relative_to(source_root.resolve())
-            except ValueError:
-                continue
-            paths.append(candidate)
-    return paths
-
-
-def _prepare_urdf_visual_material_colors(urdf_path: Path) -> int:
-    tree = ET.parse(urdf_path)
-    root = tree.getroot()
-    material_colors = {
-        material.get("name"): color.get("rgba", "").strip()
-        for material in root.findall("material")
-        if material.get("name")
-        for color in [material.find("color")]
-        if color is not None and color.get("rgba", "").strip()
-    }
-    changed_count = 0
-    for link in root.findall("link"):
-        link_name = link.get("name", "")
-        for visual_index, visual in enumerate(link.findall("visual")):
-            material = visual.find("material")
-            if _urdf_material_has_color(material):
-                continue
-            if material is None:
-                material = ET.SubElement(
-                    visual,
-                    "material",
-                    {"name": _synthetic_urdf_material_name(link_name, visual_index)},
-                )
-            material_name = material.get("name", "").strip()
-            named_rgba = material_colors.get(material_name)
-            ET.SubElement(
-                material,
-                "color",
-                {"rgba": named_rgba or _synthetic_urdf_visual_rgba(link_name, visual, visual_index)},
-            )
-            changed_count += 1
-
-    if changed_count:
-        ET.indent(root, space="  ")
-        tree.write(urdf_path, encoding="unicode", xml_declaration=False)
-    return changed_count
-
-
-def _urdf_material_has_color(material: ET.Element | None) -> bool:
-    if material is None:
-        return False
-    color = material.find("color")
-    return color is not None and bool(color.get("rgba", "").strip())
-
-
-def _synthetic_urdf_material_name(link_name: str, visual_index: int) -> str:
-    safe_link_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", link_name.strip()).strip("_")
-    return f"urdf_studio_{safe_link_name or 'visual'}_{visual_index}"
-
-
-def _synthetic_urdf_visual_rgba(link_name: str, visual: ET.Element, visual_index: int) -> str:
-    fingerprint = _urdf_visual_fingerprint(link_name, visual, visual_index)
-    fingerprint_lower = fingerprint.lower()
-    for terms, rgba in URDF_VISUAL_SEMANTIC_SYNTHETIC_COLORS:
-        if any(term in fingerprint_lower for term in terms):
-            return rgba
-    digest = hashlib.sha256(fingerprint_lower.encode("utf-8")).digest()
-    return URDF_VISUAL_SYNTHETIC_COLOR_PALETTE[digest[0] % len(URDF_VISUAL_SYNTHETIC_COLOR_PALETTE)]
-
-
 def _transferable_world_object_count(request: SimulatorWorkspacePrepareRequest) -> int:
     layout = parse_static_world_layout_payload(
         world_scene_package_json_payload(request.world_package)
     )
     return count_transferable_world_objects(layout, include_hidden=False)
-
-
-def _urdf_visual_fingerprint(link_name: str, visual: ET.Element, visual_index: int) -> str:
-    parts = [link_name, visual.get("name", ""), str(visual_index)]
-    mesh = visual.find("./geometry/mesh")
-    if mesh is not None:
-        parts.append(mesh.get("filename", ""))
-    return " ".join(part for part in parts if part)
 
 
 def prepare_simulator_workspace_package(
@@ -310,8 +99,8 @@ def prepare_simulator_workspace_package(
     request = normalize_simulator_workspace_package_request(request)
     workspace_dir = _timestamped_workspace_dir(workspace_root)
     source_root = workspace_dir / "source"
-    source_root.mkdir(parents=True, exist_ok=True)
     try:
+        source_root.mkdir(parents=True, exist_ok=True)
         return _prepare_simulator_workspace_package_inner(
             request,
             workspace_dir=workspace_dir,
@@ -330,8 +119,8 @@ def _prepare_simulator_workspace_package_inner(
     source_root: Path,
     error: Callable[[str], Exception],
 ) -> PreparedSimulatorWorkspace:
-    _write_uploaded_assets(source_root, request.mesh_assets, error=error)
-    _write_package_root_hints(source_root, request.package_roots)
+    write_uploaded_workspace_assets(source_root, request.mesh_assets, error=error)
+    write_package_root_hints(source_root, request.package_roots)
 
     world_package_path = workspace_dir / "world-package.json"
     world_package_path.write_text(
@@ -340,12 +129,12 @@ def _prepare_simulator_workspace_package_inner(
     )
 
     requested_asset_path = request.urdf_asset_path or "robot.urdf"
-    staged_urdf_relative_path = _normalize_resolved_urdf_asset_path(requested_asset_path)
+    staged_urdf_relative_path = normalize_resolved_urdf_asset_path(requested_asset_path)
     staged_urdf_path = source_root / staged_urdf_relative_path
-    robot_urdf_xml = _normalize_root_relative_urdf_mesh_filenames(
+    robot_urdf_xml = normalize_root_relative_urdf_mesh_filenames(
         request.world_package.world_snapshot.urdf_xml
     )
-    _write_asset_file(
+    write_workspace_asset_file(
         source_root,
         staged_urdf_relative_path,
         robot_urdf_xml.encode("utf-8"),
@@ -354,7 +143,7 @@ def _prepare_simulator_workspace_package_inner(
 
     source_urdf_path = staged_urdf_path
     extra_search_roots: list[Path] = [source_root, staged_urdf_path.parent]
-    requested_asset_parent = (source_root / _normalize_relative_path(requested_asset_path)).parent
+    requested_asset_parent = (source_root / normalize_workspace_asset_path(requested_asset_path)).parent
     if requested_asset_parent != staged_urdf_path.parent:
         extra_search_roots.append(requested_asset_parent)
     if request.ilu_session_id:
@@ -366,7 +155,7 @@ def _prepare_simulator_workspace_package_inner(
             source_urdf_path = session_context.source_urdf_path
             extra_search_roots.extend(session_context.extra_search_roots)
 
-    extra_search_roots.extend(_package_root_hint_paths(source_root, request.package_roots))
+    extra_search_roots.extend(package_root_hint_paths(source_root, request.package_roots))
 
     bundled_urdf_path = workspace_dir / "robot" / "robot.urdf"
     workspace_asset_roots = compute_workspace_asset_roots(
@@ -392,16 +181,17 @@ def _prepare_simulator_workspace_package_inner(
         suffix = "" if len(bundle_result.unresolved) <= 8 else " ..."
         _raise(error, f"Simulator workspace could not resolve robot mesh assets: {unresolved}{suffix}")
     try:
-        _prepare_urdf_visual_material_colors(bundled_urdf_path)
+        materialize_urdf_visual_material_colors(bundled_urdf_path)
     except ET.ParseError as exc:
         _raise(error, f"Simulator workspace could not parse robot URDF materials: {exc}")
+    prepared_robot_urdf_xml = bundled_urdf_path.read_text(encoding="utf-8")
 
     return PreparedSimulatorWorkspace(
         workspace_dir=workspace_dir,
         world_package_path=world_package_path,
         robot_urdf_path=bundled_urdf_path,
         bundle_result=bundle_result,
-        robot_urdf_xml=bundle_result.content,
+        robot_urdf_xml=prepared_robot_urdf_xml,
         world_object_count=_transferable_world_object_count(request),
         camera_count=len(request.world_package.world_snapshot.cameras),
     )

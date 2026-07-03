@@ -14,25 +14,12 @@ import {
   parseGitHubUrl,
   resolveRepositoryXacroTargetPath,
 } from "@/features/urdf/github/githubRepo";
+import type {
+  LoadUrdfTextOptions,
+  UrdfFileInput,
+} from "@/features/urdf/loader/urdfLoaderTypes";
+import type { SourceEntryGitHubParams } from "@/app/pages/index/sourceEntryTypes";
 import type { GitHubSource } from "@/shared/store/useGitHubSourceStore";
-import type { MeshFiles } from "@/shared/types/feature";
-
-type UrdfFileInput = FileList | File[];
-
-type LoadUrdfTextOptions = {
-  filename?: string;
-  activePath?: string;
-  basePath?: string;
-  urdfDocuments?: Record<string, string>;
-  meshFiles?: MeshFiles;
-  packageRoots?: Record<string, string[]>;
-};
-
-type LoadGitHubSourceParams = {
-  repoUrl: string;
-  urdfPath?: string;
-  token?: string;
-};
 
 type UseIndexSourceLoadersParams = {
   clearCameras: () => void;
@@ -60,7 +47,7 @@ export const useIndexSourceLoaders = ({
   );
 
   const handleLoadGitHubSource = useCallback(
-    async ({ repoUrl, urdfPath, token }: LoadGitHubSourceParams) => {
+    async ({ repoUrl, urdfPath, token }: SourceEntryGitHubParams) => {
       try {
         const repoInfo = parseGitHubUrl(repoUrl);
         if (!repoInfo) {

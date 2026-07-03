@@ -10,6 +10,7 @@ from typing import Iterator
 
 import pytest
 
+from backend.core.paths import BASE_DIR
 from backend.services.simulation_prep_mujoco import (
     collect_compiled_mesh_geometries,
     load_mujoco_model,
@@ -20,7 +21,6 @@ from backend.services.simulation_prep_mujoco import (
     vectors_match,
 )
 from backend.services.simulation_prep_mujoco_params import (
-    SIMULATION_PREP_MUJOCO_DEMO_URDF_PATH,
     SIMULATION_PREP_MUJOCO_POSE_TOLERANCE,
     SIMULATION_PREP_MUJOCO_QUATERNION_NORM_TOLERANCE,
     SIMULATION_PREP_MUJOCO_SCALE_TOLERANCE,
@@ -78,25 +78,26 @@ REPEATED_OMNI_WHEEL_FIXTURES = {
         },
     },
 }
+DEMO_FIXTURE_URDF_PATH = BASE_DIR / "web" / "public" / "demo" / "lekiwi.urdf"
 
 
 @contextmanager
 def write_demo_urdf_with_replaced_inertials(
     replacements: dict[str, dict[str, object]],
 ) -> Iterator[Path]:
-    document = ET.parse(SIMULATION_PREP_MUJOCO_DEMO_URDF_PATH)
+    document = ET.parse(DEMO_FIXTURE_URDF_PATH)
     root = document.getroot()
 
     for mesh in root.findall(".//mesh[@filename]"):
         mesh_reference = mesh.get("filename")
         if not mesh_reference:
             continue
-        resolved_mesh_path = (SIMULATION_PREP_MUJOCO_DEMO_URDF_PATH.parent / mesh_reference).resolve()
+        resolved_mesh_path = (DEMO_FIXTURE_URDF_PATH.parent / mesh_reference).resolve()
         mesh.set("filename", f"file://{resolved_mesh_path}")
 
     for link_name, replacement in replacements.items():
         link = root.find(f"./link[@name='{link_name}']")
-        assert link is not None, f"Link '{link_name}' must exist in the lekiwi demo URDF."
+        assert link is not None, f"Link '{link_name}' must exist in the demo URDF fixture."
 
         inertial = link.find("./inertial")
         assert inertial is not None, f"Link '{link_name}' must have an inertial block."
@@ -117,13 +118,13 @@ def write_demo_urdf_with_replaced_inertials(
 
     with tempfile.TemporaryDirectory(prefix="simulation-prep-mujoco-wheel-fix-") as temporary_dir_raw:
         temporary_dir = Path(temporary_dir_raw)
-        temporary_urdf_path = temporary_dir / SIMULATION_PREP_MUJOCO_DEMO_URDF_PATH.name
+        temporary_urdf_path = temporary_dir / DEMO_FIXTURE_URDF_PATH.name
         document.write(temporary_urdf_path, encoding="utf-8", xml_declaration=True)
         yield temporary_urdf_path
 
 
 def test_mesh_validation_mjcf_preserves_collision_mesh_names_authored_transforms_and_scales() -> None:
-    with prepare_mujoco_simulation_assets(SIMULATION_PREP_MUJOCO_DEMO_URDF_PATH) as prepared:
+    with prepare_mujoco_simulation_assets(DEMO_FIXTURE_URDF_PATH) as prepared:
         model = load_mujoco_model(prepared.mesh_validation_mjcf_path)
         compiled_geometries = collect_compiled_mesh_geometries(model)
         expected_geom_names = {geometry.validation_geom_name for geometry in prepared.collision_mesh_geometries}
@@ -156,8 +157,8 @@ def test_mesh_validation_mjcf_preserves_collision_mesh_names_authored_transforms
             )
 
 
-def test_lekiwi_urdf_compiles_with_meshes_and_runs_headlessly_without_non_finite_state() -> None:
-    with prepare_mujoco_simulation_assets(SIMULATION_PREP_MUJOCO_DEMO_URDF_PATH) as prepared:
+def test_demo_urdf_compiles_with_meshes_and_runs_headlessly_without_non_finite_state() -> None:
+    with prepare_mujoco_simulation_assets(DEMO_FIXTURE_URDF_PATH) as prepared:
         model = load_mujoco_model(prepared.staged_urdf_path)
         compiled_geometries = collect_compiled_mesh_geometries(model)
         expected_geom_names = {geometry.geom_name for geometry in prepared.collision_mesh_geometries}
@@ -197,14 +198,14 @@ def test_lekiwi_urdf_compiles_with_meshes_and_runs_headlessly_without_non_finite
         run_headless_smoke_simulation(model)
 
 
-def test_lekiwi_repeated_omni_wheel_fix_output_compiles_and_runs_headlessly() -> None:
+def test_demo_repeated_omni_wheel_fix_output_compiles_and_runs_headlessly() -> None:
     with write_demo_urdf_with_replaced_inertials(REPEATED_OMNI_WHEEL_FIXTURES) as patched_urdf_path:
         with prepare_mujoco_simulation_assets(patched_urdf_path) as prepared:
             model = load_mujoco_model(prepared.staged_urdf_path)
             run_headless_smoke_simulation(model)
 
 
-def test_lekiwi_repeated_omni_wheel_fix_output_preserves_wheel_mesh_poses_and_equal_body_masses() -> None:
+def test_demo_repeated_omni_wheel_fix_output_preserves_wheel_mesh_poses_and_equal_body_masses() -> None:
     import mujoco
 
     expected_wheel_geom_names = {

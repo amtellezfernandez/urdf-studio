@@ -121,6 +121,14 @@ const computeSceneRadius = (robot: PreviewRobot | null, objects: CreatedObject[]
   return Number.isFinite(sphere.radius) ? sphere.radius : null;
 };
 
+const useResolvedPreviewCameraConfig = (cameraId: string | null) => {
+  const cameras = useCameraStore((state) => state.cameras);
+  return useMemo(() => {
+    if (!cameraId) return cameras[0] ?? null;
+    return cameras.find((camera) => camera.id === cameraId) ?? null;
+  }, [cameraId, cameras]);
+};
+
 const JointValueSync = ({ robot }: { robot: PreviewRobot | null }) => {
   const lastValuesRef = useRef<Record<string, number> | null>(null);
   useFrame(() => {
@@ -156,6 +164,21 @@ const RobotMountKeeper = ({
   return null;
 };
 
+const PreviewObjectMaterial = ({
+  color,
+  gpuMode,
+  opacity,
+}: {
+  color: string;
+  gpuMode: GPUMode;
+  opacity: number;
+}) =>
+  gpuMode === "low" ? (
+    <meshBasicMaterial color={color} opacity={opacity} transparent depthTest depthWrite />
+  ) : (
+    <meshStandardMaterial color={color} opacity={opacity} transparent depthTest depthWrite />
+  );
+
 const PreviewObjects = ({ objects, gpuMode }: { objects: CreatedObject[]; gpuMode: GPUMode }) => (
   <group>
     {objects.map((obj) => {
@@ -169,11 +192,7 @@ const PreviewObjects = ({ objects, gpuMode }: { objects: CreatedObject[]; gpuMod
             <>
               <mesh>
                 <sphereGeometry args={[radius, 14, 10]} />
-                {gpuMode === "low" ? (
-                  <meshBasicMaterial color={fillColor} opacity={0.85} transparent depthTest depthWrite />
-                ) : (
-                  <meshStandardMaterial color={fillColor} opacity={0.85} transparent depthTest depthWrite />
-                )}
+                <PreviewObjectMaterial color={fillColor} gpuMode={gpuMode} opacity={0.85} />
               </mesh>
               <lineSegments>
                 <edgesGeometry args={[new THREE.SphereGeometry(radius, 12, 8)]} />
@@ -184,11 +203,7 @@ const PreviewObjects = ({ objects, gpuMode }: { objects: CreatedObject[]; gpuMod
             <>
               <mesh>
                 <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
-                {gpuMode === "low" ? (
-                  <meshBasicMaterial color={fillColor} opacity={0.65} transparent depthTest depthWrite />
-                ) : (
-                  <meshStandardMaterial color={fillColor} opacity={0.65} transparent depthTest depthWrite />
-                )}
+                <PreviewObjectMaterial color={fillColor} gpuMode={gpuMode} opacity={0.65} />
               </mesh>
               <lineSegments>
                 <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
@@ -211,11 +226,7 @@ const CameraPoseController = ({
   robot: PreviewRobot | null;
   sceneRadius: number | null;
 }) => {
-  const cameras = useCameraStore((state) => state.cameras);
-  const cameraConfig = useMemo(() => {
-    if (!cameraId) return cameras[0] ?? null;
-    return cameras.find((camera) => camera.id === cameraId) ?? null;
-  }, [cameraId, cameras]);
+  const cameraConfig = useResolvedPreviewCameraConfig(cameraId);
   const previewCamera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
   const viewportSize = useThree((state) => state.size);
 
@@ -249,12 +260,8 @@ export const CameraViewportPreview = ({
   urdfBasePath,
   urdfContent,
 }: CameraViewportPreviewProps) => {
-  const cameras = useCameraStore((state) => state.cameras);
   const objects = useObjectStore((state) => state.objects);
-  const cameraConfig = useMemo(() => {
-    if (!cameraId) return cameras[0] ?? null;
-    return cameras.find((camera) => camera.id === cameraId) ?? null;
-  }, [cameraId, cameras]);
+  const cameraConfig = useResolvedPreviewCameraConfig(cameraId);
   const hasCameraConfig = cameraConfig !== null;
   const normalizedIntrinsics = useMemo(
     () => (cameraConfig ? normalizeCameraIntrinsics(cameraConfig.intrinsics) : null),

@@ -32,9 +32,9 @@ third_party/splat-collider-builder/
 third_party/third-person-controller-splat/
 pyroki/
 vggt/
-cam-to-sim/runtime_sessions/
+cam-to-sim/
 
 # Machine-specific xacro runtime (wrappers point to local venv paths)
 .i-love-urdf/
-.venv-lerobot/
+.venv-*/
 dist/

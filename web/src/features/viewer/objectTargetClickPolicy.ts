@@ -28,10 +28,7 @@ export const shouldShowRoverApproachGuideForSelectedObject = ({
   if (selectedObject.isHidden === true) {
     return false;
   }
-  return (
-    selectedObject.source === "runtime-demo" ||
-    selectedObject.source === "runtime-detection"
-  );
+  return false;
 };
 
 export const shouldMoveToObjectOnSingleClick = ({

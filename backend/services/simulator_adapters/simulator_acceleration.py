@@ -11,6 +11,9 @@ SIMULATOR_ACCELERATION_DISABLE_ENV = "URDF_STUDIO_DISABLE_SIMULATOR_ACCELERATION
 SIMULATOR_GPU_DEVICE_ENV = "URDF_STUDIO_SIMULATOR_GPU_DEVICE"
 GENESIS_BACKEND_ENV = "URDF_STUDIO_GENESIS_BACKEND"
 GENESIS_PERFORMANCE_MODE_ENV = "URDF_STUDIO_GENESIS_PERFORMANCE_MODE"
+WSL_D3D12_DRI_DRIVER_PATH = Path("/usr/lib/x86_64-linux-gnu/dri/d3d12_dri.so")
+WSL_D3D12_LIBRARY_DIR = Path("/usr/lib/wsl/lib")
+WSL_DXG_DEVICE_PATH = Path("/dev/dxg")
 
 
 def _truthy_env(value: str | None) -> bool:
@@ -21,6 +24,26 @@ def _has_display_environment() -> bool:
     if sys.platform in {"win32", "darwin"}:
         return True
     return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _is_wsl_environment() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+
+def _has_wsl_d3d12_opengl_path() -> bool:
+    return (
+        sys.platform == "linux"
+        and _is_wsl_environment()
+        and _has_display_environment()
+        and WSL_DXG_DEVICE_PATH.exists()
+        and WSL_D3D12_DRI_DRIVER_PATH.exists()
+        and WSL_D3D12_LIBRARY_DIR.exists()
+    )
 
 
 def _command_succeeds(command: Sequence[str]) -> bool:
@@ -95,6 +118,10 @@ def _selected_gpu_device() -> str:
     return configured_device or "0"
 
 
+def _nvidia_d3d12_adapter_hint() -> str:
+    return "NVIDIA"
+
+
 def _set_default(env: dict[str, str], key: str, value: str) -> None:
     if not env.get(key):
         env[key] = value
@@ -128,6 +155,14 @@ def apply_simulator_acceleration_env(env: dict[str, str], simulator_id: str | No
                 _set_default(env, "MUJOCO_GL", "osmesa")
         if normalized_id == "mjlab" and has_nvidia_cuda:
             _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+        return
+
+    if normalized_id == "pybullet":
+        if _has_wsl_d3d12_opengl_path():
+            _prepend_env_path(env, "LD_LIBRARY_PATH", str(WSL_D3D12_LIBRARY_DIR))
+            _set_default(env, "GALLIUM_DRIVER", "d3d12")
+            if has_nvidia_cuda:
+                _set_default(env, "MESA_D3D12_DEFAULT_ADAPTER_NAME", _nvidia_d3d12_adapter_hint())
         return
 
     if normalized_id == "mjx" and has_nvidia_cuda:

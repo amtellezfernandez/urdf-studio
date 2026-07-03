@@ -18,6 +18,7 @@ import {
   ROBOT_MIRROR_SYMMETRY_REPAIR_MIN_STEP_METERS,
 } from "@/features/layout/page/robotMirrorSymmetryParams";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
+import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 import {
   parseRepeatedInertiaSymmetryRobot,
   type ParsedRobot,
@@ -106,11 +107,6 @@ const buildUnavailableRobotMirrorFixAvailability = (): RobotMirrorFixAvailabilit
   orientationOnlyActionableTargetCount: 0,
   orientationOnlyAvailable: false,
 });
-
-const toSortedUniqueLinkNames = (linkNames: readonly string[]): string[] =>
-  Array.from(new Set(linkNames.map((linkName) => linkName.trim()).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right)
-  );
 
 const toPositionTuple = (vector: THREE.Vector3): [number, number, number] => [
   vector.x,
@@ -446,7 +442,7 @@ const collectCenterOnlyActionableLinkNames = ({
   robot: ParsedRobot;
   targets: readonly RobotMirrorSymmetryAlignmentTarget[];
 }): string[] =>
-  toSortedUniqueLinkNames(
+  toSortedUniqueRobotMirrorLinkNames(
     targets.flatMap((target) => {
       const currentAlignmentPoint = resolveLinkAlignmentPointWorld(robot, target.linkName);
       if (!currentAlignmentPoint) {
@@ -665,7 +661,7 @@ export const resolveRobotMirrorActionableSelection = async ({
   }
 
   const selectedLinkNameSet = new Set(selectedLinkNames);
-  const selectedAlwaysIncludedVisualizationLinkNames = toSortedUniqueLinkNames(
+  const selectedAlwaysIncludedVisualizationLinkNames = toSortedUniqueRobotMirrorLinkNames(
     alwaysIncludeVisualizationLinkNames.filter((linkName) => selectedLinkNameSet.has(linkName))
   );
   const centerOnlyActionableLinkNames = collectCenterOnlyActionableLinkNames({
@@ -684,7 +680,7 @@ export const resolveRobotMirrorActionableSelection = async ({
     urdfBasePath,
     urdfContent,
   });
-  const orientationOnlyActionableLinkNames = toSortedUniqueLinkNames(
+  const orientationOnlyActionableLinkNames = toSortedUniqueRobotMirrorLinkNames(
     selectedSelectionLinks.flatMap((selectionLink) =>
       orientationAssessmentByLinkName.get(selectionLink.linkName)?.needsFix
         ? [selectionLink.linkName]
@@ -704,7 +700,7 @@ export const resolveRobotMirrorActionableSelection = async ({
       orientationOnlyActionableTargetCount: orientationOnlyActionableLinkNames.length,
       orientationOnlyAvailable: orientationOnlyActionableLinkNames.length > 0,
     },
-    deemphasizedVisualizationLinkNames: toSortedUniqueLinkNames(
+    deemphasizedVisualizationLinkNames: toSortedUniqueRobotMirrorLinkNames(
       selectedAlwaysIncludedVisualizationLinkNames.filter(
         (linkName) => {
           if (actionableVisualizationLinkNameSet.has(linkName)) {
@@ -725,7 +721,7 @@ export const resolveRobotMirrorActionableSelection = async ({
         }
       )
     ),
-    visualizationLinkNames: toSortedUniqueLinkNames([
+    visualizationLinkNames: toSortedUniqueRobotMirrorLinkNames([
       ...selectedAlwaysIncludedVisualizationLinkNames,
       ...centerOnlyActionableLinkNames,
       ...orientationOnlyActionableLinkNames,

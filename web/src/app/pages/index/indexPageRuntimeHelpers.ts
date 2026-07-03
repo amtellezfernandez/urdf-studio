@@ -19,8 +19,6 @@ import type {
 import { getAssemblyReportBaseUrl } from "@/shared/config/support";
 import type { URDFRobot } from "urdf-loader";
 
-export type OperatorTeleopPanelView = "camera" | "studio" | "hardware";
-
 export type RepeatedInertiaGroupOutcome = {
   tone: "resolved" | "warning" | "success";
   message: string;

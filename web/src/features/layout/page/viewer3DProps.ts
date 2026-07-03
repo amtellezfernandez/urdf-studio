@@ -6,7 +6,6 @@ import type { RepeatedInertiaSymmetryCenterMode } from "@/features/layout/page/r
 import type {
   InertialVisualizationSettings,
   MeshFiles,
-  RobotBasePose,
 } from "@/shared/types/feature";
 import type { JointAxisMap, JointLimits } from "@/shared/lib/urdfBrowser";
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
@@ -66,7 +65,6 @@ type Viewer3DPropsInput = {
   ikDragSuppressed?: boolean;
   vizUrdfContent: string;
   updateUrdfFile: (content: string) => void;
-  runtimeRobotBasePose?: RobotBasePose | null;
   onObjectSelect?: Viewer3DProps["onObjectSelect"];
   onInertiaReliabilityChange?: Viewer3DProps["onInertiaReliabilityChange"];
   enableObjectActionsInReadOnly?: boolean;
@@ -119,7 +117,6 @@ export const toViewer3DProps = ({
   ikDragSuppressed = false,
   vizUrdfContent,
   updateUrdfFile,
-  runtimeRobotBasePose = null,
   onObjectSelect,
   onInertiaReliabilityChange,
   enableObjectActionsInReadOnly = false,
@@ -190,7 +187,6 @@ export const toViewer3DProps = ({
     readOnlyMode,
     thumbnailMode,
     preferStudioRuntime,
-    runtimeRobotBasePose,
     onObjectSelect,
     onInertiaReliabilityChange,
     enableObjectActionsInReadOnly,

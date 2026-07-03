@@ -69,41 +69,25 @@ def test_ros_viz_session_and_subscription_endpoints() -> None:
     assert 6 in subscribed.subscribed_topic_ids
 
 
-def test_ros_viz_mode_and_clock_endpoints_for_replay_session() -> None:
-    session = _run_api(
-        create_ros_viz_session(
-            RosVizSessionCreateRequest(
-                data_source="replay",
-                replay_source="episode://abc",
-            )
-        )
-    )
+def test_ros_viz_mode_and_clock_endpoints_are_live_only() -> None:
+    session = _run_api(create_ros_viz_session(RosVizSessionCreateRequest()))
 
     state = _run_api(get_ros_viz_session_state(session.session_id))
-    assert state.mode == "replay_rosbag"
-    assert state.capabilities.can_seek is True
+    assert state.mode == "live_debug"
+    assert state.capabilities.can_seek is False
 
     switched = _run_api(
         update_ros_viz_session_mode(
             session.session_id,
-            RosVizModeUpdateRequest(mode="replay_episode"),
+            RosVizModeUpdateRequest(mode="live_debug"),
         )
     )
-    assert switched.mode == "replay_episode"
-    assert switched.data_source == "episode"
+    assert switched.mode == "live_debug"
+    assert switched.data_source == "live_ros"
 
     initial_clock = _run_api(get_ros_viz_clock_state(session.session_id))
-    assert initial_clock.can_control is True
-    assert initial_clock.mode == "replay"
-
-    updated = _run_api(
-        update_ros_viz_clock_state(
-            session.session_id,
-            RosVizClockControlRequest(is_playing=False, step_ticks=2),
-        )
-    )
-    assert updated.is_playing is False
-    assert updated.tick_index >= 2
+    assert initial_clock.can_control is False
+    assert initial_clock.mode == "live"
 
 
 def test_ros_viz_stream_ticket_endpoint_issues_short_lived_ticket() -> None:

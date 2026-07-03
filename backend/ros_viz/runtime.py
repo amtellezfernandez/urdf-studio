@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from secrets import token_hex
 from dataclasses import dataclass, field
 from threading import Lock
@@ -21,7 +20,6 @@ from backend.models.ros_viz import (
     RosVizModeProfile,
     RosVizModeUpdateRequest,
     RosVizQosProfile,
-    RosVizRecordingState,
     RosVizResolvedFramePose,
     RosVizResolvedFramePoseBatch,
     RosVizRuntimeCapabilities,
@@ -52,17 +50,11 @@ from backend.ros_viz.params import (
     DEFAULT_ROBOT_ID,
     DEFAULT_SUBSCRIBED_TOPIC_IDS,
     DETERMINISTIC_STRICT_EPOCH_NS,
-    MARKER_ALERT_LIFETIME_MS,
-    MARKER_ALERT_PERIOD_TICKS,
-    MARKER_ID_ALERT,
     MARKER_ID_TOOL_SPHERE,
     MARKER_ID_TRAJECTORY_LINE,
     MARKER_NS_STATUS,
     MARKER_NS_TRAJECTORY,
     MARKER_TRAJECTORY_MAX_POINTS,
-    MAX_CLOCK_STEP_TICKS,
-    MAX_PLAYBACK_RATE,
-    MIN_PLAYBACK_RATE,
     ROSVIZ_SESSION_ID_HEX_LENGTH,
     ROSVIZ_SESSION_ID_PREFIX,
     ROSVIZ_STREAM_TICKET_BYTES,
@@ -102,7 +94,6 @@ class RosVizModeSpec:
     clock_mode: RosVizClockMode
     time_source: RosVizTimeSource
     transport_source: RosVizTransportSource
-    recording_state: RosVizRecordingState
     is_playing: bool
     capabilities: RosVizRuntimeCapabilities
 
@@ -113,89 +104,12 @@ _MODE_SPECS: dict[RosVizSessionMode, RosVizModeSpec] = {
         clock_mode="live",
         time_source="ros_clock",
         transport_source="ros_topics",
-        recording_state="idle",
         is_playing=True,
         capabilities=RosVizRuntimeCapabilities(
-            can_record=False,
             can_toggle_play=False,
             can_step=False,
             can_seek=False,
             can_set_playback_rate=False,
-        ),
-    ),
-    "live_record": RosVizModeSpec(
-        data_source="live_ros",
-        clock_mode="live",
-        time_source="ros_clock",
-        transport_source="ros_topics",
-        recording_state="armed",
-        is_playing=True,
-        capabilities=RosVizRuntimeCapabilities(
-            can_record=True,
-            can_toggle_play=False,
-            can_step=False,
-            can_seek=False,
-            can_set_playback_rate=False,
-        ),
-    ),
-    "replay_rosbag": RosVizModeSpec(
-        data_source="replay",
-        clock_mode="replay",
-        time_source="bag_time",
-        transport_source="bag_reader",
-        recording_state="idle",
-        is_playing=True,
-        capabilities=RosVizRuntimeCapabilities(
-            can_record=False,
-            can_toggle_play=True,
-            can_step=True,
-            can_seek=True,
-            can_set_playback_rate=True,
-        ),
-    ),
-    "replay_episode": RosVizModeSpec(
-        data_source="episode",
-        clock_mode="replay",
-        time_source="episode_time",
-        transport_source="episode_store",
-        recording_state="idle",
-        is_playing=True,
-        capabilities=RosVizRuntimeCapabilities(
-            can_record=False,
-            can_toggle_play=True,
-            can_step=True,
-            can_seek=True,
-            can_set_playback_rate=True,
-        ),
-    ),
-    "replay_motion_only": RosVizModeSpec(
-        data_source="replay",
-        clock_mode="replay",
-        time_source="bag_time",
-        transport_source="motion_store",
-        recording_state="idle",
-        is_playing=True,
-        capabilities=RosVizRuntimeCapabilities(
-            can_record=False,
-            can_toggle_play=True,
-            can_step=True,
-            can_seek=True,
-            can_set_playback_rate=True,
-        ),
-    ),
-    "hybrid_compare": RosVizModeSpec(
-        data_source="replay",
-        clock_mode="replay",
-        time_source="wall_time",
-        transport_source="hybrid_pipeline",
-        recording_state="idle",
-        is_playing=True,
-        capabilities=RosVizRuntimeCapabilities(
-            can_record=False,
-            can_toggle_play=True,
-            can_step=True,
-            can_seek=True,
-            can_set_playback_rate=True,
         ),
     ),
 }
@@ -208,14 +122,12 @@ class RosVizSessionState:
     created_at_ms: int
     updated_at_ms: int
     ros_domain_id: int | None = None
-    replay_source: str | None = None
     deterministic_mode: str = DEFAULT_DETERMINISTIC_MODE
     mode_profile: RosVizModeProfile = "ros_debug"
     data_source: RosVizDataSource = "live_ros"
     session_mode: RosVizSessionMode = "live_debug"
     time_source: RosVizTimeSource = "ros_clock"
     transport_source: RosVizTransportSource = "ros_topics"
-    recording_state: RosVizRecordingState = "idle"
     clock_mode: RosVizClockMode = DEFAULT_CLOCK_MODE
     is_playing: bool = True
     playback_rate: float = DEFAULT_PLAYBACK_RATE
@@ -341,7 +253,6 @@ class RosVizRuntime:
             data_source=session.data_source,
             time_source=session.time_source,
             transport_source=session.transport_source,
-            recording_state=session.recording_state,
             clock_mode=session.clock_mode,
             is_playing=session.is_playing,
             tick_index=session.tick_index,
@@ -352,15 +263,9 @@ class RosVizRuntime:
         )
 
     def _normalize_data_source(self, req: RosVizSessionCreateRequest) -> RosVizDataSource:
-        if req.data_source == "live_ros" and req.replay_source and req.replay_source.strip():
-            return "replay"
         return req.data_source
 
-    def _default_mode_for_source(self, data_source: RosVizDataSource) -> RosVizSessionMode:
-        if data_source == "replay":
-            return "replay_rosbag"
-        if data_source == "episode":
-            return "replay_episode"
+    def _default_mode_for_source(self, _data_source: RosVizDataSource) -> RosVizSessionMode:
         return "live_debug"
 
     def _mode_spec(self, mode: RosVizSessionMode) -> RosVizModeSpec:
@@ -374,9 +279,6 @@ class RosVizRuntime:
             or caps.can_seek
             or caps.can_set_playback_rate
         )
-
-    def _clamp_playback_rate(self, value: float) -> float:
-        return max(MIN_PLAYBACK_RATE, min(MAX_PLAYBACK_RATE, value))
 
     def _normalize_client_host(self, client_host: str | None) -> str:
         return (client_host or "").strip().lower()
@@ -410,7 +312,6 @@ class RosVizRuntime:
         session.clock_mode = spec.clock_mode
         session.time_source = spec.time_source
         session.transport_source = spec.transport_source
-        session.recording_state = spec.recording_state
         session.is_playing = spec.is_playing
         session.capabilities = spec.capabilities.model_copy(deep=True)
         session.playback_rate = DEFAULT_PLAYBACK_RATE
@@ -437,7 +338,6 @@ class RosVizRuntime:
             session_id=self._next_session_id(),
             fixed_frame=fixed_frame,
             ros_domain_id=req.ros_domain_id,
-            replay_source=req.replay_source,
             deterministic_mode=deterministic_mode,
             mode_profile=req.mode_profile,
             created_at_ms=now_ms,
@@ -563,7 +463,7 @@ class RosVizRuntime:
             if req.playback_rate is not None:
                 if not session.capabilities.can_set_playback_rate:
                     raise ValueError(f"Session mode '{session.session_mode}' does not support playback-rate control.")
-                session.playback_rate = self._clamp_playback_rate(req.playback_rate)
+                session.playback_rate = req.playback_rate
 
             if req.seek_tick_index is not None:
                 if not session.capabilities.can_seek:
@@ -575,8 +475,7 @@ class RosVizRuntime:
             if req.step_ticks > 0:
                 if not session.capabilities.can_step:
                     raise ValueError(f"Session mode '{session.session_mode}' does not support stepping.")
-                step_ticks = min(MAX_CLOCK_STEP_TICKS, req.step_ticks)
-                session.tick_index += step_ticks
+                session.tick_index += req.step_ticks
 
             session.updated_at_ms = _now_ms()
             return self._to_clock_state(session)
@@ -628,41 +527,8 @@ class RosVizRuntime:
             return max(1, int(round(session.playback_rate)))
         return 0
 
-    def _has_replay_source(self, session: RosVizSessionState) -> bool:
-        return bool(session.replay_source and session.replay_source.strip())
-
-    def _should_emit_synthetic_motion(self, session: RosVizSessionState) -> bool:
-        if session.data_source == "live_ros":
-            return False
-        return self._has_replay_source(session)
-
-    def _diagnostic_motion_source(self, session: RosVizSessionState, synthetic_motion_active: bool) -> str:
-        if synthetic_motion_active:
-            return "synthetic"
-        if session.data_source == "live_ros":
-            return "static_waiting_for_ros"
-        return "static_waiting_for_replay"
-
-    def _tool_pose_xyz(self, session: RosVizSessionState) -> list[float]:
-        phase = session.tick_index * 0.07
-        return [
-            0.35 + 0.08 * math.sin(phase),
-            0.14 * math.cos(phase * 0.62),
-            0.25 + 0.04 * math.sin(phase * 0.33),
-        ]
-
-    def _elbow_pose_xyz(self, session: RosVizSessionState) -> list[float]:
-        phase = session.tick_index * 0.05
-        return [
-            0.18 + 0.04 * math.sin(phase),
-            0.06 * math.cos(phase * 0.8),
-            0.18,
-        ]
-
     def _resolve_link_poses(self, session: RosVizSessionState) -> tuple[list[float], list[float]]:
-        if not self._should_emit_synthetic_motion(session):
-            return list(STATIC_TOOL_XYZ), list(STATIC_ELBOW_XYZ)
-        return self._tool_pose_xyz(session), self._elbow_pose_xyz(session)
+        return list(STATIC_TOOL_XYZ), list(STATIC_ELBOW_XYZ)
 
     def _append_tool_trail(self, session: RosVizSessionState, tool_xyz: list[float]) -> None:
         if session.tool_trail_xyz:
@@ -757,28 +623,6 @@ class RosVizRuntime:
                 ),
             ),
         ]
-        if (
-            self._should_emit_synthetic_motion(session)
-            and session.tick_index % MARKER_ALERT_PERIOD_TICKS == 0
-            and session.tick_index > 0
-        ):
-            deltas.append(
-                RosVizMarkerDelta(
-                    action="add_or_modify",
-                    namespace=MARKER_NS_STATUS,
-                    marker_id=MARKER_ID_ALERT,
-                    marker=RosVizMarker(
-                        namespace=MARKER_NS_STATUS,
-                        marker_id=MARKER_ID_ALERT,
-                        frame_id=session.fixed_frame,
-                        marker_type="cube",
-                        pose_position_xyz=[tool_xyz[0], tool_xyz[1], max(0.05, tool_xyz[2] - 0.08)],
-                        scale_xyz=[0.06, 0.06, 0.02],
-                        color_rgba=[1.0, 0.25, 0.2, 0.8],
-                        lifetime_ms=MARKER_ALERT_LIFETIME_MS,
-                    ),
-                )
-            )
         return RosVizMarkerDeltaBatch(
             fixed_frame=session.fixed_frame,
             t_ns=t_ns,
@@ -793,7 +637,6 @@ class RosVizRuntime:
 
             tick_ns = self._tick_time_ns(session)
             tool_xyz, elbow_xyz = self._resolve_link_poses(session)
-            synthetic_motion_active = self._should_emit_synthetic_motion(session)
             frames: list[bytes] = []
             pose_hash = ""
 
@@ -857,19 +700,10 @@ class RosVizRuntime:
                 )
 
             if TOPIC_ID_DIAGNOSTIC_EVENT in session.subscribed_topic_ids:
-                motion_source = self._diagnostic_motion_source(session, synthetic_motion_active)
                 diagnostics = RosVizDiagnosticEvent(
                     code=DEFAULT_DIAGNOSTIC_CODE,
                     severity="info",
-                    message=(
-                        f"ROS viz synthetic replay active ({session.deterministic_mode})."
-                        if motion_source == "synthetic"
-                        else (
-                            f"ROS viz stream active; awaiting ROS data ({session.deterministic_mode})."
-                            if motion_source == "static_waiting_for_ros"
-                            else f"ROS viz replay mode active; waiting for replay data ({session.deterministic_mode})."
-                        )
-                    ),
+                    message=f"ROS viz stream active; awaiting ROS data ({session.deterministic_mode}).",
                     details={
                         "deterministic_mode": session.deterministic_mode,
                         "mode_profile": session.mode_profile,
@@ -877,15 +711,13 @@ class RosVizRuntime:
                         "data_source": session.data_source,
                         "time_source": session.time_source,
                         "transport_source": session.transport_source,
-                        "recording_state": session.recording_state,
                         "clock_mode": session.clock_mode,
                         "is_playing": str(session.is_playing).lower(),
                         "playback_rate": f"{session.playback_rate:.2f}",
                         "tick_index": str(session.tick_index),
                         "pose_hash": pose_hash,
                         "session_hash": session.deterministic_session_hash,
-                        "motion_source": motion_source,
-                        "replay_source": session.replay_source or "",
+                        "motion_source": "static_waiting_for_ros",
                     },
                 )
                 frames.append(

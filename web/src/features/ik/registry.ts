@@ -5,6 +5,7 @@ import { FEATURE_GATES } from "@/shared/config/featureGates";
 import { guardedFetch } from "@/shared/lib/backendGuard";
 
 const KNOWN_SOLVER_IDS = new Set<IkSolverId>([
+  "placo",
   "amik",
   "ikfast-wasm",
   "ik-js",

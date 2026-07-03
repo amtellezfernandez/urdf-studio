@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useViewerPlaybackStore } from "@/shared/store/useViewerPlaybackStore";
-import type { ViewerEpisode } from "@/shared/types/feature";
 
 const PLAYBACK_FRAME_COUNT = 1;
 const PLAYBACK_START_FRAME = 0;
@@ -12,173 +11,132 @@ const PLAYBACK_ANIMATION_FRAMES = Array.from(
     joints: {},
   })
 );
-
-const PLAYBACK_EPISODE: ViewerEpisode = {
-  id: "episode-store-test",
-  number: 1,
-  createdAt: 0,
-  frames: [
-    {
-      timestamp: 0,
-      jointPositions: { joint_a: 0 },
-    },
-  ],
-  metadata: {
-    episode_index: 0,
-  },
+const PLAYBACK_OPTIONS = {
+  autoplay: true,
+  applyInitialFrame: true,
+  startFrame: PLAYBACK_START_FRAME,
 };
 
 beforeEach(() => {
   useViewerPlaybackStore.setState({
     handlers: {},
     pendingCommands: [],
-    activeEpisodePlayback: null,
-    playbackEpisode: null,
+    activeFramePlayback: null,
     isPlaying: false,
     currentFrame: 0,
   });
 });
 
 describe("useViewerPlaybackStore", () => {
-  it("tracks the playback episode context passed to playEpisode", () => {
-    const playEpisode = vi.fn();
-    useViewerPlaybackStore.getState().registerHandlers({ playEpisode });
+  it("tracks the active frame playback passed to playFrames", () => {
+    const playFrames = vi.fn();
+    useViewerPlaybackStore.getState().registerHandlers({ playFrames });
 
-    useViewerPlaybackStore.getState().playEpisode(
+    useViewerPlaybackStore.getState().playFrames(
       PLAYBACK_ANIMATION_FRAMES,
-      {
-        autoplay: false,
-        applyInitialFrame: false,
-        startFrame: PLAYBACK_START_FRAME,
-        playbackEpisode: PLAYBACK_EPISODE,
-      }
+      PLAYBACK_OPTIONS
     );
 
-    expect(playEpisode).toHaveBeenCalledOnce();
-    expect(useViewerPlaybackStore.getState().playbackEpisode).toBe(
-      PLAYBACK_EPISODE
-    );
+    expect(playFrames).toHaveBeenCalledOnce();
+    expect(useViewerPlaybackStore.getState().activeFramePlayback).toEqual({
+      frames: PLAYBACK_ANIMATION_FRAMES,
+      options: PLAYBACK_OPTIONS,
+    });
   });
 
-  it("clears the playback episode context when animation is cleared", () => {
+  it("clears active frame playback when animation is cleared", () => {
     const clearAnimation = vi.fn();
     useViewerPlaybackStore.setState({
       handlers: { clearAnimation },
       pendingCommands: [],
-      activeEpisodePlayback: {
+      activeFramePlayback: {
         frames: PLAYBACK_ANIMATION_FRAMES,
-        options: {
-          autoplay: false,
-          applyInitialFrame: false,
-          startFrame: PLAYBACK_START_FRAME,
-          playbackEpisode: PLAYBACK_EPISODE,
-        },
+        options: PLAYBACK_OPTIONS,
       },
-      playbackEpisode: PLAYBACK_EPISODE,
     });
 
     useViewerPlaybackStore.getState().clearAnimation();
 
     expect(clearAnimation).toHaveBeenCalledOnce();
-    expect(useViewerPlaybackStore.getState().playbackEpisode).toBeNull();
-    expect(useViewerPlaybackStore.getState().activeEpisodePlayback).toBeNull();
+    expect(useViewerPlaybackStore.getState().activeFramePlayback).toBeNull();
   });
 
   it("replays queued playback commands when handlers register later", () => {
-    const playEpisode = vi.fn();
+    const playFrames = vi.fn();
     const playAnimation = vi.fn();
 
-    useViewerPlaybackStore.getState().playEpisode(
+    useViewerPlaybackStore.getState().playFrames(
       PLAYBACK_ANIMATION_FRAMES,
-      {
-        autoplay: true,
-        applyInitialFrame: true,
-        startFrame: PLAYBACK_START_FRAME,
-        playbackEpisode: PLAYBACK_EPISODE,
-      }
+      PLAYBACK_OPTIONS
     );
     useViewerPlaybackStore.getState().playAnimation(true);
 
     expect(useViewerPlaybackStore.getState().pendingCommands).toHaveLength(2);
-    expect(playEpisode).not.toHaveBeenCalled();
+    expect(playFrames).not.toHaveBeenCalled();
     expect(playAnimation).not.toHaveBeenCalled();
 
     useViewerPlaybackStore.getState().registerHandlers({
-      playEpisode,
+      playFrames,
       playAnimation,
     });
 
-    expect(playEpisode).toHaveBeenCalledOnce();
-    expect(playEpisode).toHaveBeenCalledWith(PLAYBACK_ANIMATION_FRAMES, {
-      autoplay: true,
-      applyInitialFrame: true,
-      startFrame: PLAYBACK_START_FRAME,
-      playbackEpisode: PLAYBACK_EPISODE,
-    });
+    expect(playFrames).toHaveBeenCalledOnce();
+    expect(playFrames).toHaveBeenCalledWith(PLAYBACK_ANIMATION_FRAMES, PLAYBACK_OPTIONS);
     expect(playAnimation).toHaveBeenCalledOnce();
     expect(playAnimation).toHaveBeenCalledWith(true);
     expect(useViewerPlaybackStore.getState().pendingCommands).toHaveLength(0);
-    expect(useViewerPlaybackStore.getState().playbackEpisode).toBe(
-      PLAYBACK_EPISODE
-    );
+    expect(useViewerPlaybackStore.getState().activeFramePlayback).toEqual({
+      frames: PLAYBACK_ANIMATION_FRAMES,
+      options: PLAYBACK_OPTIONS,
+    });
   });
 
-  it("does not rehydrate active episode playback only from stored state on handler re-register", () => {
-    const firstHandlerPlayEpisode = vi.fn();
-    const nextHandlerPlayEpisode = vi.fn();
+  it("does not rehydrate active frame playback only from stored state on handler re-register", () => {
+    const firstHandlerPlayFrames = vi.fn();
+    const nextHandlerPlayFrames = vi.fn();
 
     useViewerPlaybackStore.getState().registerHandlers({
-      playEpisode: firstHandlerPlayEpisode,
+      playFrames: firstHandlerPlayFrames,
     });
-    useViewerPlaybackStore.getState().playEpisode(
+    useViewerPlaybackStore.getState().playFrames(
       PLAYBACK_ANIMATION_FRAMES,
-      {
-        autoplay: true,
-        applyInitialFrame: true,
-        startFrame: PLAYBACK_START_FRAME,
-        playbackEpisode: PLAYBACK_EPISODE,
-      }
+      PLAYBACK_OPTIONS
     );
     useViewerPlaybackStore.getState().setFrameInfo(PLAYBACK_START_FRAME, PLAYBACK_FRAME_COUNT);
     useViewerPlaybackStore.getState().setHasFrames(true);
     useViewerPlaybackStore.getState().setIsPlaying(true);
 
-    expect(firstHandlerPlayEpisode).toHaveBeenCalledOnce();
+    expect(firstHandlerPlayFrames).toHaveBeenCalledOnce();
 
     useViewerPlaybackStore.getState().clearHandlers();
     useViewerPlaybackStore.getState().registerHandlers({
-      playEpisode: nextHandlerPlayEpisode,
+      playFrames: nextHandlerPlayFrames,
     });
 
-    expect(nextHandlerPlayEpisode).not.toHaveBeenCalled();
-    expect(useViewerPlaybackStore.getState().playbackEpisode).toBe(
-      PLAYBACK_EPISODE
-    );
+    expect(nextHandlerPlayFrames).not.toHaveBeenCalled();
+    expect(useViewerPlaybackStore.getState().activeFramePlayback).toEqual({
+      frames: PLAYBACK_ANIMATION_FRAMES,
+      options: PLAYBACK_OPTIONS,
+    });
   });
 
   it("does not auto-rehydrate active playback on handler register before frames are known", () => {
-    const playEpisode = vi.fn();
+    const playFrames = vi.fn();
 
     useViewerPlaybackStore.setState({
       handlers: {},
       pendingCommands: [],
-      activeEpisodePlayback: {
+      activeFramePlayback: {
         frames: PLAYBACK_ANIMATION_FRAMES,
-        options: {
-          autoplay: true,
-          applyInitialFrame: true,
-          startFrame: PLAYBACK_START_FRAME,
-          playbackEpisode: PLAYBACK_EPISODE,
-        },
+        options: PLAYBACK_OPTIONS,
       },
-      playbackEpisode: PLAYBACK_EPISODE,
       hasFrames: false,
       isPlaying: true,
       currentFrame: PLAYBACK_START_FRAME,
     });
 
-    useViewerPlaybackStore.getState().registerHandlers({ playEpisode });
+    useViewerPlaybackStore.getState().registerHandlers({ playFrames });
 
-    expect(playEpisode).not.toHaveBeenCalled();
+    expect(playFrames).not.toHaveBeenCalled();
   });
 });

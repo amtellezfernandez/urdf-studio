@@ -5,15 +5,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from backend.services.so101_genesis_urdf import (
-    So101GenesisUrdfRepairResult,
-    materialize_so101_genesis_urdf_report,
+from backend.services.simulator_adapters.robot_repair_profiles import (
+    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS,
+    SO101_GENESIS_GRIPPER_PROXY_COLLISION_PROFILE,
+)
+from backend.services.simulator_adapters.urdf_collision_proxy_repair import (
+    UrdfCollisionProxyRepairProfile,
+    materialize_urdf_collision_proxy_repair_report,
 )
 
 GENESIS_COMPATIBILITY_PATCH_PROVENANCE_KEY = "simulator_compatibility_patches"
-GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS = (
-    "so101_gripper_proxy_collisions"
-)
 
 
 @dataclass(frozen=True)
@@ -26,18 +27,40 @@ class GenesisRobotUrdfRepairResult:
 GenesisRobotRepair = Callable[[Path], GenesisRobotUrdfRepairResult]
 
 
-def _adapt_so101_repair(urdf_path: Path) -> GenesisRobotUrdfRepairResult:
-    result: So101GenesisUrdfRepairResult = materialize_so101_genesis_urdf_report(urdf_path)
-    return GenesisRobotUrdfRepairResult(
-        path=result.path,
-        applied=result.applied,
-        repair_id=result.repair_id,
+def _collision_proxy_repair(
+    profile: UrdfCollisionProxyRepairProfile,
+) -> GenesisRobotRepair:
+    def repair(urdf_path: Path) -> GenesisRobotUrdfRepairResult:
+        result = materialize_urdf_collision_proxy_repair_report(
+            urdf_path,
+            profile=profile,
+        )
+        return GenesisRobotUrdfRepairResult(
+            path=result.path,
+            applied=result.applied,
+            repair_id=result.repair_id,
+        )
+
+    return repair
+
+
+def _repair_by_profile_id(
+    profiles: Iterable[UrdfCollisionProxyRepairProfile],
+) -> dict[str, GenesisRobotRepair]:
+    return {profile.repair_id: _collision_proxy_repair(profile) for profile in profiles}
+
+
+GENESIS_ROBOT_REPAIRS_BY_ID: Mapping[str, GenesisRobotRepair] = _repair_by_profile_id(
+    (
+        SO101_GENESIS_GRIPPER_PROXY_COLLISION_PROFILE,
     )
+)
 
 
-GENESIS_ROBOT_REPAIRS_BY_ID: Mapping[str, GenesisRobotRepair] = {
-    GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS: _adapt_so101_repair,
-}
+def _compatibility_patch_profile_id(patch_id: str) -> str:
+    if patch_id == GENESIS_COMPATIBILITY_PATCH_SO101_GRIPPER_PROXY_COLLISIONS:
+        return SO101_GENESIS_GRIPPER_PROXY_COLLISION_PROFILE.repair_id
+    return patch_id
 
 
 def _patch_id_list(value: Any, path: str) -> tuple[str, ...]:
@@ -77,7 +100,8 @@ def materialize_genesis_robot_urdf_report(
 ) -> GenesisRobotUrdfRepairResult:
     source_path = urdf_path.resolve()
     for patch_id in requested_patch_ids:
-        repair = GENESIS_ROBOT_REPAIRS_BY_ID.get(patch_id)
+        profile_id = _compatibility_patch_profile_id(patch_id)
+        repair = GENESIS_ROBOT_REPAIRS_BY_ID.get(profile_id)
         if repair is None:
             raise ValueError(f"Unknown Genesis robot compatibility patch: {patch_id}")
         result = repair(source_path)

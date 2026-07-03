@@ -97,8 +97,3 @@ export const getFeatureGateUiState = (
     title: availability.enabled ? undefined : availability.unavailableReason,
   };
 };
-
-export const whenFeatureEnabled = <T,>(
-  gateOrAvailability: FeatureGate | FeatureGateAvailability,
-  value: T
-): T | undefined => (toFeatureGateAvailability(gateOrAvailability).enabled ? value : undefined);

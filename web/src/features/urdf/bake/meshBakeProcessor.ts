@@ -32,6 +32,13 @@ export type MeshBakePlanExecutionResult = {
   }>;
 };
 
+export type MeshBakePlanExecutionInput = {
+  plan: UrdfBakedMeshPlan;
+  meshFiles: Record<string, Blob>;
+  urdfBasePath?: string;
+  packageRoots?: Record<string, string[]>;
+};
+
 const OBJ_EXTENSION = ".obj";
 const STL_EXTENSION = ".stl";
 const DAE_EXTENSION = ".dae";
@@ -182,12 +189,7 @@ export const executeMeshBakePlan = async ({
   meshFiles,
   urdfBasePath,
   packageRoots,
-}: {
-  plan: UrdfBakedMeshPlan;
-  meshFiles: Record<string, Blob>;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-}): Promise<MeshBakePlanExecutionResult> => {
+}: MeshBakePlanExecutionInput): Promise<MeshBakePlanExecutionResult> => {
   const overrides: BakedMeshOverride[] = [];
   const unsupported: MeshBakePlanExecutionResult["unsupported"] = [];
 

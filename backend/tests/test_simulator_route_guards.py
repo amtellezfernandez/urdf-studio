@@ -27,7 +27,6 @@ TEST_OPERATOR_ONLY_PATHS = (
     "/workspace-transfer/targets",
     "/simulators",
     "/simulators/genesis/runtime",
-    "/runtime/sessions/demo/stats",
     "/attestation/status",
     "/ilu-session/demo-session",
 )
@@ -36,7 +35,7 @@ TEST_OPERATOR_ONLY_PATHS = (
 def _patch_security_settings(token: str | None):
     return patch(
         "backend.core.simulator_security.settings",
-        SimpleNamespace(simulator_api_token=token, cam_to_sim_proxy_token=None),
+        SimpleNamespace(simulator_api_token=token),
     )
 
 
@@ -138,30 +137,6 @@ def test_collaboration_room_routes_use_collaboration_token_guard_not_operator_gu
         )
     assert room_token_response.status_code == 200
 
-    with _patch_security_settings(None):
-        issue_capability_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities",
-            headers={COLLABORATION_SESSION_TOKEN_HEADER: created["owner_token"]},
-            json={"role": "room_editor", "allowed_transports": ["websocket"]},
-        )
-    assert issue_capability_response.status_code == 200
-    capability_token = issue_capability_response.json()["capability_token"]
-
-    with _patch_security_settings(None):
-        verify_capability_without_operator_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities/verify",
-            json={"capability_token": capability_token},
-        )
-    assert verify_capability_without_operator_response.status_code == 403
-
-    with _patch_security_settings(None):
-        revoke_capability_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities/revoke",
-            headers={COLLABORATION_SESSION_TOKEN_HEADER: created["owner_token"]},
-            json={"capability_token": capability_token},
-        )
-    assert revoke_capability_response.status_code == 200
-
 
 def test_collaboration_room_token_does_not_grant_operator_or_host_route_access() -> None:
     client = TestClient(app)
@@ -191,15 +166,6 @@ def test_world_bridge_status_rejects_remote_requests_without_operator_access() -
     assert response.status_code == 403
     assert "Remote simulator access is disabled" in response.json()["detail"]
     assert response.headers[REQUEST_ID_HEADER] == "deny-world-1"
-
-
-def test_runtime_session_stats_reject_remote_requests_without_operator_access() -> None:
-    client = TestClient(app)
-    with _patch_security_settings(None):
-        response = client.get("/runtime/sessions/demo/stats")
-
-    assert response.status_code == 403
-    assert "Remote simulator access is disabled" in response.json()["detail"]
 
 
 def test_attestation_status_rejects_remote_requests_without_operator_access() -> None:

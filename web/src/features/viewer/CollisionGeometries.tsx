@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
@@ -7,7 +14,10 @@ import type { MeshFiles } from "@/shared/types/feature";
 import type { GPUMode } from "@/shared/hooks/use-gpu-mode";
 import type { CollisionEntry, UrdfAnalysis } from "@/shared/lib/urdfCore";
 import { resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
-import { disposeMeshResources, loadMeshFromBlob } from "@/features/urdf/mesh/meshDecode";
+import {
+  disposeMeshResources,
+  loadMeshFromBlob,
+} from "@/features/urdf/mesh/meshDecode";
 import { useLinkHighlightStore } from "@/shared/store/useLinkHighlightStore";
 import {
   hasRenderableCollisionEntries,
@@ -30,6 +40,9 @@ type CollisionInstance = {
   localMatrix: THREE.Matrix4;
 };
 
+type CollisionPrimitiveInstanceRef = MutableRefObject<CollisionInstance[]>;
+type CollisionProxyTarget = "simplified" | "merged";
+
 const COLLISION_OVERLAY_COLOR = 0x808080;
 const COLLISION_OVERLAY_OPACITY = 0.32;
 const COLLISION_OVERLAY_DEPTH_TEST = true;
@@ -38,14 +51,46 @@ const COLLISION_OVERLAY_POLYGON_OFFSET_FACTOR = -1;
 const COLLISION_OVERLAY_POLYGON_OFFSET_UNITS = -1;
 const UNIT_BOX_HALF_EXTENT = 0.5;
 const UNIT_BOX_CORNERS: readonly THREE.Vector3[] = [
-  new THREE.Vector3(-UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(-UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(-UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(UNIT_BOX_HALF_EXTENT, -UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(-UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT),
-  new THREE.Vector3(UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT, UNIT_BOX_HALF_EXTENT),
+  new THREE.Vector3(
+    -UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    -UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    -UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    UNIT_BOX_HALF_EXTENT,
+    -UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    -UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+  ),
+  new THREE.Vector3(
+    UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+    UNIT_BOX_HALF_EXTENT,
+  ),
 ];
 
 export const CollisionGeometries = ({
@@ -97,6 +142,9 @@ export const CollisionGeometries = ({
   const mergedBoundsCenterRef = useRef(new THREE.Vector3());
   const mergedCornerRef = useRef(new THREE.Vector3());
   const mergedWorldMatrixRef = useRef(new THREE.Matrix4());
+  const proxyBoundsSizeRef = useRef(new THREE.Vector3());
+  const proxyBoundsCenterRef = useRef(new THREE.Vector3());
+  const proxyMeshScaleRef = useRef(new THREE.Vector3());
   const [boxCount, setBoxCount] = useState(0);
   const [sphereCount, setSphereCount] = useState(0);
   const [cylinderCount, setCylinderCount] = useState(0);
@@ -107,23 +155,62 @@ export const CollisionGeometries = ({
   const isLowGPU = gpuMode === "low";
   const simplifiedLinksSet = useMemo(
     () => new Set(collisionSimplifyLinks),
-    [collisionSimplifyLinks]
+    [collisionSimplifyLinks],
   );
-  const highlightedLinks = useLinkHighlightStore((state) => state.highlightedLinks);
+  const highlightedLinks = useLinkHighlightStore(
+    (state) => state.highlightedLinks,
+  );
   const highlightedLinksSet = useMemo(
     () => new Set(highlightedLinks),
-    [highlightedLinks]
+    [highlightedLinks],
   );
   const mergedLinksSet = useMemo(
     () => new Set(collisionMergedLinks),
-    [collisionMergedLinks]
+    [collisionMergedLinks],
   );
-  const resolveLinkObject = useMemo(() => createLinkObjectResolver(robot), [robot]);
+  const resolveLinkObject = useMemo(
+    () => createLinkObjectResolver(robot),
+    [robot],
+  );
+  const applyCollisionObjectTransform = useCallback(
+    (
+      object: THREE.Object3D,
+      linkName: string,
+      localMatrix: THREE.Matrix4,
+      fallbackToLocal = false,
+    ) => {
+      const linkObject = resolveLinkObject(linkName);
+      const worldMatrix = tempMatrix.current;
+
+      if (linkObject) {
+        composeWorldMatrixFromLinkAndLocal(
+          linkObject.matrixWorld,
+          localMatrix,
+          worldMatrix,
+        );
+      } else if (fallbackToLocal) {
+        worldMatrix.copy(localMatrix);
+      } else {
+        return false;
+      }
+
+      worldMatrix.decompose(
+        tempPosition.current,
+        tempQuaternion.current,
+        tempScale.current,
+      );
+      object.position.copy(tempPosition.current);
+      object.quaternion.copy(tempQuaternion.current);
+      object.scale.copy(tempScale.current);
+      return true;
+    },
+    [resolveLinkObject],
+  );
   const sphereSegments = isLowGPU ? 12 : 24;
   const cylinderSegments = isLowGPU ? 12 : 24;
   const baseCollisionMaterial = useMemo(
     () =>
-      (isLowGPU
+      isLowGPU
         ? new THREE.MeshBasicMaterial({
             color: COLLISION_OVERLAY_COLOR,
             opacity: COLLISION_OVERLAY_OPACITY,
@@ -147,20 +234,23 @@ export const CollisionGeometries = ({
             polygonOffset: true,
             polygonOffsetFactor: COLLISION_OVERLAY_POLYGON_OFFSET_FACTOR,
             polygonOffsetUnits: COLLISION_OVERLAY_POLYGON_OFFSET_UNITS,
-          })),
-    [isLowGPU]
+          }),
+    [isLowGPU],
   );
   const boxGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
   const sphereGeometry = useMemo(
     () => new THREE.SphereGeometry(1, sphereSegments, sphereSegments),
-    [sphereSegments]
+    [sphereSegments],
   );
   const cylinderGeometry = useMemo(
     () => new THREE.CylinderGeometry(1, 1, 1, cylinderSegments),
-    [cylinderSegments]
+    [cylinderSegments],
   );
 
-  useEffect(() => () => baseCollisionMaterial.dispose(), [baseCollisionMaterial]);
+  useEffect(
+    () => () => baseCollisionMaterial.dispose(),
+    [baseCollisionMaterial],
+  );
   useEffect(() => () => boxGeometry.dispose(), [boxGeometry]);
   useEffect(() => () => sphereGeometry.dispose(), [sphereGeometry]);
   useEffect(() => () => cylinderGeometry.dispose(), [cylinderGeometry]);
@@ -203,13 +293,18 @@ export const CollisionGeometries = ({
 
   // Parse and render collision geometries
   useEffect(() => {
-    if (!urdfAnalysis?.isValid || !collisionGroupRef.current || !dynamicGroupRef.current || !robot) {
+    if (
+      !urdfAnalysis?.isValid ||
+      !collisionGroupRef.current ||
+      !dynamicGroupRef.current ||
+      !robot
+    ) {
       return;
     }
 
     const hasVisible = hasRenderableCollisionEntries(
       urdfAnalysis.collisionsByLink,
-      collisionVisibility
+      collisionVisibility,
     );
 
     // Clear existing collision geometries (dynamic mesh objects only)
@@ -273,43 +368,12 @@ export const CollisionGeometries = ({
         });
       };
 
-      const applyLinkTransform = (
-        object: THREE.Object3D,
-        linkName: string,
-        localMatrix: THREE.Matrix4
-      ) => {
-        const linkObject = resolveLinkObject(linkName);
-
-        if (linkObject) {
-          composeWorldMatrixFromLinkAndLocal(
-            linkObject.matrixWorld,
-            localMatrix,
-            tempMatrix.current
-          );
-          tempMatrix.current.decompose(
-            tempPosition.current,
-            tempQuaternion.current,
-            tempScale.current
-          );
-
-          object.position.copy(tempPosition.current);
-          object.quaternion.copy(tempQuaternion.current);
-          object.scale.copy(tempScale.current);
-        } else {
-          // Fallback: just use local transform if link not found
-          localMatrix.decompose(tempPosition.current, tempQuaternion.current, tempScale.current);
-          object.position.copy(tempPosition.current);
-          object.quaternion.copy(tempQuaternion.current);
-          object.scale.copy(tempScale.current);
-        }
-      };
-
       const buildLocalMatrix = (
         xyz: [number, number, number],
         rpy: [number, number, number],
         scale?: [number, number, number],
         extraRotation?: THREE.Quaternion,
-        centerOffset?: THREE.Vector3
+        centerOffset?: THREE.Vector3,
       ) =>
         composeUrdfPoseMatrix(
           {
@@ -319,7 +383,7 @@ export const CollisionGeometries = ({
             extraRotation,
             centerOffset,
           },
-          new THREE.Matrix4()
+          new THREE.Matrix4(),
         );
       const syncPrimitiveCounts = () => {
         setBoxCount(boxInstancesRef.current.length);
@@ -327,52 +391,76 @@ export const CollisionGeometries = ({
         setCylinderCount(cylinderInstancesRef.current.length);
       };
 
-      const addSimplifiedMeshProxyFromBounds = (options: {
-        bounds: THREE.Box3;
-        meshScale: [number, number, number];
-        collision: CollisionEntry;
-        linkName: string;
-      }) => {
-        const { bounds, meshScale, collision, linkName } = options;
-        if (bounds.isEmpty()) return;
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-        bounds.getSize(size);
-        bounds.getCenter(center);
-        size.multiply(new THREE.Vector3(meshScale[0], meshScale[1], meshScale[2]));
-        center.multiply(new THREE.Vector3(meshScale[0], meshScale[1], meshScale[2]));
-        const localMatrix = buildLocalMatrix(
-          collision.origin.xyz,
-          collision.origin.rpy,
-          [size.x, size.y, size.z],
-          undefined,
-          center
-        );
-        boxInstancesRef.current.push({ linkName, localMatrix });
-        syncPrimitiveCounts();
+      const proxyTargetRefs: Record<
+        CollisionProxyTarget,
+        CollisionPrimitiveInstanceRef
+      > = {
+        simplified: boxInstancesRef,
+        merged: mergedInstancesRef,
       };
-      const addMergedProxyFromBounds = (options: {
+
+      const addMeshProxyFromBounds = (options: {
+        target: CollisionProxyTarget;
         bounds: THREE.Box3;
         meshScale: [number, number, number];
         collision: CollisionEntry;
         linkName: string;
       }) => {
-        const { bounds, meshScale, collision, linkName } = options;
+        const { target, bounds, meshScale, collision, linkName } = options;
         if (bounds.isEmpty()) return;
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
+        const size = proxyBoundsSizeRef.current;
+        const center = proxyBoundsCenterRef.current;
+        const scale = proxyMeshScaleRef.current.set(
+          meshScale[0],
+          meshScale[1],
+          meshScale[2],
+        );
         bounds.getSize(size);
         bounds.getCenter(center);
-        size.multiply(new THREE.Vector3(meshScale[0], meshScale[1], meshScale[2]));
-        center.multiply(new THREE.Vector3(meshScale[0], meshScale[1], meshScale[2]));
+        size.multiply(scale);
+        center.multiply(scale);
         const localMatrix = buildLocalMatrix(
           collision.origin.xyz,
           collision.origin.rpy,
           [size.x, size.y, size.z],
           undefined,
-          center
+          center,
         );
-        mergedInstancesRef.current.push({ linkName, localMatrix });
+        proxyTargetRefs[target].current.push({ linkName, localMatrix });
+        if (target === "simplified") {
+          syncPrimitiveCounts();
+        }
+      };
+
+      const loadCollisionObject = (options: {
+        blob: Blob;
+        path: string;
+        filename: string;
+        errorLabel: string;
+        onLoad: (object: THREE.Object3D) => void;
+      }) => {
+        const { blob, path, filename, errorLabel, onLoad } = options;
+        loadMeshFromBlob({
+          blob,
+          path,
+          gpuMode,
+          meshFiles,
+          signal: abortController.signal,
+        })
+          .then((result) => {
+            if (!result?.object || abortController.signal.aborted) {
+              if (result?.object) {
+                disposeMeshResources(result.object);
+              }
+              return;
+            }
+            onLoad(result.object);
+          })
+          .catch((err) => {
+            if (!abortController.signal.aborted) {
+              console.error(`Error loading ${errorLabel} ${filename}:`, err);
+            }
+          });
       };
 
       const collisionsByLink = urdfAnalysis.collisionsByLink;
@@ -384,15 +472,25 @@ export const CollisionGeometries = ({
         const visibleUniqueCollisions: CollisionEntry[] = [];
         collisions.forEach((collision: CollisionEntry) => {
           const { index } = collision;
-          const isVisible = isCollisionEntryVisible(collisionVisibility, linkName, index);
+          const isVisible = isCollisionEntryVisible(
+            collisionVisibility,
+            linkName,
+            index,
+          );
           if (!isVisible) return;
-          if (markAndCheckDuplicateCollisionEntry(seenCollisionEntries, collision)) return;
+          if (
+            markAndCheckDuplicateCollisionEntry(seenCollisionEntries, collision)
+          )
+            return;
           visibleUniqueCollisions.push(collision);
         });
 
         const meshPoseSet = buildMeshCollisionPoseSet(visibleUniqueCollisions);
         visibleUniqueCollisions.forEach((collision) => {
-          if (shouldSkipPrimitiveCollisionWhenMeshOverlaps(collision, meshPoseSet)) return;
+          if (
+            shouldSkipPrimitiveCollisionWhenMeshOverlaps(collision, meshPoseSet)
+          )
+            return;
 
           const geometry = collision.geometry;
           const shouldMerge = mergedLinksSet.has(linkName);
@@ -401,7 +499,7 @@ export const CollisionGeometries = ({
             const localMatrix = buildLocalMatrix(
               collision.origin.xyz,
               collision.origin.rpy,
-              geometry.size
+              geometry.size,
             );
             if (shouldMerge) {
               mergedInstancesRef.current.push({ linkName, localMatrix });
@@ -416,8 +514,12 @@ export const CollisionGeometries = ({
               collision.origin.xyz,
               collision.origin.rpy,
               shouldMerge
-                ? [geometry.radius * 2, geometry.radius * 2, geometry.radius * 2]
-                : [geometry.radius, geometry.radius, geometry.radius]
+                ? [
+                    geometry.radius * 2,
+                    geometry.radius * 2,
+                    geometry.radius * 2,
+                  ]
+                : [geometry.radius, geometry.radius, geometry.radius],
             );
             if (shouldMerge) {
               mergedInstancesRef.current.push({ linkName, localMatrix });
@@ -434,7 +536,7 @@ export const CollisionGeometries = ({
               shouldMerge
                 ? [geometry.radius * 2, geometry.length, geometry.radius * 2]
                 : [geometry.radius, geometry.length, geometry.radius],
-              URDF_CYLINDER_TO_THREE_AXIS_QUATERNION
+              URDF_CYLINDER_TO_THREE_AXIS_QUATERNION,
             );
             if (shouldMerge) {
               mergedInstancesRef.current.push({ linkName, localMatrix });
@@ -450,7 +552,7 @@ export const CollisionGeometries = ({
               filename,
               meshFiles,
               urdfBasePath,
-              packageRoots
+              packageRoots,
             );
 
             if (!resolved) {
@@ -460,89 +562,58 @@ export const CollisionGeometries = ({
             const shouldSimplify = simplifiedLinksSet.has(linkName);
             if (shouldMerge || shouldSimplify) {
               const boundsCacheKey = `${resolved.path}:${resolved.blob.size}`;
-              const cachedBounds = simplifiedBoundsCacheRef.current.get(boundsCacheKey);
+              const cachedBounds =
+                simplifiedBoundsCacheRef.current.get(boundsCacheKey);
+              const proxyTarget: CollisionProxyTarget = shouldMerge
+                ? "merged"
+                : "simplified";
+              const addCurrentProxyFromBounds = (bounds: THREE.Box3) => {
+                addMeshProxyFromBounds({
+                  target: proxyTarget,
+                  bounds,
+                  meshScale: geometry.scale,
+                  collision,
+                  linkName,
+                });
+              };
               if (cachedBounds) {
-                if (shouldMerge) {
-                  addMergedProxyFromBounds({
-                    bounds: cachedBounds,
-                    meshScale: geometry.scale,
-                    collision,
-                    linkName,
-                  });
-                } else {
-                  addSimplifiedMeshProxyFromBounds({
-                    bounds: cachedBounds,
-                    meshScale: geometry.scale,
-                    collision,
-                    linkName,
-                  });
-                }
+                addCurrentProxyFromBounds(cachedBounds);
                 return;
               }
-              loadMeshFromBlob({
+              loadCollisionObject({
                 blob: resolved.blob,
                 path: resolved.path,
-                gpuMode,
-                meshFiles,
-                signal: abortController.signal,
-              })
-                .then((result) => {
-                  if (!result?.object || abortController.signal.aborted) {
-                    if (result?.object) {
-                      disposeMeshResources(result.object);
-                    }
-                    return;
-                  }
-                  const bounds = new THREE.Box3().setFromObject(result.object);
-                  disposeMeshResources(result.object);
+                filename,
+                errorLabel: "collision proxy mesh",
+                onLoad: (object) => {
+                  const bounds = new THREE.Box3().setFromObject(object);
+                  disposeMeshResources(object);
                   if (bounds.isEmpty()) return;
                   simplifiedBoundsCacheRef.current.set(boundsCacheKey, bounds);
-                  if (shouldMerge) {
-                    addMergedProxyFromBounds({
-                      bounds,
-                      meshScale: geometry.scale,
-                      collision,
-                      linkName,
-                    });
-                  } else {
-                    addSimplifiedMeshProxyFromBounds({
-                      bounds,
-                      meshScale: geometry.scale,
-                      collision,
-                      linkName,
-                    });
-                  }
-                })
-                .catch((err) => {
-                  if (!abortController.signal.aborted) {
-                    console.error(`Error loading collision proxy mesh ${filename}:`, err);
-                  }
-                });
+                  addCurrentProxyFromBounds(bounds);
+                },
+              });
               return;
             }
 
-            loadMeshFromBlob({
+            loadCollisionObject({
               blob: resolved.blob,
               path: resolved.path,
-              gpuMode,
-              meshFiles,
-              signal: abortController.signal,
-            })
-              .then((result) => {
-                if (!result?.object || abortController.signal.aborted) {
-                  if (result?.object) {
-                    disposeMeshResources(result.object);
-                  }
-                  return;
-                }
-                const loadedObject = result.object;
+              filename,
+              errorLabel: "collision mesh",
+              onLoad: (loadedObject) => {
                 applyCollisionMaterial(loadedObject);
                 const localMatrix = buildLocalMatrix(
                   collision.origin.xyz,
                   collision.origin.rpy,
-                  geometry.scale
+                  geometry.scale,
                 );
-                applyLinkTransform(loadedObject, linkName, localMatrix);
+                applyCollisionObjectTransform(
+                  loadedObject,
+                  linkName,
+                  localMatrix,
+                  true,
+                );
                 loadedObject.userData.isCollisionGeometry = true;
                 loadedObject.userData.linkName = linkName;
                 loadedObject.userData.isCollisionGeom = true;
@@ -555,12 +626,8 @@ export const CollisionGeometries = ({
                   linkName,
                   localMatrix,
                 });
-              })
-              .catch((err) => {
-                if (!abortController.signal.aborted) {
-                  console.error(`Error loading collision mesh ${filename}:`, err);
-                }
-              });
+              },
+            });
 
             return;
           }
@@ -589,7 +656,7 @@ export const CollisionGeometries = ({
     boxGeometry,
     sphereGeometry,
     cylinderGeometry,
-    resolveLinkObject,
+    applyCollisionObjectTransform,
   ]);
 
   // Update collision geometry transforms every frame to follow robot movement
@@ -614,28 +681,12 @@ export const CollisionGeometries = ({
 
     // Update each collision mesh transform based on its link's current world position
     collisionMeshesRef.current.forEach(({ object, linkName, localMatrix }) => {
-      const linkObject = resolveLinkObject(linkName);
-
-      if (linkObject) {
-        composeWorldMatrixFromLinkAndLocal(
-          linkObject.matrixWorld,
-          localMatrix,
-          tempMatrix.current
-        );
-        tempMatrix.current.decompose(
-          tempPosition.current,
-          tempQuaternion.current,
-          tempScale.current
-        );
-        object.position.copy(tempPosition.current);
-        object.quaternion.copy(tempQuaternion.current);
-        object.scale.copy(tempScale.current);
-      }
+      applyCollisionObjectTransform(object, linkName, localMatrix);
     });
 
     const updateInstances = (
       instances: CollisionInstance[],
-      meshRef: { current: THREE.InstancedMesh | null }
+      meshRef: { current: THREE.InstancedMesh | null },
     ) => {
       const instanced = meshRef.current;
       if (!instanced || instances.length === 0) return;
@@ -645,7 +696,7 @@ export const CollisionGeometries = ({
         composeWorldMatrixFromLinkAndLocal(
           linkObject.matrixWorld,
           entry.localMatrix,
-          tempMatrix.current
+          tempMatrix.current,
         );
         instanced.setMatrixAt(index, tempMatrix.current);
       });
@@ -674,10 +725,12 @@ export const CollisionGeometries = ({
       composeWorldMatrixFromLinkAndLocal(
         linkObject.matrixWorld,
         entry.localMatrix,
-        mergedWorldMatrixRef.current
+        mergedWorldMatrixRef.current,
       );
       UNIT_BOX_CORNERS.forEach((unitCorner) => {
-        mergedCornerRef.current.copy(unitCorner).applyMatrix4(mergedWorldMatrixRef.current);
+        mergedCornerRef.current
+          .copy(unitCorner)
+          .applyMatrix4(mergedWorldMatrixRef.current);
         mergedBounds.expandByPoint(mergedCornerRef.current);
         hasMergedPoint = true;
       });
@@ -700,7 +753,10 @@ export const CollisionGeometries = ({
     <group ref={collisionGroupRef} renderOrder={999}>
       <group ref={dynamicGroupRef} />
       {boxCount > 0 && (
-        <instancedMesh ref={boxMeshRef} args={[boxGeometry, baseCollisionMaterial, boxCount]} />
+        <instancedMesh
+          ref={boxMeshRef}
+          args={[boxGeometry, baseCollisionMaterial, boxCount]}
+        />
       )}
       {sphereCount > 0 && (
         <instancedMesh

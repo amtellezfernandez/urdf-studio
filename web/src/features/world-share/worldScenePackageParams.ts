@@ -1,10 +1,11 @@
+import { WORLD_OBJECT_SOURCE_IDS } from "@/shared/types/worldObject";
+
 export const WORLD_SCENE_PACKAGE_SCHEMA_VERSION = "1.0.0" as const;
 export const WORLD_SCENE_PACKAGE_DEFAULT_VERSION = "0.1.0" as const;
 export const WORLD_SCENE_PACKAGE_DEFAULT_FRAME_CONVENTION = "ros-rep-103" as const;
 export const WORLD_SCENE_PACKAGE_DEFAULT_ACTION_SEMANTICS = "joint_position_rad" as const;
-export const WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE = "demo-world" as const;
+export const WORLD_SCENE_PACKAGE_DEFAULT_LAYOUT_OBJECT_SOURCE = WORLD_OBJECT_SOURCE_IDS.demo;
 export const WORLD_SCENE_PACKAGE_DEFAULT_TIMESTEP_MS = 33 as const;
-export const WORLD_SCENE_PACKAGE_DEFAULT_SCENARIO_DURATION_MS = 12_000 as const;
 export const WORLD_SCENE_PACKAGE_MIN_SCENARIO_TIME_MS = 0 as const;
 export const WORLD_SCENE_PACKAGE_MIN_SCENARIO_DURATION_MS = 0 as const;
 export const WORLD_SCENE_PACKAGE_MAX_SCENARIO_DURATION_MS = 600_000 as const;

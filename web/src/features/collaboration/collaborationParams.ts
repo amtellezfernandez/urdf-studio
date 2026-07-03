@@ -39,6 +39,5 @@ export const COLLABORATION_TRANSPORT_PARAMS = {
   sessionTokenHeader: "X-URDF-Collaboration-Token",
   sessionFragmentParam: "collab",
   sessionTokenFragmentParam: "collabToken",
-  teleopCapabilityFragmentParam: "collabTeleop",
   clientIdQueryParam: "client_id",
 } as const;

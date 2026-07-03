@@ -4,17 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from backend.models.live_transport import LiveTransportDescriptor
-
-
 CollaborationSessionRole = Literal["owner", "editor", "viewer"]
-CollaborationCapabilityRole = Literal[
-    "room_owner",
-    "room_editor",
-    "teleop_operator",
-    "robot_peer",
-    "observer",
-]
 
 
 class CollaborationSessionCreateRequest(BaseModel):
@@ -32,7 +22,6 @@ class CollaborationSessionSnapshot(BaseModel):
     peer_count: int = 0
     event_count: int = 0
     last_event_id: int = 0
-    live_transport: LiveTransportDescriptor | None = None
 
 
 class CollaborationSessionStats(BaseModel):
@@ -65,44 +54,6 @@ class CollaborationAccessUpdateResponse(BaseModel):
     snapshot: CollaborationSessionSnapshot
     session_token: str
     editor_token: str
-
-
-class CollaborationCapabilityIssueRequest(BaseModel):
-    role: CollaborationCapabilityRole
-    ttl_ms: int | None = None
-    allowed_transports: list[str] = Field(default_factory=list)
-
-
-class CollaborationCapabilityIssueResponse(BaseModel):
-    session_id: str
-    role: CollaborationCapabilityRole
-    capability_token: str
-    issued_at: str
-    expires_at: str
-    allowed_transports: list[str] = Field(default_factory=list)
-
-
-class CollaborationCapabilityVerifyRequest(BaseModel):
-    capability_token: str
-    required_role: CollaborationCapabilityRole | None = None
-    transport: str | None = None
-
-
-class CollaborationCapabilityVerifyResponse(BaseModel):
-    active: bool
-    session_id: str
-    role: CollaborationCapabilityRole | None = None
-    expires_at: str | None = None
-    allowed_transports: list[str] = Field(default_factory=list)
-
-
-class CollaborationCapabilityRevokeRequest(BaseModel):
-    capability_token: str
-
-
-class CollaborationCapabilityRevokeResponse(BaseModel):
-    session_id: str
-    revoked: bool
 
 
 class CollaborationEventRequest(BaseModel):

@@ -36,21 +36,38 @@ export const createWorkerTaskBroker = <
   const inFlight = new Map<number, BrokerTask<TRequest, TResponse>>();
   const maxConcurrent = Math.max(1, options.concurrency ?? 1);
 
+  const resolveWithFallback = (task: BrokerTask<TRequest, TResponse>) => {
+    if (!task.options.fallback) {
+      task.resolve(null);
+      return;
+    }
+    Promise.resolve(task.options.fallback(task.request))
+      .then((result) => task.resolve(result))
+      .catch(() => task.resolve(null));
+  };
+
+  const resolveCompletedTask = (
+    task: BrokerTask<TRequest, TResponse>,
+    response: TResponse,
+  ) => {
+    if (task.canceled) {
+      task.resolve(null);
+      return;
+    }
+    if (task.options.shouldFallback?.(response) && task.options.fallback) {
+      resolveWithFallback(task);
+      return;
+    }
+    task.resolve(response);
+  };
+
   const flush = () => {
     const pendingTasks = [...queue, ...inFlight.values()];
     queue.length = 0;
     inFlight.clear();
     worker?.terminate();
     worker = null;
-    pendingTasks.forEach((task) => {
-      if (task.options.fallback) {
-        Promise.resolve(task.options.fallback(task.request))
-          .then((result) => task.resolve(result))
-          .catch(() => task.resolve(null));
-      } else {
-        task.resolve(null);
-      }
-    });
+    pendingTasks.forEach(resolveWithFallback);
   };
 
   const getWorker = () => {
@@ -63,21 +80,7 @@ export const createWorkerTaskBroker = <
         const task = inFlight.get(response.id);
         if (!task) return;
         inFlight.delete(response.id);
-        if (!task.canceled) {
-          if (task.options.shouldFallback?.(response)) {
-            if (task.options.fallback) {
-              Promise.resolve(task.options.fallback(task.request))
-                .then((result) => task.resolve(result))
-                .catch(() => task.resolve(null));
-            } else {
-              task.resolve(response);
-            }
-          } else {
-            task.resolve(response);
-          }
-        } else {
-          task.resolve(null);
-        }
+        resolveCompletedTask(task, response);
         pump();
       };
 
@@ -99,13 +102,7 @@ export const createWorkerTaskBroker = <
 
     const instance = getWorker();
     if (!instance) {
-      if (task.options.fallback) {
-        Promise.resolve(task.options.fallback(task.request))
-          .then((result) => task.resolve(result))
-          .catch(() => task.resolve(null));
-      } else {
-        task.resolve(null);
-      }
+      resolveWithFallback(task);
       return;
     }
 

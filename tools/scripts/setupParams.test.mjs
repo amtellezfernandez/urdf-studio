@@ -32,7 +32,7 @@ import {
   GENESIS_TORCH_PACKAGE,
   GENESIS_VERIFY_IMPORT_SCRIPT,
   GENESIS_WORLD_PACKAGE,
-  MJX_SYSTEM_ID_DEPENDENCIES,
+  MJX_DEPENDENCIES,
   NATIVE_SIM_SETUP,
   PYBULLET_DEPENDENCIES,
   PYBULLET_FORCE_INSTALL_ENV,
@@ -41,6 +41,9 @@ import {
   PYBULLET_SKIP_AUTO_INSTALL_ENV,
   PYBULLET_VERIFY_IMPORT_SCRIPT,
   SETUP_NPM_INSTALL_FLAGS,
+  SIMULATOR_CONTAINER_FORCE_ENV,
+  SIMULATOR_CONTAINER_SETUP,
+  SIMULATOR_CONTAINER_SKIP_ENV,
 } from './setupParams.js';
 
 test('simulator setup params stay grouped by runtime stack', () => {
@@ -91,15 +94,11 @@ test('backend Python setup separates portable and native simulation runtimes', (
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /backend python native simulation runtime ok/);
 });
 
-test('backend Python setup includes MJX system-id runtime', () => {
-  assert.deepEqual(MJX_SYSTEM_ID_DEPENDENCIES, ['mujoco-mjx==3.9.0', 'optax==0.2.8', 'mujoco-sysid==0.2.1']);
+test('backend Python setup includes the MJX runtime without system-id packages', () => {
+  assert.deepEqual(MJX_DEPENDENCIES, ['mujoco-mjx==3.9.0']);
   assert.ok(BACKEND_PYTHON_DEPENDENCIES.includes('mujoco-mjx==3.9.0'));
-  assert.ok(BACKEND_PYTHON_DEPENDENCIES.includes('optax==0.2.8'));
-  assert.ok(BACKEND_PYTHON_DEPENDENCIES.includes('mujoco-sysid==0.2.1'));
+  assert.equal(MJX_DEPENDENCIES.length, 1);
   assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"mujoco\.mjx"/);
-  assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"optax"/);
-  assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"mujoco_sysid"/);
-  assert.match(BACKEND_PYTHON_VERIFY_IMPORT_SCRIPT, /"mujoco_sysid\.mjx"/);
 });
 
 test('PyBullet workspace adapter runtime is portable and direct URDF based', () => {
@@ -144,4 +143,11 @@ test('Blender setup pins a managed LTS runtime for Linux WSL release checks', ()
 
 test('setup npm installs suppress funding and audit noise', () => {
   assert.deepEqual(SETUP_NPM_INSTALL_FLAGS, ['--no-fund', '--audit=false', '--loglevel=error']);
+});
+
+test('simulator container setup env names live in setup params', () => {
+  assert.equal(SIMULATOR_CONTAINER_SETUP.skipEnv, 'URDF_STUDIO_SKIP_SIMULATOR_CONTAINERS');
+  assert.equal(SIMULATOR_CONTAINER_SETUP.forceEnv, 'URDF_STUDIO_FORCE_SIMULATOR_CONTAINERS');
+  assert.equal(SIMULATOR_CONTAINER_SKIP_ENV, SIMULATOR_CONTAINER_SETUP.skipEnv);
+  assert.equal(SIMULATOR_CONTAINER_FORCE_ENV, SIMULATOR_CONTAINER_SETUP.forceEnv);
 });

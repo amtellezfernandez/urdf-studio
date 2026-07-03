@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
+import { assertBackendResponseOk } from "@/shared/lib/backendResponse";
 
 export type IluAssemblyManifestFile = {
   path: string;
@@ -24,22 +25,6 @@ const CORE_API_OPTIONS = {
   requiredBackends: ["core-api"] as const,
 };
 
-const assertOk = async (response: Response, fallbackMessage: string) => {
-  if (response.ok) {
-    return;
-  }
-  let detail = fallbackMessage;
-  try {
-    const payload = (await response.json()) as { detail?: string };
-    if (typeof payload.detail === "string" && payload.detail.trim()) {
-      detail = payload.detail;
-    }
-  } catch {
-    // Ignore invalid JSON error payloads.
-  }
-  throw new Error(detail);
-};
-
 export const getIluAssemblyManifestUrl = (assemblyId: string): string =>
   `${API_BASE_URL}/ilu-assembly/${encodeURIComponent(assemblyId)}/manifest`;
 
@@ -50,6 +35,6 @@ export const fetchIluAssemblyManifest = async (
     ...CORE_API_OPTIONS,
     context: "Load ILU assembly",
   });
-  await assertOk(response, "Failed to load ilu assembly.");
+  await assertBackendResponseOk(response, "Failed to load ilu assembly.");
   return (await response.json()) as IluAssemblyManifest;
 };

@@ -12,6 +12,7 @@
 import * as THREE from "three";
 import type { URDFRobot } from "urdf-loader";
 import { CAMERA_POSE_COMPUTE_PARAMS } from "./cameraPoseComputeParams";
+import { resolveRobotLinkObject } from "./cameraWorldPose";
 
 interface CameraPoseConfig {
   xyz: [number, number, number];
@@ -34,9 +35,6 @@ const DEFAULT_MARGIN_FORWARD = CAMERA_POSE_COMPUTE_CONFIG.defaultMarginForwardMe
 const DEFAULT_MARGIN_UP = CAMERA_POSE_COMPUTE_CONFIG.defaultMarginUpMeters;
 const MIN_BACK_OFFSET = CAMERA_POSE_COMPUTE_CONFIG.minBackOffsetMeters;
 
-const resolveLinkObject = (robot: URDFRobot | null, linkName: string) =>
-  robot?.links?.[linkName] ?? robot?.getObjectByName?.(linkName) ?? null;
-
 /**
  * Compute bounding box for a specific link in the robot
  */
@@ -44,7 +42,7 @@ export function computeLinkBoundingBox(robot: URDFRobot | null, linkName: string
   if (!robot) return null;
 
   // Get the link object from the robot
-  const linkObject = resolveLinkObject(robot, linkName);
+  const linkObject = resolveRobotLinkObject(robot, linkName);
   if (!linkObject) {
     console.warn(`Link "${linkName}" not found in robot`);
     return null;
@@ -118,7 +116,7 @@ function autoComputeCameraPose(
   parentLink: string,
   options: AutoComputeOptions = {},
 ): CameraPoseConfig | null {
-  const linkObject = resolveLinkObject(robot, parentLink);
+  const linkObject = resolveRobotLinkObject(robot, parentLink);
   if (!linkObject) {
     return null;
   }
@@ -149,7 +147,7 @@ function autoComputeCameraPose(
   }
 
   if (options.aimLink) {
-    const aimObject = resolveLinkObject(robot, options.aimLink);
+    const aimObject = resolveRobotLinkObject(robot, options.aimLink);
     if (aimObject) {
       aimObject.updateMatrixWorld(true);
       const aimPosition = new THREE.Vector3().setFromMatrixPosition(aimObject.matrixWorld);

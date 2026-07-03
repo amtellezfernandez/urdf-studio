@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 
 import {
   PERF_GATE_BUILD_COMMAND,
+  PERF_GATE_BUILD_CHUNK_SIZE_COMMAND,
   PERF_GATE_FRONTEND_FRAME_COMMAND,
   PERF_GATE_TARGET_BUILD_DURATION_MS,
   PERF_GATE_WORLD_BENCHMARK_COMMAND,
@@ -47,6 +48,9 @@ const main = () => {
         + `${PERF_GATE_TARGET_BUILD_DURATION_MS.toFixed(PERF_GATE_DURATION_DECIMALS)}ms`
     );
   }
+
+  console.log("[perf-gate] running build chunk-size gate");
+  runCommand(PERF_GATE_BUILD_CHUNK_SIZE_COMMAND, "build chunk-size gate");
 
   console.log("[perf-gate] all performance gates passed");
 };

@@ -5,8 +5,8 @@ import {
 
 export type FeatureFlagValues = {
   playbackTrace: boolean;
-  rosVizV2: boolean;
-  motionKernelV2: boolean;
+  rosViz: boolean;
+  motionKernel: boolean;
 };
 
 export type FeatureFlagKey = keyof FeatureFlagValues;
@@ -19,14 +19,14 @@ const FEATURE_FLAGS_CHANGE_EVENT = "urdfstudio:featureFlagsChange";
 
 const DEFAULT_FEATURE_FLAGS: FeatureFlagValues = {
   playbackTrace: false,
-  rosVizV2: false,
-  motionKernelV2: true,
+  rosViz: false,
+  motionKernel: true,
 };
 
 const DEFAULT_FEATURE_FLAG_SOURCES: FeatureFlagSources = {
   playbackTrace: "default",
-  rosVizV2: "default",
-  motionKernelV2: "default",
+  rosViz: "default",
+  motionKernel: "default",
 };
 
 const listeners = new Set<() => void>();
@@ -39,11 +39,11 @@ const sanitizeFlags = (
   if (typeof input.playbackTrace === "boolean") {
     next.playbackTrace = input.playbackTrace;
   }
-  if (typeof input.rosVizV2 === "boolean") {
-    next.rosVizV2 = input.rosVizV2;
+  if (typeof input.rosViz === "boolean") {
+    next.rosViz = input.rosViz;
   }
-  if (typeof input.motionKernelV2 === "boolean") {
-    next.motionKernelV2 = input.motionKernelV2;
+  if (typeof input.motionKernel === "boolean") {
+    next.motionKernel = input.motionKernel;
   }
   return next;
 };
@@ -112,13 +112,13 @@ const readUrlFlags = (): {
       overrides.playbackTrace = !isDisabled;
       urlLocked.add("playbackTrace");
     }
-    if (key === "rosVizV2") {
-      overrides.rosVizV2 = !isDisabled;
-      urlLocked.add("rosVizV2");
+    if (key === "rosViz") {
+      overrides.rosViz = !isDisabled;
+      urlLocked.add("rosViz");
     }
-    if (key === "motionKernelV2") {
-      overrides.motionKernelV2 = !isDisabled;
-      urlLocked.add("motionKernelV2");
+    if (key === "motionKernel") {
+      overrides.motionKernel = !isDisabled;
+      urlLocked.add("motionKernel");
     }
   });
 
@@ -158,20 +158,20 @@ const getFeatureFlagState = (): {
   if (typeof stored.playbackTrace === "boolean") {
     sources.playbackTrace = "localStorage";
   }
-  if (typeof stored.rosVizV2 === "boolean") {
-    sources.rosVizV2 = "localStorage";
+  if (typeof stored.rosViz === "boolean") {
+    sources.rosViz = "localStorage";
   }
-  if (typeof stored.motionKernelV2 === "boolean") {
-    sources.motionKernelV2 = "localStorage";
+  if (typeof stored.motionKernel === "boolean") {
+    sources.motionKernel = "localStorage";
   }
   if (typeof url.values.playbackTrace === "boolean") {
     sources.playbackTrace = "url";
   }
-  if (typeof url.values.rosVizV2 === "boolean") {
-    sources.rosVizV2 = "url";
+  if (typeof url.values.rosViz === "boolean") {
+    sources.rosViz = "url";
   }
-  if (typeof url.values.motionKernelV2 === "boolean") {
-    sources.motionKernelV2 = "url";
+  if (typeof url.values.motionKernel === "boolean") {
+    sources.motionKernel = "url";
   }
   if (previousPlaybackDebug) {
     values.playbackTrace = true;
@@ -187,7 +187,7 @@ const getFeatureFlagState = (): {
   };
 };
 
-export const getFeatureFlags = (): FeatureFlagValues => getFeatureFlagState().values;
+const getFeatureFlags = (): FeatureFlagValues => getFeatureFlagState().values;
 
 export const getFeatureFlagSource = (flag: FeatureFlagKey): FeatureFlagSource =>
   getFeatureFlagState().sources[flag];

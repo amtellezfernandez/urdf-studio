@@ -1,5 +1,3 @@
-import type { LiveTransportDescriptor } from "@/features/live-transport/liveTransportTypes";
-
 export type CollaborationSessionCreateResponse = {
   session_id: string;
   session_token: string;
@@ -14,7 +12,6 @@ export type CollaborationSessionCreateResponse = {
   peer_count: number;
   event_count: number;
   last_event_id: number;
-  live_transport?: LiveTransportDescriptor | null;
 };
 
 export type CollaborationSessionSnapshot = Omit<
@@ -23,25 +20,13 @@ export type CollaborationSessionSnapshot = Omit<
 >;
 
 export type CollaborationBaseAccess = "viewer" | "editor";
-export type CollaborationLinkAccess =
-  | "viewer"
-  | "editor"
-  | "viewer_teleop"
-  | "editor_teleop";
-
-export type CollaborationCapabilityRole =
-  | "room_owner"
-  | "room_editor"
-  | "teleop_operator"
-  | "robot_peer"
-  | "observer";
+export type CollaborationLinkAccess = "viewer" | "editor";
 
 export type CollaborationShareSession = {
   sessionId: string;
   sessionToken: string;
   editorToken?: string;
   ownerToken?: string;
-  teleopCapabilityToken?: string;
   peerCount?: number;
   sharingEnabled?: boolean;
 };
@@ -50,21 +35,6 @@ export type CollaborationAccessUpdateResponse = {
   snapshot: CollaborationSessionSnapshot;
   session_token: string;
   editor_token: string;
-};
-
-export type CollaborationCapabilityIssueRequest = {
-  role: CollaborationCapabilityRole;
-  ttl_ms?: number | null;
-  allowed_transports?: string[];
-};
-
-export type CollaborationCapabilityIssueResponse = {
-  session_id: string;
-  role: CollaborationCapabilityRole;
-  capability_token: string;
-  issued_at: string;
-  expires_at: string;
-  allowed_transports: string[];
 };
 
 export type CollaborationEventRequest = {

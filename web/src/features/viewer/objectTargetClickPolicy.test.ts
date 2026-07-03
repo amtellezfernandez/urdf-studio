@@ -7,6 +7,7 @@ import {
   shouldToggleObjectSelectionOnSingleClick,
 } from "@/features/viewer/objectTargetClickPolicy";
 import { OBJECT_TARGET_CLICK_PARAMS } from "@/features/viewer/objectTargetClickParams";
+import { WORLD_OBJECT_SOURCE_IDS } from "@/shared/types/worldObject";
 
 describe("objectTargetClickPolicy", () => {
   it("treats rover approach, IK apply, and orbit follow as active target interactions", () => {
@@ -40,20 +41,20 @@ describe("objectTargetClickPolicy", () => {
     ).toBe(false);
   });
 
-  it("shows the rover guide only for an active runtime target selection", () => {
+  it("does not show a rover guide without a live runtime target source", () => {
     expect(
       shouldShowRoverApproachGuideForSelectedObject({
         hasActiveObjectTargetInteraction: true,
         selectedObject: {
-          source: "runtime-demo",
+          source: WORLD_OBJECT_SOURCE_IDS.scenario,
         },
       })
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldShowRoverApproachGuideForSelectedObject({
         hasActiveObjectTargetInteraction: false,
         selectedObject: {
-          source: "runtime-demo",
+          source: WORLD_OBJECT_SOURCE_IDS.scenario,
         },
       })
     ).toBe(false);
@@ -61,7 +62,7 @@ describe("objectTargetClickPolicy", () => {
       shouldShowRoverApproachGuideForSelectedObject({
         hasActiveObjectTargetInteraction: true,
         selectedObject: {
-          source: "runtime-detection",
+          source: WORLD_OBJECT_SOURCE_IDS.scenario,
           isHidden: true,
         },
       })

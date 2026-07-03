@@ -10,12 +10,6 @@ from backend.core.request_audit import log_websocket_security_event, resolve_web
 from backend.models.collaboration import (
     CollaborationAccessUpdateRequest,
     CollaborationAccessUpdateResponse,
-    CollaborationCapabilityIssueRequest,
-    CollaborationCapabilityIssueResponse,
-    CollaborationCapabilityRevokeRequest,
-    CollaborationCapabilityRevokeResponse,
-    CollaborationCapabilityVerifyRequest,
-    CollaborationCapabilityVerifyResponse,
     CollaborationErrorMessage,
     CollaborationEventMessage,
     CollaborationEventRequest,
@@ -213,55 +207,6 @@ async def update_collaboration_access(
         raise _translate_collaboration_error(exc) from exc
     await _close_revoked_collaboration_peers(result.revoked_peers)
     return result.response
-
-
-@http_router.post("/sessions/{session_id}/capabilities", response_model=CollaborationCapabilityIssueResponse)
-async def issue_collaboration_capability(
-    request_context: Request,
-    session_id: str,
-    request: CollaborationCapabilityIssueRequest,
-) -> CollaborationCapabilityIssueResponse:
-    try:
-        return collaboration_service.issue_capability(
-            session_id,
-            request,
-            session_token=_session_token(request_context),
-        )
-    except Exception as exc:
-        raise _translate_collaboration_error(exc) from exc
-
-
-@http_router.post(
-    "/sessions/{session_id}/capabilities/verify",
-    response_model=CollaborationCapabilityVerifyResponse,
-)
-async def verify_collaboration_capability(
-    session_id: str,
-    request: CollaborationCapabilityVerifyRequest,
-) -> CollaborationCapabilityVerifyResponse:
-    try:
-        return collaboration_service.verify_capability(session_id, request)
-    except Exception as exc:
-        raise _translate_collaboration_error(exc) from exc
-
-
-@http_router.post(
-    "/sessions/{session_id}/capabilities/revoke",
-    response_model=CollaborationCapabilityRevokeResponse,
-)
-async def revoke_collaboration_capability(
-    request_context: Request,
-    session_id: str,
-    request: CollaborationCapabilityRevokeRequest,
-) -> CollaborationCapabilityRevokeResponse:
-    try:
-        return collaboration_service.revoke_capability(
-            session_id,
-            request,
-            session_token=_session_token(request_context),
-        )
-    except Exception as exc:
-        raise _translate_collaboration_error(exc) from exc
 
 
 @http_router.post("/sessions/{session_id}/events", response_model=CollaborationEventSnapshot)

@@ -3,14 +3,10 @@ import type { URDFRobot } from "urdf-loader";
 
 import { computeOwnedLinkLocalVisualBounds } from "@/features/camera/cameraAutoBounds";
 import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirrorSymmetry";
+import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 import { ROBOT_MIRROR_SYMMETRY_PLANE_TOUCH_TOLERANCE_METERS } from "@/features/layout/page/robotMirrorSymmetryParams";
 
 const BOX_CORNER_COMPONENTS = [0, 1] as const;
-
-const toSortedUniqueLinkNames = (linkNames: Iterable<string>): string[] =>
-  Array.from(new Set(Array.from(linkNames).map((linkName) => linkName.trim()).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right)
-  );
 
 const buildLocalBoundsCorners = (bounds: THREE.Box3): THREE.Vector3[] =>
   BOX_CORNER_COMPONENTS.flatMap((xIndex) =>
@@ -95,7 +91,7 @@ export const collectRobotMirrorPlaneTouchingLinkNamesFromBounds = ({
     }
   });
 
-  return toSortedUniqueLinkNames(touchingLinkNames);
+  return toSortedUniqueRobotMirrorLinkNames(touchingLinkNames);
 };
 
 export const collectRobotMirrorPlaneTouchingLinkNamesFromRobot = ({

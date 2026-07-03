@@ -220,7 +220,7 @@ def test_runtime_strict_mode_first_tick_pose_hash_matches_across_sessions() -> N
     assert first_payload["pose_hash"] == second_payload["pose_hash"]
 
 
-def test_runtime_without_replay_source_stays_static() -> None:
+def test_runtime_without_live_ros_data_stays_static() -> None:
     runtime = RosVizRuntime()
     session = runtime.create_session(RosVizSessionCreateRequest())
 
@@ -245,68 +245,6 @@ def test_runtime_without_replay_source_stays_static() -> None:
     assert diag_payload["details"]["mode"] == "live_debug"
 
 
-def test_runtime_replay_mode_without_replay_source_stays_static() -> None:
-    runtime = RosVizRuntime()
-    session = runtime.create_session(RosVizSessionCreateRequest(data_source="replay"))
-
-    first_frames = [parse_stream_frame(frame) for frame in runtime.build_stream_frames(session.session_id)]
-    second_frames = [parse_stream_frame(frame) for frame in runtime.build_stream_frames(session.session_id)]
-
-    first_pose = next(
-        frame for frame in first_frames if frame.frame_type == RosVizStreamFrameType.RESOLVED_FRAME_POSE_BATCH
-    )
-    second_pose = next(
-        frame for frame in second_frames if frame.frame_type == RosVizStreamFrameType.RESOLVED_FRAME_POSE_BATCH
-    )
-    first_diag = next(frame for frame in first_frames if frame.frame_type == RosVizStreamFrameType.DIAGNOSTIC_EVENT)
-
-    first_payload = json.loads(first_pose.payload.decode("utf-8"))
-    second_payload = json.loads(second_pose.payload.decode("utf-8"))
-    diag_payload = json.loads(first_diag.payload.decode("utf-8"))
-
-    assert _tool_xyz_from_resolved_payload(first_payload) == _tool_xyz_from_resolved_payload(second_payload)
-    assert diag_payload["details"]["motion_source"] == "static_waiting_for_replay"
-    assert diag_payload["details"]["mode"] == "replay_rosbag"
-
-
-def test_runtime_with_replay_source_emits_synthetic_motion() -> None:
-    runtime = RosVizRuntime()
-    session = runtime.create_session(RosVizSessionCreateRequest(replay_source="demo_motion"))
-
-    first_frames = [parse_stream_frame(frame) for frame in runtime.build_stream_frames(session.session_id)]
-    second_frames = [parse_stream_frame(frame) for frame in runtime.build_stream_frames(session.session_id)]
-
-    first_pose = next(
-        frame for frame in first_frames if frame.frame_type == RosVizStreamFrameType.RESOLVED_FRAME_POSE_BATCH
-    )
-    second_pose = next(
-        frame for frame in second_frames if frame.frame_type == RosVizStreamFrameType.RESOLVED_FRAME_POSE_BATCH
-    )
-    first_diag = next(frame for frame in first_frames if frame.frame_type == RosVizStreamFrameType.DIAGNOSTIC_EVENT)
-
-    first_payload = json.loads(first_pose.payload.decode("utf-8"))
-    second_payload = json.loads(second_pose.payload.decode("utf-8"))
-    diag_payload = json.loads(first_diag.payload.decode("utf-8"))
-
-    assert _tool_xyz_from_resolved_payload(first_payload) != _tool_xyz_from_resolved_payload(second_payload)
-    assert diag_payload["details"]["motion_source"] == "synthetic"
-    assert diag_payload["details"]["data_source"] == "replay"
-    assert diag_payload["details"]["mode"] == "replay_rosbag"
-
-
-def test_runtime_auto_promotes_data_source_to_replay_when_replay_source_is_set() -> None:
-    runtime = RosVizRuntime()
-    session = runtime.create_session(
-        RosVizSessionCreateRequest(
-            data_source="live_ros",
-            replay_source="episode://123",
-        )
-    )
-
-    assert session.data_source == "replay"
-    assert session.session_mode == "replay_rosbag"
-
-
 def test_runtime_clock_state_defaults_follow_mode() -> None:
     runtime = RosVizRuntime()
 
@@ -315,51 +253,6 @@ def test_runtime_clock_state_defaults_follow_mode() -> None:
     assert live_clock.mode == "live"
     assert live_clock.is_playing is True
     assert live_clock.can_control is False
-
-    replay_session = runtime.create_session(
-        RosVizSessionCreateRequest(data_source="replay", replay_source="episode://1")
-    )
-    replay_clock = runtime.get_clock_state(replay_session.session_id)
-    assert replay_clock.mode == "replay"
-    assert replay_clock.is_playing is True
-    assert replay_clock.can_control is True
-
-    episode_session = runtime.create_session(RosVizSessionCreateRequest(data_source="episode"))
-    episode_clock = runtime.get_clock_state(episode_session.session_id)
-    assert episode_clock.mode == "replay"
-    assert episode_clock.is_playing is True
-    assert episode_clock.can_control is True
-
-
-def test_runtime_clock_control_pause_step_and_seek_for_replay() -> None:
-    runtime = RosVizRuntime()
-    session = runtime.create_session(
-        RosVizSessionCreateRequest(data_source="replay", replay_source="episode://123")
-    )
-
-    paused = runtime.update_clock_control(
-        session.session_id,
-        RosVizClockControlRequest(is_playing=False),
-    )
-    assert paused.is_playing is False
-
-    first_frames = [parse_stream_frame(frame) for frame in runtime.build_stream_frames(session.session_id)]
-    second_frames = [parse_stream_frame(frame) for frame in runtime.build_stream_frames(session.session_id)]
-    first_clock = next(frame for frame in first_frames if frame.frame_type == RosVizStreamFrameType.CLOCK_TICK)
-    second_clock = next(frame for frame in second_frames if frame.frame_type == RosVizStreamFrameType.CLOCK_TICK)
-    assert second_clock.t_ns == first_clock.t_ns
-
-    stepped = runtime.update_clock_control(
-        session.session_id,
-        RosVizClockControlRequest(step_ticks=3),
-    )
-    assert stepped.tick_index >= 3
-
-    seeked = runtime.update_clock_control(
-        session.session_id,
-        RosVizClockControlRequest(seek_tick_index=10),
-    )
-    assert seeked.tick_index == 10
 
 
 def test_runtime_clock_control_rejects_live_debug_updates() -> None:
@@ -379,11 +272,11 @@ def test_runtime_session_mode_update_resets_timeline_and_controls() -> None:
 
     updated = runtime.update_session_mode(
         session.session_id,
-        RosVizModeUpdateRequest(mode="replay_episode"),
+        RosVizModeUpdateRequest(mode="live_debug"),
     )
 
-    assert updated.mode == "replay_episode"
-    assert updated.data_source == "episode"
-    assert updated.clock_mode == "replay"
-    assert updated.capabilities.can_seek is True
+    assert updated.mode == "live_debug"
+    assert updated.data_source == "live_ros"
+    assert updated.clock_mode == "live"
+    assert updated.capabilities.can_seek is False
     assert updated.tick_index == 0

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/shared/ui/tooltip";
-import { compareUrdfs, fixMissingMeshReferences, parseURDF } from "@/shared/lib/urdfBrowser";
+import {
+  compareUrdfs,
+  fixMissingMeshReferences,
+  parseURDF,
+  type UrdfParseStats,
+} from "@/shared/lib/urdfBrowser";
 import {
   canonicalizeUrdf,
   normalizeAxes,
@@ -55,6 +60,118 @@ interface URDFComparisonProps {
   onSelectedViewChange?: (view: "original" | "modified" | "split") => void;
 }
 
+type UrdfDisplayFormat = "urdf" | "xacro" | "mjcf";
+
+const URDF_DISPLAY_FORMATS: Array<{ value: UrdfDisplayFormat; label: string }> = [
+  { value: "urdf", label: "URDF" },
+  { value: "xacro", label: "Xacro" },
+  { value: "mjcf", label: "MJCF" },
+];
+
+const FormatDropdown = ({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: UrdfDisplayFormat;
+  onChange: (format: UrdfDisplayFormat) => void;
+  disabled?: boolean;
+}) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button
+        aria-label="Select document format"
+        className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={disabled}
+      >
+        <ChevronDown className="w-3 h-3" />
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" className="w-32">
+      {URDF_DISPLAY_FORMATS.map((option) => (
+        <DropdownMenuItem
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            "text-xs cursor-pointer",
+            value === option.value && "bg-primary/20 text-primary"
+          )}
+        >
+          {option.label}
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
+
+const ParseInfoStatus = ({
+  parseInfo,
+  isEditing = false,
+}: {
+  parseInfo: UrdfParseStats;
+  isEditing?: boolean;
+}) => (
+  <Tooltip delayDuration={0}>
+    <TooltipTrigger asChild>
+      <button
+        aria-label={parseInfo.isValid ? "Show document statistics" : "Show parse error"}
+        className={cn(
+          "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
+          parseInfo.isValid
+            ? "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            : "text-red-500 hover:bg-red-500/20"
+        )}
+      >
+        <Info className="w-3 h-3" />
+      </button>
+    </TooltipTrigger>
+    <TooltipContent side="left" className="text-xs">
+      {parseInfo.isValid ? (
+        <>
+          <p className="font-medium">{parseInfo.robotName}</p>
+          <p className="text-muted-foreground">
+            {parseInfo.links} links • {parseInfo.joints} joints • {parseInfo.materials} materials
+            {isEditing && <span className="ml-1 text-orange-500">(editing)</span>}
+          </p>
+        </>
+      ) : (
+        <p className="text-red-500">Invalid: {parseInfo.error}</p>
+      )}
+    </TooltipContent>
+  </Tooltip>
+);
+
+const UrdfDocumentHeader = ({
+  title,
+  format,
+  onFormatChange,
+  parseInfo,
+  formatDisabled = false,
+  isEditing = false,
+}: {
+  title: string;
+  format: UrdfDisplayFormat;
+  onFormatChange: (format: UrdfDisplayFormat) => void;
+  parseInfo: UrdfParseStats;
+  formatDisabled?: boolean;
+  isEditing?: boolean;
+}) => (
+  <div className="flex items-center justify-between px-1 mb-0.5">
+    <div className="flex items-center gap-1">
+      <h3 className="text-xs font-medium">{title}</h3>
+      <FormatDropdown value={format} onChange={onFormatChange} disabled={formatDisabled} />
+      <span className="text-[9px] text-muted-foreground ml-1">({format.toUpperCase()})</span>
+    </div>
+    <ParseInfoStatus parseInfo={parseInfo} isEditing={isEditing} />
+  </div>
+);
+
+const UrdfCodeScroll = ({ children }: { children: ReactNode }) => (
+  <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden [&>[data-radix-scroll-area-scrollbar]]:w-[2px] [&>[data-radix-scroll-area-scrollbar]]:bg-transparent [&>[data-radix-scroll-area-scrollbar]]:p-0 [&>[data-radix-scroll-area-thumb]]:bg-[hsl(0,0%,30%)] [&>[data-radix-scroll-area-thumb]]:rounded-full [&>[data-radix-scroll-area-thumb]]:hover:bg-[hsl(0,0%,40%)]">
+    <div className="min-w-0 p-3 bg-muted/20">{children}</div>
+  </ScrollArea>
+);
+
 export const URDFComparison = ({
   originalUrdf,
   vizUrdf,
@@ -77,8 +194,8 @@ export const URDFComparison = ({
   const setSelectedView = onSelectedViewChange ?? setInternalSelectedView;
   const [isEditing, setIsEditing] = useState(false);
   const [editedVizUrdf, setEditedVizUrdf] = useState(vizUrdf);
-  const [originalFormat, setOriginalFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
-  const [modifiedFormat, setModifiedFormat] = useState<"urdf" | "xacro" | "mjcf">("urdf");
+  const [originalFormat, setOriginalFormat] = useState<UrdfDisplayFormat>("urdf");
+  const [modifiedFormat, setModifiedFormat] = useState<UrdfDisplayFormat>("urdf");
 
   // Parse URDF content in real-time
   const activeUrdf = isEditing ? editedVizUrdf : vizUrdf;
@@ -496,76 +613,12 @@ export const URDFComparison = ({
             {/* Original URDF */}
             {(selectedView === "original" || selectedView === "split") && (
               <div className="flex flex-col gap-1 min-h-0 min-w-0">
-                <div className="flex items-center justify-between px-1 mb-0.5">
-                  <div className="flex items-center gap-1">
-                    <h3 className="text-xs font-medium">Original</h3>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors">
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-32">
-                        <DropdownMenuItem
-                          onClick={() => setOriginalFormat("urdf")}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            originalFormat === "urdf" && "bg-primary/20 text-primary"
-                          )}
-                        >
-                          URDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setOriginalFormat("xacro")}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            originalFormat === "xacro" && "bg-primary/20 text-primary"
-                          )}
-                        >
-                          Xacro
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setOriginalFormat("mjcf")}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            originalFormat === "mjcf" && "bg-primary/20 text-primary"
-                          )}
-                        >
-                          MJCF
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <span className="text-[9px] text-muted-foreground ml-1">
-                      ({originalFormat.toUpperCase()})
-                    </span>
-                  </div>
-                  {originalParseInfo.isValid ? (
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <button className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors">
-                          <Info className="w-3 h-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="text-xs">
-                        <p className="font-medium">{originalParseInfo.robotName}</p>
-                        <p className="text-muted-foreground">
-                          {originalParseInfo.links} links • {originalParseInfo.joints} joints • {originalParseInfo.materials} materials
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <button className="h-4 w-4 flex items-center justify-center text-red-500 hover:bg-red-500/20 rounded-sm transition-colors">
-                          <Info className="w-3 h-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="text-xs">
-                        <p className="text-red-500">Invalid: {originalParseInfo.error}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
+                <UrdfDocumentHeader
+                  title="Original"
+                  format={originalFormat}
+                  onFormatChange={setOriginalFormat}
+                  parseInfo={originalParseInfo}
+                />
                 <div className="flex items-center gap-1 px-1 mb-1 flex-wrap">
                   <Tooltip delayDuration={0}>
                     <TooltipTrigger asChild>
@@ -581,100 +634,26 @@ export const URDFComparison = ({
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden [&>[data-radix-scroll-area-scrollbar]]:w-[2px] [&>[data-radix-scroll-area-scrollbar]]:bg-transparent [&>[data-radix-scroll-area-scrollbar]]:p-0 [&>[data-radix-scroll-area-thumb]]:bg-[hsl(0,0%,30%)] [&>[data-radix-scroll-area-thumb]]:rounded-full [&>[data-radix-scroll-area-thumb]]:hover:bg-[hsl(0,0%,40%)]">
-                  <div className="min-w-0 p-3 bg-muted/20">
-                    <URDFSyntaxHighlighter xml={getOriginalContent()} className="text-xs leading-relaxed" />
-                  </div>
-                </ScrollArea>
+                <UrdfCodeScroll>
+                  <URDFSyntaxHighlighter xml={getOriginalContent()} className="text-xs leading-relaxed" />
+                </UrdfCodeScroll>
               </div>
             )}
 
             {/* Modified URDF */}
             {(selectedView === "modified" || selectedView === "split") && (
               <div className="flex flex-col gap-1 min-h-0 min-w-0">
-                <div className="flex items-center justify-between px-1 mb-0.5">
-                  <div className="flex items-center gap-1">
-                    <h3 className="text-xs font-medium">Modified</h3>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button 
-                          className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors"
-                          disabled={isEditing}
-                        >
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-32">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setModifiedFormat("urdf");
-                            if (isEditing) setIsEditing(false);
-                          }}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            modifiedFormat === "urdf" && "bg-primary/20 text-primary"
-                          )}
-                        >
-                          URDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setModifiedFormat("xacro");
-                            if (isEditing) setIsEditing(false);
-                          }}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            modifiedFormat === "xacro" && "bg-primary/20 text-primary"
-                          )}
-                        >
-                          Xacro
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setModifiedFormat("mjcf");
-                            if (isEditing) setIsEditing(false);
-                          }}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            modifiedFormat === "mjcf" && "bg-primary/20 text-primary"
-                          )}
-                        >
-                          MJCF
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <span className="text-[9px] text-muted-foreground ml-1">
-                      ({modifiedFormat.toUpperCase()})
-                    </span>
-                  </div>
-                  {parseInfo.isValid ? (
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <button className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-sm transition-colors">
-                          <Info className="w-3 h-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="text-xs">
-                        <p className="font-medium">{parseInfo.robotName}</p>
-                        <p className="text-muted-foreground">
-                          {parseInfo.links} links • {parseInfo.joints} joints • {parseInfo.materials} materials
-                          {isEditing && <span className="ml-1 text-orange-500">(editing)</span>}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <button className="h-4 w-4 flex items-center justify-center text-red-500 hover:bg-red-500/20 rounded-sm transition-colors">
-                          <Info className="w-3 h-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="text-xs">
-                        <p className="text-red-500">Invalid: {parseInfo.error}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
+                <UrdfDocumentHeader
+                  title="Modified"
+                  format={modifiedFormat}
+                  onFormatChange={(format) => {
+                    setModifiedFormat(format);
+                    if (isEditing) setIsEditing(false);
+                  }}
+                  parseInfo={parseInfo}
+                  formatDisabled={isEditing}
+                  isEditing={isEditing}
+                />
                 <div className="flex items-center gap-1 px-1 mb-1 flex-wrap">
                   {!isEditing && modifiedFormat === "urdf" ? (
                     <>
@@ -750,11 +729,9 @@ export const URDFComparison = ({
                     />
                   </div>
                 ) : (
-                  <ScrollArea className="flex-1 border border-border/20 rounded-sm overflow-hidden [&>[data-radix-scroll-area-scrollbar]]:w-[2px] [&>[data-radix-scroll-area-scrollbar]]:bg-transparent [&>[data-radix-scroll-area-scrollbar]]:p-0 [&>[data-radix-scroll-area-thumb]]:bg-[hsl(0,0%,30%)] [&>[data-radix-scroll-area-thumb]]:rounded-full [&>[data-radix-scroll-area-thumb]]:hover:bg-[hsl(0,0%,40%)]">
-                    <div className="min-w-0 p-3 bg-muted/20">
-                      <URDFSyntaxHighlighter xml={getModifiedContent()} className="text-xs leading-relaxed" />
-                    </div>
-                  </ScrollArea>
+                  <UrdfCodeScroll>
+                    <URDFSyntaxHighlighter xml={getModifiedContent()} className="text-xs leading-relaxed" />
+                  </UrdfCodeScroll>
                 )}
               </div>
             )}

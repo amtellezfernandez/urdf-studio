@@ -12,7 +12,7 @@ const resetStore = () => {
     jointValues: {},
     initialJointValues: {},
     dataZeroJointValues: {},
-    lerobotDataZeroJointValues: {},
+    importedDataZeroJointValues: {},
     dataZeroJointSource: "auto",
     jointUpdateTimes: {},
     availableJoints: [],
@@ -103,7 +103,7 @@ describe("useJointStore velocity limiting", () => {
     useJointStore.getState().setDataZeroJointValues({
       shoulder: TEST_JOINT_STORE_POSES.initialShoulderRad,
     });
-    useJointStore.getState().setLeRobotDataZeroJointValues({
+    useJointStore.getState().setImportedDataZeroJointValues({
       shoulder: TEST_JOINT_STORE_POSES.liveShoulderRad,
     });
 
@@ -111,7 +111,7 @@ describe("useJointStore velocity limiting", () => {
       shoulder: TEST_JOINT_STORE_POSES.initialShoulderRad,
     });
 
-    useJointStore.getState().setDataZeroJointSource("lerobot");
+    useJointStore.getState().setDataZeroJointSource("imported");
 
     expect(useJointStore.getState().getActiveDataZeroJointValues()).toEqual({
       shoulder: TEST_JOINT_STORE_POSES.liveShoulderRad,

@@ -19,31 +19,15 @@ function spawnNodeScript(scriptPath, args = []) {
   });
 }
 
-if (command === 'setup') {
-  // Run setup script
-  const setupScript = join(__dirname, 'setup.js');
-  const setupProcess = spawnNodeScript(setupScript, commandArgs);
-  
-  setupProcess.on('exit', (code) => {
+function runNodeScript(scriptName, args = commandArgs) {
+  const childProcess = spawnNodeScript(join(__dirname, scriptName), args);
+  childProcess.on('exit', (code) => {
     process.exit(code || 0);
   });
-} else if (command === 'start' || !command) {
-  // Run the app (default)
-  const runScript = join(__dirname, 'run.js');
-  const runProcess = spawnNodeScript(runScript, commandArgs);
-  
-  runProcess.on('exit', (code) => {
-    process.exit(code || 0);
-  });
-} else if (command === 'world') {
-  const worldScript = join(__dirname, 'world-package-cli.js');
-  const worldProcess = spawnNodeScript(worldScript, commandArgs);
+}
 
-  worldProcess.on('exit', (code) => {
-    process.exit(code || 0);
-  });
-} else if (command === '--help' || command === '-h') {
-  console.log('URDF Studio - Robot Learning Dataset Management');
+function printHelp() {
+  console.log('URDF Studio - URDF loading and simulator transfer');
   console.log('');
   console.log('Usage: urdf-studio [command]');
   console.log('');
@@ -52,6 +36,16 @@ if (command === 'setup') {
   console.log('  start   Start URDF Studio locally (run "urdf-studio start --help" for options)');
   console.log('  world   Validate/publish/list world packages');
   console.log('  --help  Show this help message');
+}
+
+if (command === 'setup') {
+  runNodeScript('setup.js');
+} else if (command === 'start' || !command) {
+  runNodeScript('run.js');
+} else if (command === 'world') {
+  runNodeScript('world-package-cli.js');
+} else if (command === '--help' || command === '-h') {
+  printHelp();
   process.exit(0);
 } else {
   console.log(`Unknown command: ${command}`);

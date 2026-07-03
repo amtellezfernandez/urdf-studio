@@ -39,10 +39,6 @@ import { useJointStore } from "@/shared/store/useJointStore";
 import { useLinkHighlightStore } from "@/shared/store/useLinkHighlightStore";
 import { analyzeUrdf } from "@/shared/lib/urdfCore";
 import { getJointColor } from "@/features/urdf/utils/jointColors";
-import {
-  normalizeEpisodeSignalName,
-} from "@/features/dataset/episodeJointDisplayParams";
-import { resolveEpisodeSignalDisplayRows } from "@/features/dataset/episodeSignalDisplay";
 import { addCollisionToLink } from "@/features/urdf/editor/updateLinkData";
 import type { URDFRobot } from "urdf-loader";
 import { LinkControl } from "@/features/urdf/editor/LinkEditor";
@@ -663,20 +659,6 @@ const WORLD_OBJECT_SOURCE_ORDER: ReadonlyArray<NonNullable<CreatedObject["source
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceOrder;
 const WORLD_OBJECT_SOURCE_LABELS: Record<NonNullable<CreatedObject["source"]>, string> =
   JOINT_LIST_SIDEBAR_PARAMS.worldObjectSourceLabels;
-
-const toSortedUniqueSignalNames = (names: Iterable<string>) =>
-  Array.from(
-    new Set(
-      Array.from(names)
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0)
-    )
-  ).sort((left, right) =>
-    left.localeCompare(right, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    })
-  );
 
 const toReadableWorldSourceLabel = (source: string): string =>
   source
@@ -2037,7 +2019,6 @@ interface JointListSidebarProps {
   collisionMergedLinks?: string[];
   onCollisionMergedLinksChange?: (links: string[]) => void;
   robot?: URDFRobot | null;
-  episodeJointNames?: string[];
   endEffectorLink?: string | null;
   endEffectorCandidates?: string[];
   onMarkAsEndEffector?: (linkName: string | null) => void;
@@ -2061,7 +2042,6 @@ const STRUCTURE_MODE_OPTIONS: Array<{
 
 export const JointListSidebar = ({
   availableJoints,
-  episodeJointNames = [],
   availableLinks = [],
   jointLimits,
   selectedJoint,
@@ -2210,49 +2190,7 @@ export const JointListSidebar = ({
       }),
     [allLinks.length, totalJointCount]
   );
-  const episodeSignalNames = useMemo(
-    () => toSortedUniqueSignalNames(episodeJointNames),
-    [episodeJointNames]
-  );
-  const colorJointNames = useMemo(
-    () =>
-      availableJoints.length > 0
-        ? availableJoints
-        : episodeSignalNames,
-    [availableJoints, episodeSignalNames]
-  );
-  const episodeSignalRows = useMemo(
-    () =>
-      resolveEpisodeSignalDisplayRows({
-        signalNames: episodeSignalNames,
-        robot,
-        signalColorReferenceNames: colorJointNames,
-        colorStrategy: "by-signal",
-      }),
-    [colorJointNames, episodeSignalNames, robot]
-  );
-  const episodeSignalColorByNameForViewer = useMemo(() => {
-    const colorBySignalName: Record<string, string> = {};
-    const jointColorByName = new Map<string, string>();
-    colorJointNames.forEach((jointName) => {
-      jointColorByName.set(jointName, getJointColor(jointName, colorJointNames));
-    });
-    episodeSignalRows.forEach((row) => {
-      const normalizedSignalName = normalizeEpisodeSignalName(row.signalName);
-      const normalizedMappedJointName = row.mappedJointName
-        ? normalizeEpisodeSignalName(row.mappedJointName)
-        : "";
-      const mappedJointColor =
-        row.mappedJointName !== null
-          ? jointColorByName.get(row.mappedJointName)
-          : undefined;
-      colorBySignalName[row.signalName] =
-        mappedJointColor && normalizedSignalName === normalizedMappedJointName
-          ? mappedJointColor
-          : row.color;
-    });
-    return colorBySignalName;
-  }, [colorJointNames, episodeSignalRows]);
+  const colorJointNames = availableJoints;
   const effectiveEndEffectorLink = useMemo(
     () =>
       resolveEffectiveEndEffectorLink({
@@ -2335,7 +2273,7 @@ export const JointListSidebar = ({
   );
   const [visibleJoints, setVisibleJoints] = useState<Set<string>>(visibilityJointSeed);
 
-  // Reset visibility when either URDF joints or episode channels change.
+  // Reset visibility when the loaded URDF joint set changes.
   useEffect(() => {
     setVisibleJoints(new Set(visibilityJointSeed));
   }, [visibilityJointSeed]);
@@ -2372,101 +2310,10 @@ export const JointListSidebar = ({
     [isWorldExpanded, worldPanelHeight]
   );
 
-  // Listen for visibility changes from episode viewer
-  useEffect(() => {
-    const handleVisibilityChange = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        jointName: string;
-        signalName?: string;
-        mappedJointName?: string | null;
-        isVisible: boolean;
-      }>;
-      const { jointName, signalName, mappedJointName, isVisible } = customEvent.detail;
-      const relatedNames = new Set<string>();
-      const addName = (value: unknown) => {
-        if (typeof value !== "string") return;
-        const normalized = value.trim();
-        if (normalized.length === 0) return;
-        relatedNames.add(normalized);
-      };
-      addName(jointName);
-      addName(signalName);
-      addName(mappedJointName);
-      const mappedFromJointName = episodeSignalRows.find(
-        (row) => row.signalName === jointName
-      )?.mappedJointName;
-      addName(mappedFromJointName);
-      const mappedFromSignalName = episodeSignalRows.find(
-        (row) => row.signalName === signalName
-      )?.mappedJointName;
-      addName(mappedFromSignalName);
-      setVisibleJoints(prev => {
-        const newSet = new Set(prev);
-        relatedNames.forEach((name) => {
-          if (isVisible) {
-            newSet.add(name);
-          } else {
-            newSet.delete(name);
-          }
-        });
-        return newSet;
-      });
-    };
-
-    window.addEventListener('episodeViewer:jointVisibilityChange', handleVisibilityChange);
-    return () => {
-      window.removeEventListener('episodeViewer:jointVisibilityChange', handleVisibilityChange);
-    };
-  }, [episodeSignalRows]);
-
-  useEffect(() => {
-    const dispatchColorMap = () => {
-      const syncEvent = new CustomEvent("sidebar:episodeSignalColorMap", {
-        detail: {
-          colorBySignalName: episodeSignalColorByNameForViewer,
-        },
-      });
-      window.dispatchEvent(syncEvent);
-    };
-
-    const handleColorMapRequest = () => {
-      dispatchColorMap();
-    };
-
-    dispatchColorMap();
-    window.addEventListener(
-      "sidebar:requestEpisodeSignalColorMap",
-      handleColorMapRequest
-    );
-    return () => {
-      window.removeEventListener(
-        "sidebar:requestEpisodeSignalColorMap",
-        handleColorMapRequest
-      );
-    };
-  }, [episodeSignalColorByNameForViewer]);
-
   const handleVisibilityToggle = useCallback((jointName: string) => {
-    const isVisible = visibleJoints.has(jointName);
     const newVisible = toggleStringSetValue(visibleJoints, jointName);
     setVisibleJoints(newVisible);
-
-    // Dispatch event for episode viewer
-    const matchingSignalRow =
-      episodeSignalRows.find((row) => row.signalName === jointName) ??
-      episodeSignalRows.find((row) => row.mappedJointName === jointName);
-    const mappedJointName = matchingSignalRow?.mappedJointName ?? null;
-    const signalName = matchingSignalRow?.signalName ?? jointName;
-    const event = new CustomEvent("jointVisibilityToggle", {
-      detail: {
-        jointName,
-        signalName,
-        mappedJointName,
-        isVisible: !isVisible,
-      },
-    });
-    window.dispatchEvent(event);
-  }, [episodeSignalRows, visibleJoints]);
+  }, [visibleJoints]);
   const handleBatchLinkToggle = useCallback((linkName: string) => {
     setSelectedBatchLinks((prev) => toggleStringSetValue(prev, linkName));
   }, []);

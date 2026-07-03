@@ -10,7 +10,6 @@ const ALLOWLIST_PREFIXES = [
   "shared/config/demo.ts",
   "shared/config/backends.ts",
   "shared/samples/",
-  "features/layout/panels/EpisodesPanel.tsx",
   "features/viewer/Viewer3D.tsx",
 ];
 

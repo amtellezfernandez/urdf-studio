@@ -18,7 +18,12 @@ from backend.services.ilu_urdf import (
 from backend.services.simulator_adapters import mujoco as mujoco_adapter
 from backend.services.simulator_adapters import workspace_process
 from backend.services.simulator_adapters.mjlab import MJLAB_WORKSPACE_PROCESS_PARAMS
+from backend.services.simulator_adapters.mujoco_scene import (
+    configure_mujoco_passive_viewer,
+    mujoco_scene_bounds,
+)
 from backend.services.simulator_adapters.params import (
+    MUJOCO_SCENE_PARAMS,
     MUJOCO_WORKSPACE_PROCESS_PARAMS,
     WORKSPACE_LAUNCH_FRAME_MAP,
 )
@@ -57,6 +62,7 @@ def test_mjlab_workspace_prepare_imports_shared_mujoco_runner() -> None:
 def _make_prepared_workspace_fixture(
     tmp_path: Path,
     *,
+    robot_urdf_xml: str = DEMO_URDF,
     bundled_mesh_content: bytes | None = None,
 ) -> PreparedMujocoWorkspaceFixture:
     workspace_dir = tmp_path / "workspace"
@@ -65,7 +71,7 @@ def _make_prepared_workspace_fixture(
     world_package_path = workspace_dir / "world-package.json"
     robot_urdf_path = robot_dir / "robot.urdf"
     world_package_path.write_text("{}", encoding="utf-8")
-    robot_urdf_path.write_text(DEMO_URDF, encoding="utf-8")
+    robot_urdf_path.write_text(robot_urdf_xml, encoding="utf-8")
 
     copied_files = 0
     bundled: tuple[BundledMeshAsset, ...] = ()
@@ -90,7 +96,7 @@ def _make_prepared_workspace_fixture(
         robot_urdf_path=robot_urdf_path,
         bundle_result=BundleMeshAssetsResult(
             success=True,
-            content=DEMO_URDF,
+            content=robot_urdf_xml,
             out_path=str(robot_urdf_path),
             assets_root=str(robot_dir / "assets"),
             copied_files=copied_files,
@@ -98,7 +104,7 @@ def _make_prepared_workspace_fixture(
             unresolved=(),
             error=None,
         ),
-        robot_urdf_xml=DEMO_URDF,
+        robot_urdf_xml=robot_urdf_xml,
     )
     return PreparedMujocoWorkspaceFixture(
         prepared=prepared,
@@ -177,13 +183,52 @@ def test_prepare_mujoco_workspace_stages_raw_converter_output(monkeypatch, tmp_p
         "convert_urdf_to_mjcf",
         lambda urdf_xml: _conversion_result(
             DEMO_MJCF,
-            warnings=("legacy string warning",),
+            warnings=("plain string warning",),
         ),
     )
 
     result = mujoco_adapter.prepare_mujoco_workspace(_request(), simulator_id="mujoco")
 
     assert result.mjcf_path.read_text(encoding="utf-8") == DEMO_MJCF
+
+
+def test_prepare_mujoco_workspace_converts_materialized_robot_urdf_xml(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    materialized_urdf = """
+    <robot name="demo">
+      <link name="base">
+        <visual>
+          <geometry>
+            <box size="0.1 0.1 0.1"/>
+          </geometry>
+          <material name="painted_red">
+            <color rgba="0.8 0.1 0.1 1.0"/>
+          </material>
+        </visual>
+      </link>
+    </robot>
+    """
+    fixture = _make_prepared_workspace_fixture(tmp_path, robot_urdf_xml=materialized_urdf)
+    observed: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        mujoco_adapter,
+        "prepare_simulator_workspace_package",
+        lambda *args, **kwargs: fixture.prepared,
+    )
+
+    def _fake_convert_urdf_to_mjcf(urdf_xml: str) -> MjcfConversionResult:
+        observed["urdf_xml"] = urdf_xml
+        return _conversion_result(DEMO_MJCF)
+
+    monkeypatch.setattr(mujoco_adapter, "convert_urdf_to_mjcf", _fake_convert_urdf_to_mjcf)
+
+    mujoco_adapter.prepare_mujoco_workspace(_request(), simulator_id="mujoco")
+
+    assert observed["urdf_xml"] == materialized_urdf
+    assert 'rgba="0.8 0.1 0.1 1.0"' in observed["urdf_xml"]
 
 
 @pytest.mark.parametrize(
@@ -360,3 +405,58 @@ def test_apply_mjcf_workspace_repairs_preserves_or_defaults_inertial_pos() -> No
     assert 'name="dynamic_link"' in sanitized
     assert 'pos="0 0 0"' in sanitized
     assert 'pos="0.1 0.2 0.3"' in sanitized
+
+
+def test_mujoco_scene_bounds_fits_compiled_robot_and_workspace_objects() -> None:
+    mujoco = pytest.importorskip("mujoco")
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco model="bounds">
+          <worldbody>
+            <geom name="robot" type="box" pos="0 0 0.2" size="0.1 0.1 0.2"/>
+            <geom name="workspace_object" type="sphere" pos="1 0 0.2" size="0.15"/>
+            <geom name="reference_floor" type="plane" pos="0 0 0" size="10 10 0.1"/>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    bounds = mujoco_scene_bounds(mujoco, model, data)
+
+    assert bounds.geom_count == 2
+    assert bounds.center_xyz[0] > 0.3
+    assert bounds.radius_m >= 0.35
+    assert bounds.min_xyz[0] < 0.0
+    assert bounds.max_xyz[0] > 1.0
+
+
+def test_configure_mujoco_passive_viewer_sets_fit_camera_and_visual_groups() -> None:
+    mujoco = pytest.importorskip("mujoco")
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco model="viewer">
+          <worldbody>
+            <geom name="robot_visual" group="1" type="box" pos="0.5 0 0.2" size="0.1 0.1 0.2"/>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    class _Viewer:
+        cam = mujoco.MjvCamera()
+        opt = mujoco.MjvOption()
+
+    viewer = _Viewer()
+    viewer.opt.geomgroup[:] = 0
+
+    bounds = configure_mujoco_passive_viewer(mujoco, model, data, viewer)
+
+    assert tuple(float(value) for value in viewer.cam.lookat) == bounds.center_xyz
+    assert viewer.cam.distance >= 1.0
+    assert viewer.cam.azimuth == MUJOCO_SCENE_PARAMS.viewer.azimuth_deg
+    assert viewer.cam.elevation == MUJOCO_SCENE_PARAMS.viewer.elevation_deg
+    assert list(viewer.opt.geomgroup[:3]) == [1, 1, 1]

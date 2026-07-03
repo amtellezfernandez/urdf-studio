@@ -21,33 +21,33 @@ describe("featureFlags", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("defaults to disabled ROS viz v2", () => {
-    expect(isFeatureFlagEnabled("rosVizV2")).toBe(false);
-    expect(getFeatureFlagSource("rosVizV2")).toBe("default");
-    expect(isFeatureFlagUrlLocked("rosVizV2")).toBe(false);
+  it("defaults to disabled ROS Viz", () => {
+    expect(isFeatureFlagEnabled("rosViz")).toBe(false);
+    expect(getFeatureFlagSource("rosViz")).toBe("default");
+    expect(isFeatureFlagUrlLocked("rosViz")).toBe(false);
   });
 
-  it("defaults motion kernel v2 to enabled", () => {
-    expect(isFeatureFlagEnabled("motionKernelV2")).toBe(true);
-    expect(getFeatureFlagSource("motionKernelV2")).toBe("default");
-    expect(isFeatureFlagUrlLocked("motionKernelV2")).toBe(false);
+  it("defaults motion kernel to enabled", () => {
+    expect(isFeatureFlagEnabled("motionKernel")).toBe(true);
+    expect(getFeatureFlagSource("motionKernel")).toBe("default");
+    expect(isFeatureFlagUrlLocked("motionKernel")).toBe(false);
   });
 
   it("persists runtime flag to localStorage", () => {
-    setFeatureFlag("rosVizV2", true);
+    setFeatureFlag("rosViz", true);
 
-    expect(isFeatureFlagEnabled("rosVizV2")).toBe(true);
-    expect(getFeatureFlagSource("rosVizV2")).toBe("localStorage");
-    expect(isFeatureFlagUrlLocked("rosVizV2")).toBe(false);
+    expect(isFeatureFlagEnabled("rosViz")).toBe(true);
+    expect(getFeatureFlagSource("rosViz")).toBe("localStorage");
+    expect(isFeatureFlagUrlLocked("rosViz")).toBe(false);
   });
 
   it("treats URL flags as authoritative and locked", () => {
-    setFeatureFlag("rosVizV2", true);
-    window.history.replaceState({}, "", "/?flags=-rosVizV2");
+    setFeatureFlag("rosViz", true);
+    window.history.replaceState({}, "", "/?flags=-rosViz");
 
-    expect(isFeatureFlagEnabled("rosVizV2")).toBe(false);
-    expect(getFeatureFlagSource("rosVizV2")).toBe("url");
-    expect(isFeatureFlagUrlLocked("rosVizV2")).toBe(true);
+    expect(isFeatureFlagEnabled("rosViz")).toBe(false);
+    expect(getFeatureFlagSource("rosViz")).toBe("url");
+    expect(isFeatureFlagUrlLocked("rosViz")).toBe(true);
   });
 
   it("notifies subscribers when flag changes", () => {
@@ -56,7 +56,7 @@ describe("featureFlags", () => {
       notifications += 1;
     });
 
-    setFeatureFlag("rosVizV2", true);
+    setFeatureFlag("rosViz", true);
     unsubscribe();
 
     expect(notifications).toBe(1);

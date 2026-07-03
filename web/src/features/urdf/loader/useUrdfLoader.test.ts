@@ -23,9 +23,9 @@ const createRelativeFile = (
   return file;
 };
 
-const LEKIWI_SOURCE_URDF = `<?xml version="1.0"?>
-<robot name="LeKiwi">
-  <link name="base_plate_layer1-v5" />
+const createRepeatedLinkMeshSourceUrdf = (): string => `<?xml version="1.0"?>
+<robot name="RepeatedMeshBot">
+  <link name="base_link" />
   <link name="drive_motor_mount-v11" />
   <link name="drive_motor_mount-v11-2">
     <visual>
@@ -49,9 +49,9 @@ const LEKIWI_SOURCE_URDF = `<?xml version="1.0"?>
       </geometry>
     </visual>
   </link>
-  <joint name="base_plate_layer1-v5_baseplate2bottom_mount" type="fixed">
+  <joint name="base_link_to_mount" type="fixed">
     <origin xyz="-0.02 -0.1 0.0" rpy="3.141592653589793 -0.0 0.0" />
-    <parent link="base_plate_layer1-v5" />
+    <parent link="base_link" />
     <child link="drive_motor_mount-v11-2" />
   </joint>
   <joint name="drive_motor_mount-v11-2_Rigid-2" type="fixed">
@@ -524,8 +524,9 @@ describe("useUrdfLoader", () => {
     });
   });
 
-  it("preserves authored repeated mesh references during live LeKiwi load", async () => {
+  it("preserves authored shared mesh references during repeated-link URDF load", async () => {
     let loader: ReturnType<typeof useUrdfLoader> | null = null;
+    const sourceUrdf = createRepeatedLinkMeshSourceUrdf();
 
     const Harness = () => {
       loader = useUrdfLoader();
@@ -540,13 +541,13 @@ describe("useUrdfLoader", () => {
     });
 
     await act(async () => {
-      loader?.loadUrdfText(LEKIWI_SOURCE_URDF, {
-        filename: "lekiwi.urdf",
-        activePath: "demo/lekiwi.urdf",
+      loader?.loadUrdfText(sourceUrdf, {
+        filename: "repeated-link-meshes.urdf",
+        activePath: "demo/repeated-link-meshes.urdf",
       });
     });
 
-    expect(loader?.vizUrdfContent).toBe(LEKIWI_SOURCE_URDF);
+    expect(loader?.vizUrdfContent).toBe(sourceUrdf);
     expect(loader?.vizUrdfContent).toContain(`mesh filename="meshes/drive_motor_mount-v11.stl"`);
     expect(loader?.vizUrdfContent).toContain(`mesh filename="meshes/omni_wheel_mount-v5.stl"`);
     expect(loader?.vizUrdfContent).toContain(
@@ -558,8 +559,9 @@ describe("useUrdfLoader", () => {
     });
   });
 
-  it("aliases upstream-style LeKiwi mesh references back to local shared mesh files", async () => {
+  it("aliases repeated-link mesh references back to local shared mesh files", async () => {
     let loader: ReturnType<typeof useUrdfLoader> | null = null;
+    const sourceUrdf = createRepeatedLinkMeshSourceUrdf();
 
     const Harness = () => {
       loader = useUrdfLoader();
@@ -579,9 +581,9 @@ describe("useUrdfLoader", () => {
     });
 
     await act(async () => {
-      loader?.loadUrdfText(LEKIWI_SOURCE_URDF, {
-        filename: "lekiwi.urdf",
-        activePath: "demo/lekiwi.urdf",
+      loader?.loadUrdfText(sourceUrdf, {
+        filename: "repeated-link-meshes.urdf",
+        activePath: "demo/repeated-link-meshes.urdf",
         meshFiles: sharedMeshFiles,
       });
     });

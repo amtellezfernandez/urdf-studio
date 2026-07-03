@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_POINT_SIZE } from "@/features/objects/objectCreatorHelpers";
 import { WORLD_OBJECT_STORE_PARAMS } from "@/features/objects/worldObjectStoreParams";
 import { useObjectStore } from "@/features/objects/useObjectStore";
+import { WORLD_OBJECT_SOURCE_IDS } from "@/shared/types/worldObject";
 
 const TEST_POINT_SIZE = 0.14;
 const TEST_INVALID_POINT_SIZE = 0;
@@ -235,14 +236,14 @@ describe("useObjectStore", () => {
       isIkTarget: false,
     });
 
-    store.replaceObjectsBySource("runtime-detection", [
+    store.replaceObjectsBySource(WORLD_OBJECT_SOURCE_IDS.scenario, [
       {
         type: "cube",
         position: new THREE.Vector3(1, 0.06, 2),
         size: new THREE.Vector3(0.12, 0.12, 0.12),
         color: "#ff8800",
         trackedJointName: null,
-        source: "runtime-detection",
+        source: WORLD_OBJECT_SOURCE_IDS.scenario,
         isIkTarget: false,
       },
     ]);
@@ -251,10 +252,10 @@ describe("useObjectStore", () => {
     expect(
       useObjectStore
         .getState()
-        .objects.filter((object) => object.source === "runtime-detection")
+        .objects.filter((object) => object.source === WORLD_OBJECT_SOURCE_IDS.scenario)
     ).toHaveLength(1);
 
-    store.replaceObjectsBySource("runtime-detection", []);
+    store.replaceObjectsBySource(WORLD_OBJECT_SOURCE_IDS.scenario, []);
 
     const remainingObjects = useObjectStore.getState().objects;
     expect(remainingObjects).toHaveLength(1);

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { URDFLink, URDFRobot } from "urdf-loader";
 import { parseUrdfDocument } from "@/shared/lib/urdfCore";
+import { readUrdfJointTopology, type UrdfJointTopology } from "@/shared/lib/urdfTopology";
 import { KINEMATIC_SYNTHESIS_PREVIEW_SAMPLE_LIMIT } from "./kinematicSynthesizerParams";
 import {
   optimizeRobotSupportPlane,
@@ -45,18 +46,11 @@ export type CapturedKinematicState = {
   capturedLinkWorldPoses: CapturedKinematicLinkWorldPose[];
 };
 
-type ParsedJointTopology = {
-  jointName: string;
-  jointType: string;
-  parentLinkName: string;
-  childLinkName: string;
-};
-
 type ParsedRobotTopology = {
   robotName: string | null;
   rootLinkName: string;
   links: string[];
-  joints: ParsedJointTopology[];
+  joints: UrdfJointTopology[];
 };
 
 const FLOAT_PRECISION_DECIMALS = 6;
@@ -91,25 +85,7 @@ const parseRobotTopology = (urdfContent: string): ParsedRobotTopology | null => 
   const links = Array.from(robotElement.querySelectorAll(":scope > link[name]"))
     .map((linkElement) => linkElement.getAttribute("name") ?? "")
     .filter(Boolean);
-  const joints = Array.from(robotElement.querySelectorAll(":scope > joint[name]"))
-    .map((jointElement) => {
-      const jointName = jointElement.getAttribute("name") ?? "";
-      const jointType = jointElement.getAttribute("type") ?? "fixed";
-      const parentLinkName =
-        jointElement.querySelector(":scope > parent")?.getAttribute("link") ?? "";
-      const childLinkName =
-        jointElement.querySelector(":scope > child")?.getAttribute("link") ?? "";
-      if (!jointName || !parentLinkName || !childLinkName) {
-        return null;
-      }
-      return {
-        jointName,
-        jointType,
-        parentLinkName,
-        childLinkName,
-      };
-    })
-    .filter((joint): joint is ParsedJointTopology => Boolean(joint));
+  const joints = readUrdfJointTopology(robotElement);
 
   const childLinkNames = new Set(joints.map((joint) => joint.childLinkName));
   const rootLinkName = links.find((linkName) => !childLinkNames.has(linkName));

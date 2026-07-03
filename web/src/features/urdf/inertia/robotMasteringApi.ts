@@ -1,24 +1,30 @@
 import { API_BASE_URL } from "@/shared/config/api";
 import { guardedFetch } from "@/shared/lib/backendGuard";
-import type { RobotFrameLintResult } from "@/features/urdf/lint/robotFrameLinter";
-import type {
-  InertialAuditSummary,
-  InertialMeshSolveMode,
-  InertialPlausibilitySummary,
-  InertialRepairMode,
-  InertialSynthesisResult,
-} from "@/features/urdf/inertia/inertialSynthesis";
-import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
-import type { RobotOrientationCard } from "@/shared/lib/urdfCore";
+import { assertBackendResponseOk } from "@/shared/lib/backendResponse";
+import {
+  base64ToBlob,
+  blobToBase64,
+  type SerializedBlobPayload,
+} from "@/shared/lib/blobEncoding";
 import {
   ROBOT_MASTERING_JOB_POLL_INTERVAL_MS,
   ROBOT_MASTERING_JOB_TIMEOUT_MS,
 } from "./robotMasteringApiParams";
-import type { UrdfBakedMeshPlan } from "@/features/urdf/bake/virtualBake";
-import type { MeshBakePlanExecutionResult } from "@/features/urdf/bake/meshBakeProcessor";
+import type {
+  MeshBakePlanExecutionInput,
+  MeshBakePlanExecutionResult,
+} from "@/features/urdf/bake/meshBakeProcessor";
 import type { CapturedKinematicState } from "@/features/urdf/synthesis/kinematicSynthesizer";
-import type { SynthesizedUrdfJointFrame, SynthesizedUrdfLinkFrame } from "@/features/urdf/synthesis/kinematicSynthesizer";
-import type { SupportPlaneAxis } from "@/features/urdf/synthesis/supportPlaneOptimization";
+import type {
+  RobotMasteringBakeExportExecuteInput,
+  RobotMasteringCanonicalSynthesisInput,
+  RobotMasteringCanonicalSynthesisOutput,
+  RobotMasteringGeneratePhysicsInput,
+  RobotMasteringGeneratePhysicsOutput,
+  RobotMasteringGeneratePhysicsPreflightInput,
+  RobotMasteringGeneratePhysicsPreflightOutput,
+  RobotMasteringFramePreflightOutput,
+} from "@/features/urdf/inertia/robotMasteringContracts";
 
 const CORE_API_OPTIONS = {
   requiredBackends: ["core-api"] as const,
@@ -30,54 +36,27 @@ type RobotMasteringMeshFilePayload = {
   mimeType: string | null;
 };
 
-type GeneratePhysicsJobRequest = {
-  jobType: "generate-physics";
-  sourceUrdf: string;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
+type SerializedGeneratePhysicsInput = Omit<RobotMasteringGeneratePhysicsInput, "meshFiles"> & {
   meshFiles: RobotMasteringMeshFilePayload[];
-  densityPresetId: InertialDensityPresetId;
-  repairMode: InertialRepairMode;
-  linkNames?: string[];
-  meshSolveMode?: InertialMeshSolveMode;
-  regularizeNearMissTensors?: boolean;
-  canonicalizeRepeatedMeshes?: boolean;
 };
 
-type GeneratePhysicsPreflightRequest = {
-  sourceUrdf: string;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
+type SerializedGeneratePhysicsPreflightInput = Omit<
+  RobotMasteringGeneratePhysicsPreflightInput,
+  "meshFiles"
+> & {
   meshFiles: RobotMasteringMeshFilePayload[];
+};
+
+type GeneratePhysicsJobRequest = SerializedGeneratePhysicsInput & {
+  jobType: "generate-physics";
 };
 
 type FramePreflightRequest = {
   sourceUrdf: string;
 };
 
-type BakeExportExecuteRequest = {
-  planEntries: UrdfBakedMeshPlan["entries"];
-  planConflicts: UrdfBakedMeshPlan["conflicts"];
+type BakeExportExecuteRequest = Omit<RobotMasteringBakeExportExecuteInput, "meshFiles"> & {
   meshFiles: RobotMasteringMeshFilePayload[];
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-};
-
-type CanonicalSynthesisRequest = {
-  sourceUrdf: string;
-  synthesisSourceUrdf: string;
-  robotName: string | null;
-  capturedLinkWorldPoses: CapturedKinematicState["capturedLinkWorldPoses"];
-  supportPlane: {
-    success: boolean;
-    confidence: number;
-    evidence: string;
-    inferredUpAxis?: SupportPlaneAxis | null;
-    inferredUpSign?: 1 | -1 | null;
-    targetUpAxis?: "z" | null;
-    targetUpSign?: 1 | null;
-    fallbackReason?: string | null;
-  };
 };
 
 type RobotMasteringJobCreatedResponse = {
@@ -95,29 +74,14 @@ type RobotMasteringJobStatusResponse = {
   error?: string | null;
 };
 
-export type GeneratePhysicsJobResult = {
+export type GeneratePhysicsJobResult = RobotMasteringGeneratePhysicsOutput & {
   jobId: string;
   jobType: "generate-physics";
-  draftUrdfContent: string;
-  auditSummary: InertialAuditSummary | null;
-  synthesisResult: InertialSynthesisResult;
-  plausibilitySummary: InertialPlausibilitySummary | null;
 };
 
-export type GeneratePhysicsPreflightResult = {
-  auditSummary: InertialAuditSummary | null;
-  plausibilitySummary: InertialPlausibilitySummary | null;
-};
+export type GeneratePhysicsPreflightResult = RobotMasteringGeneratePhysicsPreflightOutput;
 
-export type FramePreflightResult = {
-  orientationCard: RobotOrientationCard | null;
-  frameLint: RobotFrameLintResult | null;
-};
-
-type SerializedBlobPayload = {
-  base64Content: string;
-  mimeType: string | null;
-};
+export type FramePreflightResult = RobotMasteringFramePreflightOutput;
 
 type BakeExportExecuteResponse = {
   overrides: Array<{
@@ -133,23 +97,11 @@ type BakeExportExecuteResponse = {
   unsupported: MeshBakePlanExecutionResult["unsupported"];
 };
 
-export type CanonicalSynthesisResult = {
-  preview: {
-    robotName: string | null;
-    rootLinkName: string;
-    linkCount: number;
-    jointCount: number;
-    supportPlane: CanonicalSynthesisRequest["supportPlane"];
-    links: SynthesizedUrdfLinkFrame[];
-    joints: SynthesizedUrdfJointFrame[];
-    sampleJoints: SynthesizedUrdfJointFrame[];
-  };
-  draftContent: string;
-};
+export type CanonicalSynthesisResult = RobotMasteringCanonicalSynthesisOutput;
 
 const toCanonicalSynthesisSupportPlanePayload = (
   supportPlane: CapturedKinematicState["supportPlane"]
-): CanonicalSynthesisRequest["supportPlane"] => {
+): RobotMasteringCanonicalSynthesisInput["supportPlane"] => {
   if (supportPlane.success) {
     return {
       success: true,
@@ -178,52 +130,6 @@ const sleep = (delayMs: number) =>
     setTimeout(resolve, delayMs);
   });
 
-const assertOk = async (response: Response, fallbackMessage: string) => {
-  if (response.ok) {
-    return;
-  }
-  let detail = fallbackMessage;
-  try {
-    const payload = (await response.json()) as { detail?: string };
-    if (typeof payload.detail === "string" && payload.detail.trim()) {
-      detail = payload.detail;
-    }
-  } catch {
-    // Ignore malformed backend payloads and use fallback text.
-  }
-  throw new Error(detail);
-};
-
-const blobToBase64 = async (blob: Blob): Promise<string> =>
-  await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => {
-      reject(reader.error ?? new Error("Failed to read mesh blob for backend physics generation."));
-    };
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      const commaIndex = dataUrl.indexOf(",");
-      if (commaIndex < 0) {
-        reject(new Error("Failed to encode mesh blob for backend physics generation."));
-        return;
-      }
-      resolve(dataUrl.slice(commaIndex + 1));
-    };
-    reader.readAsDataURL(blob);
-  });
-
-const base64ToBlob = ({
-  base64Content,
-  mimeType,
-}: SerializedBlobPayload): Blob => {
-  const binary = atob(base64Content);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: mimeType ?? "" });
-};
-
 const serializeMeshFiles = async (
   meshFiles: Record<string, Blob>
 ): Promise<RobotMasteringMeshFilePayload[]> => {
@@ -231,7 +137,10 @@ const serializeMeshFiles = async (
   return Promise.all(
     entries.map(async ([path, blob]) => ({
       path,
-      base64Content: await blobToBase64(blob),
+      base64Content: await blobToBase64(blob, {
+        readErrorMessage: "Failed to read mesh blob for backend physics generation.",
+        encodeErrorMessage: "Failed to encode mesh blob for backend physics generation.",
+      }),
       mimeType: blob.type || null,
     }))
   );
@@ -254,12 +163,12 @@ const createGeneratePhysicsJob = async (
       context: "Generate physics",
     }
   );
-  await assertOk(response, "Failed to create robot mastering job.");
+  await assertBackendResponseOk(response, "Failed to create robot mastering job.");
   return (await response.json()) as RobotMasteringJobCreatedResponse;
 };
 
 const fetchGeneratePhysicsPreflight = async (
-  request: GeneratePhysicsPreflightRequest
+  request: SerializedGeneratePhysicsPreflightInput
 ): Promise<GeneratePhysicsPreflightResult> => {
   const response = await guardedFetch(
     `${API_BASE_URL}/robot-mastering/generate-physics/preflight`,
@@ -275,7 +184,7 @@ const fetchGeneratePhysicsPreflight = async (
       context: "Load physics preflight",
     }
   );
-  await assertOk(response, "Failed to load physics preflight.");
+  await assertBackendResponseOk(response, "Failed to load physics preflight.");
   return (await response.json()) as GeneratePhysicsPreflightResult;
 };
 
@@ -294,7 +203,7 @@ const fetchFramePreflight = async (request: FramePreflightRequest): Promise<Fram
       context: "Load frame preflight",
     }
   );
-  await assertOk(response, "Failed to load frame preflight.");
+  await assertBackendResponseOk(response, "Failed to load frame preflight.");
   return (await response.json()) as FramePreflightResult;
 };
 
@@ -315,12 +224,28 @@ const executeBakeExport = async (
       context: "Execute bake export",
     }
   );
-  await assertOk(response, "Failed to execute bake export.");
+  await assertBackendResponseOk(response, "Failed to execute bake export.");
   return (await response.json()) as BakeExportExecuteResponse;
 };
 
+const deserializeBakeExportResult = (
+  result: BakeExportExecuteResponse
+): MeshBakePlanExecutionResult => ({
+  overrides: result.overrides.map((override) => ({
+    sourceReference: override.sourceReference,
+    resolvedPath: override.resolvedPath,
+    outputFilename: override.outputFilename,
+    blob: base64ToBlob(override.blob),
+    sidecars: override.sidecars.map((sidecar) => ({
+      filename: sidecar.filename,
+      blob: base64ToBlob(sidecar.blob),
+    })),
+  })),
+  unsupported: result.unsupported,
+});
+
 const executeCanonicalSynthesis = async (
-  request: CanonicalSynthesisRequest
+  request: RobotMasteringCanonicalSynthesisInput
 ): Promise<CanonicalSynthesisResult> => {
   const response = await guardedFetch(
     `${API_BASE_URL}/robot-mastering/canonical-synthesis`,
@@ -336,7 +261,7 @@ const executeCanonicalSynthesis = async (
       context: "Execute canonical synthesis",
     }
   );
-  await assertOk(response, "Failed to execute canonical synthesis.");
+  await assertBackendResponseOk(response, "Failed to execute canonical synthesis.");
   return (await response.json()) as CanonicalSynthesisResult;
 };
 
@@ -349,7 +274,7 @@ const fetchJobStatus = async (jobId: string): Promise<RobotMasteringJobStatusRes
       context: "Poll robot mastering job",
     }
   );
-  await assertOk(response, "Failed to poll robot mastering job.");
+  await assertBackendResponseOk(response, "Failed to poll robot mastering job.");
   return (await response.json()) as RobotMasteringJobStatusResponse;
 };
 
@@ -362,7 +287,7 @@ const fetchGeneratePhysicsResult = async (jobId: string): Promise<GeneratePhysic
       context: "Load generated physics draft",
     }
   );
-  await assertOk(response, "Failed to load generated physics draft.");
+  await assertBackendResponseOk(response, "Failed to load generated physics draft.");
   return (await response.json()) as GeneratePhysicsJobResult;
 };
 
@@ -377,18 +302,7 @@ export const generatePhysicsDraftViaBackend = async ({
   meshSolveMode,
   regularizeNearMissTensors,
   canonicalizeRepeatedMeshes,
-}: {
-  sourceUrdf: string;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-  meshFiles: Record<string, Blob>;
-  densityPresetId: InertialDensityPresetId;
-  repairMode: InertialRepairMode;
-  linkNames?: string[];
-  meshSolveMode?: InertialMeshSolveMode;
-  regularizeNearMissTensors?: boolean;
-  canonicalizeRepeatedMeshes?: boolean;
-}): Promise<GeneratePhysicsJobResult> => {
+}: RobotMasteringGeneratePhysicsInput): Promise<GeneratePhysicsJobResult> => {
   const created = await createGeneratePhysicsJob({
     jobType: "generate-physics",
     sourceUrdf,
@@ -426,12 +340,7 @@ export const generatePhysicsPreflightViaBackend = async ({
   urdfBasePath,
   packageRoots,
   meshFiles,
-}: {
-  sourceUrdf: string;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-  meshFiles: Record<string, Blob>;
-}): Promise<GeneratePhysicsPreflightResult> =>
+}: RobotMasteringGeneratePhysicsPreflightInput): Promise<GeneratePhysicsPreflightResult> =>
   await fetchGeneratePhysicsPreflight({
     sourceUrdf,
     urdfBasePath,
@@ -453,12 +362,7 @@ export const executeBakeExportViaBackend = async ({
   meshFiles,
   urdfBasePath,
   packageRoots,
-}: {
-  plan: UrdfBakedMeshPlan;
-  meshFiles: Record<string, Blob>;
-  urdfBasePath?: string;
-  packageRoots?: Record<string, string[]>;
-}): Promise<MeshBakePlanExecutionResult> => {
+}: MeshBakePlanExecutionInput): Promise<MeshBakePlanExecutionResult> => {
   const result = await executeBakeExport({
     planEntries: plan.entries,
     planConflicts: plan.conflicts,
@@ -467,19 +371,7 @@ export const executeBakeExportViaBackend = async ({
     packageRoots,
   });
 
-  return {
-    overrides: result.overrides.map((override) => ({
-      sourceReference: override.sourceReference,
-      resolvedPath: override.resolvedPath,
-      outputFilename: override.outputFilename,
-      blob: base64ToBlob(override.blob),
-      sidecars: override.sidecars.map((sidecar) => ({
-        filename: sidecar.filename,
-        blob: base64ToBlob(sidecar.blob),
-      })),
-    })),
-    unsupported: result.unsupported,
-  };
+  return deserializeBakeExportResult(result);
 };
 
 export const executeCanonicalSynthesisViaBackend = async ({

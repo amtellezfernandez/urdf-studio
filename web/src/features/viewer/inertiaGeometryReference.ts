@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { composeUrdfPoseMatrix } from "@/shared/lib/spatialFrame";
 import { createLruCache, hashArrayBuffer } from "@/shared/lib/cache";
 import { computeMeshBoundsFromArrayBuffer, resolveMeshBlobFromReference } from "@/shared/lib/urdfBrowser";
+import { parseVector3Tuple } from "@/shared/lib/vector3Tuple";
 import type { CollisionData, LinkData, MeshBounds } from "@/shared/lib/urdfCore";
 import type { MeshFiles } from "@/shared/types/feature";
 import {
@@ -42,12 +43,7 @@ const parseVectorString = (
   if (!raw) {
     return fallback;
   }
-  const parts = raw.split(/\s+/).map(Number);
-  return [
-    Number.isFinite(parts[0]) ? parts[0] : fallback[0],
-    Number.isFinite(parts[1]) ? parts[1] : fallback[1],
-    Number.isFinite(parts[2]) ? parts[2] : fallback[2],
-  ];
+  return parseVector3Tuple(raw, fallback);
 };
 
 const buildBoxCorners = (size: [number, number, number]): GeometryReferencePoint[] => {

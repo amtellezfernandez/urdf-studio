@@ -3,11 +3,13 @@ import {
   loadRobotAssetFileListFromManifestUrls,
   loadRobotAssetFileListProgressivelyFromManifestUrl,
   loadRobotAssetFileListProgressivelyFromManifestUrls,
+  type RobotAssetManifestPreferences,
   type ProgressiveRobotAssetFileList,
 } from "@/shared/robotAssets/robotAssetManifest";
 import { DEMO_ROBOT_ASSET_MANIFEST_COPY } from "@/app/pages/index/demoBootstrapParams";
 
 export type ProgressiveDemoFileList = ProgressiveRobotAssetFileList;
+export type DemoRobotAssetPreferences = RobotAssetManifestPreferences;
 
 export const loadDemoFileListFromManifestUrl = (
   manifestUrl: string,

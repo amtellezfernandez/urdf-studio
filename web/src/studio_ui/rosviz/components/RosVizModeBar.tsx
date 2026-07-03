@@ -35,6 +35,9 @@ export const RosVizModeBar = ({
   const canStep = Boolean(sessionState?.capabilities.can_step);
   const canSetPlaybackRate = Boolean(sessionState?.capabilities.can_set_playback_rate);
   const hasTimelineControls = canTogglePlay || canStep || canSetPlaybackRate;
+  const hasMultipleModes = ROSVIZ_SESSION_MODE_OPTIONS.length > 1;
+  const activeModeLabel =
+    ROSVIZ_SESSION_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? "Live Debug";
 
   return (
     <div className="absolute right-3 top-11 z-10 flex items-center gap-2 rounded border border-border/40 bg-background/90 px-2 py-1 text-[10px] backdrop-blur-sm">
@@ -50,22 +53,28 @@ export const RosVizModeBar = ({
       </span>
 
       <span className="text-muted-foreground">Session</span>
-      <select
-        value={mode}
-        disabled={!sessionState || clockRequestPending}
-        onChange={(event) => onModeChange(event.target.value as RosVizSessionMode)}
-        className={cn(
-          "rounded border border-border/50 bg-background/90 px-2 py-1 font-mono text-foreground",
-          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-          "disabled:cursor-not-allowed disabled:opacity-50"
-        )}
-      >
-        {ROSVIZ_SESSION_MODE_OPTIONS.map((option) => (
-          <option key={option.mode} value={option.mode}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      {hasMultipleModes ? (
+        <select
+          value={mode}
+          disabled={!sessionState || clockRequestPending}
+          onChange={(event) => onModeChange(event.target.value as RosVizSessionMode)}
+          className={cn(
+            "rounded border border-border/50 bg-background/90 px-2 py-1 font-mono text-foreground",
+            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+            "disabled:cursor-not-allowed disabled:opacity-50"
+          )}
+        >
+          {ROSVIZ_SESSION_MODE_OPTIONS.map((option) => (
+            <option key={option.mode} value={option.mode}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="rounded border border-border/40 bg-background/85 px-2 py-1 font-mono text-foreground">
+          {activeModeLabel}
+        </span>
+      )}
 
       {hasTimelineControls ? (
         <>

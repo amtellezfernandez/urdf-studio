@@ -6,8 +6,6 @@ export * from './setupParams/mjlab.js';
 export * from './setupParams/genesis.js';
 export * from './setupParams/pybullet.js';
 export * from './setupParams/blender.js';
-export * from './setupParams/lerobotSource.js';
-export * from './setupParams/lerobotTraining.js';
 
 import { BACKEND_PYTHON_CORE_SETUP } from './setupParams/backendPythonCore.js';
 import {
@@ -17,7 +15,7 @@ import {
 import {
   BACKEND_PYTHON_JAX_DEPENDENCIES,
   BACKEND_PYTHON_NATIVE_SIM_VERIFY_IMPORT_SCRIPT,
-  MJX_SYSTEM_ID_DEPENDENCIES,
+  MJX_DEPENDENCIES,
 } from './setupParams/nativeSim.js';
 
 export const BACKEND_PYTHON_PORTABLE_DEPENDENCIES = BACKEND_PYTHON_CORE_SETUP.dependencies;
@@ -25,7 +23,7 @@ export const BACKEND_PYTHON_CORE_VERIFY_IMPORT_SCRIPT = BACKEND_PYTHON_CORE_SETU
 export const BACKEND_PYTHON_DEPENDENCIES = [
   ...BACKEND_PYTHON_PORTABLE_DEPENDENCIES,
   ...BACKEND_PYTHON_JAX_DEPENDENCIES,
-  ...MJX_SYSTEM_ID_DEPENDENCIES,
+  ...MJX_DEPENDENCIES,
   ...BACKEND_PYTHON_PLACO_DEPENDENCIES,
 ];
 export const BACKEND_PYTHON_PORTABLE_VERIFY_IMPORT_SCRIPT = [

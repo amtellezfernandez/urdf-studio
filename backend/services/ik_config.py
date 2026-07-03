@@ -35,7 +35,7 @@ _DEFAULT_ORBIT = IkOrbitDefaults(
 _DEFAULT_TOLERANCES = IkTolerances(position_tolerance=0.002, orientation_tolerance=0.05)
 
 _DEFAULT_SOLVER_TUNING = {
-    "lerobot-placo": IkSolverTuning(
+    "placo": IkSolverTuning(
         position_weight=100.0,
         orientation_weight=0.5,
         posture_weight=0.0,

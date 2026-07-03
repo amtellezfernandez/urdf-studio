@@ -1,8 +1,4 @@
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
-export {
-  isLeKiwiRobotAsset,
-  isOpenArmRobotAsset,
-} from "@/shared/lib/robotAssetIdentity";
 
 type ResolveRemountPreservedFrameTimestampParams = {
   animationFrames: AnimationFrame[] | null;

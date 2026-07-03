@@ -8,6 +8,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from backend.services.simulator_adapters.params import GENESIS_SCENE_PARAMS
+from backend.services.simulator_adapters.scene_bounds import scene_bounds_from_aabbs
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
 from backend.services.world_layout_transfer_types import SimPrimitive
 from backend.services.world_layout_transfer_types import WorldLayoutTransferError
@@ -26,22 +27,25 @@ def scene_center_and_radius(
     primitives: Sequence[SimPrimitive],
 ) -> tuple[tuple[float, float, float], float]:
     viewer = GENESIS_SCENE_PARAMS.viewer
-    bounds: list[tuple[np.ndarray, np.ndarray]] = []
+    aabbs: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
     robot_half_extent = np.full(3, viewer.robot_bounds_half_extent_m, dtype=float)
     robot_center = np.array((0.0, 0.0, viewer.robot_bounds_half_extent_m), dtype=float)
-    bounds.append((robot_center - robot_half_extent, robot_center + robot_half_extent))
-    bounds.extend(primitive_bounds(primitive) for primitive in primitives)
-    if not bounds:
-        return GENESIS_SCENE_PARAMS.viewer.default_center_xyz, GENESIS_SCENE_PARAMS.viewer.default_radius_m
-    mins = np.min(np.stack([item[0] for item in bounds], axis=0), axis=0)
-    maxs = np.max(np.stack([item[1] for item in bounds], axis=0), axis=0)
-    center_array = (mins + maxs) * 0.5
-    center = tuple(float(value) for value in center_array)
-    radius = max(
-        viewer.min_radius_m,
-        float(np.linalg.norm((maxs - mins) * 0.5)),
+    aabbs.append(_aabb_to_tuple(robot_center - robot_half_extent, robot_center + robot_half_extent))
+    aabbs.extend(_aabb_to_tuple(*primitive_bounds(primitive)) for primitive in primitives)
+    bounds = scene_bounds_from_aabbs(
+        aabbs,
+        default_center_xyz=viewer.default_center_xyz,
+        default_radius_m=viewer.default_radius_m,
+        min_radius_m=viewer.min_radius_m,
     )
-    return center, radius
+    return bounds.center_xyz, bounds.radius_m
+
+
+def _aabb_to_tuple(min_xyz: np.ndarray, max_xyz: np.ndarray) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    return (
+        tuple(float(value) for value in min_xyz),
+        tuple(float(value) for value in max_xyz),
+    )
 
 
 def add_floor_entity(gs: Any, scene: Any) -> None:

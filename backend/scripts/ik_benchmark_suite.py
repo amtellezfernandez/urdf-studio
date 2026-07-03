@@ -17,7 +17,7 @@ from backend.models.kinematics import IKRequest, IkSolveRequest
 from backend.services.ik_orchestrator import solve_ik as orchestrated_ik
 from backend.services.kinematics import compute_link_pose
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
-from backend.services.lerobot_kinematics import inverse_kinematics as placo_ik
+from backend.services.placo_kinematics import inverse_kinematics as placo_ik
 
 
 @dataclass
@@ -218,7 +218,7 @@ def solve_policy(
             target_link=target_link,
             target_position=list(target_position),
             target_wxyz=list(target_wxyz),
-            solver_chain=["lerobot-placo", "amik"],
+            solver_chain=["placo", "amik"],
             orientation_mode="prefer",
         )
         response = orchestrated_ik(req)

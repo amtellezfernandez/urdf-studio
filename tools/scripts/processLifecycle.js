@@ -95,8 +95,7 @@ function isUrdfStudioDevCommand(argv) {
     joined.includes('tools/scripts/run.js') ||
     joined.includes('config/vite.config.ts') ||
     (joined.includes('uvicorn') && joined.includes('backend.server:app')) ||
-    (joined.includes('cargo') && joined.includes('ikd/Cargo.toml')) ||
-    (joined.includes('cloudflared') && joined.includes('tunnel') && joined.includes('--url'))
+    (joined.includes('cargo') && joined.includes('ikd/Cargo.toml'))
   );
 }
 

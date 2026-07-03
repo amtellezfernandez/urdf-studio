@@ -40,8 +40,6 @@ const BACKENDS: BackendMap<BackendDescriptor> = {
 
 const unique = <T,>(values: readonly T[]): T[] => Array.from(new Set(values));
 
-export const getBackendById = (id: BackendId): BackendDescriptor => BACKENDS[id];
-
 export const listUnavailableBackends = (required: BackendIdList): BackendDescriptor[] => {
   const ids = unique(required);
   return ids
@@ -49,7 +47,7 @@ export const listUnavailableBackends = (required: BackendIdList): BackendDescrip
     .filter((backend) => !backend.available);
 };
 
-export const formatBackendNames = (required: BackendIdList): string =>
+const formatBackendNames = (required: BackendIdList): string =>
   unique(required)
     .map((id) => BACKENDS[id].label)
     .join(" + ");
@@ -78,7 +76,7 @@ export const buildBackendUnavailableReason = (required: BackendIdList): string =
   return unavailable.map((backend) => backend.unavailableReason).join(" ");
 };
 
-export const createBackendUnavailableError = (
+const createBackendUnavailableError = (
   required: BackendIdList,
   context?: string
 ): Error => {

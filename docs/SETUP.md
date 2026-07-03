@@ -20,7 +20,7 @@ http://127.0.0.1:5173
 ## Prerequisites
 
 - Node.js and npm
-- `uv` from <https://astral.sh/uv>. No separate Python install is required; setup creates the Python 3.12 backend/training runtime through `uv`.
+- `uv` from <https://astral.sh/uv>. No separate Python install is required; setup creates the Python 3.12 backend runtime through `uv`.
 
 On Linux, install build tools before setup:
 
@@ -48,7 +48,11 @@ npm run setup:check
 npm run setup -- --twin
 ```
 
-On macOS, setup attempts the app and workspace viewer runtimes. Some optional native training/collision packages are skipped when their wheels are not portable across local Python environments.
+On macOS, setup attempts the app and workspace viewer runtimes. Some optional native collision and simulation packages are skipped when their wheels are not portable across local Python environments.
+
+## WSL2
+
+Use WSL2 with WSLg for interactive simulator windows. PyBullet uses the WSLg D3D12 OpenGL path when `/dev/dxg`, the Mesa `d3d12` driver, and `/usr/lib/wsl/lib` are available. If PyBullet reports `llvmpipe`, it is using software OpenGL and mouse/camera interaction can be slow; run `npm run simulator:compatibility` and prefer MuJoCo or Genesis until the WSL graphics stack is fixed.
 
 ## Start Locally
 
@@ -85,16 +89,6 @@ npm run team -- --team-host 192.168.1.40
 
 Use team mode only on a network you intentionally trust.
 
-## Phone/Data Mode
-
-Phone/data mode can create a public tunnel back to your local machine. Use it only when you intend to expose that workflow:
-
-```bash
-npm run data -- --ack-public-tunnel
-```
-
-If the tunnel cannot be established, startup fails closed.
-
 ## Ports
 
 Use another app port when the default is busy:
@@ -116,7 +110,6 @@ npm run start -- --help
 | `npm run setup` | Install dependencies and local runtime |
 | `npm run start` | Start the local app |
 | `npm run team` | Start a trusted-network team session |
-| `npm run data` | Start phone/data workflow with tunnel acknowledgement |
 | `npm run release:check` | Run release-readiness checks |
 | `npm run simulator:workspace:check` | Headlessly prepare the demo workspace in installed transfer targets |
 | `npm run simulator:workspace:check:fixtures` | Validate demo, Studio Y-up, mesh-asset, hidden-object, and Xacro-source transfer fixtures |
@@ -172,7 +165,7 @@ npm run setup
 Advanced: point setup at a specific interpreter instead of the `uv` managed one:
 
 ```bash
-URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12 npm run setup
+URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON=/path/to/python3.12 npm run setup
 ```
 
 ### Setup Seems Stuck

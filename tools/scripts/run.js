@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, accessSync, constants as fsConstants } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { delimiter, dirname, join } from 'path';
 import { spawn } from 'child_process';
-import { randomBytes } from 'crypto';
 import readline from 'readline';
 import { runtimeConfig as baseRuntimeConfig } from '../../config/runtime.js';
-import { clearLoadedRobotEnvOverlayValues } from '../../config/privateEnv.js';
 import { resolveBackendGitHubToken } from './githubAuth.js';
 import {
   applyRuntimeEnvOverrides,
-  applyRobotGatewayEnvSelection,
   applyTeamModeRuntimeProfile,
   applyTeamSharingGatewayRuntimeProfile,
   assertRemoteBindingsAllowed,
@@ -25,10 +22,8 @@ import {
   buildRunHelpText,
   buildRuntimeUrls,
   formatMissingAcknowledgementsMessage,
-  formatStartupSecurityViolationsMessage,
   formatUnknownRunArgsMessage,
   getMissingSecurityAcknowledgements,
-  getStartupSecurityViolations,
   mergeRuntimeConfig,
   parseRunArgs,
   recoverLoopbackPorts,
@@ -37,7 +32,6 @@ import {
   shouldExposeIkdRuntime,
 } from './runConfig.js';
 import {
-  CLOUD_FLARED_BINARY_ENV,
   RUN_ACKNOWLEDGEMENT_TOKENS,
   RUN_BACKEND_READY_TIMEOUT_MS,
   RUN_FRONTEND_READY_TIMEOUT_MS,
@@ -58,7 +52,6 @@ import {
   stopWslWindowsLocalhostRelay,
 } from './wslWindowsLocalhostRelay.js';
 import { isWslEnvironment } from '../../config/wslOwnerProxy.js';
-import { startCamToSimIngressProxy } from './camToSimIngressProxy.js';
 import {
   buildOutdatedVersionMessage,
   formatOfficialVersionStatusMessage,
@@ -87,8 +80,6 @@ const colors = {
 };
 
 const verbose = /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_VERBOSE || '');
-const CLOUD_FLARED_DISCOVERY_TIMEOUT_MS = 20_000;
-const CLOUD_FLARED_TUNNEL_REGEX = /https:\/\/[-a-z0-9]+\.trycloudflare\.com/i;
 function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
@@ -245,7 +236,6 @@ function wait(ms) {
 
 export function shouldUseWslTeamSharingGateway({
   allowRemote = false,
-  dataMode = false,
   isWsl = false,
   runtimeConfig,
   teamMode = false,
@@ -253,7 +243,6 @@ export function shouldUseWslTeamSharingGateway({
   return (
     !teamMode &&
     !allowRemote &&
-    !dataMode &&
     isWsl &&
     isLoopbackHost(runtimeConfig?.web?.host) &&
     isLoopbackHost(runtimeConfig?.web?.bindHost)
@@ -323,134 +312,6 @@ function findCargo() {
   return null;
 }
 
-function isExecutable(path) {
-  if (!existsSync(path)) {
-    return false;
-  }
-  if (process.platform === 'win32') {
-    return true;
-  }
-  try {
-    accessSync(path, fsConstants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function findBinary(name) {
-  const pathEnv = process.env.PATH || '';
-  for (const dir of pathEnv.split(delimiter)) {
-    if (!dir) continue;
-    const candidate = join(dir, name);
-    if (isExecutable(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-async function resolveCloudflaredBinary() {
-  const configuredBinary = typeof process.env[CLOUD_FLARED_BINARY_ENV] === 'string'
-    ? process.env[CLOUD_FLARED_BINARY_ENV].trim()
-    : '';
-  if (configuredBinary) {
-    if (isExecutable(configuredBinary)) {
-      return { binaryPath: configuredBinary, reason: null };
-    }
-    return {
-      binaryPath: null,
-      reason: `${CLOUD_FLARED_BINARY_ENV} does not point to an executable cloudflared binary`,
-    };
-  }
-
-  const globalBinary = findBinary('cloudflared');
-  if (globalBinary) {
-    return { binaryPath: globalBinary, reason: null };
-  }
-
-  return {
-    binaryPath: null,
-    reason: 'cloudflared not found. Install it manually; automatic download is disabled for security.',
-  };
-}
-
-function maybeExtractCloudflareUrl(chunk) {
-  const match = chunk.match(CLOUD_FLARED_TUNNEL_REGEX);
-  return match ? match[0] : null;
-}
-
-async function startCloudflareTunnel(env, apiBaseUrl) {
-  const cloudflared = await resolveCloudflaredBinary();
-  if (!cloudflared.binaryPath) {
-    return Promise.resolve({ process: null, publicBaseUrl: null, reason: cloudflared.reason });
-  }
-  const cloudflaredBinary = cloudflared.binaryPath;
-
-  return new Promise((resolve) => {
-    const tunnelProcess = spawn(
-      cloudflaredBinary,
-      ['tunnel', '--url', apiBaseUrl, '--no-autoupdate'],
-      buildManagedSpawnOptions({
-        cwd: rootDir,
-        env,
-        shell: false,
-        stdio: 'pipe',
-      })
-    );
-
-    let settled = false;
-    const cleanupAndResolve = (payload) => {
-      if (settled) return;
-      settled = true;
-      resolve(payload);
-    };
-
-    const timeoutHandle = setTimeout(() => {
-      cleanupAndResolve({
-        process: tunnelProcess,
-        publicBaseUrl: null,
-        reason: 'timed out while waiting for a cloudflared URL',
-      });
-    }, CLOUD_FLARED_DISCOVERY_TIMEOUT_MS);
-
-    const onChunk = (chunk) => {
-      const text = chunk.toString();
-      if (verbose) {
-        process.stdout.write(`[Tunnel] ${text}`);
-      }
-      const discoveredUrl = maybeExtractCloudflareUrl(text);
-      if (!discoveredUrl) return;
-      clearTimeout(timeoutHandle);
-      cleanupAndResolve({
-        process: tunnelProcess,
-        publicBaseUrl: discoveredUrl,
-        reason: null,
-      });
-    };
-
-    tunnelProcess.stdout.on('data', onChunk);
-    tunnelProcess.stderr.on('data', onChunk);
-    tunnelProcess.on('error', (error) => {
-      clearTimeout(timeoutHandle);
-      cleanupAndResolve({
-        process: null,
-        publicBaseUrl: null,
-        reason: `cloudflared failed to start: ${error.message}`,
-      });
-    });
-    tunnelProcess.on('exit', (code) => {
-      if (settled) return;
-      clearTimeout(timeoutHandle);
-      cleanupAndResolve({
-        process: null,
-        publicBaseUrl: null,
-        reason: `cloudflared exited before URL discovery (code ${code ?? 'unknown'})`,
-      });
-    });
-  });
-}
-
 function printRuntimeHelp() {
   console.log(buildRunHelpText());
 }
@@ -459,10 +320,7 @@ function isStaleProcessCleanupEnabled(env = process.env) {
   return !/^(1|true|yes)$/i.test(env[RUN_SKIP_STALE_PROCESS_CLEANUP_ENV] || '');
 }
 
-async function cleanupStaleProcessGroups({ concurrentRobotGateway = false } = {}) {
-  if (concurrentRobotGateway) {
-    return [];
-  }
+async function cleanupStaleProcessGroups() {
   if (!isStaleProcessCleanupEnabled()) {
     return [];
   }
@@ -476,17 +334,6 @@ async function cleanupStaleProcessGroups({ concurrentRobotGateway = false } = {}
 
 async function requestMissingAcknowledgements(missingAcknowledgements) {
   for (const acknowledgement of missingAcknowledgements) {
-    if (acknowledgement.kind === 'publicTunnel') {
-      log('');
-      log('  Data mode can create a public internet URL to your local API.', colors.yellow);
-      log('  Anyone with that active tunnel URL can hit the phone-link ingress while it is up.', colors.yellow);
-      const answer = (await question(`  Type ${RUN_ACKNOWLEDGEMENT_TOKENS.publicTunnel} to continue: `)).trim().toUpperCase();
-      if (answer !== RUN_ACKNOWLEDGEMENT_TOKENS.publicTunnel) {
-        throw new Error('Public tunnel acknowledgement declined');
-      }
-      continue;
-    }
-
     if (acknowledgement.kind === 'remoteExposure') {
       log('');
       log('  Remote bind mode exposes URDF Studio services on non-loopback interfaces.', colors.yellow);
@@ -528,15 +375,9 @@ async function main() {
     throw new Error(buildOutdatedVersionMessage(officialVersionStatus));
   }
 
-  const isDataMode =
-    parsedRunArgs.dataMode || /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_DATA_MODE || '');
-  const isRuntimeDemoMode =
-    parsedRunArgs.runtimeDemoMode ||
-    /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_RUNTIME_DEMO || '');
   const mergedRuntimeConfigBase = mergeRuntimeConfig(baseRuntimeConfig, parsedRunArgs.overrides);
   const useTeamSharingGateway = shouldUseWslTeamSharingGateway({
     allowRemote: parsedRunArgs.allowRemote,
-    dataMode: isDataMode,
     isWsl: isWslEnvironment(),
     runtimeConfig: mergedRuntimeConfigBase,
     teamMode: parsedRunArgs.teamMode,
@@ -552,9 +393,7 @@ async function main() {
     : exposedFrontendRuntimeConfig;
   const mergedRuntimeConfig = teamRuntimeConfig;
   const allowRemoteBinds = parsedRunArgs.allowRemote || parsedRunArgs.teamMode;
-  const staleProcessGroups = await cleanupStaleProcessGroups({
-    concurrentRobotGateway: Boolean(parsedRunArgs.robotName || parsedRunArgs.robotEnvFile),
-  });
+  const staleProcessGroups = await cleanupStaleProcessGroups();
   const recoveredPorts = await recoverLoopbackPorts(mergedRuntimeConfig, {
     webPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.web || {}, 'port'),
     apiPortPinned: Object.prototype.hasOwnProperty.call(parsedRunArgs.overrides.api || {}, 'port'),
@@ -573,10 +412,8 @@ async function main() {
   });
   const missingAcknowledgements = getMissingSecurityAcknowledgements(
     {
-      ackPublicTunnel: parsedRunArgs.ackPublicTunnel,
       ackRemoteExposure: parsedRunArgs.ackRemoteExposure,
       allowRemote: allowRemoteBinds,
-      dataMode: isDataMode,
     },
     {
       env: process.env,
@@ -590,19 +427,6 @@ async function main() {
     }
     await requestMissingAcknowledgements(missingAcknowledgements);
   }
-  const startupSecurityViolations = getStartupSecurityViolations(
-    {
-      dataMode: isDataMode,
-      remoteExposureIssues,
-    },
-    {
-      env: process.env,
-    }
-  );
-  if (startupSecurityViolations.length > 0) {
-    throw new Error(formatStartupSecurityViolationsMessage(startupSecurityViolations));
-  }
-
   logArrow('Starting URDF Studio...');
   if (staleProcessGroups.length > 0) {
     log(
@@ -649,17 +473,7 @@ async function main() {
   });
   
   // Set environment variables if tokens exist
-  const launcherEnv =
-    parsedRunArgs.robotName || parsedRunArgs.robotEnvFile
-      ? clearLoadedRobotEnvOverlayValues({ ...process.env }, { sourceEnv: process.env })
-      : process.env;
-  const env = applyRobotGatewayEnvSelection(
-    applyRuntimeEnvOverrides(launcherEnv, runtimeConfig),
-    {
-      robotEnvFile: parsedRunArgs.robotEnvFile,
-      robotName: parsedRunArgs.robotName,
-    },
-  );
+  const env = applyRuntimeEnvOverrides(process.env, runtimeConfig);
   const rosUrdfdomCandidates = [
     '/opt/ros/jazzy/lib/x86_64-linux-gnu',
     '/opt/ros/rolling/lib/x86_64-linux-gnu',
@@ -676,51 +490,15 @@ async function main() {
   env.URDF_TEAM_SHARING_INITIAL_ENABLED = parsedRunArgs.teamMode ? 'true' : 'false';
   env.URDF_TEAM_SHARING_LOCAL_URL = frontendReadyUrl;
   env.URDF_TEAM_SHARING_TEAM_URL = teamSharingWebBaseUrl;
-  let camToSimIngressProxyToken = null;
   if (backendGitHubAuth.token) {
     env.URDF_GITHUB_TOKEN = backendGitHubAuth.token;
   }
-  if (isDataMode) {
-    camToSimIngressProxyToken = randomBytes(32).toString('hex');
-    env.URDF_CAM_TO_SIM_PROXY_TOKEN = camToSimIngressProxyToken;
-  }
-  if (isRuntimeDemoMode) {
-    env.VITE_RUNTIME_DEMO = '1';
-    env.URDF_STUDIO_RUNTIME_DEMO = '1';
-  }
-  
   // Check if node_modules exists
   if (!existsSync(join(rootDir, 'node_modules'))) {
     log('⚠ Dependencies not installed. Run "urdf-studio setup" first.', colors.yellow);
     process.exit(1);
   }
   
-  let camToSimIngressProxy = null;
-  let tunnelProcess = null;
-  if (isDataMode) {
-    camToSimIngressProxy = await startCamToSimIngressProxy({
-      backendBaseUrl: loopbackApiBaseUrl,
-      proxyToken: camToSimIngressProxyToken,
-    });
-    log('  Data mode: enabled (public phone-link tunnel path)', colors.yellow);
-    const tunnelStart = await startCloudflareTunnel(env, camToSimIngressProxy.baseUrl);
-    if (!tunnelStart.publicBaseUrl) {
-      if (tunnelStart.process) {
-        tunnelStart.process.kill('SIGTERM');
-      }
-      await new Promise((resolve) => camToSimIngressProxy.server.close(resolve));
-      camToSimIngressProxy = null;
-      const reason = tunnelStart.reason || 'unknown tunnel setup error';
-      throw new Error(
-        `Data mode failed closed because the public tunnel could not be established: ${reason}`
-      );
-    }
-    tunnelProcess = tunnelStart.process;
-    env.URDF_CAM_TO_SIM_PUBLIC_BASE_URL = tunnelStart.publicBaseUrl;
-    log('  Phone Link:', colors.reset);
-    log(`  ${colors.pinkBright}${colors.underline}${tunnelStart.publicBaseUrl}${colors.reset}`, colors.reset);
-  }
-
   // Start Python FastAPI backend
   const venvPython = join(rootDir, PYTHON_ENV_DIRNAME, 'bin', 'python3');
   let pythonBackendProcess = null;
@@ -848,10 +626,6 @@ async function main() {
     terminateManagedProcess(viteProcess, 'SIGTERM');
     terminateManagedProcess(pythonBackendProcess, 'SIGTERM');
     terminateManagedProcess(ikdProcess, 'SIGTERM');
-    terminateManagedProcess(tunnelProcess, 'SIGTERM');
-    if (camToSimIngressProxy) {
-      camToSimIngressProxy.server.close();
-    }
     throw error;
   }
 
@@ -864,11 +638,9 @@ async function main() {
   log('');
   log('  Ready:', colors.reset);
   for (const overviewLine of buildStartupOverviewLines({
-    dataMode: isDataMode,
     localNetworkUrl: resolveLocalNetworkUrl(runtimeConfig),
     remoteExposureIssues,
     runtimeConfig,
-    runtimeDemoMode: isRuntimeDemoMode,
     runtimeUrls,
     teamMode: parsedRunArgs.teamMode,
     teamSharingGateway: useTeamSharingGateway,
@@ -913,7 +685,6 @@ async function main() {
     log('');
     log('  Technical details:', colors.reset);
     for (const postureLine of buildSecurityPostureLines({
-      dataMode: isDataMode,
       remoteExposureIssues,
       runtimeConfig,
       teamSharingGateway: useTeamSharingGateway,
@@ -954,11 +725,7 @@ async function main() {
     terminateManagedProcess(viteProcess, signal);
     terminateManagedProcess(pythonBackendProcess, signal);
     terminateManagedProcess(ikdProcess, signal);
-    terminateManagedProcess(tunnelProcess, signal);
     stopWslWindowsLocalhostRelay(wslWindowsLocalhostRelay);
-    if (camToSimIngressProxy) {
-      camToSimIngressProxy.server.close();
-    }
     setTimeout(() => {
       process.exit(0);
     }, RUN_SHUTDOWN_GRACE_MS);

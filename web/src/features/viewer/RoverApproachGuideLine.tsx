@@ -1,6 +1,4 @@
 import {
-  useEffect,
-  useMemo,
   useRef,
   type MutableRefObject,
 } from "react";
@@ -8,6 +6,11 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { ROVER_APPROACH_GUIDE_PARAMS } from "@/features/viewer/roverApproachGuideParams";
 import type { RoverApproachGuideLineState } from "@/features/viewer/roverApproachGuideState";
+import {
+  hideRoverApproachOverlayLine,
+  showRoverApproachOverlayLine,
+  useRoverApproachOverlayLine,
+} from "@/features/viewer/roverApproachOverlayLine";
 
 const DEFAULT_ARROW_FORWARD = new THREE.Vector3(0, 1, 0);
 
@@ -28,48 +31,18 @@ export const RoverApproachGuideLine = ({
   const arrowQuaternionRef = useRef(new THREE.Quaternion());
   const arrowScaleRef = useRef(new THREE.Vector3(1, 1, 1));
   const arrowMatrixRef = useRef(new THREE.Matrix4());
-  const lineGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(linePositionsRef.current, 3)
-    );
-    return geometry;
-  }, []);
-  const lineMaterial = useMemo(
-    () =>
-      new THREE.LineBasicMaterial({
-        color: ROVER_APPROACH_GUIDE_PARAMS.color,
-        opacity: ROVER_APPROACH_GUIDE_PARAMS.opacity,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    []
-  );
-  const lineObject = useMemo(() => {
-    const line = new THREE.Line(lineGeometry, lineMaterial);
-    line.visible = false;
-    line.renderOrder = 19;
-    line.raycast = () => null;
-    return line;
-  }, [lineGeometry, lineMaterial]);
-
-  useEffect(
-    () => () => {
-      lineGeometry.dispose();
-      lineMaterial.dispose();
-    },
-    [lineGeometry, lineMaterial]
-  );
+  const { lineGeometry, lineObject } = useRoverApproachOverlayLine({
+    positions: linePositionsRef.current,
+    color: ROVER_APPROACH_GUIDE_PARAMS.color,
+    opacity: ROVER_APPROACH_GUIDE_PARAMS.opacity,
+  });
 
   useFrame(() => {
     const arrows = arrowsRef.current;
     if (!arrows) return;
     const guideState = guideLineStateRef.current;
     if (!guideState.visible) {
-      lineObject.visible = false;
-      lineGeometry.setDrawRange(0, 0);
+      hideRoverApproachOverlayLine(lineObject, lineGeometry);
       arrows.visible = false;
       return;
     }
@@ -96,8 +69,7 @@ export const RoverApproachGuideLine = ({
       !Number.isFinite(segmentLength) ||
       segmentLength <= ROVER_APPROACH_GUIDE_PARAMS.minLengthMeters
     ) {
-      lineObject.visible = false;
-      lineGeometry.setDrawRange(0, 0);
+      hideRoverApproachOverlayLine(lineObject, lineGeometry);
       arrows.visible = false;
       return;
     }
@@ -110,11 +82,7 @@ export const RoverApproachGuideLine = ({
     linePositionsRef.current[4] = liftedEndRef.current.y;
     linePositionsRef.current[5] = liftedEndRef.current.z;
 
-    const positions = lineGeometry.attributes.position as THREE.BufferAttribute;
-    positions.needsUpdate = true;
-    lineGeometry.setDrawRange(0, 2);
-    lineGeometry.computeBoundingSphere();
-    lineObject.visible = true;
+    showRoverApproachOverlayLine(lineObject, lineGeometry, 2);
 
     const requestedArrowCount = Math.floor(
       segmentLength / ROVER_APPROACH_GUIDE_PARAMS.arrowSpacingMeters

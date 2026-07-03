@@ -11,7 +11,7 @@ import {
   computeOwnedLinkLocalVisualBounds,
   type LocalCameraFrameCue,
 } from "./cameraAutoBounds";
-import { resolveCameraParentLinkNameFromJoint } from "./cameraWorldPose";
+import { resolveCameraParentLinkNameFromJoint, resolveRobotLinkObject } from "./cameraWorldPose";
 import {
   CAMERA_ICON_ENVELOPE_BASIS_MIN_VECTOR_LENGTH,
   CAMERA_ICON_ENVELOPE_MIN_EDGE_M,
@@ -31,26 +31,6 @@ type LinkBoundsPointSample = {
     yAxis: THREE.Vector3;
     zAxis: THREE.Vector3;
   } | null;
-};
-
-const safeDecode = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
-const resolveRobotLinkObject = (robot: URDFRobot | null, linkName: string) => {
-  if (!robot) return null;
-  const decoded = safeDecode(linkName);
-  return (
-    robot.links?.[linkName] ??
-    robot.links?.[decoded] ??
-    robot.getObjectByName?.(linkName) ??
-    (decoded !== linkName ? robot.getObjectByName?.(decoded) : null) ??
-    null
-  );
 };
 
 const clampAxisToMinEdge = (value: number) => Math.max(value, CAMERA_ICON_ENVELOPE_MIN_EDGE_M);

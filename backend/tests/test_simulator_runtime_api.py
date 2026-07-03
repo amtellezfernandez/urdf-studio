@@ -64,7 +64,7 @@ def _operator_headers() -> dict[str, str]:
 def _patch_security_settings():
     return patch(
         "backend.core.simulator_security.settings",
-        SimpleNamespace(simulator_api_token=TEST_SIMULATOR_TOKEN, cam_to_sim_proxy_token=None),
+        SimpleNamespace(simulator_api_token=TEST_SIMULATOR_TOKEN),
     )
 
 
@@ -358,6 +358,41 @@ def test_simulator_runtime_status_can_probe_external_python(monkeypatch) -> None
     ]
 
 
+def test_pybullet_runtime_status_reports_degraded_software_opengl(monkeypatch) -> None:
+    from backend.services.simulator_adapters import base as simulator_adapter_base
+    from backend.services.simulator_adapters import pybullet as pybullet_adapter
+
+    monkeypatch.setattr(
+        simulator_adapter_base,
+        "is_python_module_available",
+        lambda import_name: import_name == "pybullet",
+    )
+    monkeypatch.setattr(
+        pybullet_adapter,
+        "pybullet_runtime_opengl_warnings",
+        lambda **_kwargs: ("PyBullet GUI is using software OpenGL.",),
+    )
+
+    status = get_simulator_runtime_status("pybullet")
+
+    assert status.available is True
+    assert status.status == "ready, display degraded: software OpenGL"
+    assert (
+        "hardware OpenGL",
+        False,
+        False,
+        "runtime",
+    ) in [
+        (
+            dependency.name,
+            dependency.available,
+            dependency.required,
+            dependency.scope,
+        )
+        for dependency in status.dependencies
+    ]
+
+
 def test_list_simulator_runtimes_returns_capability_descriptors() -> None:
     with _patch_security_settings():
         response = asyncio.run(_request_json("GET", "/simulators", headers=_operator_headers()))
@@ -476,6 +511,7 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
             log_path="/tmp/sim.log",
             world_package_path="/tmp/world.json",
             robot_urdf_path="/tmp/robot.urdf",
+            workspace_warnings=["simulator diagnostic"],
             world_object_count=5,
             camera_count=3,
         )
@@ -499,6 +535,7 @@ def test_simulator_workspace_prepare_delegates_to_selected_adapter(monkeypatch) 
     assert response.status_code == 200
     assert response.json()["simulator_id"] == "genesis"
     assert response.json()["pid"] == 1234
+    assert response.json()["workspace_warnings"] == ["simulator diagnostic"]
     assert response.json()["world_object_count"] == 5
     assert response.json()["camera_count"] == 3
     assert captured == {
@@ -712,6 +749,7 @@ def test_workspace_transfer_open_refreshes_stale_world_snapshot_digest(monkeypat
             log_path="/tmp/sim.log",
             world_package_path="/tmp/world.json",
             robot_urdf_path="/tmp/robot.urdf",
+            workspace_warnings=["PyBullet GUI is using software OpenGL."],
             world_object_count=2,
             camera_count=1,
         )
@@ -735,6 +773,9 @@ def test_workspace_transfer_open_refreshes_stale_world_snapshot_digest(monkeypat
     assert response.status_code == 200
     assert captured["simulator_id"] == "blender"
     assert captured["declared_digests"] == (captured["actual_digest"],)
+    assert response.json()["workspaceWarnings"] == [
+        "PyBullet GUI is using software OpenGL."
+    ]
     assert response.json()["worldObjectCount"] == 2
     assert response.json()["cameraCount"] == 1
 

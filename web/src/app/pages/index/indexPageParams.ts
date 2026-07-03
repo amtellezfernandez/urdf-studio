@@ -1,4 +1,3 @@
-import { isRuntimeDemoEnabled } from "@/studio_ui/runtimeviz/runtimeRobotPreviewParams";
 import { hasExplicitWorldImportRequest } from "@/features/world-share/defaultSceneAutoLoadPolicy";
 import {
   IMPORT_WORLD_ID_PARAM,
@@ -13,8 +12,6 @@ import {
 export type ThumbnailParams = {
   demo: boolean;
   enabled: boolean;
-  preview: boolean;
-  runtimeDemo: boolean;
   repoUrl: string;
   urdfTarget: string;
 };
@@ -43,8 +40,6 @@ export type IndexPageQueryParams = {
 export const EMPTY_THUMBNAIL_PARAMS: ThumbnailParams = {
   demo: false,
   enabled: false,
-  preview: false,
-  runtimeDemo: false,
   repoUrl: "",
   urdfTarget: "",
 };
@@ -85,8 +80,6 @@ export const parseIndexPageQueryParams = (search: string): IndexPageQueryParams 
     thumbnail: {
       demo: params.get("demo") === "1",
       enabled: params.get("thumbnail") === "1",
-      preview: params.get("runtime_preview") === "1",
-      runtimeDemo: isRuntimeDemoEnabled(search),
       repoUrl: params.get("github") || params.get("repo") || "",
       urdfTarget: params.get("urdf") || "",
     },

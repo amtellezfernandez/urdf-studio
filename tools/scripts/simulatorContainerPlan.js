@@ -1,25 +1,28 @@
 #!/usr/bin/env node
 
 import { resolve } from 'path';
-import { pathToFileURL } from 'url';
 
 import {
-  DEPLOYMENT_MODES,
   buildDockerRunPlan,
   formatDockerRunCommand,
 } from './simulatorDeployment.js';
 import {
+  compatibleContainerTargets,
+  parseContainerCliArgs,
+  printContainerTargetList,
+  readOptionValue,
+  resolveContainerTarget,
+  resolveContainerTargets,
+  runCliMain,
+  validateContainerTargetSelection,
+} from './simulatorContainerCliHelpers.js';
+import {
   getSimulatorCompatibilityReport,
-  getSimulatorCompatibilityTarget,
 } from './simulatorCompatibility.js';
 
-function readOptionValue(args, index, flag) {
-  const value = args[index + 1];
-  if (!value || value.startsWith('--')) {
-    throw new Error(`${flag} requires a value.`);
-  }
-  return value;
-}
+const CONTAINER_PLAN_MESSAGES = {
+  empty: 'No simulator container fast path is compatible with this machine.',
+};
 
 export function parseArgs(args) {
   const options = {
@@ -35,48 +38,37 @@ export function parseArgs(args) {
     enableDesktopDisplay: true,
     help: false,
   };
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--help' || arg === '-h') {
-      options.help = true;
-    } else if (arg === '--all') {
-      options.all = true;
-    } else if (arg === '--workspace') {
-      options.workspaceDir = resolve(readOptionValue(args, index, arg));
-      index += 1;
-    } else if (arg === '--project-root') {
-      options.projectRoot = resolve(readOptionValue(args, index, arg));
-      index += 1;
-    } else if (arg === '--name') {
-      options.name = readOptionValue(args, index, arg);
-      index += 1;
-    } else if (arg === '--network') {
-      options.network = readOptionValue(args, index, arg);
-      index += 1;
-    } else if (arg === '--detach') {
+  parseContainerCliArgs(args, options, {
+    '--workspace': (_options, parsedArgs, index, arg) => {
+      options.workspaceDir = resolve(readOptionValue(parsedArgs, index, arg));
+      return 1;
+    },
+    '--project-root': (_options, parsedArgs, index, arg) => {
+      options.projectRoot = resolve(readOptionValue(parsedArgs, index, arg));
+      return 1;
+    },
+    '--name': (_options, parsedArgs, index, arg) => {
+      options.name = readOptionValue(parsedArgs, index, arg);
+      return 1;
+    },
+    '--network': (_options, parsedArgs, index, arg) => {
+      options.network = readOptionValue(parsedArgs, index, arg);
+      return 1;
+    },
+    '--detach': () => {
       options.detach = true;
-    } else if (arg === '--interactive') {
+    },
+    '--interactive': () => {
       options.interactive = true;
-    } else if (arg === '--no-rm') {
+    },
+    '--no-rm': () => {
       options.remove = false;
-    } else if (arg === '--no-display') {
+    },
+    '--no-display': () => {
       options.enableDesktopDisplay = false;
-    } else if (arg.startsWith('--')) {
-      throw new Error(`Unknown option: ${arg}`);
-    } else if (arg === 'all' && !options.simulatorId) {
-      options.all = true;
-    } else if (!options.simulatorId) {
-      options.simulatorId = arg;
-    } else {
-      throw new Error(`Unexpected argument: ${arg}`);
-    }
-  }
-  if (options.all && options.simulatorId) {
-    throw new Error('Use either --all or one simulator id, not both.');
-  }
-  if (options.all && options.name) {
-    throw new Error('Use one simulator id when setting a container name.');
-  }
+    },
+  });
+  validateContainerTargetSelection(options, { allowNamedAll: false });
   return options;
 }
 
@@ -96,47 +88,22 @@ function printUsage() {
 }
 
 export function containerTargets(report) {
-  return Object.values(report.targets)
-    .filter((target) => target.compatible && target.deployment?.mode === DEPLOYMENT_MODES.container);
+  return compatibleContainerTargets(report);
 }
 
 function printContainerTargets(report) {
-  const targets = containerTargets(report);
-  if (targets.length === 0) {
-    console.log('No simulator container fast path is compatible with this machine.');
-    return;
-  }
-  console.log('Container-ready simulator targets:');
-  for (const target of targets) {
-    const image = target.deployment.container?.image || target.deployment.image;
-    console.log(`  ${target.id}: ${target.label} ${target.deployment.accelerator} ${image}`);
-  }
+  printContainerTargetList(report, {
+    title: 'Container-ready simulator targets:',
+    emptyMessage: CONTAINER_PLAN_MESSAGES.empty,
+  });
 }
 
 export function resolveTarget(report, simulatorId) {
-  const target = getSimulatorCompatibilityTarget(report, simulatorId);
-  if (!target) {
-    throw new Error(`Unknown simulator target: ${simulatorId}`);
-  }
-  if (!target.compatible) {
-    throw new Error(`${target.label} is not compatible on this machine: ${target.reasons.join(' ')}`);
-  }
-  if (target.deployment?.mode !== DEPLOYMENT_MODES.container) {
-    throw new Error(
-      `${target.label} uses ${target.deployment?.mode}/${target.deployment?.accelerator} on this machine, not Docker.`
-    );
-  }
-  return target;
+  return resolveContainerTarget(report, simulatorId);
 }
 
 export function resolvePlanTargets(report, { all = false, simulatorId = null } = {}) {
-  if (all) {
-    return containerTargets(report);
-  }
-  if (simulatorId) {
-    return [resolveTarget(report, simulatorId)];
-  }
-  return [];
+  return resolveContainerTargets(report, { all, simulatorId });
 }
 
 export function buildTargetRunPlan(target, options = {}) {
@@ -170,7 +137,7 @@ function main() {
 
   const targets = resolvePlanTargets(report, options);
   if (targets.length === 0) {
-    console.log('No simulator container fast path is compatible with this machine.');
+    console.log(CONTAINER_PLAN_MESSAGES.empty);
     return;
   }
   console.log(targets
@@ -178,15 +145,4 @@ function main() {
     .join('\n'));
 }
 
-function isMainModule() {
-  return Boolean(process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href);
-}
-
-if (isMainModule()) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  }
-}
+runCliMain(import.meta.url, main);

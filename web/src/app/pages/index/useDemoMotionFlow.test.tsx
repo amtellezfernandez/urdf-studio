@@ -3,10 +3,10 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDemoEpisodes, type DemoMotionEpisode } from "@/shared/samples/demoMotion";
+import { createDemoMotionSequences, type DemoMotionSequence } from "@/shared/samples/demoMotion";
 import { useDemoMotionFlow } from "@/app/pages/index/useDemoMotionFlow";
 
-const playEpisodeSpy = vi.fn();
+const playFramesSpy = vi.fn();
 const toastErrorSpy = vi.fn();
 const toastInfoSpy = vi.fn();
 const loadDemoFileListFromManifestUrlsSpy = vi.fn();
@@ -20,9 +20,9 @@ vi.mock("@/shared/config/demo", () => ({
 }));
 
 vi.mock("@/shared/samples/demoMotion", () => ({
-  createDemoEpisodes: vi.fn(),
-  toDemoAnimationFrames: (episode: DemoMotionEpisode) =>
-    episode.frames.map((frame) => ({
+  createDemoMotionSequences: vi.fn(),
+  toDemoAnimationFrames: (sequence: DemoMotionSequence) =>
+    sequence.frames.map((frame) => ({
       timestamp: frame.timestamp,
       joints: frame.jointPositions,
     })),
@@ -37,7 +37,7 @@ vi.mock("@/app/pages/index/demoBootstrap", () => ({
 
 vi.mock("@/features/viewer/playback/viewerPlayback", () => ({
   viewerPlayback: {
-    playEpisode: (...args: unknown[]) => playEpisodeSpy(...args),
+    playFrames: (...args: unknown[]) => playFramesSpy(...args),
   },
 }));
 
@@ -51,9 +51,8 @@ vi.mock("sonner", () => ({
 type HookResult = ReturnType<typeof useDemoMotionFlow>;
 type HookOptions = Parameters<typeof useDemoMotionFlow>[0];
 
-const createDemoMotionEpisode = (): DemoMotionEpisode => ({
+const createDemoMotionSequence = (): DemoMotionSequence => ({
   id: "demo-pickup",
-  number: 1,
   frames: [
     { timestamp: 0, jointPositions: { joint_a: 0 } },
     { timestamp: 100, jointPositions: { joint_a: 0.5 } },
@@ -79,7 +78,7 @@ describe("useDemoMotionFlow", () => {
         IS_REACT_ACT_ENVIRONMENT?: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    playEpisodeSpy.mockReset();
+    playFramesSpy.mockReset();
     toastErrorSpy.mockReset();
     toastInfoSpy.mockReset();
     loadDemoFileListFromManifestUrlsSpy.mockReset();
@@ -87,21 +86,20 @@ describe("useDemoMotionFlow", () => {
   });
 
   it("plays demo motion frames without starting playback on first launch", async () => {
-    const demoEpisode = createDemoMotionEpisode();
-    vi.mocked(createDemoEpisodes).mockReturnValue([demoEpisode]);
+    const demoMotionSequence = createDemoMotionSequence();
+    vi.mocked(createDemoMotionSequences).mockReturnValue([demoMotionSequence]);
 
     const optionsRef: { current: HookOptions } = {
       current: {
         activeUrdfPath: null,
         availableJoints: ["joint_a"],
         hasLoadedFiles: true,
-        isLeKiwiDemoRobot: false,
         jointLimits: {
           joint_a: { type: "revolute", lower: -1, upper: 1 },
         },
         loadFilesFromFolderWithFreshCameras: vi.fn(),
         playbackHandlers: {
-          playEpisode: vi.fn(),
+          playFrames: vi.fn(),
         },
         prepareDemoScene: vi.fn(() => true),
         robot: null,
@@ -128,8 +126,8 @@ describe("useDemoMotionFlow", () => {
       hookValue?.handlePlayDemoMotion();
     });
 
-    expect(playEpisodeSpy).toHaveBeenCalledTimes(1);
-    expect(playEpisodeSpy.mock.calls[0]?.[1]).toEqual({
+    expect(playFramesSpy).toHaveBeenCalledTimes(1);
+    expect(playFramesSpy.mock.calls[0]?.[1]).toEqual({
       autoplay: false,
       applyInitialFrame: false,
     });
@@ -139,12 +137,63 @@ describe("useDemoMotionFlow", () => {
       hookValue?.handlePlayDemoMotion();
     });
 
-    expect(playEpisodeSpy).toHaveBeenCalledTimes(2);
-    expect(playEpisodeSpy.mock.calls[1]?.[1]).toEqual({
+    expect(playFramesSpy).toHaveBeenCalledTimes(2);
+    expect(playFramesSpy.mock.calls[1]?.[1]).toEqual({
       autoplay: true,
       applyInitialFrame: true,
     });
     expect(toastErrorSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("uses manifest preferences to prepare and preserve the demo world layout", async () => {
+    const demoMotionSequence = createDemoMotionSequence();
+    vi.mocked(createDemoMotionSequences).mockReturnValue([demoMotionSequence]);
+    const prepareDemoScene = vi.fn(() => true);
+    const skipDefaultWorldLayoutAutoImportRef = { current: false };
+    const optionsRef: { current: HookOptions } = {
+      current: {
+        activeUrdfPath: "demo.urdf",
+        availableJoints: ["joint_a"],
+        hasLoadedFiles: true,
+        jointLimits: {
+          joint_a: { type: "revolute", lower: -1, upper: 1 },
+        },
+        loadFilesFromFolderWithFreshCameras: vi.fn(),
+        playbackHandlers: {
+          playFrames: vi.fn(),
+        },
+        prepareDemoScene,
+        prepareDemoWorldLayoutOnMotion: true,
+        preserveDemoWorldLayoutOnMotion: true,
+        robot: null,
+        skipDefaultWorldLayoutAutoImportRef,
+        urdfAnalysis: null,
+      },
+    };
+
+    let hookValue: HookResult | null = null;
+    const Harness = () => {
+      hookValue = useDemoMotionFlow(optionsRef.current);
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+    });
+
+    await act(async () => {
+      hookValue?.handlePlayDemoMotion();
+    });
+
+    expect(prepareDemoScene).toHaveBeenCalledOnce();
+    expect(skipDefaultWorldLayoutAutoImportRef.current).toBe(true);
+    expect(playFramesSpy).toHaveBeenCalledOnce();
 
     await act(async () => {
       root.unmount();
@@ -174,6 +223,11 @@ describe("useDemoMotionFlow", () => {
     loadDemoFileListProgressivelyFromManifestUrlsSpy.mockResolvedValue({
       initialFileList: [urdfFile] as unknown as FileList,
       loadRemainingFileList,
+      preferences: {
+        prepareDemoWorldLayoutOnMotion: true,
+        preserveDemoWorldLayoutOnMotion: true,
+        suppressDefaultWorldLayoutAutoImport: true,
+      },
     });
 
     const loadDemoUrdfTextWithFreshCameras = vi.fn();
@@ -181,16 +235,17 @@ describe("useDemoMotionFlow", () => {
       async (_files: FileList, _options?: { shouldApply?: () => boolean }) => true
     );
     const loadFilesFromFolderWithFreshCameras = vi.fn();
+    const onDemoManifestPreferences = vi.fn();
     const optionsRef: { current: HookOptions } = {
       current: {
         activeUrdfPath: "lekiwi.urdf",
         availableJoints: [],
         hasLoadedFiles: false,
         hydrateDemoAssetsFromFiles,
-        isLeKiwiDemoRobot: false,
         jointLimits: {},
         loadDemoUrdfTextWithFreshCameras,
         loadFilesFromFolderWithFreshCameras,
+        onDemoManifestPreferences,
         playbackHandlers: {},
         prepareDemoScene: vi.fn(() => true),
         robot: null,
@@ -226,6 +281,14 @@ describe("useDemoMotionFlow", () => {
       activePath: "lekiwi.urdf",
       filename: "lekiwi.urdf",
     });
+    expect(onDemoManifestPreferences).toHaveBeenCalledWith({
+      activePath: "lekiwi.urdf",
+      preferences: {
+        prepareDemoWorldLayoutOnMotion: true,
+        preserveDemoWorldLayoutOnMotion: true,
+        suppressDefaultWorldLayoutAutoImport: true,
+      },
+    });
     expect(loadRemainingFileList).toHaveBeenCalledOnce();
     expect(hydrateDemoAssetsFromFiles).toHaveBeenCalledWith([meshFile], {
       activePath: "lekiwi.urdf",
@@ -260,9 +323,9 @@ describe("useDemoMotionFlow", () => {
         loadDemoFileListProgressivelyFromManifestUrlsSpy(...args),
     }));
     vi.doMock("@/shared/samples/demoMotion", () => ({
-      createDemoEpisodes: vi.fn(),
-      toDemoAnimationFrames: (episode: DemoMotionEpisode) =>
-        episode.frames.map((frame) => ({
+      createDemoMotionSequences: vi.fn(),
+      toDemoAnimationFrames: (sequence: DemoMotionSequence) =>
+        sequence.frames.map((frame) => ({
           timestamp: frame.timestamp,
           joints: frame.jointPositions,
         })),
@@ -287,7 +350,6 @@ describe("useDemoMotionFlow", () => {
         activeUrdfPath: null,
         availableJoints: [],
         hasLoadedFiles: false,
-        isLeKiwiDemoRobot: false,
         jointLimits: {},
         loadFilesFromFolderWithFreshCameras,
         playbackHandlers: {},
@@ -320,10 +382,10 @@ describe("useDemoMotionFlow", () => {
     });
   });
 
-  it("primes demo episodes on autoload without opening the viewer or starting playback", async () => {
+  it("primes demo motion sequences on autoload without opening the viewer or starting playback", async () => {
     vi.resetModules();
-    const demoEpisode = createDemoMotionEpisode();
-    const createDemoEpisodesMock = vi.fn(() => [demoEpisode]);
+    const demoMotionSequence = createDemoMotionSequence();
+    const createDemoMotionSequencesMock = vi.fn(() => [demoMotionSequence]);
     vi.doMock("@/shared/config/demo", () => ({
       DEMO_AUTOLOAD: true,
       DEMO_LOCAL_MANIFEST_URL: "/demo/local-manifest.json",
@@ -331,16 +393,16 @@ describe("useDemoMotionFlow", () => {
       DEMO_MODE: true,
     }));
     vi.doMock("@/shared/samples/demoMotion", () => ({
-      createDemoEpisodes: createDemoEpisodesMock,
-      toDemoAnimationFrames: (episode: DemoMotionEpisode) =>
-        episode.frames.map((frame) => ({
+      createDemoMotionSequences: createDemoMotionSequencesMock,
+      toDemoAnimationFrames: (sequence: DemoMotionSequence) =>
+        sequence.frames.map((frame) => ({
           timestamp: frame.timestamp,
           joints: frame.jointPositions,
         })),
     }));
     vi.doMock("@/features/viewer/playback/viewerPlayback", () => ({
       viewerPlayback: {
-        playEpisode: (...args: unknown[]) => playEpisodeSpy(...args),
+        playFrames: (...args: unknown[]) => playFramesSpy(...args),
       },
     }));
     vi.doMock("sonner", () => ({
@@ -358,13 +420,12 @@ describe("useDemoMotionFlow", () => {
         activeUrdfPath: null,
         availableJoints: ["joint_a"],
         hasLoadedFiles: true,
-        isLeKiwiDemoRobot: false,
         jointLimits: {
           joint_a: { type: "revolute", lower: -1, upper: 1 },
         },
         loadFilesFromFolderWithFreshCameras: vi.fn(),
         playbackHandlers: {
-          playEpisode: vi.fn(),
+          playFrames: vi.fn(),
         },
         prepareDemoScene: vi.fn(() => true),
         robot: null,
@@ -390,8 +451,8 @@ describe("useDemoMotionFlow", () => {
       await Promise.resolve();
     });
 
-    expect(createDemoEpisodesMock).toHaveBeenCalledOnce();
-    expect(playEpisodeSpy).not.toHaveBeenCalled();
+    expect(createDemoMotionSequencesMock).toHaveBeenCalledOnce();
+    expect(playFramesSpy).not.toHaveBeenCalled();
     expect(toastErrorSpy).not.toHaveBeenCalled();
 
     await act(async () => {

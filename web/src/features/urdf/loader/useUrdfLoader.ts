@@ -31,22 +31,12 @@ import {
   collectXacroSupportFiles,
   expandXacro,
 } from "@/features/urdf/xacro/xacroClient";
-import {
-  aliasLeKiwiLiveMeshFiles,
-} from "@/features/urdf/loader/lekiwiLiveUrdf";
+import { aliasRepeatedLinkMeshFiles } from "@/features/urdf/loader/repeatedMeshAlias";
+import type { LoadUrdfTextOptions } from "@/features/urdf/loader/urdfLoaderTypes";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
   onAutoSelectEndEffector?: (link: string | null) => void;
-};
-
-type LoadUrdfTextOptions = {
-  filename?: string;
-  activePath?: string;
-  basePath?: string;
-  urdfDocuments?: Record<string, string>;
-  meshFiles?: MeshFiles;
-  packageRoots?: Record<string, string[]>;
 };
 
 type HydrateLoadedAssetsOptions = {
@@ -573,7 +563,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
       const rawActivePath = options.activePath || filename;
       const normalizedActivePath = normalizeMeshPathForMatch(rawActivePath) || rawActivePath;
       const nextBasePath = options.basePath ?? getBasePathFromRelativePath(normalizedActivePath);
-      const nextMeshFiles = aliasLeKiwiLiveMeshFiles(runtimeContent, options.meshFiles ?? {});
+      const nextMeshFiles = aliasRepeatedLinkMeshFiles(runtimeContent, options.meshFiles ?? {});
       const nextPackageRoots = options.packageRoots ?? {};
       const nextUrdfDocuments = {
         ...(options.urdfDocuments ?? {}),
@@ -710,7 +700,7 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
           logRegistrations: true,
         });
 
-        const runtimeMeshFiles = aliasLeKiwiLiveMeshFiles(originalContent, meshes);
+        const runtimeMeshFiles = aliasRepeatedLinkMeshFiles(originalContent, meshes);
         const urdfMeshReferences = analysis.meshReferences;
         const debugInfo = buildDebugMeshInfo(meshAssets, runtimeMeshFiles, urdfMeshReferences);
 

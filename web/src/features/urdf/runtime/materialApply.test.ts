@@ -57,9 +57,9 @@ describe("applyUrdfVisualMaterials", () => {
     expectMeshColor(mesh, [1.0, 0.82, 0.12]);
   });
 
-  it("forces LeKiwi wheel and motor visuals to SO100 dark", () => {
+  it("respects authored material colors before fallback palette", () => {
     const { root, mesh } = createTestScene(`
-      <robot name="LeKiwi">
+      <robot name="demo">
         <material name="body_part">
           <color rgba="0.8 0.1 0.1 1.0"/>
         </material>
@@ -75,19 +75,16 @@ describe("applyUrdfVisualMaterials", () => {
     `);
 
     applyUrdfVisualMaterials(root);
-    expectMeshColor(mesh, [0.1, 0.1, 0.1]);
+    expectMeshColor(mesh, [0.8, 0.1, 0.1]);
   });
 
-  it("forces LeKiwi non-wheel visuals to SO100 printed yellow", () => {
+  it("uses semantic dark fallback for colorless wheel visuals", () => {
     const { root, mesh } = createTestScene(`
-      <robot name="LeKiwi">
-        <material name="body_part">
-          <color rgba="0.2 0.3 0.9 1.0"/>
-        </material>
-        <link name="base_link">
+      <robot name="demo">
+        <link name="wheel_link">
           <visual>
             <geometry>
-              <mesh filename="meshes/chassis/base_shell.stl"/>
+              <mesh filename="meshes/wheels/front_wheel.stl"/>
             </geometry>
             <material name="body_part"/>
           </visual>
@@ -96,6 +93,23 @@ describe("applyUrdfVisualMaterials", () => {
     `);
 
     applyUrdfVisualMaterials(root);
-    expectMeshColor(mesh, [1.0, 0.82, 0.12]);
+    expectMeshColor(mesh, [0.04, 0.045, 0.05]);
+  });
+
+  it("uses semantic frame fallback for colorless body visuals", () => {
+    const { root, mesh } = createTestScene(`
+      <robot name="demo">
+        <link name="base_link">
+          <visual>
+            <geometry>
+              <mesh filename="meshes/chassis/base_shell.stl"/>
+            </geometry>
+          </visual>
+        </link>
+      </robot>
+    `);
+
+    applyUrdfVisualMaterials(root);
+    expectMeshColor(mesh, [0.66, 0.69, 0.64]);
   });
 });

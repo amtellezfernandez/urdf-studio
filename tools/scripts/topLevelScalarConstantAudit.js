@@ -19,7 +19,6 @@ const AUDIT_PARAMS = {
     ".ruff_cache",
     ".uv-cache",
     ".venv",
-    ".venv-lerobot",
     ".venv-sim311",
     "dist",
     "node_modules",

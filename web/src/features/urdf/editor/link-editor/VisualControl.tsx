@@ -4,7 +4,7 @@ import { BlenderPanel, BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { updateVisualInLink } from "@/features/urdf/editor/updateLinkData";
 import type { LinkData, VisualData } from "@/shared/lib/urdfBrowser";
 import { useDeferredUrdfUpdate } from "@/features/urdf/editor/link-editor/useDeferredUrdfUpdate";
-import { MeshGeometryFields } from "@/features/urdf/editor/link-editor/MeshGeometryFields";
+import { GeometryParamsMeshFields } from "@/features/urdf/editor/link-editor/MeshGeometryFields";
 import { toast } from "sonner";
 import {
   createGeometryParamChangeHandler,
@@ -85,11 +85,9 @@ export const VisualControl = ({
   return (
     <BlenderPanel title={title} defaultOpen={true} className="mb-0.5">
       <div className="space-y-0.5">
-        <MeshGeometryFields
-          filename={geometryParams.filename || ""}
-          scale={geometryParams.scale || "1 1 1"}
-          onFilenameChange={(value) => handleParamChange("filename", value)}
-          onScaleChange={(value) => handleParamChange("scale", value)}
+        <GeometryParamsMeshFields
+          geometryParams={geometryParams}
+          onParamChange={handleParamChange}
           origin={origin}
           onOriginChange={handleOriginChange}
           filenamePlaceholder="meshes/model.stl (or .glb/.gltf)"

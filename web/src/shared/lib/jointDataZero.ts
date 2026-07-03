@@ -26,12 +26,14 @@ const hasJointDataZeroValues = (
 ): boolean =>
   Object.values(dataZeroJointValues).some((value) => Number.isFinite(value));
 
-export const applyJointDataZeroOffset = ({
+const offsetJointDataZeroValues = ({
   jointValues,
   dataZeroJointValues,
+  direction,
 }: {
   jointValues: Readonly<JointValues>;
   dataZeroJointValues: Readonly<JointValues>;
+  direction: 1 | -1;
 }): JointValues => {
   if (!hasJointDataZeroValues(dataZeroJointValues)) {
     return { ...jointValues };
@@ -39,9 +41,22 @@ export const applyJointDataZeroOffset = ({
   return mapJointDataZeroOffset({
     jointValues,
     dataZeroJointValues,
-    direction: 1,
+    direction,
   });
 };
+
+export const applyJointDataZeroOffset = ({
+  jointValues,
+  dataZeroJointValues,
+}: {
+  jointValues: Readonly<JointValues>;
+  dataZeroJointValues: Readonly<JointValues>;
+}): JointValues =>
+  offsetJointDataZeroValues({
+    jointValues,
+    dataZeroJointValues,
+    direction: 1,
+  });
 
 export const removeJointDataZeroOffset = ({
   jointValues,
@@ -49,16 +64,12 @@ export const removeJointDataZeroOffset = ({
 }: {
   jointValues: Readonly<JointValues>;
   dataZeroJointValues: Readonly<JointValues>;
-}): JointValues => {
-  if (!hasJointDataZeroValues(dataZeroJointValues)) {
-    return { ...jointValues };
-  }
-  return mapJointDataZeroOffset({
+}): JointValues =>
+  offsetJointDataZeroValues({
     jointValues,
     dataZeroJointValues,
     direction: -1,
   });
-};
 
 export const resolveJointDataZeroReference = ({
   dataZeroJointValues,

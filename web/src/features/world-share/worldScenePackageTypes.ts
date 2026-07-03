@@ -1,4 +1,5 @@
 import type { Camera } from "@/shared/types/camera";
+import type { WorldObjectSource } from "@/shared/types/worldObject";
 import { WORLD_SCENE_PACKAGE_SCHEMA_VERSION } from "@/features/world-share/worldScenePackageParams";
 
 export type WorldRuntimeTargetMode = "native" | "python" | "container";
@@ -59,14 +60,7 @@ export type SerializableWorldObject = {
   asset_ref?: string;
   asset_scale_xyz?: [number, number, number];
   mesh?: SerializableWorldObjectMeshSpec;
-  source?:
-    | "user"
-    | "world-scenario"
-    | "demo-world"
-    | "runtime-detection"
-    | "runtime-demo"
-    | "runtime-restricted-area"
-    | "runtime-trajectory";
+  source?: WorldObjectSource;
   tracked_joint_name?: string | null;
   is_ik_target?: boolean;
   ik_target_type?: "punctual" | "orbit";

@@ -18,6 +18,7 @@ import {
   type WorkspaceTransferTargetId,
 } from "@/features/world-share/workspaceTransferParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import { WORKSPACE_TRANSFER_LAUNCHER_PARAMS } from "@/app/pages/index/workspaceTransferLauncherParams";
 
 type UseWorkspaceTransferLauncherParams = {
   activeUrdfPath: string | null;
@@ -62,31 +63,6 @@ const describeWorkspaceAssetFormats = (
 const formatSceneTransferSummary = (objectCount: number, cameraCount: number): string =>
   `${objectCount} obj · ${cameraCount} cam`;
 
-const resolveWorkspaceTransferTargetTransferLabel = (
-  descriptor: WorkspaceTransferTargetDescriptor
-): string => {
-  const assetFormats = describeWorkspaceAssetFormats(
-    descriptor.transferPolicy.robotAssetFormat,
-    descriptor.transferPolicy.sceneAssetFormat
-  );
-  switch (descriptor.transferPolicy.transferStrategy) {
-    case "direct":
-      if (
-        descriptor.transferPolicy.robotAssetFormat === "urdf" &&
-        descriptor.transferPolicy.sceneAssetFormat === "urdf"
-      ) {
-        return "Direct URDF";
-      }
-      return `Direct ${assetFormats}`;
-    case "convert":
-      return `Converts to ${assetFormats}`;
-    case "planned":
-      return `Planned ${assetFormats}`;
-    default:
-      return assetFormats;
-  }
-};
-
 const resolveWorkspaceTransferTargetTransferDescription = (
   descriptor: WorkspaceTransferTargetDescriptor
 ): string => {
@@ -125,6 +101,14 @@ const resolveWorkspaceTransferTargetStatusLabel = (
   if (status?.available === false) return status.status || "unavailable";
   if (status?.available === true) return status.status || "ready";
   return "checking";
+};
+
+const workspaceTransferTargetNeedsAttention = (
+  status?: WorkspaceTransferTargetStatus
+): boolean => {
+  if (status?.available !== true) return false;
+  const normalizedStatus = status.status.trim().toLowerCase();
+  return normalizedStatus !== "" && normalizedStatus !== "ready";
 };
 
 const assertWorkspacePackageCarriesSceneObjects = (
@@ -170,6 +154,25 @@ const stopWorkspaceTransferLaunch = (launch: WorkspaceTransferLaunch): void => {
     launchId: launch.launchId,
     targetLabel: launch.targetLabel,
   }).catch(() => undefined);
+};
+
+const toastUnresolvedMeshRefs = (meshRefs: string[] | undefined): void => {
+  if (!meshRefs || meshRefs.length === 0) return;
+  const toastLimit = WORKSPACE_TRANSFER_LAUNCHER_PARAMS.unresolvedMeshRefToastLimit;
+  const listed = meshRefs.slice(0, toastLimit).join(", ");
+  const hiddenCount = meshRefs.length - toastLimit;
+  const extra = hiddenCount > 0 ? ` +${hiddenCount} more` : "";
+  toast.warning(
+    `${meshRefs.length} mesh${meshRefs.length === 1 ? "" : "es"} could not be resolved: ${listed}${extra}`
+  );
+};
+
+const toastWorkspaceWarnings = (warnings: string[] | undefined): void => {
+  warnings
+    ?.slice(0, WORKSPACE_TRANSFER_LAUNCHER_PARAMS.workspaceWarningToastLimit)
+    .forEach((warning) => {
+      toast.warning(warning);
+    });
 };
 
 const resolveWorkspaceTransferTargetDetail = (
@@ -343,11 +346,8 @@ export const useWorkspaceTransferLauncher = ({
         toast.success(
           `${descriptor.label} opened (pid ${prepared.pid}, ${openedSceneSummary}${meshSummary}).`
         );
-        if (prepared.unresolvedMeshRefs && prepared.unresolvedMeshRefs.length > 0) {
-          const listed = prepared.unresolvedMeshRefs.slice(0, 5).join(", ");
-          const extra = prepared.unresolvedMeshRefs.length > 5 ? ` +${prepared.unresolvedMeshRefs.length - 5} more` : "";
-          toast.warning(`${prepared.unresolvedMeshRefs.length} mesh${prepared.unresolvedMeshRefs.length === 1 ? "" : "es"} could not be resolved: ${listed}${extra}`);
-        }
+        toastUnresolvedMeshRefs(prepared.unresolvedMeshRefs);
+        toastWorkspaceWarnings(prepared.workspaceWarnings);
       } catch (error) {
         if (controller.signal.aborted || isWorkspaceTransferAbortError(error)) {
           return;
@@ -391,7 +391,6 @@ export const useWorkspaceTransferLauncher = ({
         robotAssetFormat: descriptor.transferPolicy.robotAssetFormat,
         sceneAssetFormat: descriptor.transferPolicy.sceneAssetFormat,
         transferStrategy: descriptor.transferPolicy.transferStrategy,
-        transferLabel: resolveWorkspaceTransferTargetTransferLabel(descriptor),
         transferDescription: resolveWorkspaceTransferTargetTransferDescription(descriptor),
         createsTransferAsset: createsWorkspaceTransferAsset(descriptor),
         statusLabel: resolveWorkspaceTransferTargetStatusLabel(descriptor, status),
@@ -400,6 +399,7 @@ export const useWorkspaceTransferLauncher = ({
         cancelLabel: `Stop opening ${descriptor.label}`,
         isBusy,
         isActive,
+        needsAttention: workspaceTransferTargetNeedsAttention(status),
         canOpen,
         disabledLabel,
         onAction: () => handleOpenTarget(descriptor),

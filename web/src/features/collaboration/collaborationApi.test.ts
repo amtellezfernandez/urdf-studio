@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createCollaborationSession,
-  issueCollaborationCapability,
   postCollaborationEvent,
   updateCollaborationAccess,
 } from "@/features/collaboration/collaborationApi";
@@ -158,47 +157,4 @@ describe("collaborationApi", () => {
     );
   });
 
-  it("issues teleop capability tokens with the owner token header", async () => {
-    const responsePayload = {
-      session_id: SESSION_ID,
-      role: "teleop_operator",
-      capability_token: "teleop-capability-token",
-      issued_at: "2026-04-11T00:00:00Z",
-      expires_at: "2026-04-11T00:05:00Z",
-      allowed_transports: ["moq"],
-    };
-    guardedFetchMock.mockResolvedValueOnce(jsonResponse(responsePayload));
-
-    await expect(
-      issueCollaborationCapability(
-        {
-          sessionId: SESSION_ID,
-          sessionToken: VIEWER_TOKEN,
-          ownerToken: OWNER_TOKEN,
-        },
-        {
-          role: "teleop_operator",
-          allowed_transports: ["moq"],
-        },
-      ),
-    ).resolves.toEqual(responsePayload);
-
-    expect(guardedFetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "/collaboration/sessions/collab-abc/capabilities",
-      ),
-      expect.objectContaining({
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          [COLLABORATION_SESSION_TOKEN_HEADER]: OWNER_TOKEN,
-        },
-        body: JSON.stringify({
-          role: "teleop_operator",
-          allowed_transports: ["moq"],
-        }),
-      }),
-      expect.objectContaining({ context: "Collaboration capability issue" }),
-    );
-  });
 });

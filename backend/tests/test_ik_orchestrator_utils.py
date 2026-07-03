@@ -27,14 +27,14 @@ def test_orientation_attempts() -> None:
 
 
 def test_strategy_ordering() -> None:
-    chain = ["lerobot-placo", "amik"]
+    chain = ["placo", "amik"]
     strategies = build_strategies(chain, "optional", True)
     assert strategies == [
-        ("lerobot-placo", False, 1.0, "strict"),
+        ("placo", False, 1.0, "strict"),
         ("amik", False, 1.0, "strict"),
-        ("lerobot-placo", False, 0.2, "relaxed"),
+        ("placo", False, 0.2, "relaxed"),
         ("amik", False, 0.2, "relaxed"),
-        ("lerobot-placo", True, 0.0, "ignore"),
+        ("placo", True, 0.0, "ignore"),
         ("amik", True, 0.0, "ignore"),
     ]
 

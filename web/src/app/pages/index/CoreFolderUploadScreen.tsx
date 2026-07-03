@@ -14,8 +14,6 @@ import {
   Camera,
   Check,
   FileUp,
-  Folder,
-  FolderOpen,
   Github,
   Globe,
   Info,
@@ -32,117 +30,30 @@ import { useCameraStore } from "@/shared/store/useCameraStore";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Switch } from "@/shared/ui/switch";
+import {
+  CompactSourceIntake,
+  RecentLinkPanel,
+} from "@/app/pages/index/coreFolderUploadScreenParts";
+import {
+  addRecentValue,
+  CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
+  deriveLocalSourceLabel,
+  deriveSourceLabel,
+  fileListToArray,
+  readStoredJsonArray,
+  readStoredString,
+  removeRecentValue,
+  writeStoredString,
+} from "@/app/pages/index/coreFolderUploadScreenState";
+import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
 
-type UrdfFileInput = FileList | File[];
-
-type CoreFolderUploadScreenProps = {
-  onFolderSelected: (fileList: UrdfFileInput, options?: { preserveCameras?: boolean }) => Promise<void>;
-  onGitHubSelected: (params: { repoUrl: string; urdfPath?: string; token?: string }) => Promise<void>;
-  onUrlSelected: (url: string) => Promise<void>;
-  onPlayDemoMotion: () => void | Promise<void>;
-  onImportWorldLayout: (worldLayoutUrl: string) => Promise<void>;
-};
+type CoreFolderUploadScreenProps = SourceEntryActions;
 
 type StagedRobotSource = {
   label: string;
   kind: "local" | "github" | "url";
   load: () => Promise<void>;
 };
-
-const SETUP_ENTRY_WIDE_CONTAINER_CLASS = "max-w-7xl space-y-6";
-const SETUP_ENTRY_PRIMARY_GRID_CLASS =
-  "grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start";
-const SETUP_ENTRY_STACK_CLASS = "space-y-4";
-const RECENT_CAMERA_CONFIGS_STORAGE_KEY = "urdfstudio:recent-camera-configs";
-const RECENT_WORLD_LAYOUTS_STORAGE_KEY = "urdfstudio:recent-world-layouts";
-const LAST_LOCAL_CAMERA_CONFIG_STORAGE_KEY = "urdfstudio:last-local-camera-config";
-const LAST_LOCAL_ROBOT_SOURCE_STORAGE_KEY = "urdfstudio:last-local-robot-source";
-const LAST_LOCAL_WORLD_LAYOUT_STORAGE_KEY = "urdfstudio:last-local-world-layout";
-
-const readStoredJsonArray = (storageKey: string): string[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const value = window.localStorage.getItem(storageKey);
-    if (!value) return [];
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string")
-      : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeStoredJsonArray = (storageKey: string, values: string[]): void => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey, JSON.stringify(values));
-};
-
-const readStoredString = (storageKey: string): string | null => {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(storageKey);
-};
-
-const writeStoredString = (storageKey: string, value: string | null): void => {
-  if (typeof window === "undefined") return;
-  if (value) {
-    window.localStorage.setItem(storageKey, value);
-    return;
-  }
-  window.localStorage.removeItem(storageKey);
-};
-
-const addRecentValue = (storageKey: string, value: string, maxItems = 3): string[] => {
-  const trimmed = value.trim();
-  if (!trimmed) return readStoredJsonArray(storageKey);
-  const nextValues = [
-    trimmed,
-    ...readStoredJsonArray(storageKey).filter((item) => item !== trimmed),
-  ].slice(0, maxItems);
-  writeStoredJsonArray(storageKey, nextValues);
-  return nextValues;
-};
-
-const removeRecentValue = (storageKey: string, value: string): string[] => {
-  const nextValues = readStoredJsonArray(storageKey).filter((item) => item !== value);
-  writeStoredJsonArray(storageKey, nextValues);
-  return nextValues;
-};
-
-const deriveSourceLabel = (value: string, fallback: string): string => {
-  const trimmed = value.trim();
-  if (!trimmed) return fallback;
-  try {
-    const parsed = new URL(trimmed);
-    const segment = parsed.pathname.split("/").filter(Boolean).pop();
-    return segment || parsed.hostname || fallback;
-  } catch {
-    const segment = trimmed.split("/").filter(Boolean).pop();
-    return segment || fallback;
-  }
-};
-
-const getFileRelativePath = (file: File): string =>
-  ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(
-    /\\/g,
-    "/"
-  );
-
-const deriveLocalSourceLabel = (files: File[]): string => {
-  const firstPath = files[0] ? getFileRelativePath(files[0]) : "";
-  const firstSegment = firstPath.split("/").filter(Boolean)[0];
-  if (firstSegment && firstSegment !== files[0]?.name) return firstSegment;
-  if (files.length === 1 && files[0]) return files[0].name;
-  return `${files.length} local files`;
-};
-
-const fileListToArray = (fileList: FileList | null): File[] =>
-  fileList ? Array.from(fileList) : [];
-
-const sourceButtonClass =
-  "h-8 rounded-md border border-border bg-muted px-3 text-xs text-foreground hover:bg-muted/80";
-const launcherActionButtonClass =
-  "h-8 rounded-md border border-[#ff63d5]/30 bg-[#ff63d5]/[0.08] px-3 text-xs text-foreground hover:bg-[#ff63d5]/[0.14] disabled:border-border disabled:bg-muted/20 disabled:text-muted-foreground";
 
 export const CoreFolderUploadScreen = ({
   onFolderSelected,
@@ -179,19 +90,19 @@ export const CoreFolderUploadScreen = ({
   const [loadedWorldLayoutName, setLoadedWorldLayoutName] = useState<string | null>(null);
   const [stagedRobot, setStagedRobot] = useState<StagedRobotSource | null>(null);
   const [lastLocalFolder, setLastLocalFolder] = useState<string | null>(() =>
-    readStoredString(LAST_LOCAL_ROBOT_SOURCE_STORAGE_KEY)
+    readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey)
   );
   const [lastLocalCameraConfig, setLastLocalCameraConfig] = useState<string | null>(() =>
-    readStoredString(LAST_LOCAL_CAMERA_CONFIG_STORAGE_KEY)
+    readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalCameraConfigStorageKey)
   );
   const [lastLocalWorldLayout, setLastLocalWorldLayout] = useState<string | null>(() =>
-    readStoredString(LAST_LOCAL_WORLD_LAYOUT_STORAGE_KEY)
+    readStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey)
   );
   const [recentCameraConfigs, setRecentCameraConfigs] = useState<string[]>(() =>
-    readStoredJsonArray(RECENT_CAMERA_CONFIGS_STORAGE_KEY)
+    readStoredJsonArray(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentCameraConfigsStorageKey)
   );
   const [recentWorldLayouts, setRecentWorldLayouts] = useState<string[]>(() =>
-    readStoredJsonArray(RECENT_WORLD_LAYOUTS_STORAGE_KEY)
+    readStoredJsonArray(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey)
   );
 
   const logoUrl = `${import.meta.env.BASE_URL}assets/urdf-studio-logo.png`;
@@ -240,7 +151,7 @@ export const CoreFolderUploadScreen = ({
       }
       const label = deriveLocalSourceLabel(usableFiles);
       setLastLocalFolder(label);
-      writeStoredString(LAST_LOCAL_ROBOT_SOURCE_STORAGE_KEY, label);
+      writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey, label);
       stageRobot({
         label,
         kind: "local",
@@ -331,7 +242,7 @@ export const CoreFolderUploadScreen = ({
       setIsLoadingWorldLayout(true);
       try {
         await onImportWorldLayout(normalizedUrl);
-        setRecentWorldLayouts(addRecentValue(RECENT_WORLD_LAYOUTS_STORAGE_KEY, normalizedUrl));
+        setRecentWorldLayouts(addRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey, normalizedUrl));
         setWorldLayoutUrl(normalizedUrl);
         setLoadedWorldLayoutName(deriveSourceLabel(normalizedUrl, "world-layout.json"));
         toast.success("Loaded world layout.");
@@ -355,7 +266,7 @@ export const CoreFolderUploadScreen = ({
       try {
         await onImportWorldLayout(objectUrl);
         setLastLocalWorldLayout(file.name);
-        writeStoredString(LAST_LOCAL_WORLD_LAYOUT_STORAGE_KEY, file.name);
+        writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey, file.name);
         setLoadedWorldLayoutName(file.name);
         toast.success(`Loaded world layout from ${file.name}.`);
       } catch (error) {
@@ -416,7 +327,7 @@ export const CoreFolderUploadScreen = ({
         const content = await response.text();
         const filename = deriveSourceLabel(normalizedUrl, "camera-config.json");
         applyCameraConfig(parseCameraConfig(content, filename), normalizedUrl);
-        setRecentCameraConfigs(addRecentValue(RECENT_CAMERA_CONFIGS_STORAGE_KEY, normalizedUrl));
+        setRecentCameraConfigs(addRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentCameraConfigsStorageKey, normalizedUrl));
         setCameraConfigUrl(normalizedUrl);
       } catch (error) {
         const message =
@@ -436,7 +347,7 @@ export const CoreFolderUploadScreen = ({
         const content = await file.text();
         applyCameraConfig(parseCameraConfig(content, file.name), file.name);
         setLastLocalCameraConfig(file.name);
-        writeStoredString(LAST_LOCAL_CAMERA_CONFIG_STORAGE_KEY, file.name);
+        writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalCameraConfigStorageKey, file.name);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to import camera configuration.";
@@ -503,162 +414,6 @@ export const CoreFolderUploadScreen = ({
     [setGPUMode]
   );
 
-  const renderRecentLinkPanel = ({
-    title,
-    emptyLabel,
-    entries,
-    onLoadUrl,
-    onRemoveUrl,
-    lastLocalLabel,
-    onBrowseLocal,
-    onClearLocal,
-  }: {
-    title: string;
-    emptyLabel: string;
-    entries: string[];
-    onLoadUrl: (url: string) => void | Promise<void>;
-    onRemoveUrl: (url: string) => void;
-    lastLocalLabel?: string | null;
-    onBrowseLocal: () => void;
-    onClearLocal: () => void;
-  }) => (
-    <div className="space-y-2 rounded-md border border-border/70 bg-background/40 p-2.5">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Folder className="h-3.5 w-3.5" />
-        <span>{title}</span>
-      </div>
-      {entries.length === 0 && !lastLocalLabel ? (
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {entries.map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              className="group inline-flex max-w-full items-center gap-1 rounded-md border border-border/30 bg-background/20 px-1.5 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-border/45 hover:bg-background/35 hover:text-foreground"
-              title={entry}
-              onClick={() => {
-                void onLoadUrl(entry);
-              }}
-            >
-              <span className="max-w-[170px] truncate">{deriveSourceLabel(entry, entry)}</span>
-              <X
-                className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRemoveUrl(entry);
-                }}
-              />
-            </button>
-          ))}
-          {lastLocalLabel ? (
-            <button
-              type="button"
-              className="group inline-flex max-w-full items-center gap-1 rounded-md border border-border/30 bg-background/20 px-1.5 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:border-border/45 hover:bg-background/35 hover:text-foreground"
-              title={`Browse ${lastLocalLabel} again`}
-              onClick={onBrowseLocal}
-            >
-              <Folder className="h-3 w-3" />
-              <span className="max-w-[170px] truncate">local · {lastLocalLabel}</span>
-              <X
-                className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClearLocal();
-                }}
-              />
-            </button>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-
-  const renderCompactSourceIntake = ({
-    isDropActive,
-    isPreparing,
-    localLabel,
-    onBrowseLocal,
-    inputPlaceholder,
-    inputValue,
-    onInputValueChange,
-    onLoadRemote,
-    loadDisabled,
-    isLoading,
-    loadIcon,
-  }: {
-    isDropActive: boolean;
-    isPreparing: boolean;
-    localLabel: string;
-    onBrowseLocal: () => void;
-    inputPlaceholder: string;
-    inputValue: string;
-    onInputValueChange: (value: string) => void;
-    onLoadRemote: () => void | Promise<unknown>;
-    loadDisabled: boolean;
-    isLoading: boolean;
-    loadIcon: "github" | "globe";
-  }) => (
-    <div className="flex w-full flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
-      <div
-        className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2.5 transition-colors sm:w-auto sm:shrink-0 ${
-          isDropActive
-            ? "border-[#ff63d5]/60 bg-[#ff63d5]/[0.05] text-foreground"
-            : "border-border/70 bg-background/35 text-muted-foreground"
-        }`}
-      >
-        <div className="flex items-center gap-1.5">
-          {isPreparing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <FolderOpen className="h-3.5 w-3.5" />
-          )}
-          <span>{localLabel}</span>
-          <button
-            type="button"
-            onClick={onBrowseLocal}
-            className="text-[11px] font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Browse Locally
-          </button>
-        </div>
-      </div>
-      <div className="flex w-full min-w-0 items-center gap-1.5 sm:flex-1">
-        <Input
-          type="text"
-          placeholder={inputPlaceholder}
-          value={inputValue}
-          onChange={(event) => onInputValueChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !isLoading) {
-              void onLoadRemote();
-            }
-          }}
-          disabled={isLoading}
-          className="min-w-0 flex-1 bg-background/80"
-        />
-        <Button
-          type="button"
-          onClick={() => {
-            void onLoadRemote();
-          }}
-          disabled={loadDisabled}
-          size="sm"
-          className={sourceButtonClass}
-        >
-          {isLoading ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : loadIcon === "github" ? (
-            <Github className="mr-1.5 h-3.5 w-3.5" />
-          ) : (
-            <Globe className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Load
-        </Button>
-      </div>
-    </div>
-  );
-
   const renderRobotLoader = () => (
     <div
       className={`space-y-4 rounded-lg border p-4 transition-colors ${
@@ -693,7 +448,7 @@ export const CoreFolderUploadScreen = ({
           type="button"
           size="sm"
           onClick={() => folderInputRef.current?.click()}
-          className={sourceButtonClass}
+          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
         >
           <Upload className="mr-1.5 h-3.5 w-3.5" />
           Local Folder
@@ -702,7 +457,7 @@ export const CoreFolderUploadScreen = ({
           type="button"
           size="sm"
           onClick={() => localFilesInputRef.current?.click()}
-          className={sourceButtonClass}
+          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
         >
           <FileUp className="mr-1.5 h-3.5 w-3.5" />
           Local Files
@@ -723,7 +478,7 @@ export const CoreFolderUploadScreen = ({
               type="submit"
               disabled={isLoadingGithub || !githubUrl.trim()}
               size="sm"
-              className={sourceButtonClass}
+              className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
             >
               {isLoadingGithub ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -757,7 +512,7 @@ export const CoreFolderUploadScreen = ({
             type="submit"
             disabled={isLoadingUrl || !urlSource.trim()}
             size="sm"
-            className={sourceButtonClass}
+            className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
           >
             {isLoadingUrl ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -785,19 +540,19 @@ export const CoreFolderUploadScreen = ({
           </div>
         </div>
       ) : (
-        renderRecentLinkPanel({
-          title: "Recent Robot Sources",
-          emptyLabel: "No recent local robot folder yet.",
-          entries: [],
-          onLoadUrl: () => undefined,
-          onRemoveUrl: () => undefined,
-          lastLocalLabel: lastLocalFolder,
-          onBrowseLocal: () => folderInputRef.current?.click(),
-          onClearLocal: () => {
+        <RecentLinkPanel
+          title="Recent Robot Sources"
+          emptyLabel="No recent local robot folder yet."
+          entries={[]}
+          onLoadUrl={() => undefined}
+          onRemoveUrl={() => undefined}
+          lastLocalLabel={lastLocalFolder}
+          onBrowseLocal={() => folderInputRef.current?.click()}
+          onClearLocal={() => {
             setLastLocalFolder(null);
-            writeStoredString(LAST_LOCAL_ROBOT_SOURCE_STORAGE_KEY, null);
-          },
-        })
+            writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalRobotSourceStorageKey, null);
+          }}
+        />
       )}
     </div>
   );
@@ -831,19 +586,19 @@ export const CoreFolderUploadScreen = ({
         <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
         <p>Load a camera JSON/YAML with name, parent joint, pose, and intrinsics.</p>
       </div>
-      {renderCompactSourceIntake({
-        isDropActive: cameraSourceDropActive,
-        isPreparing: isLoadingCameraConfig,
-        localLabel: "Drag camera JSON/YAML",
-        onBrowseLocal: () => cameraConfigFileInputRef.current?.click(),
-        inputPlaceholder: "https://.../camera-config.json",
-        inputValue: cameraConfigUrl,
-        onInputValueChange: setCameraConfigUrl,
-        onLoadRemote: () => loadCameraConfigFromUrl(cameraConfigUrl),
-        loadDisabled: isLoadingCameraConfig || !cameraConfigUrl.trim(),
-        isLoading: isLoadingCameraConfig,
-        loadIcon: "globe",
-      })}
+      <CompactSourceIntake
+        isDropActive={cameraSourceDropActive}
+        isPreparing={isLoadingCameraConfig}
+        localLabel="Drag camera JSON/YAML"
+        onBrowseLocal={() => cameraConfigFileInputRef.current?.click()}
+        inputPlaceholder="https://.../camera-config.json"
+        inputValue={cameraConfigUrl}
+        onInputValueChange={setCameraConfigUrl}
+        onLoadRemote={() => loadCameraConfigFromUrl(cameraConfigUrl)}
+        loadDisabled={isLoadingCameraConfig || !cameraConfigUrl.trim()}
+        isLoading={isLoadingCameraConfig}
+        loadIcon="globe"
+      />
       {cameras.length > 0 ? (
         <div className="space-y-2 rounded-md border border-border/70 bg-background/40 p-2.5">
           <div className="flex items-center justify-between gap-2">
@@ -892,21 +647,21 @@ export const CoreFolderUploadScreen = ({
           </div>
         </div>
       ) : (
-        renderRecentLinkPanel({
-          title: "Recent Camera Configs",
-          emptyLabel: "No recent camera configs yet.",
-          entries: recentCameraConfigs,
-          onLoadUrl: loadCameraConfigFromUrl,
-          onRemoveUrl: (url) => {
-            setRecentCameraConfigs(removeRecentValue(RECENT_CAMERA_CONFIGS_STORAGE_KEY, url));
-          },
-          lastLocalLabel: lastLocalCameraConfig,
-          onBrowseLocal: () => cameraConfigFileInputRef.current?.click(),
-          onClearLocal: () => {
+        <RecentLinkPanel
+          title="Recent Camera Configs"
+          emptyLabel="No recent camera configs yet."
+          entries={recentCameraConfigs}
+          onLoadUrl={loadCameraConfigFromUrl}
+          onRemoveUrl={(url) => {
+            setRecentCameraConfigs(removeRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentCameraConfigsStorageKey, url));
+          }}
+          lastLocalLabel={lastLocalCameraConfig}
+          onBrowseLocal={() => cameraConfigFileInputRef.current?.click()}
+          onClearLocal={() => {
             setLastLocalCameraConfig(null);
-            writeStoredString(LAST_LOCAL_CAMERA_CONFIG_STORAGE_KEY, null);
-          },
-        })
+            writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalCameraConfigStorageKey, null);
+          }}
+        />
       )}
     </div>
   );
@@ -940,19 +695,19 @@ export const CoreFolderUploadScreen = ({
         <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
         <p>Paste a world link or browse local JSON. Public and GitHub file links are supported.</p>
       </div>
-      {renderCompactSourceIntake({
-        isDropActive: worldSourceDropActive,
-        isPreparing: isLoadingWorldLayout,
-        localLabel: "Drag world JSON",
-        onBrowseLocal: () => worldLayoutFileInputRef.current?.click(),
-        inputPlaceholder: "https://.../world-layout.json",
-        inputValue: worldLayoutUrl,
-        onInputValueChange: setWorldLayoutUrl,
-        onLoadRemote: () => loadWorldLayoutFromUrl(worldLayoutUrl),
-        loadDisabled: isLoadingWorldLayout || !worldLayoutUrl.trim(),
-        isLoading: isLoadingWorldLayout,
-        loadIcon: "globe",
-      })}
+      <CompactSourceIntake
+        isDropActive={worldSourceDropActive}
+        isPreparing={isLoadingWorldLayout}
+        localLabel="Drag world JSON"
+        onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
+        inputPlaceholder="https://.../world-layout.json"
+        inputValue={worldLayoutUrl}
+        onInputValueChange={setWorldLayoutUrl}
+        onLoadRemote={() => loadWorldLayoutFromUrl(worldLayoutUrl)}
+        loadDisabled={isLoadingWorldLayout || !worldLayoutUrl.trim()}
+        isLoading={isLoadingWorldLayout}
+        loadIcon="globe"
+      />
       {loadedWorldLayoutName ? (
         <div className="space-y-2 rounded-md border border-border/70 bg-background/40 p-2.5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -966,23 +721,23 @@ export const CoreFolderUploadScreen = ({
           </div>
         </div>
       ) : (
-        renderRecentLinkPanel({
-          title: "Recent World Layouts",
-          emptyLabel: "No recent world layouts yet.",
-          entries: recentWorldLayouts,
-          onLoadUrl: (url) => {
+        <RecentLinkPanel
+          title="Recent World Layouts"
+          emptyLabel="No recent world layouts yet."
+          entries={recentWorldLayouts}
+          onLoadUrl={(url) => {
             void loadWorldLayoutFromUrl(url);
-          },
-          onRemoveUrl: (url) => {
-            setRecentWorldLayouts(removeRecentValue(RECENT_WORLD_LAYOUTS_STORAGE_KEY, url));
-          },
-          lastLocalLabel: lastLocalWorldLayout,
-          onBrowseLocal: () => worldLayoutFileInputRef.current?.click(),
-          onClearLocal: () => {
+          }}
+          onRemoveUrl={(url) => {
+            setRecentWorldLayouts(removeRecentValue(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.recentWorldLayoutsStorageKey, url));
+          }}
+          lastLocalLabel={lastLocalWorldLayout}
+          onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
+          onClearLocal={() => {
             setLastLocalWorldLayout(null);
-            writeStoredString(LAST_LOCAL_WORLD_LAYOUT_STORAGE_KEY, null);
-          },
-        })
+            writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey, null);
+          }}
+        />
       )}
     </div>
   );
@@ -1013,7 +768,7 @@ export const CoreFolderUploadScreen = ({
           </Button>
         </div>
       </div>
-      <div className={`w-full ${SETUP_ENTRY_WIDE_CONTAINER_CLASS}`}>
+      <div className={`w-full ${CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryWideContainerClass}`}>
         <input
           ref={worldLayoutFileInputRef}
           type="file"
@@ -1063,7 +818,7 @@ export const CoreFolderUploadScreen = ({
             }}
             disabled={!hasSetupSelection || entryLoadInteractionsDisabled}
             size="sm"
-            className={launcherActionButtonClass}
+            className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.launcherActionButtonClass}
           >
             {isLoadingSetup ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1073,8 +828,8 @@ export const CoreFolderUploadScreen = ({
             Load Setup
           </Button>
         </div>
-        <div className={SETUP_ENTRY_PRIMARY_GRID_CLASS}>
-          <div className={SETUP_ENTRY_STACK_CLASS}>
+        <div className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryPrimaryGridClass}>
+          <div className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.setupEntryStackClass}>
             {renderRobotLoader()}
             {renderCameraSetupLoader()}
           </div>

@@ -1,21 +1,16 @@
 import * as THREE from "three";
 import { MATERIAL_APPLY_PARAMS } from "./materialApplyParams";
+import {
+  resolveSyntheticVisualRgba,
+  type ParsedRgba,
+} from "./materialPolicy";
 
 const MATERIAL_PARAMS = MATERIAL_APPLY_PARAMS;
 const DEFAULT_ALPHA = MATERIAL_PARAMS.defaultAlpha;
 const RGB_COMPONENTS = MATERIAL_PARAMS.rgbComponentCount;
 const RGBA_COMPONENTS = MATERIAL_PARAMS.rgbaComponentCount;
-const SO100_PRIMARY_RGB = MATERIAL_PARAMS.so100PrimaryRgb;
-const SO100_DARK_RGB = MATERIAL_PARAMS.so100DarkRgb;
-
-const LEKIWI_ROBOT_KEYWORD = MATERIAL_PARAMS.lekiwiRobotKeyword;
-const LEKIWI_DARK_MATERIAL_KEYWORDS = MATERIAL_PARAMS.lekiwiDarkMaterialKeywords;
-const LEKIWI_DARK_MESH_KEYWORDS = MATERIAL_PARAMS.lekiwiDarkMeshKeywords;
-
-type ParsedRgba = [number, number, number, number];
 
 const namedMaterialRgbaCache = new WeakMap<Document, Map<string, ParsedRgba>>();
-const robotNameCache = new WeakMap<Document, string | null>();
 
 const disposeMaterial = (material: THREE.Material) => {
   Object.values(material).forEach((value) => {
@@ -26,7 +21,7 @@ const disposeMaterial = (material: THREE.Material) => {
   material.dispose();
 };
 
-export const applyMaterialRecursively = (
+const applyMaterialRecursively = (
   root: THREE.Object3D,
   material: THREE.Material | THREE.Material[],
   key?: string
@@ -111,84 +106,34 @@ const getNamedMaterialRgbaMap = (document: Document): Map<string, ParsedRgba> =>
   return namedRgba;
 };
 
-const getRobotName = (document: Document): string | null => {
-  if (robotNameCache.has(document)) {
-    return robotNameCache.get(document) ?? null;
-  }
-
-  const robotName = document.querySelector("robot")?.getAttribute("name")?.trim() ?? null;
-  robotNameCache.set(document, robotName);
-  return robotName;
-};
-
-const shouldUseLeKiwiPaletteOverride = (visualNode: Element): boolean => {
-  const robotName = getRobotName(visualNode.ownerDocument);
-  if (!robotName) return false;
-  return robotName.toLowerCase().includes(LEKIWI_ROBOT_KEYWORD);
-};
-
-const rgbToRgba = (rgb: readonly [number, number, number], alpha = DEFAULT_ALPHA): ParsedRgba => [
-  rgb[0],
-  rgb[1],
-  rgb[2],
-  alpha,
-];
-
-const resolveLeKiwiPaletteRgba = (visualNode: Element, materialName: string | null): ParsedRgba => {
-  const normalizedMaterialName = materialName?.toLowerCase() ?? "";
-  if (
-    normalizedMaterialName &&
-    LEKIWI_DARK_MATERIAL_KEYWORDS.some((keyword) => normalizedMaterialName.includes(keyword))
-  ) {
-    return rgbToRgba(SO100_DARK_RGB);
-  }
-
-  const meshFilename = visualNode
-    .querySelector("geometry > mesh")
-    ?.getAttribute("filename")
-    ?.toLowerCase();
-  if (
-    meshFilename &&
-    LEKIWI_DARK_MESH_KEYWORDS.some((keyword) => meshFilename.includes(keyword))
-  ) {
-    return rgbToRgba(SO100_DARK_RGB);
-  }
-
-  return rgbToRgba(SO100_PRIMARY_RGB);
-};
-
 const parseUrdfColorMaterial = (visualNode: Element): THREE.MeshPhongMaterial | null => {
   const materialNode = Array.from(visualNode.children).find(
     (child) => child.nodeName.toLowerCase() === "material"
   );
   const materialName = materialNode?.getAttribute("name")?.trim() ?? null;
 
-  if (shouldUseLeKiwiPaletteOverride(visualNode)) {
-    return createPhongMaterialFromRgba(resolveLeKiwiPaletteRgba(visualNode, materialName));
-  }
-  if (!materialNode) return null;
-
-  const colorNode = Array.from(materialNode.children).find(
-    (child) => child.nodeName.toLowerCase() === "color"
-  );
-  const inlineRgba = colorNode?.getAttribute("rgba")?.trim();
-  if (inlineRgba) {
-    const parsed = parseRgba(inlineRgba);
-    if (!parsed) {
-      return null;
+  if (materialNode) {
+    const colorNode = Array.from(materialNode.children).find(
+      (child) => child.nodeName.toLowerCase() === "color"
+    );
+    const inlineRgba = colorNode?.getAttribute("rgba")?.trim();
+    if (inlineRgba) {
+      const parsed = parseRgba(inlineRgba);
+      if (parsed) {
+        return createPhongMaterialFromRgba(parsed);
+      }
     }
-    return createPhongMaterialFromRgba(parsed);
+
+    const materialNameKey = materialName?.toLowerCase();
+    if (materialNameKey) {
+      const namedRgba = getNamedMaterialRgbaMap(visualNode.ownerDocument).get(materialNameKey);
+      if (namedRgba) {
+        return createPhongMaterialFromRgba(namedRgba);
+      }
+    }
   }
 
-  const materialNameKey = materialName?.toLowerCase();
-  if (!materialNameKey) {
-    return null;
-  }
-  const namedRgba = getNamedMaterialRgbaMap(visualNode.ownerDocument).get(materialNameKey);
-  if (!namedRgba) {
-    return null;
-  }
-  return createPhongMaterialFromRgba(namedRgba);
+  return createPhongMaterialFromRgba(resolveSyntheticVisualRgba(visualNode));
 };
 
 export const applyUrdfVisualMaterials = (root: THREE.Object3D) => {

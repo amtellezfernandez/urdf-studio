@@ -14,6 +14,7 @@ import {
   WORLD_SCENARIO_EVENTS,
   WORLD_SCENARIO_MOTION,
   WORLD_SCENARIO_NUMERIC_TOLERANCES,
+  WORLD_SCENARIO_SOURCES,
   type WorldScenarioObjectSeed,
 } from "./worldScenarioParams";
 
@@ -116,7 +117,7 @@ const buildPolarObject = (
     position: ensureMinPlanarDistance(position, params.baseCenter, minPlanarDistance),
     size,
     color: seed.color,
-    source: "world-scenario",
+    source: WORLD_SCENARIO_SOURCES.current,
     trackedJointName: null,
     isIkTarget: false,
   };
@@ -162,7 +163,7 @@ const buildStaticWorldScenario = (params: WorldScenarioBuildParams) => {
         position: pedestalPosition,
         size: pedestalSize,
         color: "#1f2937",
-        source: "world-scenario",
+        source: WORLD_SCENARIO_SOURCES.current,
         trackedJointName: null,
         isIkTarget: false,
       },

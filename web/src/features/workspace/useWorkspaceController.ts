@@ -28,10 +28,10 @@ import {
 export const useWorkspaceController = () => {
   const rosVizFlagEnabled = useSyncExternalStore(
     subscribeFeatureFlags,
-    () => isFeatureFlagEnabled("rosVizV2"),
+    () => isFeatureFlagEnabled("rosViz"),
     () => false
   );
-  const rosVizFlagLocked = isFeatureFlagUrlLocked("rosVizV2");
+  const rosVizFlagLocked = isFeatureFlagUrlLocked("rosViz");
   const rosVizGate = useFeatureGateAvailability(FEATURE_GATES.rosVizRuntime);
   const webGpuSupported = canUseWebGpu();
 
@@ -61,9 +61,9 @@ export const useWorkspaceController = () => {
       if (rosVizFlagLocked) {
         return;
       }
-      setFeatureFlag("rosVizV2", runtime === "rosVizV2");
+      setFeatureFlag("rosViz", runtime === "rosViz");
 
-      const nextProfile: ViewerProfile = runtime === "rosVizV2" ? "ros_debug" : "studio";
+      const nextProfile: ViewerProfile = runtime === "rosViz" ? "ros_debug" : "studio";
       if (!viewerProfileLocked) {
         setViewerProfile(nextProfile);
       }

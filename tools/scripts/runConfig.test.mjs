@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import {
   applyRuntimeEnvOverrides,
-  applyRobotGatewayEnvSelection,
   applyTeamModeRuntimeProfile,
   applyTeamSharingGatewayRuntimeProfile,
   assertRemoteBindingsAllowed,
@@ -15,11 +14,9 @@ import {
   buildTeamSharingWebBaseUrl,
   buildRuntimeUrls,
   formatMissingAcknowledgementsMessage,
-  formatStartupSecurityViolationsMessage,
   formatBindAddress,
   formatUnknownRunArgsMessage,
   getMissingSecurityAcknowledgements,
-  getStartupSecurityViolations,
   isLoopbackHost,
   isRemoteBindHost,
   mergeRuntimeConfig,
@@ -34,55 +31,33 @@ const BASE_RUNTIME_CONFIG = {
   web: { host: '127.0.0.1', port: 5173, bindHost: '127.0.0.1' },
   api: { host: '127.0.0.1', port: 8000, bindHost: '127.0.0.1' },
   ikd: { enabled: true, host: '127.0.0.1', port: 8088, controlHz: 500, telemetryHz: 60, staleTargetMs: 250, useForDrag: true },
-  teleop: { enabled: false, host: '127.0.0.1', httpPort: 8091, webtransportPort: 8092, nativeQuicPort: 8093 },
   ik: {},
 };
 
 test('parseRunArgs reads boolean and value flags', () => {
   const parsed = parseRunArgs([
-    '--data',
     '--allow-remote',
     '--web-port',
     '3001',
     '--api-bind-host=0.0.0.0',
     '--ikd-host',
     '192.168.1.7',
-    '--teleop',
-    '--teleop-http-port',
-    '8099',
   ]);
 
   assert.deepEqual(parsed, {
-    ackPublicTunnel: false,
     ackRemoteExposure: false,
     allowRemote: true,
     allowOutdated: false,
-    dataMode: true,
     help: false,
     overrides: {
       web: { port: 3001 },
       api: { bindHost: '0.0.0.0' },
       ikd: { host: '192.168.1.7' },
-      teleop: { httpPort: 8099 },
     },
-    runtimeDemoMode: false,
     teamHost: null,
     teamMode: false,
-    teleopMode: true,
-    robotEnvFile: null,
-    robotName: null,
     unknownArgs: [],
   });
-});
-
-test('parseRunArgs reads robot gateway selectors', () => {
-  const namedRobot = parseRunArgs(['--robot', 'so100-left-1']);
-  const explicitFile = parseRunArgs(['--robot-env-file=.env.robots/so100-left-2.env']);
-
-  assert.equal(namedRobot.robotName, 'so100-left-1');
-  assert.equal(namedRobot.robotEnvFile, null);
-  assert.equal(explicitFile.robotName, null);
-  assert.equal(explicitFile.robotEnvFile, '.env.robots/so100-left-2.env');
 });
 
 test('parseRunArgs reads team mode and host override', () => {
@@ -180,8 +155,6 @@ test('applyTeamModeRuntimeProfile exposes only the frontend team profile service
   assert.equal(profiled.web.bindHost, '0.0.0.0');
   assert.equal(profiled.api.host, '127.0.0.1');
   assert.equal(profiled.api.bindHost, '127.0.0.1');
-  assert.equal(profiled.teleop.enabled, false);
-  assert.equal(profiled.teleop.host, '127.0.0.1');
 });
 
 test('applyTeamSharingGatewayRuntimeProfile exposes only a gated frontend', () => {
@@ -191,7 +164,6 @@ test('applyTeamSharingGatewayRuntimeProfile exposes only a gated frontend', () =
   assert.equal(profiled.web.bindHost, '0.0.0.0');
   assert.equal(profiled.api.host, '127.0.0.1');
   assert.equal(profiled.api.bindHost, '127.0.0.1');
-  assert.equal(profiled.teleop.enabled, false);
 });
 
 test('buildTeamSharingWebBaseUrl formats the detected team host', () => {
@@ -376,22 +348,8 @@ test('parseRunArgs rejects invalid ports', () => {
   assert.throws(() => parseRunArgs(['--web-port', '70000']), /must be between/);
 });
 
-test('parseRunArgs rejects unsafe robot selectors', () => {
-  assert.throws(() => parseRunArgs(['--robot', '../openarm']), /requires a robot name/);
-  assert.throws(() => parseRunArgs(['--robot', '--team']), /requires a robot name/);
-  assert.throws(
-    () => parseRunArgs(['--robot-env-file', '../.env.robots/openarm-a.env']),
-    /relative env file path/,
-  );
-  assert.throws(
-    () => parseRunArgs(['--robot-env-file', String.raw`.env.robots\openarm-a.env`]),
-    /relative env file path/,
-  );
-});
-
 test('parseRunArgs reads acknowledgement flags', () => {
-  const parsed = parseRunArgs(['--ack-public-tunnel', '--ack-remote-exposure']);
-  assert.equal(parsed.ackPublicTunnel, true);
+  const parsed = parseRunArgs(['--ack-remote-exposure']);
   assert.equal(parsed.ackRemoteExposure, true);
 });
 
@@ -404,7 +362,6 @@ test('mergeRuntimeConfig applies scoped overrides', () => {
   assert.equal(merged.web.port, 3001);
   assert.equal(merged.api.bindHost, '0.0.0.0');
   assert.equal(merged.ikd.port, BASE_RUNTIME_CONFIG.ikd.port);
-  assert.equal(merged.teleop.httpPort, BASE_RUNTIME_CONFIG.teleop.httpPort);
 });
 
 test('remote bind guard rejects non-loopback exposure without opt-in', () => {
@@ -445,41 +402,11 @@ test('runtime env overrides propagate effective hosts and ports', () => {
     URDF_API_BIND_HOST: '127.0.0.1',
     URDF_IKD_HOST: '127.0.0.1',
     URDF_IKD_PORT: '8088',
-    URDF_TELEOP_HOST: '127.0.0.1',
-    URDF_TELEOP_HTTP_PORT: '8091',
-    URDF_TELEOP_WEBTRANSPORT_PORT: '8092',
-    URDF_TELEOP_NATIVE_QUIC_PORT: '8093',
     VITE_API_BASE_URL: 'http://127.0.0.1:8000',
     VITE_IKD_BASE_URL: 'http://127.0.0.1:8088',
     VITE_IKD_WS_URL: 'ws://127.0.0.1:8088/telemetry',
     VITE_IKD_APPROACH_WS_URL: 'ws://127.0.0.1:8088/approach/ws',
-    VITE_TELEOP_HTTP_BASE_URL: 'http://127.0.0.1:8091',
   });
-});
-
-test('robot gateway env selection is applied by the launcher without shell overrides', () => {
-  assert.deepEqual(
-    applyRobotGatewayEnvSelection(
-      {
-        URDF_ROBOT_GATEWAY_ENV_FILE: '.env.robots/old.env',
-      },
-      { robotName: 'openarm-a' },
-    ),
-    {
-      URDF_ROBOT_GATEWAY_ENV: 'openarm-a',
-    },
-  );
-  assert.deepEqual(
-    applyRobotGatewayEnvSelection(
-      {
-        URDF_ROBOT_GATEWAY_ENV: 'openarm-a',
-      },
-      { robotEnvFile: '.env.robots/so100-left-2.env' },
-    ),
-    {
-      URDF_ROBOT_GATEWAY_ENV_FILE: '.env.robots/so100-left-2.env',
-    },
-  );
 });
 
 test('recoverLoopbackPorts keeps configured ports when they are free', async () => {
@@ -533,33 +460,6 @@ test('recoverLoopbackPorts shifts gated frontend network port when default is oc
   ]);
 });
 
-test('recoverLoopbackPorts keeps recovered teleop UDP ports distinct', async () => {
-  const occupiedUdpPorts = new Set([BASE_RUNTIME_CONFIG.teleop.webtransportPort]);
-  const result = await recoverLoopbackPorts(
-    {
-      ...BASE_RUNTIME_CONFIG,
-      teleop: { ...BASE_RUNTIME_CONFIG.teleop, enabled: true },
-    },
-    {
-      portAvailabilityChecker: async () => true,
-      udpPortAvailabilityChecker: async (_host, port) => !occupiedUdpPorts.has(port),
-    }
-  );
-
-  assert.equal(
-    result.runtimeConfig.teleop.webtransportPort,
-    BASE_RUNTIME_CONFIG.teleop.webtransportPort + 1
-  );
-  assert.equal(
-    result.runtimeConfig.teleop.nativeQuicPort,
-    BASE_RUNTIME_CONFIG.teleop.nativeQuicPort + 1
-  );
-  assert.notEqual(
-    result.runtimeConfig.teleop.webtransportPort,
-    result.runtimeConfig.teleop.nativeQuicPort
-  );
-});
-
 test('recoverLoopbackPorts leaves explicit pinned ports unchanged', async () => {
   const apiPort = 8000;
   const result = await recoverLoopbackPorts(
@@ -597,13 +497,11 @@ test('frontend readiness URL uses loopback for remote frontend binds', () => {
   );
 });
 
-test('missing acknowledgement detection requires public tunnel and remote exposure opt-ins', () => {
+test('missing acknowledgement detection requires remote exposure opt-in', () => {
   const missing = getMissingSecurityAcknowledgements(
     {
-      ackPublicTunnel: false,
       ackRemoteExposure: false,
       allowRemote: true,
-      dataMode: true,
     },
     {
       env: {},
@@ -612,11 +510,6 @@ test('missing acknowledgement detection requires public tunnel and remote exposu
   );
 
   assert.deepEqual(missing, [
-    {
-      kind: 'publicTunnel',
-      flag: '--ack-public-tunnel',
-      envKey: 'URDF_STUDIO_ACK_PUBLIC_TUNNEL',
-    },
     {
       kind: 'remoteExposure',
       flag: '--ack-remote-exposure',
@@ -628,14 +521,11 @@ test('missing acknowledgement detection requires public tunnel and remote exposu
 test('acknowledgement env vars satisfy missing acknowledgement checks', () => {
   const missing = getMissingSecurityAcknowledgements(
     {
-      ackPublicTunnel: false,
       ackRemoteExposure: false,
       allowRemote: true,
-      dataMode: true,
     },
     {
       env: {
-        URDF_STUDIO_ACK_PUBLIC_TUNNEL: '1',
         URDF_STUDIO_ACK_REMOTE_EXPOSURE: 'yes',
       },
       remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
@@ -648,17 +538,13 @@ test('acknowledgement env vars satisfy missing acknowledgement checks', () => {
 test('security posture lines summarize effective runtime exposure', () => {
   assert.deepEqual(
     buildSecurityPostureLines({
-      dataMode: true,
       remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
       runtimeConfig: BASE_RUNTIME_CONFIG,
     }),
     [
       'frontend bind: 127.0.0.1:5173',
       'backend bind: 127.0.0.1:8000',
-      'live teleop relay: disabled',
       'team sharing gate: disabled',
-      'data mode: public tunnel enabled',
-      'data tunnel scope: cam-to-sim session ingress only',
       'network exposure: remote bind allowed',
     ]
   );
@@ -674,35 +560,6 @@ test('loopback API base URL uses bind host rather than public API host', () => {
   );
 });
 
-test('startup security violations require tokenized local-only data mode', () => {
-  assert.deepEqual(
-    getStartupSecurityViolations(
-      {
-        dataMode: true,
-        remoteExposureIssues: [{ service: 'frontend', host: '0.0.0.0', port: 5173 }],
-      },
-      { env: {} }
-    ),
-    [
-      'Data mode cannot be combined with non-loopback binds. Keep binds local and use the tunnel as the only exposure path.',
-      'Data mode requires URDF_SIMULATOR_API_TOKEN so remote operator routes are not left unauthenticated.',
-    ]
-  );
-});
-
-test('startup security violations clear once tokenized local-only data mode is used', () => {
-  assert.deepEqual(
-    getStartupSecurityViolations(
-      {
-        dataMode: true,
-        remoteExposureIssues: [],
-      },
-      { env: { URDF_SIMULATOR_API_TOKEN: 'secret-token' } }
-    ),
-    []
-  );
-});
-
 test('helper formatting functions describe bind addresses and unknown args', () => {
   assert.equal(isLoopbackHost('localhost'), true);
   assert.equal(isRemoteBindHost('0.0.0.0'), true);
@@ -714,17 +571,11 @@ test('helper formatting functions describe bind addresses and unknown args', () 
   assert.equal(
     formatMissingAcknowledgementsMessage([
       {
-        kind: 'publicTunnel',
-        flag: '--ack-public-tunnel',
-        envKey: 'URDF_STUDIO_ACK_PUBLIC_TUNNEL',
+        kind: 'remoteExposure',
+        flag: '--ack-remote-exposure',
+        envKey: 'URDF_STUDIO_ACK_REMOTE_EXPOSURE',
       },
     ]),
-    'public tunnel mode requires acknowledgement via --ack-public-tunnel or URDF_STUDIO_ACK_PUBLIC_TUNNEL=1'
-  );
-  assert.equal(
-    formatStartupSecurityViolationsMessage([
-      'Data mode requires URDF_SIMULATOR_API_TOKEN so remote operator routes are not left unauthenticated.',
-    ]),
-    'Data mode requires URDF_SIMULATOR_API_TOKEN so remote operator routes are not left unauthenticated.'
+    'remote exposure mode requires acknowledgement via --ack-remote-exposure or URDF_STUDIO_ACK_REMOTE_EXPOSURE=1'
   );
 });

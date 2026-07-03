@@ -190,6 +190,7 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
     )
     bundled_mesh_count: int = Field(default=0, alias="bundledMeshCount")
     unresolved_mesh_refs: list[str] = Field(default_factory=list, alias="unresolvedMeshRefs")
+    workspace_warnings: list[str] = Field(default_factory=list, alias="workspaceWarnings")
     world_object_count: int = Field(default=0, ge=0, alias="worldObjectCount")
     camera_count: int = Field(default=0, ge=0, alias="cameraCount")
 
@@ -211,6 +212,7 @@ class WorkspaceOpenResponse(WorkspaceTransferCamelModel):
             targetAssetFormat=response.simulator_asset_format,
             bundledMeshCount=response.bundled_mesh_count,
             unresolvedMeshRefs=response.unresolved_mesh_refs,
+            workspaceWarnings=response.workspace_warnings,
             worldObjectCount=response.world_object_count,
             cameraCount=response.camera_count,
         )

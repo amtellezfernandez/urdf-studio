@@ -3,14 +3,14 @@ import { describe, expect, it } from "vitest";
 import { getRosVizRuntimeDecision } from "./runtimeSelector";
 
 describe("runtimeSelector", () => {
-  it("uses ROS viz runtime when all requirements are met", () => {
+  it("uses ROS Viz runtime when all requirements are met", () => {
     const decision = getRosVizRuntimeDecision({
       rosVizFlagEnabled: true,
       rosVizGateEnabled: true,
       webGpuSupported: true,
     });
 
-    expect(decision.runtime).toBe("rosVizV2");
+    expect(decision.runtime).toBe("rosViz");
     expect(decision.reason).toBe("enabled");
   });
 

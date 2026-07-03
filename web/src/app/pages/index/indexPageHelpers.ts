@@ -6,7 +6,7 @@ export const DEFAULT_WORLD_SCENE_PACKAGE_ID = INDEX_PAGE_HELPER_PARAMS.defaultWo
 export const DEFAULT_WORLD_SCENE_PACKAGE_TITLE = INDEX_PAGE_HELPER_PARAMS.defaultWorldScenePackageTitle;
 export const WORLD_SCENE_PACKAGE_IMPORT_ACCEPT = INDEX_PAGE_HELPER_PARAMS.worldScenePackageImportAccept;
 const DEFAULT_WORLD_LAYOUT_EXPORT_NAME = INDEX_PAGE_HELPER_PARAMS.defaultWorldLayoutExportName;
-export const ROBOT_NAME_PATTERN = /<robot\b[^>]*\bname=["']([^"']+)["']/i;
+const ROBOT_NAME_PATTERN = /<robot\b[^>]*\bname=["']([^"']+)["']/i;
 export const toWorldRegistryRecordKey = (packageId: string, version: string) =>
   `${packageId}@${version}`;
 export const IMPORT_WORLD_SCENE_URL_PARAM = INDEX_PAGE_HELPER_PARAMS.importWorldSceneUrlParam;

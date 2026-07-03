@@ -10,15 +10,6 @@ export const buildJointTypes = (jointLimits: JointLimits): string[] => {
   return Array.from(types).sort();
 };
 
-export const buildJointTypeCounts = (jointLimits: JointLimits): Record<string, number> => {
-  const counts: Record<string, number> = {};
-  Object.values(jointLimits).forEach((joint) => {
-    const type = joint?.type || "unknown";
-    counts[type] = (counts[type] || 0) + 1;
-  });
-  return counts;
-};
-
 export const buildFilteredJointNames = ({
   availableJoints,
   jointLimits,

@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from starlette.routing import BaseRoute
 
 from backend.api.attestation import router as attestation_router
-from backend.api.cam_to_sim import router as cam_to_sim_router
 from backend.api.collaboration import http_router as collaboration_http_router
 from backend.api.collaboration import ws_router as collaboration_ws_router
 from backend.api.health import router as health_router
@@ -24,7 +23,6 @@ from backend.api.ilu_session import router as ilu_session_router
 from backend.api.robot_mastering import router as robot_mastering_router
 from backend.api.ros_viz import http_router as ros_viz_http_router
 from backend.api.ros_viz import ws_router as ros_viz_ws_router
-from backend.api.runtime_sessions import router as runtime_sessions_router
 from backend.api.samples import router as samples_router
 from backend.api.simulator_runtime import router as simulator_runtime_router
 from backend.api.simulation_prep import router as simulation_prep_router
@@ -50,7 +48,6 @@ METRICS_PATH_PREFIXES = (
     "/worlds/rollouts",
     "/ros-viz",
     "/ws/ros-viz",
-    "/cam-to-sim",
     "/collaboration",
     "/ws/collaboration",
 )
@@ -64,7 +61,6 @@ API_ROUTERS = (
     ik_router,
     ikd_runtime_router,
     robot_mastering_router,
-    runtime_sessions_router,
     samples_router,
     world_bridge_router,
     workspace_transfer_router,
@@ -73,7 +69,6 @@ API_ROUTERS = (
     world_rollouts_router,
     ros_viz_http_router,
     ros_viz_ws_router,
-    cam_to_sim_router,
     collaboration_http_router,
     collaboration_ws_router,
     simulation_prep_router,

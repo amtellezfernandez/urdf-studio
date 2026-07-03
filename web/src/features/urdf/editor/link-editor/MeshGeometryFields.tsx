@@ -1,11 +1,15 @@
 import { Input } from "@/shared/ui/input";
 import { BlenderPropertyRow } from "@/shared/ui/blender-panel";
 import { Vector3Inputs } from "@/features/urdf/editor/link-editor/Vector3Inputs";
-import { formatVector3, parseVector3, updateVector3Value } from "@/features/urdf/editor/link-editor/sizeUtils";
+import {
+  formatVector3,
+  parseVector3,
+  updateVector3Value,
+} from "@/features/urdf/editor/link-editor/sizeUtils";
 import { OriginRows } from "@/features/urdf/editor/link-editor/OriginRows";
 import type { OriginData } from "@/shared/lib/urdfBrowser";
 
-interface MeshGeometryFieldsProps {
+export interface MeshGeometryFieldsProps {
   filename: string;
   scale: string;
   onFilenameChange: (value: string) => void;
@@ -23,7 +27,7 @@ interface MeshGeometryFieldsProps {
   originInputClassName?: string;
 }
 
-export const MeshGeometryFields = ({
+const MeshGeometryFields = ({
   filename,
   scale,
   onFilenameChange,
@@ -77,3 +81,25 @@ export const MeshGeometryFields = ({
     </>
   );
 };
+
+type GeometryParamsMeshFieldsProps = Omit<
+  MeshGeometryFieldsProps,
+  "filename" | "scale" | "onFilenameChange" | "onScaleChange"
+> & {
+  geometryParams: Record<string, string>;
+  onParamChange: (key: string, value: string) => void;
+};
+
+export const GeometryParamsMeshFields = ({
+  geometryParams,
+  onParamChange,
+  ...meshGeometryFieldsProps
+}: GeometryParamsMeshFieldsProps) => (
+  <MeshGeometryFields
+    filename={geometryParams.filename || ""}
+    scale={geometryParams.scale || "1 1 1"}
+    onFilenameChange={(value) => onParamChange("filename", value)}
+    onScaleChange={(value) => onParamChange("scale", value)}
+    {...meshGeometryFieldsProps}
+  />
+);

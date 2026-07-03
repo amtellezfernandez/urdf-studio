@@ -144,6 +144,56 @@ describe("useWorkspaceTransferLauncher", () => {
     cameraCount: 0,
   };
 
+  it("keeps degraded but available simulator targets openable and marked for attention", async () => {
+    fetchWorkspaceTransferTargetStatusMock.mockResolvedValueOnce({
+      targetId: "blender",
+      available: true,
+      status: "ready, display degraded: software OpenGL",
+      dependencies: [
+        {
+          name: "hardware OpenGL",
+          available: false,
+          required: false,
+          scope: "runtime",
+        },
+      ],
+    });
+    let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
+
+    const Harness = () => {
+      hookValue = useWorkspaceTransferLauncher({
+        activeUrdfPath: "robot.urdf",
+        attachedIluSessionId: "",
+        buildCurrentWorldScenePackageManifest: vi.fn(async () => createWorldPackage()),
+        meshFiles: {},
+        originalUrdfContent: "<robot name=\"demo\"/>",
+        packageRoots: {},
+        vizUrdfContent: "<robot name=\"demo\"/>",
+        worldCameraCount: 0,
+        worldObjectCount: 0,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(hookValue?.workspaceTransfer.targets[0]?.canOpen).toBe(true);
+    expect(hookValue?.workspaceTransfer.targets[0]?.needsAttention).toBe(true);
+    expect(hookValue?.workspaceTransfer.targets[0]?.statusLabel).toBe(
+      "ready, display degraded: software OpenGL"
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("opens a simulator from the current workspace package without mutating the scene first", async () => {
     const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
     let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
@@ -373,6 +423,60 @@ describe("useWorkspaceTransferLauncher", () => {
 
     expect(toastWarningMock).toHaveBeenCalledWith(
       "2 meshes could not be resolved: meshes/missing-left.stl, meshes/missing-right.stl"
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("warns when the simulator reports launch diagnostics", async () => {
+    openWorkspaceTransferTargetMock.mockResolvedValueOnce({
+      targetId: "blender",
+      started: true,
+      pid: 1234,
+      command: ["python", "-m", "backend.scripts.blender_workspace_prepare"],
+      worldPackagePath: "/tmp/world-package.json",
+      robotUrdfPath: "/tmp/robot.urdf",
+      bundledMeshCount: 0,
+      unresolvedMeshRefs: [],
+      workspaceWarnings: ["PyBullet GUI is using software OpenGL."],
+      worldObjectCount: 1,
+      cameraCount: 0,
+    });
+    const buildCurrentWorldScenePackageManifest = vi.fn(async () => createWorldPackage());
+    let hookValue: ReturnType<typeof useWorkspaceTransferLauncher> | null = null;
+
+    const Harness = () => {
+      hookValue = useWorkspaceTransferLauncher({
+        activeUrdfPath: "robot.urdf",
+        attachedIluSessionId: "",
+        buildCurrentWorldScenePackageManifest,
+        meshFiles: {},
+        originalUrdfContent: "<robot name=\"demo\"/>",
+        packageRoots: {},
+        vizUrdfContent: "<robot name=\"demo\"/>",
+        worldCameraCount: 0,
+        worldObjectCount: 0,
+      });
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await (hookValue?.workspaceTransfer.targets[0]?.onAction() as unknown as Promise<void>);
+      await Promise.resolve();
+    });
+
+    expect(toastWarningMock).toHaveBeenCalledWith(
+      "PyBullet GUI is using software OpenGL."
     );
 
     await act(async () => {

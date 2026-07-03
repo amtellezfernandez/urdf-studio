@@ -1,13 +1,14 @@
 export type DemoMotionWorldPolicyInput = {
   hasLoadedFiles: boolean;
-  isLeKiwiDemoRobot: boolean;
+  preserveDemoWorldLayoutOnMotion: boolean;
 };
 
-export const shouldPrepareLeKiwiDemoScene = (
-  isLeKiwiDemoRobot: boolean
-): boolean => isLeKiwiDemoRobot;
+export const shouldPrepareDemoWorldLayoutOnMotion = (
+  prepareDemoWorldLayoutOnMotion: boolean
+): boolean => prepareDemoWorldLayoutOnMotion;
 
-export const shouldPreserveScenarioWorldLayoutOnDemoMotion = ({
+export const shouldPreserveDemoWorldLayoutOnMotion = ({
   hasLoadedFiles,
-  isLeKiwiDemoRobot,
-}: DemoMotionWorldPolicyInput): boolean => !hasLoadedFiles || isLeKiwiDemoRobot;
+  preserveDemoWorldLayoutOnMotion,
+}: DemoMotionWorldPolicyInput): boolean =>
+  !hasLoadedFiles || preserveDemoWorldLayoutOnMotion;

@@ -14,6 +14,7 @@ import {
   parseRepeatedInertiaSymmetryRobot,
   type RepeatedInertiaSymmetryLinkCentersLocal,
 } from "@/features/layout/page/repeatedInertiaSymmetryRobot";
+import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 
 export type RobotMirrorSelectionLink = {
   counterpartLinkName: string | null;
@@ -25,11 +26,6 @@ export type RobotMirrorSelectionLink = {
   preselected: boolean;
   status: "available" | "centered" | "paired" | "review";
 };
-
-const toSortedUniqueLinkNames = (linkNames: readonly string[]): string[] =>
-  Array.from(new Set(linkNames.map((linkName) => linkName.trim()).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right)
-  );
 
 const buildRadialSymmetryLinkNameSet = (
   repeatedInertiaSymmetryChains: readonly RepeatedInertiaSymmetryChain[]
@@ -195,5 +191,5 @@ export const collectRobotMirrorAffectedLinkNames = ({
     return [];
   }
 
-  return toSortedUniqueLinkNames(Array.from(actionableTargetLinkNames));
+  return toSortedUniqueRobotMirrorLinkNames(actionableTargetLinkNames);
 };

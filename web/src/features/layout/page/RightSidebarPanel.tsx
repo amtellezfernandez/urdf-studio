@@ -12,6 +12,10 @@ import { ChevronsLeft } from "lucide-react";
 import type { WorkspaceMode } from "@/features/workspace/types";
 import type { AssemblyInspectorData } from "@/features/assembly/inspector/buildAssemblyInspectorData";
 import { AssemblyRightRobotsPanel } from "@/features/assembly/workspace/AssemblyRightRobotsPanel";
+import type {
+  AssemblySubstitutionApplyHandler,
+  AssemblySubstitutionSession,
+} from "@/features/assembly/workspace/assemblyWorkspaceTypes";
 import { SidebarDock } from "@/features/layout/page/SidebarDock";
 import { getWorkspaceModeUiPolicy } from "@/features/layout/page/workspaceModeUi";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
@@ -20,15 +24,9 @@ type RightSidebarPanelProps = {
   workspaceMode: WorkspaceMode;
   assemblyInspector: AssemblyInspectorData | null;
   onDuplicateAssemblyRobot?: (instanceId: string) => void;
-  substitutionSession?: {
-    hostRobotId: string;
-    hostRobotName: string;
-    replacementRobotId: string;
-    replacementRobotName: string;
-  } | null;
-  onApplySubstitution?: (hostRootLink: string, replacementRootLink: string) => void;
+  substitutionSession?: AssemblySubstitutionSession | null;
+  onApplySubstitution?: AssemblySubstitutionApplyHandler;
   availableJoints: string[];
-  episodeJointNames: string[];
   availableLinks: string[];
   jointLimits: JointLimits;
   selectedJoint: string | null;
@@ -99,7 +97,6 @@ const RightSidebarPanelBase = ({
   substitutionSession,
   onApplySubstitution,
   availableJoints,
-  episodeJointNames,
   availableLinks,
   jointLimits,
   selectedJoint,
@@ -176,7 +173,6 @@ const RightSidebarPanelBase = ({
     >
     <JointListSidebar
       availableJoints={availableJoints}
-      episodeJointNames={episodeJointNames}
       availableLinks={availableLinks}
       jointLimits={jointLimits}
       selectedJoint={selectedJoint}

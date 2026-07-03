@@ -9,7 +9,7 @@ const BOOT_FALLBACK_HTML_TEST_FIXTURE = {
   fallbackTitle: "Loading URDF Studio",
   noScriptText: "JavaScript is required to run URDF Studio.",
   pageRetryParam: "urdfStudioBootRetry",
-  retryScriptMarker: "dataset.urdfStudioEntryRetry",
+  retryScriptMarker: "data-urdf-studio-entry-retry",
 };
 
 const readIndexHtml = () =>

@@ -21,7 +21,7 @@ This document describes what the code actually does today.
 - `web/src/studio_ui`
   - Owns mode bar, overlays, panel composition, viewer orchestration.
   - Current RosViz UI:
-    - `web/src/studio_ui/rosviz/RosVizV2Viewer.tsx`
+    - `web/src/studio_ui/rosviz/RosVizViewer.tsx`
     - `web/src/studio_ui/rosviz/components/*`
     - `web/src/studio_ui/panels/RuntimeHealthPanel.tsx`
 
@@ -36,7 +36,7 @@ RosViz runtime contracts live under `runtime_engine`; RosViz UI lives under `stu
 - UI host wiring is in:
   - `web/src/features/layout/page/ViewerHost.tsx`
 
-Runtime can fall back from RosViz v2 to Studio 3D when:
+Runtime can use Studio 3D instead of RosViz when:
 - thumbnail mode is active,
 - RosViz feature/gate is unavailable,
 - WebGPU is unavailable.
@@ -50,7 +50,7 @@ Runtime can fall back from RosViz v2 to Studio 3D when:
 - API surface:
   - `backend/api/ros_viz.py`
 
-Session state now includes explicit mode/time/transport/recording/capabilities:
+Session state now includes explicit mode/time/transport/capabilities:
 - `GET /ros-viz/sessions/{id}/state`
 - `POST /ros-viz/sessions/{id}/mode`
 - `GET/POST /ros-viz/sessions/{id}/clock`

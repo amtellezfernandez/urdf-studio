@@ -18,7 +18,7 @@ const RightSidebarPanel = lazy(() =>
   import("@/features/layout/page/RightSidebarPanel").then((module) => ({ default: module.RightSidebarPanel }))
 );
 
-type PageShellProps = {
+export type PageShellProps = {
   isLoading: boolean;
   topNavBarProps: ComponentProps<typeof import("@/features/layout/page/TopNavBar").TopNavBar>;
   leftSidebarProps: ComponentProps<typeof import("@/features/layout/page/LeftSidebarPanel").LeftSidebarPanel>;

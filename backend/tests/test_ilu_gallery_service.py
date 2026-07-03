@@ -356,7 +356,6 @@ def test_create_gallery_job_generates_preview_entries(
                 "authorGithub": REAL_GALLERY_OWNER,
                 "contact": "",
                 "extra": "",
-                "hfDatasets": [],
             },
             "catalogSnapshot": {
                 "repoEntries": [
@@ -2523,7 +2522,6 @@ def test_update_gallery_job_metadata_updates_titles_and_repo_metadata(
                 "authorGithub": REAL_GALLERY_OWNER,
                 "contact": "",
                 "extra": "",
-                "hfDatasets": [],
             },
             "items": [{"id": REAL_BARKOUR_PATH, "title": "Barkour V0"}],
         },
@@ -2556,7 +2554,6 @@ def test_merge_gallery_repo_metadata_prefers_gallery_values(
                         "authorGithub": "",
                         "contact": "",
                         "extra": "",
-                        "hfDatasets": [],
                         "stars": 5585,
                         "ownerLogin": "TheRobotStudio",
                         "ownerAvatar": "https://avatars.example/owner.png",
@@ -2584,7 +2581,6 @@ def test_merge_gallery_repo_metadata_prefers_gallery_values(
             "authorGithub": "TheRobotStudio",
             "contact": "hello@therobotstudio.com",
             "extra": "",
-            "hfDatasets": [],
         },
     )
 
@@ -2621,7 +2617,6 @@ def test_merge_gallery_repo_metadata_uses_inspection_defaults_for_new_repo(
             "authorGithub": REAL_GALLERY_OWNER,
             "contact": "",
             "extra": "",
-            "hfDatasets": [],
         },
     )
 

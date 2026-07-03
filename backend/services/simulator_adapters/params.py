@@ -94,8 +94,32 @@ class GenesisSceneParams:
 
 
 @dataclass(frozen=True)
+class MujocoViewerFitParams:
+    default_center_xyz: tuple[float, float, float]
+    default_radius_m: float
+    min_radius_m: float
+    distance_scale: float
+    min_distance_m: float
+    azimuth_deg: float
+    elevation_deg: float
+    visible_geom_groups: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class MujocoSceneParams:
     viewer_step_hz: float
+    viewer: MujocoViewerFitParams
+
+
+@dataclass(frozen=True)
+class PyBulletViewerFitParams:
+    default_center_xyz: tuple[float, float, float]
+    default_radius_m: float
+    min_radius_m: float
+    distance_scale: float
+    min_distance_m: float
+    yaw_deg: float
+    pitch_deg: float
 
 
 @dataclass(frozen=True)
@@ -113,6 +137,7 @@ class PyBulletSceneParams:
     robot_base_orientation_xyzw: tuple[float, float, float, float]
     camera_near_m: float
     camera_far_m: float
+    viewer: PyBulletViewerFitParams
 
 
 @dataclass(frozen=True)
@@ -205,6 +230,16 @@ GENESIS_SCENE_PARAMS = GenesisSceneParams(
 )
 MUJOCO_SCENE_PARAMS = MujocoSceneParams(
     viewer_step_hz=60.0,
+    viewer=MujocoViewerFitParams(
+        default_center_xyz=(0.0, 0.0, 0.35),
+        default_radius_m=0.75,
+        min_radius_m=0.35,
+        distance_scale=2.4,
+        min_distance_m=1.0,
+        azimuth_deg=135.0,
+        elevation_deg=-28.0,
+        visible_geom_groups=(0, 1, 2),
+    ),
 )
 MUJOCO_WORKSPACE_REPAIR_PARAMS = MujocoWorkspaceRepairParams(
     min_inertial_mass=1e-9,
@@ -218,6 +253,15 @@ PYBULLET_SCENE_PARAMS = PyBulletSceneParams(
     robot_base_orientation_xyzw=(0.0, 0.0, 0.0, 1.0),
     camera_near_m=0.01,
     camera_far_m=25.0,
+    viewer=PyBulletViewerFitParams(
+        default_center_xyz=(0.0, 0.0, 0.35),
+        default_radius_m=0.75,
+        min_radius_m=0.35,
+        distance_scale=2.6,
+        min_distance_m=1.0,
+        yaw_deg=135.0,
+        pitch_deg=-30.0,
+    ),
 )
 BLENDER_SCENE_PARAMS = BlenderSceneParams(
     workspace_mode="visual-layout-round-trip-v1",

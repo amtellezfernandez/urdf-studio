@@ -4,7 +4,6 @@ import {
   buildCollaborationShareUrl,
   buildCollaborationWebSocketProtocols,
   buildCollaborationWebSocketUrl,
-  collaborationAccessIncludesTeleop,
   createCollaborationClientId,
   describeCollaborationLinkAccess,
   getCollaborationBaseAccess,
@@ -58,37 +57,11 @@ describe("collaborationTransport", () => {
     ).toThrow("Only the room owner can create edit links.");
   });
 
-  it("builds teleop share URLs with a separate operator capability token", () => {
-    const url = buildCollaborationShareUrl(
-      {
-        sessionId: "collab-abc",
-        sessionToken: "viewer-token",
-        editorToken: "editor-token",
-        teleopCapabilityToken: "teleop-token",
-      },
-      "http://localhost:5173/?view=studio",
-      "viewer_teleop",
-    );
-
-    expect(url).toBe(
-      "http://localhost:5173/?view=studio#collab=collab-abc&collabToken=viewer-token&collabTeleop=teleop-token",
-    );
-    expect(readCollaborationShareSessionFromUrl(url)).toEqual({
-      sessionId: "collab-abc",
-      sessionToken: "viewer-token",
-      teleopCapabilityToken: "teleop-token",
-    });
-    expect(getCollaborationBaseAccess("editor_teleop")).toBe("editor");
-    expect(collaborationAccessIncludesTeleop("viewer_teleop")).toBe(true);
-    expect(describeCollaborationLinkAccess("editor_teleop")).toBe("Can edit + teleop");
-
-    expect(() =>
-      buildCollaborationShareUrl(
-        { sessionId: "collab-abc", sessionToken: "viewer-token" },
-        "http://localhost:5173/?view=studio",
-        "viewer_teleop",
-      ),
-    ).toThrow("Only the room owner can create teleop links.");
+  it("describes supported share-link access levels", () => {
+    expect(getCollaborationBaseAccess("viewer")).toBe("viewer");
+    expect(getCollaborationBaseAccess("editor")).toBe("editor");
+    expect(describeCollaborationLinkAccess("viewer")).toBe("Can view");
+    expect(describeCollaborationLinkAccess("editor")).toBe("Can edit");
   });
 
   it("scrubs old query-string share tokens from generated links", () => {

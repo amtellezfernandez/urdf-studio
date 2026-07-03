@@ -54,6 +54,7 @@ import type {
   RobotMirrorOutcome,
 } from "@/features/layout/page/robotMirrorSymmetryFix";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
+import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 import { resolveRobotMirrorSimulationPrepViewState } from "@/features/layout/page/robotMirrorSimulationPrepViewState";
 import {
   REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS,
@@ -1250,11 +1251,6 @@ const shouldIgnoreVisualizationCardClick = (target: EventTarget | null): boolean
   target instanceof Element &&
   Boolean(target.closest("button, input, label, a, textarea, select, [role='checkbox']"));
 
-const toSortedUniqueLinkNames = (linkNames: readonly string[]): string[] =>
-  Array.from(new Set(linkNames.map((linkName) => linkName.trim()).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right)
-  );
-
 const buildCompatibilityRobotMirrorSelectionState = ({
   robotMirrorSelectionGroups,
   selectedRobotMirrorGroupKeys,
@@ -1268,7 +1264,7 @@ const buildCompatibilityRobotMirrorSelectionState = ({
   const selectedGroupKeySet = new Set(selectedRobotMirrorGroupKeys);
   const selectedLinkNameSet = new Set<string>();
   const selectionLinks = robotMirrorSelectionGroups.flatMap((group) => {
-    const groupLinkNames = toSortedUniqueLinkNames(group.linkNames ?? []);
+    const groupLinkNames = toSortedUniqueRobotMirrorLinkNames(group.linkNames ?? []);
     const meshLabel = group.meshLabel?.trim() || group.groupKey;
     const isSelected = selectedGroupKeySet.has(group.groupKey);
     if (isSelected) {

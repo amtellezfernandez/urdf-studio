@@ -1272,11 +1272,10 @@ def test_start_blender_workspace_uses_auto_frame_map(monkeypatch, tmp_path: Path
         lambda request: prepared,
     )
     monkeypatch.setattr(
-        blender_adapter.subprocess,
-        "Popen",
-        lambda *args, **kwargs: _FakeProcess(),
+        blender_adapter,
+        "start_workspace_process_until_ready",
+        lambda **_kwargs: _FakeProcess(),
     )
-    monkeypatch.setattr(blender_adapter, "wait_for_workspace_readiness", lambda *args, **kwargs: None)
 
     response = blender_adapter.start_blender_workspace(
         SimulatorWorkspacePrepareRequest(

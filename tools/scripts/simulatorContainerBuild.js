@@ -1,26 +1,29 @@
 #!/usr/bin/env node
 
-import { resolve } from 'path';
-import { pathToFileURL } from 'url';
 import { spawnSync } from 'child_process';
 
 import {
-  DEPLOYMENT_MODES,
   buildDockerBuildPlan,
   formatDockerRunCommand,
 } from './simulatorDeployment.js';
 import {
+  compatibleContainerTargets,
+  containerImage,
+  parseContainerCliArgs,
+  printContainerTargetList,
+  readOptionValue,
+  resolveContainerTarget,
+  resolveContainerTargets,
+  runCliMain,
+  validateContainerTargetSelection,
+} from './simulatorContainerCliHelpers.js';
+import {
   getSimulatorCompatibilityReport,
-  getSimulatorCompatibilityTarget,
 } from './simulatorCompatibility.js';
 
-function readOptionValue(args, index, flag) {
-  const value = args[index + 1];
-  if (!value || value.startsWith('--')) {
-    throw new Error(`${flag} requires a value.`);
-  }
-  return value;
-}
+const MANAGED_BUILD_MESSAGES = {
+  empty: 'No compatible managed simulator container builds are available on this machine.',
+};
 
 export function parseArgs(args) {
   const options = {
@@ -33,37 +36,26 @@ export function parseArgs(args) {
     progress: null,
     help: false,
   };
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--help' || arg === '-h') {
-      options.help = true;
-    } else if (arg === '--all') {
-      options.all = true;
-    } else if (arg === '--print') {
+  parseContainerCliArgs(args, options, {
+    '--print': () => {
       options.printOnly = true;
-    } else if (arg === '--no-pull') {
+    },
+    '--no-pull': () => {
       options.pull = false;
-    } else if (arg === '--no-cache') {
+    },
+    '--no-cache': () => {
       options.noCache = true;
-    } else if (arg === '--platform') {
-      options.platform = readOptionValue(args, index, arg);
-      index += 1;
-    } else if (arg === '--progress') {
-      options.progress = readOptionValue(args, index, arg);
-      index += 1;
-    } else if (arg.startsWith('--')) {
-      throw new Error(`Unknown option: ${arg}`);
-    } else if (arg === 'all' && !options.simulatorId) {
-      options.all = true;
-    } else if (!options.simulatorId) {
-      options.simulatorId = arg;
-    } else {
-      throw new Error(`Unexpected argument: ${arg}`);
-    }
-  }
-  if (options.all && options.simulatorId) {
-    throw new Error('Use either --all or one simulator id, not both.');
-  }
+    },
+    '--platform': (_options, parsedArgs, index, arg) => {
+      options.platform = readOptionValue(parsedArgs, index, arg);
+      return 1;
+    },
+    '--progress': (_options, parsedArgs, index, arg) => {
+      options.progress = readOptionValue(parsedArgs, index, arg);
+      return 1;
+    },
+  });
+  validateContainerTargetSelection(options);
   return options;
 }
 
@@ -80,55 +72,23 @@ function printUsage() {
 }
 
 export function managedBuildTargets(report) {
-  return Object.values(report.targets)
-    .filter(
-      (target) =>
-        target.compatible &&
-        target.deployment?.mode === DEPLOYMENT_MODES.container &&
-        target.deployment.container?.build
-    );
+  return compatibleContainerTargets(report, { requireManagedBuild: true });
 }
 
 function printManagedBuildTargets(report) {
-  const targets = managedBuildTargets(report);
-  if (targets.length === 0) {
-    console.log('No compatible managed simulator container builds are available on this machine.');
-    return;
-  }
-  console.log('Managed simulator container builds:');
-  for (const target of targets) {
-    const image = target.deployment.container?.image || target.deployment.image;
-    console.log(`  ${target.id}: ${target.label} ${target.deployment.accelerator} ${image}`);
-  }
+  printContainerTargetList(report, {
+    title: 'Managed simulator container builds:',
+    emptyMessage: MANAGED_BUILD_MESSAGES.empty,
+    requireManagedBuild: true,
+  });
 }
 
 export function resolveTarget(report, simulatorId) {
-  const target = getSimulatorCompatibilityTarget(report, simulatorId);
-  if (!target) {
-    throw new Error(`Unknown simulator target: ${simulatorId}`);
-  }
-  if (!target.compatible) {
-    throw new Error(`${target.label} is not compatible on this machine: ${target.reasons.join(' ')}`);
-  }
-  if (target.deployment?.mode !== DEPLOYMENT_MODES.container) {
-    throw new Error(
-      `${target.label} uses ${target.deployment?.mode}/${target.deployment?.accelerator} on this machine, not Docker.`
-    );
-  }
-  if (!target.deployment.container?.build) {
-    throw new Error(`${target.label} uses an external container image and has no managed build recipe.`);
-  }
-  return target;
+  return resolveContainerTarget(report, simulatorId, { requireManagedBuild: true });
 }
 
 export function resolveBuildTargets(report, { all = false, simulatorId = null } = {}) {
-  if (all) {
-    return managedBuildTargets(report);
-  }
-  if (simulatorId) {
-    return [resolveTarget(report, simulatorId)];
-  }
-  return [];
+  return resolveContainerTargets(report, { all, simulatorId }, { requireManagedBuild: true });
 }
 
 function buildPlan(target, options) {
@@ -168,7 +128,7 @@ function main() {
 
   const targets = resolveBuildTargets(report, options);
   if (targets.length === 0) {
-    console.log('No compatible managed simulator container builds are available on this machine.');
+    console.log(MANAGED_BUILD_MESSAGES.empty);
     return;
   }
   const plans = targets.map((target) => [target, buildPlan(target, options)]);
@@ -179,8 +139,7 @@ function main() {
 
   let exitCode = 0;
   for (const [target, plan] of plans) {
-    const image = target.deployment.container?.image || target.deployment.image;
-    console.log(`Building ${target.label}: ${image}`);
+    console.log(`Building ${target.label}: ${containerImage(target)}`);
     const status = runBuildPlan(plan);
     if (status !== 0) {
       exitCode = status;
@@ -190,15 +149,4 @@ function main() {
   process.exitCode = exitCode;
 }
 
-function isMainModule() {
-  return Boolean(process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href);
-}
-
-if (isMainModule()) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  }
-}
+runCliMain(import.meta.url, main);

@@ -47,8 +47,8 @@ function findUv() {
 }
 
 function getConfiguredPythonForUnifiedEnv() {
-  return typeof process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON === 'string'
-    ? process.env.URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON.trim()
+  return typeof process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON === 'string'
+    ? process.env.URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON.trim()
     : '';
 }
 
@@ -85,7 +85,7 @@ function ensureVenv() {
   const configuredPython = getConfiguredPythonForUnifiedEnv();
   const pythonPath = findPythonForUnifiedEnv();
   if (configuredPython && !pythonPath) {
-    throw new Error('URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON must point to Python 3.12+.');
+    throw new Error('URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON must point to Python 3.12+.');
   }
 
   const bootstrapPython = pythonPath || '3.12';

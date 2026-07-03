@@ -18,6 +18,10 @@ from backend.services.simulator_adapters.mujoco import apply_mjcf_workspace_repa
 from backend.services.simulator_adapters.mujoco_camera import (
     write_mujoco_camera_screenshots,
 )
+from backend.services.simulator_adapters.mujoco_scene import (
+    configure_mujoco_passive_viewer,
+    mujoco_scene_bounds,
+)
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.params import (
     MJLAB_WORKSPACE_PROCESS_PARAMS,
@@ -161,6 +165,7 @@ def prepare_mujoco_workspace_scene(
         simulator_scene.robot.joint_positions,
     )
     mujoco.mj_forward(model, data)
+    scene_bounds = mujoco_scene_bounds(mujoco, model, data)
     camera_screenshot_count = 0
     if camera_screenshot_dir is not None:
         camera_screenshot_count = write_mujoco_camera_screenshots(
@@ -195,6 +200,13 @@ def prepare_mujoco_workspace_scene(
                 "camera_screenshots": camera_screenshot_count,
                 "applied_initial_joints": applied_joints,
                 "mjcf_repair_warnings": mjcf_repair_warnings,
+                "scene_bounds": {
+                    "center_xyz": scene_bounds.center_xyz,
+                    "radius_m": scene_bounds.radius_m,
+                    "min_xyz": scene_bounds.min_xyz,
+                    "max_xyz": scene_bounds.max_xyz,
+                    "geom_count": scene_bounds.geom_count,
+                },
                 "viewer_step_hz": MUJOCO_SCENE_PARAMS.viewer_step_hz,
             },
             artifacts={
@@ -211,6 +223,7 @@ def prepare_mujoco_workspace_scene(
     import mujoco.viewer
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
+        configure_mujoco_passive_viewer(mujoco, model, data, viewer)
         deadline = time.monotonic() + duration_sec if duration_sec > 0 else None
         while viewer.is_running():
             viewer.sync()

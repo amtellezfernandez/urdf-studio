@@ -1,44 +1,44 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  shouldPrepareLeKiwiDemoScene,
-  shouldPreserveScenarioWorldLayoutOnDemoMotion,
+  shouldPrepareDemoWorldLayoutOnMotion,
+  shouldPreserveDemoWorldLayoutOnMotion,
 } from "@/app/pages/index/demoMotionPolicy";
 
-describe("shouldPrepareLeKiwiDemoScene", () => {
-  it("prepares the scene when the loaded robot is LeKiwi", () => {
-    expect(shouldPrepareLeKiwiDemoScene(true)).toBe(true);
+describe("shouldPrepareDemoWorldLayoutOnMotion", () => {
+  it("prepares the scene when the manifest requests demo world layout", () => {
+    expect(shouldPrepareDemoWorldLayoutOnMotion(true)).toBe(true);
   });
 
-  it("skips scene preparation for non-LeKiwi robots", () => {
-    expect(shouldPrepareLeKiwiDemoScene(false)).toBe(false);
+  it("skips scene preparation by default", () => {
+    expect(shouldPrepareDemoWorldLayoutOnMotion(false)).toBe(false);
   });
 });
 
-describe("shouldPreserveScenarioWorldLayoutOnDemoMotion", () => {
+describe("shouldPreserveDemoWorldLayoutOnMotion", () => {
   it("preserves scenario ownership while loading bundled demo assets", () => {
     expect(
-      shouldPreserveScenarioWorldLayoutOnDemoMotion({
+      shouldPreserveDemoWorldLayoutOnMotion({
         hasLoadedFiles: false,
-        isLeKiwiDemoRobot: false,
+        preserveDemoWorldLayoutOnMotion: false,
       })
     ).toBe(true);
   });
 
-  it("preserves scenario ownership for loaded LeKiwi demo robot", () => {
+  it("preserves scenario ownership when the manifest requests it", () => {
     expect(
-      shouldPreserveScenarioWorldLayoutOnDemoMotion({
+      shouldPreserveDemoWorldLayoutOnMotion({
         hasLoadedFiles: true,
-        isLeKiwiDemoRobot: true,
+        preserveDemoWorldLayoutOnMotion: true,
       })
     ).toBe(true);
   });
 
-  it("does not suppress default world layout for non-LeKiwi loaded robots", () => {
+  it("does not suppress default world layout for ordinary loaded robots", () => {
     expect(
-      shouldPreserveScenarioWorldLayoutOnDemoMotion({
+      shouldPreserveDemoWorldLayoutOnMotion({
         hasLoadedFiles: true,
-        isLeKiwiDemoRobot: false,
+        preserveDemoWorldLayoutOnMotion: false,
       })
     ).toBe(false);
   });

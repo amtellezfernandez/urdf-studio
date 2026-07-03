@@ -1,6 +1,4 @@
-import { isFeatureFlagEnabled } from "@/shared/config/featureFlags";
-
-export type ViewerRuntime = "studio3D" | "rosVizV2";
+export type ViewerRuntime = "studio3D" | "rosViz";
 export type RosVizRuntimeDecisionReason =
   | "enabled"
   | "prefer_studio_runtime"
@@ -41,14 +39,14 @@ export const getRosVizRuntimeDecision = (
     return {
       runtime: "studio3D",
       reason: "thumbnail_mode",
-      message: "ROS viz v2 is disabled in thumbnail mode. Studio 3D renderer is active.",
+      message: "ROS Viz is disabled in thumbnail mode. Studio 3D renderer is active.",
     };
   }
   if (!input.rosVizGateEnabled) {
     return {
       runtime: "studio3D",
       reason: "backend_unavailable",
-      message: input.rosVizGateReason || "ROS viz backend is unavailable.",
+      message: input.rosVizGateReason || "ROS Viz backend is unavailable.",
     };
   }
   if (input.webGpuSupported === false) {
@@ -62,19 +60,12 @@ export const getRosVizRuntimeDecision = (
     return {
       runtime: "studio3D",
       reason: "flag_disabled",
-      message: "ROS viz v2 is disabled. Studio 3D renderer is active.",
+      message: "ROS Viz is disabled. Studio 3D renderer is active.",
     };
   }
   return {
-    runtime: "rosVizV2",
+    runtime: "rosViz",
     reason: "enabled",
-    message: "ROS viz v2 renderer is enabled.",
+    message: "ROS Viz renderer is enabled.",
   };
 };
-
-export const shouldUseRosVizV2Runtime = (): boolean =>
-  getRosVizRuntimeDecision({
-    rosVizFlagEnabled: isFeatureFlagEnabled("rosVizV2"),
-    rosVizGateEnabled: true,
-    webGpuSupported: canUseWebGpu(),
-  }).runtime === "rosVizV2";

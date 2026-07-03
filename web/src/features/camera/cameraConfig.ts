@@ -13,6 +13,22 @@ const toSerializableIntrinsics = (intrinsics: Camera["intrinsics"]) => ({
   ...(intrinsics.distortion ? { distortion: intrinsics.distortion } : {}),
 });
 
+const toCameraConfigFile = (cameras: Camera[]): CameraConfigFile => ({
+  cameras: cameras.map((cam) => ({
+    name: cam.name,
+    parent_joint: cam.parent_joint,
+    pose: [
+      cam.pose.xyz[0],
+      cam.pose.xyz[1],
+      cam.pose.xyz[2],
+      cam.pose.rpy[0],
+      cam.pose.rpy[1],
+      cam.pose.rpy[2],
+    ],
+    intrinsics: toSerializableIntrinsics(cam.intrinsics),
+  })),
+});
+
 /**
  * Parse a camera configuration file (JSON or YAML)
  */
@@ -82,46 +98,14 @@ export function parseCameraConfig(content: string, filename: string): CameraConf
  * Export cameras to JSON format
  */
 export function exportCamerasToJSON(cameras: Camera[]): string {
-  const configFile: CameraConfigFile = {
-    cameras: cameras.map((cam) => ({
-      name: cam.name,
-      parent_joint: cam.parent_joint,
-      pose: [
-        cam.pose.xyz[0],
-        cam.pose.xyz[1],
-        cam.pose.xyz[2],
-        cam.pose.rpy[0],
-        cam.pose.rpy[1],
-        cam.pose.rpy[2],
-      ],
-      intrinsics: toSerializableIntrinsics(cam.intrinsics),
-    })),
-  };
-
-  return JSON.stringify(configFile, null, 2);
+  return JSON.stringify(toCameraConfigFile(cameras), null, 2);
 }
 
 /**
  * Export cameras to YAML format
  */
 export function exportCamerasToYAML(cameras: Camera[]): string {
-  const configFile: CameraConfigFile = {
-    cameras: cameras.map((cam) => ({
-      name: cam.name,
-      parent_joint: cam.parent_joint,
-      pose: [
-        cam.pose.xyz[0],
-        cam.pose.xyz[1],
-        cam.pose.xyz[2],
-        cam.pose.rpy[0],
-        cam.pose.rpy[1],
-        cam.pose.rpy[2],
-      ],
-      intrinsics: toSerializableIntrinsics(cam.intrinsics),
-    })),
-  };
-
-  return jsyaml.dump(configFile, {
+  return jsyaml.dump(toCameraConfigFile(cameras), {
     indent: 2,
     lineWidth: -1,
     noRefs: true,

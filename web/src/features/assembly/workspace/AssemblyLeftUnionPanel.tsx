@@ -2,10 +2,13 @@ import { ChevronsRight } from "lucide-react";
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 import type { AssemblyInspectorData } from "@/features/assembly/inspector/buildAssemblyInspectorData";
-import { SidebarResizeHandle } from "@/features/layout/page/SidebarResizeHandle";
+import { SidebarDock } from "@/features/layout/page/SidebarDock";
 import { TOP_NAV_HEIGHT, VIEWPORT_HEIGHT_WITH_TOP_NAV } from "@/features/layout/page/constants";
 import { applySubstitutionSubtree } from "@/features/assembly/substitution/substitutionSubtree";
-import type { PackageRootMap } from "@/shared/lib/urdfBrowser";
+import type {
+  AssemblySubstitutionApplyHandler,
+  AssemblySubstitutionSession,
+} from "@/features/assembly/workspace/assemblyWorkspaceTypes";
 
 type AssemblyLeftUnionPanelProps = {
   assemblyInspector: AssemblyInspectorData | null;
@@ -13,18 +16,8 @@ type AssemblyLeftUnionPanelProps = {
   contactPairCount: number;
   proposalRequested: boolean;
   onRequestProposal: () => void;
-  substitutionSession?: {
-    hostRobotName: string;
-    hostUrdfContent: string;
-    hostLinkOptions: string[];
-    replacementRobotName: string;
-    replacementUrdfContent: string;
-    replacementUrdfPath: string;
-    replacementLinkOptions: string[];
-    replacementRootLinkOptions: string[];
-    packageRoots?: PackageRootMap;
-  } | null;
-  onApplySubstitution?: (hostRootLink: string, replacementRootLink: string) => void;
+  substitutionSession?: AssemblySubstitutionSession | null;
+  onApplySubstitution?: AssemblySubstitutionApplyHandler;
   sidebarWidth: number;
   isSidebarCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -154,7 +147,16 @@ export const AssemblyLeftUnionPanel = ({
   }, [selectedHostRootLink, selectedReplacementRootLink, substitutionSession]);
 
   return (
-    <>
+    <SidebarDock
+      side="left"
+      sidebarWidth={sidebarWidth}
+      isCollapsed={isSidebarCollapsed}
+      onToggleCollapse={onToggleCollapse}
+      onResizeStart={onSidebarResizeStart}
+      collapseButtonLabel="Union"
+      resizeAriaLabel="Resize assembly union panel"
+      CollapseIcon={ChevronsRight}
+    >
       <div
         className="fixed left-0 z-30 flex flex-col border-r border-border/35 bg-background/95 shadow-xl backdrop-blur-sm transition-transform duration-200 ease-out"
         style={{
@@ -425,26 +427,6 @@ export const AssemblyLeftUnionPanel = ({
           </div>
         )}
       </div>
-
-      {!isSidebarCollapsed && (
-        <SidebarResizeHandle
-          side="left"
-          sidebarWidth={sidebarWidth}
-          ariaLabel="Resize assembly union panel"
-          onPointerDown={onSidebarResizeStart}
-        />
-      )}
-
-      {isSidebarCollapsed && (
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="fixed bottom-6 left-4 z-40 flex items-center gap-1 rounded-full border border-border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm shadow-sm transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <ChevronsRight className="h-3 w-3" />
-          Union
-        </button>
-      )}
-    </>
+    </SidebarDock>
   );
 };

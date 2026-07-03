@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useDeferredUrdfUpdate } from "@/features/urdf/editor/link-editor/useDeferredUrdfUpdate";
 import { formatVector3, parseVector3, updateVector3Value } from "@/features/urdf/editor/link-editor/sizeUtils";
 import { Vector3Inputs } from "@/features/urdf/editor/link-editor/Vector3Inputs";
-import { MeshGeometryFields } from "@/features/urdf/editor/link-editor/MeshGeometryFields";
+import { GeometryParamsMeshFields } from "@/features/urdf/editor/link-editor/MeshGeometryFields";
 import {
   createGeometryParamChangeHandler,
   createOriginChangeHandler,
@@ -434,11 +434,9 @@ export const CollisionControl = ({
                 </Select>
               </BlenderPropertyRow>
             )}
-            <MeshGeometryFields
-              filename={geometryParams.filename || ""}
-              scale={geometryParams.scale || "1 1 1"}
-              onFilenameChange={(value) => handleParamChange("filename", value)}
-              onScaleChange={(value) => handleParamChange("scale", value)}
+            <GeometryParamsMeshFields
+              geometryParams={geometryParams}
+              onParamChange={handleParamChange}
               origin={origin}
               onOriginChange={handleOriginChange}
               filenamePlaceholder="model.stl (or .glb/.gltf)"

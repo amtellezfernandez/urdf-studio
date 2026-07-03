@@ -1,5 +1,8 @@
 {
   "label": "OpenArm Bimanual",
+  "preferences": {
+    "suppressDefaultWorldLayoutAutoImport": true
+  },
   "files": [
     {
       "path": "openarm_description/openarm.urdf",

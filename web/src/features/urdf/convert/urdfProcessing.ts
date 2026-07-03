@@ -2,7 +2,7 @@ import { createWorkerTaskBroker } from "@/shared/lib/workerTaskRunner";
 import { createLruCache, hashString } from "@/shared/lib/cache";
 import { escapeHtml, highlightUrdfToHtml } from "../parsing/urdfHighlight";
 import { parseUrdfStats, type UrdfParseStats } from "@/shared/lib/urdfBrowser";
-import { convertURDFToMJCF, convertURDFToUSD, convertURDFToXacro } from "@/shared/lib/urdfCore";
+import { convertURDFToMJCF, convertURDFToXacro } from "@/shared/lib/urdfCore";
 
 type UrdfWorkerResponse =
   | { id: number; type: "stats"; result: UrdfParseStats }
@@ -11,13 +11,10 @@ type UrdfWorkerResponse =
 
 type XacroConversionResult = ReturnType<typeof convertURDFToXacro>;
 type MjcfConversionResult = ReturnType<typeof convertURDFToMJCF>;
-type UsdConversionResult = ReturnType<typeof convertURDFToUSD>;
 
 const statsCache = createLruCache<UrdfParseStats>(48);
 const highlightCache = createLruCache<string>(24);
-const conversionCache = createLruCache<
-  XacroConversionResult | MjcfConversionResult | UsdConversionResult
->(16);
+const conversionCache = createLruCache<XacroConversionResult | MjcfConversionResult>(16);
 
 const highlightFallbackMax = 20000;
 const highlightWorkerMin = 2500;
@@ -120,15 +117,6 @@ export const convertUrdfToMjcfCached = (xml: string): MjcfConversionResult => {
   const cached = conversionCache.get(key);
   if (cached) return cached as MjcfConversionResult;
   const result = convertURDFToMJCF(xml);
-  conversionCache.set(key, result);
-  return result;
-};
-
-export const convertUrdfToUsdCached = (xml: string): UsdConversionResult => {
-  const key = cacheKey("usd", xml);
-  const cached = conversionCache.get(key);
-  if (cached) return cached as UsdConversionResult;
-  const result = convertURDFToUSD(xml);
   conversionCache.set(key, result);
   return result;
 };

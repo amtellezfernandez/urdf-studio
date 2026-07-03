@@ -37,73 +37,16 @@ const ALLOWED_UNUSED_FILE_PREFIXES = [];
 const ALLOWED_UNUSED_FILE_PATHS = new Set([
   "web/src/features/urdf/inertia/robotMasteringBackend.ts",
   "web/src/features/urdf/synthesis/canonicalSynthesisDraft.ts",
-  "web/src/features/training/PolicyEvaluator.tsx",
-  "web/src/runtime_engine/index.ts",
-  "web/src/studio_core/index.ts",
-  "web/src/studio_core/editing/index.ts",
-  "web/src/studio_core/ik/index.ts",
-  "web/src/studio_core/scene/index.ts",
-  "web/src/studio_ui/index.ts",
 ]);
 
 const ALLOWED_UNUSED_EXPORT_FILE_SUFFIXES = ["/types.ts"];
 
-const ALLOWED_UNUSED_EXPORT_FILE_PATHS = new Set([
-  "web/src/features/training/PolicyEvaluator.tsx",
-]);
+const ALLOWED_UNUSED_EXPORT_FILE_PATHS = new Set([]);
 
 const ALLOWED_UNUSED_EXPORTS_BY_FILE = new Map([
   [
-    "web/src/features/layout/page/constants.ts",
-    new Set([
-      "MIN_HEADER_HEIGHT",
-      "SIDEBAR_RESIZER_TOP_OFFSET_PX",
-      "TOP_NAV_HEIGHT_PX",
-    ]),
-  ],
-  [
-    "web/src/features/layout/sidebarSelectors.ts",
-    new Set(["buildJointTypeCounts"]),
-  ],
-  [
     "web/src/features/urdf/mesh/fixMissingMeshReferences.ts",
     new Set(["fixMissingMeshReferences"]),
-  ],
-  [
-    "web/src/features/urdf/runtime/materialApply.ts",
-    new Set(["applyMaterialRecursively"]),
-  ],
-  [
-    "web/src/features/urdf/runtime/transformContract.ts",
-    new Set(["DEFAULT_TRANSFORM_CONTRACT"]),
-  ],
-  [
-    "web/src/features/viewer/computeCenterOfMass.ts",
-    new Set(["InertialEntry", "parseInertialEntries"]),
-  ],
-  [
-    "web/src/features/viewer/inertialMath.ts",
-    new Set(["computeEigenDecompositionSymmetric3x3"]),
-  ],
-  [
-    "web/src/features/viewer/playback/episodeCoordinator.ts",
-    new Set(["findNextPlayableEpisodeIndex", "getPlaybackEndAction"]),
-  ],
-  [
-    "web/src/features/viewer/drag-runtime/index.ts",
-    new Set([
-      "DragRuntimeCache",
-      "DragRuntimeConfig",
-      "DragSolveTicket",
-      "DragTargetLocal",
-      "FastSafetyResult",
-      "buildAdjacentLinkPairsFromAnalysis",
-      "buildCollisionProxiesFromRobot",
-      "captureRobotJointState",
-      "evaluateFastSafety",
-      "selectBestFastCandidate",
-      "validateReleasePose",
-    ]),
   ],
   [
     "web/src/features/world-share/worldHubApi.ts",
@@ -125,110 +68,6 @@ const ALLOWED_UNUSED_EXPORTS_BY_FILE = new Map([
   [
     "web/src/features/world-share/worldScenePackageBuilder.ts",
     new Set(["toSerializableWorldObject"]),
-  ],
-  [
-    "web/src/features/world-share/worldScenePackageParams.ts",
-    new Set(["WORLD_SCENE_PACKAGE_DEFAULT_SCENARIO_DURATION_MS"]),
-  ],
-  [
-    "web/src/runtime_engine/rosviz/protocol/rosVizProtocol.ts",
-    new Set([
-      "ROSVIZ_STREAM_FLAG_PAYLOAD_FLATBUFFER",
-      "ROSVIZ_STREAM_HEADER_BYTES",
-    ]),
-  ],
-  [
-    "web/src/runtime_engine/rosviz/session/modeSpecs.ts",
-    new Set(["canChangePlaybackState"]),
-  ],
-  [
-    "web/src/runtime_engine/rosviz/session/runtimeSelector.ts",
-    new Set(["shouldUseRosVizV2Runtime"]),
-  ],
-  [
-    "web/src/shared/config/backends.ts",
-    new Set([
-      "createBackendUnavailableError",
-      "formatBackendNames",
-      "getBackendById",
-    ]),
-  ],
-  [
-    "web/src/shared/config/credentials.ts",
-    new Set(["HF_TOKEN_STORAGE_KEY", "getHfTokenFromStorage"]),
-  ],
-  ["web/src/shared/config/featureFlags.ts", new Set(["getFeatureFlags"])],
-  [
-    "web/src/shared/contracts/previewBridge.ts",
-    new Set(["isApplyWorldLayoutResultMessage"]),
-  ],
-  [
-    "web/src/shared/hooks/use-recent-links.tsx",
-    new Set(["RecentLinkEntry"]),
-  ],
-  ["web/src/shared/lib/backendGuard.ts", new Set(["requireBackends"])],
-  ["web/src/shared/lib/featureGateUi.ts", new Set(["whenFeatureEnabled"])],
-  [
-    "web/src/shared/lib/meshFormats.ts",
-    new Set(["extractExtensionWithoutDot"]),
-  ],
-  [
-    "web/src/studio_core/editing/index.ts",
-    new Set([
-      "addCollisionToLink",
-      "addInertialToLink",
-      "getUrdfElementByName",
-      "parseUrdfDocument",
-      "removeCollisionFromLink",
-      "removeInertialFromLink",
-      "removeVisualFromLink",
-      "serializeUrdfDocument",
-      "updateCollisionInLink",
-      "updateInertialInLink",
-      "updateJointAxisInURDF",
-      "updateJointLimitsInURDF",
-      "updateJointNameInURDF",
-      "updateJointTypeInURDF",
-      "updateJointVelocityInURDF",
-      "updateLinkNameInURDF",
-      "updateVisualInLink",
-    ]),
-  ],
-  [
-    "web/src/studio_core/ik/index.ts",
-    new Set([
-      "DEFAULT_IK_SOLVER_CHAIN",
-      "IkConfigResponse",
-      "IkOrientationPayload",
-      "IkSolvePayload",
-      "IkSolveRequest",
-      "IkSolveResponse",
-      "IkSolveStrategy",
-      "IkSolverId",
-      "IkSolverMeta",
-      "LOCAL_SOLVER_DEFS",
-      "buildIkStrategies",
-      "getSolverChain",
-    ]),
-  ],
-  [
-    "web/src/studio_core/scene/rosViz2dSceneParams.ts",
-    new Set([
-      "ROSVIZ_CANVAS_MAX_PIXELS_PER_METER",
-      "ROSVIZ_CANVAS_MIN_PIXELS_PER_METER",
-    ]),
-  ],
-  [
-    "web/src/studio_ui/index.ts",
-    new Set(["RosVizV2Viewer", "RuntimeHealthPanel"]),
-  ],
-  [
-    "web/src/runtime_engine/index.ts",
-    new Set([
-      "RuntimeConnectionStatus",
-      "RuntimeHealthSnapshot",
-      "useRuntimeHealthStore",
-    ]),
   ],
   [
     "web/src/features/urdf/inertia/robotMasteringBackend.ts",

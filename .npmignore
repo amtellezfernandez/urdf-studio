@@ -2,9 +2,13 @@
 node_modules/
 web/node_modules/
 .cache/
+.claude/
+.codex/
+.pytest_cache/
+.ruff_cache/
 .uv-cache/
 .venv/
-.venv-lerobot/
+.venv-*/
 dist/
 **/dist/
 reports/
@@ -21,6 +25,7 @@ reports/
 .npmrc
 .urdf-studio-config.json
 .urdf-studio-version-check.json
+.urdf-studio-embodiment-registry.json
 .i-love-urdf/
 
 # Repository and release-process metadata
@@ -33,7 +38,7 @@ third_party/
 amd-hackathon/
 pyroki/
 vggt/
-cam-to-sim/runtime_sessions/
+cam-to-sim/
 
 # Tests are kept in git but not shipped in the npm artifact
 backend/tests/

@@ -1,17 +1,15 @@
 import { create } from "zustand";
 import type { AnimationFrame } from "@/features/viewer/viewer-types";
-import type { ViewerEpisode } from "@/shared/types/feature";
 
-export type EpisodePlaybackOptions = {
+export type FramePlaybackOptions = {
   autoplay?: boolean;
   applyInitialFrame?: boolean;
   startFrame?: number;
-  playbackEpisode?: ViewerEpisode | null;
 };
 
 type ViewerPlaybackHandlers = {
   playAnimation?: (forceState?: boolean) => void;
-  playEpisode?: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
+  playFrames?: (frames: AnimationFrame[], options?: FramePlaybackOptions) => void;
   stopAnimation?: () => void;
   clearAnimation?: () => void;
   setFrame?: (frameIndex: number) => void;
@@ -20,29 +18,28 @@ type ViewerPlaybackHandlers = {
 type PendingViewerPlaybackCommand =
   | { type: "playAnimation"; forceState?: boolean }
   | {
-      type: "playEpisode";
+      type: "playFrames";
       frames: AnimationFrame[];
-      options?: EpisodePlaybackOptions;
+      options?: FramePlaybackOptions;
     }
   | { type: "stopAnimation" }
   | { type: "clearAnimation" }
   | { type: "setFrame"; frameIndex: number };
 
-type ActiveEpisodePlayback = {
+type ActiveFramePlayback = {
   frames: AnimationFrame[];
-  options?: EpisodePlaybackOptions;
+  options?: FramePlaybackOptions;
 };
 
 type ViewerPlaybackStore = {
   handlers: ViewerPlaybackHandlers;
   pendingCommands: PendingViewerPlaybackCommand[];
-  activeEpisodePlayback: ActiveEpisodePlayback | null;
+  activeFramePlayback: ActiveFramePlayback | null;
   playbackSpeed: number;
   isPlaying: boolean;
   currentFrame: number;
   totalFrames: number;
   hasFrames: boolean;
-  playbackEpisode: ViewerEpisode | null;
   registerHandlers: (handlers: ViewerPlaybackHandlers) => void;
   clearHandlers: () => void;
   setPlaybackSpeed: (speed: number) => void;
@@ -50,7 +47,7 @@ type ViewerPlaybackStore = {
   setFrameInfo: (currentFrame: number, totalFrames?: number) => void;
   setHasFrames: (hasFrames: boolean) => void;
   playAnimation: (forceState?: boolean) => void;
-  playEpisode: (frames: AnimationFrame[], options?: EpisodePlaybackOptions) => void;
+  playFrames: (frames: AnimationFrame[], options?: FramePlaybackOptions) => void;
   stopAnimation: () => void;
   clearAnimation: () => void;
   setFrame: (frameIndex: number) => void;
@@ -64,8 +61,8 @@ const executePendingViewerPlaybackCommand = (
     case "playAnimation":
       handlers.playAnimation?.(command.forceState);
       return;
-    case "playEpisode":
-      handlers.playEpisode?.(command.frames, command.options);
+    case "playFrames":
+      handlers.playFrames?.(command.frames, command.options);
       return;
     case "stopAnimation":
       handlers.stopAnimation?.();
@@ -82,13 +79,12 @@ const executePendingViewerPlaybackCommand = (
 export const useViewerPlaybackStore = create<ViewerPlaybackStore>((set, get) => ({
   handlers: {},
   pendingCommands: [],
-  activeEpisodePlayback: null,
+  activeFramePlayback: null,
   playbackSpeed: 1.0,
   isPlaying: false,
   currentFrame: 0,
   totalFrames: 0,
   hasFrames: false,
-  playbackEpisode: null,
   registerHandlers: (handlers) =>
     set((state) => {
       const pendingCommands = state.pendingCommands;
@@ -119,20 +115,19 @@ export const useViewerPlaybackStore = create<ViewerPlaybackStore>((set, get) => 
       pendingCommands: [...state.pendingCommands, { type: "playAnimation", forceState }],
     }));
   },
-  playEpisode: (frames, options) => {
+  playFrames: (frames, options) => {
     set({
-      activeEpisodePlayback: { frames, options },
-      playbackEpisode: options?.playbackEpisode ?? null,
+      activeFramePlayback: { frames, options },
     });
     const { handlers } = get();
-    if (handlers.playEpisode) {
-      handlers.playEpisode(frames, options);
+    if (handlers.playFrames) {
+      handlers.playFrames(frames, options);
       return;
     }
     set((state) => ({
       pendingCommands: [
         ...state.pendingCommands,
-        { type: "playEpisode", frames, options },
+        { type: "playFrames", frames, options },
       ],
     }));
   },
@@ -147,7 +142,7 @@ export const useViewerPlaybackStore = create<ViewerPlaybackStore>((set, get) => 
     }));
   },
   clearAnimation: () => {
-    set({ activeEpisodePlayback: null, pendingCommands: [], playbackEpisode: null });
+    set({ activeFramePlayback: null, pendingCommands: [] });
     const { handlers } = get();
     if (handlers.clearAnimation) {
       handlers.clearAnimation();

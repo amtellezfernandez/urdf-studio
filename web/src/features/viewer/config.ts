@@ -43,10 +43,6 @@ export const IK_ARM_REACH_CONFIG = {
   clampEpsilonMeters: 1e-6,
 };
 
-export const LIVE_TELEOP_JOINT_SYNC_CONFIG = {
-  positionEpsilonRad: 0.005,
-};
-
 export const IK_ORBIT_DEFAULTS = {
   radius: 0.3,
   inclinationDeg: 45,

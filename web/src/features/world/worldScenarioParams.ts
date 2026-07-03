@@ -1,4 +1,5 @@
 import type { WorldScenarioEvent } from "./scenarioTimeline";
+import { WORLD_OBJECT_SOURCE_IDS, type WorldObjectSource } from "@/shared/types/worldObject";
 
 export type WorldScenarioObjectSeed = {
   key: string;
@@ -188,6 +189,6 @@ export const WORLD_SCENARIO_MOTION = {
 } as const;
 
 export const WORLD_SCENARIO_SOURCES = {
-  current: "world-scenario",
-  demoWorld: "demo-world",
-} as const;
+  current: WORLD_OBJECT_SOURCE_IDS.scenario,
+  demoWorld: WORLD_OBJECT_SOURCE_IDS.demo,
+} as const satisfies Record<string, WorldObjectSource>;

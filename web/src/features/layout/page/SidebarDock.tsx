@@ -8,6 +8,7 @@ type SidebarDockProps = {
   onToggleCollapse: () => void;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   collapseButtonLabel?: string;
+  resizeAriaLabel?: string;
   CollapseIcon: ComponentType<{ className?: string }>;
   children: ReactNode;
 };
@@ -24,6 +25,7 @@ export const SidebarDock = ({
   onToggleCollapse,
   onResizeStart,
   collapseButtonLabel = "Panel",
+  resizeAriaLabel,
   CollapseIcon,
   children,
 }: SidebarDockProps) => (
@@ -34,7 +36,7 @@ export const SidebarDock = ({
       <SidebarResizeHandle
         side={side}
         sidebarWidth={sidebarWidth}
-        ariaLabel={side === "left" ? "Resize sidebar" : "Resize right sidebar"}
+        ariaLabel={resizeAriaLabel ?? (side === "left" ? "Resize sidebar" : "Resize right sidebar")}
         onPointerDown={onResizeStart}
       />
     ) : (

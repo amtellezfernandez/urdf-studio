@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 import { parseUrdfDocument } from "@/shared/lib/urdfCore";
 import { composeUrdfPoseMatrix } from "@/shared/lib/spatialFrame";
+import { readUrdfJointTopology } from "@/shared/lib/urdfTopology";
 
 export type ParsedJoint = {
   childLinkName: string;
@@ -73,26 +74,15 @@ export const parseRepeatedInertiaSymmetryRobot = (
     return null;
   }
 
-  const joints = Array.from(robotElement.querySelectorAll(":scope > joint[name]"))
-    .map((jointElement) => {
-      const jointName = jointElement.getAttribute("name") ?? "";
-      const parentLinkName =
-        jointElement.querySelector(":scope > parent")?.getAttribute("link") ?? "";
-      const childLinkName =
-        jointElement.querySelector(":scope > child")?.getAttribute("link") ?? "";
-      if (!jointName || !parentLinkName || !childLinkName) {
-        return null;
-      }
+  const joints = readUrdfJointTopology(robotElement)
+    .map(({ jointElement, ...jointTopology }) => {
       const originElement = jointElement.querySelector(":scope > origin");
       const originXyz = parseOriginTriplet(originElement?.getAttribute("xyz"));
       const originRpy = parseOriginTriplet(originElement?.getAttribute("rpy"));
       return {
-        childLinkName,
-        jointName,
-        jointType: jointElement.getAttribute("type")?.trim() || "fixed",
+        ...jointTopology,
         originRpy,
         originXyz,
-        parentLinkName,
         transform: composeUrdfPoseMatrix(
           {
             xyz: originXyz,
@@ -100,9 +90,8 @@ export const parseRepeatedInertiaSymmetryRobot = (
           },
           new THREE.Matrix4()
         ),
-      } satisfies ParsedJoint;
-    })
-    .filter((joint): joint is ParsedJoint => joint !== null);
+      };
+    });
 
   const linkElements = Array.from(robotElement.querySelectorAll(":scope > link[name]"));
   const linkNames = linkElements

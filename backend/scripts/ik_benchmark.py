@@ -14,8 +14,8 @@ from backend.core.app_config import get_config_value, read_app_config
 from backend.models.kinematics import FKRequest, IKRequest
 from backend.services.kinematics import forward_kinematics
 from backend.services.amik_kinematics import inverse_kinematics as amik_ik
-from backend.services.lerobot_kinematics import inverse_kinematics as placo_ik
-from backend.services.lerobot_kinematics import _load_placo
+from backend.services.placo_kinematics import inverse_kinematics as placo_ik
+from backend.services.placo_kinematics import _load_placo
 
 
 @dataclass
@@ -92,7 +92,7 @@ def evaluate_placo(
             pos = np.array(transform[:3, 3], dtype=float)
             errors.append(float(np.linalg.norm(pos - np.array(target))))
     return SolverResult(
-        name="lerobot-placo",
+        name="placo",
         runs=len(targets),
         success=success,
         avg_ms=float(np.mean(durations)) if durations else 0.0,
@@ -141,7 +141,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark IK solvers using the SO-ARM100 sample.")
     parser.add_argument("--sample-id", default="so-arm100", help="Sample id from config.")
     parser.add_argument("--targets", type=int, default=12, help="Number of target positions.")
-    parser.add_argument("--solvers", nargs="*", default=["lerobot-placo", "amik"])
+    parser.add_argument("--solvers", nargs="*", default=["placo", "amik"])
     args = parser.parse_args()
 
     urdf_xml = load_sample_urdf(args.sample_id)
@@ -149,7 +149,7 @@ def main() -> None:
     targets = generate_targets(args.targets)
 
     results: List[SolverResult] = []
-    if "lerobot-placo" in args.solvers:
+    if "placo" in args.solvers:
         results.append(evaluate_placo(urdf_xml, target_link, targets))
     if "amik" in args.solvers:
         results.append(evaluate_amik(urdf_xml, target_link, targets))

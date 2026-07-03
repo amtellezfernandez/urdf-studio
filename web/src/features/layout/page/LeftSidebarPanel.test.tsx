@@ -25,7 +25,6 @@ const workspaceTransfer: WorkspaceTransferState = {
       robotAssetFormat: "urdf",
       sceneAssetFormat: "urdf",
       transferStrategy: "direct",
-      transferLabel: "URDF",
       transferDescription: "Uses the loaded URDF directly.",
       createsTransferAsset: false,
       statusLabel: "ready",
@@ -155,6 +154,38 @@ describe("LeftSidebarPanel", () => {
 
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onAction).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("marks degraded openable simulator targets with an attention dot", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = createProps();
+    props.workspaceTransfer = {
+      ...workspaceTransfer,
+      targets: [
+        {
+          ...workspaceTransfer.targets[0],
+          needsAttention: true,
+          statusLabel: "ready, display degraded: software OpenGL",
+        },
+      ],
+    };
+
+    await act(async () => {
+      root.render(createElement(LeftSidebarPanel, props));
+    });
+
+    const openButton = container.querySelector(
+      'button[aria-label="Open in Genesis"]'
+    ) as HTMLButtonElement | null;
+    expect(openButton).toBeTruthy();
+    expect(openButton?.disabled).toBe(false);
+    expect(openButton?.title).toContain("display degraded");
+    expect(openButton?.querySelector("span")?.className).toContain("bg-amber");
 
     await act(async () => {
       root.unmount();

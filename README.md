@@ -10,22 +10,13 @@ One command opens the app. The launcher manages the supporting local services fo
   <img src="docs/assets/quickstart-load.gif" alt="URDF Studio loading the built-in sample motion into the robotics workspace" width="900">
 </p>
 
-One click loads a sample robot, scene objects, cameras, and replayable episodes.
+One click loads a sample robot, scene objects, cameras, and sample motion for a quick workspace check.
 
-<table>
-  <tr>
-    <td width="50%">
-      <strong>Robotics Workspace</strong><br>
-      Inspect the robot, joints, links, cameras, scene objects, and world context in one dense desktop surface.<br><br>
-      <img src="docs/assets/workspace-tour.gif" alt="URDF Studio 3D workspace with robot, joints, scene objects, and side panels" width="100%">
-    </td>
-    <td width="50%">
-      <strong>Episode Replay</strong><br>
-      Play episodes, watch the robot move, and review the synchronized joint graph and replay cursor.<br><br>
-      <img src="docs/assets/episode-replay.gif" alt="URDF Studio replaying an episode with the graph cursor and robot motion synchronized" width="100%">
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/assets/workspace-tour.gif" alt="URDF Studio 3D workspace with robot, joints, scene objects, cameras, and simulator transfer controls" width="900">
+</p>
+
+Use the workspace to inspect joints, links, cameras, scene objects, and prepared simulator targets in one dense desktop surface.
 
 ## Start Here
 
@@ -59,13 +50,13 @@ Fast smoke test:
 
 1. Open `http://127.0.0.1:5173`.
 2. Click `Play Sample Motion`.
-3. In `Episodes`, click the first episode play button once.
-4. The button should change to pause, the frame counter should advance, and the graph cursor should move smoothly.
+3. The robot pose, joint values, velocity fields, and camera list should update without UI freezes.
+4. Open `Simulation Prep` and check that compatible targets report the expected prepared file type.
 
 ## Prerequisites
 
 - Node.js and npm
-- `uv` from <https://astral.sh/uv>. No separate Python install is required; setup creates the Python 3.12 backend/training runtime through `uv`.
+- `uv` from <https://astral.sh/uv>. No separate Python install is required; setup creates the Python 3.12 backend runtime through `uv`.
 - Linux build tools for native Python dependencies:
 
 ```bash
@@ -73,7 +64,7 @@ sudo apt-get update
 sudo apt-get install python3-dev build-essential
 ```
 
-On macOS, setup attempts the app and workspace viewer runtimes. Some optional native training/collision packages are skipped when their wheels are not portable across local Python environments.
+On macOS, setup attempts the app and workspace viewer runtimes. Some optional native collision and simulation packages are skipped when their wheels are not portable across local Python environments.
 
 ## Setup
 
@@ -116,6 +107,7 @@ docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 WSL target behavior:
 
 - Genesis uses CUDA when `nvidia-smi` and `libcuda` are visible; otherwise it falls back to CPU. For interactive workspace opens, Genesis performance mode is off by default to avoid slow static-shape recompilation on every scene change; set `URDF_STUDIO_GENESIS_PERFORMANCE_MODE=1` only for long fixed-scene runs.
+- PyBullet uses the WSLg D3D12 OpenGL path when `/dev/dxg`, the Mesa `d3d12` driver, and `/usr/lib/wsl/lib` are available. If a launch warning reports `llvmpipe`, PyBullet is on software OpenGL and mouse/camera interaction can be slow; use MuJoCo or Genesis until the WSL graphics stack is fixed.
 - MuJoCo and MJLab use the desktop OpenGL path when WSLg/display is available, EGL when a headless NVIDIA GPU path is available, and OSMesa as the CPU fallback.
 - MJX uses a Docker fast path when Docker and the NVIDIA runtime are available. Inspect it with `npm run simulator:container:build -- mjx --print` and `npm run simulator:container:plan -- mjx --workspace <workspace-dir>`.
 - Blender uses a managed Linux runtime in WSL x64 when Blender is not already installed.
@@ -145,7 +137,6 @@ npm run simulator:container:plan -- all --workspace <workspace-dir>
 | --- | --- |
 | `npm run start` | Normal local app |
 | `npm run team` | Intentional same-Wi-Fi or Tailnet sharing |
-| `npm run data` | Phone/data workflow with explicit tunnel acknowledgement |
 | `npm run start -- --help` | Runtime options |
 
 Use `npm run start` when you want the real app.
@@ -156,21 +147,21 @@ Use `npm run start` when you want the real app.
 
 1. Start the app with `npm run start`.
 2. Click `Play Sample Motion`.
-3. Use the `Episodes` panel to replay the sample trajectories.
+3. Inspect the joint tree, velocity/effort fields, cameras, and scene objects.
 
 ### Load Your Own Robot
 
 1. Use the `Robot` loader on the first screen.
 2. Drop a URDF/Xacro folder, zip, or files with meshes.
 3. Check the scene tree and joints panel after load.
-4. Use `Reset Pose`, joint controls, and replay tools to inspect behavior.
+4. Use `Reset Pose`, joint controls, and simulator preparation tools to inspect behavior.
 
-### Replay Episodes
+### Prepare A Simulator Workspace
 
-1. Load or record episodes.
-2. Use the left `Episodes` list to choose an episode.
-3. Use the inline episode graph to inspect frame, time, joint curves, and velocity/limit markers.
-4. Use one-click play/pause to verify replay motion.
+1. Load a robot-world scene.
+2. Open `Simulation Prep`.
+3. Pick a compatible target such as Blender, PyBullet, MuJoCo, MJLab, or Genesis.
+4. Review whether the target uses URDF directly or needs a converted workspace file.
 
 ## Sharing
 
@@ -196,7 +187,7 @@ npm run setup
 Advanced: point setup at a specific interpreter instead of the `uv` managed one:
 
 ```bash
-URDF_STUDIO_LEROBOT_BOOTSTRAP_PYTHON=/path/to/python3.12 npm run setup
+URDF_STUDIO_BACKEND_BOOTSTRAP_PYTHON=/path/to/python3.12 npm run setup
 ```
 
 ### The App Does Not Open
@@ -225,11 +216,11 @@ Restart from the launcher:
 npm run start
 ```
 
-### Sample Loads But Replay Does Not Move
+### Sample Motion Does Not Move
 
 - Use `npm run start`.
-- Confirm the first episode button changes to pause.
-- Confirm frame counters advance.
+- Confirm `Play Sample Motion` toggles to pause.
+- Confirm joint angle and velocity values update.
 - Refresh the page and repeat the smoke test.
 
 ## Security Defaults
@@ -243,12 +234,6 @@ npm run team
 ```
 
 Advanced network options are available through `npm run start -- --help`, but normal sharing should use `npm run team`.
-
-Phone/data mode also requires explicit acknowledgement:
-
-```bash
-npm run data -- --ack-public-tunnel
-```
 
 ## Documentation
 

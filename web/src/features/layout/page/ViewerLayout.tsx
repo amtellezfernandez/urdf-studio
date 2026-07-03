@@ -6,7 +6,6 @@ import type { RepeatedInertiaSymmetryCenterMode } from "@/features/layout/page/r
 import type {
   InertialVisualizationSettings,
   MeshFiles,
-  RobotBasePose,
   UrdfViewMode,
 } from "@/shared/types/feature";
 import type { URDFRobot } from "urdf-loader";
@@ -95,7 +94,6 @@ type ViewerLayoutProps = {
   getExportUrdfContent: () => string;
   thumbnailMode?: boolean;
   onFixMissingMeshRefs?: () => void;
-  runtimeRobotBasePose?: RobotBasePose | null;
   onObjectSelect?: Viewer3DProps["onObjectSelect"];
   onInertiaReliabilityChange?: Viewer3DProps["onInertiaReliabilityChange"];
   enableObjectActionsInReadOnly?: boolean;

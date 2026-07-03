@@ -216,7 +216,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules/urdf-loader")) return "urdf-loader";
             if (id.includes("node_modules/three")) return "three";
             if (id.includes("node_modules/reactflow")) return "reactflow";
-            if (id.includes("node_modules/jszip")) return "jszip";
             if (id.includes("node_modules/@radix-ui/")) return "radix-ui";
             if (id.includes("node_modules/lucide-react")) return "lucide";
             if (id.includes("node_modules/@tanstack/")) return "tanstack";

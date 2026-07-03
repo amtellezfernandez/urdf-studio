@@ -40,11 +40,6 @@ export const DEAD_CODE_PATH_RISK_RULES = [
     score: 8,
   },
   {
-    prefix: "web/src/features/dataset/",
-    label: "dataset",
-    score: 8,
-  },
-  {
     prefix: "web/src/features/viewer/",
     label: "viewer",
     score: 8,

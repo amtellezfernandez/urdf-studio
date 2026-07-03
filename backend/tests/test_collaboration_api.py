@@ -13,7 +13,6 @@ from backend.services.collaboration import collaboration_service
 from backend.services.collaboration_params import (
     COLLABORATION_ACCESS_PAUSED_MESSAGE,
     COLLABORATION_ACCESS_REVOKED_MESSAGE,
-    COLLABORATION_CAPABILITY_MIN_TTL_MS,
     COLLABORATION_SESSION_TOKEN_HEADER,
     COLLABORATION_WEBSOCKET_ACCESS_REVOKED_CLOSE_CODE,
     COLLABORATION_WEBSOCKET_CAPACITY_CLOSE_CODE,
@@ -28,8 +27,6 @@ TEST_NEXT_CLIENT_SEQUENCE = 2
 TEST_ACCEPTED_EVENT_COUNT_AFTER_REPLAY = 2
 TEST_RETAINED_EVENT_COUNT_AFTER_REPLAY = 2
 TEST_REJECTED_EVENT_COUNT_AFTER_REPLAY = 1
-TEST_CAPABILITY_ISSUE_NOW_MS = 1_000_000
-TEST_BEFORE_CAPABILITY_EXPIRY_MS = 1
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +37,7 @@ def reset_collaboration_service() -> None:
 def _patch_security_settings(token: str | None = TEST_SIMULATOR_TOKEN):
     return patch(
         "backend.core.simulator_security.settings",
-        SimpleNamespace(simulator_api_token=token, cam_to_sim_proxy_token=None),
+        SimpleNamespace(simulator_api_token=token),
     )
 
 
@@ -76,7 +73,21 @@ def _create_session(client: TestClient) -> dict:
     assert payload["session_token"]
     assert payload["editor_token"]
     assert payload["session_token"] != payload["editor_token"]
-    assert payload["live_transport"] is None
+    assert set(payload) == {
+        "session_id",
+        "session_token",
+        "editor_token",
+        "owner_token",
+        "label",
+        "role",
+        "editors_enabled",
+        "sharing_enabled",
+        "created_at",
+        "updated_at",
+        "peer_count",
+        "event_count",
+        "last_event_id",
+    }
     return payload
 
 
@@ -316,28 +327,6 @@ def test_collaboration_owner_can_pause_and_resume_reusable_guest_links() -> None
     viewer_headers = _collaboration_headers(created["session_token"])
 
     with _patch_security_settings():
-        capability_response = client.post(
-            f"/collaboration/sessions/{session_id}/capabilities",
-            headers=owner_headers,
-            json={"role": "teleop_operator", "allowed_transports": ["moq"]},
-        )
-    assert capability_response.status_code == 200
-    capability_verify_request = {
-        "capability_token": capability_response.json()["capability_token"],
-        "required_role": "teleop_operator",
-        "transport": "moq",
-    }
-
-    with _patch_security_settings():
-        active_capability_response = client.post(
-            f"/collaboration/sessions/{session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json=capability_verify_request,
-        )
-    assert active_capability_response.status_code == 200
-    assert active_capability_response.json()["active"] is True
-
-    with _patch_security_settings():
         pause_response = client.patch(
             f"/collaboration/sessions/{session_id}/access",
             headers=owner_headers,
@@ -351,11 +340,6 @@ def test_collaboration_owner_can_pause_and_resume_reusable_guest_links() -> None
             f"/collaboration/sessions/{session_id}",
             headers=owner_headers,
         )
-        paused_capability_response = client.post(
-            f"/collaboration/sessions/{session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json=capability_verify_request,
-        )
 
     assert pause_response.status_code == 200
     assert pause_response.json()["snapshot"]["sharing_enabled"] is False
@@ -365,8 +349,6 @@ def test_collaboration_owner_can_pause_and_resume_reusable_guest_links() -> None
     )
     assert owner_snapshot_response.status_code == 200
     assert owner_snapshot_response.json()["sharing_enabled"] is False
-    assert paused_capability_response.status_code == 200
-    assert paused_capability_response.json()["active"] is False
 
     with _patch_security_settings():
         resume_response = client.patch(
@@ -378,18 +360,11 @@ def test_collaboration_owner_can_pause_and_resume_reusable_guest_links() -> None
             f"/collaboration/sessions/{session_id}",
             headers=viewer_headers,
         )
-        resumed_capability_response = client.post(
-            f"/collaboration/sessions/{session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json=capability_verify_request,
-        )
 
     assert resume_response.status_code == 200
     assert resume_response.json()["snapshot"]["sharing_enabled"] is True
     assert resumed_viewer_response.status_code == 200
     assert resumed_viewer_response.json()["role"] == "viewer"
-    assert resumed_capability_response.status_code == 200
-    assert resumed_capability_response.json()["active"] is False
 
 
 def test_collaboration_rooms_do_not_cross_contaminate_tokens_or_events() -> None:
@@ -466,195 +441,6 @@ def test_collaboration_rooms_do_not_cross_contaminate_tokens_or_events() -> None
             pass
 
     assert disconnect_info.value.code == COLLABORATION_WEBSOCKET_UNAUTHORIZED_CLOSE_CODE
-
-
-def test_collaboration_owner_issues_verifies_and_revokes_transport_capabilities() -> (
-    None
-):
-    client = TestClient(create_app())
-    with _patch_security_settings():
-        first_room = _create_session(client)
-        second_room = _create_session(client)
-    first_session_id = first_room["session_id"]
-    second_session_id = second_room["session_id"]
-    editor_headers = _collaboration_headers(first_room["editor_token"])
-    owner_headers = _collaboration_headers(first_room["owner_token"])
-
-    with _patch_security_settings():
-        editor_issue_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities",
-            headers=editor_headers,
-            json={"role": "teleop_operator", "allowed_transports": ["moq"]},
-        )
-    assert editor_issue_response.status_code == 401
-
-    with _patch_security_settings():
-        owner_issue_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities",
-            headers=owner_headers,
-            json={"role": "teleop_operator", "allowed_transports": ["moq"]},
-        )
-    assert owner_issue_response.status_code == 200
-    capability = owner_issue_response.json()
-    capability_token = capability["capability_token"]
-    assert capability["session_id"] == first_session_id
-    assert capability["role"] == "teleop_operator"
-    assert capability_token
-    assert capability["allowed_transports"] == ["moq"]
-
-    verify_request = {
-        "capability_token": capability_token,
-        "required_role": "teleop_operator",
-        "transport": "moq",
-    }
-    with _patch_security_settings():
-        verify_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json=verify_request,
-        )
-        wrong_role_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json={**verify_request, "required_role": "robot_peer"},
-        )
-        missing_role_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json={**verify_request, "required_role": None},
-        )
-        missing_transport_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json={**verify_request, "transport": None},
-        )
-        wrong_room_response = client.post(
-            f"/collaboration/sessions/{second_session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json=verify_request,
-        )
-    assert verify_response.status_code == 200
-    assert verify_response.json()["active"] is True
-    assert wrong_role_response.status_code == 200
-    assert wrong_role_response.json()["active"] is False
-    assert missing_role_response.status_code == 200
-    assert missing_role_response.json()["active"] is False
-    assert missing_transport_response.status_code == 200
-    assert missing_transport_response.json()["active"] is False
-    assert wrong_room_response.status_code == 200
-    assert wrong_room_response.json()["active"] is False
-
-    with _patch_security_settings():
-        revoke_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities/revoke",
-            headers=owner_headers,
-            json={"capability_token": capability_token},
-        )
-        verify_revoked_response = client.post(
-            f"/collaboration/sessions/{first_session_id}/capabilities/verify",
-            headers=_operator_headers(),
-            json=verify_request,
-        )
-    assert revoke_response.status_code == 200
-    assert revoke_response.json() == {"session_id": first_session_id, "revoked": True}
-    assert verify_revoked_response.status_code == 200
-    assert verify_revoked_response.json()["active"] is False
-
-
-def test_collaboration_capabilities_default_to_moq_live_transport() -> None:
-    client = TestClient(create_app())
-    with _patch_security_settings():
-        created = _create_session(client)
-
-    with _patch_security_settings():
-        issue_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities",
-            headers=_collaboration_headers(created["owner_token"]),
-            json={"role": "teleop_operator"},
-        )
-
-    assert issue_response.status_code == 200
-    assert issue_response.json()["allowed_transports"] == ["moq"]
-
-
-def test_collaboration_rejects_non_moq_teleop_capability_transport() -> None:
-    client = TestClient(create_app())
-    with _patch_security_settings():
-        created = _create_session(client)
-        issue_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities",
-            headers=_collaboration_headers(created["owner_token"]),
-            json={"role": "teleop_operator", "allowed_transports": ["webtransport"]},
-        )
-
-    assert issue_response.status_code == 422
-    assert (
-        "Unsupported collaboration capability transport for teleop_operator"
-        in issue_response.json()["detail"]
-    )
-
-
-def test_collaboration_transport_capabilities_expire_at_ttl_boundary() -> None:
-    client = TestClient(create_app())
-    with (
-        _patch_security_settings(),
-        patch(
-            "backend.services.collaboration._now_ms",
-            return_value=TEST_CAPABILITY_ISSUE_NOW_MS,
-        ),
-    ):
-        created = _create_session(client)
-        issue_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities",
-            headers=_collaboration_headers(created["owner_token"]),
-            json={
-                "role": "robot_peer",
-                "ttl_ms": COLLABORATION_CAPABILITY_MIN_TTL_MS,
-                "allowed_transports": ["moq"],
-            },
-        )
-    assert issue_response.status_code == 200
-    capability_token = issue_response.json()["capability_token"]
-    verify_request = {
-        "capability_token": capability_token,
-        "required_role": "robot_peer",
-        "transport": "moq",
-    }
-
-    with (
-        _patch_security_settings(),
-        patch(
-            "backend.services.collaboration._now_ms",
-            return_value=(
-                TEST_CAPABILITY_ISSUE_NOW_MS
-                + COLLABORATION_CAPABILITY_MIN_TTL_MS
-                - TEST_BEFORE_CAPABILITY_EXPIRY_MS
-            ),
-        ),
-    ):
-        before_expiry_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities/verify",
-            headers=_operator_headers(),
-            json=verify_request,
-        )
-    assert before_expiry_response.status_code == 200
-    assert before_expiry_response.json()["active"] is True
-
-    with (
-        _patch_security_settings(),
-        patch(
-            "backend.services.collaboration._now_ms",
-            return_value=TEST_CAPABILITY_ISSUE_NOW_MS
-            + COLLABORATION_CAPABILITY_MIN_TTL_MS,
-        ),
-    ):
-        expired_response = client.post(
-            f"/collaboration/sessions/{created['session_id']}/capabilities/verify",
-            headers=_operator_headers(),
-            json=verify_request,
-        )
-    assert expired_response.status_code == 200
-    assert expired_response.json()["active"] is False
 
 
 def test_collaboration_rejects_session_tokens_in_urls() -> None:
