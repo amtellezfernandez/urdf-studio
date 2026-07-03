@@ -7,12 +7,7 @@ import React, {
   useState,
 } from "react";
 import { JointControl } from "@/features/layout/JointControl";
-import {
-  Camera as CameraIcon,
-  ChevronDown,
-  ChevronRight,
-  X,
-} from "lucide-react";
+import { Camera as CameraIcon, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import {
   type JointAxisMap,
@@ -77,7 +72,7 @@ import {
 } from "@/features/layout/jointListSidebarParams";
 import { parseJointEffortLimits } from "@/features/layout/jointEffortLimits";
 import { HierarchyJointBrowserView } from "@/features/layout/HierarchyJointBrowserView";
-import { WorldPanel } from "@/features/layout/WorldPanel";
+import { SidebarWorldSection } from "@/features/layout/SidebarWorldSection";
 import { CameraEditorPanel } from "@/features/layout/CameraEditorPanel";
 import { ObjectEditorPanel } from "@/features/layout/ObjectEditorPanel";
 import { LinkBatchEditorPanel } from "@/features/layout/LinkBatchEditorPanel";
@@ -99,9 +94,6 @@ const toggleStringSetValue = (previous: Set<string>, value: string) => {
 
 const JOINT_LIST_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
 
-const WORLD_PANEL_MIN_HEIGHT: number = JOINT_LIST_SIDEBAR_PARAMS.worldPanel.minHeight;
-const WORLD_PANEL_DEFAULT_HEIGHT: number = JOINT_LIST_SIDEBAR_PARAMS.worldPanel.defaultHeight;
-const WORLD_PANEL_MAX_HEIGHT: number = JOINT_LIST_SIDEBAR_PARAMS.worldPanel.maxHeight;
 const SIDEBAR_PANEL_LAYOUT = JOINT_LIST_SIDEBAR_PARAMS.panelLayout;
 const SIDEBAR_SECTION_CLASS = JOINT_LIST_CLASS_NAMES.sidebarSection;
 const SIDEBAR_SECTION_HEADER_CLASS = JOINT_LIST_CLASS_NAMES.sidebarSectionHeader;
@@ -381,9 +373,6 @@ export const JointListSidebar = ({
   const selectedCameraId = useCameraStore((state) => state.selectedCameraId);
   const worldObjectCount = useObjectStore((state) => state.objects.length);
   const worldCameraCount = useCameraStore((state) => state.cameras.length);
-  const [isWorldExpanded, setIsWorldExpanded] = useState(true);
-  const [worldPanelHeight, setWorldPanelHeight] = useState(WORLD_PANEL_DEFAULT_HEIGHT);
-  const worldPanelResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const structureListScrollRef = useRef<HTMLDivElement | null>(null);
   const editorTitle = useMemo(() => {
     if (hasMultiSelectedBatchLinks) {
@@ -402,7 +391,6 @@ export const JointListSidebar = ({
     selectedLink,
     selectedObjectId,
   ]);
-  const totalWorldItems = worldObjectCount + worldCameraCount;
   const visibilityJointSeed = useMemo(
     () => new Set(availableJoints),
     [availableJoints]
@@ -413,39 +401,6 @@ export const JointListSidebar = ({
   useEffect(() => {
     setVisibleJoints(new Set(visibilityJointSeed));
   }, [visibilityJointSeed]);
-  const handleWorldPanelResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!isWorldExpanded) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const startY = event.clientY;
-      const startHeight = worldPanelHeight;
-      worldPanelResizeRef.current = { startY, startHeight };
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const session = worldPanelResizeRef.current;
-        if (!session) return;
-        const deltaY = moveEvent.clientY - session.startY;
-        const nextHeight = Math.max(
-          WORLD_PANEL_MIN_HEIGHT,
-          Math.min(WORLD_PANEL_MAX_HEIGHT, session.startHeight + deltaY)
-        );
-        setWorldPanelHeight(nextHeight);
-      };
-
-      const handlePointerUp = () => {
-        worldPanelResizeRef.current = null;
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-    },
-    [isWorldExpanded, worldPanelHeight]
-  );
-
   const handleVisibilityToggle = useCallback((jointName: string) => {
     const newVisible = toggleStringSetValue(visibleJoints, jointName);
     setVisibleJoints(newVisible);
@@ -917,43 +872,14 @@ export const JointListSidebar = ({
             isSubgroupCreatorOpen={isSubgroupCreatorOpen}
             jointTypes={jointTypes}
             leadingContent={
-              <div className="rounded-sm border border-border/25 bg-background/55 p-1">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-1 text-left"
-                  onClick={() => setIsWorldExpanded((current) => !current)}
-                >
-                  <span className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    {isWorldExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                    World
-                  </span>
-                  <span className="text-[9px] text-muted-foreground">
-                    {worldObjectCount} obj · {worldCameraCount} cam
-                  </span>
-                </button>
-                {isWorldExpanded ? (
-                  <div className="mt-1">
-                    <div
-                      className="overflow-y-auto pr-1 minimal-scrollbar"
-                      style={{ height: worldPanelHeight }}
-                    >
-                      <WorldPanel
-                        robot={robot}
-                        endEffectorLink={effectiveEndEffectorLink}
-                        onJointSelect={onJointSelect}
-                        setSelectedLink={setSelectedLink}
-                      />
-                    </div>
-                    <div
-                      className="mt-1 h-1.5 cursor-row-resize rounded-sm bg-border/35 transition-colors hover:bg-border/60"
-                      title="Drag to resize world panel"
-                      onPointerDown={handleWorldPanelResizeStart}
-                    />
-                  </div>
-                ) : totalWorldItems === 0 ? (
-                  <div className="mt-0.5 text-[9px] text-muted-foreground/70">No world items.</div>
-                ) : null}
-              </div>
+              <SidebarWorldSection
+                cameraCount={worldCameraCount}
+                endEffectorLink={effectiveEndEffectorLink}
+                objectCount={worldObjectCount}
+                onJointSelect={onJointSelect}
+                robot={robot}
+                setSelectedLink={setSelectedLink}
+              />
             }
             linkGroupingMode={linkGroupingMode}
             onCloseSubgroupCreator={closeSubgroupCreator}
