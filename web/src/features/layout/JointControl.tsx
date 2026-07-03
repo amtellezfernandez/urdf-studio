@@ -285,9 +285,8 @@ export const JointControl = ({
     if (effortAttribute.status === "missing") return;
     onEffortChange?.(null);
   }, [effortAttribute.status, onEffortChange]);
-  
-  // Delete confirmation dialog state
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Name editing state
   const [isEditingName, setIsEditingName] = useState(false);
@@ -909,24 +908,24 @@ export const JointControl = ({
           <BlenderPropertyRow label={currentType === "prismatic" ? "Pos" : "Angle"} labelWidth="w-12">
             <div className="flex min-w-0 items-center gap-1">
               <div className="flex-1">
-                  <CustomSlider
-                    value={[resolvedValue]}
-                  onValueChange={(value) => {
+                <CustomSlider
+                  value={[resolvedValue]}
+                  onValueChange={(nextSliderValue) => {
                     if (isFixedJoint) return;
-                    onValueChange(value[0]);
+                    onValueChange(nextSliderValue[0]);
                   }}
-                    min={min}
-                    max={max}
-                    step={JOINT_CONTROL_PARAMS.valueInput.radStep}
-                    disabled={isFixedJoint}
-                    jointType={currentType}
-                  />
+                  min={min}
+                  max={max}
+                  step={JOINT_CONTROL_PARAMS.valueInput.radStep}
+                  disabled={isFixedJoint}
+                  jointType={currentType}
+                />
               </div>
-                <NumberInput
-                  value={angleUnit === "deg" ? resolvedValue * RAD_TO_DEG : resolvedValue}
-              onValueChange={(val) => {
-                if (isFixedJoint) return;
-                const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
+              <NumberInput
+                value={angleUnit === "deg" ? resolvedValue * RAD_TO_DEG : resolvedValue}
+                onValueChange={(nextDisplayValue) => {
+                  if (isFixedJoint) return;
+                  const radValue = angleUnit === "deg" ? nextDisplayValue * DEG_TO_RAD : nextDisplayValue;
                   const clampedValue = clampValue(radValue);
                   onValueChange(clampedValue);
                 }}
@@ -1044,8 +1043,8 @@ export const JointControl = ({
                             : jointInfo?.lower !== null && jointInfo?.lower !== undefined
                               ? jointInfo.lower
                               : undefined)}
-                      onValueChange={(val) => {
-                        const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
+                      onValueChange={(nextLimitDisplayValue) => {
+                        const radValue = angleUnit === "deg" ? nextLimitDisplayValue * DEG_TO_RAD : nextLimitDisplayValue;
                         setLocalLowerLimit(String(radValue));
                         if (onLimitsChange) {
                           const currentUpper = parseLimitInput(localUpperLimit);
@@ -1097,8 +1096,8 @@ export const JointControl = ({
                             : jointInfo?.upper !== null && jointInfo?.upper !== undefined
                               ? jointInfo.upper
                               : undefined)}
-                      onValueChange={(val) => {
-                        const radValue = angleUnit === "deg" ? val * DEG_TO_RAD : val;
+                      onValueChange={(nextLimitDisplayValue) => {
+                        const radValue = angleUnit === "deg" ? nextLimitDisplayValue * DEG_TO_RAD : nextLimitDisplayValue;
                         setLocalUpperLimit(String(radValue));
                         if (onLimitsChange) {
                           const currentLower = parseLimitInput(localLowerLimit);
@@ -1214,9 +1213,9 @@ export const JointControl = ({
                   <div className="mb-0.5 text-[8px] text-muted-foreground">Parent</div>
                   <Select
                     value={jointLinks.parentLink || ""}
-                    onValueChange={(value) => {
+                    onValueChange={(nextParentLinkName) => {
                       if (jointLinks.childLink && onLinkChange) {
-                        onLinkChange(jointName, value, jointLinks.childLink);
+                        onLinkChange(jointName, nextParentLinkName, jointLinks.childLink);
                       }
                     }}
                   >
@@ -1240,9 +1239,9 @@ export const JointControl = ({
                   <div className="mb-0.5 text-[8px] text-muted-foreground">Child</div>
                   <Select
                     value={jointLinks.childLink || ""}
-                    onValueChange={(value) => {
+                    onValueChange={(nextChildLinkName) => {
                       if (jointLinks.parentLink && onLinkChange) {
-                        onLinkChange(jointName, jointLinks.parentLink, value);
+                        onLinkChange(jointName, jointLinks.parentLink, nextChildLinkName);
                       }
                     }}
                   >
@@ -1330,8 +1329,8 @@ export const JointControl = ({
                   <div className="grid grid-cols-3 gap-1">
                     <NumberInput
                       value={parseAxisValue(localAxisX) ?? jointAxis?.xyz?.[0]}
-                      onValueChange={(val) => {
-                        setLocalAxisX(String(val));
+                      onValueChange={(nextAxisX) => {
+                        setLocalAxisX(String(nextAxisX));
                       }}
                       onBlur={handleAxisCommit}
                       step={0.01}
@@ -1340,8 +1339,8 @@ export const JointControl = ({
                     />
                     <NumberInput
                       value={parseAxisValue(localAxisY) ?? jointAxis?.xyz?.[1]}
-                      onValueChange={(val) => {
-                        setLocalAxisY(String(val));
+                      onValueChange={(nextAxisY) => {
+                        setLocalAxisY(String(nextAxisY));
                       }}
                       onBlur={handleAxisCommit}
                       step={0.01}
@@ -1350,8 +1349,8 @@ export const JointControl = ({
                     />
                     <NumberInput
                       value={parseAxisValue(localAxisZ) ?? jointAxis?.xyz?.[2]}
-                      onValueChange={(val) => {
-                        setLocalAxisZ(String(val));
+                      onValueChange={(nextAxisZ) => {
+                        setLocalAxisZ(String(nextAxisZ));
                       }}
                       onBlur={handleAxisCommit}
                       step={0.01}
@@ -1371,7 +1370,7 @@ export const JointControl = ({
                 variant="ghost"
                 size="sm"
                 className="h-5 px-0 text-[8px] font-medium text-destructive/80 hover:bg-transparent hover:text-destructive"
-                onClick={() => setShowDeleteDialog(true)}
+                onClick={() => setIsDeleteDialogOpen(true)}
               >
                 <Trash2 className="w-3 h-3 mr-1.5" />
                 Delete Joint
@@ -1382,7 +1381,7 @@ export const JointControl = ({
       </Collapsible>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Joint</DialogTitle>
@@ -1394,7 +1393,7 @@ export const JointControl = ({
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowDeleteDialog(false)}
+              onClick={() => setIsDeleteDialogOpen(false)}
             >
               No
             </Button>
@@ -1402,7 +1401,7 @@ export const JointControl = ({
               variant="destructive"
               onClick={() => {
                 onDeleteJoint?.(jointName);
-                setShowDeleteDialog(false);
+                setIsDeleteDialogOpen(false);
               }}
             >
               Yes
