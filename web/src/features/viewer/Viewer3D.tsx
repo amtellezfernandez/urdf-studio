@@ -13,7 +13,6 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
 import { toast } from "sonner";
-import { hexToRgba } from "@/shared/lib/color";
 import { resolveRobotRootLinkName } from "@/shared/lib/urdfRootLink";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
@@ -43,6 +42,7 @@ import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBo
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
 import { CreatedObjects } from "@/features/viewer/components/CreatedObjects";
 import { IKResultDialog } from "@/features/viewer/components/IKResultDialog";
+import { ViewerJointTypesPanel } from "@/features/viewer/components/ViewerJointTypesPanel";
 import {
   JointAxisIndicator,
   RotationPlane,
@@ -2098,11 +2098,6 @@ const hexToThreeJsHex = (hex: string): number => {
   return parseInt(cleanHex, 16);
 };
 
-// Helper function to get joint type label (capitalize first letter)
-const getJointTypeLabel = (type: string): string => {
-  return type.charAt(0).toUpperCase() + type.slice(1);
-};
-
 const parseContactPair = (pairKey: string): [string, string] | null => {
   const parts = pairKey.split("::");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
@@ -3667,25 +3662,6 @@ export const Viewer3D = ({
       ? ikEndEffectorLinks.map((linkName, index) => `${index + 1}:${linkName}`).join(" · ")
       : "None";
   const eeHeaderText = ikEndEffectorLinks.length === 1 ? "EE" : "EEs";
-  const jointNamesByType = useMemo(() => {
-    const namesByType: Record<string, string[]> = {};
-    Object.entries(jointLimits || {}).forEach(([name, info]) => {
-      const type = info?.type || "continuous";
-      const existing = namesByType[type];
-      if (existing) {
-        existing.push(name);
-      } else {
-        namesByType[type] = [name];
-      }
-    });
-    return namesByType;
-  }, [jointLimits]);
-  const selectFirstJointOfType = useCallback((type: string) => {
-    const typeJoints = jointNamesByType[type] ?? [];
-    if (typeJoints.length > 0 && onJointSelect) {
-      onJointSelect(typeJoints[0]);
-    }
-  }, [jointNamesByType, onJointSelect]);
   const selectedCameraIdForCentering = useCameraStore((state) => state.selectedCameraId);
   const setLiveRobotBasePose = useRobotPoseStore((state) => state.setPose);
   const clearLiveRobotBasePose = useRobotPoseStore((state) => state.clearPose);
@@ -5019,88 +4995,14 @@ export const Viewer3D = ({
 
       {/* 3D Viewer Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Joint Types Panel - Blender Style */}
-        {viewerUi.showJointTypesPanel && (() => {
-          // Count joints by type
-          const totalJoints = Object.keys(jointLimits || {}).length;
-          const typeCounts: Record<string, number> = {};
-
-          Object.values(jointLimits || {}).forEach(j => {
-            const type = j?.type || "continuous";
-            typeCounts[type] = (typeCounts[type] || 0) + 1;
-          });
-
-          // Get all joint types that exist in the robot, ordered by importance (most common first)
-          const typeOrder: string[] = ["revolute", "continuous", "prismatic", "fixed", "planar", "floating", "mimic"];
-          const existingTypes = Object.keys(typeCounts).sort((a, b) => {
-            const aIndex = typeOrder.indexOf(a);
-            const bIndex = typeOrder.indexOf(b);
-            if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-            if (aIndex === -1) return 1;
-            if (bIndex === -1) return -1;
-            return aIndex - bIndex;
-          });
-
-          return (
-          <div className="absolute top-4 left-4 z-10 w-44 rounded border border-border/40 bg-background/98 shadow-md backdrop-blur-sm">
-            <div className="border-b border-border/20 px-2 py-1">
-              <div className="text-[8px] font-semibold uppercase tracking-tight text-muted-foreground/80">
-                Joint Types {totalJoints}
-              </div>
-            </div>
-
-            <div className="space-y-1 p-1.5">
-              <div className="space-y-0.5">
-                {existingTypes.map((type) => {
-                  const count = typeCounts[type];
-                  const color = (jointColors as Record<string, string>)[type] || jointColors.light_gray;
-                  const isFixed = type === "fixed";
-                  const typeJoints = jointNamesByType[type] ?? [];
-                  const isSelected = selectedJoint && typeJoints.includes(selectedJoint);
-
-                  return (
-                    <div
-                      key={type}
-                      className={cn(
-                        "flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer transition-colors",
-                        isSelected
-                          ? "bg-primary/15 border border-primary/30"
-                          : "hover:bg-muted/15 border border-transparent"
-                      )}
-                      onClick={() => selectFirstJointOfType(type)}
-                    >
-                      <div
-                        className="h-1.5 w-1.5 flex-shrink-0 rounded-[2px] border"
-                        style={{
-                          borderColor: color,
-                          backgroundColor: isFixed ? color : hexToRgba(color, 0.25)
-                        }}
-                      />
-                      <span className="flex-1 truncate text-[10px] font-medium capitalize text-foreground">
-                        {getJointTypeLabel(type)}
-                      </span>
-                      <span className="flex-shrink-0 text-[8px] text-muted-foreground/75">
-                        {count}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="border-t border-border/15 pt-1 text-[8.5px] leading-tight">
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground/80">L</span>
-                  <span className="truncate text-foreground">{selectedLink || "None"}</span>
-                </div>
-                <div className="mt-0.5 flex items-center gap-1">
-                  <span className="text-muted-foreground/80">J</span>
-                  <span className="truncate text-foreground">{selectedJoint || "None"}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          );
-        })()}
+        {viewerUi.showJointTypesPanel ? (
+          <ViewerJointTypesPanel
+            jointLimits={jointLimits}
+            onJointSelect={onJointSelect}
+            selectedJoint={selectedJoint}
+            selectedLink={selectedLink}
+          />
+        ) : null}
 
         {viewerUi.showEndEffectorSummary && (
           <div className="absolute bottom-4 left-4 z-20 max-w-[25rem] rounded border border-border/40 bg-background/92 px-1.5 py-1 shadow-sm backdrop-blur-sm">
