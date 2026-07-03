@@ -4,6 +4,7 @@ import type { RobotMirrorLinkResult } from "@/features/layout/page/robotMirrorSy
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
 import {
   buildCompatibilityRobotMirrorSelectionState,
+  buildRepeatedInertiaSymmetryChainViewState,
   buildRobotMirrorSelectionStats,
   formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
   formatRepeatedInertiaSymmetryDistance,
@@ -37,6 +38,59 @@ const createBranchRow = (
   rotationRadians: null,
   status: "aligned",
   topologyMatchesFamily: true,
+  ...overrides,
+});
+
+const createRepeatedInertiaSymmetryChain = (
+  overrides: Partial<RepeatedInertiaSymmetryChain> = {}
+): RepeatedInertiaSymmetryChain => ({
+  affectedLinkNames: ["branch_a_link", "branch_b_link"],
+  branchCount: 2,
+  branchLinkGroups: [
+    {
+      branchRootLinkName: "branch_a",
+      linkNames: ["branch_a_link"],
+      status: "outlier",
+    },
+    {
+      branchRootLinkName: "branch_b",
+      linkNames: ["branch_b_link"],
+      status: "aligned",
+    },
+  ],
+  branchRows: [createBranchRow({ branchRootLinkName: "branch_a" })],
+  earliestDivergenceLinkName: "branch_a",
+  expectedAngleDegrees: 180,
+  maxAngularErrorDegrees: 0,
+  maxDistanceDeltaMeters: 0.01,
+  outlierAngularErrorDegrees: 0,
+  outlierBranchRootLinkName: "branch_a",
+  recommendedRepair: {
+    articulatedBoundaryJointName: null,
+    blockedTargetLinkNames: [],
+    kind: "translation",
+    mode: "single-joint",
+    stepCount: 2,
+    steps: [
+      {
+        childLinkName: "branch_a",
+        jointName: "joint_a",
+        parentLinkName: "root",
+        targetPositionMeters: [0, 0, 0],
+      },
+    ],
+    summary: "Move branch_a",
+    targetLinkNames: ["branch_a_link"],
+  },
+  repeatedGroupCount: 1,
+  repeatedMeshLabels: ["finger.stl"],
+  rootMeshCenterPositionMeters: [0, 0, 0],
+  siblingBranchRootLinkNames: ["branch_b"],
+  symmetryCenterMode: "robot-center",
+  symmetryCenterPositionMeters: [0, 0, 0],
+  symmetryRootLinkName: "root",
+  symmetryType: "radial",
+  topologyMatchingBranchCount: 2,
   ...overrides,
 });
 
@@ -87,6 +141,58 @@ describe("healthActionPanelSymmetry", () => {
       ["right", "finger_b", true],
       ["left", "palm", false],
     ]);
+  });
+
+  it("builds repeated inertia symmetry chain view state once for compact and expanded rows", () => {
+    const chain = createRepeatedInertiaSymmetryChain();
+    const baseState = buildRepeatedInertiaSymmetryChainViewState({
+      activeInertiaVisualizationScopeKey: null,
+      chain,
+      outcomeByKey: {},
+      repeatedInertiaSymmetryActingChainKey: null,
+      repeatedInertiaSymmetryActingProgress: null,
+    });
+
+    expect(baseState).toMatchObject({
+      chain,
+      chainKey: "root:branch_a",
+      completedProgress: null,
+      isActing: false,
+      isAutoAlignAvailable: true,
+      isVisualizationActive: false,
+      outcome: null,
+      progress: null,
+      visualizationLinkNames: ["branch_a_link", "branch_b_link"],
+    });
+
+    expect(
+      buildRepeatedInertiaSymmetryChainViewState({
+        activeInertiaVisualizationScopeKey: baseState.scopeKey,
+        chain,
+        outcomeByKey: {
+          [baseState.chainKey]: {
+            completedProgress: { appliedStepCount: 1, totalStepCount: 2 },
+            message: "Aligned one joint",
+            tone: "success",
+          },
+        },
+        repeatedInertiaSymmetryActingChainKey: baseState.chainKey,
+        repeatedInertiaSymmetryActingProgress: {
+          appliedStepCount: 2,
+          chainKey: baseState.chainKey,
+          totalStepCount: 2,
+        },
+      })
+    ).toMatchObject({
+      completedProgress: { appliedStepCount: 1, totalStepCount: 2 },
+      isActing: true,
+      isVisualizationActive: true,
+      outcome: {
+        message: "Aligned one joint",
+        tone: "success",
+      },
+      progress: { appliedStepCount: 2, totalStepCount: 2 },
+    });
   });
 
   it("summarizes and groups mirror selection links by mesh label", () => {

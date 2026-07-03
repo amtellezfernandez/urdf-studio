@@ -21,7 +21,11 @@ import type { RobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirro
 import type { RobotMirrorLinkResult } from "@/features/layout/page/robotMirrorSymmetryFix";
 import { toSortedUniqueRobotMirrorLinkNames } from "@/features/layout/page/robotMirrorLinkNames";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
-import { buildRepeatedInertiaSymmetryFamilyOutcomeKey } from "@/features/layout/page/simulationPrepViewerState";
+import {
+  buildRepeatedInertiaSymmetryFamilyOutcomeKey,
+  buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey,
+  collectRepeatedInertiaSymmetryFamilyLinkNames,
+} from "@/features/layout/page/simulationPrepViewerState";
 
 const HEALTH_ACTION_CLASS_NAMES = HEALTH_ACTION_PANEL_PARAMS.classNames;
 const RADIANS_TO_DEGREES = HEALTH_ACTION_PANEL_PARAMS.radiansToDegrees;
@@ -490,3 +494,60 @@ export const resolveRepeatedInertiaSymmetryOutcome = ({
       outlierBranchRootLinkName: chain.outlierBranchRootLinkName,
     })
   ] ?? outcomeByKey[buildRepeatedInertiaSymmetryFamilyOutcomeKey(chain)] ?? null;
+
+export type RepeatedInertiaSymmetryChainViewState = {
+  chain: RepeatedInertiaSymmetryChain;
+  chainKey: string;
+  completedProgress: {
+    appliedStepCount: number;
+    totalStepCount: number;
+  } | null;
+  isActing: boolean;
+  isAutoAlignAvailable: boolean;
+  isVisualizationActive: boolean;
+  outcome: NonNullable<
+    HealthActionPanelProps["repeatedInertiaSymmetryOutcomeByChainKey"]
+  >[string] | null;
+  progress: {
+    appliedStepCount: number;
+    totalStepCount: number;
+  } | null;
+  scopeKey: string;
+  visualizationLinkNames: string[];
+};
+
+export const buildRepeatedInertiaSymmetryChainViewState = ({
+  activeInertiaVisualizationScopeKey,
+  chain,
+  outcomeByKey,
+  repeatedInertiaSymmetryActingChainKey,
+  repeatedInertiaSymmetryActingProgress,
+}: {
+  activeInertiaVisualizationScopeKey: string | null;
+  chain: RepeatedInertiaSymmetryChain;
+  outcomeByKey: NonNullable<HealthActionPanelProps["repeatedInertiaSymmetryOutcomeByChainKey"]>;
+  repeatedInertiaSymmetryActingChainKey: string | null;
+  repeatedInertiaSymmetryActingProgress: HealthActionPanelProps["repeatedInertiaSymmetryActingProgress"];
+}): RepeatedInertiaSymmetryChainViewState => {
+  const chainKey = buildRepeatedInertiaSymmetryChainKey({
+    symmetryRootLinkName: chain.symmetryRootLinkName,
+    outlierBranchRootLinkName: chain.outlierBranchRootLinkName,
+  });
+  const scopeKey = buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain);
+  const outcome = resolveRepeatedInertiaSymmetryOutcome({ chain, outcomeByKey });
+  return {
+    chain,
+    chainKey,
+    completedProgress: outcome?.completedProgress ?? null,
+    isActing: repeatedInertiaSymmetryActingChainKey === chainKey,
+    isAutoAlignAvailable: Boolean(chain.recommendedRepair) && chain.recommendedRepair.stepCount > 0,
+    isVisualizationActive: activeInertiaVisualizationScopeKey === scopeKey,
+    outcome,
+    progress:
+      repeatedInertiaSymmetryActingProgress?.chainKey === chainKey
+        ? repeatedInertiaSymmetryActingProgress
+        : null,
+    scopeKey,
+    visualizationLinkNames: collectRepeatedInertiaSymmetryFamilyLinkNames(chain),
+  };
+};

@@ -32,7 +32,6 @@ import {
 } from "@/features/layout/page/simulationPrepViewerState";
 import { hasSimulationPrepPhysicsActionPending } from "@/features/layout/page/simulationPrepState";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
-import { buildRepeatedInertiaSymmetryChainKey } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
 import { resolveRobotMirrorSimulationPrepViewState } from "@/features/layout/page/robotMirrorSimulationPrepViewState";
 import { REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
@@ -81,6 +80,7 @@ import {
 } from "@/features/layout/page/healthActionPanelPhysicsActions";
 import {
   buildCompatibilityRobotMirrorSelectionState,
+  buildRepeatedInertiaSymmetryChainViewState,
   buildRobotMirrorSelectionStats,
   formatMirrorSelectionLinkCount,
   formatRepeatedInertiaSymmetryAngle,
@@ -104,7 +104,6 @@ import {
   groupRobotMirrorSelectionLinksByMeshLabel,
   MIRROR_SELECTION_RADIAL_BADGE_CLASS,
   resolveMirrorSelectionStatusBadge,
-  resolveRepeatedInertiaSymmetryOutcome,
   resolveRepeatedInertiaSymmetryRowToneClass,
   resolveRepeatedInertiaSymmetryStatusBadgeClass,
   shouldIgnoreVisualizationCardClick,
@@ -641,6 +640,15 @@ export const HealthActionPanel = ({
     compactRadialHeaderScopeKey !== null &&
     compactRadialHeaderLinkNames !== null &&
     compactRadialHeaderLinkNames.length > 0;
+  const repeatedInertiaSymmetryChainViewStates = repeatedInertiaSymmetryChains.map((chain) =>
+    buildRepeatedInertiaSymmetryChainViewState({
+      activeInertiaVisualizationScopeKey,
+      chain,
+      outcomeByKey: repeatedInertiaSymmetryOutcomeByChainKey,
+      repeatedInertiaSymmetryActingChainKey,
+      repeatedInertiaSymmetryActingProgress,
+    })
+  );
   const handleRobotMirrorSectionClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (
       !canToggleRobotMirrorVisualization ||
@@ -1037,39 +1045,16 @@ export const HealthActionPanel = ({
                 </div>
               </div>
               <div className="mt-2 space-y-1">
-                {repeatedInertiaSymmetryChains.map((chain) => {
-                  const symmetryChainKey = buildRepeatedInertiaSymmetryChainKey({
-                    symmetryRootLinkName: chain.symmetryRootLinkName,
-                    outlierBranchRootLinkName: chain.outlierBranchRootLinkName,
-                  });
-                  const symmetryScopeKey =
-                    buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain);
-                  const symmetryVisualizationLinkNames =
-                    collectRepeatedInertiaSymmetryFamilyLinkNames(chain);
-                  const isSymmetryChainActive =
-                    activeInertiaVisualizationScopeKey === symmetryScopeKey;
-                  const isActingSymmetryChain =
-                    repeatedInertiaSymmetryActingChainKey === symmetryChainKey;
-                  const symmetryProgress =
-                    repeatedInertiaSymmetryActingProgress?.chainKey === symmetryChainKey
-                      ? repeatedInertiaSymmetryActingProgress
-                      : null;
-                  const symmetryOutcome = resolveRepeatedInertiaSymmetryOutcome({
-                    chain,
-                    outcomeByKey: repeatedInertiaSymmetryOutcomeByChainKey,
-                  });
-                  const completedSymmetryProgress = symmetryOutcome?.completedProgress ?? null;
-                  const isSymmetryAutoAlignAvailable =
-                    Boolean(chain.recommendedRepair) &&
-                    chain.recommendedRepair.stepCount > 0;
+                {repeatedInertiaSymmetryChainViewStates.map((chainState) => {
+                  const { chain } = chainState;
                   return (
                     <div
-                      key={`radial-summary:${chain.symmetryRootLinkName}:${chain.outlierBranchRootLinkName}`}
+                      key={`radial-summary:${chainState.chainKey}`}
                       className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 rounded border border-border/20 bg-background/10 px-2 py-1 text-[9px]"
                       onMouseEnter={() =>
                         onPreviewInertiaVisualizationScope?.(
-                          symmetryScopeKey,
-                          symmetryVisualizationLinkNames,
+                          chainState.scopeKey,
+                          chainState.visualizationLinkNames,
                           chain
                         )
                       }
@@ -1092,25 +1077,25 @@ export const HealthActionPanel = ({
                             size="icon"
                             variant="ghost"
                             className={`${VISUALIZATION_TOGGLE_BUTTON_BASE_CLASS} ${
-                              isSymmetryChainActive
+                              chainState.isVisualizationActive
                                 ? VISUALIZATION_TOGGLE_BUTTON_ACTIVE_CLASS
                                 : VISUALIZATION_TOGGLE_BUTTON_INACTIVE_CLASS
                             }`}
                             onClick={() =>
                               onToggleInertiaVisualizationScope(
-                                symmetryScopeKey,
-                                symmetryVisualizationLinkNames,
+                                chainState.scopeKey,
+                                chainState.visualizationLinkNames,
                                 chain
                               )
                             }
                             aria-label={`${
-                              isSymmetryChainActive ? "Hide" : "Show"
+                              chainState.isVisualizationActive ? "Hide" : "Show"
                             } symmetry guide for ${chain.outlierBranchRootLinkName}`}
                             title={`${
-                              isSymmetryChainActive ? "Hide" : "Show"
+                              chainState.isVisualizationActive ? "Hide" : "Show"
                             } symmetry guide and all branch inertia boxes in the viewer`}
                           >
-                            {isSymmetryChainActive ? (
+                            {chainState.isVisualizationActive ? (
                               <EyeOff className={VISUALIZATION_TOGGLE_ICON_CLASS} />
                             ) : (
                               <Eye className={VISUALIZATION_TOGGLE_ICON_CLASS} />
@@ -1125,22 +1110,22 @@ export const HealthActionPanel = ({
                             className={`h-5 shrink-0 gap-1 px-1.5 text-[9px] ${SIMULATION_PREP_DISABLED_ACTION_BUTTON_CLASS}`}
                             onClick={() => onFixRepeatedInertiaSymmetryChain(chain)}
                             disabled={
-                              (isAnySimulationPrepFixBusy && !isActingSymmetryChain) ||
-                              isActingSymmetryChain ||
-                              !isSymmetryAutoAlignAvailable
+                              (isAnySimulationPrepFixBusy && !chainState.isActing) ||
+                              chainState.isActing ||
+                              !chainState.isAutoAlignAvailable
                             }
                             aria-label={`Auto-align symmetry branch ${chain.outlierBranchRootLinkName}`}
                           >
-                            {isActingSymmetryChain ? (
+                            {chainState.isActing ? (
                               <LoaderCircle className="h-3 w-3 animate-spin" />
                             ) : (
                               <Wrench className="h-3 w-3" />
                             )}
                             <span>
                               {formatRepeatedInertiaSymmetryAutoAlignButtonLabel({
-                                completedProgress: completedSymmetryProgress,
-                                isActing: isActingSymmetryChain,
-                                progress: symmetryProgress,
+                                completedProgress: chainState.completedProgress,
+                                isActing: chainState.isActing,
+                                progress: chainState.progress,
                               })}
                             </span>
                           </Button>
@@ -1180,36 +1165,11 @@ export const HealthActionPanel = ({
                 </div>
               </div>
               <div className="mt-2 space-y-1.5">
-                {repeatedInertiaSymmetryChains.map((chain) => (
-                  (() => {
-                    const symmetryChainKey = buildRepeatedInertiaSymmetryChainKey({
-                      symmetryRootLinkName: chain.symmetryRootLinkName,
-                      outlierBranchRootLinkName: chain.outlierBranchRootLinkName,
-                    });
-                    const symmetryScopeKey =
-                      buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey(chain);
-                    const symmetryVisualizationLinkNames =
-                      collectRepeatedInertiaSymmetryFamilyLinkNames(chain);
-                    const isSymmetryChainActive =
-                      activeInertiaVisualizationScopeKey === symmetryScopeKey;
-                    const isActingSymmetryChain =
-                      repeatedInertiaSymmetryActingChainKey === symmetryChainKey;
-                    const symmetryProgress =
-                      repeatedInertiaSymmetryActingProgress?.chainKey === symmetryChainKey
-                        ? repeatedInertiaSymmetryActingProgress
-                        : null;
-                    const symmetryOutcome = resolveRepeatedInertiaSymmetryOutcome({
-                      chain,
-                      outcomeByKey: repeatedInertiaSymmetryOutcomeByChainKey,
-                    });
-                    const completedSymmetryProgress = symmetryOutcome?.completedProgress ?? null;
-                    const isSymmetryAutoAlignAvailable =
-                      Boolean(chain.recommendedRepair) &&
-                      chain.recommendedRepair.stepCount > 0;
-
-                    return (
+                {repeatedInertiaSymmetryChainViewStates.map((chainState) => {
+                  const { chain } = chainState;
+                  return (
                       <div
-                        key={`${chain.symmetryRootLinkName}:${chain.outlierBranchRootLinkName}`}
+                        key={chainState.chainKey}
                         className={REPEATED_PARTS_GROUP_CLASS}
                       >
                         <div className="min-w-0">
@@ -1223,25 +1183,25 @@ export const HealthActionPanel = ({
                                 size="icon"
                                 variant="ghost"
                                 className={`${VISUALIZATION_TOGGLE_BUTTON_BASE_CLASS} ${
-                                  isSymmetryChainActive
+                                  chainState.isVisualizationActive
                                     ? VISUALIZATION_TOGGLE_BUTTON_ACTIVE_CLASS
                                     : VISUALIZATION_TOGGLE_BUTTON_INACTIVE_CLASS
                                 }`}
                                 onClick={() =>
                                   onToggleInertiaVisualizationScope(
-                                    symmetryScopeKey,
-                                    symmetryVisualizationLinkNames,
+                                    chainState.scopeKey,
+                                    chainState.visualizationLinkNames,
                                     chain
                                   )
                                 }
                                 aria-label={`${
-                                  isSymmetryChainActive ? "Hide" : "Show"
+                                  chainState.isVisualizationActive ? "Hide" : "Show"
                                 } symmetry guide for ${chain.outlierBranchRootLinkName}`}
                                 title={`${
-                                  isSymmetryChainActive ? "Hide" : "Show"
+                                  chainState.isVisualizationActive ? "Hide" : "Show"
                                 } symmetry guide and all branch inertia boxes in the viewer`}
                               >
-                                {isSymmetryChainActive ? (
+                                {chainState.isVisualizationActive ? (
                                   <EyeOff className={VISUALIZATION_TOGGLE_ICON_CLASS} />
                                 ) : (
                                   <Eye className={VISUALIZATION_TOGGLE_ICON_CLASS} />
@@ -1323,36 +1283,36 @@ export const HealthActionPanel = ({
                                   className={`h-6 shrink-0 gap-1 px-2 text-[10px] ${SIMULATION_PREP_DISABLED_ACTION_BUTTON_CLASS}`}
                                   onClick={() => onFixRepeatedInertiaSymmetryChain(chain)}
                                   disabled={
-                                    (isAnySimulationPrepFixBusy && !isActingSymmetryChain) ||
-                                    isActingSymmetryChain ||
-                                    !isSymmetryAutoAlignAvailable
+                                    (isAnySimulationPrepFixBusy && !chainState.isActing) ||
+                                    chainState.isActing ||
+                                    !chainState.isAutoAlignAvailable
                                   }
                                   aria-label={`Auto-align symmetry branch ${chain.outlierBranchRootLinkName}`}
                                 >
-                                  {isActingSymmetryChain ? (
+                                  {chainState.isActing ? (
                                     <LoaderCircle className="h-3 w-3 animate-spin" />
                                   ) : (
                                     <Wrench className="h-3 w-3" />
                                   )}
                                   <span>
                                     {formatRepeatedInertiaSymmetryAutoAlignButtonLabel({
-                                      completedProgress: completedSymmetryProgress,
-                                      isActing: isActingSymmetryChain,
-                                      progress: symmetryProgress,
+                                      completedProgress: chainState.completedProgress,
+                                      isActing: chainState.isActing,
+                                      progress: chainState.progress,
                                     })}
                                   </span>
                                 </Button>
                               </div>
                             ) : null}
-                            {symmetryOutcome ? (
+                            {chainState.outcome ? (
                               <div
                                 className={`mt-2 rounded border px-2 py-1.5 text-[10px] ${
-                                  symmetryOutcome.tone === "success"
+                                  chainState.outcome.tone === "success"
                                     ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
                                     : "border-amber-400/30 bg-amber-500/10 text-amber-100"
                                 }`}
                               >
-                                {symmetryOutcome.message}
+                                {chainState.outcome.message}
                               </div>
                             ) : null}
                             <div className="mt-2 overflow-hidden rounded border border-border/30">
@@ -1427,8 +1387,7 @@ export const HealthActionPanel = ({
                         </div>
                       </div>
                     );
-                  })()
-                ))}
+                })}
               </div>
                 </>
               ) : null}
