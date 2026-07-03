@@ -185,9 +185,9 @@ describe("healthActionPanelSymmetry", () => {
       visualizationLinkNames: ["branch_a_link", "branch_b_link"],
     });
     expect(baseState.branchRows[0]).toMatchObject({
+      branchRowKey: "root:branch_a",
       branchSummary: "branch_a_link",
       branchTitle: "branch_a_link",
-      key: "root:branch_a",
       representativeLinkName: "link_a",
       statusText: "Aligned",
     });
@@ -245,13 +245,13 @@ describe("healthActionPanelSymmetry", () => {
 
     expect(buildRepeatedInertiaSymmetryBranchRowViewState({ chain, row })).toMatchObject({
       angleText: "0.0° → 180.0° (6.0° err)",
+      branchRowKey: "root:missing_branch",
       branchSummary: "fallback_link",
       branchTitle: "fallback_link",
-      key: "root:missing_branch",
       offsetText: "3.0 mm (rad 0.0 mm • lat 0.0 mm)",
       radiusText: "150.0 mm → 200.0 mm",
       representativeLinkName: "fallback_link",
-      showTopologyBadge: true,
+      shouldShowTopologyBadge: true,
       statusText: "Angle",
     });
   });
@@ -362,7 +362,6 @@ describe("healthActionPanelSymmetry", () => {
           {
             counterpartLinkName: "right_tip",
             isSelected: true,
-            key: "left_tip",
             linkName: "left_tip",
             resultMetrics: "move 12.0 mm • res 1.0 mm • rot 0.0° • axis 2.9°",
             resultReason: "plane-normal axis was ambiguous",
@@ -379,7 +378,7 @@ describe("healthActionPanelSymmetry", () => {
         selectionLinkRows: [
           {
             isSelected: false,
-            key: "left_palm",
+            linkName: "left_palm",
             resultMetrics: null,
             resultReason: null,
             resultSummary: null,

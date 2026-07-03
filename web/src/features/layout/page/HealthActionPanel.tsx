@@ -902,7 +902,7 @@ export const HealthActionPanel = ({
                                       } = rowState;
                                       return (
                                         <label
-                                          key={rowState.key}
+                                          key={linkName}
                                           className="flex items-center gap-1 px-1.5 py-0.5 text-[9px] leading-tight"
                                         >
                                           <Checkbox
@@ -1287,7 +1287,7 @@ export const HealthActionPanel = ({
                               {chainState.branchRows.map((rowState) => {
                                 return (
                                   <div
-                                    key={rowState.key}
+                                    key={rowState.branchRowKey}
                                     className={`border-t border-border/20 px-2 py-1 text-[10px] ${rowState.rowToneClass}`}
                                   >
                                     <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.1fr)_auto_auto_auto_auto] gap-x-3">
@@ -1307,7 +1307,7 @@ export const HealthActionPanel = ({
                                         >
                                           {rowState.statusText}
                                         </span>
-                                        {rowState.showTopologyBadge ? (
+                                        {rowState.shouldShowTopologyBadge ? (
                                           <span className="inline-flex items-center rounded-full border border-border/30 bg-background/30 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
                                             Topology
                                           </span>

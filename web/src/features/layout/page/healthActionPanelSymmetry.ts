@@ -249,7 +249,6 @@ export const groupRobotMirrorSelectionLinksByMeshLabel = (
 export type RobotMirrorSelectionLinkRowViewState = {
   counterpartLinkName: string | null;
   isSelected: boolean;
-  key: string;
   linkName: string;
   resultMetrics: string | null;
   resultReason: string | null;
@@ -287,7 +286,6 @@ export const buildRobotMirrorSelectionMeshGroupViewStates = ({
       return {
         counterpartLinkName: selectionLink.counterpartLinkName,
         isSelected: selectedLinkNameSet.has(selectionLink.linkName),
-        key: selectionLink.linkName,
         linkName: selectionLink.linkName,
         resultMetrics: linkResult ? formatRobotMirrorLinkResultMetrics(linkResult) : null,
         resultReason: linkResult ? formatRobotMirrorLinkResultReason(linkResult) : null,
@@ -499,16 +497,15 @@ export const formatRepeatedInertiaSymmetryRepairMode = (
 
 export type RepeatedInertiaSymmetryBranchRowViewState = {
   angleText: string;
+  branchRowKey: string;
   branchSummary: string;
   branchTitle: string;
-  key: string;
   offsetText: string;
   offsetsText: string;
   radiusText: string;
   representativeLinkName: string;
-  row: RepeatedInertiaSymmetryChain["branchRows"][number];
   rowToneClass: string;
-  showTopologyBadge: boolean;
+  shouldShowTopologyBadge: boolean;
   statusBadgeClass: string;
   statusText: string;
 };
@@ -538,14 +535,13 @@ export const buildRepeatedInertiaSymmetryBranchRowViewState = ({
     branchTitle: branchLinkGroup
       ? formatRepeatedInertiaSymmetryBranchLinks(branchLinkGroup)
       : row.representativeLinkName,
-    key: `${chain.symmetryRootLinkName}:${row.branchRootLinkName}`,
+    branchRowKey: `${chain.symmetryRootLinkName}:${row.branchRootLinkName}`,
     offsetText: formatRepeatedInertiaSymmetryOffsetSummary(row),
     offsetsText: formatRepeatedInertiaSymmetryLinkOffsets(row),
     radiusText: formatRepeatedInertiaSymmetryRadiusComparison(row),
     representativeLinkName: row.representativeLinkName,
-    row,
     rowToneClass: resolveRepeatedInertiaSymmetryRowToneClass(row),
-    showTopologyBadge: !row.topologyMatchesFamily,
+    shouldShowTopologyBadge: !row.topologyMatchesFamily,
     statusBadgeClass: resolveRepeatedInertiaSymmetryStatusBadgeClass(row),
     statusText: formatRepeatedInertiaSymmetryStatus(row),
   };
