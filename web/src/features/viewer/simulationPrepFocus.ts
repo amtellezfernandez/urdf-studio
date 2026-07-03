@@ -11,19 +11,19 @@ export const buildSimulationPrepSymmetryLinkNames = (
     new Set(chain.branchLinkGroups.flatMap((branchLinkGroup) => branchLinkGroup.linkNames))
   );
 
-export const resolveSimulationPrepSymmetryFocusRadius = ({
-  chain,
+function resolveLinkBoundsFocusRadius({
+  linkNames,
   resolveLinkObject,
 }: {
-  chain: RepeatedInertiaSymmetryChain;
+  linkNames: string[];
   resolveLinkObject: LinkObjectResolver;
-}): number => {
+}): number | null {
   const bounds = new THREE.Box3();
   const boxCenter = new THREE.Vector3();
   const boxSize = new THREE.Vector3();
   let hasBounds = false;
 
-  buildSimulationPrepSymmetryLinkNames(chain).forEach((linkName) => {
+  linkNames.forEach((linkName) => {
     const linkObject = resolveLinkObject(linkName);
     if (!linkObject) {
       return;
@@ -41,10 +41,28 @@ export const resolveSimulationPrepSymmetryFocusRadius = ({
     bounds.union(linkBounds);
   });
 
-  if (hasBounds) {
-    bounds.getCenter(boxCenter);
-    bounds.getSize(boxSize);
-    return Math.max(boxSize.length() * 0.5, boxCenter.distanceTo(bounds.max));
+  if (!hasBounds) {
+    return null;
+  }
+
+  bounds.getCenter(boxCenter);
+  bounds.getSize(boxSize);
+  return Math.max(boxSize.length() * 0.5, boxCenter.distanceTo(bounds.max));
+}
+
+export const resolveSimulationPrepSymmetryFocusRadius = ({
+  chain,
+  resolveLinkObject,
+}: {
+  chain: RepeatedInertiaSymmetryChain;
+  resolveLinkObject: LinkObjectResolver;
+}): number => {
+  const boundsRadius = resolveLinkBoundsFocusRadius({
+    linkNames: buildSimulationPrepSymmetryLinkNames(chain),
+    resolveLinkObject,
+  });
+  if (boundsRadius !== null) {
+    return boundsRadius;
   }
 
   const idealLayerRadii = chain.branchRows.flatMap((row) =>
@@ -73,33 +91,12 @@ export const resolveSimulationPrepRobotMirrorFocusRadius = ({
   check: RobotMirrorSymmetryCheck;
   resolveLinkObject: LinkObjectResolver;
 }): number => {
-  const bounds = new THREE.Box3();
-  const boxCenter = new THREE.Vector3();
-  const boxSize = new THREE.Vector3();
-  let hasBounds = false;
-
-  collectSimulationPrepRobotMirrorFocusLinkNames(check).forEach((linkName) => {
-    const linkObject = resolveLinkObject(linkName);
-    if (!linkObject) {
-      return;
-    }
-    linkObject.updateMatrixWorld(true);
-    const linkBounds = new THREE.Box3().setFromObject(linkObject);
-    if (linkBounds.isEmpty()) {
-      return;
-    }
-    if (!hasBounds) {
-      bounds.copy(linkBounds);
-      hasBounds = true;
-      return;
-    }
-    bounds.union(linkBounds);
+  const boundsRadius = resolveLinkBoundsFocusRadius({
+    linkNames: collectSimulationPrepRobotMirrorFocusLinkNames(check),
+    resolveLinkObject,
   });
-
-  if (hasBounds) {
-    bounds.getCenter(boxCenter);
-    bounds.getSize(boxSize);
-    return Math.max(boxSize.length() * 0.5, boxCenter.distanceTo(bounds.max));
+  if (boundsRadius !== null) {
+    return boundsRadius;
   }
 
   return check.maxResidualMeters;

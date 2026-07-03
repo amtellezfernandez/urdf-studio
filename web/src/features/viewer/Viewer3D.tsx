@@ -13,6 +13,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
 import { toast } from "sonner";
+import { hexToRgba } from "@/shared/lib/color";
 import { resolveRobotRootLinkName } from "@/shared/lib/urdfRootLink";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { applyJointValues } from "@/shared/lib/urdf-joints";
@@ -5020,14 +5021,6 @@ export const Viewer3D = ({
       <div className="flex-1 overflow-hidden relative">
         {/* Joint Types Panel - Blender Style */}
         {viewerUi.showJointTypesPanel && (() => {
-          // Helper to convert hex to rgba
-          const hexToRgba = (hex: string, alpha: number) => {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-          };
-
           // Count joints by type
           const totalJoints = Object.keys(jointLimits || {}).length;
           const typeCounts: Record<string, number> = {};

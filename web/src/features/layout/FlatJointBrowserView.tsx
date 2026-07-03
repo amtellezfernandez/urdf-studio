@@ -9,9 +9,9 @@ import {
   type StructureGroupSection,
 } from "@/features/layout/structureGroups";
 import { resolveVisibleSectionItemNames } from "@/features/layout/structureSectionVisibility";
-import type { StructureDragState } from "@/features/layout/useStructureGroupEditor";
+import type { StructureGroupDragHandlers } from "@/features/layout/useStructureGroupEditor";
 
-type FlatJointBrowserViewProps = {
+type FlatJointBrowserViewProps = StructureGroupDragHandlers & {
   activeMovingJointNames: Set<string>;
   activeStructureDropGroup: string | null;
   angleUnit: "rad" | "deg";
@@ -27,23 +27,6 @@ type FlatJointBrowserViewProps = {
   jointLimits: JointLimits;
   onJointHover?: (jointName: string | null) => void;
   onJointSelect: (jointName: string) => void;
-  onStructureDragEnd: () => void;
-  onStructureDragStart: (
-    event: React.DragEvent<HTMLElement>,
-    dragState: StructureDragState
-  ) => void;
-  onStructureGroupDragLeave: (
-    event: React.DragEvent<HTMLElement>,
-    targetGroupLabel: string
-  ) => void;
-  onStructureGroupDragOver: (
-    event: React.DragEvent<HTMLElement>,
-    targetGroupLabel: string
-  ) => void;
-  onStructureGroupDrop: (
-    event: React.DragEvent<HTMLElement>,
-    targetGroupLabel: string
-  ) => void;
   onToggleJointSectionCollapse: (sectionId: string) => void;
   onVisibilityToggle: (jointName: string) => void;
   searchQuery: string;

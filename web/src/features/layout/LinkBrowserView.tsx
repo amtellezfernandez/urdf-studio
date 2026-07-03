@@ -5,9 +5,9 @@ import { cn } from "@/shared/lib/utils";
 import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
 import { StructureSectionShell } from "@/features/layout/StructureSectionShell";
 import type { StructureGroupSection } from "@/features/layout/structureGroups";
-import type { StructureDragState } from "@/features/layout/useStructureGroupEditor";
+import type { StructureGroupDragHandlers } from "@/features/layout/useStructureGroupEditor";
 
-type LinkBrowserViewProps = {
+type LinkBrowserViewProps = StructureGroupDragHandlers & {
   activeStructureDropGroup: string | null;
   areAllFilteredLinksSelected: boolean;
   canReassignDisplayedLinkGroups: boolean;
@@ -25,23 +25,6 @@ type LinkBrowserViewProps = {
   onBatchLinkToggle: (linkName: string) => void;
   onLinkSelect: (linkName: string) => void;
   onMarkAsEndEffector?: (linkName: string | null) => void;
-  onStructureDragEnd: () => void;
-  onStructureDragStart: (
-    event: React.DragEvent<HTMLElement>,
-    dragState: StructureDragState
-  ) => void;
-  onStructureGroupDragLeave: (
-    event: React.DragEvent<HTMLElement>,
-    targetGroupLabel: string
-  ) => void;
-  onStructureGroupDragOver: (
-    event: React.DragEvent<HTMLElement>,
-    targetGroupLabel: string
-  ) => void;
-  onStructureGroupDrop: (
-    event: React.DragEvent<HTMLElement>,
-    targetGroupLabel: string
-  ) => void;
   onToggleBatchLinkGroup: (linkNames: string[]) => void;
   onToggleLinkSectionCollapse: (sectionId: string) => void;
   onToggleSelectAllFilteredLinks: () => void;

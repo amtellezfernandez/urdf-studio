@@ -157,6 +157,41 @@ function colorText(text, color, reset) {
   return color ? `${color}${text}${reset || ''}` : text;
 }
 
+async function handleCurrentTokenAction({
+  runtime,
+  config,
+  tokenKey,
+  currentToken,
+  color,
+  reset,
+  removedMessage,
+}) {
+  if (!currentToken) {
+    return null;
+  }
+
+  runtime.logInfo(`Current token: ${colorText(runtime.maskTokenImpl(currentToken), color, reset)}`);
+  runtime.log('');
+  runtime.logInfo('Options:');
+  runtime.logInfo('  [r] Remove token');
+  runtime.logInfo('  [s] Substitute/Update token');
+  runtime.logInfo('  [Enter] Skip (keep current)');
+  runtime.log('');
+
+  const action = await runtime.question(`  Choose an option: ${color}`);
+  if (shouldRemoveToken(action)) {
+    delete config[tokenKey];
+    runtime.saveConfig(config);
+    runtime.logSuccess(removedMessage);
+    return buildSetupResult({ changed: true });
+  }
+  if (!shouldUpdateToken(action)) {
+    runtime.logInfo('Token unchanged (keeping current token).');
+    return buildSetupResult();
+  }
+  return null;
+}
+
 function buildAuthRuntimeOptions({
   rootDir,
   env = process.env,
@@ -200,22 +235,38 @@ function buildAuthRuntimeOptions({
   };
 }
 
-export async function setupHuggingFace(options = {}) {
+function buildInteractiveAuthSession(options = {}) {
   const runtime = buildAuthRuntimeOptions(options);
   if (
     !runtime.shouldOfferTokenSetupImpl({ env: runtime.env, argv: runtime.argv }) ||
     !runtime.isInteractiveImpl({ stdin: runtime.stdin, stdout: runtime.stdout })
   ) {
-    return buildSetupResult();
+    return { result: buildSetupResult() };
   }
 
-  const configPath = getSetupConfigPath(runtime.rootDir);
-  const config = runtime.loadConfig();
+  return {
+    result: null,
+    runtime,
+    configPath: getSetupConfigPath(runtime.rootDir),
+    config: runtime.loadConfig(),
+    colors: {
+      reset: runtime.colors.reset || '',
+      yellow: runtime.colors.yellow || '',
+      gray: runtime.colors.gray || '',
+    },
+  };
+}
+
+export async function setupHuggingFace(options = {}) {
+  const session = buildInteractiveAuthSession(options);
+  if (session.result) {
+    return session.result;
+  }
+
+  const { runtime, configPath, config } = session;
   const currentToken = config.huggingfaceToken || '';
-  const reset = runtime.colors.reset || '';
   const pinkBright = runtime.colors.pinkBright || '';
-  const yellow = runtime.colors.yellow || '';
-  const gray = runtime.colors.gray || '';
+  const { reset, yellow, gray } = session.colors;
 
   runtime.log('');
   runtime.logArrow('Hugging Face authentication');
@@ -226,27 +277,20 @@ export async function setupHuggingFace(options = {}) {
     return buildSetupResult();
   }
 
-  if (currentToken) {
-    runtime.logInfo(`Current token: ${colorText(runtime.maskTokenImpl(currentToken), pinkBright, reset)}`);
-    runtime.log('');
-    runtime.logInfo('Options:');
-    runtime.logInfo('  [r] Remove token');
-    runtime.logInfo('  [s] Substitute/Update token');
-    runtime.logInfo('  [Enter] Skip (keep current)');
-    runtime.log('');
+  const currentTokenActionResult = await handleCurrentTokenAction({
+    runtime,
+    config,
+    tokenKey: 'huggingfaceToken',
+    currentToken,
+    color: pinkBright,
+    reset,
+    removedMessage: 'HuggingFace token removed',
+  });
+  if (currentTokenActionResult) {
+    return currentTokenActionResult;
+  }
 
-    const action = await runtime.question(`  Choose an option: ${pinkBright}`);
-    if (shouldRemoveToken(action)) {
-      delete config.huggingfaceToken;
-      runtime.saveConfig(config);
-      runtime.logSuccess('HuggingFace token removed');
-      return buildSetupResult({ changed: true });
-    }
-    if (!shouldUpdateToken(action)) {
-      runtime.logInfo('Token unchanged (keeping current token).');
-      return buildSetupResult();
-    }
-  } else {
+  if (!currentToken) {
     runtime.logInfo('A token is only needed for private Hugging Face resources. Public simulator transfer does not require it.');
     runtime.log('');
     runtime.logInfo('To create a token:');
@@ -280,22 +324,16 @@ export async function setupHuggingFace(options = {}) {
 }
 
 export async function setupGitHub(options = {}) {
-  const runtime = buildAuthRuntimeOptions(options);
-  const resolveSetupGitHubTokenImpl = options.resolveSetupGitHubTokenImpl || resolveSetupGitHubToken;
-  if (
-    !runtime.shouldOfferTokenSetupImpl({ env: runtime.env, argv: runtime.argv }) ||
-    !runtime.isInteractiveImpl({ stdin: runtime.stdin, stdout: runtime.stdout })
-  ) {
-    return buildSetupResult();
+  const session = buildInteractiveAuthSession(options);
+  if (session.result) {
+    return session.result;
   }
 
-  const configPath = getSetupConfigPath(runtime.rootDir);
-  const config = runtime.loadConfig();
+  const { runtime, configPath, config } = session;
+  const resolveSetupGitHubTokenImpl = options.resolveSetupGitHubTokenImpl || resolveSetupGitHubToken;
   const currentToken = config.githubToken || '';
-  const reset = runtime.colors.reset || '';
   const purpleBright = runtime.colors.purpleBright || '';
-  const yellow = runtime.colors.yellow || '';
-  const gray = runtime.colors.gray || '';
+  const { reset, yellow, gray } = session.colors;
 
   runtime.log('');
   runtime.logArrow('GitHub access');
@@ -306,26 +344,17 @@ export async function setupGitHub(options = {}) {
     return buildSetupResult();
   }
 
-  if (currentToken) {
-    runtime.logInfo(`Current token: ${colorText(runtime.maskTokenImpl(currentToken), purpleBright, reset)}`);
-    runtime.log('');
-    runtime.logInfo('Options:');
-    runtime.logInfo('  [r] Remove token');
-    runtime.logInfo('  [s] Substitute/Update token');
-    runtime.logInfo('  [Enter] Skip (keep current)');
-    runtime.log('');
-
-    const action = await runtime.question(`  Choose an option: ${purpleBright}`);
-    if (shouldRemoveToken(action)) {
-      delete config.githubToken;
-      runtime.saveConfig(config);
-      runtime.logSuccess('GitHub token removed');
-      return buildSetupResult({ changed: true });
-    }
-    if (!shouldUpdateToken(action)) {
-      runtime.logInfo('Token unchanged (keeping current token).');
-      return buildSetupResult();
-    }
+  const currentTokenActionResult = await handleCurrentTokenAction({
+    runtime,
+    config,
+    tokenKey: 'githubToken',
+    currentToken,
+    color: purpleBright,
+    reset,
+    removedMessage: 'GitHub token removed',
+  });
+  if (currentTokenActionResult) {
+    return currentTokenActionResult;
   }
 
   const detectedGitHubAuth = resolveSetupGitHubTokenImpl();

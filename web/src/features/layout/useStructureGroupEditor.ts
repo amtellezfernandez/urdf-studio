@@ -27,6 +27,26 @@ export type StructureDragState = {
   sourceGroupLabel: string;
 };
 
+export type StructureGroupDragHandlers = {
+  onStructureDragEnd: () => void;
+  onStructureDragStart: (
+    event: React.DragEvent<HTMLElement>,
+    dragState: StructureDragState
+  ) => void;
+  onStructureGroupDragLeave: (
+    event: React.DragEvent<HTMLElement>,
+    targetGroupLabel: string
+  ) => void;
+  onStructureGroupDragOver: (
+    event: React.DragEvent<HTMLElement>,
+    targetGroupLabel: string
+  ) => void;
+  onStructureGroupDrop: (
+    event: React.DragEvent<HTMLElement>,
+    targetGroupLabel: string
+  ) => void;
+};
+
 type UseStructureGroupEditorArgs = {
   analysis: UrdfAnalysis | null;
   urdfContent: string | undefined;

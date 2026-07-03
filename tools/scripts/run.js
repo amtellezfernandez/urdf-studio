@@ -61,34 +61,15 @@ import {
   shouldBypassOutdatedVersionGate,
   VERSION_CHECK_STATES,
 } from './updateCheck.js';
+import { createTerminalLogger } from './terminalOutput.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..', '..');
 
-// Colors for terminal output
-const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  pink: '\x1b[35m',      // Magenta/pink
-  pinkBright: '\x1b[95m', // Bright magenta
-  pinkLight: '\x1b[38;5;213m', // Light pink
-  pinkDark: '\x1b[38;5;162m',  // Dark pink
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
-  gray: '\x1b[90m',
-  underline: '\x1b[4m',
-};
+const { colors, log, logArrow } = createTerminalLogger();
 
 const verbose = /^(1|true|yes)$/i.test(process.env.URDF_STUDIO_VERBOSE || '');
-function log(message, color = colors.reset) {
-  console.log(`${color}${message}${colors.reset}`);
-}
-
-function logArrow(message) {
-  log(`→ ${message}`, colors.pink);
-}
 
 function spawnNpm(args, options = {}) {
   const { command, argsPrefix } = getNpmCommand();

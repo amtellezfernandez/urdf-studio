@@ -52,48 +52,13 @@ import {
   setupHuggingFace as setupHuggingFaceWithOptions,
 } from './setupAuthConfig.js';
 import { runSetupSequence as runSetupSequenceWithSteps } from './setupSequence.js';
+import { createTerminalLogger } from './terminalOutput.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..', '..');
 
-// Colors for terminal output
-const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  pink: '\x1b[35m',      // Magenta/pink
-  pinkBright: '\x1b[95m', // Bright magenta
-  pinkLight: '\x1b[38;5;213m', // Light pink
-  pinkDark: '\x1b[38;5;162m',  // Dark pink
-  purple: '\x1b[38;5;129m',    // Purple
-  purpleBright: '\x1b[38;5;141m', // Bright purple
-  purpleLight: '\x1b[38;5;183m',   // Light purple
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  gray: '\x1b[90m',
-  underline: '\x1b[4m',
-};
-
-function log(message, color = colors.reset) {
-  console.log(`${color}${message}${colors.reset}`);
-}
-
-function logArrow(message) {
-  log(`→ ${message}`, colors.pink);
-}
-
-function logSuccess(message) {
-  log(`✓ ${message}`, colors.green);
-}
-
-function logInfo(message) {
-  log(`  ${message}`, colors.gray);
-}
-
-function logUrl(url, text) {
-  const underline = '\x1b[4m';
-  log(`  ${text}: ${colors.pinkBright}${underline}${url}${colors.reset}`);
-}
+const { colors, log, logArrow, logInfo, logSuccess, logUrl } = createTerminalLogger();
 
 function getUvEnv({ managedPythonPath = null } = {}) {
   return getUvEnvWithOptions({ rootDir, managedPythonPath });

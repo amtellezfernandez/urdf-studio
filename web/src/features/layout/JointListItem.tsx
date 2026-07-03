@@ -1,4 +1,5 @@
 import { memo, useRef, useState, useCallback, useEffect } from "react";
+import { hexToRgba } from "@/shared/lib/color";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimitInfo } from "@/shared/lib/urdfBrowser";
 import jointColors from "@/shared/joint_colors.json";
@@ -375,14 +376,6 @@ const JointListItemBase = ({
   const squareColor = isFixedJoint
     ? "#52525b"
     : jointEditorColor;
-
-  // Helper to convert hex to rgba
-  const hexToRgba = (hex: string, alpha: number) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
 
   const handleSquareClick = (e: React.MouseEvent) => {
     e.stopPropagation();

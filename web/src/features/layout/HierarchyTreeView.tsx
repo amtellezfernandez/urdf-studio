@@ -2,6 +2,7 @@ import React from "react";
 import * as THREE from "three";
 import { Link2 } from "lucide-react";
 import type { URDFRobot } from "urdf-loader";
+import { hexToRgba } from "@/shared/lib/color";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
 import { JointListItem } from "@/features/layout/JointListItem";
@@ -54,13 +55,6 @@ type HierarchyLinkRowProps = {
 };
 
 const HIERARCHY_TREE_PARAMS = JOINT_LIST_SIDEBAR_PARAMS.hierarchyTree;
-
-const hexToRgba = (hex: string, alpha: number) => {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
 
 function TreeBranchConnector({
   bottom,
