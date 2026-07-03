@@ -19,7 +19,6 @@ import {
   normalizeMeshPathForMatch,
   parseURDF,
   parseMeshReference,
-  resolveMeshBlobFromReference,
   type JointAxisMap,
   type JointLimits,
 } from "@/shared/lib/urdfBrowser";
@@ -37,6 +36,10 @@ import {
   formatMeshRegistrationDebugLine,
   formatUrdfMeshLoadDiagnostics,
 } from "@/features/urdf/loader/urdfLoaderDiagnostics";
+import {
+  summarizeUrdfLoadIssues,
+  type UrdfLoadIssueSummary,
+} from "@/features/urdf/loader/urdfLoadIssues";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
@@ -78,74 +81,6 @@ const getBasePathFromRelativePath = (relativePath: string): string => {
   if (parts.length <= 1) return "";
   parts.pop();
   return parts.join("/");
-};
-
-const collectMissingPackages = (
-  meshReferences: string[],
-  packageRoots: Record<string, string[]>,
-  meshFiles?: MeshFiles,
-  urdfBasePath?: string
-): string[] => {
-  const missing = new Set<string>();
-  meshReferences.forEach((ref) => {
-    const refInfo = parseMeshReference(ref);
-    if (refInfo.scheme !== "package" || !refInfo.packageName) return;
-    if (packageRoots[refInfo.packageName]) return;
-    if (meshFiles && resolveMeshBlobFromReference(ref, meshFiles, urdfBasePath, packageRoots)) {
-      return;
-    }
-    if (!packageRoots[refInfo.packageName]) {
-      missing.add(refInfo.packageName);
-    }
-  });
-  return Array.from(missing);
-};
-
-type UrdfLoadIssueSummary = {
-  unmatchedRefs: string[];
-  absoluteFileRefs: string[];
-  missingPackages: string[];
-  hasIssues: boolean;
-};
-
-const summarizeUrdfLoadIssues = (
-  analysis: UrdfAnalysis,
-  parsedIsValid: boolean,
-  meshFilesForLookup: MeshFiles,
-  packageRootsForLookup: Record<string, string[]>,
-  urdfBasePathForLookup: string
-): UrdfLoadIssueSummary => {
-  const unmatchedRefs = analysis.meshReferences.filter((ref) => {
-    const refInfo = parseMeshReference(ref);
-    if (refInfo.isAbsoluteFile) {
-      return false;
-    }
-    return !resolveMeshBlobFromReference(
-      ref,
-      meshFilesForLookup,
-      urdfBasePathForLookup,
-      packageRootsForLookup
-    );
-  });
-  const absoluteFileRefs = analysis.absoluteFileMeshRefs;
-  const missingPackages = collectMissingPackages(
-    analysis.meshReferences,
-    packageRootsForLookup,
-    meshFilesForLookup,
-    urdfBasePathForLookup
-  );
-  const hasIssues =
-    unmatchedRefs.length > 0 ||
-    absoluteFileRefs.length > 0 ||
-    missingPackages.length > 0 ||
-    !parsedIsValid;
-
-  return {
-    unmatchedRefs,
-    absoluteFileRefs,
-    missingPackages,
-    hasIssues,
-  };
 };
 
 const registerMeshKey = (
@@ -453,13 +388,13 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
     (content: string, filename = DEFAULT_URDF_FILENAME) => {
       const parsed = parseURDF(content);
       const analysis = analyzeUrdfDocument(parsed.document);
-      const issueSummary = summarizeUrdfLoadIssues(
+      const issueSummary = summarizeUrdfLoadIssues({
         analysis,
-        parsed.isValid,
-        meshFiles,
         packageRoots,
-        urdfBasePath
-      );
+        meshFiles,
+        parsedIsValid: parsed.isValid,
+        urdfBasePath,
+      });
       setVizUrdfContent(content);
       setJointLimits(analysis.jointLimits);
       setJointAxes(analysis.jointAxes);
@@ -585,13 +520,13 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         : [];
       const autoEndEffector =
         autoEndEffectorCandidates.length === 1 ? autoEndEffectorCandidates[0] : null;
-      const issueSummary = summarizeUrdfLoadIssues(
+      const issueSummary = summarizeUrdfLoadIssues({
         analysis,
-        parsedUrdf.isValid,
-        nextMeshFiles,
-        nextPackageRoots,
-        nextBasePath
-      );
+        meshFiles: nextMeshFiles,
+        packageRoots: nextPackageRoots,
+        parsedIsValid: parsedUrdf.isValid,
+        urdfBasePath: nextBasePath,
+      });
 
       applyLoadedUrdfState({
         activePath: normalizedActivePath,
@@ -712,13 +647,13 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
         const urdfMeshReferences = analysis.meshReferences;
         const debugInfo = buildDebugMeshInfo(meshAssets, runtimeMeshFiles, urdfMeshReferences);
 
-        const issueSummary = summarizeUrdfLoadIssues(
+        const issueSummary = summarizeUrdfLoadIssues({
           analysis,
-          parsedUrdf.isValid,
-          runtimeMeshFiles,
-          packageRootsRecord,
-          resolvedBasePath
-        );
+          meshFiles: runtimeMeshFiles,
+          packageRoots: packageRootsRecord,
+          parsedIsValid: parsedUrdf.isValid,
+          urdfBasePath: resolvedBasePath,
+        });
 
         applyLoadedUrdfState({
           activePath: urdfRelativePath,
@@ -797,13 +732,13 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
 
       const parsedUrdf = parseURDF(nextContent);
       const analysis = analyzeUrdfDocument(parsedUrdf.document);
-      const issueSummary = summarizeUrdfLoadIssues(
+      const issueSummary = summarizeUrdfLoadIssues({
         analysis,
-        parsedUrdf.isValid,
-        meshes,
-        packageRootsRecord,
-        nextBasePath
-      );
+        meshFiles: meshes,
+        packageRoots: packageRootsRecord,
+        parsedIsValid: parsedUrdf.isValid,
+        urdfBasePath: nextBasePath,
+      });
 
       if (options.shouldApply && !options.shouldApply()) {
         return false;
@@ -844,13 +779,13 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
       if (content.trim()) {
         const parsed = parseURDF(content);
         const analysis = analyzeUrdfDocument(parsed.document);
-        const issueSummary = summarizeUrdfLoadIssues(
+        const issueSummary = summarizeUrdfLoadIssues({
           analysis,
-          parsed.isValid,
-          meshes,
+          meshFiles: meshes,
           packageRoots,
-          urdfBasePath
-        );
+          parsedIsValid: parsed.isValid,
+          urdfBasePath,
+        });
         setMissingPackageRefs(issueSummary.missingPackages);
         setUnmatchedURDFRefs(issueSummary.unmatchedRefs);
         setAbsoluteFileMeshRefs(issueSummary.absoluteFileRefs);
