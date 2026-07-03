@@ -19,8 +19,10 @@ import {
   SIMULATION_PREP_PANEL_DEFAULT_TOP_PX,
   SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX,
   SIMULATION_PREP_PANEL_WIDTH_PX,
+  clampSimulationPrepPanelPosition,
   getSimulationPrepPanelInitialPosition,
   getSimulationPrepPanelWidthPx,
+  type SimulationPrepPanelPosition,
 } from "@/features/layout/page/simulationPrepPanelParams";
 import {
   buildRobotMirrorSymmetryVisualizationScopeKey,
@@ -131,43 +133,6 @@ const STATUS_ICON = {
   warning: AlertTriangle,
   danger: AlertTriangle,
 } as const;
-
-type PanelPosition = {
-  left: number;
-  top: number;
-};
-
-const clampPanelPosition = ({
-  nextLeft,
-  nextTop,
-  panelWidth,
-  panelHeight,
-  viewportWidth,
-  viewportHeight,
-}: {
-  nextLeft: number;
-  nextTop: number;
-  panelWidth: number;
-  panelHeight: number;
-  viewportWidth: number;
-  viewportHeight: number;
-}): PanelPosition => {
-  const minLeft = SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX;
-  const minTop = SIMULATION_PREP_PANEL_DEFAULT_TOP_PX;
-  const maxLeft = Math.max(
-    SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX,
-    viewportWidth - panelWidth - SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX
-  );
-  const maxTop = Math.max(
-    SIMULATION_PREP_PANEL_DEFAULT_TOP_PX,
-    viewportHeight - panelHeight - SIMULATION_PREP_PANEL_VIEWPORT_MARGIN_PX
-  );
-
-  return {
-    left: Math.min(Math.max(nextLeft, minLeft), maxLeft),
-    top: Math.min(Math.max(nextTop, minTop), maxTop),
-  };
-};
 
 const buildPlausibilityHeading = ({
   verdict,
@@ -1399,7 +1364,7 @@ export const HealthActionPanel = ({
   const [robotMirrorExpanded, setRobotMirrorExpanded] = useState(false);
   const [radialSymmetryExpanded, setRadialSymmetryExpanded] = useState(false);
   const [showUnifiedRepeatedMeshes, setShowUnifiedRepeatedMeshes] = useState(false);
-  const [panelPosition, setPanelPosition] = useState<PanelPosition>(() =>
+  const [panelPosition, setPanelPosition] = useState<SimulationPrepPanelPosition>(() =>
     getSimulationPrepPanelInitialPosition(globalThis.window?.innerWidth ?? SIMULATION_PREP_PANEL_WIDTH_PX)
   );
   const [isDragging, setIsDragging] = useState(false);
@@ -1442,7 +1407,7 @@ export const HealthActionPanel = ({
       const panelHeight = panelRect?.height ?? 0;
 
       setPanelPosition((currentPosition) =>
-        clampPanelPosition({
+        clampSimulationPrepPanelPosition({
           nextLeft: currentPosition.left,
           nextTop: currentPosition.top,
           panelWidth,
@@ -1484,7 +1449,7 @@ export const HealthActionPanel = ({
       const panelHeight = panelRect?.height ?? 0;
 
       setPanelPosition(
-        clampPanelPosition({
+        clampSimulationPrepPanelPosition({
           nextLeft: dragState.originLeft + event.clientX - dragState.startX,
           nextTop: dragState.originTop + event.clientY - dragState.startY,
           panelWidth,
