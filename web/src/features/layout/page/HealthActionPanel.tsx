@@ -56,14 +56,8 @@ import {
   buildPhysicsActionSummary,
 } from "@/features/layout/page/healthActionPanelOverview";
 import {
-  buildExcludedLinkGroups,
-  buildExclusionReasonSummary,
-  buildGeometryDiagnosisHeadline,
-  buildGeometryDiagnosisNote,
-  buildSanitizationSummary,
-  countGeometryDiagnosisAttentionLinks,
+  buildGeometryDiagnosisViewState,
   formatDiagnosticNumber,
-  getPreparationVisualizationScope,
 } from "@/features/layout/page/healthActionPanelDiagnostics";
 import {
   PhysicsMaterialPicker,
@@ -435,9 +429,10 @@ export const HealthActionPanel = ({
     stagedEntryCount > 0 ||
     Boolean(synthesisRootLinkName);
   const excludedLinks = physicsPlausibilitySummary?.excludedLinks ?? [];
-  const exclusionReasonSummary = buildExclusionReasonSummary(excludedLinks);
-  const excludedLinkGroups = buildExcludedLinkGroups(excludedLinks);
-  const sanitizationSummary = buildSanitizationSummary(excludedLinks);
+  const geometryDiagnosis = buildGeometryDiagnosisViewState({
+    activeInertiaVisualizationScopeKey,
+    excludedLinks,
+  });
   const voxelRecoveryLinkNames = excludedLinks
     .filter((entry) => entry.recoveryDisposition === "recover")
     .map((entry) => entry.linkName);
@@ -1377,23 +1372,20 @@ export const HealthActionPanel = ({
               physicsPlausibilitySummary.comparableLinkCount < physicsAuditSummary.presentLinkCount ? (
                 <div className={DIAGNOSIS_CARD_CLASS}>
                   <div className="font-medium text-amber-200">
-                    {buildGeometryDiagnosisHeadline({
-                      excludedCount: physicsPlausibilitySummary.excludedLinks.length,
-                      attentionCount: countGeometryDiagnosisAttentionLinks(
-                        physicsPlausibilitySummary.excludedLinks
-                      ),
-                    })}
+                    {geometryDiagnosis.headline}
                   </div>
-                  {physicsPlausibilitySummary.excludedLinks.length > 0 ? (
+                  {geometryDiagnosis.hasExcludedLinks ? (
                     <div className="space-y-1.5">
-                      {buildGeometryDiagnosisNote({ sanitizationSummary }) ? (
+                      {geometryDiagnosis.note ? (
                         <div className="text-[10px] text-muted-foreground">
-                          {buildGeometryDiagnosisNote({ sanitizationSummary })}
+                          {geometryDiagnosis.note}
                         </div>
                       ) : null}
                       <div className="text-[10px]">
                         <span className="font-medium text-foreground">Why</span>
-                        <span className="ml-2 text-muted-foreground">{exclusionReasonSummary.join(" | ")}</span>
+                        <span className="ml-2 text-muted-foreground">
+                          {geometryDiagnosis.reasonSummaryText}
+                        </span>
                       </div>
                       {voxelRecoveryAction || regularizeAction ? (
                         <div className="space-y-1.5">
@@ -1432,40 +1424,36 @@ export const HealthActionPanel = ({
                         </div>
                       ) : null}
                       <div className="space-y-1.5" aria-label="Diagnosis details list">
-                        {excludedLinkGroups.map((group) => {
-                          const preparationVisualizationScope = getPreparationVisualizationScope(group);
-                          const isPreparationScopeActive =
-                            preparationVisualizationScope?.scopeKey === activeInertiaVisualizationScopeKey;
-
+                        {geometryDiagnosis.groups.map((group) => {
                           return (
                             <div key={group.key} className={DIAGNOSIS_GROUP_CLASS}>
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0 font-medium text-foreground">{group.summary}</div>
                                 <div className="flex items-center gap-1">
-                                  {preparationVisualizationScope && onToggleInertiaVisualizationScope ? (
+                                  {group.preparationVisualizationScope && onToggleInertiaVisualizationScope ? (
                                     <Button
                                       type="button"
                                       size="icon"
                                       variant="ghost"
                                       className={`${VISUALIZATION_TOGGLE_BUTTON_BASE_CLASS} ${
-                                        isPreparationScopeActive
+                                        group.isPreparationScopeActive
                                           ? VISUALIZATION_TOGGLE_BUTTON_ACTIVE_CLASS
                                           : VISUALIZATION_TOGGLE_BUTTON_INACTIVE_CLASS
                                       }`}
                                       onClick={() =>
                                         onToggleInertiaVisualizationScope(
-                                          preparationVisualizationScope.scopeKey,
-                                          preparationVisualizationScope.linkNames
+                                          group.preparationVisualizationScope.scopeKey,
+                                          group.preparationVisualizationScope.linkNames
                                         )
                                       }
                                       aria-label={`${
-                                        isPreparationScopeActive ? "Hide" : "Show"
-                                      } ${preparationVisualizationScope.label} inertia boxes`}
+                                        group.isPreparationScopeActive ? "Hide" : "Show"
+                                      } ${group.preparationVisualizationScope.label} inertia boxes`}
                                       title={`${
-                                        isPreparationScopeActive ? "Hide" : "Show"
-                                      } ${preparationVisualizationScope.label} inertia boxes in the viewer`}
+                                        group.isPreparationScopeActive ? "Hide" : "Show"
+                                      } ${group.preparationVisualizationScope.label} inertia boxes in the viewer`}
                                     >
-                                      {isPreparationScopeActive ? (
+                                      {group.isPreparationScopeActive ? (
                                         <EyeOff className={VISUALIZATION_TOGGLE_ICON_CLASS} />
                                       ) : (
                                         <Eye className={VISUALIZATION_TOGGLE_ICON_CLASS} />

@@ -5,6 +5,7 @@ import {
   buildExclusionReasonSummary,
   buildGeometryDiagnosisHeadline,
   buildGeometryDiagnosisNote,
+  buildGeometryDiagnosisViewState,
   buildSanitizationSummary,
   countGeometryDiagnosisAttentionLinks,
   formatDiagnosticNumber,
@@ -77,6 +78,48 @@ describe("healthActionPanelDiagnostics", () => {
       label: "PSD-regularization",
     });
     expect(getPreparationVisualizationScope(ghostGroup!)).toBeNull();
+  });
+
+  it("builds geometry diagnosis view state with active visualization scopes", () => {
+    const state = buildGeometryDiagnosisViewState({
+      activeInertiaVisualizationScopeKey: SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY,
+      excludedLinks: [
+        createExcludedLink({ linkName: "recover", recoveryDisposition: "recover" }),
+        createExcludedLink({ linkName: "regularize", recoveryDisposition: "regularize" }),
+        createExcludedLink({ linkName: "ghost", recoveryDisposition: "auto-exclude-ghost" }),
+      ],
+    });
+
+    expect(state).toMatchObject({
+      hasExcludedLinks: true,
+      headline: "Geometry diagnosis • 3 flagged, 2 need attention",
+      note: null,
+      reasonSummaryText:
+        "1 rescued and now voxel-ready | 1 can use PSD regularization | 1 removed as ghost geometry",
+    });
+    expect(
+      state.groups.map((group) => ({
+        active: group.isPreparationScopeActive,
+        key: group.key,
+        scopeKey: group.preparationVisualizationScope?.scopeKey ?? null,
+      }))
+    ).toEqual([
+      {
+        active: true,
+        key: "voxel-ready",
+        scopeKey: SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY,
+      },
+      {
+        active: false,
+        key: "near-miss",
+        scopeKey: SIMULATION_PREP_PSD_REGULARIZE_SCOPE_KEY,
+      },
+      {
+        active: false,
+        key: "ghost-geometry",
+        scopeKey: null,
+      },
+    ]);
   });
 
   it("summarizes sanitization risk and geometry diagnosis copy", () => {

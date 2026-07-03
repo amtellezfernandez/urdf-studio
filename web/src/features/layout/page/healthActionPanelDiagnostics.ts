@@ -277,3 +277,46 @@ export const buildGeometryDiagnosisNote = ({
   }
   return null;
 };
+
+export type GeometryDiagnosisGroupViewState = ExcludedLinkGroup & {
+  isPreparationScopeActive: boolean;
+  preparationVisualizationScope: PreparationVisualizationScope | null;
+};
+
+export type GeometryDiagnosisViewState = {
+  groups: GeometryDiagnosisGroupViewState[];
+  hasExcludedLinks: boolean;
+  headline: string;
+  note: string | null;
+  reasonSummaryText: string;
+};
+
+export const buildGeometryDiagnosisViewState = ({
+  activeInertiaVisualizationScopeKey,
+  excludedLinks,
+}: {
+  activeInertiaVisualizationScopeKey: string | null;
+  excludedLinks: ExcludedLinkEntry[];
+}): GeometryDiagnosisViewState => {
+  const groups = buildExcludedLinkGroups(excludedLinks).map((group) => {
+    const preparationVisualizationScope = getPreparationVisualizationScope(group);
+    return {
+      ...group,
+      isPreparationScopeActive:
+        preparationVisualizationScope?.scopeKey === activeInertiaVisualizationScopeKey,
+      preparationVisualizationScope,
+    };
+  });
+  const sanitizationSummary = buildSanitizationSummary(excludedLinks);
+
+  return {
+    groups,
+    hasExcludedLinks: excludedLinks.length > 0,
+    headline: buildGeometryDiagnosisHeadline({
+      attentionCount: countGeometryDiagnosisAttentionLinks(excludedLinks),
+      excludedCount: excludedLinks.length,
+    }),
+    note: buildGeometryDiagnosisNote({ sanitizationSummary }),
+    reasonSummaryText: buildExclusionReasonSummary(excludedLinks).join(" | "),
+  };
+};
