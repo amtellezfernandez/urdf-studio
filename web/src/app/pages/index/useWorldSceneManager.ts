@@ -64,8 +64,10 @@ import {
   downloadJsonDocument,
   downloadTextDocument,
   openFileSelectionDialog,
+  applyWorldSceneLayerObjectSourceOverride,
   readWorldRolloutConfigDraft,
-  toImportedObjectParams,
+  toImportedCreatedObjects,
+  toImportedWorldSceneCameras,
   waitForWorldRolloutJob,
 } from "@/app/pages/index/worldSceneManagerHelpers";
 
@@ -393,11 +395,7 @@ export const useWorldSceneManager = ({
 
   const applyWorldSceneObjects = useCallback(
     (sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]) => {
-      const nextObjects = sceneObjects.map((object) => ({
-        id: object.id,
-        ...toImportedObjectParams(object),
-      }));
-      applyCreatedObjects(nextObjects);
+      applyCreatedObjects(toImportedCreatedObjects(sceneObjects));
     },
     [applyCreatedObjects]
   );
@@ -415,13 +413,8 @@ export const useWorldSceneManager = ({
       const snapshot = manifest.world_snapshot;
       updateUrdfFile(snapshot.urdf_xml, `${manifest.package_id}-${manifest.version}.urdf`);
       clearCameras();
-      snapshot.cameras.forEach((camera) => {
-        addCamera({
-          name: camera.name,
-          parent_joint: camera.parent_joint,
-          pose: camera.pose,
-          intrinsics: camera.intrinsics,
-        });
+      toImportedWorldSceneCameras(snapshot.cameras).forEach((camera) => {
+        addCamera(camera);
       });
       applyWorldSceneObjects(snapshot.objects);
       setJointValues(snapshot.joint_positions);
@@ -547,13 +540,9 @@ export const useWorldSceneManager = ({
         worldLayoutUrl,
         contextLabel
       );
-      applyImportedWorldSceneLayer({
-        ...worldLayout,
-        objects: worldLayout.objects.map((object) => ({
-          ...object,
-          source: options.sourceOverride ?? object.source,
-        })),
-      });
+      applyImportedWorldSceneLayer(
+        applyWorldSceneLayerObjectSourceOverride(worldLayout, options.sourceOverride)
+      );
       if (embeddedCameras > 0) {
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
       }

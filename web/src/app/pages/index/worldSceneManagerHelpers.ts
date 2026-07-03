@@ -1,4 +1,5 @@
 import { Vector3 } from "three";
+import type { Camera } from "@/shared/types/camera";
 import { resolveWorldObjectGeometry, type CreatedObject } from "@/features/objects";
 import { normalizeWorldObjectRotationEuler } from "@/features/objects/worldObjectGeometry";
 import {
@@ -6,6 +7,7 @@ import {
   WORLD_ROLLOUT_JOB_POLL_INTERVAL_MS,
 } from "@/features/world-share/worldRolloutParams";
 import type { WorldScenePackageManifest } from "@/features/world-share/worldScenePackageTypes";
+import type { WorldSceneLayerSnapshot } from "@/features/world-share/worldSceneManifest";
 import type { WorldRolloutCheckerProfile } from "@/features/world-share/worldRolloutTypes";
 import {
   buildWorldRolloutConfigFromDraft,
@@ -125,4 +127,37 @@ export function toImportedObjectParams(
     importedObject.orbitTargetPoint = object.orbit_target_point;
   }
   return importedObject;
+}
+
+export function toImportedCreatedObjects(
+  sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"]
+): CreatedObject[] {
+  return sceneObjects.map((sceneObject) => ({
+    id: sceneObject.id,
+    ...toImportedObjectParams(sceneObject),
+  }));
+}
+
+export function toImportedWorldSceneCameras(
+  cameras: WorldScenePackageManifest["world_snapshot"]["cameras"]
+): Array<Omit<Camera, "id">> {
+  return cameras.map((camera) => ({
+    name: camera.name,
+    parent_joint: camera.parent_joint,
+    pose: camera.pose,
+    intrinsics: camera.intrinsics,
+  }));
+}
+
+export function applyWorldSceneLayerObjectSourceOverride(
+  worldLayout: WorldSceneLayerSnapshot,
+  sourceOverride?: NonNullable<CreatedObject["source"]>
+): WorldSceneLayerSnapshot {
+  return {
+    ...worldLayout,
+    objects: worldLayout.objects.map((sceneObject) => ({
+      ...sceneObject,
+      source: sourceOverride ?? sceneObject.source,
+    })),
+  };
 }
