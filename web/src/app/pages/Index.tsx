@@ -20,12 +20,7 @@ import { useUrdfMaterialHandlers } from "@/features/layout/page/useUrdfMaterialH
 import { PageLayout, type PageLayoutProps } from "@/features/layout/page/PageLayout";
 import type { CollaborationInviteAction } from "@/features/layout/page/top-nav/types";
 import type { IkAppliedMetadata } from "@/features/viewer/useIkSolver";
-import type {
-  AngleUnit,
-  InertialVisualizationSettings,
-  RotationAxis,
-  UrdfViewMode,
-} from "@/shared/types/feature";
+import type { AngleUnit, RotationAxis, UrdfViewMode } from "@/shared/types/feature";
 import { useUrdfLoader } from "@/features/urdf/loader/useUrdfLoader";
 import { useUrdfSelection } from "@/features/urdf/selection";
 import { useUrdfViewer } from "@/features/urdf/viewer";
@@ -72,6 +67,7 @@ import {
   hasLoadReviewAttention,
 } from "@/app/pages/index/loadReviewDerivations";
 import { useLoadReviewPanelController } from "@/app/pages/index/useLoadReviewPanelController";
+import { useSimulationPrepViewerHighlights } from "@/app/pages/index/useSimulationPrepViewerHighlights";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
@@ -109,7 +105,6 @@ import {
   type SimulationPrepVisualizationPreview,
   SIMULATION_PREP_PSD_REGULARIZE_SCOPE_KEY,
   SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY,
-  withSimulationPrepInertiaVisualization,
 } from "@/features/layout/page/simulationPrepViewerState";
 import { IndexModeGate } from "@/app/pages/index/IndexModeGate";
 import { useIluCalibrationFocus } from "@/app/pages/index/useIluCalibrationFocus";
@@ -198,13 +193,6 @@ import {
 } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
 import { applyRepeatedInertiaSymmetryFix } from "@/features/layout/page/repeatedInertiaSymmetryFix";
 import type { InertiaReliabilityEntry } from "@/features/viewer/InertialVisualization";
-
-const cloneInertialVisualizationSettings = (
-  settings: InertialVisualizationSettings
-): InertialVisualizationSettings => ({
-  ...settings,
-  scopedLinkNames: settings.scopedLinkNames ? [...settings.scopedLinkNames] : null,
-});
 
 const Index = () => {
   const navigate = useNavigate();
@@ -493,8 +481,6 @@ const Index = () => {
     setInertialVisualization,
     handleFrameChange,
   } = useUrdfViewer();
-  const simulationPrepInertialVisualizationBeforeOpenRef =
-    useRef<InertialVisualizationSettings | null>(null);
   const {
     sidebarWidth,
     isSidebarCollapsed,
@@ -549,6 +535,21 @@ const Index = () => {
   const [simulationPrepResetPoseRequestKey, setSimulationPrepResetPoseRequestKey] = useState<
     string | null
   >(null);
+  const {
+    clearSimulationPrepViewerHighlights,
+    closeSimulationPrepPanel,
+    discardSimulationPrepViewerHighlightSnapshot,
+    enableSimulationPrepViewerHighlights,
+    openSimulationPrepPanel,
+  } = useSimulationPrepViewerHighlights({
+    panelOpen: showHealthActionPanel,
+    setActiveInertiaVisualizationScopeKey,
+    setHoveredInertiaVisualizationPreview,
+    setInertialVisualization,
+    setShowHealthActionPanel,
+    setShowLoadIssues,
+    setSimulationPrepResetPoseRequestKey,
+  });
   const hasCamerasToExport = cameras.length > 0;
   const canRevert = useMemo(
     () => Boolean(savedVizUrdfContent && savedVizUrdfContent !== vizUrdfContent),
@@ -1664,7 +1665,7 @@ const Index = () => {
   }, [hasPhysicsPreflightInputReady, loadPhysicsPreflight]);
 
   const resetSimulationPrepReviewState = useCallback(() => {
-    simulationPrepInertialVisualizationBeforeOpenRef.current = null;
+    discardSimulationPrepViewerHighlightSnapshot();
     setShowHealthActionPanel(false);
     setHoveredInertiaVisualizationPreview(null);
     setActiveInertiaVisualizationScopeKey(null);
@@ -1679,7 +1680,7 @@ const Index = () => {
     setRobotMirrorOutcome(null);
     setActiveRobotMirrorAction(null);
     setIsRobotMirrorActing(false);
-  }, [setInertialVisualization]);
+  }, [discardSimulationPrepViewerHighlightSnapshot, setInertialVisualization]);
 
   useEffect(() => {
     if (urdfLoadRevision === 0 || !originalUrdfContent.trim()) {
@@ -2264,59 +2265,6 @@ const Index = () => {
   });
 
   const worldHubEnabled = isWorldHubConfigured();
-  const enableSimulationPrepViewerHighlights = useCallback(
-    (scopedLinkNames?: readonly string[] | null) => {
-      setInertialVisualization((current) => {
-        if (!simulationPrepInertialVisualizationBeforeOpenRef.current) {
-          simulationPrepInertialVisualizationBeforeOpenRef.current =
-            cloneInertialVisualizationSettings(current);
-        }
-        return withSimulationPrepInertiaVisualization(current, scopedLinkNames);
-      });
-    },
-    [setInertialVisualization]
-  );
-
-  const restoreSimulationPrepViewerHighlights = useCallback(() => {
-    setInertialVisualization((current) => {
-      const previous = simulationPrepInertialVisualizationBeforeOpenRef.current;
-      simulationPrepInertialVisualizationBeforeOpenRef.current = null;
-      if (previous) {
-        return cloneInertialVisualizationSettings(previous);
-      }
-      return current.scopedLinkNames === null
-        ? current
-        : syncSimulationPrepInertiaVisualizationScope(current);
-    });
-  }, [setInertialVisualization]);
-
-  const clearSimulationPrepViewerHighlights = useCallback(() => {
-    setHoveredInertiaVisualizationPreview(null);
-    setActiveInertiaVisualizationScopeKey(null);
-    restoreSimulationPrepViewerHighlights();
-  }, [restoreSimulationPrepViewerHighlights]);
-
-  const closeSimulationPrepPanel = useCallback(() => {
-    setShowHealthActionPanel(false);
-    clearSimulationPrepViewerHighlights();
-  }, [clearSimulationPrepViewerHighlights]);
-
-  const openSimulationPrepPanel = () => {
-    setShowLoadIssues(false);
-    enableSimulationPrepViewerHighlights();
-    setHoveredInertiaVisualizationPreview(null);
-    setActiveInertiaVisualizationScopeKey(null);
-    setSimulationPrepResetPoseRequestKey(String(Date.now()));
-    setShowHealthActionPanel(true);
-  };
-
-  useEffect(() => {
-    if (showHealthActionPanel) {
-      return;
-    }
-    clearSimulationPrepViewerHighlights();
-  }, [clearSimulationPrepViewerHighlights, showHealthActionPanel]);
-
   const handleToggleInertiaVisualizationScope = useCallback(
     (
       scopeKey: string,
