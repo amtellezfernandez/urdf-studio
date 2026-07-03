@@ -30,17 +30,17 @@ def _hash_urdf(urdf_xml: str) -> str:
 
 
 def _load_urdf_from_xml(urdf_xml: str) -> yourdfpy.URDF:
-    with tempfile.NamedTemporaryFile("w", suffix=".urdf", delete=False) as tmp:
-        tmp.write(urdf_xml)
-        tmp_path = tmp.name
+    with tempfile.NamedTemporaryFile("w", suffix=".urdf", delete=False) as urdf_file:
+        urdf_file.write(urdf_xml)
+        temporary_urdf_path = urdf_file.name
     try:
-        urdf = yourdfpy.URDF.load(tmp_path)  # type: ignore[attr-defined]
+        loaded_urdf = yourdfpy.URDF.load(temporary_urdf_path)  # type: ignore[attr-defined]
     finally:
         try:
-            Path(tmp_path).unlink(missing_ok=True)
+            Path(temporary_urdf_path).unlink(missing_ok=True)
         except OSError:
             pass
-    return urdf
+    return loaded_urdf
 
 
 def _get_or_create_entry(urdf_xml: str) -> KinematicsEntry:
@@ -48,24 +48,28 @@ def _get_or_create_entry(urdf_xml: str) -> KinematicsEntry:
         raise HTTPException(status_code=400, detail="URDF content is empty")
     sanitized_urdf = strip_urdf_for_kinematics(urdf_xml)
     urdf_hash = _hash_urdf(sanitized_urdf)
-    entry = _KINEMATICS_CACHE.get(urdf_hash)
-    if entry is not None:
-        return entry
+    cached_entry = _KINEMATICS_CACHE.get(urdf_hash)
+    if cached_entry is not None:
+        return cached_entry
     try:
-        urdf = _load_urdf_from_xml(sanitized_urdf)
+        robot_model = _load_urdf_from_xml(sanitized_urdf)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Failed to load URDF: {exc}") from exc
-    entry = KinematicsEntry(urdf_hash=urdf_hash, urdf_xml=sanitized_urdf, urdf=urdf)
+    entry = KinematicsEntry(
+        urdf_hash=urdf_hash,
+        urdf_xml=sanitized_urdf,
+        urdf=robot_model,
+    )
     _KINEMATICS_CACHE[urdf_hash] = entry
     return entry
 
 
 def _build_joint_values(
-    urdf: yourdfpy.URDF, joint_values: Dict[str, float]
+    robot_model: yourdfpy.URDF, joint_values: Dict[str, float]
 ) -> Dict[str, float]:
     return {
-        name: float(joint_values.get(name, 0.0))
-        for name in urdf.actuated_joint_names
+        joint_name: float(joint_values.get(joint_name, 0.0))
+        for joint_name in robot_model.actuated_joint_names
     }
 
 
@@ -107,7 +111,10 @@ def _quaternion_from_rotation_matrix(rotation: np.ndarray) -> List[float]:
 def rotation_matrix_to_wxyz(rotation: List[List[float]]) -> List[float]:
     rotation_matrix = np.asarray(rotation, dtype=np.float64)
     if rotation_matrix.shape != (3, 3):
-      raise HTTPException(status_code=400, detail="target_rotation must be a 3x3 matrix")
+        raise HTTPException(
+            status_code=400,
+            detail="target_rotation must be a 3x3 matrix",
+        )
     return _quaternion_from_rotation_matrix(rotation_matrix)
 
 
@@ -115,45 +122,59 @@ def compute_link_pose(
     urdf_xml: str, joint_values: Dict[str, float], target_link: str
 ) -> Tuple[List[float], List[float]]:
     entry = _get_or_create_entry(urdf_xml)
-    urdf = entry.urdf
-    if target_link not in urdf.link_map:
+    robot_model = entry.urdf
+    if target_link not in robot_model.link_map:
         raise HTTPException(
             status_code=400,
             detail=f"Target link '{target_link}' not found in URDF.",
         )
 
     try:
-        urdf.update_cfg(_build_joint_values(urdf, joint_values))
-        transform = np.asarray(urdf.get_transform(target_link), dtype=np.float64)
+        robot_model.update_cfg(_build_joint_values(robot_model, joint_values))
+        transform = np.asarray(
+            robot_model.get_transform(target_link),
+            dtype=np.float64,
+        )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Forward kinematics failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"Forward kinematics failed: {exc}",
+        ) from exc
 
     position = [float(value) for value in transform[:3, 3]]
     quaternion = _quaternion_from_rotation_matrix(transform[:3, :3])
     return position, quaternion
 
 
-def forward_kinematics(req: FKRequest) -> FKResponse:
-    entry = _get_or_create_entry(req.urdf)
-    urdf = entry.urdf
+def forward_kinematics(fk_request: FKRequest) -> FKResponse:
+    entry = _get_or_create_entry(fk_request.urdf)
+    robot_model = entry.urdf
 
     try:
-        urdf.update_cfg(_build_joint_values(urdf, req.joint_values))
+        robot_model.update_cfg(
+            _build_joint_values(robot_model, fk_request.joint_values)
+        )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Forward kinematics failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"Forward kinematics failed: {exc}",
+        ) from exc
 
     links: List[FKLink] = []
-    for name in urdf.link_map.keys():
+    for link_name in robot_model.link_map.keys():
         try:
-            transform = np.asarray(urdf.get_transform(name), dtype=np.float64)
+            transform = np.asarray(
+                robot_model.get_transform(link_name),
+                dtype=np.float64,
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f"Forward kinematics failed for link '{name}': {exc}",
+                detail=f"Forward kinematics failed for link '{link_name}': {exc}",
             ) from exc
         links.append(
             FKLink(
-                name=name,
+                name=link_name,
                 position=[float(value) for value in transform[:3, 3]],
                 quaternion_wxyz=_quaternion_from_rotation_matrix(transform[:3, :3]),
             )
@@ -161,7 +182,7 @@ def forward_kinematics(req: FKRequest) -> FKResponse:
 
     metadata: Dict[str, Any] = {
         "urdf_hash": entry.urdf_hash,
-        "actuated_joint_names": list(urdf.actuated_joint_names),
-        "all_link_names": list(urdf.link_map.keys()),
+        "actuated_joint_names": list(robot_model.actuated_joint_names),
+        "all_link_names": list(robot_model.link_map.keys()),
     }
     return FKResponse(links=links, metadata=metadata)
