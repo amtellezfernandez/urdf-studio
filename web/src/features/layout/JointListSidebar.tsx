@@ -9,7 +9,6 @@ import React, {
 import { JointControl } from "@/features/layout/JointControl";
 import {
   Camera as CameraIcon,
-  Check,
   ChevronDown,
   ChevronRight,
   GripVertical,
@@ -88,6 +87,7 @@ import { CameraEditorPanel } from "@/features/layout/CameraEditorPanel";
 import { ObjectEditorPanel } from "@/features/layout/ObjectEditorPanel";
 import { LinkBatchEditorPanel } from "@/features/layout/LinkBatchEditorPanel";
 import { SidebarStructureControls } from "@/features/layout/SidebarStructureControls";
+import { LinkBrowserView } from "@/features/layout/LinkBrowserView";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 
 const toggleStringSetValue = (previous: Set<string>, value: string) => {
@@ -110,33 +110,7 @@ const SIDEBAR_PANEL_LAYOUT = JOINT_LIST_SIDEBAR_PARAMS.panelLayout;
 const SIDEBAR_SECTION_CLASS = JOINT_LIST_CLASS_NAMES.sidebarSection;
 const SIDEBAR_SECTION_HEADER_CLASS = JOINT_LIST_CLASS_NAMES.sidebarSectionHeader;
 const MIN_LINK_BATCH_SELECTION_FOR_EDITOR = JOINT_LIST_SIDEBAR_PARAMS.minLinkBatchSelectionForEditor;
-const BATCH_TOGGLE_BASE_CLASS = JOINT_LIST_CLASS_NAMES.batchToggleBase;
-const BATCH_TOGGLE_SELECTED_CLASS = JOINT_LIST_CLASS_NAMES.batchToggleSelected;
-const BATCH_TOGGLE_UNSELECTED_CLASS = JOINT_LIST_CLASS_NAMES.batchToggleUnselected;
-const LINK_TICK_SIZE_CLASS = JOINT_LIST_CLASS_NAMES.linkTickSize;
-const LINK_SECTION_HEADER_CLASS = JOINT_LIST_CLASS_NAMES.linkSectionHeader;
-const LINK_COLLAPSE_BUTTON_CLASS = JOINT_LIST_CLASS_NAMES.linkCollapseButton;
-const LINK_ACTION_CHIP_CLASS = JOINT_LIST_CLASS_NAMES.linkActionChip;
-const LINK_STATUS_CHIP_CLASS = JOINT_LIST_CLASS_NAMES.linkStatusChip;
-const LINK_BROWSER_TEXT_CLASS = JOINT_LIST_CLASS_NAMES.linkBrowserText;
 const STRUCTURE_SUBGROUP_ACTION_BUTTON_CLASS = JOINT_LIST_CLASS_NAMES.structureSubgroupActionButton;
-const BatchSelectionTick = ({
-  selected,
-  squareClassName,
-}: {
-  selected: boolean;
-  squareClassName: string;
-}) => (
-  <span
-    className={cn(
-      BATCH_TOGGLE_BASE_CLASS,
-      squareClassName,
-      selected ? BATCH_TOGGLE_SELECTED_CLASS : BATCH_TOGGLE_UNSELECTED_CLASS
-    )}
-  >
-    <Check className="h-2.5 w-2.5" />
-  </span>
-);
 
 interface JointListSidebarProps {
   availableJoints: string[];
@@ -1026,265 +1000,39 @@ export const JointListSidebar = ({
             }}
           >
             {effectiveStructureViewMode === "links" ? (
-              // Links view
-              displayedLinkSections.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-                  {searchQuery
-                    ? "No links match the search"
-                    : "No links available"}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between rounded-sm border border-border/30 bg-muted/10 px-2 py-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex items-center gap-1.5 text-muted-foreground hover:text-foreground",
-                        LINK_BROWSER_TEXT_CLASS
-                      )}
-                      onClick={toggleSelectAllFilteredLinks}
-                    >
-                      <BatchSelectionTick
-                        selected={areAllFilteredLinksSelected}
-                        squareClassName={LINK_TICK_SIZE_CLASS}
-                      />
-                      <span>{areAllFilteredLinksSelected ? "Remove selection" : "Select all"}</span>
-                    </button>
-                    <span className={cn("text-muted-foreground tabular-nums", LINK_BROWSER_TEXT_CLASS)}>
-                      {selectedBatchLinkNames.length} selected
-                    </span>
-                  </div>
-                  {displayedLinkSections.map((section) => {
-                    const isCollapsed = collapsedLinkSectionIds.has(section.id);
-                    const sectionDisplayLabel = getDisplayedLinkSectionLabel(section.label);
-                    const visibleLinkNames = isCollapsed
-                      ? effectiveEndEffectorLink && section.items.includes(effectiveEndEffectorLink)
-                        ? [effectiveEndEffectorLink]
-                        : []
-                      : section.items;
-                    return (
-                    <StructureSectionShell
-                      key={section.id}
-                      sectionLabel={section.label}
-                      itemCount={section.items.length}
-                      canReassignStructureGroups={canReassignDisplayedLinkGroups}
-                      isStructureDragActive={isStructureDragActive}
-                      activeStructureDropGroup={activeStructureDropGroup}
-                      onDragOver={handleStructureGroupDragOver}
-                      onDragLeave={handleStructureGroupDragLeave}
-                      onDrop={handleStructureGroupDrop}
-                      headerClassName={LINK_SECTION_HEADER_CLASS}
-                      renderHeaderContent={() => (
-                        <div className="flex min-w-0 items-center gap-1">
-                          <button
-                            type="button"
-                            className={LINK_COLLAPSE_BUTTON_CLASS}
-                            onClick={() => toggleLinkSectionCollapse(section.id)}
-                            title={
-                              isCollapsed
-                                ? `Show ${sectionDisplayLabel} links`
-                                : `Hide ${sectionDisplayLabel} links`
-                            }
-                            aria-label={
-                              isCollapsed
-                                ? `Show ${sectionDisplayLabel} links`
-                                : `Hide ${sectionDisplayLabel} links`
-                            }
-                          >
-                            <ChevronRight
-                              className={cn(
-                                "h-3 w-3 transition-transform",
-                                !isCollapsed && "rotate-90"
-                              )}
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            className="flex min-w-0 items-center gap-1.5 text-left text-muted-foreground/85 hover:text-foreground"
-                            onClick={() => toggleBatchLinkGroup(section.items)}
-                            title={`Select all links in ${sectionDisplayLabel}`}
-                          >
-                            <BatchSelectionTick
-                              selected={
-                                section.items.length > 0 &&
-                                section.items.every((linkName) => selectedBatchLinks.has(linkName))
-                              }
-                              squareClassName={LINK_TICK_SIZE_CLASS}
-                            />
-                            <span className="truncate">{sectionDisplayLabel}</span>
-                          </button>
-                        </div>
-                      )}
-                    >
-                      {visibleLinkNames.map((linkName) => {
-                        const isBatchSelected = selectedBatchLinks.has(linkName);
-                        const isLinkSelected = selectedLink === linkName;
-                        const isLinkHighlighted = highlightedLinkName === linkName;
-                        const hasUrdfCollision = linksWithCollisionSet.has(linkName);
-                        const isCollisionSimplified =
-                          hasUrdfCollision && simplifiedLinkSet.has(linkName);
-                        const isCollisionMerged = hasUrdfCollision && mergedLinkSet.has(linkName);
-                        const hasEeStatus = effectiveEndEffectorLink === linkName;
-                        const hasVoxelDerivedInertial = voxelDerivedInertialLinkSet.has(linkName);
-                        const linkData = analysis?.isValid ? analysis.linkDataByName[linkName] : null;
-                        const canAddMeshCollision =
-                          !hasUrdfCollision &&
-                          Boolean(
-                            linkData?.visuals.some(
-                              (visual) =>
-                                visual.geometry.type === "mesh" &&
-                                Boolean(visual.geometry.params.filename)
-                            )
-                          );
-                        const statusSummaryLabel = [
-                          isCollisionMerged ? "Mrg" : isCollisionSimplified ? "Simp" : null,
-                          hasEeStatus ? "EE" : null,
-                        ]
-                          .filter((value): value is string => value !== null)
-                          .join("+");
-                        const statusSummaryTitle = [
-                          isCollisionMerged
-                            ? "Merged collision active"
-                            : isCollisionSimplified
-                              ? "Collision simplification enabled"
-                              : null,
-                          hasEeStatus ? "Marked as end effector" : null,
-                        ]
-                          .filter((value): value is string => value !== null)
-                          .join(" • ");
-
-                        return (
-                          <div
-                            key={linkName}
-                            className={cn(
-                              "group flex items-center gap-1.5 rounded-md border px-2 py-1.5 transition-colors cursor-pointer",
-                              isLinkSelected
-                                ? "border-sky-500/45 bg-sky-500/12"
-                                : isLinkHighlighted
-                                  ? "border-sky-500/30 bg-sky-500/8"
-                                : "border-transparent hover:border-border/40 hover:bg-muted/20",
-                              canReassignDisplayedLinkGroups && "cursor-grab active:cursor-grabbing"
-                            )}
-                            draggable={canReassignDisplayedLinkGroups}
-                            onDragStart={(event) =>
-                              handleStructureDragStart(event, {
-                                sourceType: "link",
-                                sourceName: linkName,
-                                sourceGroupLabel: section.label,
-                              })
-                            }
-                            onDragEnd={handleStructureDragEnd}
-                            onClick={() => selectSidebarLink(linkName)}
-                          >
-                            {canReassignDisplayedLinkGroups ? (
-                              <span
-                                className="inline-flex items-center text-muted-foreground/50"
-                                title="Drag to move link to another group"
-                              >
-                                <GripVertical className="h-3 w-3" />
-                              </span>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="inline-flex"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleBatchLinkToggle(linkName);
-                                selectSidebarLink(linkName);
-                              }}
-                              title={
-                                isBatchSelected
-                                  ? "Remove from link batch selection"
-                                  : "Add to link batch selection"
-                              }
-                            >
-                              <BatchSelectionTick
-                                selected={isBatchSelected}
-                                squareClassName={LINK_TICK_SIZE_CLASS}
-                              />
-                            </button>
-                            <span
-                              className={cn(
-                                "font-medium min-w-0 flex-1 truncate text-foreground/90",
-                                LINK_BROWSER_TEXT_CLASS
-                              )}
-                              title={linkName}
-                            >
-                              {linkName}
-                            </span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {hasUrdfCollision ? (
-                                <span
-                                  className={cn(
-                                    LINK_STATUS_CHIP_CLASS,
-                                    "border-slate-400/40 bg-slate-400/15 text-slate-200"
-                                  )}
-                                  title="Link has URDF collision definitions"
-                                >
-                                  Col
-                                </span>
-                              ) : canAddMeshCollision ? (
-                                <button
-                                  type="button"
-                                  className={LINK_ACTION_CHIP_CLASS}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    addMeshCollisionForLink(linkName);
-                                  }}
-                                  title="Add mesh collision from visual geometry (manual)"
-                                >
-                                  Add Col
-                                </button>
-                              ) : null}
-                              {statusSummaryLabel ? (
-                                <span
-                                  className={cn(
-                                    LINK_STATUS_CHIP_CLASS,
-                                    "border-cyan-500/40 bg-cyan-500/15 text-cyan-200"
-                                  )}
-                                  title={statusSummaryTitle}
-                                >
-                                  {statusSummaryLabel}
-                                </span>
-                              ) : null}
-                              {hasVoxelDerivedInertial ? (
-                                <span
-                                  className={cn(
-                                    LINK_STATUS_CHIP_CLASS,
-                                    "border-cyan-400/40 bg-cyan-400/12 text-cyan-100"
-                                  )}
-                                  title="The staged inertial draft for this link used volumetric voxel fallback."
-                                >
-                                  Vox
-                                </span>
-                              ) : null}
-                            {onMarkAsEndEffector ? (
-                              <button
-                                type="button"
-                                className={cn(
-                                  LINK_ACTION_CHIP_CLASS,
-                                  effectiveEndEffectorLink === linkName
-                                    ? "border-primary/60 bg-primary/20 text-primary"
-                                    : ""
-                                )}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onMarkAsEndEffector(endEffectorLink === linkName ? null : linkName);
-                                }}
-                                title={endEffectorLink === linkName ? "Clear end-effector" : "Mark as end-effector"}
-                              >
-                                {endEffectorLink === linkName ? "Clear EE" : "Set EE"}
-                              </button>
-                            ) : null}
-                            </div>
-                          </div>
-                        );
-                        })}
-                    </StructureSectionShell>
-                    );
-                  })}
-                </div>
-              )
+              <LinkBrowserView
+                activeStructureDropGroup={activeStructureDropGroup}
+                areAllFilteredLinksSelected={areAllFilteredLinksSelected}
+                canReassignDisplayedLinkGroups={canReassignDisplayedLinkGroups}
+                collapsedLinkSectionIds={collapsedLinkSectionIds}
+                displayedLinkSections={displayedLinkSections}
+                effectiveEndEffectorLink={effectiveEndEffectorLink}
+                endEffectorLink={endEffectorLink}
+                formatSectionLabel={getDisplayedLinkSectionLabel}
+                highlightedLinkName={highlightedLinkName}
+                isStructureDragActive={isStructureDragActive}
+                linkDataByName={analysis?.isValid ? analysis.linkDataByName : null}
+                linksWithCollisionSet={linksWithCollisionSet}
+                mergedLinkSet={mergedLinkSet}
+                onAddMeshCollisionForLink={addMeshCollisionForLink}
+                onBatchLinkToggle={handleBatchLinkToggle}
+                onLinkSelect={selectSidebarLink}
+                onMarkAsEndEffector={onMarkAsEndEffector}
+                onStructureDragEnd={handleStructureDragEnd}
+                onStructureDragStart={handleStructureDragStart}
+                onStructureGroupDragLeave={handleStructureGroupDragLeave}
+                onStructureGroupDragOver={handleStructureGroupDragOver}
+                onStructureGroupDrop={handleStructureGroupDrop}
+                onToggleBatchLinkGroup={toggleBatchLinkGroup}
+                onToggleLinkSectionCollapse={toggleLinkSectionCollapse}
+                onToggleSelectAllFilteredLinks={toggleSelectAllFilteredLinks}
+                searchQuery={searchQuery}
+                selectedBatchLinkNames={selectedBatchLinkNames}
+                selectedBatchLinks={selectedBatchLinks}
+                selectedLink={selectedLink}
+                simplifiedLinkSet={simplifiedLinkSet}
+                voxelDerivedInertialLinkSet={voxelDerivedInertialLinkSet}
+              />
             ) : effectiveStructureViewMode === "flat" ? (
               // Flat view
               groupedJointsWithCustom.length === 0 ? (
