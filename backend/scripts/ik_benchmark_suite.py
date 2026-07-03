@@ -83,99 +83,6 @@ def generate_targets(target_set: str, count: int) -> List[Tuple[float, float, fl
     return targets
 
 
-def sample_random_cfgs(
-    lower: np.ndarray,
-    upper: np.ndarray,
-    count: int,
-    rng: random.Random,
-) -> List[np.ndarray]:
-    cfgs: List[np.ndarray] = []
-    ranges = upper - lower
-    ranges = np.where(ranges <= 0.0, 1.0, ranges)
-    for _ in range(count):
-        unit = np.array([rng.random() for _ in range(len(lower))], dtype=np.float32)
-        cfgs.append(lower + unit * ranges)
-    return cfgs
-
-
-def sample_near_limit_cfgs(
-    lower: np.ndarray,
-    upper: np.ndarray,
-    count: int,
-    rng: random.Random,
-    margin_fraction: float = 0.08,
-) -> List[np.ndarray]:
-    cfgs: List[np.ndarray] = []
-    ranges = upper - lower
-    ranges = np.where(ranges <= 0.0, 1.0, ranges)
-    margins = ranges * margin_fraction
-    for _ in range(count):
-        cfg = np.zeros_like(lower)
-        for idx in range(len(lower)):
-            if rng.random() < 0.5:
-                cfg[idx] = lower[idx] + rng.random() * margins[idx]
-            else:
-                cfg[idx] = upper[idx] - rng.random() * margins[idx]
-        cfgs.append(cfg)
-    return cfgs
-
-
-def sanitize_limits(lower: np.ndarray, upper: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    finite = np.isfinite(lower) & np.isfinite(upper)
-    safe_lower = np.where(finite, lower, 0.0)
-    safe_upper = np.where(finite, upper, 0.0)
-    return safe_lower, safe_upper
-
-
-def filter_diverse_positions(
-    positions: List[Tuple[float, float, float]],
-    orientations: List[Tuple[float, float, float, float]],
-    min_distance: float,
-    count: int,
-) -> Tuple[List[Tuple[float, float, float]], List[Tuple[float, float, float, float]]]:
-    selected_positions: List[Tuple[float, float, float]] = []
-    selected_orientations: List[Tuple[float, float, float, float]] = []
-    for pos, ori in zip(positions, orientations):
-        if len(selected_positions) >= count:
-            break
-        if not selected_positions:
-            selected_positions.append(pos)
-            selected_orientations.append(ori)
-            continue
-        distances = [
-            math.dist(pos, existing) for existing in selected_positions
-        ]
-        if min(distances) >= min_distance:
-            selected_positions.append(pos)
-            selected_orientations.append(ori)
-    if len(selected_positions) < count:
-        for pos, ori in zip(positions, orientations):
-            if len(selected_positions) >= count:
-                break
-            if pos in selected_positions:
-                continue
-            selected_positions.append(pos)
-            selected_orientations.append(ori)
-    return selected_positions, selected_orientations
-
-
-def compute_manipulability(robot, cfg: np.ndarray, link_idx: int) -> float:
-    cfg_jnp = jnp.array(cfg, dtype=jnp.float32)
-    jacobian = jax.jacfwd(
-        lambda q: jaxlie.SE3(robot.forward_kinematics(q)).translation()
-    )(cfg_jnp)[link_idx]
-    jjt = jacobian @ jacobian.T
-    value = jnp.sqrt(jnp.maximum(0.0, jnp.linalg.det(jjt)))
-    return float(value)
-
-
-def pose_from_cfg(robot, cfg: np.ndarray, link_idx: int) -> Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]:
-    cfg_jnp = jnp.array(cfg, dtype=jnp.float32)
-    poses = robot.forward_kinematics(cfg_jnp)
-    w, x, y, z, px, py, pz = map(float, poses[link_idx])
-    return (px, py, pz), (w, x, y, z)
-
-
 def generate_target_set(
     target_set: str,
     count: int,
@@ -212,7 +119,7 @@ def solve_policy(
     target_wxyz: Tuple[float, float, float, float],
 ) -> Tuple[IKRequest | IkSolveRequest, Dict[str, float], Dict]:
     if policy == "orchestrated":
-        req = IkSolveRequest(
+        request = IkSolveRequest(
             urdf=urdf_xml,
             joint_values={},
             target_link=target_link,
@@ -221,41 +128,41 @@ def solve_policy(
             solver_chain=["placo", "amik"],
             orientation_mode="prefer",
         )
-        response = orchestrated_ik(req)
-        return req, response.solution, response.metadata
+        response = orchestrated_ik(request)
+        return request, response.solution, response.metadata
     if policy == "amik-direct":
-        req = IKRequest(
+        request = IKRequest(
             urdf=urdf_xml,
             joint_values={},
             target_link=target_link,
             target_position=list(target_position),
             target_wxyz=list(target_wxyz),
         )
-        response = amik_ik(req)
-        return req, response.solution, response.metadata
+        response = amik_ik(request)
+        return request, response.solution, response.metadata
     if policy == "placo-direct":
-        req = IKRequest(
+        request = IKRequest(
             urdf=urdf_xml,
             joint_values={},
             target_link=target_link,
             target_position=list(target_position),
             target_wxyz=list(target_wxyz),
         )
-        response = placo_ik(req)
-        return req, response.solution, response.metadata
+        response = placo_ik(request)
+        return request, response.solution, response.metadata
     raise ValueError(f"Unknown policy: {policy}")
 
 
 def summarize(values: List[float]) -> Dict[str, float]:
     if not values:
         return {"p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0, "mean": 0.0}
-    arr = np.array(values, dtype=float)
+    values_array = np.array(values, dtype=float)
     return {
-        "p50": float(np.percentile(arr, 50)),
-        "p90": float(np.percentile(arr, 90)),
-        "p95": float(np.percentile(arr, 95)),
-        "p99": float(np.percentile(arr, 99)),
-        "mean": float(np.mean(arr)),
+        "p50": float(np.percentile(values_array, 50)),
+        "p90": float(np.percentile(values_array, 90)),
+        "p95": float(np.percentile(values_array, 95)),
+        "p99": float(np.percentile(values_array, 99)),
+        "mean": float(np.mean(values_array)),
     }
 
 
@@ -296,21 +203,19 @@ def main() -> None:
         for target_set in args.target_sets:
             seed_map = {
                 "nominal": 101,
-                "near_limit": 103,
-                "near_singular": 107,
                 "unreachable": 109,
             }
             seed = seed_map.get(target_set, 123)
             positions, orientations = generate_target_set(
                 target_set, args.targets, urdf_xml, target_link, seed
             )
-            for target_index, target in enumerate(positions):
+            for target_index, target_position in enumerate(positions):
                 target_wxyz = orientations[target_index]
                 for policy in args.policies:
                     start = time.perf_counter()
                     try:
                         _, solution, metadata = solve_policy(
-                            policy, urdf_xml, target_link, target, target_wxyz
+                            policy, urdf_xml, target_link, target_position, target_wxyz
                         )
                     except Exception:
                         duration_ms = (time.perf_counter() - start) * 1000.0
@@ -324,7 +229,7 @@ def main() -> None:
                                 solver_policy=policy,
                                 solver_used=None,
                                 target_index=target_index,
-                                target_position=target,
+                                target_position=target_position,
                                 target_wxyz=target_wxyz,
                                 duration_ms=duration_ms,
                                 success=False,
@@ -342,7 +247,7 @@ def main() -> None:
                         urdf_xml, solution, target_link
                     )
                     pos_err = float(
-                        np.linalg.norm(np.array(pos_actual) - np.array(target))
+                        np.linalg.norm(np.array(pos_actual) - np.array(target_position))
                     )
                     rot_err = float(quat_angle_error(target_wxyz, wxyz_actual))
                     success = pos_err <= 0.002 and rot_err <= 0.05
@@ -356,7 +261,7 @@ def main() -> None:
                             solver_policy=policy,
                             solver_used=metadata.get("solver_id") if metadata else None,
                             target_index=target_index,
-                            target_position=target,
+                            target_position=target_position,
                             target_wxyz=target_wxyz,
                             duration_ms=duration_ms,
                             success=success,
