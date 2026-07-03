@@ -2,6 +2,7 @@ from backend.services.ik_orchestrator_utils import (
     build_orientation_attempts,
     build_seed_list,
     build_strategies,
+    generate_jitter_seeds,
 )
 
 
@@ -54,3 +55,12 @@ def test_seed_fallback() -> None:
     seeds = build_seed_list({}, None)
     sources = [source for source, _ in seeds]
     assert sources == ["zeros"]
+
+
+def test_jitter_seed_values_are_deterministic() -> None:
+    seed = {"joint_b": 0.0, "joint_a": 1.0, "joint_c": -1.0, "joint_d": 2.0}
+
+    assert generate_jitter_seeds(seed, count=2, magnitude=0.1) == [
+        {"joint_b": -0.1, "joint_a": 1.1, "joint_c": -0.9, "joint_d": 2.0},
+        {"joint_b": 0.1, "joint_a": 0.9, "joint_c": -1.1, "joint_d": 2.0},
+    ]

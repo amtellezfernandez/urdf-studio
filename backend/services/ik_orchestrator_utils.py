@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, Optional, Tuple
 
+JointSeed = Dict[str, float]
+NamedJointSeed = Tuple[str, JointSeed]
+
 
 def build_orientation_attempts(
     mode: str, has_orientation: bool
@@ -44,33 +47,35 @@ def build_strategies(
 
 
 def build_seed_list(
-    base_seed: Dict[str, float], cached_seed: Optional[Dict[str, float]]
-) -> List[Tuple[str, Dict[str, float]]]:
-    seeds: List[Tuple[str, Dict[str, float]]] = []
+    base_seed: JointSeed, cached_seed: Optional[JointSeed]
+) -> List[NamedJointSeed]:
+    seed_candidates: List[NamedJointSeed] = []
     if base_seed:
-        seeds.append(("current", base_seed))
-    if cached_seed and cached_seed not in [seed for _, seed in seeds]:
-        seeds.append(("last_success", cached_seed))
-    if not seeds:
-        seeds.append(("zeros", {}))
+        seed_candidates.append(("current", base_seed))
+    if cached_seed and all(cached_seed != seed for _, seed in seed_candidates):
+        seed_candidates.append(("last_success", cached_seed))
+    if not seed_candidates:
+        seed_candidates.append(("zeros", {}))
 
-    jitter_base = seeds[0][1]
-    for idx, jitter in enumerate(generate_jitter_seeds(jitter_base)):
-        seeds.append((f"jitter_{idx}", jitter))
-    return seeds
+    jitter_base = seed_candidates[0][1]
+    for jitter_index, jitter_seed in enumerate(generate_jitter_seeds(jitter_base)):
+        seed_candidates.append((f"jitter_{jitter_index}", jitter_seed))
+    return seed_candidates
 
 
 def generate_jitter_seeds(
-    seed: Dict[str, float], count: int = 2, magnitude: float = 0.05
-) -> List[Dict[str, float]]:
+    seed: JointSeed, count: int = 2, magnitude: float = 0.05
+) -> List[JointSeed]:
     if not seed:
         return []
     names = sorted(seed.keys())
-    seeds: List[Dict[str, float]] = []
-    for idx in range(count):
-        next_seed = dict(seed)
-        for offset_idx, name in enumerate(names[: min(3, len(names))]):
-            direction = 1.0 if (idx + offset_idx) % 2 == 0 else -1.0
-            next_seed[name] = float(next_seed.get(name, 0.0)) + direction * magnitude
-        seeds.append(next_seed)
-    return seeds
+    jittered_seeds: List[JointSeed] = []
+    for jitter_index in range(count):
+        jittered_seed = dict(seed)
+        for joint_offset_index, joint_name in enumerate(names[: min(3, len(names))]):
+            direction = 1.0 if (jitter_index + joint_offset_index) % 2 == 0 else -1.0
+            jittered_seed[joint_name] = (
+                float(jittered_seed.get(joint_name, 0.0)) + direction * magnitude
+            )
+        jittered_seeds.append(jittered_seed)
+    return jittered_seeds
