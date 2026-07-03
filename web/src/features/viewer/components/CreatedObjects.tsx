@@ -31,7 +31,7 @@ type CreatedObjectsProps = {
   endEffectorLink?: string | null;
   gpuMode?: GPUMode;
   onEditDragStateChange?: (dragging: boolean) => void;
-  onIkTargetClick?: (obj: CreatedObject) => void;
+  onIkTargetClick?: (object: CreatedObject) => void;
   onObjectSelect?: (objectId: string, object?: CreatedObject) => void;
   orbitDefaults: {
     radius: number;
@@ -211,17 +211,17 @@ export const CreatedObjects = ({
         setSelectedObject(null);
         return;
       }
-      const targetObj = objects.find((object) => object.id === objectId);
+      const targetObject = objects.find((object) => object.id === objectId);
       setSelectedObject(objectId);
-      if (!targetObj) {
+      if (!targetObject) {
         return;
       }
       if (orbitTargetPoint) {
         updateOrbitTargetPoint(objectId, orbitTargetPoint);
-      } else if (targetObj.ikTargetType === "orbit") {
+      } else if (targetObject.ikTargetType === "orbit") {
         updateOrbitTargetPoint(objectId, "primary");
       }
-      onObjectSelect?.(objectId, targetObj);
+      onObjectSelect?.(objectId, targetObject);
     },
     [
       objects,
@@ -236,12 +236,12 @@ export const CreatedObjects = ({
     (objectId: string, orbitTargetPoint?: "primary" | "secondary") => {
       lastObjectClickRef.current = null;
       handleObjectSelection(objectId, orbitTargetPoint, { toggle: false });
-      const lockedTargetObj =
+      const lockedTargetObject =
         useObjectStore.getState().objects.find((object) => object.id === objectId) ?? null;
-      if (!lockedTargetObj) {
+      if (!lockedTargetObject) {
         return;
       }
-      onIkTargetClick?.(lockedTargetObj);
+      onIkTargetClick?.(lockedTargetObject);
     },
     [handleObjectSelection, onIkTargetClick]
   );
@@ -320,125 +320,140 @@ export const CreatedObjects = ({
 
   return (
     <group>
-      {objects.filter((obj) => obj.isHidden !== true).map((obj) => {
-        const isSelected = selectedObjectId === obj.id;
-        const isHovered = hoveredObjectId === obj.id;
-        const isContacted = contactObjectId === obj.id;
-        const isEmphasized = isSelected || isHovered || isContacted;
-        const baseColor = obj.color || "#3b82f6";
-        const targetTint = isContacted ? "#f8fafc" : baseColor;
-        const hoverEdgeColor = "#67e8f9";
-        const contactEdgeColor = "#f8fafc";
-        const edgeColor = isContacted ? contactEdgeColor : hoverEdgeColor;
-        const maxDim = Math.max(obj.size.x, obj.size.y, obj.size.z);
-        const rotationEuler = normalizeWorldObjectRotationEuler(obj.rotation);
-        const objectRotation: [number, number, number] = [
-          rotationEuler.x,
-          rotationEuler.y,
-          rotationEuler.z,
-        ];
-        const comRadius = Math.min(0.028, Math.max(0.007, maxDim * 0.08));
-        const pointDisplayRadiusM = WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM * 0.5;
-        const comAxisHalfLength = comRadius * 2.8;
-        const comCrossPositions = new Float32Array([
-          -comAxisHalfLength, 0, 0,
-          comAxisHalfLength, 0, 0,
-          0, -comAxisHalfLength, 0,
-          0, comAxisHalfLength, 0,
-          0, 0, -comAxisHalfLength,
-          0, 0, comAxisHalfLength,
-        ]);
+      {objects
+        .filter((createdObject) => createdObject.isHidden !== true)
+        .map((createdObject) => {
+          const isSelected = selectedObjectId === createdObject.id;
+          const isHovered = hoveredObjectId === createdObject.id;
+          const isContacted = contactObjectId === createdObject.id;
+          const isEmphasized = isSelected || isHovered || isContacted;
+          const baseColor = createdObject.color || "#3b82f6";
+          const targetTint = isContacted ? "#f8fafc" : baseColor;
+          const hoverEdgeColor = "#67e8f9";
+          const contactEdgeColor = "#f8fafc";
+          const edgeColor = isContacted ? contactEdgeColor : hoverEdgeColor;
+          const maximumObjectDimensionMeters = Math.max(
+            createdObject.size.x,
+            createdObject.size.y,
+            createdObject.size.z
+          );
+          const rotationEuler = normalizeWorldObjectRotationEuler(createdObject.rotation);
+          const objectRotation: [number, number, number] = [
+            rotationEuler.x,
+            rotationEuler.y,
+            rotationEuler.z,
+          ];
+          const comRadius = Math.min(
+            0.028,
+            Math.max(0.007, maximumObjectDimensionMeters * 0.08)
+          );
+          const pointDisplayRadiusM = WORLD_OBJECT_RENDER_PARAMS.pointDisplayDiameterM * 0.5;
+          const comAxisHalfLength = comRadius * 2.8;
+          const comCrossPositions = new Float32Array([
+            -comAxisHalfLength, 0, 0,
+            comAxisHalfLength, 0, 0,
+            0, -comAxisHalfLength, 0,
+            0, comAxisHalfLength, 0,
+            0, 0, -comAxisHalfLength,
+            0, 0, comAxisHalfLength,
+          ]);
 
-        return (
-          <group key={obj.id}>
-            {editable && isSelected && (
-              <WorldObjectEditHandles
-                object={obj}
-                mode={objectEditMode}
-                onDragStateChange={onEditDragStateChange}
-              />
-            )}
-            <CreatedObjectBody
-              object={obj}
-              objectRotation={objectRotation}
-              targetTint={targetTint}
-              edgeColor={edgeColor}
-              isEmphasized={isEmphasized}
-              pointDisplayRadiusM={pointDisplayRadiusM}
-              onClick={handleObjectClick}
-              onDoubleClick={handleObjectMoveRequest}
-              onPointerEnter={handlePointerEnter}
-              onPointerLeave={handlePointerLeave}
-            />
-
-            <group position={[obj.position.x, obj.position.y, obj.position.z]}>
-              <mesh raycast={() => null}>
-                <sphereGeometry args={[comRadius, 14, 10]} />
-                <meshBasicMaterial
-                  color="#ff63d5"
-                  transparent
-                  opacity={isEmphasized ? 0.42 : 0.3}
-                  depthWrite={false}
-                />
-              </mesh>
-              <lineSegments raycast={() => null} renderOrder={950}>
-                <bufferGeometry>
-                  <bufferAttribute
-                    attach="attributes-position"
-                    count={6}
-                    array={comCrossPositions}
-                    itemSize={3}
-                  />
-                </bufferGeometry>
-                <lineBasicMaterial
-                  color="#ff63d5"
-                  transparent
-                  opacity={isEmphasized ? 0.5 : 0.34}
-                  depthTest={false}
-                  depthWrite={false}
-                />
-              </lineSegments>
-            </group>
-
-            {robot &&
-              endEffectorLink &&
-              (obj.trackedJointName || endEffectorLink) && (
-                <TrackingLine
-                  cubePos={obj.position}
-                  robot={robot}
-                  trackedJointName={obj.trackedJointName || null}
-                  endEffectorLink={endEffectorLink}
-                  gpuMode={gpuMode}
+          return (
+            <group key={createdObject.id}>
+              {editable && isSelected && (
+                <WorldObjectEditHandles
+                  object={createdObject}
+                  mode={objectEditMode}
+                  onDragStateChange={onEditDragStateChange}
                 />
               )}
-
-            {obj.ikTargetType === "orbit" && (
-              <OrbitVisualization
-                centerPosition={obj.position}
-                radius={obj.orbitRadius ?? orbitDefaults.radius}
-                inclination={obj.orbitInclination ?? orbitDefaults.inclinationDeg}
-                phase={obj.orbitPhase ?? orbitDefaults.phaseDeg}
-                secondaryPhaseOffsetDeg={
-                  obj.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg
-                }
-                color={targetTint}
-                onPrimaryOrbitClick={() => {
-                  handleObjectSelection(obj.id, "primary");
-                }}
-                onPrimaryOrbitDoubleClick={() => {
-                  handleObjectMoveRequest(obj.id, "primary");
-                }}
-                onSecondaryOrbitClick={() => {
-                  handleObjectSelection(obj.id, "secondary");
-                }}
-                onSecondaryOrbitDoubleClick={() => {
-                  handleObjectMoveRequest(obj.id, "secondary");
-                }}
+              <CreatedObjectBody
+                object={createdObject}
+                objectRotation={objectRotation}
+                targetTint={targetTint}
+                edgeColor={edgeColor}
+                isEmphasized={isEmphasized}
+                pointDisplayRadiusM={pointDisplayRadiusM}
+                onClick={handleObjectClick}
+                onDoubleClick={handleObjectMoveRequest}
+                onPointerEnter={handlePointerEnter}
+                onPointerLeave={handlePointerLeave}
               />
-            )}
-          </group>
-        );
-      })}
+
+              <group
+                position={[
+                  createdObject.position.x,
+                  createdObject.position.y,
+                  createdObject.position.z,
+                ]}
+              >
+                <mesh raycast={() => null}>
+                  <sphereGeometry args={[comRadius, 14, 10]} />
+                  <meshBasicMaterial
+                    color="#ff63d5"
+                    transparent
+                    opacity={isEmphasized ? 0.42 : 0.3}
+                    depthWrite={false}
+                  />
+                </mesh>
+                <lineSegments raycast={() => null} renderOrder={950}>
+                  <bufferGeometry>
+                    <bufferAttribute
+                      attach="attributes-position"
+                      count={6}
+                      array={comCrossPositions}
+                      itemSize={3}
+                    />
+                  </bufferGeometry>
+                  <lineBasicMaterial
+                    color="#ff63d5"
+                    transparent
+                    opacity={isEmphasized ? 0.5 : 0.34}
+                    depthTest={false}
+                    depthWrite={false}
+                  />
+                </lineSegments>
+              </group>
+
+              {robot &&
+                endEffectorLink &&
+                (createdObject.trackedJointName || endEffectorLink) && (
+                  <TrackingLine
+                    cubePos={createdObject.position}
+                    robot={robot}
+                    trackedJointName={createdObject.trackedJointName || null}
+                    endEffectorLink={endEffectorLink}
+                    gpuMode={gpuMode}
+                  />
+                )}
+
+              {createdObject.ikTargetType === "orbit" && (
+                <OrbitVisualization
+                  centerPosition={createdObject.position}
+                  radius={createdObject.orbitRadius ?? orbitDefaults.radius}
+                  inclination={createdObject.orbitInclination ?? orbitDefaults.inclinationDeg}
+                  phase={createdObject.orbitPhase ?? orbitDefaults.phaseDeg}
+                  secondaryPhaseOffsetDeg={
+                    createdObject.orbitSecondaryOffset ?? orbitDefaults.secondaryOffsetDeg
+                  }
+                  color={targetTint}
+                  onPrimaryOrbitClick={() => {
+                    handleObjectSelection(createdObject.id, "primary");
+                  }}
+                  onPrimaryOrbitDoubleClick={() => {
+                    handleObjectMoveRequest(createdObject.id, "primary");
+                  }}
+                  onSecondaryOrbitClick={() => {
+                    handleObjectSelection(createdObject.id, "secondary");
+                  }}
+                  onSecondaryOrbitDoubleClick={() => {
+                    handleObjectMoveRequest(createdObject.id, "secondary");
+                  }}
+                />
+              )}
+            </group>
+          );
+        })}
     </group>
   );
 };
