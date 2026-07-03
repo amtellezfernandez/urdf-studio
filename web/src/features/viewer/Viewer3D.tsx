@@ -157,6 +157,11 @@ import {
   buildSimulationPrepSymmetryCameraDirection,
   resolveSimulationPrepSymmetryCameraDistance,
 } from "@/features/viewer/symmetryCameraFrame";
+import {
+  collectSimulationPrepRobotMirrorFocusLinkNames,
+  resolveSimulationPrepRobotMirrorFocusRadius,
+  resolveSimulationPrepSymmetryFocusRadius,
+} from "@/features/viewer/simulationPrepFocus";
 import { findAutoEndEffectorLinksFromAnalysis } from "@/features/layout/page/utils";
 import { createUrdfMeshLoadCallback } from "@/features/urdf/runtime/urdfMeshLoader";
 import {
@@ -366,109 +371,6 @@ const isEditableKeyboardTarget = (target: EventTarget | null): boolean => {
     target.isContentEditable
   );
 };
-
-const buildSimulationPrepSymmetryLinkNames = (
-  chain: RepeatedInertiaSymmetryChain
-): string[] =>
-  Array.from(
-    new Set(chain.branchLinkGroups.flatMap((branchLinkGroup) => branchLinkGroup.linkNames))
-  );
-
-const resolveSimulationPrepSymmetryFocusRadius = ({
-  chain,
-  resolveLinkObject,
-}: {
-  chain: RepeatedInertiaSymmetryChain;
-  resolveLinkObject: ReturnType<typeof createLinkObjectResolver>;
-}): number => {
-  const bounds = new THREE.Box3();
-  const boxCenter = new THREE.Vector3();
-  const boxSize = new THREE.Vector3();
-  let hasBounds = false;
-
-  buildSimulationPrepSymmetryLinkNames(chain).forEach((linkName) => {
-    const linkObject = resolveLinkObject(linkName);
-    if (!linkObject) {
-      return;
-    }
-    linkObject.updateMatrixWorld(true);
-    const linkBounds = new THREE.Box3().setFromObject(linkObject);
-    if (linkBounds.isEmpty()) {
-      return;
-    }
-    if (!hasBounds) {
-      bounds.copy(linkBounds);
-      hasBounds = true;
-      return;
-    }
-    bounds.union(linkBounds);
-  });
-
-  if (hasBounds) {
-    bounds.getCenter(boxCenter);
-    bounds.getSize(boxSize);
-    return Math.max(boxSize.length() * 0.5, boxCenter.distanceTo(bounds.max));
-  }
-
-  const idealLayerRadii = chain.branchRows.flatMap((row) =>
-    row.linkRows
-      .map((linkRow) => linkRow.idealLayerRadiusMeters)
-      .filter((radius): radius is number => radius !== null)
-  );
-  const candidateRadius = Math.max(
-    chain.maxDistanceDeltaMeters,
-    ...(chain.branchRows
-      .map((row) => row.idealRadialDistanceMeters ?? row.radialDistanceMeters)
-      .filter(Number.isFinite) as number[]),
-    ...idealLayerRadii
-  );
-  return Number.isFinite(candidateRadius) ? candidateRadius : 0;
-};
-
-const resolveSimulationPrepRobotMirrorFocusRadius = ({
-  check,
-  resolveLinkObject,
-}: {
-  check: RobotMirrorSymmetryCheck;
-  resolveLinkObject: ReturnType<typeof createLinkObjectResolver>;
-}): number => {
-  const bounds = new THREE.Box3();
-  const boxCenter = new THREE.Vector3();
-  const boxSize = new THREE.Vector3();
-  let hasBounds = false;
-
-  const focusLinkNames =
-    check.centeredLinkNames.length > 0 ? check.centeredLinkNames : check.supportedLinkNames;
-  focusLinkNames.forEach((linkName) => {
-    const linkObject = resolveLinkObject(linkName);
-    if (!linkObject) {
-      return;
-    }
-    linkObject.updateMatrixWorld(true);
-    const linkBounds = new THREE.Box3().setFromObject(linkObject);
-    if (linkBounds.isEmpty()) {
-      return;
-    }
-    if (!hasBounds) {
-      bounds.copy(linkBounds);
-      hasBounds = true;
-      return;
-    }
-    bounds.union(linkBounds);
-  });
-
-  if (hasBounds) {
-    bounds.getCenter(boxCenter);
-    bounds.getSize(boxSize);
-    return Math.max(boxSize.length() * 0.5, boxCenter.distanceTo(bounds.max));
-  }
-
-  return check.maxResidualMeters;
-};
-
-const collectSimulationPrepRobotMirrorFocusLinkNames = (
-  check: RobotMirrorSymmetryCheck
-): string[] => (check.centeredLinkNames.length > 0 ? check.centeredLinkNames : check.supportedLinkNames);
 
 // Component to render orbit visualization
 const CreatedObjects = ({
