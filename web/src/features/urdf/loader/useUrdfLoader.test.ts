@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
-import { extractMeshReferencesFromUrdfContent, useUrdfLoader } from "./useUrdfLoader";
+import { extractMeshReferencesFromUrdfContent } from "@/features/urdf/loader/urdfLoaderFiles";
+import { useUrdfLoader } from "./useUrdfLoader";
 
 const createRelativeFile = (
   name: string,

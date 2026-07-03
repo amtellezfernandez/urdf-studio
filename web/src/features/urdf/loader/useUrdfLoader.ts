@@ -6,9 +6,6 @@ import {
   type UrdfAnalysis,
 } from "@/shared/lib/urdfCore";
 import {
-  buildPackageRootsFromRepositoryFiles,
-  buildRepositoryFileEntriesFromPaths,
-  extractPackageNameFromPackageXml,
   isSupportedMeshResource,
   isXacroPath,
   normalizeExpandedUrdfPath,
@@ -39,6 +36,11 @@ import {
   getFileRelativePath,
   indexMeshResources,
 } from "@/features/urdf/loader/urdfMeshIndex";
+import {
+  buildPackageRootsFromFiles,
+  getBasePathFromRelativePath,
+  readUrdfDocumentsFromFiles,
+} from "@/features/urdf/loader/urdfLoaderFiles";
 
 type UseUrdfLoaderOptions = {
   onClearSelection?: () => void;
@@ -66,72 +68,6 @@ type ApplyLoadedUrdfStateParams = {
   urdfContent: string;
   urdfDocuments: Record<string, string>;
   validationError: string | null;
-};
-
-const getBasePathFromRelativePath = (relativePath: string): string => {
-  const normalized = normalizeMeshPathForMatch(relativePath);
-  if (!normalized) return "";
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length <= 1) return "";
-  parts.pop();
-  return parts.join("/");
-};
-
-const buildPackageRootsFromFiles = async (files: File[]) => {
-  const packageFiles = files.filter((file) => file.name.toLowerCase() === "package.xml");
-  const packageNameByPath: Record<string, string> = {};
-
-  await Promise.all(
-    packageFiles.map(async (file) => {
-      try {
-        const relativePath = getFileRelativePath(file);
-        const normalizedPath = normalizeMeshPathForMatch(relativePath);
-        if (!normalizedPath) return;
-        const text = await file.text();
-        const packageName = extractPackageNameFromPackageXml(text);
-        if (!packageName) return;
-        packageNameByPath[normalizedPath] = packageName;
-      } catch {
-        // Ignore package.xml read errors
-      }
-    })
-  );
-
-  const repositoryFiles = buildRepositoryFileEntriesFromPaths(
-    files.map((file) => getFileRelativePath(file))
-  );
-
-  return buildPackageRootsFromRepositoryFiles(repositoryFiles, {
-    packageNameByPath,
-  });
-};
-
-const readUrdfDocumentsFromFiles = async (files: File[]) => {
-  const documentEntries = await Promise.all(
-    files
-      .filter(
-        (file) => file.name.toLowerCase().endsWith(".urdf") || isXacroPath(getFileRelativePath(file))
-      )
-      .map(async (file) => {
-        const rawPath = getFileRelativePath(file);
-        const normalizedPath = normalizeMeshPathForMatch(rawPath) || file.name;
-        return {
-          content: await file.text(),
-          path: normalizedPath,
-        };
-      })
-  );
-
-  return documentEntries.reduce<Record<string, string>>((documents, entry) => {
-    documents[entry.path] = entry.content;
-    return documents;
-  }, {});
-};
-
-export const extractMeshReferencesFromUrdfContent = (urdfContent: string): string[] => {
-  if (!urdfContent.trim()) return [];
-  const parsed = parseURDF(urdfContent);
-  return analyzeUrdfDocument(parsed.document).meshReferences;
 };
 
 export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
