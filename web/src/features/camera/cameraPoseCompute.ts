@@ -53,47 +53,47 @@ export function computeLinkBoundingBox(robot: URDFRobot | null, linkName: string
 
   // Create a bounding box that only includes this link's geometry
   // (not child links)
-  const box = new THREE.Box3();
-  let hasGeometry = false;
+  const linkBoundingBox = new THREE.Box3();
+  let hasLinkGeometry = false;
 
-  const traverse = (obj: THREE.Object3D) => {
+  const includeLinkGeometryInBounds = (currentObject: THREE.Object3D) => {
     // Skip child links
-    if (obj !== linkObject && allLinkNames.has(obj.name)) {
+    if (currentObject !== linkObject && allLinkNames.has(currentObject.name)) {
       return;
     }
 
     // Include meshes in the bounding box
-    if (obj instanceof THREE.Mesh) {
-      const mesh = obj as THREE.Mesh;
-      if (mesh.geometry) {
-        mesh.geometry.computeBoundingBox();
-        if (mesh.geometry.boundingBox) {
-          const meshBox = mesh.geometry.boundingBox.clone();
-          meshBox.applyMatrix4(mesh.matrixWorld);
-          box.union(meshBox);
-          hasGeometry = true;
+    if (currentObject instanceof THREE.Mesh) {
+      const meshObject = currentObject;
+      if (meshObject.geometry) {
+        meshObject.geometry.computeBoundingBox();
+        if (meshObject.geometry.boundingBox) {
+          const meshWorldBox = meshObject.geometry.boundingBox.clone();
+          meshWorldBox.applyMatrix4(meshObject.matrixWorld);
+          linkBoundingBox.union(meshWorldBox);
+          hasLinkGeometry = true;
         }
       }
     }
 
     // Traverse children
-    for (const child of obj.children) {
+    for (const childObject of currentObject.children) {
       // Stop if we encounter another link
-      if (allLinkNames.has(child.name)) {
+      if (allLinkNames.has(childObject.name)) {
         continue;
       }
-      traverse(child);
+      includeLinkGeometryInBounds(childObject);
     }
   };
 
-  traverse(linkObject);
+  includeLinkGeometryInBounds(linkObject);
 
-  if (!hasGeometry) {
+  if (!hasLinkGeometry) {
     console.warn(`Link "${linkName}" has no geometry for bounding box computation`);
     return null;
   }
 
-  return box;
+  return linkBoundingBox;
 }
 
 /**
@@ -163,9 +163,9 @@ function autoComputeCameraPose(
 
   if (options.robotBoundingBox) {
     const center = options.robotBoundingBox.getCenter(new THREE.Vector3());
-    const candidate = parentPosition.clone().sub(center);
-    if (candidate.length() > CAMERA_POSE_COMPUTE_CONFIG.directionLengthEpsilon) {
-      outwardDirection = candidate.normalize();
+    const outwardCandidate = parentPosition.clone().sub(center);
+    if (outwardCandidate.length() > CAMERA_POSE_COMPUTE_CONFIG.directionLengthEpsilon) {
+      outwardDirection = outwardCandidate.normalize();
     }
   }
 
@@ -177,13 +177,17 @@ function autoComputeCameraPose(
     aimDirection.multiplyScalar(-1);
   }
 
-  const bbox =
+  const cameraSubjectBoundingBox =
     computeLinkBoundingBox(robot, parentLink) ??
     (options.aimLink ? computeLinkBoundingBox(robot, options.aimLink) : null);
   let backOffset = options.marginForward ?? DEFAULT_MARGIN_FORWARD;
-  if (bbox) {
-    const size = bbox.getSize(new THREE.Vector3());
-    backOffset = Math.max(MIN_BACK_OFFSET, size.length() * CAMERA_POSE_COMPUTE_CONFIG.boundingBoxBackOffsetScale + backOffset);
+  if (cameraSubjectBoundingBox) {
+    const cameraSubjectSize = cameraSubjectBoundingBox.getSize(new THREE.Vector3());
+    backOffset = Math.max(
+      MIN_BACK_OFFSET,
+      cameraSubjectSize.length() * CAMERA_POSE_COMPUTE_CONFIG.boundingBoxBackOffsetScale +
+        backOffset
+    );
   } else {
     backOffset = Math.max(MIN_BACK_OFFSET, backOffset + CAMERA_POSE_COMPUTE_CONFIG.fallbackBackOffsetMeters);
   }
@@ -201,9 +205,9 @@ function autoComputeCameraPose(
       options.targetPosition instanceof THREE.Vector3
         ? options.targetPosition
         : new THREE.Vector3(...options.targetPosition);
-    const candidate = target.clone().sub(worldPosition);
-    if (candidate.length() > CAMERA_POSE_COMPUTE_CONFIG.directionLengthEpsilon) {
-      lookDirection = candidate.normalize();
+    const targetLookDirection = target.clone().sub(worldPosition);
+    if (targetLookDirection.length() > CAMERA_POSE_COMPUTE_CONFIG.directionLengthEpsilon) {
+      lookDirection = targetLookDirection.normalize();
     }
   }
 
