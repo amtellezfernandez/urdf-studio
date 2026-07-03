@@ -91,6 +91,7 @@ import { HierarchyTreeView } from "@/features/layout/HierarchyTreeView";
 import { WorldPanel } from "@/features/layout/WorldPanel";
 import { CameraEditorPanel } from "@/features/layout/CameraEditorPanel";
 import { ObjectEditorPanel } from "@/features/layout/ObjectEditorPanel";
+import { LinkBatchEditorPanel } from "@/features/layout/LinkBatchEditorPanel";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 
 const toggleStringSetValue = (previous: Set<string>, value: string) => {
@@ -1603,89 +1604,31 @@ export const JointListSidebar = ({
                 )}
               </div>
             ) : hasMultiSelectedBatchLinks ? (
-              <div className="p-2 space-y-2">
-                <div className="text-xs text-foreground">
-                  {`${selectedBatchLinkNames.length} link${selectedBatchLinkNames.length === 1 ? "" : "s"} selected`}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {hasSelectedCollisionBatchLinks
-                    ? hasMixedBatchSimplifyState
-                      ? "Simplification state: mixed"
-                      : selectedBatchSimplifiedCount === selectedBatchCollisionCount
-                        ? "Simplification state: enabled"
-                        : "Simplification state: disabled"
-                    : "Simplification state: no URDF collisions in selection"}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {hasSelectedCollisionBatchLinks
-                    ? hasMixedBatchMergeState
-                      ? "Merged collision state: mixed"
-                      : selectedBatchMergedCount === selectedBatchCollisionCount
-                        ? "Merged collision state: active"
-                        : "Merged collision state: inactive"
-                    : "Merged collision state: no URDF collisions in selection"}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-emerald-500/50 bg-emerald-500/20 px-2 text-[10px] font-medium text-emerald-200 hover:bg-emerald-500/30"
-                    onClick={simplifySelectedBatchCollisions}
-                    disabled={!onCollisionSimplifyLinksChange || !hasSelectedCollisionBatchLinks}
-                  >
-                    Simplify Collisions
-                  </button>
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-border/60 bg-muted/30 px-2 text-[10px] font-medium text-foreground hover:bg-muted/50"
-                    onClick={restoreSelectedBatchCollisionMeshes}
-                    disabled={!onCollisionSimplifyLinksChange || !hasSelectedCollisionBatchLinks}
-                  >
-                    Use Full Mesh
-                  </button>
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-cyan-500/50 bg-cyan-500/20 px-2 text-[10px] font-medium text-cyan-200 hover:bg-cyan-500/30"
-                    onClick={applyBatchCollisionMerge}
-                    disabled={!onCollisionMergedLinksChange || !hasMultiSelectedCollisionBatchLinks}
-                    title="Replace merged collision group with the current selected links"
-                  >
-                    Merge As One Collision
-                  </button>
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-border/60 bg-muted/30 px-2 text-[10px] font-medium text-foreground hover:bg-muted/50"
-                    onClick={clearBatchCollisionMerge}
-                    disabled={!onCollisionMergedLinksChange || !hasSelectedCollisionBatchLinks}
-                    title="Remove selected links from merged collision group"
-                  >
-                    Clear Merged Collision
-                  </button>
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-border/50 bg-transparent px-2 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                    onClick={clearBatchLinkSelection}
-                  >
-                    Clear Selection
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto rounded-sm border border-border/30 bg-background/40 p-1">
-                  {selectedBatchLinkNames.map((linkName) => (
-                    <div key={linkName} className="flex items-center gap-1 py-0.5 px-1 text-[10px]">
-                      <span
-                        className={cn(
-                          "h-2.5 w-2.5 rounded-[2px] border",
-                          mergedLinkSet.has(linkName)
-                            ? "border-cyan-500/60 bg-cyan-500/50"
-                            : simplifiedLinkSet.has(linkName)
-                              ? "border-emerald-500/60 bg-emerald-500/50"
-                              : "border-border/60 bg-transparent"
-                        )}
-                      />
-                      <span className="truncate">{linkName}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <LinkBatchEditorPanel
+                canClearMergedCollision={Boolean(
+                  onCollisionMergedLinksChange && hasSelectedCollisionBatchLinks
+                )}
+                canMergeCollisions={Boolean(
+                  onCollisionMergedLinksChange && hasMultiSelectedCollisionBatchLinks
+                )}
+                canSimplifyCollisions={Boolean(
+                  onCollisionSimplifyLinksChange && hasSelectedCollisionBatchLinks
+                )}
+                hasMixedBatchMergeState={hasMixedBatchMergeState}
+                hasMixedBatchSimplifyState={hasMixedBatchSimplifyState}
+                hasSelectedCollisionBatchLinks={hasSelectedCollisionBatchLinks}
+                mergedLinkSet={mergedLinkSet}
+                onApplyCollisionMerge={applyBatchCollisionMerge}
+                onClearCollisionMerge={clearBatchCollisionMerge}
+                onClearSelection={clearBatchLinkSelection}
+                onRestoreCollisionMeshes={restoreSelectedBatchCollisionMeshes}
+                onSimplifyCollisions={simplifySelectedBatchCollisions}
+                selectedBatchCollisionCount={selectedBatchCollisionCount}
+                selectedBatchLinkNames={selectedBatchLinkNames}
+                selectedBatchMergedCount={selectedBatchMergedCount}
+                selectedBatchSimplifiedCount={selectedBatchSimplifiedCount}
+                simplifiedLinkSet={simplifiedLinkSet}
+              />
             ) : selectedCameraId ? (
               <CameraEditorPanel
                 cameraId={selectedCameraId}
