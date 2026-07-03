@@ -35,20 +35,20 @@ const buildJointTopologySnapshot = (
 ): Record<string, JointTopology> =>
   Object.fromEntries(
     jointNames.map((jointName) => {
-      const jointObj = robot.joints?.[jointName];
+      const robotJoint = robot.joints?.[jointName];
       const parentLinkName =
-        typeof jointObj?.parent?.name === "string" && jointObj.parent.name.trim()
-          ? jointObj.parent.name
+        typeof robotJoint?.parent?.name === "string" && robotJoint.parent.name.trim()
+          ? robotJoint.parent.name
           : null;
       const childLinkNames =
-        jointObj?.children
+        robotJoint?.children
           ?.map((child) => child.name)
           .filter((name): name is string => Boolean(name?.trim())) ?? [];
       return [
         jointName,
         {
           name: jointName,
-          type: jointObj?.jointType ?? "",
+          type: robotJoint?.jointType ?? "",
           parentLinkName,
           childLinkNames,
         },
@@ -89,50 +89,50 @@ export const useRobotJointSync = ({
       useJointStore.getState().setDataZeroJointValues({});
       return;
     }
-    const allJoints = Object.keys(robot.joints ?? {});
-    const joints = allJoints.filter((j) => {
-      const jointObj = robot.joints?.[j];
+    const allJointNames = Object.keys(robot.joints ?? {});
+    const controllableJointNames = allJointNames.filter((jointName) => {
+      const robotJoint = robot.joints?.[jointName];
       return (
-        jointObj &&
-        (typeof resolveJointScalarValue(jointObj) === "number" ||
-          jointObj.jointType === "fixed") &&
-        !j.toLowerCase().includes("imu") &&
-        !j.toLowerCase().includes("site")
+        robotJoint &&
+        (typeof resolveJointScalarValue(robotJoint) === "number" ||
+          robotJoint.jointType === "fixed") &&
+        !jointName.toLowerCase().includes("imu") &&
+        !jointName.toLowerCase().includes("site")
       );
     });
-    const angles: Record<string, number> = {};
-    joints.forEach((j) => {
-      const jointObj = robot.joints?.[j];
-      if (jointObj.jointType === "fixed") {
-        angles[j] = 0;
+    const initialJointAngles: Record<string, number> = {};
+    controllableJointNames.forEach((jointName) => {
+      const robotJoint = robot.joints?.[jointName];
+      if (robotJoint.jointType === "fixed") {
+        initialJointAngles[jointName] = 0;
       } else if (initialPosePolicy === "limits-center") {
-        const limits = getJointLimits(jointLimits, j);
+        const limits = getJointLimits(jointLimits, jointName);
         if (Number.isFinite(limits.lower) && Number.isFinite(limits.upper)) {
-          angles[j] = (limits.lower + limits.upper) / 2;
+          initialJointAngles[jointName] = (limits.lower + limits.upper) / 2;
         } else if (Number.isFinite(limits.lower)) {
-          angles[j] = limits.lower;
+          initialJointAngles[jointName] = limits.lower;
         } else if (Number.isFinite(limits.upper)) {
-          angles[j] = limits.upper;
+          initialJointAngles[jointName] = limits.upper;
         } else {
-          angles[j] = 0;
+          initialJointAngles[jointName] = 0;
         }
       } else {
-        const value = resolveJointScalarValue(jointObj);
-        angles[j] = typeof value === "number" ? value : 0;
+        const scalarValue = resolveJointScalarValue(robotJoint);
+        initialJointAngles[jointName] = typeof scalarValue === "number" ? scalarValue : 0;
       }
     });
-    initialPoseRef.current = { ...angles };
-    onRobotJointsLoaded?.(joints, angles);
-    setAvailableJointsStore(joints);
-    useJointStore.getState().setInitialJointValues(angles);
-    useJointStore.getState().setDataZeroJointValues(angles);
+    initialPoseRef.current = { ...initialJointAngles };
+    onRobotJointsLoaded?.(controllableJointNames, initialJointAngles);
+    setAvailableJointsStore(controllableJointNames);
+    useJointStore.getState().setInitialJointValues(initialJointAngles);
+    useJointStore.getState().setDataZeroJointValues(initialJointAngles);
     useJointStore.getState().setDataZeroJointSource("auto");
     useJointStore.getState().setJointTopology(
-      buildJointTopologySnapshot(robot, joints),
+      buildJointTopologySnapshot(robot, controllableJointNames),
     );
-    setStoreJointValues(angles);
-    targetJointValuesRef.current = { ...angles };
-    animatedJointValuesRef.current = { ...angles };
+    setStoreJointValues(initialJointAngles);
+    targetJointValuesRef.current = { ...initialJointAngles };
+    animatedJointValuesRef.current = { ...initialJointAngles };
   }, [
     robot,
     onRobotJointsLoaded,
@@ -143,12 +143,15 @@ export const useRobotJointSync = ({
   ]);
 
   useEffect(() => {
-    const propChanged = hasJointMapChanged(jointValues, lastJointValuesPropRef.current);
+    const hasPropJointValuesChanged = hasJointMapChanged(
+      jointValues,
+      lastJointValuesPropRef.current,
+    );
     lastJointValuesPropRef.current = { ...jointValues };
     const isAnyDragging = isDraggingJoint || isIkHandleDragging || isIkTrajectoryApplying;
 
     if (!robot) return;
-    if (!propChanged) return;
+    if (!hasPropJointValuesChanged) return;
     // Ignore stale prop snapshots (can happen around fast local updates like reset/IK drag).
     if (!hasJointMapChanged(jointValues, storeJointValues)) return;
     if (isAnyDragging) {
