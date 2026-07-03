@@ -27,9 +27,10 @@ import { applyWorkspaceChangeSet } from "@/features/world-share/workspaceTransfe
 import type { WorldScenePublishDraft } from "@/features/world-share/WorldPublishDialog";
 import type { CreatedObject } from "@/features/objects";
 import {
-  APPLY_WORLD_LAYOUT_RESULT_MESSAGE_TYPE,
-  isApplyWorldLayoutMessage,
-} from "@/shared/contracts/worldLayoutBridge";
+  isTrustedWorldLayoutBridgeOrigin,
+  postWorldLayoutBridgeResult,
+  readWorldLayoutBridgeRequest,
+} from "@/app/pages/index/worldSceneManagerBridge";
 import {
   DEFAULT_WORLD_SCENE_PACKAGE_TITLE,
   WORLD_SCENE_PACKAGE_IMPORT_ACCEPT,
@@ -689,41 +690,40 @@ export const useWorldSceneManager = ({
   ]);
 
   useEffect(() => {
-    const postWorldLayoutResult = (
-      target: MessageEventSource | null,
-      origin: string,
-      requestId: string | undefined,
-      ok: boolean,
-      message: string
-    ) => {
-      if (!target || typeof (target as Window).postMessage !== "function") {
-        return;
-      }
-      (target as Window).postMessage(
-        { type: APPLY_WORLD_LAYOUT_RESULT_MESSAGE_TYPE, requestId, ok, message },
-        origin === "null" ? "*" : origin
-      );
-    };
-
     const onMessage = (event: MessageEvent<unknown>) => {
-      if (event.origin !== window.location.origin && event.origin !== "null") return;
-      if (!isApplyWorldLayoutMessage(event.data)) return;
-
-      const requestId = event.data.requestId;
-      const worldLayoutUrl =
-        typeof event.data.worldLayoutUrl === "string" ? event.data.worldLayoutUrl.trim() : "";
-      if (!worldLayoutUrl) {
-        postWorldLayoutResult(event.source, event.origin, requestId, false, "World layout URL is required.");
+      if (!isTrustedWorldLayoutBridgeOrigin(event.origin, window.location.origin)) return;
+      const bridgeRequest = readWorldLayoutBridgeRequest(event.data);
+      if (!bridgeRequest) return;
+      if (bridgeRequest.kind === "invalid") {
+        postWorldLayoutBridgeResult({
+          target: event.source,
+          origin: event.origin,
+          requestId: bridgeRequest.requestId,
+          ok: false,
+          message: bridgeRequest.message,
+        });
         return;
       }
 
       void (async () => {
         try {
-          await importWorldLayoutFromUrl(worldLayoutUrl, "World layout message");
-          postWorldLayoutResult(event.source, event.origin, requestId, true, "World layout applied.");
+          await importWorldLayoutFromUrl(bridgeRequest.worldLayoutUrl, "World layout message");
+          postWorldLayoutBridgeResult({
+            target: event.source,
+            origin: event.origin,
+            requestId: bridgeRequest.requestId,
+            ok: true,
+            message: "World layout applied.",
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Failed to import world layout";
-          postWorldLayoutResult(event.source, event.origin, requestId, false, message);
+          postWorldLayoutBridgeResult({
+            target: event.source,
+            origin: event.origin,
+            requestId: bridgeRequest.requestId,
+            ok: false,
+            message,
+          });
         }
       })();
     };
