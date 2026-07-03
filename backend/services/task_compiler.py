@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Type, TypeVar
 
 from backend.models.ik_tasks import (
     JointLimitConstraint,
@@ -11,35 +11,44 @@ from backend.models.ik_tasks import (
 )
 from backend.models.kinematics import IKRequest, IkSolveRequest
 
+TaskT = TypeVar("TaskT", PoseTask, PositionTask, OrientationTask, PostureTask)
+ConstraintT = TypeVar("ConstraintT")
 
-def _first_task(req: IkSolveRequest, task_type):
-    if not req.tasks:
+
+def _first_task(solve_request: IkSolveRequest, task_type: Type[TaskT]) -> Optional[TaskT]:
+    if not solve_request.tasks:
         return None
-    for task in req.tasks:
+    for task in solve_request.tasks:
         if isinstance(task, task_type):
             return task
     return None
 
 
-def compile_ik_request(req: IkSolveRequest) -> IKRequest:
+def _first_constraint(
+    solve_request: IkSolveRequest, constraint_type: Type[ConstraintT]
+) -> Optional[ConstraintT]:
+    if not solve_request.constraints:
+        return None
+    for constraint in solve_request.constraints:
+        if isinstance(constraint, constraint_type):
+            return constraint
+    return None
+
+
+def compile_ik_request(solve_request: IkSolveRequest) -> IKRequest:
     """
     Build a compatibility IKRequest from the task IR, falling back to the original fields.
     """
-    pose_task: Optional[PoseTask] = _first_task(req, PoseTask)
-    position_task: Optional[PositionTask] = _first_task(req, PositionTask)
-    orientation_task: Optional[OrientationTask] = _first_task(req, OrientationTask)
-    posture_task: Optional[PostureTask] = _first_task(req, PostureTask)
-    joint_limit_constraint: Optional[JointLimitConstraint] = None
-    if req.constraints:
-        for constraint in req.constraints:
-            if isinstance(constraint, JointLimitConstraint):
-                joint_limit_constraint = constraint
-                break
+    pose_task = _first_task(solve_request, PoseTask)
+    position_task = _first_task(solve_request, PositionTask)
+    orientation_task = _first_task(solve_request, OrientationTask)
+    posture_task = _first_task(solve_request, PostureTask)
+    joint_limit_constraint = _first_constraint(solve_request, JointLimitConstraint)
 
     if pose_task:
         return IKRequest(
-            urdf=req.urdf,
-            joint_values=req.joint_values,
+            urdf=solve_request.urdf,
+            joint_values=solve_request.joint_values,
             target_link=pose_task.link,
             target_position=pose_task.position,
             target_rotation=pose_task.rotation,
@@ -48,34 +57,40 @@ def compile_ik_request(req: IkSolveRequest) -> IKRequest:
             orientation_weight=pose_task.weight_orientation,
             posture_joint_values=posture_task.joint_values if posture_task else None,
             posture_weight=posture_task.weight if posture_task else None,
-            limit_weight=0.0 if joint_limit_constraint and not joint_limit_constraint.enabled else None,
+            limit_weight=(
+                0.0
+                if joint_limit_constraint and not joint_limit_constraint.enabled
+                else None
+            ),
         )
 
-    target_link = req.target_link
-    target_position = req.target_position
-    target_rotation = req.target_rotation
-    target_wxyz = req.target_wxyz
+    compiled_target_link = solve_request.target_link
+    compiled_target_position = solve_request.target_position
+    compiled_target_rotation = solve_request.target_rotation
+    compiled_target_wxyz = solve_request.target_wxyz
 
     if position_task:
-        target_link = position_task.link
-        target_position = position_task.position
+        compiled_target_link = position_task.link
+        compiled_target_position = position_task.position
     position_weight = position_task.weight if position_task else None
     if orientation_task:
-        target_link = orientation_task.link
-        target_rotation = orientation_task.rotation
-        target_wxyz = orientation_task.wxyz
+        compiled_target_link = orientation_task.link
+        compiled_target_rotation = orientation_task.rotation
+        compiled_target_wxyz = orientation_task.wxyz
     orientation_weight = orientation_task.weight if orientation_task else None
 
     return IKRequest(
-        urdf=req.urdf,
-        joint_values=req.joint_values,
-        target_link=target_link,
-        target_position=target_position,
-        target_rotation=target_rotation,
-        target_wxyz=target_wxyz,
+        urdf=solve_request.urdf,
+        joint_values=solve_request.joint_values,
+        target_link=compiled_target_link,
+        target_position=compiled_target_position,
+        target_rotation=compiled_target_rotation,
+        target_wxyz=compiled_target_wxyz,
         position_weight=position_weight,
         orientation_weight=orientation_weight,
         posture_joint_values=posture_task.joint_values if posture_task else None,
         posture_weight=posture_task.weight if posture_task else None,
-        limit_weight=0.0 if joint_limit_constraint and not joint_limit_constraint.enabled else None,
+        limit_weight=(
+            0.0 if joint_limit_constraint and not joint_limit_constraint.enabled else None
+        ),
     )
