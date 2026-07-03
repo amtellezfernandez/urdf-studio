@@ -107,7 +107,7 @@ describe("healthActionPanelOverview", () => {
         nearMissCount: 0,
       })
     ).toEqual({
-      disabled: true,
+      isDisabled: true,
       summary: "Analyzing physics now. Wait for the audit before clicking.",
     });
     expect(
@@ -119,7 +119,7 @@ describe("healthActionPanelOverview", () => {
         nearMissCount: 0,
       })
     ).toEqual({
-      disabled: false,
+      isDisabled: false,
       summary: "Repair 2 missing or invalid inertial links.",
     });
   });

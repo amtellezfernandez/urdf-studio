@@ -82,7 +82,7 @@ export const buildGeneratePhysicsDialogDescription = ({
 };
 
 export type PhysicsActionSummary = {
-  disabled: boolean;
+  isDisabled: boolean;
   summary: string;
 };
 
@@ -104,13 +104,13 @@ export const buildPhysicsActionSummary = ({
       summary: physicsPreflightLoading
         ? "Analyzing physics now. Wait for the audit before clicking."
         : "Run the physics check before repairing masses.",
-      disabled: physicsPreflightLoading,
+      isDisabled: physicsPreflightLoading,
     };
   }
   if (physicsAuditSummary && physicsAuditSummary.repairableLinkCount > 0 && onOpenGeneratePhysicsDialog) {
     return {
       summary: `Repair ${physicsAuditSummary.repairableLinkCount} missing or invalid inertial link${physicsAuditSummary.repairableLinkCount === 1 ? "" : "s"}.`,
-      disabled: false,
+      isDisabled: false,
     };
   }
   if (voxelRecoveryCount > 0 && onOpenGeneratePhysicsDialog) {
@@ -119,12 +119,12 @@ export const buildPhysicsActionSummary = ({
         nearMissCount > 0
           ? `${voxelRecoveryCount} skipped link${voxelRecoveryCount === 1 ? "" : "s"} passed voxel precheck. ${nearMissCount} near-miss link${nearMissCount === 1 ? "" : "s"} can use PSD regularization.`
           : `${voxelRecoveryCount} skipped link${voxelRecoveryCount === 1 ? "" : "s"} passed voxel precheck.`,
-      disabled: false,
+      isDisabled: false,
     };
   }
   return {
     summary: "Physics check ready.",
-    disabled: false,
+    isDisabled: false,
   };
 };
 

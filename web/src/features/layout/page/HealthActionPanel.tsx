@@ -96,7 +96,7 @@ type RecommendedAction = {
   onClick: () => void;
   variant?: "default" | "outline";
   icon: typeof Sparkles;
-  disabled?: boolean;
+  isDisabled: boolean;
 };
 
 const HEALTH_ACTION_CLASS_NAMES = HEALTH_ACTION_PANEL_PARAMS.classNames;
@@ -137,10 +137,12 @@ const buildRecommendedAction = ({
   onRepairOrientation,
   repairOrientationLabel,
   repairOrientationSummary,
+  repairOrientationDisabled,
 }: {
   onRepairOrientation?: () => void;
   repairOrientationLabel?: string | null;
   repairOrientationSummary?: string | null;
+  repairOrientationDisabled: boolean;
 }): RecommendedAction | null => {
   if (onRepairOrientation) {
     return {
@@ -152,6 +154,7 @@ const buildRecommendedAction = ({
       onClick: onRepairOrientation,
       variant: "outline",
       icon: Wrench,
+      isDisabled: repairOrientationDisabled,
     };
   }
   return null;
@@ -241,14 +244,14 @@ export const HealthActionPanel = ({
   onClearStagedAction,
   onClearPhysicsDraft,
 }: HealthActionPanelProps) => {
-  const [showPhysicsPanel, setShowPhysicsPanel] = useState(false);
+  const [isPhysicsPanelVisible, setIsPhysicsPanelVisible] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(advancedOpenByDefault);
   const [armedPhysicsActionKey, setArmedPhysicsActionKey] = useState<PhysicsPanelActionKey | null>(null);
   const [selectedPhysicsMaterials, setSelectedPhysicsMaterials] = useState<PhysicsActionMaterialSelection>({});
   const [expandedDiagnosisGroups, setExpandedDiagnosisGroups] = useState<Record<string, boolean>>({});
   const [robotMirrorExpanded, setRobotMirrorExpanded] = useState(false);
   const [radialSymmetryExpanded, setRadialSymmetryExpanded] = useState(false);
-  const [showUnifiedRepeatedMeshes, setShowUnifiedRepeatedMeshes] = useState(false);
+  const [areUnifiedRepeatedMeshesVisible, setAreUnifiedRepeatedMeshesVisible] = useState(false);
   const [panelPosition, setPanelPosition] = useState<SimulationPrepPanelPosition>(() =>
     getSimulationPrepPanelInitialPosition(globalThis.window?.innerWidth ?? SIMULATION_PREP_PANEL_WIDTH_PX)
   );
@@ -467,7 +470,7 @@ export const HealthActionPanel = ({
     }
     setArmedPhysicsActionKey(null);
     setSelectedPhysicsMaterials({});
-    setShowPhysicsPanel(true);
+    setIsPhysicsPanelVisible(true);
   };
   const physicsAction = buildPhysicsActionSummary({
     onOpenGeneratePhysicsDialog,
@@ -486,6 +489,7 @@ export const HealthActionPanel = ({
     onRepairOrientation,
     repairOrientationLabel,
     repairOrientationSummary,
+    repairOrientationDisabled,
   });
   const physicsPanelActions = buildPhysicsPanelActions({
     audit: physicsAuditSummary,
@@ -495,9 +499,9 @@ export const HealthActionPanel = ({
     onGenerateVoxelPhysics,
     onGenerateRegularizedPhysics,
   });
-  const showPhysicsActionButton =
+  const shouldShowPhysicsActionButton =
     !physicsAuditSummary || physicsPanelActions.length > 0;
-  const showInlinePhysicsActions = Boolean(physicsAuditSummary) && physicsPanelActions.length > 0;
+  const shouldShowInlinePhysicsActions = Boolean(physicsAuditSummary) && physicsPanelActions.length > 0;
   const hasPendingPhysicsAction = hasSimulationPrepPhysicsActionPending(physicsActionStatusByKey ?? {});
   const isSimulationPrepActionBlocked =
     isSimulationPrepFixBusy ||
@@ -1512,7 +1516,7 @@ export const HealthActionPanel = ({
           </div>
 
           <div className="space-y-2">
-            {physicsPlausibilitySummary?.excludedLinks.length ? null : showInlinePhysicsActions ? (
+            {physicsPlausibilitySummary?.excludedLinks.length ? null : shouldShowInlinePhysicsActions ? (
               <div className={PHYSICS_SECTION_CARD_CLASS}>
                 <div className="space-y-1.5">
                   {physicsPanelActionRows.map((rowState) => {
@@ -1578,13 +1582,13 @@ export const HealthActionPanel = ({
               </div>
             ) : (
               <>
-                {showPhysicsActionButton ? (
+                {shouldShowPhysicsActionButton ? (
                   <Button
                     size="sm"
                     className="h-8 w-full justify-start gap-2 px-2 text-xs"
                     onClick={openPhysicsPanel}
                     disabled={
-                      physicsAction.disabled ||
+                      physicsAction.isDisabled ||
                       isSimulationPrepActionBlocked ||
                       (!onOpenGeneratePhysicsDialog &&
                         !onGeneratePhysics &&
@@ -1601,7 +1605,7 @@ export const HealthActionPanel = ({
                   </div>
                 )}
                 <div className="text-[11px] text-muted-foreground">{physicsAction.summary}</div>
-                {showPhysicsActionButton && showPhysicsPanel ? (
+                {shouldShowPhysicsActionButton && isPhysicsPanelVisible ? (
                   <div className={PHYSICS_SECTION_CARD_CLASS}>
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -1613,7 +1617,7 @@ export const HealthActionPanel = ({
                         variant="ghost"
                         className="h-7 w-7 shrink-0"
                         onClick={() => {
-                          setShowPhysicsPanel(false);
+                          setIsPhysicsPanelVisible(false);
                         }}
                         aria-label="Close physics panel"
                       >
@@ -1637,7 +1641,7 @@ export const HealthActionPanel = ({
                   variant={recommendedAction.variant ?? "outline"}
                   className="h-8 w-full justify-start gap-2 px-2 text-xs"
                   onClick={recommendedAction.onClick}
-                  disabled={recommendedAction.disabled || isSimulationPrepActionBlocked}
+                  disabled={recommendedAction.isDisabled || isSimulationPrepActionBlocked}
                 >
                   <recommendedAction.icon className="h-3.5 w-3.5" />
                   {recommendedAction.label}
@@ -1659,12 +1663,12 @@ export const HealthActionPanel = ({
                     <button
                       type="button"
                       className="flex items-center gap-1 text-left text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowUnifiedRepeatedMeshes((current) => !current)}
+                      onClick={() => setAreUnifiedRepeatedMeshesVisible((current) => !current)}
                       aria-label={`${
-                        showUnifiedRepeatedMeshes ? "Hide" : "Show"
+                        areUnifiedRepeatedMeshesVisible ? "Hide" : "Show"
                       } unified repeated meshes`}
                     >
-                      {showUnifiedRepeatedMeshes ? (
+                      {areUnifiedRepeatedMeshesVisible ? (
                         <ChevronDown className="h-3.5 w-3.5" />
                       ) : (
                         <ChevronRight className="h-3.5 w-3.5" />
@@ -1673,7 +1677,7 @@ export const HealthActionPanel = ({
                         Unified repeated meshes: {physicsRepeatedMeshCanonicalizationSummaries.length}
                       </span>
                     </button>
-                    {showUnifiedRepeatedMeshes ? (
+                    {areUnifiedRepeatedMeshesVisible ? (
                       <div className="mt-1 space-y-1 pl-5 text-muted-foreground">
                         {physicsRepeatedMeshCanonicalizationSummaries.map((summary) => {
                           const scopeKey = buildRepeatedInertiaVisualizationScopeKey(summary.groupKey);
