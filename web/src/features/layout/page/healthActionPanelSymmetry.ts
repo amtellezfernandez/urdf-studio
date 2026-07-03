@@ -189,6 +189,59 @@ export const buildCompatibilityRobotMirrorSelectionState = ({
   };
 };
 
+export type RobotMirrorSelectionStats = {
+  selectedLinkCount: number;
+  selectedMeshCount: number;
+};
+
+export const buildRobotMirrorSelectionStats = ({
+  selectedLinkNames,
+  selectionLinks,
+}: {
+  selectedLinkNames: readonly string[];
+  selectionLinks: readonly RobotMirrorSelectionLink[];
+}): RobotMirrorSelectionStats => {
+  const selectedLinkNameSet = new Set(selectedLinkNames);
+  const selectedLinks = selectionLinks.filter((selectionLink) =>
+    selectedLinkNameSet.has(selectionLink.linkName)
+  );
+  return {
+    selectedLinkCount: selectedLinks.length,
+    selectedMeshCount: new Set(selectedLinks.map((selectionLink) => selectionLink.meshLabel)).size,
+  };
+};
+
+export type RobotMirrorSelectionMeshGroup = {
+  meshLabel: string;
+  radialExcludedCount: number;
+  selectionLinks: RobotMirrorSelectionLink[];
+};
+
+export const groupRobotMirrorSelectionLinksByMeshLabel = (
+  selectionLinks: readonly RobotMirrorSelectionLink[]
+): RobotMirrorSelectionMeshGroup[] =>
+  Array.from(
+    selectionLinks.reduce(
+      (groups, selectionLink) => {
+        const currentLinks = groups.get(selectionLink.meshLabel) ?? [];
+        currentLinks.push(selectionLink);
+        groups.set(selectionLink.meshLabel, currentLinks);
+        return groups;
+      },
+      new Map<string, RobotMirrorSelectionLink[]>()
+    )
+  )
+    .map(([meshLabel, groupedSelectionLinks]) => ({
+      meshLabel,
+      radialExcludedCount: groupedSelectionLinks.filter(
+        (selectionLink) => selectionLink.defaultExclusionReason === "radial-symmetry"
+      ).length,
+      selectionLinks: [...groupedSelectionLinks].sort((left, right) =>
+        left.linkName.localeCompare(right.linkName)
+      ),
+    }))
+    .sort((left, right) => left.meshLabel.localeCompare(right.meshLabel));
+
 export const formatRepeatedInertiaSymmetryType = (
   chain: Pick<
     RepeatedInertiaSymmetryChain,

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { RepeatedInertiaSymmetryChain } from "@/features/layout/page/repeatedInertiaSymmetry";
 import type { RobotMirrorLinkResult } from "@/features/layout/page/robotMirrorSymmetryFix";
+import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
 import {
   buildCompatibilityRobotMirrorSelectionState,
+  buildRobotMirrorSelectionStats,
   formatRepeatedInertiaSymmetryAutoAlignButtonLabel,
   formatRepeatedInertiaSymmetryDistance,
   formatRepeatedInertiaSymmetryOffsetSummary,
@@ -10,6 +12,7 @@ import {
   formatRobotMirrorLinkResultMetrics,
   formatRobotMirrorLinkResultReason,
   formatRobotMirrorLinkResultSummary,
+  groupRobotMirrorSelectionLinksByMeshLabel,
   resolveMirrorSelectionStatusBadge,
   resolveRepeatedInertiaSymmetryStatusBadgeClass,
 } from "@/features/layout/page/healthActionPanelSymmetry";
@@ -54,6 +57,20 @@ const createRobotMirrorLinkResult = (
   ...overrides,
 });
 
+const createRobotMirrorSelectionLink = (
+  overrides: Partial<RobotMirrorSelectionLink> = {}
+): RobotMirrorSelectionLink => ({
+  counterpartLinkName: null,
+  defaultExclusionReason: null,
+  groupKey: "finger",
+  groupLinkCount: 1,
+  linkName: "finger_tip",
+  meshLabel: "Finger",
+  preselected: false,
+  status: "available",
+  ...overrides,
+});
+
 describe("healthActionPanelSymmetry", () => {
   it("builds legacy mirror selection state with sorted unique links", () => {
     const state = buildCompatibilityRobotMirrorSelectionState({
@@ -69,6 +86,47 @@ describe("healthActionPanelSymmetry", () => {
       ["right", "finger_a", true],
       ["right", "finger_b", true],
       ["left", "palm", false],
+    ]);
+  });
+
+  it("summarizes and groups mirror selection links by mesh label", () => {
+    const selectionLinks = [
+      createRobotMirrorSelectionLink({
+        defaultExclusionReason: "radial-symmetry",
+        linkName: "finger_b",
+        meshLabel: "Finger",
+      }),
+      createRobotMirrorSelectionLink({
+        groupKey: "palm",
+        linkName: "palm",
+        meshLabel: "Palm",
+      }),
+      createRobotMirrorSelectionLink({
+        linkName: "finger_a",
+        meshLabel: "Finger",
+      }),
+    ];
+
+    expect(
+      buildRobotMirrorSelectionStats({
+        selectedLinkNames: ["finger_a", "palm"],
+        selectionLinks,
+      })
+    ).toEqual({
+      selectedLinkCount: 2,
+      selectedMeshCount: 2,
+    });
+    expect(groupRobotMirrorSelectionLinksByMeshLabel(selectionLinks)).toEqual([
+      {
+        meshLabel: "Finger",
+        radialExcludedCount: 1,
+        selectionLinks: [selectionLinks[2], selectionLinks[0]],
+      },
+      {
+        meshLabel: "Palm",
+        radialExcludedCount: 0,
+        selectionLinks: [selectionLinks[1]],
+      },
     ]);
   });
 

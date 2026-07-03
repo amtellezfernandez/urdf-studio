@@ -81,6 +81,7 @@ import {
 } from "@/features/layout/page/healthActionPanelPhysicsActions";
 import {
   buildCompatibilityRobotMirrorSelectionState,
+  buildRobotMirrorSelectionStats,
   formatMirrorSelectionLinkCount,
   formatRepeatedInertiaSymmetryAngle,
   formatRepeatedInertiaSymmetryAngleComparison,
@@ -100,6 +101,7 @@ import {
   formatRobotMirrorLinkResultReason,
   formatRobotMirrorLinkResultSummary,
   formatRobotMirrorPlaneLabel,
+  groupRobotMirrorSelectionLinksByMeshLabel,
   MIRROR_SELECTION_RADIAL_BADGE_CLASS,
   resolveMirrorSelectionStatusBadge,
   resolveRepeatedInertiaSymmetryOutcome,
@@ -587,37 +589,13 @@ export const HealthActionPanel = ({
     Boolean(onToggleInertiaVisualizationScope) &&
     robotMirrorScopeKey !== null &&
     robotMirrorVisualizationLinkNames.length > 0;
-  const selectedRobotMirrorLinkCount = displayRobotMirrorSelectionLinks.filter((selectionLink) =>
-    effectiveSelectedRobotMirrorLinkNames.includes(selectionLink.linkName)
-  ).length;
-  const selectedRobotMirrorMeshCount = new Set(
+  const robotMirrorSelectionStats = buildRobotMirrorSelectionStats({
+    selectedLinkNames: effectiveSelectedRobotMirrorLinkNames,
+    selectionLinks: displayRobotMirrorSelectionLinks,
+  });
+  const robotMirrorSelectionLinksByMeshLabel = groupRobotMirrorSelectionLinksByMeshLabel(
     displayRobotMirrorSelectionLinks
-      .filter((selectionLink) =>
-        effectiveSelectedRobotMirrorLinkNames.includes(selectionLink.linkName)
-      )
-      .map((selectionLink) => selectionLink.meshLabel)
-  ).size;
-  const robotMirrorSelectionLinksByMeshLabel = Array.from(
-    displayRobotMirrorSelectionLinks.reduce(
-      (groups, selectionLink) => {
-        const currentLinks = groups.get(selectionLink.meshLabel) ?? [];
-        currentLinks.push(selectionLink);
-        groups.set(selectionLink.meshLabel, currentLinks);
-        return groups;
-      },
-      new Map<string, RobotMirrorSelectionLink[]>()
-    )
-  )
-    .map(([meshLabel, selectionLinks]) => ({
-      meshLabel,
-      radialExcludedCount: selectionLinks.filter(
-        (selectionLink) => selectionLink.defaultExclusionReason === "radial-symmetry"
-      ).length,
-      selectionLinks: [...selectionLinks].sort((left, right) =>
-        left.linkName.localeCompare(right.linkName)
-      ),
-    }))
-    .sort((left, right) => left.meshLabel.localeCompare(right.meshLabel));
+  );
   const robotMirrorOutcomeByLinkName = new Map(
     robotMirrorOutcome?.linkResults?.map((linkResult) => [linkResult.linkName, linkResult]) ?? []
   );
@@ -825,10 +803,10 @@ export const HealthActionPanel = ({
                     <div className="flex flex-wrap items-center justify-between gap-1.5">
                       <div className="min-w-0 text-[9px] text-foreground/85">
                         {effectiveSelectedRobotMirrorLinkNames.length} selected •{" "}
-                        {selectedRobotMirrorMeshCount} mesh
-                        {selectedRobotMirrorMeshCount === 1 ? "" : "es"} •{" "}
-                        {selectedRobotMirrorLinkCount} link
-                        {selectedRobotMirrorLinkCount === 1 ? "" : "s"}
+                        {robotMirrorSelectionStats.selectedMeshCount} mesh
+                        {robotMirrorSelectionStats.selectedMeshCount === 1 ? "" : "es"} •{" "}
+                        {robotMirrorSelectionStats.selectedLinkCount} link
+                        {robotMirrorSelectionStats.selectedLinkCount === 1 ? "" : "s"}
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {onAlignRobotMirrorOrientation ? (
