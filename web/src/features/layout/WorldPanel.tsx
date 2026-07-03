@@ -26,6 +26,15 @@ const toReadableWorldSourceLabel = (source: string): string =>
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 
+const toWorldObjectDisplayName = (worldObject: CreatedObject): string => {
+  const generatedObjectIdPrefix = "object-";
+  const objectOrdinal = worldObject.id.startsWith(generatedObjectIdPrefix)
+    ? worldObject.id.slice(generatedObjectIdPrefix.length)
+    : worldObject.id;
+  const objectTypeLabel = worldObject.type.charAt(0).toUpperCase() + worldObject.type.slice(1);
+  return `${objectTypeLabel} ${objectOrdinal}`;
+};
+
 export const WorldPanel = ({
   robot,
   endEffectorLink,
@@ -134,42 +143,41 @@ export const WorldPanel = ({
 
       {objectGroups.length > 0 ? (
         <div className="space-y-1">
-          {objectGroups.map((group) => (
-            <div key={group.source} className="space-y-0.5">
+          {objectGroups.map((objectGroup) => (
+            <div key={objectGroup.source} className="space-y-0.5">
               <div className="flex items-center justify-between px-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                <span>{group.label}</span>
-                <span className="tabular-nums">{group.objects.length}</span>
+                <span>{objectGroup.label}</span>
+                <span className="tabular-nums">{objectGroup.objects.length}</span>
               </div>
               <div className="overflow-hidden rounded-sm border border-border/20 bg-background/20">
-                {group.objects.map((obj) => {
-                  const isHidden = obj.isHidden === true;
-                  const isSelected = obj.id === selectedObjectId;
+                {objectGroup.objects.map((worldObject) => {
+                  const isHidden = worldObject.isHidden === true;
+                  const isSelected = worldObject.id === selectedObjectId;
                   const trackingReference = resolveTrackingReference({
                     robot,
-                    trackedName: obj.trackedJointName,
+                    trackedName: worldObject.trackedJointName,
                     endEffectorLink,
                   });
                   const liveDistance =
                     trackingReference?.position !== null && trackingReference?.position !== undefined
-                      ? obj.position.distanceTo(trackingReference.position)
+                      ? worldObject.position.distanceTo(trackingReference.position)
                       : null;
-                  const objectOrdinal = obj.id.startsWith("object-") ? obj.id.slice(7) : obj.id;
 
                   return (
                     <div
-                      key={obj.id}
+                      key={worldObject.id}
                       className={cn(
                         "group cursor-pointer border-b border-border/20 px-1.5 py-1 transition-colors last:border-b-0",
                         isSelected ? "bg-muted/35" : "hover:bg-muted/20",
                         isHidden && "opacity-70"
                       )}
-                      onClick={() => selectWorldObject(obj.id)}
+                      onClick={() => selectWorldObject(worldObject.id)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <Box className="h-3 w-3 shrink-0 text-muted-foreground/80" />
                           <span className="truncate text-[9.5px] font-medium text-foreground/95">
-                            {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {objectOrdinal}
+                            {toWorldObjectDisplayName(worldObject)}
                           </span>
                           {isHidden ? (
                             <span className="shrink-0 text-[8px] uppercase tracking-[0.05em] text-muted-foreground/80">
@@ -187,7 +195,7 @@ export const WorldPanel = ({
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              toggleWorldObjectVisibility(obj.id, isHidden);
+                              toggleWorldObjectVisibility(worldObject.id, isHidden);
                             }}
                             title={isHidden ? "Show object" : "Hide object"}
                             aria-label={isHidden ? "Show object" : "Hide object"}
