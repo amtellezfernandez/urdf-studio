@@ -35,15 +35,18 @@ def _hash_urdf(urdf_xml: str) -> str:
 
 def _quat_to_matrix(wxyz: List[float]) -> np.ndarray:
     if len(wxyz) != 4:
-        raise HTTPException(status_code=400, detail="target_wxyz must have length 4 when provided")
+        raise HTTPException(
+            status_code=400,
+            detail="target_wxyz must have length 4 when provided",
+        )
     w, x, y, z = wxyz
-    norm = math.sqrt(w * w + x * x + y * y + z * z)
-    if norm == 0:
+    quaternion_norm = math.sqrt(w * w + x * x + y * y + z * z)
+    if quaternion_norm == 0:
         return np.eye(3, dtype=np.float64)
-    w /= norm
-    x /= norm
-    y /= norm
-    z /= norm
+    w /= quaternion_norm
+    x /= quaternion_norm
+    y /= quaternion_norm
+    z /= quaternion_norm
     return np.array(
         [
             [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
@@ -68,16 +71,16 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
 
     sanitized_urdf = strip_urdf_for_kinematics(urdf_xml)
     urdf_hash = _hash_urdf(sanitized_urdf)
-    cached = _robot_cache.get(urdf_hash)
-    if cached is not None:
-        return cached
+    cached_entry = _robot_cache.get(urdf_hash)
+    if cached_entry is not None:
+        return cached_entry
 
-    with tempfile.NamedTemporaryFile("w", suffix=".urdf", delete=False) as tmp:
-        tmp.write(sanitized_urdf)
-        tmp_path = tmp.name
+    with tempfile.NamedTemporaryFile("w", suffix=".urdf", delete=False) as urdf_file:
+        urdf_file.write(sanitized_urdf)
+        temporary_urdf_path = urdf_file.name
 
     try:
-        robot = placo.RobotWrapper(tmp_path)
+        robot = placo.RobotWrapper(temporary_urdf_path)
         solver = placo.KinematicsSolver(robot)
         solver.mask_fbase(True)
         tuning = get_solver_tuning("placo")
@@ -100,7 +103,7 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
         ) from exc
     finally:
         try:
-            Path(tmp_path).unlink(missing_ok=True)
+            Path(temporary_urdf_path).unlink(missing_ok=True)
         except OSError:
             pass
 
@@ -116,76 +119,98 @@ def _load_placo(urdf_xml: str) -> PlacoRobotEntry:
     return entry
 
 
-def _get_or_create_frame_task(entry: PlacoRobotEntry, target_link: str):
-    cached = entry.task_cache.get(target_link)
-    if cached is not None:
-        return cached
+def _get_or_create_frame_task(entry: PlacoRobotEntry, target_link: str) -> Any:
+    cached_task = entry.task_cache.get(target_link)
+    if cached_task is not None:
+        return cached_task
 
     try:
-        task = entry.solver.add_frame_task(target_link, np.eye(4))
+        frame_task = entry.solver.add_frame_task(target_link, np.eye(4))
     except Exception as exc:
         raise HTTPException(
             status_code=400,
             detail=f"Target link '{target_link}' not found in URDF.",
         ) from exc
 
-    entry.task_cache[target_link] = task
-    return task
+    entry.task_cache[target_link] = frame_task
+    return frame_task
 
 
-def inverse_kinematics(req: IKRequest) -> IKResponse:
-    entry = _load_placo(req.urdf)
+def _request_weight(request_value: float | None, fallback_value: float) -> float:
+    return float(request_value) if request_value is not None else float(fallback_value)
+
+
+def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
+    entry = _load_placo(ik_request.urdf)
     robot = entry.robot
 
-    if len(req.target_position) != 3:
-        raise HTTPException(status_code=400, detail="target_position must have length 3")
-    if req.target_rotation is not None:
-        if len(req.target_rotation) != 3 or any(len(row) != 3 for row in req.target_rotation):
+    if len(ik_request.target_position) != 3:
+        raise HTTPException(
+            status_code=400,
+            detail="target_position must have length 3",
+        )
+    if ik_request.target_rotation is not None:
+        has_invalid_rotation_shape = len(ik_request.target_rotation) != 3 or any(
+            len(row) != 3 for row in ik_request.target_rotation
+        )
+        if has_invalid_rotation_shape:
             raise HTTPException(
                 status_code=400,
                 detail="target_rotation must be a 3x3 matrix when provided (row-major).",
             )
 
-    seed_map = {name: float(req.joint_values.get(name, 0.0)) for name in entry.joint_names}
-    for joint_name, value in seed_map.items():
-        robot.set_joint(joint_name, value)
+    seed_joint_values = {
+        joint_name: float(ik_request.joint_values.get(joint_name, 0.0))
+        for joint_name in entry.joint_names
+    }
+    for joint_name, joint_value in seed_joint_values.items():
+        robot.set_joint(joint_name, joint_value)
     robot.update_kinematics()
 
     tuning = get_solver_tuning("placo")
-    pos_weight = float(req.position_weight) if req.position_weight is not None else float(tuning.position_weight)
-    ori_weight = float(req.orientation_weight) if req.orientation_weight is not None else float(tuning.orientation_weight)
-    posture_weight = float(req.posture_weight) if req.posture_weight is not None else float(tuning.posture_weight)
-    limit_weight = float(req.limit_weight) if req.limit_weight is not None else float(tuning.limit_weight)
+    position_weight = _request_weight(
+        ik_request.position_weight, tuning.position_weight
+    )
+    orientation_weight = _request_weight(
+        ik_request.orientation_weight, tuning.orientation_weight
+    )
+    posture_weight = _request_weight(ik_request.posture_weight, tuning.posture_weight)
+    limit_weight = _request_weight(ik_request.limit_weight, tuning.limit_weight)
 
     rotation = (
-        np.array(req.target_rotation, dtype=np.float64)
-        if req.target_rotation is not None
-        else _quat_to_matrix(req.target_wxyz or [1.0, 0.0, 0.0, 0.0])
+        np.array(ik_request.target_rotation, dtype=np.float64)
+        if ik_request.target_rotation is not None
+        else _quat_to_matrix(ik_request.target_wxyz or [1.0, 0.0, 0.0, 0.0])
     )
     target_pose = np.eye(4, dtype=np.float64)
     target_pose[:3, :3] = rotation
-    target_pose[:3, 3] = np.array(req.target_position, dtype=np.float64)
+    target_pose[:3, 3] = np.array(ik_request.target_position, dtype=np.float64)
 
     try:
-        frame_task = _get_or_create_frame_task(entry, req.target_link)
+        frame_task = _get_or_create_frame_task(entry, ik_request.target_link)
         frame_task.T_world_frame = target_pose
 
-        has_orientation = req.target_rotation is not None or req.target_wxyz is not None
+        has_orientation = (
+            ik_request.target_rotation is not None or ik_request.target_wxyz is not None
+        )
         frame_task.configure(
-            req.target_link,
+            ik_request.target_link,
             "soft",
-            pos_weight,
-            ori_weight if has_orientation else 0.0,
+            position_weight,
+            orientation_weight if has_orientation else 0.0,
         )
         if posture_weight > 0.0:
             if entry.joints_task is None:
                 entry.joints_task = entry.solver.add_joints_task()
             entry.joints_task.configure("posture", "soft", posture_weight)
-            posture_target = req.posture_joint_values or seed_map
+            posture_target = ik_request.posture_joint_values or seed_joint_values
             try:
                 entry.joints_task.set_joints(posture_target)
             except Exception:
-                joint_seed = [posture_target.get(name, 0.0) for name in entry.joint_names]
+                joint_seed = [
+                    posture_target.get(joint_name, 0.0)
+                    for joint_name in entry.joint_names
+                ]
                 try:
                     entry.joints_task.set_joints(joint_seed)
                 except Exception:
@@ -200,7 +225,7 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
 
     try:
         iterations = max(1, int(tuning.solve_iterations))
-        for _ in range(iterations):
+        for _solve_iteration in range(iterations):
             entry.solver.solve(True)
             robot.update_kinematics()
     except Exception as exc:
@@ -208,7 +233,10 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
             status_code=500, detail=f"Placo IK solve failed: {exc}"
         ) from exc
 
-    solution = {name: float(robot.get_joint(name)) for name in entry.joint_names}
+    solution = {
+        joint_name: float(robot.get_joint(joint_name))
+        for joint_name in entry.joint_names
+    }
 
     diagnostics = IKDiagnostics(
         termination_reason="placo",
@@ -226,7 +254,7 @@ def inverse_kinematics(req: IKRequest) -> IKResponse:
 
     metadata: Dict[str, Any] = {
         "urdf_hash": entry.urdf_hash,
-        "target_link": req.target_link,
+        "target_link": ik_request.target_link,
         "actuated_joint_names": entry.joint_names,
     }
 
