@@ -424,9 +424,13 @@ export const CollisionControl = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {visualMeshInfo.map((mesh, idx) => (
-                      <SelectItem key={idx} value={String(idx)} className="text-[10px]">
-                        Visual Mesh {idx + 1}{" "}
+                    {visualMeshInfo.map((mesh, meshIndex) => (
+                      <SelectItem
+                        key={`${mesh.filename}:${meshIndex}`}
+                        value={String(meshIndex)}
+                        className="text-[10px]"
+                      >
+                        Visual Mesh {meshIndex + 1}{" "}
                         {mesh.filename ? `(${mesh.filename.split("/").pop()})` : ""}
                       </SelectItem>
                     ))}

@@ -22,11 +22,11 @@ export const Vector3Inputs = ({
 }: Vector3InputsProps) => {
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      {values.map((val, i) => (
+      {values.map((componentValue, componentIndex) => (
         <NumberInput
-          key={i}
-          value={val}
-          onValueChange={(newVal) => onChange(i, newVal)}
+          key={componentIndex}
+          value={componentValue}
+          onValueChange={(newComponentValue) => onChange(componentIndex, newComponentValue)}
           step={step}
           min={min}
           compact={compact}

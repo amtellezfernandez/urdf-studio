@@ -15,9 +15,9 @@ import {
 } from "./approachWorldNavigation";
 import { ROVER_APPROACH_WORLD_NAVIGATION_WORKER_PARAMS } from "./approachWorldNavigationWorkerParams";
 
-type WorkerRequest = { id: number } & RoverApproachWorldRouteRequest;
+type ApproachWorldNavigationWorkerRequest = { id: number } & RoverApproachWorldRouteRequest;
 
-type WorkerResponse =
+type ApproachWorldNavigationWorkerResponse =
   | {
       id: number;
       type: "route";
@@ -32,7 +32,7 @@ type WorkerResponse =
 const contextCache = createLruCache<RoverApproachWorldNavigationContext>(
   ROVER_APPROACH_WORLD_NAVIGATION_WORKER_PARAMS.sceneCacheLimit
 );
-const ctx = self as unknown as DedicatedWorkerGlobalScope;
+const workerScope = self as unknown as DedicatedWorkerGlobalScope;
 const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 const getNavigationContext = (
@@ -51,7 +51,7 @@ const getNavigationContext = (
   return { context, cacheHit: false, cacheKey };
 };
 
-ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
+workerScope.onmessage = (event: MessageEvent<ApproachWorldNavigationWorkerRequest>) => {
   const requestStartMs = nowMs();
   const { id, ...request } = event.data;
   try {
@@ -66,7 +66,7 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
       excludedObstacleId: request.excludedObstacleId,
       excludedObstacleIds: request.excludedObstacleIds,
     });
-    const response: WorkerResponse = {
+    const response: ApproachWorldNavigationWorkerResponse = {
       id,
       type: "route",
       result: serializeRoverApproachWorldRouteResult({
@@ -91,13 +91,13 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
         },
       }),
     };
-    ctx.postMessage(response);
+    workerScope.postMessage(response);
   } catch (error) {
-    const response: WorkerResponse = {
+    const response: ApproachWorldNavigationWorkerResponse = {
       id,
       type: "error",
       error: error instanceof Error ? error.message : "World navigation worker failed",
     };
-    ctx.postMessage(response);
+    workerScope.postMessage(response);
   }
 };
