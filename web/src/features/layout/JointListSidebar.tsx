@@ -31,7 +31,6 @@ import type { URDFRobot } from "urdf-loader";
 import { LinkControl } from "@/features/urdf/editor/LinkEditor";
 import type { CollisionVisibility } from "@/features/urdf/editor/LinkEditor";
 import {
-  buildFilteredHierarchyJoints,
   buildFilteredJointNames,
   buildHierarchyTree,
   buildJointTypes,
@@ -77,7 +76,7 @@ import {
   JOINT_LIST_SIDEBAR_PARAMS,
 } from "@/features/layout/jointListSidebarParams";
 import { parseJointEffortLimits } from "@/features/layout/jointEffortLimits";
-import { HierarchyTreeView } from "@/features/layout/HierarchyTreeView";
+import { HierarchyJointBrowserView } from "@/features/layout/HierarchyJointBrowserView";
 import { WorldPanel } from "@/features/layout/WorldPanel";
 import { CameraEditorPanel } from "@/features/layout/CameraEditorPanel";
 import { ObjectEditorPanel } from "@/features/layout/ObjectEditorPanel";
@@ -875,18 +874,6 @@ export const JointListSidebar = ({
     ]
   );
 
-  // Filter hierarchical joints (for backward compatibility)
-  const filteredHierarchyJoints = useMemo(
-    () =>
-      buildFilteredHierarchyJoints({
-        jointHierarchy,
-        jointLimits,
-        typeFilter,
-        searchQuery: deferredSearchQuery,
-      }),
-    [deferredSearchQuery, jointHierarchy, jointLimits, typeFilter]
-  );
-
   if (isCollapsed) {
     return null;
   }
@@ -1061,36 +1048,27 @@ export const JointListSidebar = ({
                 visibleJoints={visibleJoints}
               />
             ) : (
-              // Hierarchical view
-              !hierarchyTree || filteredHierarchyJoints.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-                  {!hierarchyTree
-                    ? "Loading hierarchy..."
-                    : searchQuery || typeFilter !== "all"
-                    ? "No joints match the filters"
-                    : "No joints available"}
-                </div>
-              ) : (
-                  <HierarchyTreeView
-                    hierarchyTree={hierarchyTree}
-                    jointLimits={jointLimits}
-                    deletedJoints={deletedJoints}
-                  selectedJoint={selectedJoint}
-                  hoveredJoint={hoveredJoint}
-                  angleUnit={angleUnit}
-                  onJointSelect={onJointSelect}
-                  onLinkSelect={selectSidebarLink}
-                  selectedLink={selectedLink}
-                  availableJoints={availableJoints}
-                  colorJointNames={colorJointNames}
-                  jointEffortLimits={jointEffortLimits}
-                  visibleJoints={visibleJoints}
-                  onVisibilityToggle={handleVisibilityToggle}
-                  endEffectorLink={effectiveEndEffectorLink}
-                  onMarkAsEndEffector={onMarkAsEndEffector}
-                  structureLabels={structureLabels}
-                />
-              )
+              <HierarchyJointBrowserView
+                hierarchyTree={hierarchyTree}
+                jointLimits={jointLimits}
+                deletedJoints={deletedJoints}
+                selectedJoint={selectedJoint}
+                hoveredJoint={hoveredJoint}
+                angleUnit={angleUnit}
+                onJointSelect={onJointSelect}
+                onLinkSelect={selectSidebarLink}
+                selectedLink={selectedLink}
+                availableJoints={availableJoints}
+                colorJointNames={colorJointNames}
+                jointEffortLimits={jointEffortLimits}
+                visibleJoints={visibleJoints}
+                onVisibilityToggle={handleVisibilityToggle}
+                endEffectorLink={effectiveEndEffectorLink}
+                onMarkAsEndEffector={onMarkAsEndEffector}
+                structureLabels={structureLabels}
+                searchQuery={searchQuery}
+                typeFilter={typeFilter}
+              />
             )}
           </div>
         </div>

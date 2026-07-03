@@ -78,8 +78,8 @@ export const HierarchyTreeView = React.memo(({
     onJointSelect?.(null);
   };
   const selectHierarchyJoint = (jointName: string) => {
-    onJointSelect?.(jointName);
     onLinkSelect?.(null);
+    onJointSelect?.(jointName);
   };
 
   const renderLinkNode = (linkName: string, depth: number = 0, visitedLinks: Set<string> = new Set()): React.ReactNode => {
