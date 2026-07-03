@@ -2,7 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { analyzeLoadedUrdfContent } from "@/features/urdf/loader/loadedUrdfAnalysis";
 
-const SINGLE_TOOL_URDF = `<?xml version="1.0"?>
+describe("loadedUrdfAnalysis", () => {
+  const fixtures = {
+    singleToolUrdf: `<?xml version="1.0"?>
 <robot name="single_tool">
   <link name="base_link" />
   <link name="arm_link" />
@@ -17,14 +19,14 @@ const SINGLE_TOOL_URDF = `<?xml version="1.0"?>
     <child link="tool_tip" />
     <limit lower="-1" upper="1" effort="10" velocity="1" />
   </joint>
-</robot>`;
+</robot>`,
+  };
 
-describe("loadedUrdfAnalysis", () => {
   it("analyzes valid URDF content and resolves a single auto end-effector", () => {
     const result = analyzeLoadedUrdfContent({
       meshFiles: {},
       packageRoots: {},
-      parsedContent: SINGLE_TOOL_URDF,
+      parsedContent: fixtures.singleToolUrdf,
       urdfBasePath: "",
     });
 

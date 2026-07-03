@@ -20,6 +20,12 @@ export const JOINT_LIST_SIDEBAR_PARAMS = {
     defaultHeight: 132,
     maxHeight: 360,
   },
+  hierarchyTree: {
+    indentPx: 8,
+    lineOffsetPx: 4,
+    branchWidthPx: 4,
+    linkColor: "#4a9eff",
+  },
   panelLayout: {
     structureRows: "minmax(0, 1.35fr) minmax(200px, 0.75fr)",
   },
@@ -54,6 +60,14 @@ export const JOINT_LIST_SIDEBAR_PARAMS = {
     cameraSectionLabel:
       "pt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground/75",
     cameraFieldLabel: "text-[8px] leading-none text-muted-foreground/70",
+    cameraEditorCompactSelectTrigger: "h-5 text-[10px] bg-muted/15 border-border/40",
+    cameraEditorCompactSelectContent: "bg-popover border-border",
+    cameraEditorCompactInput: "w-full min-w-[48px] text-[10px]",
+    objectEditorCompactSelectTrigger:
+      "h-5 text-[9px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]",
+    objectEditorCompactSelectContent: "bg-[#2a2a2a] border-[#3d3d3d]",
+    objectEditorCompactNumericInput: "w-full min-w-0 text-[10px]",
+    objectEditorInlineNumericInput: "w-full min-w-[56px] text-[10px]",
   },
   worldObjectSourceOrder: WORLD_OBJECT_SOURCES,
   worldObjectSourceLabels: WORLD_OBJECT_SOURCE_LABELS,

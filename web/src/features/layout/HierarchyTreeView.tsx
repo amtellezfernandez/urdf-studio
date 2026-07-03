@@ -5,6 +5,7 @@ import type { URDFRobot } from "urdf-loader";
 import { cn } from "@/shared/lib/utils";
 import type { JointLimits } from "@/shared/lib/urdfBrowser";
 import { JointListItem } from "@/features/layout/JointListItem";
+import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
 import type { JointHierarchyTreeModel } from "@/features/layout/sidebarSelectors";
 import type { RobotStructureLabels } from "@/features/layout/robotStructureLabels";
 
@@ -29,10 +30,7 @@ export interface HierarchyTreeViewProps {
   structureLabels: RobotStructureLabels;
 }
 
-const HIERARCHY_TREE_INDENT_PX = 8;
-const HIERARCHY_TREE_LINE_OFFSET_PX = 4;
-const HIERARCHY_TREE_BRANCH_WIDTH_PX = 4;
-const HIERARCHY_LINK_COLOR = "#4a9eff";
+const HIERARCHY_TREE_PARAMS = JOINT_LIST_SIDEBAR_PARAMS.hierarchyTree;
 
 const hexToRgba = (hex: string, alpha: number) => {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -122,22 +120,22 @@ export const HierarchyTreeView = React.memo(({
           <div
             key={`link-${linkName}-${depth}`}
             className="relative"
-            style={{ paddingLeft: `${depth * HIERARCHY_TREE_INDENT_PX}px` }}
+            style={{ paddingLeft: `${depth * HIERARCHY_TREE_PARAMS.indentPx}px` }}
           >
             {depth > 0 && (
               <>
                 <div
                   className="absolute top-1/2 bg-border/30"
                   style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
-                    width: `${HIERARCHY_TREE_BRANCH_WIDTH_PX}px`,
+                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
+                    width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
                     height: "1px",
                   }}
                 />
                 <div
                   className="absolute bg-border/30"
                   style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
                     top: "0",
                     bottom: "50%",
                     width: "1px",
@@ -154,7 +152,7 @@ export const HierarchyTreeView = React.memo(({
               style={
                 isSelected
                   ? {
-                      backgroundColor: hexToRgba(HIERARCHY_LINK_COLOR, 0.15),
+                      backgroundColor: hexToRgba(HIERARCHY_TREE_PARAMS.linkColor, 0.15),
                     }
                   : undefined
               }
@@ -170,7 +168,7 @@ export const HierarchyTreeView = React.memo(({
                   )}
                   style={
                     isSelected
-                      ? { color: HIERARCHY_LINK_COLOR }
+                      ? { color: HIERARCHY_TREE_PARAMS.linkColor }
                       : undefined
                   }
                   title={linkName}
@@ -234,22 +232,22 @@ export const HierarchyTreeView = React.memo(({
         <div key={`link-${linkName}-${depth}`}>
           <div
             className="relative"
-            style={{ paddingLeft: `${depth * HIERARCHY_TREE_INDENT_PX}px` }}
+            style={{ paddingLeft: `${depth * HIERARCHY_TREE_PARAMS.indentPx}px` }}
           >
             {depth > 0 && (
               <>
                 <div
                   className="absolute top-1/2 bg-border/30"
                   style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
-                    width: `${HIERARCHY_TREE_BRANCH_WIDTH_PX}px`,
+                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
+                    width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
                     height: "1px",
                   }}
                 />
                 <div
                   className="absolute bg-border/30"
                   style={{
-                    left: `${(depth - 1) * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                    left: `${(depth - 1) * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
                     top: "0",
                     bottom: "0",
                     width: "1px",
@@ -265,7 +263,7 @@ export const HierarchyTreeView = React.memo(({
               style={
                 isSelected
                   ? {
-                      backgroundColor: hexToRgba(HIERARCHY_LINK_COLOR, 0.15),
+                      backgroundColor: hexToRgba(HIERARCHY_TREE_PARAMS.linkColor, 0.15),
                     }
                   : undefined
               }
@@ -280,7 +278,7 @@ export const HierarchyTreeView = React.memo(({
                   )}
                   style={
                     isSelected
-                      ? { color: HIERARCHY_LINK_COLOR }
+                      ? { color: HIERARCHY_TREE_PARAMS.linkColor }
                       : undefined
                   }
                   title={linkName}
@@ -331,21 +329,21 @@ export const HierarchyTreeView = React.memo(({
               <div key={`joint-${joint.jointName}`}>
                 <div
                   className="relative"
-                  style={{ paddingLeft: `${(depth + 1) * HIERARCHY_TREE_INDENT_PX}px` }}
+                  style={{ paddingLeft: `${(depth + 1) * HIERARCHY_TREE_PARAMS.indentPx}px` }}
                 >
                   <>
                     <div
                       className="absolute top-1/2 bg-border/30"
                       style={{
-                        left: `${depth * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
-                        width: `${HIERARCHY_TREE_BRANCH_WIDTH_PX}px`,
+                        left: `${depth * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
+                        width: `${HIERARCHY_TREE_PARAMS.branchWidthPx}px`,
                         height: "1px",
                       }}
                     />
                     <div
                       className="absolute bg-border/30"
                       style={{
-                        left: `${depth * HIERARCHY_TREE_INDENT_PX + HIERARCHY_TREE_LINE_OFFSET_PX}px`,
+                        left: `${depth * HIERARCHY_TREE_PARAMS.indentPx + HIERARCHY_TREE_PARAMS.lineOffsetPx}px`,
                         top: "0",
                         bottom: hasChildJoints || !isLastJoint ? "0" : "50%",
                         width: "1px",

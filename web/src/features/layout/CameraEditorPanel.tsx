@@ -31,9 +31,7 @@ export interface CameraEditorPanelProps {
 
 const CAMERA_SECTION_LABEL_CLASS = JOINT_LIST_SIDEBAR_PARAMS.classNames.cameraSectionLabel;
 const CAMERA_FIELD_LABEL_CLASS = JOINT_LIST_SIDEBAR_PARAMS.classNames.cameraFieldLabel;
-const COMPACT_SELECT_TRIGGER_CLASS = "h-5 text-[10px] bg-muted/15 border-border/40";
-const COMPACT_SELECT_CONTENT_CLASS = "bg-popover border-border";
-const COMPACT_INPUT_CLASS = "w-full min-w-[48px] text-[10px]";
+const CAMERA_EDITOR_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
 
 const radToDeg = (rad: number) => (rad * 180) / Math.PI;
 const degToRad = (deg: number) => (deg * Math.PI) / 180;
@@ -137,10 +135,10 @@ export const CameraEditorPanel = ({
                 updateCamera(camera.id, { parent_joint: value, pose: remappedPose });
               }}
             >
-              <SelectTrigger className={COMPACT_SELECT_TRIGGER_CLASS}>
+              <SelectTrigger className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactSelectTrigger}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className={COMPACT_SELECT_CONTENT_CLASS}>
+              <SelectContent className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactSelectContent}>
                 {availableJoints.map((jointName) => (
                   <SelectItem key={jointName} value={jointName} className="text-[10px]">
                     {jointName}
@@ -159,21 +157,21 @@ export const CameraEditorPanel = ({
                 value={camera.pose.xyz[0]}
                 onValueChange={(val) => updateCameraPose(camera.id, camera.pose, "xyz", 0, val)}
                 step={0.01}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="Y (m)"
                 value={camera.pose.xyz[1]}
                 onValueChange={(val) => updateCameraPose(camera.id, camera.pose, "xyz", 1, val)}
                 step={0.01}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="Z (m)"
                 value={camera.pose.xyz[2]}
                 onValueChange={(val) => updateCameraPose(camera.id, camera.pose, "xyz", 2, val)}
                 step={0.01}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
@@ -187,7 +185,7 @@ export const CameraEditorPanel = ({
                   updateCameraPose(camera.id, camera.pose, "rpy", 0, degToRad(val))
                 }
                 step={1}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="Pitch Y"
@@ -196,7 +194,7 @@ export const CameraEditorPanel = ({
                   updateCameraPose(camera.id, camera.pose, "rpy", 1, degToRad(val))
                 }
                 step={1}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="Yaw Z"
@@ -205,7 +203,7 @@ export const CameraEditorPanel = ({
                   updateCameraPose(camera.id, camera.pose, "rpy", 2, degToRad(val))
                 }
                 step={1}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
@@ -228,7 +226,7 @@ export const CameraEditorPanel = ({
                 }}
                 step={1}
                 min={1}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="H"
@@ -244,7 +242,7 @@ export const CameraEditorPanel = ({
                 }}
                 step={1}
                 min={1}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="FOV"
@@ -257,7 +255,7 @@ export const CameraEditorPanel = ({
                 step={1}
                 min={1}
                 max={179}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
@@ -278,7 +276,7 @@ export const CameraEditorPanel = ({
                 }}
                 step={1}
                 min={1e-3}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="fy"
@@ -294,7 +292,7 @@ export const CameraEditorPanel = ({
                 }}
                 step={1}
                 min={1e-3}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>
@@ -314,7 +312,7 @@ export const CameraEditorPanel = ({
                   });
                 }}
                 step={0.5}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
               <CameraNumberField
                 label="cy"
@@ -329,7 +327,7 @@ export const CameraEditorPanel = ({
                   });
                 }}
                 step={0.5}
-                className={COMPACT_INPUT_CLASS}
+                className={CAMERA_EDITOR_CLASS_NAMES.cameraEditorCompactInput}
               />
             </div>
           </BlenderPropertyRow>

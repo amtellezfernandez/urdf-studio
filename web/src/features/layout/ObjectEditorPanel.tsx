@@ -20,11 +20,7 @@ export interface ObjectEditorPanelProps {
 }
 
 const OBJECT_FIELD_LABEL_CLASS = JOINT_LIST_SIDEBAR_PARAMS.classNames.cameraFieldLabel;
-const COMPACT_SELECT_TRIGGER_CLASS =
-  "h-5 text-[9px] bg-[#2a2a2a] border-[#3d3d3d] text-[#d4d4d4]";
-const COMPACT_SELECT_CONTENT_CLASS = "bg-[#2a2a2a] border-[#3d3d3d]";
-const COMPACT_NUMERIC_INPUT_CLASS = "w-full min-w-0 text-[10px]";
-const INLINE_NUMERIC_INPUT_CLASS = "w-full min-w-[56px] text-[10px]";
+const OBJECT_EDITOR_CLASS_NAMES = JOINT_LIST_SIDEBAR_PARAMS.classNames;
 
 const OBJECT_EDIT_MODES: ObjectEditMode[] = ["move", "rotate", "resize"];
 const OBJECT_TRANSFORM_SPACES: ObjectTransformSpace[] = ["world", "local"];
@@ -291,7 +287,7 @@ export const ObjectEditorPanel = ({
                     )
                   }
                   step={0.01}
-                  className={COMPACT_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                   labelClassName="w-3 text-[9px] text-muted-foreground/80"
                   wrapperClassName="flex items-center gap-1.5"
                 />
@@ -304,7 +300,7 @@ export const ObjectEditorPanel = ({
                     )
                   }
                   step={0.01}
-                  className={COMPACT_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                   labelClassName="w-3 text-[9px] text-muted-foreground/80"
                   wrapperClassName="flex items-center gap-1.5"
                 />
@@ -317,7 +313,7 @@ export const ObjectEditorPanel = ({
                     )
                   }
                   step={0.01}
-                  className={COMPACT_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                   labelClassName="w-3 text-[9px] text-muted-foreground/80"
                   wrapperClassName="flex items-center gap-1.5"
                 />
@@ -333,7 +329,7 @@ export const ObjectEditorPanel = ({
                     )
                   }
                   step={0.01}
-                  className={INLINE_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                   labelClassName="sr-only"
                   wrapperClassName="space-y-0"
                 />
@@ -346,7 +342,7 @@ export const ObjectEditorPanel = ({
                     )
                   }
                   step={0.01}
-                  className={INLINE_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                   labelClassName="sr-only"
                   wrapperClassName="space-y-0"
                 />
@@ -359,7 +355,7 @@ export const ObjectEditorPanel = ({
                     )
                   }
                   step={0.01}
-                  className={INLINE_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                   labelClassName="sr-only"
                   wrapperClassName="space-y-0"
                 />
@@ -380,7 +376,7 @@ export const ObjectEditorPanel = ({
                   }
                   step={0.01}
                   min={0.01}
-                  className={COMPACT_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                   labelClassName="w-3 text-[9px] text-muted-foreground/80"
                   wrapperClassName="flex items-center gap-1.5"
                 />
@@ -394,7 +390,7 @@ export const ObjectEditorPanel = ({
                   }
                   step={0.01}
                   min={0.01}
-                  className={COMPACT_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                   labelClassName="w-3 text-[9px] text-muted-foreground/80"
                   wrapperClassName="flex items-center gap-1.5"
                 />
@@ -408,7 +404,7 @@ export const ObjectEditorPanel = ({
                   }
                   step={0.01}
                   min={0.01}
-                  className={COMPACT_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                   labelClassName="w-3 text-[9px] text-muted-foreground/80"
                   wrapperClassName="flex items-center gap-1.5"
                 />
@@ -425,7 +421,7 @@ export const ObjectEditorPanel = ({
                   }
                   step={0.01}
                   min={0.01}
-                  className={INLINE_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                   labelClassName="sr-only"
                   wrapperClassName="space-y-0"
                 />
@@ -439,7 +435,7 @@ export const ObjectEditorPanel = ({
                   }
                   step={0.01}
                   min={0.01}
-                  className={INLINE_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                   labelClassName="sr-only"
                   wrapperClassName="space-y-0"
                 />
@@ -453,7 +449,7 @@ export const ObjectEditorPanel = ({
                   }
                   step={0.01}
                   min={0.01}
-                  className={INLINE_NUMERIC_INPUT_CLASS}
+                  className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                   labelClassName="sr-only"
                   wrapperClassName="space-y-0"
                 />
@@ -480,10 +476,10 @@ export const ObjectEditorPanel = ({
                 }
               }}
             >
-              <SelectTrigger className={COMPACT_SELECT_TRIGGER_CLASS}>
+              <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className={COMPACT_SELECT_CONTENT_CLASS}>
+              <SelectContent className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectContent}>
                 {endEffectorLink && (
                   <SelectItem value="__end_effector__" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                     Use end-effector ({endEffectorLink})
@@ -517,10 +513,10 @@ export const ObjectEditorPanel = ({
               value={obj.ikTargetType ?? "punctual"}
               onValueChange={(value: "punctual" | "orbit") => updateIkTargetType(obj.id, value)}
             >
-              <SelectTrigger className={COMPACT_SELECT_TRIGGER_CLASS}>
+              <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className={COMPACT_SELECT_CONTENT_CLASS}>
+              <SelectContent className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectContent}>
                 <SelectItem value="punctual" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                   Point
                 </SelectItem>
@@ -540,10 +536,10 @@ export const ObjectEditorPanel = ({
                     updateOrbitTargetPoint(obj.id, value)
                   }
                 >
-                  <SelectTrigger className={COMPACT_SELECT_TRIGGER_CLASS}>
+                  <SelectTrigger className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectTrigger}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className={COMPACT_SELECT_CONTENT_CLASS}>
+                  <SelectContent className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactSelectContent}>
                     <SelectItem value="primary" className="text-[10px] text-[#d4d4d4] hover:bg-[#3d3d3d]">
                       Primary
                     </SelectItem>
@@ -567,7 +563,7 @@ export const ObjectEditorPanel = ({
                         onValueChange={(val) => updateOrbitParams(obj.id, { radius: val })}
                         step={0.01}
                         min={0.01}
-                        className={COMPACT_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                         labelClassName="w-16 text-[9px] text-muted-foreground/80"
                         wrapperClassName="flex items-center gap-1.5"
                       />
@@ -578,7 +574,7 @@ export const ObjectEditorPanel = ({
                         step={5}
                         min={-90}
                         max={90}
-                        className={COMPACT_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                         labelClassName="w-16 text-[9px] text-muted-foreground/80"
                         wrapperClassName="flex items-center gap-1.5"
                       />
@@ -591,7 +587,7 @@ export const ObjectEditorPanel = ({
                         step={15}
                         min={0}
                         max={360}
-                        className={COMPACT_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                         labelClassName="w-16 text-[9px] text-muted-foreground/80"
                         wrapperClassName="flex items-center gap-1.5"
                       />
@@ -604,7 +600,7 @@ export const ObjectEditorPanel = ({
                         step={15}
                         min={0}
                         max={360}
-                        className={COMPACT_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorCompactNumericInput}
                         labelClassName="w-16 text-[9px] text-muted-foreground/80"
                         wrapperClassName="flex items-center gap-1.5"
                       />
@@ -617,7 +613,7 @@ export const ObjectEditorPanel = ({
                         onValueChange={(val) => updateOrbitParams(obj.id, { radius: val })}
                         step={0.01}
                         min={0.01}
-                        className={INLINE_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                         labelClassName={OBJECT_FIELD_LABEL_CLASS}
                       />
                       <LabeledNumberField
@@ -627,7 +623,7 @@ export const ObjectEditorPanel = ({
                         step={5}
                         min={-90}
                         max={90}
-                        className={INLINE_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                         labelClassName={OBJECT_FIELD_LABEL_CLASS}
                       />
                       <LabeledNumberField
@@ -639,7 +635,7 @@ export const ObjectEditorPanel = ({
                         step={15}
                         min={0}
                         max={360}
-                        className={INLINE_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                         labelClassName={OBJECT_FIELD_LABEL_CLASS}
                       />
                       <LabeledNumberField
@@ -651,7 +647,7 @@ export const ObjectEditorPanel = ({
                         step={15}
                         min={0}
                         max={360}
-                        className={INLINE_NUMERIC_INPUT_CLASS}
+                        className={OBJECT_EDITOR_CLASS_NAMES.objectEditorInlineNumericInput}
                         labelClassName={OBJECT_FIELD_LABEL_CLASS}
                       />
                     </div>
