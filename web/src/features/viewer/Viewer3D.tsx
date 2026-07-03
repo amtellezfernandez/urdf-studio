@@ -8,7 +8,6 @@ import {
 } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
-import { Camera, Globe } from "lucide-react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader";
@@ -42,6 +41,7 @@ import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBo
 import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
 import { CreatedObjects } from "@/features/viewer/components/CreatedObjects";
 import { IKResultDialog } from "@/features/viewer/components/IKResultDialog";
+import { ViewerCameraToolbar } from "@/features/viewer/components/ViewerCameraToolbar";
 import { ViewerEndEffectorSummary } from "@/features/viewer/components/ViewerEndEffectorSummary";
 import { ViewerInertiaLegend } from "@/features/viewer/components/ViewerInertiaLegend";
 import { ViewerJointTypesPanel } from "@/features/viewer/components/ViewerJointTypesPanel";
@@ -5480,76 +5480,16 @@ export const Viewer3D = ({
           </div>
         )}
 
-        {/* Camera POV button (mirror gizmo camera circle) */}
-        {robot && (
-          <div className="absolute top-4 right-4 z-20">
-            <div className="relative">
-              <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background/90 p-1 shadow-sm backdrop-blur-sm">
-                <button
-                  type="button"
-                  aria-label="Global Camera"
-                  title="Global Camera"
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded text-[11px] transition-colors",
-                    selectedCameraId === null
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectGlobalCameraView();
-                  }}
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Cameras"
-                  title="Cameras"
-                  disabled={!hasCameras}
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded text-[11px] transition-colors",
-                    !hasCameras
-                      ? "cursor-not-allowed text-muted-foreground/60"
-                      : selectedCameraId !== null || isCameraMenuOpen
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleCameraMenu();
-                  }}
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              {isCameraMenuOpen && hasCameras && (
-                <div
-                  className="absolute right-0 mt-1 w-44 bg-background/95 border border-border/70 rounded shadow-md text-xs"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="border-b border-border/60 px-3 py-1 text-[10px] font-medium text-muted-foreground">
-                    Cameras
-                  </div>
-                  {cameras.map((camera) => (
-                    <button
-                      key={camera.id}
-                      className={cn(
-                        "w-full text-left px-3 py-1 hover:bg-muted transition-colors",
-                        selectedCameraId === camera.id && "bg-muted/70 font-medium"
-                      )}
-                      onClick={() => {
-                        selectNamedCameraView(camera.id);
-                      }}
-                    >
-                      {camera.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {robot ? (
+          <ViewerCameraToolbar
+            cameras={cameras}
+            isCameraMenuOpen={isCameraMenuOpen}
+            onCameraSelect={selectNamedCameraView}
+            onGlobalCameraSelect={selectGlobalCameraView}
+            onToggleCameraMenu={toggleCameraMenu}
+            selectedCameraId={selectedCameraId}
+          />
+        ) : null}
 
         {!urdfFile && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
