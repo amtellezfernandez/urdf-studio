@@ -499,7 +499,7 @@ export const HealthActionPanel = ({
     !physicsAuditSummary || physicsPanelActions.length > 0;
   const showInlinePhysicsActions = Boolean(physicsAuditSummary) && physicsPanelActions.length > 0;
   const hasPendingPhysicsAction = hasSimulationPrepPhysicsActionPending(physicsActionStatusByKey ?? {});
-  const isAnySimulationPrepFixBusy =
+  const isSimulationPrepActionBlocked =
     isSimulationPrepFixBusy ||
     hasPendingPhysicsAction ||
     repeatedInertiaActingGroupKey !== null ||
@@ -509,7 +509,7 @@ export const HealthActionPanel = ({
   const physicsPanelActionRows = buildPhysicsPanelActionRowViewStates({
     actions: physicsPanelActions,
     armedActionKey: armedPhysicsActionKey,
-    isAnySimulationPrepFixBusy,
+    isBlockedBySimulationPrep: isSimulationPrepActionBlocked,
     selectedMaterials: selectedPhysicsMaterials,
     statusByKey: physicsActionStatusByKey,
   });
@@ -541,12 +541,12 @@ export const HealthActionPanel = ({
   };
   const handleRunPhysicsAction = ({
     action,
-    disabled,
+    isDisabled,
   }: {
     action: PhysicsPanelAction;
-    disabled: boolean;
+    isDisabled: boolean;
   }) => {
-    if (disabled) {
+    if (isDisabled) {
       return;
     }
     const selectedMaterial = selectedPhysicsMaterials[action.key] ?? null;
@@ -596,12 +596,12 @@ export const HealthActionPanel = ({
   const isRobotMirrorCenterActionActive =
     isRobotMirrorActing && activeRobotMirrorAction === "center-only";
   const isRobotMirrorOrientationActionDisabled =
-    isAnySimulationPrepFixBusy ||
+    isSimulationPrepActionBlocked ||
     isRobotMirrorAvailabilityLoading ||
     effectiveSelectedRobotMirrorLinkNames.length === 0 ||
     !canAlignRobotMirrorOrientation;
   const isRobotMirrorCenterActionDisabled =
-    isAnySimulationPrepFixBusy ||
+    isSimulationPrepActionBlocked ||
     isRobotMirrorAvailabilityLoading ||
     effectiveSelectedRobotMirrorLinkNames.length === 0 ||
     !canFixRobotMirrorSymmetry;
@@ -1095,7 +1095,7 @@ export const HealthActionPanel = ({
                             className={`h-5 shrink-0 gap-1 px-1.5 text-[9px] ${SIMULATION_PREP_DISABLED_ACTION_BUTTON_CLASS}`}
                             onClick={() => onFixRepeatedInertiaSymmetryChain(chain)}
                             disabled={
-                              (isAnySimulationPrepFixBusy && !chainState.isActing) ||
+                              (isSimulationPrepActionBlocked && !chainState.isActing) ||
                               chainState.isActing ||
                               !chainState.isAutoAlignAvailable
                             }
@@ -1243,7 +1243,7 @@ export const HealthActionPanel = ({
                                   className={`h-6 shrink-0 gap-1 px-2 text-[10px] ${SIMULATION_PREP_DISABLED_ACTION_BUTTON_CLASS}`}
                                   onClick={() => onFixRepeatedInertiaSymmetryChain(chain)}
                                   disabled={
-                                    (isAnySimulationPrepFixBusy && !chainState.isActing) ||
+                                    (isSimulationPrepActionBlocked && !chainState.isActing) ||
                                     chainState.isActing ||
                                     !chainState.isAutoAlignAvailable
                                   }
@@ -1401,11 +1401,11 @@ export const HealthActionPanel = ({
                               status={voxelRecoveryActionRow.status}
                               isArmed={voxelRecoveryActionRow.isArmed}
                               selectedMaterial={voxelRecoveryActionRow.selectedMaterial}
-                              disabled={voxelRecoveryActionRow.disabled}
-                              onRun={(action, disabled) =>
+                              isDisabled={voxelRecoveryActionRow.isDisabled}
+                              onRun={(action, isDisabled) =>
                                 handleRunPhysicsAction({
                                   action,
-                                  disabled,
+                                  isDisabled,
                                 })
                               }
                               onSelect={handleSelectPhysicsMaterial}
@@ -1417,11 +1417,11 @@ export const HealthActionPanel = ({
                               status={regularizeActionRow.status}
                               isArmed={regularizeActionRow.isArmed}
                               selectedMaterial={regularizeActionRow.selectedMaterial}
-                              disabled={regularizeActionRow.disabled}
-                              onRun={(action, disabled) =>
+                              isDisabled={regularizeActionRow.isDisabled}
+                              onRun={(action, isDisabled) =>
                                 handleRunPhysicsAction({
                                   action,
-                                  disabled,
+                                  isDisabled,
                                 })
                               }
                               onSelect={handleSelectPhysicsMaterial}
@@ -1519,7 +1519,7 @@ export const HealthActionPanel = ({
                     const { action } = rowState;
                     return (
                       <div
-                        key={`button-${rowState.key}`}
+                        key={`button-${rowState.actionKey}`}
                         className="rounded border border-border/60 bg-background/40 p-2 text-[11px]"
                         aria-busy={rowState.isRunning}
                       >
@@ -1528,35 +1528,35 @@ export const HealthActionPanel = ({
                             <div className="font-medium text-foreground">{action.title}</div>
                             <div className="mt-0.5 text-muted-foreground">{action.description}</div>
                           </div>
-                          {rowState.runningLabel ? (
+                          {rowState.runningStatusLabel ? (
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                              <span>{rowState.runningLabel}</span>
+                              <span>{rowState.runningStatusLabel}</span>
                             </div>
                           ) : null}
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 shrink-0 border-border/50 bg-transparent px-2.5 text-[10px] font-normal text-muted-foreground hover:text-foreground"
-                            disabled={rowState.disabled}
+                            disabled={rowState.isDisabled}
                             aria-label={action.title}
                             onClick={() => {
                               handleRunPhysicsAction({
                                 action,
-                                disabled: rowState.disabled,
+                                isDisabled: rowState.isDisabled,
                               });
                             }}
                           >
-                            {rowState.buttonLabel}
+                            {rowState.actionButtonLabel}
                           </Button>
                         </div>
-                        {rowState.showMaterialPicker ? (
+                        {rowState.shouldShowMaterialPicker ? (
                           <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
                             <div className="text-[10px] text-muted-foreground">Choose a material to continue.</div>
                             <PhysicsMaterialPicker
                               actionKey={action.key}
                               selectedMaterial={rowState.selectedMaterial}
-                              disabled={rowState.disabled}
+                              isDisabled={rowState.isDisabled}
                               onSelect={handleSelectPhysicsMaterial}
                             />
                           </div>
@@ -1585,7 +1585,7 @@ export const HealthActionPanel = ({
                     onClick={openPhysicsPanel}
                     disabled={
                       physicsAction.disabled ||
-                      isAnySimulationPrepFixBusy ||
+                      isSimulationPrepActionBlocked ||
                       (!onOpenGeneratePhysicsDialog &&
                         !onGeneratePhysics &&
                         !onGenerateVoxelPhysics &&
@@ -1637,7 +1637,7 @@ export const HealthActionPanel = ({
                   variant={recommendedAction.variant ?? "outline"}
                   className="h-8 w-full justify-start gap-2 px-2 text-xs"
                   onClick={recommendedAction.onClick}
-                  disabled={recommendedAction.disabled || isAnySimulationPrepFixBusy}
+                  disabled={recommendedAction.disabled || isSimulationPrepActionBlocked}
                 >
                   <recommendedAction.icon className="h-3.5 w-3.5" />
                   {recommendedAction.label}
@@ -1790,7 +1790,7 @@ export const HealthActionPanel = ({
                         size="sm"
                         variant="outline"
                         onClick={onRunAdvancedPrimaryAction}
-                        disabled={isAnySimulationPrepFixBusy}
+                        disabled={isSimulationPrepActionBlocked}
                       >
                         {advancedPrimaryActionLabel}
                       </Button>
@@ -1800,7 +1800,7 @@ export const HealthActionPanel = ({
                         size="sm"
                         variant="outline"
                         onClick={onRunAdvancedSecondaryAction}
-                        disabled={isAnySimulationPrepFixBusy}
+                        disabled={isSimulationPrepActionBlocked}
                       >
                         {advancedSecondaryActionLabel}
                       </Button>

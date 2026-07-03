@@ -143,14 +143,14 @@ export const buildPhysicsPanelActions = ({
 
 export type PhysicsPanelActionRowViewState = {
   action: PhysicsPanelAction;
-  buttonLabel: string;
-  disabled: boolean;
+  actionButtonLabel: string;
+  actionKey: PhysicsPanelActionKey;
+  isDisabled: boolean;
   isArmed: boolean;
   isRunning: boolean;
-  key: PhysicsPanelActionKey;
-  runningLabel: string | null;
+  runningStatusLabel: string | null;
   selectedMaterial: InertialDensityPresetId | null;
-  showMaterialPicker: boolean;
+  shouldShowMaterialPicker: boolean;
   status: SimulationPrepPhysicsActionStatus;
 };
 
@@ -164,13 +164,13 @@ export const buildPhysicsPanelActionLookup = (
 export const buildPhysicsPanelActionRowViewStates = ({
   actions,
   armedActionKey,
-  isAnySimulationPrepFixBusy,
+  isBlockedBySimulationPrep,
   selectedMaterials,
   statusByKey,
 }: {
   actions: readonly PhysicsPanelAction[];
   armedActionKey: PhysicsPanelActionKey | null;
-  isAnySimulationPrepFixBusy: boolean;
+  isBlockedBySimulationPrep: boolean;
   selectedMaterials: PhysicsActionMaterialSelection;
   statusByKey: HealthActionPanelProps["physicsActionStatusByKey"];
 }): PhysicsPanelActionRowViewState[] =>
@@ -178,22 +178,23 @@ export const buildPhysicsPanelActionRowViewStates = ({
     const status = getPhysicsActionStatus(statusByKey, action.key);
     const isArmed = armedActionKey === action.key;
     const selectedMaterial = selectedMaterials[action.key] ?? null;
-    const disabled = !action.available || status !== "idle" || isAnySimulationPrepFixBusy;
+    const isDisabled = !action.available || status !== "idle" || isBlockedBySimulationPrep;
     return {
       action,
-      buttonLabel: getPhysicsActionButtonLabel({
+      actionKey: action.key,
+      actionButtonLabel: getPhysicsActionButtonLabel({
         action,
         hasSelectedMaterial: selectedMaterial !== null,
         isArmed,
         status,
       }),
-      disabled,
+      isDisabled,
       isArmed,
       isRunning: status === "running",
-      key: action.key,
-      runningLabel: status === "running" ? PHYSICS_ACTION_STATUS_LABELS[action.key].running : null,
+      runningStatusLabel:
+        status === "running" ? PHYSICS_ACTION_STATUS_LABELS[action.key].running : null,
       selectedMaterial,
-      showMaterialPicker: action.available && isArmed,
+      shouldShowMaterialPicker: action.available && isArmed,
       status,
     };
   });
@@ -202,4 +203,4 @@ export const findPhysicsPanelActionRowViewState = (
   rows: readonly PhysicsPanelActionRowViewState[],
   actionKey: PhysicsPanelActionKey
 ): PhysicsPanelActionRowViewState | null =>
-  rows.find((row) => row.key === actionKey) ?? null;
+  rows.find((row) => row.actionKey === actionKey) ?? null;

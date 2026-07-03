@@ -16,14 +16,14 @@ import {
 type PhysicsMaterialPickerProps = {
   actionKey: PhysicsPanelActionKey;
   selectedMaterial: InertialDensityPresetId | null;
-  disabled: boolean;
+  isDisabled: boolean;
   onSelect: (actionKey: PhysicsPanelActionKey, materialId: InertialDensityPresetId) => void;
 };
 
 export const PhysicsMaterialPicker = ({
   actionKey,
   selectedMaterial,
-  disabled,
+  isDisabled,
   onSelect,
 }: PhysicsMaterialPickerProps) => (
   <div className={MATERIAL_BUTTON_GRID_CLASS}>
@@ -39,7 +39,7 @@ export const PhysicsMaterialPicker = ({
             }`}
             aria-label={`${option.label} physics material`}
             aria-pressed={selectedMaterial === option.id}
-            disabled={disabled}
+            disabled={isDisabled}
             onClick={() => onSelect(actionKey, option.id)}
           >
             <span className="font-normal">{option.label}</span>
@@ -59,8 +59,8 @@ type PhysicsQuickActionCardProps = {
   status: SimulationPrepPhysicsActionStatus;
   isArmed: boolean;
   selectedMaterial: InertialDensityPresetId | null;
-  disabled: boolean;
-  onRun: (action: PhysicsPanelAction, disabled: boolean) => void;
+  isDisabled: boolean;
+  onRun: (action: PhysicsPanelAction, isDisabled: boolean) => void;
   onSelect: (actionKey: PhysicsPanelActionKey, materialId: InertialDensityPresetId) => void;
 };
 
@@ -69,11 +69,11 @@ export const PhysicsQuickActionCard = ({
   status,
   isArmed,
   selectedMaterial,
-  disabled,
+  isDisabled,
   onRun,
   onSelect,
 }: PhysicsQuickActionCardProps) => {
-  const isDisabled = disabled || !action.available || status !== "idle";
+  const isRunButtonDisabled = isDisabled || !action.available || status !== "idle";
   return (
     <div className="space-y-1.5 rounded border border-border/30 bg-background/30 p-2">
       <div className="flex items-center justify-between gap-2 text-[11px]">
@@ -85,10 +85,10 @@ export const PhysicsQuickActionCard = ({
           size="sm"
           variant="outline"
           className="h-7 shrink-0 border-border/50 bg-transparent px-2.5 text-[10px] font-normal text-muted-foreground hover:text-foreground"
-          disabled={isDisabled}
+          disabled={isRunButtonDisabled}
           aria-label={action.title}
           onClick={() => {
-            onRun(action, isDisabled);
+            onRun(action, isRunButtonDisabled);
           }}
         >
           {getPhysicsActionButtonLabel({
@@ -105,7 +105,7 @@ export const PhysicsQuickActionCard = ({
           <PhysicsMaterialPicker
             actionKey={action.key}
             selectedMaterial={selectedMaterial}
-            disabled={isDisabled}
+            isDisabled={isRunButtonDisabled}
             onSelect={onSelect}
           />
         </div>

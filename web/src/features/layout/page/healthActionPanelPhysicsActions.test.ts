@@ -36,7 +36,7 @@ describe("healthActionPanelPhysicsActions", () => {
     const rows = buildPhysicsPanelActionRowViewStates({
       actions: [repairAction, voxelAction, unavailableRegularizeAction],
       armedActionKey: "repair-missing-invalid",
-      isAnySimulationPrepFixBusy: false,
+      isBlockedBySimulationPrep: false,
       selectedMaterials: {
         "repair-missing-invalid": "aluminum",
       },
@@ -48,36 +48,36 @@ describe("healthActionPanelPhysicsActions", () => {
     expect(rows).toMatchObject([
       {
         action: repairAction,
-        buttonLabel: "Recalculate",
-        disabled: false,
+        actionButtonLabel: "Recalculate",
+        actionKey: "repair-missing-invalid",
+        isDisabled: false,
         isArmed: true,
         isRunning: false,
-        key: "repair-missing-invalid",
-        runningLabel: null,
+        runningStatusLabel: null,
         selectedMaterial: "aluminum",
-        showMaterialPicker: true,
+        shouldShowMaterialPicker: true,
         status: "idle",
       },
       {
         action: voxelAction,
-        buttonLabel: "Recovering...",
-        disabled: true,
+        actionButtonLabel: "Recovering...",
+        actionKey: "voxel-recovery",
+        isDisabled: true,
         isArmed: false,
         isRunning: true,
-        key: "voxel-recovery",
-        runningLabel: "Recovering...",
+        runningStatusLabel: "Recovering...",
         selectedMaterial: null,
-        showMaterialPicker: false,
+        shouldShowMaterialPicker: false,
         status: "running",
       },
       {
         action: unavailableRegularizeAction,
-        buttonLabel: "No Links Available",
-        disabled: true,
+        actionButtonLabel: "No Links Available",
+        actionKey: "psd-regularize",
+        isDisabled: true,
         isArmed: false,
-        key: "psd-regularize",
         selectedMaterial: null,
-        showMaterialPicker: false,
+        shouldShowMaterialPicker: false,
         status: "idle",
       },
     ]);
@@ -87,16 +87,16 @@ describe("healthActionPanelPhysicsActions", () => {
     const rows = buildPhysicsPanelActionRowViewStates({
       actions: [createPhysicsAction()],
       armedActionKey: "repair-missing-invalid",
-      isAnySimulationPrepFixBusy: true,
+      isBlockedBySimulationPrep: true,
       selectedMaterials: {},
       statusByKey: {},
     });
 
     expect(rows[0]).toMatchObject({
-      buttonLabel: "Select Material",
-      disabled: true,
+      actionButtonLabel: "Select Material",
+      isDisabled: true,
       isArmed: true,
-      showMaterialPicker: true,
+      shouldShowMaterialPicker: true,
       status: "idle",
     });
   });
@@ -106,7 +106,7 @@ describe("healthActionPanelPhysicsActions", () => {
     const rows = buildPhysicsPanelActionRowViewStates({
       actions: [repairAction],
       armedActionKey: null,
-      isAnySimulationPrepFixBusy: false,
+      isBlockedBySimulationPrep: false,
       selectedMaterials: {},
       statusByKey: {},
     });
