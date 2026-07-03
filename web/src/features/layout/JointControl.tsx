@@ -39,6 +39,7 @@ import { JOINT_TYPES, AXIS_PRESETS } from "@/shared/constants/jointConstants";
 import { DEG_TO_RAD, RAD_TO_DEG } from "@/shared/lib/angleConversions";
 import { getJointLimitsError } from "@/shared/lib/jointLimits";
 import { resolveJointValueRange } from "@/features/layout/jointValueRange";
+import { getJointValueColor } from "@/features/layout/jointValueColor";
 import { JOINT_CONTROL_PARAMS } from "@/features/layout/jointControlParams";
 import { LimitAttributeStatusBadge } from "@/features/layout/jointLimitDebug";
 import {
@@ -86,9 +87,6 @@ type JointLimitMetadata = JointLimitInfo & {
   velocity?: number | null;
 };
 
-const LIGHT_GREEN = "#bbf7d0";
-const LIGHT_YELLOW = "#fef3c7";
-const LIGHT_RED = "#fecaca";
 const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
   onParseError: () => {},
   onRobotMissing: () => {},
@@ -99,57 +97,6 @@ const JOINT_CONTROL_URDF_PARSE_OPTIONS = {
 
 const roundToPrecision = (value: number, precision: number): number =>
   Math.round(value * precision) / precision;
-
-const hexToRgb = (hex: string) => {
-  const normalized = hex.replace("#", "");
-  const bigint = parseInt(normalized, 16);
-  return {
-    r: (bigint >> 16) & 255,
-    g: (bigint >> 8) & 255,
-    b: bigint & 255,
-  };
-};
-
-const rgbToHex = (r: number, g: number, b: number) => {
-  const toHex = (value: number) => value.toString(16).padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-const interpolateColor = (start: string, end: string, t: number) => {
-  const startRgb = hexToRgb(start);
-  const endRgb = hexToRgb(end);
-  const clamp = (value: number) => Math.min(1, Math.max(0, value));
-  const factor = clamp(t);
-
-  const r = Math.round(startRgb.r + (endRgb.r - startRgb.r) * factor);
-  const g = Math.round(startRgb.g + (endRgb.g - startRgb.g) * factor);
-  const b = Math.round(startRgb.b + (endRgb.b - startRgb.b) * factor);
-
-  return rgbToHex(r, g, b);
-};
-
-const getJointValueColor = (value: number, min: number, max: number, hasBothLimits: boolean) => {
-  if (!hasBothLimits || !Number.isFinite(min) || !Number.isFinite(max) || min === max) {
-    return LIGHT_GREEN;
-  }
-
-  const clampedValue = Math.min(Math.max(value, min), max);
-  const range = max - min;
-  if (range <= 0) {
-    return LIGHT_YELLOW;
-  }
-
-  const normalized = (clampedValue - min) / range;
-  const distanceToEdge = Math.min(normalized, 1 - normalized);
-  const closeness = 1 - distanceToEdge / 0.5;
-  const clampedCloseness = Math.min(Math.max(closeness, 0), 1);
-
-  if (clampedCloseness <= 0.5) {
-    return interpolateColor(LIGHT_GREEN, LIGHT_YELLOW, clampedCloseness * 2);
-  }
-
-  return interpolateColor(LIGHT_YELLOW, LIGHT_RED, (clampedCloseness - 0.5) * 2);
-};
 
 export const JointControl = ({
   jointName,

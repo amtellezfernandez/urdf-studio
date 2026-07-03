@@ -6,62 +6,8 @@ import jointColors from "@/shared/joint_colors.json";
 import { getJointColor } from "@/features/urdf/utils/jointColors";
 import { useJointStore } from "@/shared/store/useJointStore";
 import { resolveJointValueRange } from "@/features/layout/jointValueRange";
+import { getJointValueColor } from "@/features/layout/jointValueColor";
 import { JOINT_LIST_ITEM_PARAMS } from "@/features/layout/jointListItemParams";
-
-const LIGHT_GREEN = "#bbf7d0";
-const LIGHT_YELLOW = "#fef3c7";
-const LIGHT_RED = "#fecaca";
-
-const hexToRgb = (hex: string) => {
-  const normalized = hex.replace("#", "");
-  const bigint = parseInt(normalized, 16);
-  return {
-    r: (bigint >> 16) & 255,
-    g: (bigint >> 8) & 255,
-    b: bigint & 255,
-  };
-};
-
-const rgbToHex = (r: number, g: number, b: number) => {
-  const toHex = (value: number) => value.toString(16).padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-const interpolateColor = (start: string, end: string, t: number) => {
-  const startRgb = hexToRgb(start);
-  const endRgb = hexToRgb(end);
-  const clamp = (value: number) => Math.min(1, Math.max(0, value));
-  const factor = clamp(t);
-
-  const r = Math.round(startRgb.r + (endRgb.r - startRgb.r) * factor);
-  const g = Math.round(startRgb.g + (endRgb.g - startRgb.g) * factor);
-  const b = Math.round(startRgb.b + (endRgb.b - startRgb.b) * factor);
-
-  return rgbToHex(r, g, b);
-};
-
-const getJointValueColor = (value: number, min: number, max: number, hasBothLimits: boolean) => {
-  if (!hasBothLimits || !Number.isFinite(min) || !Number.isFinite(max) || min === max) {
-    return LIGHT_GREEN;
-  }
-
-  const clampedValue = Math.min(Math.max(value, min), max);
-  const range = max - min;
-  if (range <= 0) {
-    return LIGHT_YELLOW;
-  }
-
-  const normalized = (clampedValue - min) / range;
-  const distanceToEdge = Math.min(normalized, 1 - normalized);
-  const closeness = 1 - distanceToEdge / 0.5;
-  const clampedCloseness = Math.min(Math.max(closeness, 0), 1);
-
-  if (clampedCloseness <= 0.5) {
-    return interpolateColor(LIGHT_GREEN, LIGHT_YELLOW, clampedCloseness * 2);
-  }
-
-  return interpolateColor(LIGHT_YELLOW, LIGHT_RED, (clampedCloseness - 0.5) * 2);
-};
 
 interface JointListItemProps {
   jointName: string;
