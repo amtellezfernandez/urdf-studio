@@ -43,11 +43,14 @@ import {
   createAssemblySpec,
   validateAssemblySpec,
 } from "@/shared/lib/urdfCore";
-import { normalizeMeshPathForMatch } from "@/shared/lib/urdfBrowser";
 import { isWorldHubConfigured } from "@/shared/config/worldHub";
 import { parseRobotNameFromUrdf } from "@/app/pages/index/indexPageHelpers";
 import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
+import {
+  buildAssemblyExportModels,
+  resolveAssemblyExportPrimaryRobotId,
+} from "@/app/pages/index/assemblyExportDerivations";
 import { useWorldSceneManager, downloadTextDocument } from "@/app/pages/index/useWorldSceneManager";
 import { useCameraRuntimeOrchestration } from "@/app/pages/index/useCameraRuntimeOrchestration";
 import type { DemoManifestPreferencesLoad } from "@/app/pages/index/useDemoMotionFlow";
@@ -719,37 +722,13 @@ const Index = () => {
       toast.error("Assembly export requires at least one physical robot contact.");
       return;
     }
-    const normalizedActivePath =
-      activeUrdfPath && activeUrdfPath.length > 0
-        ? normalizeMeshPathForMatch(activeUrdfPath) || activeUrdfPath
-        : null;
-    const modelsFromSelection = assemblySelectedRobots
-      .map((robot) => {
-        const normalizedPath = normalizeMeshPathForMatch(robot.urdfPath) || robot.urdfPath;
-        const content =
-          urdfDocuments[normalizedPath] ||
-          (normalizedActivePath && normalizedPath === normalizedActivePath ? vizUrdfContent : "");
-        if (!content.trim()) return null;
-        return {
-          id: robot.instanceId,
-          name: robot.name,
-          urdfContent: content,
-        };
-      })
-      .filter((model): model is { id: string; name: string; urdfContent: string } => Boolean(model));
-
-    const models =
-      modelsFromSelection.length > 0
-        ? modelsFromSelection
-        : vizUrdfContent.trim().length > 0
-          ? [
-              {
-                id: "primary_robot",
-                name: urdfFile?.name.replace(/^viz-/, "") || "primary.urdf",
-                urdfContent: vizUrdfContent,
-              },
-            ]
-          : [];
+    const models = buildAssemblyExportModels({
+      activeUrdfPath,
+      assemblySelectedRobots,
+      fallbackUrdfFileName: urdfFile?.name,
+      urdfDocuments,
+      vizUrdfContent,
+    });
 
     if (models.length === 0) {
       toast.error("No assembly robots available for export.");
@@ -758,19 +737,11 @@ const Index = () => {
 
     try {
       const spec = createAssemblySpec(
-        models.map((model) => ({
-          ...model,
-          isPrimary: assemblySelectedRobots.some(
-            (robot) => robot.instanceId === model.id && robot.isPrimary
-          ),
-        })),
+        models,
         {
           robotName: "assembled_robot",
           poses: assemblyPoses,
-          primaryRobotId:
-            assemblySelectedRobots.find((robot) => robot.isPrimary)?.instanceId ||
-            assemblySelectedRobots[0]?.instanceId ||
-            null,
+          primaryRobotId: resolveAssemblyExportPrimaryRobotId(assemblySelectedRobots),
         }
       );
       const validation = validateAssemblySpec(spec);
