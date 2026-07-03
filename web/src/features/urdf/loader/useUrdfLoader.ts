@@ -19,7 +19,6 @@ import {
 import { findAutoEndEffectorLinksFromAnalysis } from "@/features/layout/page/utils";
 import { DEFAULT_URDF_FILENAME } from "@/features/layout/page/constants";
 import type { DebugMeshInfo, MeshFiles } from "@/shared/types/feature";
-import { createVizFilename } from "../utils/addJointColors";
 import {
   collectXacroSupportFiles,
   expandXacro,
@@ -36,6 +35,10 @@ import {
   getFileRelativePath,
   indexMeshResources,
 } from "@/features/urdf/loader/urdfMeshIndex";
+import {
+  createExpandedXacroUrdfFile,
+  createLoadedUrdfFile,
+} from "@/features/urdf/loader/urdfFileFactory";
 import {
   buildPackageRootsFromFiles,
   getBasePathFromRelativePath,
@@ -98,12 +101,8 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
   const [missingPackageRefs, setMissingPackageRefs] = useState<string[]>([]);
 
   const createUrdfFile = useCallback(
-    (content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File => {
-      const vizFilename = createVizFilename(filename);
-      const uniqueFilename = timestamp ? `${vizFilename.replace(".urdf", "")}_${timestamp}.urdf` : vizFilename;
-      const blob = new Blob([content], { type: "application/xml" });
-      return new File([blob], uniqueFilename, { type: "application/xml" });
-    },
+    (content: string, filename = DEFAULT_URDF_FILENAME, timestamp?: number): File =>
+      createLoadedUrdfFile(content, filename, timestamp),
     []
   );
 
@@ -339,13 +338,10 @@ export const useUrdfLoader = (options: UseUrdfLoaderOptions = {}) => {
           const normalizedUrdfPath = normalizeMeshPathForMatch(urdfRelativePath) || urdfRelativePath;
           nextUrdfDocuments[normalizedUrdfPath] = originalContent;
           urdfRelativePath = normalizedUrdfPath;
-          const blob = new Blob([originalContent], { type: "application/xml" });
-          urdfFile = new File([blob], urdfFilename, { type: "application/xml" });
-          Object.defineProperty(urdfFile, "webkitRelativePath", {
-            value: urdfRelativePath,
-            writable: false,
-            enumerable: true,
-            configurable: false,
+          urdfFile = createExpandedXacroUrdfFile({
+            content: originalContent,
+            filename: urdfFilename,
+            relativePath: urdfRelativePath,
           });
           toast.info("Expanded Xacro to URDF");
         }
