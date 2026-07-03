@@ -97,22 +97,26 @@ const createMeshFallback = (meshRef: string, reason: "missing" | "failed") => {
   return group;
 };
 
+const createPreviewObjectBounds = (previewObject: CreatedObject): THREE.Box3 => {
+  const halfSize = previewObject.size.clone().multiplyScalar(0.5);
+  return new THREE.Box3(
+    previewObject.position.clone().sub(halfSize),
+    previewObject.position.clone().add(halfSize)
+  );
+};
+
 const computeSceneRadius = (robot: PreviewRobot | null, objects: CreatedObject[]) => {
   const combinedBox = new THREE.Box3().makeEmpty();
   if (robot) {
     const robotBox = new THREE.Box3().setFromObject(robot);
     if (!robotBox.isEmpty()) combinedBox.copy(robotBox);
   }
-  objects.forEach((obj) => {
-    const halfSize = obj.size.clone().multiplyScalar(0.5);
-    const objBox = new THREE.Box3(
-      obj.position.clone().sub(halfSize),
-      obj.position.clone().add(halfSize)
-    );
+  objects.forEach((previewObject) => {
+    const objectBox = createPreviewObjectBounds(previewObject);
     if (combinedBox.isEmpty()) {
-      combinedBox.copy(objBox);
+      combinedBox.copy(objectBox);
     } else {
-      combinedBox.union(objBox);
+      combinedBox.union(objectBox);
     }
   });
   if (combinedBox.isEmpty()) return null;
@@ -181,32 +185,47 @@ const PreviewObjectMaterial = ({
 
 const PreviewObjects = ({ objects, gpuMode }: { objects: CreatedObject[]; gpuMode: GPUMode }) => (
   <group>
-    {objects.map((obj) => {
-      const fillColor = obj.isIkTarget ? "#facc15" : obj.color || "#3b82f6";
-      const outlineColor = obj.isIkTarget ? "#facc15" : "#bfbfbf";
-      const radius =
-        obj.type === "point" ? 0.035 : Math.max(obj.size.x, obj.size.y, obj.size.z) * 0.5;
+    {objects.map((previewObject) => {
+      const fillColor = previewObject.isIkTarget ? "#facc15" : previewObject.color || "#3b82f6";
+      const outlineColor = previewObject.isIkTarget ? "#facc15" : "#bfbfbf";
+      const previewObjectRadius =
+        previewObject.type === "point"
+          ? 0.035
+          : Math.max(previewObject.size.x, previewObject.size.y, previewObject.size.z) * 0.5;
       return (
-        <group key={obj.id} position={[obj.position.x, obj.position.y, obj.position.z]}>
-          {obj.type === "point" ? (
+        <group
+          key={previewObject.id}
+          position={[previewObject.position.x, previewObject.position.y, previewObject.position.z]}
+        >
+          {previewObject.type === "point" ? (
             <>
               <mesh>
-                <sphereGeometry args={[radius, 14, 10]} />
+                <sphereGeometry args={[previewObjectRadius, 14, 10]} />
                 <PreviewObjectMaterial color={fillColor} gpuMode={gpuMode} opacity={0.85} />
               </mesh>
               <lineSegments>
-                <edgesGeometry args={[new THREE.SphereGeometry(radius, 12, 8)]} />
+                <edgesGeometry args={[new THREE.SphereGeometry(previewObjectRadius, 12, 8)]} />
                 <lineBasicMaterial color={outlineColor} depthTest depthWrite={false} />
               </lineSegments>
             </>
           ) : (
             <>
               <mesh>
-                <boxGeometry args={[obj.size.x, obj.size.y, obj.size.z]} />
+                <boxGeometry
+                  args={[previewObject.size.x, previewObject.size.y, previewObject.size.z]}
+                />
                 <PreviewObjectMaterial color={fillColor} gpuMode={gpuMode} opacity={0.65} />
               </mesh>
               <lineSegments>
-                <edgesGeometry args={[new THREE.BoxGeometry(obj.size.x, obj.size.y, obj.size.z)]} />
+                <edgesGeometry
+                  args={[
+                    new THREE.BoxGeometry(
+                      previewObject.size.x,
+                      previewObject.size.y,
+                      previewObject.size.z
+                    ),
+                  ]}
+                />
                 <lineBasicMaterial color={outlineColor} depthTest depthWrite={false} />
               </lineSegments>
             </>
