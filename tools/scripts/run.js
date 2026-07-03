@@ -47,10 +47,12 @@ import {
   terminateManagedProcess,
   terminateStaleUrdfStudioProcessGroups,
 } from './processLifecycle.js';
+import { getNpmCommand } from './setupNodeRuntime.js';
 import {
   ensureWslWindowsLocalhostAccess,
   stopWslWindowsLocalhostRelay,
 } from './wslWindowsLocalhostRelay.js';
+import { findCargo } from './setupToolchainRuntime.js';
 import { isWslEnvironment } from '../../config/wslOwnerProxy.js';
 import {
   buildOutdatedVersionMessage,
@@ -86,21 +88,6 @@ function log(message, color = colors.reset) {
 
 function logArrow(message) {
   log(`→ ${message}`, colors.pink);
-}
-
-function getNpmCommand() {
-  const npmExecPath = typeof process.env.npm_execpath === 'string' ? process.env.npm_execpath.trim() : '';
-  if (npmExecPath) {
-    return {
-      command: process.execPath,
-      argsPrefix: [npmExecPath],
-    };
-  }
-
-  return {
-    command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
-    argsPrefix: [],
-  };
 }
 
 function spawnNpm(args, options = {}) {
@@ -286,30 +273,6 @@ async function waitForHttpReady({
   }
 
   throw new Error(`${label} did not become ready at ${url} within ${timeoutMs} ms.`);
-}
-
-function findCargo() {
-  const cargoLocations = [
-    join(process.env.HOME || '', '.cargo', 'bin', 'cargo'),
-    '/usr/local/bin/cargo',
-    '/usr/bin/cargo',
-  ];
-
-  for (const cargoPath of cargoLocations) {
-    if (existsSync(cargoPath)) {
-      return cargoPath;
-    }
-  }
-
-  const pathEnv = process.env.PATH || '';
-  for (const dir of pathEnv.split(delimiter)) {
-    if (!dir) continue;
-    const candidate = join(dir, 'cargo');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
 }
 
 function printRuntimeHelp() {
