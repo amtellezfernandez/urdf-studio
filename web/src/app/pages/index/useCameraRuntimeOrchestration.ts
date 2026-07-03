@@ -67,6 +67,13 @@ type UseCameraRuntimeOrchestrationParams = {
   originalUrdfContent: string;
 };
 
+function isManagedWorldScenarioObject(createdObject: CreatedObject): boolean {
+  return (
+    createdObject.source === WORLD_SCENARIO_SOURCES.current ||
+    createdObject.source === WORLD_SCENARIO_SOURCES.demoWorld
+  );
+}
+
 export const useCameraRuntimeOrchestration = ({
   activeUrdfPath,
   addCamera,
@@ -258,12 +265,8 @@ export const useCameraRuntimeOrchestration = ({
       const isFrameLike = (name: string) => /frame|dummy|target|origin|marker|site/i.test(name);
       const existingScenarioObjectIds = useObjectStore
         .getState()
-        .objects.filter(
-          (obj) =>
-            obj.source === WORLD_SCENARIO_SOURCES.current ||
-            obj.source === WORLD_SCENARIO_SOURCES.demoWorld
-        )
-        .map((obj) => obj.id);
+        .objects.filter(isManagedWorldScenarioObject)
+        .map((createdObject) => createdObject.id);
       existingScenarioObjectIds.forEach((id) => removeObject(id));
       worldScenarioSnapshot.objects.forEach((objectSpec) => {
         addObject(objectSpec, { trackHistory: false, select: false });
@@ -277,12 +280,8 @@ export const useCameraRuntimeOrchestration = ({
       if (baseReference) {
         const createdScenarioObjectIds = useObjectStore
           .getState()
-          .objects.filter(
-            (obj) =>
-              obj.source === WORLD_SCENARIO_SOURCES.current ||
-              obj.source === WORLD_SCENARIO_SOURCES.demoWorld
-          )
-          .map((obj) => obj.id);
+          .objects.filter(isManagedWorldScenarioObject)
+          .map((createdObject) => createdObject.id);
         createdScenarioObjectIds.forEach((id, index) => {
           const targetReference = index % 2 === 0 ? baseReference : distalReference ?? baseReference;
           updateTrackedJoint(id, targetReference);
