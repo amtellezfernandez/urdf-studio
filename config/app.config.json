@@ -63,8 +63,8 @@
     "items": {
       "so-arm100": {
         "label": "SO-ARM100 (SO101)",
-        "repoPath": "third_party/so-arm100",
-        "urdfPath": "Simulation/SO101/so101_new_calib.urdf"
+        "repoPath": "web/public/demo",
+        "urdfPath": "robot.urdf"
       }
     }
   }

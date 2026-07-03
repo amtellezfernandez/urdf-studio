@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -12,8 +13,7 @@ from backend.core.app_config import get_config_value, read_app_config
 from backend.models.samples import SampleEntry, SampleFile, SampleFilesResponse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_ALLOWED_ROOT_NAME = "third_party"
-SAMPLE_ALLOWED_ROOT = REPO_ROOT / SAMPLE_ALLOWED_ROOT_NAME
+SAMPLE_ALLOWED_ROOT_NAMES = ("third_party", "web/public/demo")
 
 
 @dataclass(frozen=True)
@@ -44,6 +44,19 @@ def _is_relative_to(path: Path, root: Path) -> bool:
     return True
 
 
+def _allowed_root_parts() -> tuple[tuple[str, ...], ...]:
+    return tuple(Path(root_name).parts for root_name in SAMPLE_ALLOWED_ROOT_NAMES)
+
+
+def _allowed_roots() -> tuple[Path, ...]:
+    return tuple((REPO_ROOT / root_name).resolve() for root_name in SAMPLE_ALLOWED_ROOT_NAMES)
+
+
+def _is_under_allowed_root(raw_path: str) -> bool:
+    path_parts = Path(raw_path).parts
+    return any(path_parts[: len(root_parts)] == root_parts for root_parts in _allowed_root_parts())
+
+
 def _resolve_config_path(root: Path, raw_path: str, *, field_name: str) -> Path:
     normalized = _normalize_relative_config_path(raw_path)
     if normalized is None:
@@ -60,7 +73,7 @@ def _is_safe_sample_definition(repo_path: object, urdf_path: object) -> tuple[st
     normalized_urdf_path = _normalize_relative_config_path(urdf_path)
     if normalized_repo_path is None or normalized_urdf_path is None:
         return None
-    if Path(normalized_repo_path).parts[:1] != (SAMPLE_ALLOWED_ROOT_NAME,):
+    if not _is_under_allowed_root(normalized_repo_path):
         return None
     return normalized_repo_path, normalized_urdf_path
 
@@ -105,9 +118,8 @@ def list_samples() -> tuple[Optional[str], List[SampleEntry]]:
 
 def _resolve_sample_path(sample: SampleDefinition) -> tuple[Path, Path]:
     repo_path = _resolve_config_path(REPO_ROOT, sample.repo_path, field_name="repoPath")
-    allowed_sample_root = SAMPLE_ALLOWED_ROOT.resolve()
-    if not _is_relative_to(repo_path, allowed_sample_root):
-        raise HTTPException(status_code=400, detail="Sample repo is outside the allowed sample root.")
+    if not any(_is_relative_to(repo_path, root) for root in _allowed_roots()):
+        raise HTTPException(status_code=400, detail="Sample source is outside the allowed sample roots.")
 
     urdf_path = _resolve_config_path(repo_path, sample.urdf_path, field_name="urdfPath")
     if not _is_relative_to(urdf_path, repo_path):
@@ -116,9 +128,7 @@ def _resolve_sample_path(sample: SampleDefinition) -> tuple[Path, Path]:
     if not repo_path.exists():
         raise HTTPException(
             status_code=404,
-            detail=(
-                "Sample repo not found. Run `git submodule update --init --recursive` to fetch it."
-            ),
+            detail="Sample source not found. Run `npm run setup` or check samples config.",
         )
     if not urdf_path.exists():
         raise HTTPException(
@@ -132,17 +142,52 @@ def _is_safe_sample_file(path: Path, resolved_repo_root: Path) -> bool:
     return path.is_file() and _is_relative_to(path.resolve(), resolved_repo_root)
 
 
+def _normalize_mesh_reference(filename: str) -> str | None:
+    normalized = filename.strip().replace("\\", "/")
+    if not normalized:
+        return None
+    if normalized.startswith(("http://", "https://", "data:", "file://")):
+        return None
+    if normalized.startswith("package://"):
+        package_path = normalized.removeprefix("package://").lstrip("/")
+        if not package_path:
+            return None
+        parts = package_path.split("/", 1)
+        return parts[1] if len(parts) == 2 else parts[0]
+    return normalized.lstrip("/")
+
+
+def _resolve_mesh_reference(filename: str, urdf_dir: Path, repo_root: Path) -> Path | None:
+    normalized = _normalize_mesh_reference(filename)
+    if normalized is None:
+        return None
+    candidate = urdf_dir / normalized
+    resolved_repo_root = repo_root.resolve()
+    if _is_safe_sample_file(candidate, resolved_repo_root):
+        return candidate.resolve()
+    package_candidate = repo_root / normalized
+    if _is_safe_sample_file(package_candidate, resolved_repo_root):
+        return package_candidate.resolve()
+    return None
+
+
 def _collect_mesh_files(urdf_path: Path, repo_root: Path) -> List[Path]:
     urdf_dir = urdf_path.parent
-    resolved_repo_root = repo_root.resolve()
     mesh_files: List[Path] = []
     seen: set[Path] = set()
-    for pattern in ("*.stl", "*.STL"):
-        for path in urdf_dir.rglob(pattern):
-            if path in seen or not _is_safe_sample_file(path, resolved_repo_root):
-                continue
-            seen.add(path)
-            mesh_files.append(path)
+    try:
+        root = ET.parse(urdf_path).getroot()
+    except ET.ParseError:
+        return mesh_files
+    for mesh_node in root.iter("mesh"):
+        filename = mesh_node.attrib.get("filename")
+        if not filename:
+            continue
+        path = _resolve_mesh_reference(filename, urdf_dir, repo_root)
+        if path is None or path in seen:
+            continue
+        seen.add(path)
+        mesh_files.append(path)
     return mesh_files
 
 

@@ -52,6 +52,7 @@ third_party/refiner-main/
 third_party/robot_viewer/
 third_party/ros2_bridge_project/
 third_party/rviz/
+third_party/so-arm100/
 third_party/splat-collider-builder/
 third_party/third-person-controller-splat/
 third_party/unitree_ros/
