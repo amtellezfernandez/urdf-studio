@@ -7,16 +7,12 @@ import React, {
   useState,
 } from "react";
 import { JointControl } from "@/features/layout/JointControl";
-import { Input } from "@/shared/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import {
   Camera as CameraIcon,
   Check,
   ChevronDown,
   ChevronRight,
   GripVertical,
-  Plus,
-  Search,
   X,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -55,7 +51,6 @@ import {
 import {
   buildAlphabeticalLinkSections,
   buildMeshGroupedLinkSections,
-  LINK_SIDEBAR_GROUPING_MODE_OPTIONS,
   type LinkSidebarGroupingMode,
 } from "@/features/layout/linkSidebarGrouping";
 import { JointListItem } from "@/features/layout/JointListItem";
@@ -92,6 +87,7 @@ import { WorldPanel } from "@/features/layout/WorldPanel";
 import { CameraEditorPanel } from "@/features/layout/CameraEditorPanel";
 import { ObjectEditorPanel } from "@/features/layout/ObjectEditorPanel";
 import { LinkBatchEditorPanel } from "@/features/layout/LinkBatchEditorPanel";
+import { SidebarStructureControls } from "@/features/layout/SidebarStructureControls";
 import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 
 const toggleStringSetValue = (previous: Set<string>, value: string) => {
@@ -329,10 +325,6 @@ export const JointListSidebar = ({
   const isAnalysisInvalid = urdfAnalysis?.isValid === false;
   const hasMultipleEndEffectors = endEffectorCandidates.length > 1;
   const panelRows = SIDEBAR_PANEL_LAYOUT.structureRows;
-  const isSearchMode =
-    effectiveStructureViewMode === "flat" ||
-    effectiveStructureViewMode === "hierarchy" ||
-    effectiveStructureViewMode === "links";
   const jointHierarchy = analysis?.jointHierarchy ?? null;
   const totalJointCount = useMemo(
     () => Object.keys(jointLimits).length,
@@ -960,206 +952,67 @@ export const JointListSidebar = ({
         {/* Top Section: Joints */}
         <div className={SIDEBAR_SECTION_CLASS}>
           {/* Header */}
-          <div className={cn(SIDEBAR_SECTION_HEADER_CLASS, "space-y-1")}>
-            <div className="rounded-sm border border-border/25 bg-background/55 p-1">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-1 text-left"
-                onClick={() => setIsWorldExpanded((current) => !current)}
-              >
-                <span className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  {isWorldExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                  World
-                </span>
-                <span className="text-[9px] text-muted-foreground">
-                  {worldObjectCount} obj · {worldCameraCount} cam
-                </span>
-              </button>
-              {isWorldExpanded ? (
-                <div className="mt-1">
-                  <div
-                    className="overflow-y-auto pr-1 minimal-scrollbar"
-                    style={{ height: worldPanelHeight }}
-                  >
-                    <WorldPanel
-                      robot={robot}
-                      endEffectorLink={effectiveEndEffectorLink}
-                      onJointSelect={onJointSelect}
-                      setSelectedLink={setSelectedLink}
+          <SidebarStructureControls
+            canReassignStructureGroups={canReassignStructureGroups}
+            effectiveStructureViewMode={effectiveStructureViewMode}
+            headerClassName={cn(SIDEBAR_SECTION_HEADER_CLASS, "space-y-1")}
+            isSubgroupCreatorOpen={isSubgroupCreatorOpen}
+            jointTypes={jointTypes}
+            leadingContent={
+              <div className="rounded-sm border border-border/25 bg-background/55 p-1">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-1 text-left"
+                  onClick={() => setIsWorldExpanded((current) => !current)}
+                >
+                  <span className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    {isWorldExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                    World
+                  </span>
+                  <span className="text-[9px] text-muted-foreground">
+                    {worldObjectCount} obj · {worldCameraCount} cam
+                  </span>
+                </button>
+                {isWorldExpanded ? (
+                  <div className="mt-1">
+                    <div
+                      className="overflow-y-auto pr-1 minimal-scrollbar"
+                      style={{ height: worldPanelHeight }}
+                    >
+                      <WorldPanel
+                        robot={robot}
+                        endEffectorLink={effectiveEndEffectorLink}
+                        onJointSelect={onJointSelect}
+                        setSelectedLink={setSelectedLink}
+                      />
+                    </div>
+                    <div
+                      className="mt-1 h-1.5 cursor-row-resize rounded-sm bg-border/35 transition-colors hover:bg-border/60"
+                      title="Drag to resize world panel"
+                      onPointerDown={handleWorldPanelResizeStart}
                     />
                   </div>
-                  <div
-                    className="mt-1 h-1.5 cursor-row-resize rounded-sm bg-border/35 transition-colors hover:bg-border/60"
-                    title="Drag to resize world panel"
-                    onPointerDown={handleWorldPanelResizeStart}
-                  />
-                </div>
-              ) : totalWorldItems === 0 ? (
-                <div className="mt-0.5 text-[9px] text-muted-foreground/70">No world items.</div>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-1">
-              {structureModeOptions.map((option) => {
-                const isActive = effectiveStructureViewMode === option.value;
-                const isDisabled = Boolean(option.requiresUrdf && !urdfContent);
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    disabled={isDisabled}
-                    onClick={() => {
-                      if (isDisabled) return;
-                      setViewMode(option.value);
-                    }}
-                    title={option.label}
-                    className={cn(
-                      "h-5 truncate rounded-sm border px-1.5 text-[9px] transition-colors",
-                      isActive
-                        ? "border-border bg-background text-foreground"
-                        : "border-border/30 bg-muted/10 text-muted-foreground hover:text-foreground",
-                      isDisabled && "opacity-40 cursor-not-allowed"
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Filters and Controls */}
-          {isSearchMode && (
-            <div className="flex-shrink-0 border-b border-border/20 bg-background/90 p-1">
-              <div className="flex items-center gap-1">
-                <div className="relative flex-1 min-w-0">
-                  <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="text"
-                    placeholder={
-                      effectiveStructureViewMode === "links"
-                        ? "Search links..."
-                        : "Search joints..."
-                    }
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-6 pl-6 pr-6 text-[11px] bg-muted/20 border-border/50"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-
-                {effectiveStructureViewMode === "flat" && (
-                  <>
-                    <Select value={typeFilter} onValueChange={setTypeFilter}>
-                      <SelectTrigger className="h-6 w-24 text-[11px] bg-muted/20 border-border/50">
-                        <SelectValue placeholder="All" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border-border">
-                        <SelectItem value="all" className="text-xs">All</SelectItem>
-                        {jointTypes.map(type => (
-                          <SelectItem key={type} value={type} className="text-xs capitalize">
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
-
-                {(effectiveStructureViewMode === "links" ||
-                  effectiveStructureViewMode === "flat") && (
-                  <button
-                    type="button"
-                    className={STRUCTURE_SUBGROUP_ACTION_BUTTON_CLASS}
-                    onClick={openSubgroupCreator}
-                    disabled={
-                      !canReassignStructureGroups ||
-                      (effectiveStructureViewMode === "links" && linkGroupingMode !== "body")
-                    }
-                    title={
-                      !canReassignStructureGroups
-                        ? "Group editing is unavailable"
-                        : effectiveStructureViewMode === "links" && linkGroupingMode !== "body"
-                          ? "Subgroups are only available in Body grouping"
-                          : "Create an empty subgroup drop target"
-                    }
-                  >
-                    <Plus className="h-3 w-3" />
-                    <span>Subgroup</span>
-                  </button>
-                )}
+                ) : totalWorldItems === 0 ? (
+                  <div className="mt-0.5 text-[9px] text-muted-foreground/70">No world items.</div>
+                ) : null}
               </div>
-              {effectiveStructureViewMode === "links" ? (
-                <div className="mt-1.5 flex items-center gap-1">
-                  {LINK_SIDEBAR_GROUPING_MODE_OPTIONS.map((option) => {
-                    const isActive = linkGroupingMode === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={cn(
-                          "h-5 rounded-sm border px-1.5 text-[9px] transition-colors",
-                          isActive
-                            ? "border-border bg-background text-foreground"
-                            : "border-border/30 bg-muted/10 text-muted-foreground hover:text-foreground"
-                        )}
-                        onClick={() => setLinkGroupingMode(option.value)}
-                        aria-pressed={isActive}
-                        aria-label={`Group links by ${option.label}`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {(effectiveStructureViewMode === "links" ||
-                effectiveStructureViewMode === "flat") &&
-              isSubgroupCreatorOpen ? (
-                <div className="mt-1.5 flex items-center gap-1">
-                  <Input
-                    type="text"
-                    value={subgroupDraftLabel}
-                    onChange={(event) => setSubgroupDraftLabel(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        createCustomSubgroup();
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        closeSubgroupCreator();
-                      }
-                    }}
-                    placeholder="New subgroup (e.g. arm1_gripper)"
-                    className="h-6 text-[10px] bg-muted/20 border-border/50"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-border/50 px-1.5 text-[10px] text-foreground hover:bg-muted/20"
-                    onClick={createCustomSubgroup}
-                  >
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    className="h-6 rounded-sm border border-border/35 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                    onClick={closeSubgroupCreator}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          )}
+            }
+            linkGroupingMode={linkGroupingMode}
+            onCloseSubgroupCreator={closeSubgroupCreator}
+            onCreateCustomSubgroup={createCustomSubgroup}
+            onLinkGroupingModeChange={setLinkGroupingMode}
+            onOpenSubgroupCreator={openSubgroupCreator}
+            onSearchQueryChange={setSearchQuery}
+            onStructureViewModeChange={setViewMode}
+            onSubgroupDraftLabelChange={setSubgroupDraftLabel}
+            onTypeFilterChange={setTypeFilter}
+            searchQuery={searchQuery}
+            structureModeOptions={structureModeOptions}
+            subgroupActionButtonClassName={STRUCTURE_SUBGROUP_ACTION_BUTTON_CLASS}
+            subgroupDraftLabel={subgroupDraftLabel}
+            typeFilter={typeFilter}
+            urdfContentAvailable={Boolean(urdfContent)}
+          />
 
           {/* Scrollable Joint List */}
           <div
