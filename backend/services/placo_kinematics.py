@@ -10,12 +10,16 @@ from typing import Any, TypeAlias
 import numpy as np
 from fastapi import HTTPException
 
-from backend.models.kinematics import IKDiagnostics, IKRequest, IKResponse
+from backend.models.kinematics import (
+    IKDiagnostics,
+    IKRequest,
+    IKResponse,
+    KinematicsMetadata,
+)
 from backend.services.ik_config import get_solver_tuning
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
 
 PlacoTaskCache: TypeAlias = dict[str, Any]
-IkMetadata: TypeAlias = dict[str, Any]
 
 
 @dataclass
@@ -255,7 +259,7 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
         branch_message="Placo solver does not report branch diagnostics.",
     )
 
-    metadata: IkMetadata = {
+    metadata: KinematicsMetadata = {
         "urdf_hash": entry.urdf_hash,
         "target_link": ik_request.target_link,
         "actuated_joint_names": entry.joint_names,

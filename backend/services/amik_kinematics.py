@@ -9,7 +9,12 @@ from fastapi import HTTPException
 
 import yourdfpy  # type: ignore
 
-from backend.models.kinematics import IKDiagnostics, IKRequest, IKResponse
+from backend.models.kinematics import (
+    IKDiagnostics,
+    IKRequest,
+    IKResponse,
+    KinematicsMetadata,
+)
 from backend.services.ilu_urdf import strip_urdf_for_kinematics
 from backend.services.kinematics import _load_urdf_from_xml
 
@@ -230,7 +235,7 @@ def inverse_kinematics(ik_request: IKRequest) -> IKResponse:
         branch_metric=0.0,
         branch_message="orientation_ignored",
     )
-    metadata = {
+    metadata: KinematicsMetadata = {
         "target_link": ik_request.target_link,
         "actuated_joint_names": list(robot_model.actuated_joint_names),
         "urdf_hash": entry.urdf_hash,

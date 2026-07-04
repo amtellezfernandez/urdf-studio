@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field
 
@@ -8,7 +8,10 @@ from backend.models.ik_tasks import IkConstraint, IkTask
 
 
 JointValueMap: TypeAlias = dict[str, float]
-KinematicsMetadata: TypeAlias = dict[str, Any]
+KinematicsMetadataValue: TypeAlias = (
+    str | int | float | bool | None | list[str | int | float | bool | None]
+)
+KinematicsMetadata: TypeAlias = dict[str, KinematicsMetadataValue]
 QuaternionWxyz: TypeAlias = list[float]
 RotationMatrix3x3: TypeAlias = list[list[float]]
 Vector3: TypeAlias = list[float]
