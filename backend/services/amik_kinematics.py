@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
 
 import numpy as np
 from fastapi import HTTPException
@@ -19,6 +18,7 @@ DEFAULT_MAX_ITERATIONS = 28
 DEFAULT_TOLERANCE = 0.006
 MAX_STEP_RAD = 0.35
 MAX_STEP_LINEAR = 0.02
+JointValueMap = dict[str, float]
 
 
 @dataclass
@@ -26,10 +26,10 @@ class AmikEntry:
     urdf_hash: str
     urdf_xml: str
     urdf: yourdfpy.URDF
-    chain_cache: Dict[str, List[yourdfpy.urdf.Joint]] = field(default_factory=dict)
+    chain_cache: dict[str, list[yourdfpy.urdf.Joint]] = field(default_factory=dict)
 
 
-_amik_cache: Dict[str, AmikEntry] = {}
+_amik_cache: dict[str, AmikEntry] = {}
 
 
 def _hash_urdf(urdf_xml: str) -> str:
@@ -58,15 +58,15 @@ def _get_or_create_entry(urdf_xml: str) -> AmikEntry:
 
 
 def _build_joint_values(
-    robot_model: yourdfpy.URDF, joint_values: Dict[str, float]
-) -> Dict[str, float]:
+    robot_model: yourdfpy.URDF, joint_values: JointValueMap
+) -> JointValueMap:
     return {
         joint_name: np.float32(joint_values.get(joint_name, 0.0))
         for joint_name in robot_model.actuated_joint_names
     }
 
 
-def _joint_chain(entry: AmikEntry, target_link: str) -> List[yourdfpy.urdf.Joint]:
+def _joint_chain(entry: AmikEntry, target_link: str) -> list[yourdfpy.urdf.Joint]:
     cached_chain = entry.chain_cache.get(target_link)
     if cached_chain is not None:
         return cached_chain
@@ -78,11 +78,11 @@ def _joint_chain(entry: AmikEntry, target_link: str) -> List[yourdfpy.urdf.Joint
             detail=f"Target link '{target_link}' not found in URDF.",
         )
 
-    joint_by_child_link: Dict[str, yourdfpy.urdf.Joint] = {
+    joint_by_child_link: dict[str, yourdfpy.urdf.Joint] = {
         joint.child: joint for joint in robot_model.joint_map.values()
     }
 
-    joint_chain: List[yourdfpy.urdf.Joint] = []
+    joint_chain: list[yourdfpy.urdf.Joint] = []
     link_name = target_link
     visited_joint_names = set()
     while link_name in joint_by_child_link:
@@ -106,7 +106,7 @@ def _clamp(value: float, lower: float, upper: float) -> float:
     return min(upper, max(lower, value))
 
 
-def _get_joint_limits(joint: yourdfpy.urdf.Joint) -> Tuple[float | None, float | None]:
+def _get_joint_limits(joint: yourdfpy.urdf.Joint) -> tuple[float | None, float | None]:
     if joint.limit is None:
         return None, None
     lower = joint.limit.lower
@@ -118,7 +118,7 @@ def _get_joint_limits(joint: yourdfpy.urdf.Joint) -> Tuple[float | None, float |
 
 def _get_joint_pose(
     robot_model: yourdfpy.URDF, joint: yourdfpy.urdf.Joint
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     parent_transform = robot_model.get_transform(joint.parent)
     origin = joint.origin if joint.origin is not None else np.eye(4)
     joint_transform = parent_transform @ origin
