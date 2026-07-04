@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, TypeAlias
 
 from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SOURCE_SCHEMA,
@@ -35,6 +36,9 @@ BLENDER_LOCKED_DOMAINS = frozenset(
         "robot.transmissions",
     )
 )
+
+BlenderEditSessionMapping: TypeAlias = Mapping[str, object]
+BlenderEditSessionFieldValidator: TypeAlias = Callable[[object, str], str | None]
 
 
 def validate_blender_edit_session_artifact(
@@ -97,13 +101,13 @@ def validate_blender_edit_session_artifact(
         return camera_error
     return _validate_blender_edit_session_source(
         payload.get("source"),
-        package=payload.get("package"),
+        package_payload=payload.get("package"),
         object_entries=payload.get("objects"),
         camera_entries=payload.get("cameras"),
     )
 
 
-def _validate_blender_edit_session_header(payload: Mapping[str, Any]) -> str | None:
+def _validate_blender_edit_session_header(payload: BlenderEditSessionMapping) -> str | None:
     required_fields = (
         "schema",
         "mode",
@@ -225,17 +229,17 @@ def _validate_blender_edit_session_entries(
 
 
 def _validate_blender_edit_session_source(
-    value: Any,
+    source: object,
     *,
-    package: Any,
-    object_entries: Any,
-    camera_entries: Any,
+    package_payload: object,
+    object_entries: object,
+    camera_entries: object,
 ) -> str | None:
-    if not isinstance(value, Mapping):
+    if not isinstance(source, Mapping):
         return "Blender edit-session field 'source' must be an object"
-    if not isinstance(package, Mapping):
+    if not isinstance(package_payload, Mapping):
         return "Blender edit-session field 'package' must be an object"
-    if value.get("schema") != BLENDER_CHANGE_SET_SOURCE_SCHEMA:
+    if source.get("schema") != BLENDER_CHANGE_SET_SOURCE_SCHEMA:
         return "Blender edit-session source has unsupported schema"
     for source_key, package_key in (
         ("package_id", "package_id"),
@@ -243,21 +247,24 @@ def _validate_blender_edit_session_source(
         ("frame_convention", "frame_convention"),
         ("frame_map", "frame_map"),
     ):
-        source_value = value.get(source_key)
-        package_value = package.get(package_key)
+        source_value = source.get(source_key)
+        package_value = package_payload.get(package_key)
         if source_value != package_value:
             return (
                 f"Blender edit-session source.{source_key} does not match "
                 f"package.{package_key}"
             )
     for field_name in ("world_snapshot_digest_sha256",):
-        error = _validate_non_empty_string(value.get(field_name), f"source.{field_name}")
+        error = _validate_non_empty_string(source.get(field_name), f"source.{field_name}")
         if error:
             return error
-    object_ids = _validate_source_id_list(value.get("world_object_ids"), "source.world_object_ids")
+    object_ids = _validate_source_id_list(
+        source.get("world_object_ids"),
+        "source.world_object_ids",
+    )
     if isinstance(object_ids, str):
         return object_ids
-    camera_ids = _validate_source_id_list(value.get("camera_ids"), "source.camera_ids")
+    camera_ids = _validate_source_id_list(source.get("camera_ids"), "source.camera_ids")
     if isinstance(camera_ids, str):
         return camera_ids
     object_entry_ids = _entry_stable_ids(object_entries, "objects")
@@ -337,10 +344,10 @@ def _duplicate_ids(values: Sequence[str]) -> tuple[str, ...]:
 
 
 def _validate_blender_edit_session_entry_numbers(
-    entry: Mapping[str, Any],
+    entry: BlenderEditSessionMapping,
     path_name: str,
 ) -> str | None:
-    validators = (
+    validators: tuple[tuple[str, BlenderEditSessionFieldValidator], ...] = (
         ("position_xyz", _validate_vector3),
         ("quat_wxyz", _validate_quat_wxyz),
         ("size_xyz", _validate_positive_vector3),
