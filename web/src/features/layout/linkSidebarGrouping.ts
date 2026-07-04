@@ -1,5 +1,9 @@
 import type { UrdfAnalysis } from "@/shared/lib/urdfCore";
 import type { StructureGroupSection } from "@/features/layout/structureGroups";
+import {
+  DEFAULT_MESH_GROUP_LABEL,
+  resolveLinkMeshGroupLabel,
+} from "@/features/layout/linkSidebarGroupingHelpers";
 
 export type LinkSidebarGroupingMode = "body" | "mesh" | "alpha";
 
@@ -12,35 +16,7 @@ export const LINK_SIDEBAR_GROUPING_MODE_OPTIONS: Array<{
   { value: "alpha", label: "A-Z" },
 ];
 
-const DEFAULT_MESH_GROUP_LABEL = "Other";
 const ALPHA_GROUP_LABEL = "A-Z";
-
-const extractMeshFilename = (meshReference: string): string => {
-  const segments = meshReference.split(/[\\/]/).filter(Boolean);
-  return segments[segments.length - 1] || meshReference;
-};
-
-const resolveLinkMeshGroupLabel = (
-  analysis: UrdfAnalysis | null | undefined,
-  linkName: string
-): string => {
-  if (!analysis?.isValid) {
-    return DEFAULT_MESH_GROUP_LABEL;
-  }
-  const linkData = analysis.linkDataByName[linkName];
-  if (!linkData) {
-    return DEFAULT_MESH_GROUP_LABEL;
-  }
-  const meshReference =
-    linkData.visuals.find(
-      (entry) => entry.geometry.type === "mesh" && Boolean(entry.geometry.params.filename?.trim())
-    )?.geometry.params.filename?.trim() ??
-    linkData.collisions.find(
-      (entry) => entry.geometry.type === "mesh" && Boolean(entry.geometry.params.filename?.trim())
-    )?.geometry.params.filename?.trim() ??
-    "";
-  return meshReference ? extractMeshFilename(meshReference) : DEFAULT_MESH_GROUP_LABEL;
-};
 
 export const buildMeshGroupedLinkSections = ({
   analysis,
