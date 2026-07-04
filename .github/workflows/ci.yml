@@ -216,6 +216,7 @@ jobs:
           backend/tests/test_pybullet_simulator_adapter.py
           backend/tests/test_simulator_camera_transfer.py
           backend/tests/test_simulator_runtime_api.py
+          backend/tests/test_wsp_mjx_synthetic_source.py
           backend/tests/test_simulator_scene_spec.py
           backend/tests/test_simulator_workspace_check.py
           backend/tests/test_simulator_workspace_package.py
