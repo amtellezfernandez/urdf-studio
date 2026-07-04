@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TypeAlias
 
 from backend.core.paths import BASE_DIR
+from backend.models.simulator_runtime import SimulatorId
 from backend.services.world_layout_transfer_types import WorldLayoutFrameMap
 
 
@@ -146,6 +147,11 @@ class BlenderSceneParams:
 
 
 SimulatorSceneParams: TypeAlias = GenesisSceneParams | MujocoSceneParams | PyBulletSceneParams | BlenderSceneParams
+SimulatorWorkspaceProcessParamsById: TypeAlias = dict[SimulatorId, SimulatorWorkspaceProcessParams]
+SimulatorSceneParamsById: TypeAlias = dict[SimulatorId, SimulatorSceneParams]
+
+_simulator_workspace_process_params_by_id: SimulatorWorkspaceProcessParamsById | None = None
+_simulator_scene_params_by_id: SimulatorSceneParamsById | None = None
 
 
 GENESIS_WORKSPACE_PROCESS_PARAMS = SimulatorWorkspaceProcessParams(
@@ -268,25 +274,38 @@ BLENDER_SCENE_PARAMS = BlenderSceneParams(
 )
 
 
+def get_simulator_workspace_process_params_by_id() -> SimulatorWorkspaceProcessParamsById:
+    global _simulator_workspace_process_params_by_id
+    if _simulator_workspace_process_params_by_id is not None:
+        return _simulator_workspace_process_params_by_id
+    import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
+    from backend.services.simulator_adapters.plugin import get_workspace_plugins
+
+    _simulator_workspace_process_params_by_id = {
+        plugin.simulator_id: plugin.require_workspace_process()
+        for plugin in get_workspace_plugins()
+    }
+    return _simulator_workspace_process_params_by_id
+
+
+def get_simulator_scene_params_by_id() -> SimulatorSceneParamsById:
+    global _simulator_scene_params_by_id
+    if _simulator_scene_params_by_id is not None:
+        return _simulator_scene_params_by_id
+    import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
+    from backend.services.simulator_adapters.plugin import get_workspace_plugins
+
+    _simulator_scene_params_by_id = {
+        plugin.simulator_id: plugin.scene_params
+        for plugin in get_workspace_plugins()
+        if hasattr(plugin, "scene_params")
+    }
+    return _simulator_scene_params_by_id
+
+
 def __getattr__(name: str) -> object:
     if name == "SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID":
-        import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
-        from backend.services.simulator_adapters.plugin import get_workspace_plugins
-        result = {
-            p.simulator_id: p.workspace_process
-            for p in get_workspace_plugins()
-            if p.workspace_process is not None
-        }
-        globals()["SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID"] = result
-        return result
+        return get_simulator_workspace_process_params_by_id()
     if name == "SIMULATOR_SCENE_PARAMS_BY_ID":
-        import backend.services.simulator_adapters  # noqa: F401 — triggers plugin registration
-        from backend.services.simulator_adapters.plugin import get_workspace_plugins
-        result = {
-            p.simulator_id: p.scene_params
-            for p in get_workspace_plugins()
-            if hasattr(p, "scene_params")
-        }
-        globals()["SIMULATOR_SCENE_PARAMS_BY_ID"] = result
-        return result
+        return get_simulator_scene_params_by_id()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

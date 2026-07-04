@@ -44,6 +44,8 @@ from backend.services.simulator_adapters.camera_conventions import (
 from backend.services.simulator_adapters.params import (
     SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID,
     SIMULATOR_SCENE_PARAMS_BY_ID,
+    get_simulator_scene_params_by_id,
+    get_simulator_workspace_process_params_by_id,
 )
 from backend.services.simulator_adapters.plugin import DirectUrdfSimulatorPlugin, get_plugin
 from backend.services.world_scene_package_digest import (
@@ -291,6 +293,8 @@ def test_openable_simulator_runtime_params_are_centralized() -> None:
     assert openable_simulator_ids == set(WORKSPACE_SIMULATOR_IDS)
     assert openable_simulator_ids == set(SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID)
     assert openable_simulator_ids == set(SIMULATOR_SCENE_PARAMS_BY_ID)
+    assert SIMULATOR_WORKSPACE_PROCESS_PARAMS_BY_ID is get_simulator_workspace_process_params_by_id()
+    assert SIMULATOR_SCENE_PARAMS_BY_ID is get_simulator_scene_params_by_id()
 
     for simulator_id in openable_simulator_ids:
         assert get_simulator_adapter(simulator_id).capabilities.workspace_target
