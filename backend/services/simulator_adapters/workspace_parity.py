@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias, TypedDict, cast
 
+from backend.models.json_payload import JsonObject
 from backend.services.simulator_adapters.camera_artifacts import (
     MIN_VISIBLE_CHANNEL_SPAN,
     camera_artifact_name,
@@ -39,9 +40,7 @@ class WorkspaceParityResult:
     detail: str
 
 
-JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
-ParityReportPayload: TypeAlias = dict[str, JsonValue]
+ParityReportPayload: TypeAlias = JsonObject
 ParityReportView: TypeAlias = Mapping[str, object]
 ParitySignature: TypeAlias = dict[str, object]
 

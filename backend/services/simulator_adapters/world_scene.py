@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NotRequired, TypeAlias, TypedDict, cast
 
+from backend.models.json_payload import JsonValue
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.simulator_adapters.camera_transfer import (
     SimCameraSpec,
@@ -28,8 +29,6 @@ from backend.services.world_layout_transfer_types import (
     WorldLayoutFrameMap,
 )
 
-JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 JsonFloatVector: TypeAlias = list[float]
 
 

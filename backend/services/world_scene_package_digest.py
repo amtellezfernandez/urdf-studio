@@ -4,15 +4,10 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping
-from typing import TypeAlias, cast
+from typing import cast
 
+from backend.models.json_payload import JsonObject, JsonValue
 from backend.models.world_scene_package import WorldScenePackageManifest
-
-WorldSceneJsonScalar: TypeAlias = str | int | float | bool | None
-WorldSceneJsonValue: TypeAlias = (
-    WorldSceneJsonScalar | list["WorldSceneJsonValue"] | dict[str, "WorldSceneJsonValue"]
-)
-WorldSceneJsonObject: TypeAlias = dict[str, WorldSceneJsonValue]
 
 
 def _expand_exponent_notation(number_text: str) -> str:
@@ -68,7 +63,7 @@ def _json_object_sort_key(key: str) -> bytes:
     return key.encode("utf-16-be")
 
 
-def _canonical_json_dump(payload: WorldSceneJsonValue) -> str:
+def _canonical_json_dump(payload: JsonValue) -> str:
     if payload is None:
         return "null"
     if isinstance(payload, bool):
@@ -82,7 +77,7 @@ def _canonical_json_dump(payload: WorldSceneJsonValue) -> str:
     if isinstance(payload, Mapping):
         if not all(isinstance(key, str) for key in payload):
             raise TypeError("World scene package JSON object keys must be strings.")
-        json_object = cast(Mapping[str, WorldSceneJsonValue], payload)
+        json_object = cast(Mapping[str, JsonValue], payload)
         fields = (
             (
                 f"{json.dumps(key, ensure_ascii=False, separators=(',', ':'))}:"
@@ -99,8 +94,8 @@ def canonical_world_scene_package_json(manifest: WorldScenePackageManifest) -> s
     return _canonical_json_dump(payload)
 
 
-def world_scene_package_json_payload(manifest: WorldScenePackageManifest) -> WorldSceneJsonObject:
-    payload: WorldSceneJsonObject = manifest.model_dump(mode="json")
+def world_scene_package_json_payload(manifest: WorldScenePackageManifest) -> JsonObject:
+    payload: JsonObject = manifest.model_dump(mode="json")
     if payload.get("description") is None:
         payload.pop("description", None)
     runtime_targets = payload.get("runtime_targets", [])
