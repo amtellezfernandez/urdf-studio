@@ -20,6 +20,44 @@ type ReconcileCollapsedSectionIdsResult = {
 
 export { areStringSetsEqual } from "@/features/layout/stringSetHelpers";
 
+export const buildAvailableSectionIdSet = (
+  sections: StructureGroupSection[]
+): Set<string> => new Set(sections.map((section) => section.id));
+
+export const resolveCollapsedSectionIdSet = ({
+  availableSectionIds,
+  collapseAllSections,
+  collapseNewSectionsByDefault,
+  knownSectionIds,
+  pinnedExpandedSectionIds = new Set<string>(),
+  previousCollapsedSectionIds,
+}: {
+  availableSectionIds: Set<string>;
+  collapseAllSections: boolean;
+  collapseNewSectionsByDefault: boolean;
+  knownSectionIds: Set<string>;
+  pinnedExpandedSectionIds?: Set<string>;
+  previousCollapsedSectionIds: Set<string>;
+}): Set<string> => {
+  const nextCollapsedSectionIds = collapseAllSections
+    ? new Set(availableSectionIds)
+    : filterStringSetMembers(previousCollapsedSectionIds, availableSectionIds);
+
+  if (!collapseAllSections && collapseNewSectionsByDefault) {
+    availableSectionIds.forEach((sectionId) => {
+      if (!knownSectionIds.has(sectionId)) {
+        nextCollapsedSectionIds.add(sectionId);
+      }
+    });
+  }
+
+  pinnedExpandedSectionIds.forEach((sectionId) => {
+    nextCollapsedSectionIds.delete(sectionId);
+  });
+
+  return nextCollapsedSectionIds;
+};
+
 export const resolveSectionsContainingItem = (
   sections: StructureGroupSection[],
   itemName: string | null | undefined
@@ -59,22 +97,15 @@ export const reconcileCollapsedSectionIds = ({
   collapseAllSections,
   pinnedExpandedSectionIds = new Set<string>(),
 }: ReconcileCollapsedSectionIdsArgs): ReconcileCollapsedSectionIdsResult => {
-  const availableSectionIds = new Set(sections.map((section) => section.id));
+  const availableSectionIds = buildAvailableSectionIdSet(sections);
   const nextKnownSectionIds = new Set(availableSectionIds);
-  const nextCollapsedSectionIds = collapseAllSections
-    ? new Set(availableSectionIds)
-    : filterStringSetMembers(previousCollapsedSectionIds, availableSectionIds);
-
-  if (!collapseAllSections && collapseNewSectionsByDefault) {
-    availableSectionIds.forEach((sectionId) => {
-      if (!knownSectionIds.has(sectionId)) {
-        nextCollapsedSectionIds.add(sectionId);
-      }
-    });
-  }
-
-  pinnedExpandedSectionIds.forEach((sectionId) => {
-    nextCollapsedSectionIds.delete(sectionId);
+  const nextCollapsedSectionIds = resolveCollapsedSectionIdSet({
+    availableSectionIds,
+    collapseAllSections,
+    collapseNewSectionsByDefault,
+    knownSectionIds,
+    pinnedExpandedSectionIds,
+    previousCollapsedSectionIds,
   });
 
   return {

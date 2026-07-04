@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { StructureGroupSection } from "@/features/layout/structureGroups";
 import {
   areStringSetsEqual,
+  buildAvailableSectionIdSet,
   reconcileCollapsedSectionIds,
+  resolveCollapsedSectionIdSet,
   resolveVisibleSectionItemNames,
   resolveSectionsContainingItem,
 } from "@/features/layout/structureSectionVisibility";
@@ -14,6 +16,20 @@ const SECTIONS: StructureGroupSection[] = [
 ];
 
 describe("structureSectionVisibility", () => {
+  it("builds available section ids and resolves collapsed ids", () => {
+    const availableSectionIds = buildAvailableSectionIdSet(SECTIONS);
+    expect(areStringSetsEqual(availableSectionIds, new Set(["base", "arm1", "other"]))).toBe(true);
+
+    const collapsedSectionIds = resolveCollapsedSectionIdSet({
+      availableSectionIds,
+      collapseAllSections: false,
+      collapseNewSectionsByDefault: true,
+      knownSectionIds: new Set(["base"]),
+      previousCollapsedSectionIds: new Set(["base"]),
+    });
+    expect(areStringSetsEqual(collapsedSectionIds, new Set(["base", "arm1", "other"]))).toBe(true);
+  });
+
   it("finds sections containing a specific item", () => {
     const result = resolveSectionsContainingItem(SECTIONS, "tool_link");
     expect(Array.from(result)).toEqual(["arm1"]);
