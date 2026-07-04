@@ -1,20 +1,33 @@
-import { Component, Suspense, type ReactNode } from "react";
+import { Component, Suspense, useMemo, type ReactNode } from "react";
 import { useGLTF } from "@react-three/drei";
-import { useLoader } from "@react-three/fiber";
+import { useLoader, type ThreeEvent } from "@react-three/fiber";
 import { PLYLoader, STLLoader } from "three-stdlib";
 
 import type { CreatedObject } from "@/features/objects";
+
+type MeshAssetPointerHandlers = {
+  onClick: (event: ThreeEvent<MouseEvent>) => void;
+  onDoubleClick: (event: ThreeEvent<MouseEvent>) => void;
+  onPointerOver: (event: ThreeEvent<PointerEvent>) => void;
+  onPointerMove: (event: ThreeEvent<PointerEvent>) => void;
+  onPointerOut: (event: ThreeEvent<PointerEvent>) => void;
+};
 
 type MeshAssetBodyProps = {
   object: CreatedObject;
   objectPosition: [number, number, number];
   objectRotation: [number, number, number];
-  pointerHandlers: Record<string, (...args: never[]) => void>;
+  pointerHandlers: MeshAssetPointerHandlers;
   fallback: ReactNode;
 };
 
-const resolveMeshAssetUri = (object: CreatedObject): string | null =>
-  object.meshUri ?? object.assetRef ?? null;
+const isLoadableBrowserMeshUri = (value: string): boolean =>
+  /^(blob:|data:|https?:\/\/|\/)/i.test(value);
+
+const resolveMeshAssetUri = (object: CreatedObject): string | null => {
+  const candidates = [object.meshUri, object.assetRef];
+  return candidates.find((candidate) => candidate && isLoadableBrowserMeshUri(candidate)) ?? null;
+};
 
 const resolveMeshAssetExtension = (uri: string): string => {
   const withoutQuery = uri.split(/[?#]/)[0] ?? "";
@@ -24,7 +37,8 @@ const resolveMeshAssetExtension = (uri: string): string => {
 
 function GltfMeshAsset({ uri }: { uri: string }) {
   const gltf = useGLTF(uri);
-  return <primitive object={gltf.scene} />;
+  const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  return <primitive object={scene} />;
 }
 
 function StlMeshAsset({ uri }: { uri: string }) {
@@ -47,7 +61,7 @@ function PlyMeshAsset({ uri }: { uri: string }) {
 }
 
 class MeshAssetErrorBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
+  { children: ReactNode; fallback: ReactNode; resetKey: string },
   { hasError: boolean }
 > {
   state = { hasError: false };
@@ -56,9 +70,9 @@ class MeshAssetErrorBoundary extends Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
-    if (import.meta.env.DEV) {
-      console.error("MeshAssetBody failed to load asset:", error);
+  componentDidUpdate(previousProps: { resetKey: string }) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
     }
   }
 
@@ -96,8 +110,8 @@ export function MeshAssetBody({
   }
 
   return (
-    <MeshAssetErrorBoundary fallback={fallback}>
-      <Suspense fallback={null}>
+    <MeshAssetErrorBoundary fallback={fallback} resetKey={uri}>
+      <Suspense fallback={fallback}>
         <group
           position={objectPosition}
           rotation={objectRotation}
