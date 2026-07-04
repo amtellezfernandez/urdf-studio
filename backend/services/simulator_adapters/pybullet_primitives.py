@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence, TypeAlias
+from typing import Any, TypeAlias
 
 from backend.services.simulator_adapters.camera_transfer import (
     CAMERA_MARKER_RGBA,
@@ -10,8 +11,7 @@ from backend.services.simulator_adapters.camera_transfer import (
     SimCameraSpec,
 )
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
-from backend.services.world_layout_transfer_types import SimPrimitive
-from backend.services.world_layout_transfer_types import WorldLayoutTransferError
+from backend.services.world_layout_transfer_types import SimPrimitive, WorldLayoutTransferError
 
 
 PyBulletShapeKwargs: TypeAlias = dict[str, object]
@@ -70,15 +70,17 @@ def pybullet_primitive_shape(
             visual_kwargs=shape_kwargs,
         )
     if primitive.sim_type == "cylinder":
+        radius = primitive.size_xyz[0] * 0.5
+        height = primitive.size_xyz[2]
         return PyBulletPrimitiveShape(
             shape_type=pybullet.GEOM_CYLINDER,
             collision_kwargs={
-                "radius": primitive.size_xyz[0] * 0.5,
-                "height": primitive.size_xyz[2],
+                "radius": radius,
+                "height": height,
             },
             visual_kwargs={
-                "radius": primitive.size_xyz[0] * 0.5,
-                "length": primitive.size_xyz[2],
+                "radius": radius,
+                "length": height,
             },
         )
     raise ValueError(f"Unsupported PyBullet primitive type: {primitive.sim_type}")
