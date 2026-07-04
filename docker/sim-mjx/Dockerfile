@@ -22,8 +22,9 @@ RUN apt-get update \
 RUN python -m pip install --upgrade pip \
     && python -m pip install --upgrade \
         "jax[${JAX_CUDA_EXTRA}]" \
-        "mujoco>=3.3"
+        "mujoco>=3.3" \
+        "mujoco-mjx==3.9.0"
 
 WORKDIR /workspace
 
-CMD ["python", "-c", "import jax, mujoco; print('URDF Studio MJX runtime ready:', jax.default_backend(), mujoco.__version__)"]
+CMD ["python", "-c", "import jax, mujoco, mujoco.mjx; print('URDF Studio MJX runtime ready:', jax.default_backend(), mujoco.__version__)"]
