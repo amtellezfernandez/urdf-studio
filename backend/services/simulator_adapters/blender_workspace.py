@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import textwrap
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import yourdfpy  # type: ignore
 
@@ -13,6 +14,7 @@ from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SCHEMA,
     build_blender_change_set_source,
 )
+from backend.services.simulator_adapters.camera_transfer import SimCameraSpec
 from backend.services.simulator_adapters.blender_edit_session import (
     BLENDER_EDIT_SESSION_SCHEMA,
     BLENDER_LOCKED_DOMAINS,
@@ -22,6 +24,7 @@ from backend.services.simulator_adapters.blender_edit_session import (
 from backend.services.simulator_adapters.numeric import is_finite_number
 from backend.services.simulator_adapters.world_scene import SimulatorSceneSpec
 from backend.services.simulator_adapters.world_mesh_assets import resolve_declared_mesh_asset_path
+from backend.services.world_layout_transfer_types import SimPrimitive
 
 BLENDER_CHANGE_SET_FILENAME = "blender-change-set.json"
 BLENDER_EDIT_SESSION_FILENAME = "blender-edit-session.json"
@@ -30,6 +33,44 @@ BLENDER_FOCUS_SCRIPT_FILENAME = "focus_blender_view.py"
 BLENDER_EXPORT_SCRIPT_FILENAME = "export_blender_changes.py"
 BLENDER_ROBOT_GLB_FILENAME = "robot-reference.glb"
 BLENDER_ROBOT_USD_FILENAME = "robot-reference.usda"
+
+JsonFloatVector: TypeAlias = list[float]
+
+
+class BlenderObjectEditSessionEntry(TypedDict):
+    kind: Literal["world_object"]
+    stable_id: str
+    source_name: str
+    sim_name: str
+    source_type: str
+    sim_type: str
+    position_xyz: JsonFloatVector
+    quat_wxyz: JsonFloatVector
+    size_xyz: JsonFloatVector
+    rgba: JsonFloatVector
+    collision: bool
+    fixed: bool
+    mass_kg: float | None
+    semantic_role: str | None
+    asset_ref: str | None
+    asset_path: str | None
+    asset_scale_xyz: JsonFloatVector | None
+
+
+class BlenderCameraEditSessionEntry(TypedDict):
+    kind: Literal["camera"]
+    stable_id: str
+    name: str
+    sim_name: str
+    parent_joint: str
+    parent_link: str
+    parent_position_xyz: JsonFloatVector
+    parent_quat_wxyz: JsonFloatVector
+    position_xyz: JsonFloatVector
+    quat_wxyz: JsonFloatVector
+    width: int
+    height: int
+    fov_deg: float
 
 
 @dataclass(frozen=True)
@@ -1103,7 +1144,10 @@ def build_blender_export_script(*, change_set_path: Path, source: Mapping[str, A
     )
 
 
-def _blender_object_entry(primitive: Any, asset_roots: Sequence[Path]) -> dict[str, Any]:
+def _blender_object_entry(
+    primitive: SimPrimitive,
+    asset_roots: Sequence[Path],
+) -> BlenderObjectEditSessionEntry:
     asset_path = resolve_declared_mesh_asset_path(
         primitive,
         asset_roots,
@@ -1130,7 +1174,7 @@ def _blender_object_entry(primitive: Any, asset_roots: Sequence[Path]) -> dict[s
     }
 
 
-def _blender_camera_entry(camera: Any) -> dict[str, Any]:
+def _blender_camera_entry(camera: SimCameraSpec) -> BlenderCameraEditSessionEntry:
     parent_rotation = camera.render_world_pose.rotation * camera.render_local_pose.rotation.inv()
     parent_offset = parent_rotation.apply(camera.render_local_pose.position_xyz)
     parent_position = tuple(
