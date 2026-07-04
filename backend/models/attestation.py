@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field
 
-AttestationGatewayDecisionPayload: TypeAlias = dict[str, Any]
+from backend.models.json_payload import JsonObject
+
+AttestationGatewayDecisionPayload: TypeAlias = JsonObject
 
 
 class AttestationTrustState(str, Enum):

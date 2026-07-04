@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.models.json_payload import JsonObject
 from backend.models.world_scene_package import WorldScenePackageManifest
 
 
@@ -15,7 +16,7 @@ SimulatorTransferStrategy = Literal["direct", "convert", "planned"]
 SimulatorTargetKind = Literal["physics_simulator", "authoring_tool", "renderer"]
 SimulatorDependencyScope = Literal["workspace", "validation", "runtime"]
 SimulatorWorkspaceLaunchMode = Literal["interactive_viewer", "headless_check"]
-WorkspaceChangeSetPayload: TypeAlias = dict[str, Any]
+WorkspaceChangeSetPayload: TypeAlias = JsonObject
 SIMULATOR_CANONICAL_FRAME_CONVENTION = "ros-rep-103"
 SIMULATOR_ID_VALUES = (
     "genesis",

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from typing import TypeAlias
+from typing import TypeAlias, TypeAliasType
 
 JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
-JsonObject: TypeAlias = dict[str, JsonValue]
+JsonValue = TypeAliasType(
+    "JsonValue",
+    JsonScalar | list["JsonValue"] | dict[str, "JsonValue"],
+)
+JsonObject = TypeAliasType("JsonObject", dict[str, JsonValue])

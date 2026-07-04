@@ -6,6 +6,7 @@ from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.models.json_payload import JsonObject
 from backend.services.world_asset_refs import normalize_portable_world_asset_ref
 
 from backend.services.world_scene_package_params import (
@@ -26,7 +27,7 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
 )
 
-WorldScenePayload: TypeAlias = dict[str, Any]
+WorldScenePayload: TypeAlias = JsonObject
 
 
 class WorldRuntimeTarget(BaseModel):

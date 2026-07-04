@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from backend.models.json_payload import JsonObject
 
 
 RobotMasteringJobType: TypeAlias = Literal["generate-physics"]
 RobotMasteringJobStatus: TypeAlias = Literal["queued", "running", "succeeded", "failed"]
-RobotMasteringPayload: TypeAlias = dict[str, Any]
+RobotMasteringPayload: TypeAlias = JsonObject
 
 
 class RobotMasteringModel(BaseModel):

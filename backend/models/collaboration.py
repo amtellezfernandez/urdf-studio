@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
+from backend.models.json_payload import JsonObject
+
 CollaborationSessionRole = Literal["owner", "editor", "viewer"]
-CollaborationEventPayload: TypeAlias = dict[str, Any]
-CollaborationJournalDetails: TypeAlias = dict[str, Any]
+CollaborationEventPayload: TypeAlias = JsonObject
+CollaborationJournalDetails: TypeAlias = JsonObject
 
 
 class CollaborationSessionCreateRequest(BaseModel):

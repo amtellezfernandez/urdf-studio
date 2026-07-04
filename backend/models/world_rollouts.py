@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.models.json_payload import JsonObject
 from backend.models.world_scene_package import WorldScenePackageManifest
 from backend.services.world_rollout_params import (
     WORLD_ROLLOUT_CAMPAIGN_SCHEMA_VERSION,
@@ -24,7 +25,7 @@ from backend.services.world_rollout_params import (
 )
 from backend.services.world_scene_package_params import SHA256_HEX_LENGTH
 
-WorldRolloutPayload: TypeAlias = dict[str, Any]
+WorldRolloutPayload: TypeAlias = JsonObject
 
 
 def _utc_now() -> datetime:
