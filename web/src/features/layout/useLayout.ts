@@ -6,45 +6,35 @@ import type {
 import {
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
-  JOINT_LIST_SIDEBAR_PARAMS,
-  RIGHT_SIDEBAR_MAX_WIDTH,
-  RIGHT_SIDEBAR_MIN_WIDTH,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MIN_WIDTH,
 } from "@/features/layout/jointListSidebarParams";
+import { DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT } from "@/features/layout/page/constants";
 import {
-  DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
-  MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT,
-  MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
-} from "@/features/layout/page/constants";
-
-type ResizePointerDown = { t: number; x: number };
-
-const clampNumber = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
-
-const getPointerTimestamp = (): number =>
-  typeof performance !== "undefined" ? performance.now() : Date.now();
+  clampLeftSidebarTopPanelHeight,
+  clampRightSidebarWidth,
+  clampSidebarWidth,
+  getPointerTimestamp,
+  resolveExpandedRightSidebarWidth,
+  resolveExpandedSidebarWidth,
+  resolveResizeDoubleClick,
+  type ResizePointerDown,
+} from "@/features/layout/layoutResizeHelpers";
 
 const consumeResizeDoubleClick = (
   event: ReactPointerEvent<HTMLDivElement>,
   lastPointerDownRef: MutableRefObject<ResizePointerDown | null>,
-  onDoubleClick: () => void,
+  handleDoubleClick: () => void,
 ): boolean => {
-  const now = getPointerTimestamp();
-  const lastPointerDown = lastPointerDownRef.current;
-  if (
-    lastPointerDown &&
-    now - lastPointerDown.t <=
-      JOINT_LIST_SIDEBAR_PARAMS.resizeDoubleClick.maxIntervalMs &&
-    Math.abs(event.clientX - lastPointerDown.x) <=
-      JOINT_LIST_SIDEBAR_PARAMS.resizeDoubleClick.maxDeltaPx
-  ) {
+  const result = resolveResizeDoubleClick({
+    currentTimestamp: getPointerTimestamp(),
+    pointerX: event.clientX,
+    previousPointerDown: lastPointerDownRef.current,
+  });
+  lastPointerDownRef.current = result.nextPointerDown;
+  if (result.consumedDoubleClick) {
     lastPointerDownRef.current = null;
-    onDoubleClick();
+    handleDoubleClick();
     return true;
   }
-  lastPointerDownRef.current = { t: now, x: event.clientX };
   return false;
 };
 
@@ -99,59 +89,25 @@ export const useLayout = () => {
     DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT,
   );
 
-  const clampSidebarWidth = useCallback(
-    (width: number) => clampNumber(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
-    [],
-  );
-
-  const clampRightSidebarWidth = useCallback(
-    (width: number) =>
-      clampNumber(width, RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH),
-    [],
-  );
-
-  const clampLeftSidebarTopPanelHeight = useCallback(
-    (height: number, containerHeight: number) => {
-      if (!Number.isFinite(height)) {
-        return DEFAULT_LEFT_SIDEBAR_TOP_PANEL_HEIGHT;
-      }
-      if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
-        return Math.min(0.95, Math.max(0.05, height));
-      }
-      const minTopRatio = Math.min(
-        0.95,
-        MIN_LEFT_SIDEBAR_TOP_PANEL_HEIGHT / containerHeight,
-      );
-      const maxTopRatioFromCamera =
-        1 - MIN_LEFT_SIDEBAR_CAMERA_PANEL_HEIGHT / containerHeight;
-      const maxTopRatio = Math.max(
-        minTopRatio,
-        Math.min(0.95, maxTopRatioFromCamera),
-      );
-      return Math.min(maxTopRatio, Math.max(minTopRatio, height));
-    },
-    [],
-  );
-
   const handleSidebarToggle = useCallback(() => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;
       if (!next) {
-        setSidebarWidth((current) => clampSidebarWidth(current));
+        setSidebarWidth((current) => resolveExpandedSidebarWidth(current));
       }
       return next;
     });
-  }, [clampSidebarWidth]);
+  }, []);
 
   const handleRightSidebarToggle = useCallback(() => {
     setIsRightSidebarCollapsed((prev) => {
       const next = !prev;
       if (!next) {
-        setRightSidebarWidth((current) => clampRightSidebarWidth(current));
+        setRightSidebarWidth((current) => resolveExpandedRightSidebarWidth(current));
       }
       return next;
     });
-  }, [clampRightSidebarWidth]);
+  }, []);
 
   const handleSidebarResizeStart = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -176,7 +132,7 @@ export const useLayout = () => {
         },
       });
     },
-    [sidebarWidth, clampSidebarWidth],
+    [sidebarWidth],
   );
 
   const handleRightSidebarResizeStart = useCallback(
@@ -206,7 +162,7 @@ export const useLayout = () => {
         },
       });
     },
-    [rightSidebarWidth, clampRightSidebarWidth],
+    [rightSidebarWidth],
   );
 
   const handleLeftSidebarVerticalResizeStart = useCallback(
@@ -253,7 +209,7 @@ export const useLayout = () => {
         },
       });
     },
-    [leftSidebarTopPanelHeight, clampLeftSidebarTopPanelHeight],
+    [leftSidebarTopPanelHeight],
   );
 
   return {
