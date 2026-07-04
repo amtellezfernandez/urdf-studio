@@ -43,25 +43,54 @@ def write_workspace_asset_roots(workspace_dir: Path, roots: tuple[Path, ...]) ->
     )
 
 
+def _default_workspace_asset_roots(
+    *,
+    world_package_path: Path,
+    robot_urdf_path: Path,
+) -> tuple[Path, ...]:
+    return compute_workspace_asset_roots(
+        workspace_dir=world_package_path.parent,
+        robot_urdf_path=robot_urdf_path,
+    )
+
+
+def _manifest_asset_root(value: object) -> Path | None:
+    if not isinstance(value, str):
+        return None
+    root_text = value.strip()
+    if not root_text:
+        return None
+    root_path = Path(root_text).expanduser()
+    if not root_path.is_absolute():
+        return None
+    try:
+        resolved_root = root_path.resolve()
+    except (OSError, RuntimeError):
+        return None
+    if not resolved_root.is_dir():
+        return None
+    return resolved_root
+
+
 def workspace_asset_roots(world_package_path: Path, robot_urdf_path: Path) -> tuple[Path, ...]:
     workspace_dir = world_package_path.parent
     manifest_path = workspace_dir / WORKSPACE_ASSET_ROOTS_FILENAME
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return compute_workspace_asset_roots(
-            workspace_dir=workspace_dir,
+        return _default_workspace_asset_roots(
+            world_package_path=world_package_path,
             robot_urdf_path=robot_urdf_path,
         )
     if not isinstance(payload, list):
-        return compute_workspace_asset_roots(
-            workspace_dir=workspace_dir,
+        return _default_workspace_asset_roots(
+            world_package_path=world_package_path,
             robot_urdf_path=robot_urdf_path,
         )
-    roots = tuple(Path(item) for item in payload if isinstance(item, str) and item.strip())
+    roots = tuple(root for item in payload if (root := _manifest_asset_root(item)) is not None)
     if not roots:
-        return compute_workspace_asset_roots(
-            workspace_dir=workspace_dir,
+        return _default_workspace_asset_roots(
+            world_package_path=world_package_path,
             robot_urdf_path=robot_urdf_path,
         )
     return _dedupe_paths(roots)
