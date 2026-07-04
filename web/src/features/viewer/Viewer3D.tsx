@@ -24,7 +24,6 @@ import {
 } from "@/shared/lib/axisFrame";
 import { useCameraStore } from "@/shared/store/useCameraStore";
 import { useLinkHighlightStore } from "@/shared/store/useLinkHighlightStore";
-import type { Camera as RobotCamera } from "@/shared/types/camera";
 import { useRobotPoseStore } from "@/shared/store/useRobotPoseStore";
 import { useObjectStore, type CreatedObject } from "@/features/objects";
 import { WORLD_OBJECT_EDIT_PARAMS } from "@/features/objects/worldObjectEditParams";
@@ -46,7 +45,10 @@ import { ASSEMBLY_PLACEMENT_CONTACT_PARAMS } from "@/features/viewer/assemblyPla
 import { CustomAxesHelper } from "@/features/viewer/CustomAxesHelper";
 import { ViewerFloorPlane, ViewerWorldGrid } from "@/features/viewer/ViewerSceneChrome";
 import { ViewerCanvasErrorBoundary } from "@/features/viewer/ViewerCanvasErrorBoundary";
-import { filterVisibleCameraIconConfigs } from "@/features/viewer/viewerCameraIconVisibility";
+import {
+  buildVisibleViewerCameraConfigs,
+  filterVisibleCameraIconConfigs,
+} from "@/features/viewer/viewerCameraIconVisibility";
 import { CreatedObjects } from "@/features/viewer/components/CreatedObjects";
 import { IKResultDialog } from "@/features/viewer/components/IKResultDialog";
 import { ViewerCameraToolbar } from "@/features/viewer/components/ViewerCameraToolbar";
@@ -311,13 +313,6 @@ export interface Viewer3DProps {
   enableObjectActionsInReadOnly?: boolean;
   onInertiaReliabilityChange?: (entries: InertiaReliabilityEntry[]) => void;
 }
-
-const RUNTIME_HIDDEN_CAMERA_PATTERN = /(wrist|gripper|hand|tool|end[_-]?effector|ee)/i;
-
-const shouldHideCameraInReadOnlyRuntime = (camera: RobotCamera) => {
-  const name = `${camera.name} ${camera.parent_joint}`.toLowerCase();
-  return RUNTIME_HIDDEN_CAMERA_PATTERN.test(name);
-};
 
 const DEFAULT_OBJECT_FRAME_DIRECTION = new THREE.Vector3(1, 1, 0.65).normalize();
 const IK_APPLY_INPUT_SOURCE = "ik_apply";
@@ -2069,27 +2064,12 @@ export const Viewer3D = ({
   const selectedObjectId = useObjectStore((state) => state.selectedObjectId);
   const objectEditMode = useObjectStore((state) => state.editMode);
   const visibleCameraConfigs = useMemo(
-    () => {
-      const insertedLiveCameraIds = insertedLiveCameraIdsRef.current;
-      const cameraConfigsByKey = new Map<string, RobotCamera>();
-      const nonLiveCameraConfigs = cameraConfigs.filter(
-        (camera) => !insertedLiveCameraIds.has(camera.id),
-      );
-      for (const camera of nonLiveCameraConfigs) {
-        const duplicateCamera = cameraConfigsByKey.get(camera.id) ??
-          cameraConfigsByKey.get(camera.name);
-        if (!duplicateCamera) {
-          cameraConfigsByKey.set(camera.id, camera);
-          cameraConfigsByKey.set(camera.name, camera);
-        }
-      }
-      const cameraConfigsWithLive = [...new Set(cameraConfigsByKey.values())];
-      return readOnlyMode
-        ? cameraConfigsWithLive.filter(
-            (camera) => !shouldHideCameraInReadOnlyRuntime(camera),
-          )
-        : cameraConfigsWithLive;
-    },
+    () =>
+      buildVisibleViewerCameraConfigs(
+        cameraConfigs,
+        insertedLiveCameraIdsRef.current,
+        readOnlyMode
+      ),
     [cameraConfigs, readOnlyMode]
   );
   const cameraIconConfigs = useMemo(
