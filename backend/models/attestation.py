@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -24,21 +24,21 @@ class AttestationFinding(BaseModel):
     finding_type: str = Field(..., min_length=1)
     severity: AttestationFindingSeverity
     message: str = Field(..., min_length=1)
-    component_id: Optional[str] = None
-    component_class: Optional[str] = None
-    evidence_source: Optional[str] = None
+    component_id: str | None = None
+    component_class: str | None = None
+    evidence_source: str | None = None
 
 
 class AttestationStatusUpsertRequest(BaseModel):
     robot_id: str = Field(..., min_length=1)
     verifier: str = Field(default="zra", min_length=1)
     trust_state: AttestationTrustState
-    last_verified_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    reason: Optional[str] = None
-    findings: List[AttestationFinding] = Field(default_factory=list)
-    proof_digest: Optional[str] = None
-    public_digest: Optional[str] = None
+    last_verified_at: datetime | None = None
+    expires_at: datetime | None = None
+    reason: str | None = None
+    findings: list[AttestationFinding] = Field(default_factory=list)
+    proof_digest: str | None = None
+    public_digest: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
@@ -51,14 +51,14 @@ class AttestationStatusResponse(BaseModel):
     status_explanation: str
     control_explanation: str
     override_active: bool = False
-    override_reason: Optional[str] = None
-    override_expires_at: Optional[datetime] = None
-    last_verified_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    reason: Optional[str] = None
-    findings: List[AttestationFinding] = Field(default_factory=list)
-    proof_digest: Optional[str] = None
-    public_digest: Optional[str] = None
+    override_reason: str | None = None
+    override_expires_at: datetime | None = None
+    last_verified_at: datetime | None = None
+    expires_at: datetime | None = None
+    reason: str | None = None
+    findings: list[AttestationFinding] = Field(default_factory=list)
+    proof_digest: str | None = None
+    public_digest: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
     updated_at: datetime
 
@@ -70,14 +70,14 @@ class AttestationSummary(BaseModel):
     status_explanation: str
     control_explanation: str
     override_active: bool = False
-    override_reason: Optional[str] = None
-    override_expires_at: Optional[datetime] = None
-    reason: Optional[str] = None
+    override_reason: str | None = None
+    override_expires_at: datetime | None = None
+    reason: str | None = None
     finding_count: int = 0
     alert_count: int = 0
-    top_finding: Optional[str] = None
+    top_finding: str | None = None
     updated_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
 
 class AttestationOverrideRequest(BaseModel):
@@ -97,20 +97,20 @@ class ZraGatewayImportRequest(BaseModel):
 
 class ZraGatewayPullRequest(BaseModel):
     robot_id: str = Field(..., min_length=1)
-    ssh_host: Optional[str] = None
-    ssh_user: Optional[str] = None
-    ssh_password: Optional[str] = None
-    remote_gateway_path: Optional[str] = None
-    local_gateway_path: Optional[str] = None
+    ssh_host: str | None = None
+    ssh_user: str | None = None
+    ssh_password: str | None = None
+    remote_gateway_path: str | None = None
+    local_gateway_path: str | None = None
     timeout_seconds: int = Field(default=10, ge=1, le=120)
 
 
 class ZraOrchestratorDeviceStatus(BaseModel):
     robot_id: str
     enabled: bool
-    last_poll_at: Optional[datetime] = None
-    last_success_at: Optional[datetime] = None
-    last_error: Optional[str] = None
+    last_poll_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
     consecutive_failures: int = 0
     current_state: AttestationTrustState = AttestationTrustState.INACTIVE
 
@@ -120,7 +120,7 @@ class ZraOrchestratorStatusResponse(BaseModel):
     poll_interval_seconds: int
     inactive_after_seconds: int
     device_count: int = 0
-    devices: List[ZraOrchestratorDeviceStatus] = Field(default_factory=list)
+    devices: list[ZraOrchestratorDeviceStatus] = Field(default_factory=list)
 
 
 def utc_now() -> datetime:

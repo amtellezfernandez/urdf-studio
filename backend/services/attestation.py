@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Dict, List, Optional
 
 from backend.models.attestation import (
     AttestationFinding,
@@ -20,8 +19,8 @@ from backend.models.attestation import (
 
 def _effective_trust_state(
     trust_state: AttestationTrustState,
-    expires_at,
-):
+    expires_at: datetime | None,
+) -> AttestationTrustState:
     if trust_state == AttestationTrustState.VERIFIED and expires_at is not None:
         if expires_at <= utc_now():
             return AttestationTrustState.STALE
@@ -32,7 +31,7 @@ def _control_allowed(effective_trust_state: AttestationTrustState) -> bool:
     return effective_trust_state == AttestationTrustState.VERIFIED
 
 
-def _top_finding_message(payload: AttestationStatusUpsertRequest) -> Optional[str]:
+def _top_finding_message(payload: AttestationStatusUpsertRequest) -> str | None:
     alert_findings = [
         finding.message
         for finding in payload.findings
@@ -101,7 +100,7 @@ def _control_explanation(
 @dataclass
 class _StoredAttestationStatus:
     payload: AttestationStatusUpsertRequest
-    updated_at: datetime | None = None
+    updated_at: datetime
     override_expires_at: datetime | None = None
     override_reason: str | None = None
 
@@ -109,7 +108,7 @@ class _StoredAttestationStatus:
 class AttestationStatusStore:
     def __init__(self) -> None:
         self._lock = Lock()
-        self._statuses: Dict[str, _StoredAttestationStatus] = {}
+        self._statuses: dict[str, _StoredAttestationStatus] = {}
 
     def upsert(self, request: AttestationStatusUpsertRequest) -> AttestationStatusResponse:
         with self._lock:
@@ -120,21 +119,21 @@ class AttestationStatusStore:
             self._statuses[request.robot_id] = stored
             return self._to_response(stored)
 
-    def get(self, robot_id: str) -> Optional[AttestationStatusResponse]:
+    def get(self, robot_id: str) -> AttestationStatusResponse | None:
         with self._lock:
             stored = self._statuses.get(robot_id)
             if stored is None:
                 return None
             return self._to_response(stored)
 
-    def list(self) -> List[AttestationStatusResponse]:
+    def list(self) -> list[AttestationStatusResponse]:
         with self._lock:
             return [
                 self._to_response(stored)
                 for _, stored in sorted(self._statuses.items(), key=lambda item: item[0])
             ]
 
-    def summary(self, robot_id: str) -> Optional[AttestationSummary]:
+    def summary(self, robot_id: str) -> AttestationSummary | None:
         with self._lock:
             stored = self._statuses.get(robot_id)
             if stored is None:
@@ -145,7 +144,7 @@ class AttestationStatusStore:
         self,
         robot_id: str,
         request: AttestationOverrideRequest,
-    ) -> Optional[AttestationStatusResponse]:
+    ) -> AttestationStatusResponse | None:
         with self._lock:
             stored = self._statuses.get(robot_id)
             if stored is None:
@@ -160,7 +159,7 @@ class AttestationStatusStore:
         self,
         robot_id: str,
         request: AttestationScanTriggerRequest,
-    ) -> Optional[AttestationStatusResponse]:
+    ) -> AttestationStatusResponse | None:
         with self._lock:
             stored = self._statuses.get(robot_id)
             now = utc_now()
