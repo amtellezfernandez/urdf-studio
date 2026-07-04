@@ -57,8 +57,8 @@ def pinhole_camera_intrinsics_from_record(value: object) -> PinholeCameraIntrins
         if fx is None:
             return None
 
-    cx = _read_optional_finite_float(value, "cx", fallback=width * 0.5)
-    cy = _read_optional_finite_float(value, "cy", fallback=height * 0.5)
+    cx = _read_optional_finite_float(value, "cx", default_value=width * 0.5)
+    cy = _read_optional_finite_float(value, "cy", default_value=height * 0.5)
     if cx is _INVALID_OPTIONAL_NUMBER or cy is _INVALID_OPTIONAL_NUMBER:
         return None
     return PinholeCameraIntrinsics(
@@ -118,9 +118,9 @@ def _read_optional_finite_float(
     record: CameraIntrinsicsRecord,
     key: str,
     *,
-    fallback: float,
+    default_value: float,
 ) -> float | _InvalidOptionalNumber:
     if key not in record:
-        return fallback
+        return default_value
     value = record.get(key)
     return float(value) if is_finite_number(value) else _INVALID_OPTIONAL_NUMBER
