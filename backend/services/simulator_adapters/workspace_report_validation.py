@@ -449,23 +449,23 @@ def _validate_report_item_fields(
     list_field_name: str,
     required_fields: tuple[str, ...],
 ) -> str | None:
-    items = payload.get(list_field_name)
-    if not isinstance(items, list):
+    report_entries = payload.get(list_field_name)
+    if not isinstance(report_entries, list):
         return f"simulator validation report field '{list_field_name}' must be a list"
-    for index, item in enumerate(items):
-        if not isinstance(item, Mapping):
+    for index, report_entry in enumerate(report_entries):
+        if not isinstance(report_entry, Mapping):
             return (
                 f"simulator validation report field '{list_field_name}[{index}]' "
                 "must be an object"
             )
-        missing_fields = [field for field in required_fields if field not in item]
+        missing_fields = [field for field in required_fields if field not in report_entry]
         if missing_fields:
             return (
                 f"simulator validation report field '{list_field_name}[{index}]' "
                 f"missing field(s): {', '.join(missing_fields)}"
             )
         value_error = _validate_report_item_values(
-            item,
+            report_entry,
             path=f"{list_field_name}[{index}]",
             list_field_name=list_field_name,
         )
@@ -476,13 +476,27 @@ def _validate_report_item_fields(
     else:
         identity_fields = ("camera_id", "sim_name")
     identity_error = _validate_report_unique_item_values(
-        items,
+        report_entries,
         list_field_name=list_field_name,
         field_names=identity_fields,
     )
     if identity_error:
         return identity_error
     return None
+
+
+def _index_report_entries_by_string_field(
+    report_entries: list[Any],
+    field_name: str,
+) -> dict[str, Mapping[str, Any]]:
+    indexed_entries: dict[str, Mapping[str, Any]] = {}
+    for report_entry in report_entries:
+        if not isinstance(report_entry, Mapping):
+            continue
+        field_value = report_entry.get(field_name)
+        if isinstance(field_value, str):
+            indexed_entries[field_value] = report_entry
+    return indexed_entries
 
 
 def _validate_expected_object_vectors(
@@ -496,28 +510,24 @@ def _validate_expected_object_vectors(
     objects = payload.get("objects")
     if not isinstance(objects, list):
         return "simulator validation report field 'objects' must be a list"
-    objects_by_source_id = {
-        item.get("source_id"): item
-        for item in objects
-        if isinstance(item, Mapping) and isinstance(item.get("source_id"), str)
-    }
+    objects_by_source_id = _index_report_entries_by_string_field(objects, "source_id")
     for source_id, expected_position in expected_positions.items():
-        item = objects_by_source_id.get(source_id)
-        if item is None:
+        object_report = objects_by_source_id.get(source_id)
+        if object_report is None:
             return f"simulator validation report missing object source_id {source_id!r}"
         error = _validate_expected_vector3(
-            item.get("position_xyz"),
+            object_report.get("position_xyz"),
             expected_position,
             f"objects[{source_id}].position_xyz",
         )
         if error:
             return error
     for source_id, expected_size in expected_sizes.items():
-        item = objects_by_source_id.get(source_id)
-        if item is None:
+        object_report = objects_by_source_id.get(source_id)
+        if object_report is None:
             return f"simulator validation report missing object source_id {source_id!r}"
         error = _validate_expected_vector3(
-            item.get("size_xyz"),
+            object_report.get("size_xyz"),
             expected_size,
             f"objects[{source_id}].size_xyz",
         )
@@ -536,75 +546,71 @@ def _validate_expected_object_contracts(
     objects = payload.get("objects")
     if not isinstance(objects, list):
         return "simulator validation report field 'objects' must be a list"
-    objects_by_id = {
-        item.get("source_id"): item
-        for item in objects
-        if isinstance(item, Mapping) and isinstance(item.get("source_id"), str)
-    }
-    for source_id, expected in expected_contracts.items():
-        item = objects_by_id.get(source_id)
-        if item is None:
+    objects_by_source_id = _index_report_entries_by_string_field(objects, "source_id")
+    for source_id, expected_contract in expected_contracts.items():
+        object_report = objects_by_source_id.get(source_id)
+        if object_report is None:
             return f"simulator validation report missing object source_id {source_id!r}"
         for field_name, expected_value in (
-            ("source_name", expected.source_name),
-            ("sim_name", expected.sim_name),
-            ("source_type", expected.source_type),
-            ("sim_type", expected.sim_type),
-            ("semantic_role", expected.semantic_role),
-            ("asset_ref", expected.asset_ref),
+            ("source_name", expected_contract.source_name),
+            ("sim_name", expected_contract.sim_name),
+            ("source_type", expected_contract.source_type),
+            ("sim_type", expected_contract.sim_type),
+            ("semantic_role", expected_contract.semantic_role),
+            ("asset_ref", expected_contract.asset_ref),
         ):
-            actual_value = item.get(field_name)
+            actual_value = object_report.get(field_name)
             if actual_value != expected_value:
                 return (
                     f"simulator validation report field 'objects[{source_id}].{field_name}' "
                     f"is {actual_value!r}, expected {expected_value!r}"
                 )
         for field_name, expected_value in (
-            ("collision", expected.collision),
-            ("fixed", expected.fixed),
+            ("collision", expected_contract.collision),
+            ("fixed", expected_contract.fixed),
         ):
-            actual_value = item.get(field_name)
+            actual_value = object_report.get(field_name)
             if actual_value is not expected_value:
                 return (
                     f"simulator validation report field 'objects[{source_id}].{field_name}' "
                     f"is {actual_value!r}, expected {expected_value!r}"
                 )
         for field_name, expected_value in (
-            ("mass_kg", expected.mass_kg),
-            ("friction", expected.friction),
-            ("restitution", expected.restitution),
+            ("mass_kg", expected_contract.mass_kg),
+            ("friction", expected_contract.friction),
+            ("restitution", expected_contract.restitution),
         ):
             error = _validate_expected_optional_number(
-                item.get(field_name),
+                object_report.get(field_name),
                 expected_value,
                 f"objects[{source_id}].{field_name}",
             )
             if error:
                 return error
         for field_name, expected_value in (
-            ("position_xyz", expected.position_xyz),
-            ("size_xyz", expected.size_xyz),
+            ("position_xyz", expected_contract.position_xyz),
+            ("size_xyz", expected_contract.size_xyz),
         ):
             error = _validate_expected_vector3(
-                item.get(field_name),
+                object_report.get(field_name),
                 expected_value,
                 f"objects[{source_id}].{field_name}",
             )
             if error:
                 return error
         for field_name, expected_value in (
-            ("quat_wxyz", expected.quat_wxyz),
-            ("rgba", expected.rgba),
+            ("quat_wxyz", expected_contract.quat_wxyz),
+            ("rgba", expected_contract.rgba),
         ):
             error = _validate_expected_vector4(
-                item.get(field_name),
+                object_report.get(field_name),
                 expected_value,
                 f"objects[{source_id}].{field_name}",
             )
             if error:
                 return error
-        actual_asset_scale = item.get("asset_scale_xyz")
-        if expected.asset_scale_xyz is None:
+        actual_asset_scale = object_report.get("asset_scale_xyz")
+        if expected_contract.asset_scale_xyz is None:
             if actual_asset_scale is not None:
                 return (
                     f"simulator validation report field 'objects[{source_id}].asset_scale_xyz' "
@@ -613,7 +619,7 @@ def _validate_expected_object_contracts(
         else:
             error = _validate_expected_vector3(
                 actual_asset_scale,
-                expected.asset_scale_xyz,
+                expected_contract.asset_scale_xyz,
                 f"objects[{source_id}].asset_scale_xyz",
             )
             if error:
@@ -631,16 +637,12 @@ def _validate_expected_object_asset_refs(
     objects = payload.get("objects")
     if not isinstance(objects, list):
         return "simulator validation report field 'objects' must be a list"
-    objects_by_source_id = {
-        item.get("source_id"): item
-        for item in objects
-        if isinstance(item, Mapping) and isinstance(item.get("source_id"), str)
-    }
+    objects_by_source_id = _index_report_entries_by_string_field(objects, "source_id")
     for source_id, expected_asset_ref in expected_asset_refs.items():
-        item = objects_by_source_id.get(source_id)
-        if item is None:
+        object_report = objects_by_source_id.get(source_id)
+        if object_report is None:
             return f"simulator validation report missing object source_id {source_id!r}"
-        actual_asset_ref = item.get("asset_ref")
+        actual_asset_ref = object_report.get("asset_ref")
         if actual_asset_ref != expected_asset_ref:
             return (
                 f"simulator validation report field 'objects[{source_id}].asset_ref' "
@@ -660,9 +662,9 @@ def _validate_expected_camera_ids(
     if not isinstance(cameras, list):
         return "simulator validation report field 'cameras' must be a list"
     actual_camera_ids = tuple(
-        item.get("camera_id")
-        for item in cameras
-        if isinstance(item, Mapping)
+        camera_report.get("camera_id")
+        for camera_report in cameras
+        if isinstance(camera_report, Mapping)
     )
     if actual_camera_ids != expected_camera_ids:
         return (
@@ -682,62 +684,58 @@ def _validate_expected_camera_contracts(
     cameras = payload.get("cameras")
     if not isinstance(cameras, list):
         return "simulator validation report field 'cameras' must be a list"
-    cameras_by_id = {
-        item.get("camera_id"): item
-        for item in cameras
-        if isinstance(item, Mapping) and isinstance(item.get("camera_id"), str)
-    }
-    for camera_id, expected in expected_contracts.items():
-        item = cameras_by_id.get(camera_id)
-        if item is None:
+    cameras_by_id = _index_report_entries_by_string_field(cameras, "camera_id")
+    for camera_id, expected_contract in expected_contracts.items():
+        camera_report = cameras_by_id.get(camera_id)
+        if camera_report is None:
             return f"simulator validation report missing camera_id {camera_id!r}"
         for field_name, expected_value in (
-            ("sim_name", expected.sim_name),
-            ("parent_joint", expected.parent_joint),
-            ("parent_link", expected.parent_link),
+            ("sim_name", expected_contract.sim_name),
+            ("parent_joint", expected_contract.parent_joint),
+            ("parent_link", expected_contract.parent_link),
         ):
-            actual_value = item.get(field_name)
+            actual_value = camera_report.get(field_name)
             if actual_value != expected_value:
                 return (
                     f"simulator validation report field 'cameras[{camera_id}].{field_name}' "
                     f"is {actual_value!r}, expected {expected_value!r}"
                 )
         for field_name, expected_value in (
-            ("width", expected.width),
-            ("height", expected.height),
+            ("width", expected_contract.width),
+            ("height", expected_contract.height),
         ):
-            actual_value = item.get(field_name)
+            actual_value = camera_report.get(field_name)
             if actual_value != expected_value:
                 return (
                     f"simulator validation report field 'cameras[{camera_id}].{field_name}' "
                     f"is {actual_value!r}, expected {expected_value!r}"
                 )
         fov_error = _validate_expected_number(
-            item.get("fov_deg"),
-            expected.fov_deg,
+            camera_report.get("fov_deg"),
+            expected_contract.fov_deg,
             f"cameras[{camera_id}].fov_deg",
         )
         if fov_error:
             return fov_error
         position_error = _validate_expected_vector3(
-            item.get("position_xyz"),
-            expected.position_xyz,
+            camera_report.get("position_xyz"),
+            expected_contract.position_xyz,
             f"cameras[{camera_id}].position_xyz",
         )
         if position_error:
             return position_error
         quat_error = _validate_expected_vector4(
-            item.get("quat_wxyz"),
-            expected.quat_wxyz,
+            camera_report.get("quat_wxyz"),
+            expected_contract.quat_wxyz,
             f"cameras[{camera_id}].quat_wxyz",
         )
         if quat_error:
             return quat_error
         matrix_error = _validate_expected_matrix3(
-            (item.get("intrinsics") or {}).get("matrix")
-            if isinstance(item.get("intrinsics"), Mapping)
+            (camera_report.get("intrinsics") or {}).get("matrix")
+            if isinstance(camera_report.get("intrinsics"), Mapping)
             else None,
-            expected.intrinsics_matrix,
+            expected_contract.intrinsics_matrix,
             f"cameras[{camera_id}].intrinsics.matrix",
         )
         if matrix_error:
@@ -753,13 +751,13 @@ def _validate_report_object_asset_refs(payload: Mapping[str, Any]) -> str | None
     objects = payload.get("objects")
     if not isinstance(objects, list):
         return "simulator validation report field 'objects' must be a list"
-    for item in objects:
-        if not isinstance(item, Mapping):
+    for object_report in objects:
+        if not isinstance(object_report, Mapping):
             continue
-        asset_ref = item.get("asset_ref")
+        asset_ref = object_report.get("asset_ref")
         if asset_ref is None:
             continue
-        source_id = item.get("source_id", "<unknown>")
+        source_id = object_report.get("source_id", "<unknown>")
         if not isinstance(asset_ref, str) or not asset_ref.strip():
             return (
                 f"simulator validation report field 'objects[{source_id}].asset_ref' "
@@ -853,7 +851,7 @@ def _validate_expected_optional_number(
 
 
 def _validate_report_unique_item_values(
-    items: list[Any],
+    report_entries: list[Any],
     *,
     list_field_name: str,
     field_names: tuple[str, ...],
@@ -861,10 +859,10 @@ def _validate_report_unique_item_values(
     for field_name in field_names:
         seen: set[str] = set()
         duplicates: set[str] = set()
-        for item in items:
-            if not isinstance(item, Mapping):
+        for report_entry in report_entries:
+            if not isinstance(report_entry, Mapping):
                 continue
-            value = item.get(field_name)
+            value = report_entry.get(field_name)
             if not isinstance(value, str):
                 continue
             normalized = value.strip()
@@ -880,70 +878,76 @@ def _validate_report_unique_item_values(
 
 
 def _validate_report_item_values(
-    item: Mapping[str, Any],
+    report_entry: Mapping[str, Any],
     *,
     path: str,
     list_field_name: str,
 ) -> str | None:
     if list_field_name == "objects":
         for field_name in ("source_id", "source_name", "sim_name", "source_type", "sim_type"):
-            error = _validate_report_string(item.get(field_name), f"{path}.{field_name}")
+            error = _validate_report_string(report_entry.get(field_name), f"{path}.{field_name}")
             if error:
                 return error
         for field_name in ("position_xyz", "size_xyz"):
             error = _validate_report_vector3(
-                item.get(field_name),
+                report_entry.get(field_name),
                 f"{path}.{field_name}",
                 positive=field_name == "size_xyz",
             )
             if error:
                 return error
-        error = _validate_report_quat_wxyz(item.get("quat_wxyz"), f"{path}.quat_wxyz")
+        error = _validate_report_quat_wxyz(report_entry.get("quat_wxyz"), f"{path}.quat_wxyz")
         if error:
             return error
-        error = _validate_report_rgba(item.get("rgba"), f"{path}.rgba")
+        error = _validate_report_rgba(report_entry.get("rgba"), f"{path}.rgba")
         if error:
             return error
         for field_name in ("collision", "fixed"):
-            error = _validate_report_bool(item.get(field_name), f"{path}.{field_name}")
+            error = _validate_report_bool(report_entry.get(field_name), f"{path}.{field_name}")
             if error:
                 return error
         for field_name in ("mass_kg", "friction", "restitution"):
             error = _validate_report_optional_non_negative_number(
-                item.get(field_name),
+                report_entry.get(field_name),
                 f"{path}.{field_name}",
             )
             if error:
                 return error
         for field_name in ("semantic_role", "asset_ref"):
-            error = _validate_report_optional_string(item.get(field_name), f"{path}.{field_name}")
+            error = _validate_report_optional_string(
+                report_entry.get(field_name),
+                f"{path}.{field_name}",
+            )
             if error:
                 return error
-        asset_scale = item.get("asset_scale_xyz")
+        asset_scale = report_entry.get("asset_scale_xyz")
         if asset_scale is not None:
             return _validate_report_vector3(asset_scale, f"{path}.asset_scale_xyz", positive=True)
         return None
 
     if list_field_name == "cameras":
         for field_name in ("camera_id", "name", "sim_name", "parent_joint", "parent_link"):
-            error = _validate_report_string(item.get(field_name), f"{path}.{field_name}")
+            error = _validate_report_string(report_entry.get(field_name), f"{path}.{field_name}")
             if error:
                 return error
-        error = _validate_report_vector3(item.get("position_xyz"), f"{path}.position_xyz")
+        error = _validate_report_vector3(report_entry.get("position_xyz"), f"{path}.position_xyz")
         if error:
             return error
-        error = _validate_report_quat_wxyz(item.get("quat_wxyz"), f"{path}.quat_wxyz")
+        error = _validate_report_quat_wxyz(report_entry.get("quat_wxyz"), f"{path}.quat_wxyz")
         if error:
             return error
         for field_name in ("width", "height"):
-            error = _validate_report_positive_int(item.get(field_name), f"{path}.{field_name}")
+            error = _validate_report_positive_int(
+                report_entry.get(field_name),
+                f"{path}.{field_name}",
+            )
             if error:
                 return error
-        error = _validate_report_camera_fov(item.get("fov_deg"), f"{path}.fov_deg")
+        error = _validate_report_camera_fov(report_entry.get("fov_deg"), f"{path}.fov_deg")
         if error:
             return error
         return _validate_report_camera_intrinsics(
-            item.get("intrinsics"),
+            report_entry.get("intrinsics"),
             f"{path}.intrinsics",
         )
     return None
@@ -977,8 +981,8 @@ def _validate_report_string_list(
         return f"simulator validation report field '{path}' must be a list"
     if not allow_empty and not value:
         return f"simulator validation report field '{path}' must be a non-empty list"
-    for index, item in enumerate(value):
-        error = _validate_report_string(item, f"{path}[{index}]")
+    for index, report_entry in enumerate(value):
+        error = _validate_report_string(report_entry, f"{path}[{index}]")
         if error:
             return error
     return None
