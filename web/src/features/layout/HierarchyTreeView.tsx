@@ -9,6 +9,13 @@ import { JointListItem } from "@/features/layout/JointListItem";
 import { JOINT_LIST_SIDEBAR_PARAMS } from "@/features/layout/jointListSidebarParams";
 import type { JointHierarchyTreeModel } from "@/features/layout/sidebarSelectors";
 import type { RobotStructureLabels } from "@/features/layout/robotStructureLabels";
+import {
+  extractLinkWorldPose,
+  resolveHierarchyTreeViewEmptyState,
+  resolveHierarchyTreeViewErrorState,
+  resolveNextEndEffectorLink,
+  type LinkWorldPose,
+} from "@/features/layout/hierarchyTreeViewHelpers";
 
 export interface HierarchyTreeViewProps {
   hierarchyTree: JointHierarchyTreeModel | null;
@@ -30,11 +37,6 @@ export interface HierarchyTreeViewProps {
   robot?: URDFRobot | null;
   structureLabels: RobotStructureLabels;
 }
-
-type LinkWorldPose = {
-  position: { x: number; y: number; z: number };
-  quaternion: { w: number; x: number; y: number; z: number };
-};
 
 type TreeIndentedFrameProps = {
   children: React.ReactNode;
@@ -241,14 +243,22 @@ export const HierarchyTreeView = React.memo(({
   if (!hierarchyTree || hierarchyTree.rootLinks.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground/70 p-4 text-center">
-        No joints found
+        {resolveHierarchyTreeViewEmptyState({
+          hasHierarchyTree: hierarchyTree !== null,
+          rootLinkCount: hierarchyTree?.rootLinks.length ?? 0,
+        })}
       </div>
     );
   }
 
   const toggleEndEffectorForLink = (linkName: string) => {
     if (!onMarkAsEndEffector) return;
-    onMarkAsEndEffector(endEffectorLink === linkName ? null : linkName);
+    onMarkAsEndEffector(
+      resolveNextEndEffectorLink({
+        currentEndEffectorLink: endEffectorLink,
+        linkName,
+      })
+    );
   };
   const selectHierarchyLink = (linkName: string) => {
     onLinkSelect?.(linkName);
@@ -277,18 +287,7 @@ export const HierarchyTreeView = React.memo(({
       let linkCoordinates: LinkWorldPose | null = null;
       if (isEE && robot) {
         try {
-          const linkObj = robot.links?.[linkName] ?? robot.getObjectByName?.(linkName);
-          if (linkObj) {
-            linkObj.updateMatrixWorld?.(true);
-            const position = new THREE.Vector3();
-            const quaternion = new THREE.Quaternion();
-            const scale = new THREE.Vector3();
-            linkObj.matrixWorld.decompose(position, quaternion, scale);
-            linkCoordinates = {
-              position: { x: position.x, y: position.y, z: position.z },
-              quaternion: { w: quaternion.w, x: quaternion.x, y: quaternion.y, z: quaternion.z },
-            };
-          }
+          linkCoordinates = extractLinkWorldPose(robot, linkName);
         } catch (error) {
           console.error("Error getting link coordinates:", error);
         }
@@ -411,7 +410,7 @@ export const HierarchyTreeView = React.memo(({
     console.error("Error rendering hierarchy tree:", error);
     return (
       <div className="flex items-center justify-center h-full text-xs text-red-500 p-4 text-center">
-        Error rendering hierarchy view. Check console for details.
+        {resolveHierarchyTreeViewErrorState()}
       </div>
     );
   }
