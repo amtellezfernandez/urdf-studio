@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -24,6 +24,8 @@ from backend.services.world_rollout_params import (
 )
 from backend.services.world_scene_package_params import SHA256_HEX_LENGTH
 
+WorldRolloutPayload = dict[str, Any]
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -39,30 +41,30 @@ class WorldRolloutJobStatus(str, Enum):
 class WorldRolloutArtifactRef(BaseModel):
     kind: str = Field(..., min_length=1)
     uri: str = Field(..., min_length=1)
-    digest_sha256: Optional[str] = Field(
+    digest_sha256: str | None = Field(
         default=None,
         min_length=SHA256_HEX_LENGTH,
         max_length=SHA256_HEX_LENGTH,
         pattern="^[a-fA-F0-9]{64}$",
     )
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: WorldRolloutPayload = Field(default_factory=dict)
 
 
 class WorldRolloutModuleSpec(BaseModel):
     module_id: str = Field(..., min_length=1)
     tier: str = Field(..., min_length=1)
     role: str = Field(..., min_length=1)
-    trigger: Optional[str] = None
-    latency_budget_ms: Optional[float] = Field(default=None, gt=0)
-    params: Dict[str, Any] = Field(default_factory=dict)
+    trigger: str | None = None
+    latency_budget_ms: float | None = Field(default=None, gt=0)
+    params: WorldRolloutPayload = Field(default_factory=dict)
 
 
 class WorldRolloutCheckerProfile(BaseModel):
     schema_version: str = Field(default=WORLD_ROLLOUT_CHECKER_PROFILE_SCHEMA_VERSION)
     profile_id: str = Field(..., min_length=1)
     target_id: str = Field(..., min_length=1)
-    description: Optional[str] = None
-    params: Dict[str, Any] = Field(default_factory=dict)
+    description: str | None = None
+    params: WorldRolloutPayload = Field(default_factory=dict)
     modules: list[WorldRolloutModuleSpec] = Field(
         default_factory=list,
         max_length=WORLD_ROLLOUT_MAX_MODULE_SPECS,
@@ -85,7 +87,7 @@ class WorldRolloutCheckerProfile(BaseModel):
 class WorldRolloutPackageRef(BaseModel):
     package_id: str = Field(..., min_length=1)
     version: str = Field(..., min_length=1)
-    digest_sha256: Optional[str] = Field(
+    digest_sha256: str | None = Field(
         default=None,
         min_length=SHA256_HEX_LENGTH,
         max_length=SHA256_HEX_LENGTH,
@@ -95,8 +97,8 @@ class WorldRolloutPackageRef(BaseModel):
 
 class WorldRolloutRunnerSpec(BaseModel):
     kind: str = Field(default=WORLD_ROLLOUT_DEFAULT_RUNNER_KIND, min_length=1)
-    tool: Optional[str] = None
-    params: Dict[str, Any] = Field(default_factory=dict)
+    tool: str | None = None
+    params: WorldRolloutPayload = Field(default_factory=dict)
 
 
 class WorldRolloutCampaignManifest(BaseModel):
@@ -105,7 +107,7 @@ class WorldRolloutCampaignManifest(BaseModel):
     created_at: datetime = Field(default_factory=_utc_now)
     world_package: WorldRolloutPackageRef
     checker_profile: WorldRolloutCheckerProfile
-    rollout_params: Dict[str, Any] = Field(default_factory=dict)
+    rollout_params: WorldRolloutPayload = Field(default_factory=dict)
     runner: WorldRolloutRunnerSpec = Field(default_factory=WorldRolloutRunnerSpec)
     artifacts: list[WorldRolloutArtifactRef] = Field(
         default_factory=list,
@@ -123,25 +125,25 @@ class WorldRolloutCampaignManifest(BaseModel):
 class WorldRolloutTraceRecord(BaseModel):
     t_ms: int = Field(..., ge=0)
     stream: str = Field(default="state", min_length=1)
-    module_id: Optional[str] = None
-    tier: Optional[str] = None
-    state: Dict[str, Any] = Field(default_factory=dict)
-    semantic_outputs: Dict[str, Any] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    module_id: str | None = None
+    tier: str | None = None
+    state: WorldRolloutPayload = Field(default_factory=dict)
+    semantic_outputs: WorldRolloutPayload = Field(default_factory=dict)
+    metadata: WorldRolloutPayload = Field(default_factory=dict)
 
 
 class WorldRolloutDecisionRecord(BaseModel):
-    t_ms: Optional[int] = Field(default=None, ge=0)
-    module_id: Optional[str] = None
-    tier: Optional[str] = None
-    subject_ref: Optional[str] = None
+    t_ms: int | None = Field(default=None, ge=0)
+    module_id: str | None = None
+    tier: str | None = None
+    subject_ref: str | None = None
     decision: str
     rule_id: str = Field(..., min_length=1)
-    message: Optional[str] = None
-    confidence: Optional[float] = Field(default=None, ge=0, le=1)
-    metrics: Dict[str, Any] = Field(default_factory=dict)
-    semantic_outputs: Dict[str, Any] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    message: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    metrics: WorldRolloutPayload = Field(default_factory=dict)
+    semantic_outputs: WorldRolloutPayload = Field(default_factory=dict)
+    metadata: WorldRolloutPayload = Field(default_factory=dict)
 
     @field_validator("decision")
     @classmethod
@@ -156,9 +158,9 @@ class WorldRolloutDecisionRecord(BaseModel):
 class WorldRolloutJobCreateRequest(BaseModel):
     world_package: WorldScenePackageManifest
     checker_profile: WorldRolloutCheckerProfile
-    campaign_id: Optional[str] = Field(default=None, min_length=1)
-    rollout_params: Dict[str, Any] = Field(default_factory=dict)
-    runner_params: Dict[str, Any] = Field(default_factory=dict)
+    campaign_id: str | None = Field(default=None, min_length=1)
+    rollout_params: WorldRolloutPayload = Field(default_factory=dict)
+    runner_params: WorldRolloutPayload = Field(default_factory=dict)
 
 
 class WorldRolloutJobResponse(BaseModel):
@@ -167,16 +169,16 @@ class WorldRolloutJobResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     campaign: WorldRolloutCampaignManifest
-    output_manifest_path: Optional[str] = None
+    output_manifest_path: str | None = None
     trace_record_count: int = 0
     decision_count: int = 0
     reject_count: int = 0
     warn_count: int = 0
     stop_count: int = 0
     escalation_count: int = 0
-    error: Optional[str] = None
-    stdout: Optional[str] = None
-    stderr: Optional[str] = None
+    error: str | None = None
+    stdout: str | None = None
+    stderr: str | None = None
 
 
 class WorldRolloutImportRequest(BaseModel):
