@@ -1,6 +1,11 @@
 import type { JointHierarchyNode, JointLimits } from "@/shared/lib/urdfBrowser";
-
-const normalizeQuery = (query: string) => query.trim().toLowerCase();
+import {
+  buildCombinedJointNameSet,
+  buildHierarchyLinkToJointsMap,
+  filterHierarchyJoints,
+  normalizeSidebarQuery,
+  resolveHierarchyRootLinks,
+} from "@/features/layout/sidebarSelectorHelpers";
 
 export const buildJointTypes = (jointLimits: JointLimits): string[] => {
   const types = new Set<string>();
@@ -23,10 +28,12 @@ export const buildFilteredJointNames = ({
   searchQuery: string;
   includeJointLimitNames?: boolean;
 }): string[] => {
-  const allJoints = includeJointLimitNames
-    ? new Set([...availableJoints, ...Object.keys(jointLimits)])
-    : new Set([...availableJoints]);
-  const query = normalizeQuery(searchQuery);
+  const allJoints = buildCombinedJointNameSet({
+    availableJoints,
+    includeJointLimitNames,
+    jointLimits,
+  });
+  const query = normalizeSidebarQuery(searchQuery);
 
   return Array.from(allJoints).filter((jointName) => {
     const matchesType =
@@ -37,7 +44,7 @@ export const buildFilteredJointNames = ({
 };
 
 export const buildFilteredLinks = (allLinks: string[], searchQuery: string): string[] => {
-  const query = normalizeQuery(searchQuery);
+  const query = normalizeSidebarQuery(searchQuery);
   if (!query) return allLinks;
   return allLinks.filter((linkName) => linkName.toLowerCase().includes(query));
 };
@@ -50,26 +57,6 @@ export type JointHierarchyTreeModel = {
   linkToJoints: Map<string, JointHierarchyNode[]>;
   rootLinks: string[];
   filteredJoints: JointHierarchyNode[];
-};
-
-const filterHierarchyJoints = ({
-  jointHierarchy,
-  jointLimits,
-  typeFilter,
-  searchQuery,
-}: {
-  jointHierarchy: JointHierarchyLike;
-  jointLimits: JointLimits;
-  typeFilter: string;
-  searchQuery: string;
-}): JointHierarchyNode[] => {
-  const query = normalizeQuery(searchQuery);
-  return jointHierarchy.orderedJoints.filter((joint) => {
-    const jointType = jointLimits[joint.jointName]?.type || joint.type;
-    const matchesType = typeFilter === "all" || jointType === typeFilter;
-    const matchesSearch = query.length === 0 || joint.jointName.toLowerCase().includes(query);
-    return matchesType && matchesSearch;
-  });
 };
 
 export const buildHierarchyTree = ({
@@ -90,30 +77,11 @@ export const buildHierarchyTree = ({
     typeFilter,
     searchQuery,
   });
-
-  const linkToJoints = new Map<string, JointHierarchyNode[]>();
-  const processedLinks = new Set<string>();
-  const rootLinks = new Set<string>();
-
-  filteredJoints.forEach((joint) => {
-    const byParent = linkToJoints.get(joint.parentLink);
-    if (byParent) {
-      byParent.push(joint);
-    } else {
-      linkToJoints.set(joint.parentLink, [joint]);
-    }
-    processedLinks.add(joint.childLink);
-  });
-
-  filteredJoints.forEach((joint) => {
-    if (!processedLinks.has(joint.parentLink)) {
-      rootLinks.add(joint.parentLink);
-    }
-  });
+  const linkToJoints = buildHierarchyLinkToJointsMap(filteredJoints);
 
   return {
     linkToJoints,
-    rootLinks: Array.from(rootLinks),
+    rootLinks: resolveHierarchyRootLinks(filteredJoints),
     filteredJoints,
   };
 };
