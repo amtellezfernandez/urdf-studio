@@ -9,6 +9,7 @@ export const useResetPlaybackOnRobotFileChange = ({
   resetPlayback,
   robotFile,
 }: UseResetPlaybackOnRobotFileChangeOptions): void => {
+  const resetPlaybackRef = useRef(resetPlayback);
   const previousRobotFileRef = useRef<{
     initialized: boolean;
     robotFile: File | null;
@@ -16,6 +17,10 @@ export const useResetPlaybackOnRobotFileChange = ({
     initialized: false,
     robotFile: null,
   });
+
+  useEffect(() => {
+    resetPlaybackRef.current = resetPlayback;
+  }, [resetPlayback]);
 
   useEffect(() => {
     const previous = previousRobotFileRef.current;
@@ -26,6 +31,6 @@ export const useResetPlaybackOnRobotFileChange = ({
       initialized: true,
       robotFile,
     };
-    resetPlayback();
-  }, [resetPlayback, robotFile]);
+    resetPlaybackRef.current();
+  }, [robotFile]);
 };

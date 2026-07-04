@@ -204,7 +204,9 @@ def should_step_pybullet_workspace_once(
     camera_screenshot_dir: Path | None,
     report_path: Path | None,
 ) -> bool:
-    return no_viewer or free_base or camera_screenshot_dir is not None or report_path is not None
+    # Report generation is metadata-only; it must not advance a static GUI inspection scene.
+    del report_path
+    return no_viewer or free_base or camera_screenshot_dir is not None
 
 
 def is_pybullet_connected(pybullet: Any, client_id: int) -> bool:

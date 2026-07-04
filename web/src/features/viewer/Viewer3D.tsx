@@ -97,8 +97,8 @@ import { usePlaybackHandlers } from "@/features/viewer/usePlaybackHandlers";
 import { useViewerCameraControls } from "@/features/viewer/useViewerCameraControls";
 import { usePlaybackNotifications } from "@/features/viewer/usePlaybackNotifications";
 import { useViewerWindowBindings } from "@/features/viewer/useViewerWindowBindings";
-import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
 import { useResetPlaybackOnRobotFileChange } from "@/features/viewer/useResetPlaybackOnRobotFileChange";
+import { resetRobotLoadMotionState } from "@/features/viewer/robotLoadMotionReset";
 import { useMeshFilesState } from "@/features/viewer/useMeshFilesState";
 import { useRobotBoundingBoxSync } from "@/features/viewer/useRobotBoundingBoxSync";
 import { useRobotCameraCentering } from "@/features/viewer/useRobotCameraCentering";
@@ -348,6 +348,7 @@ const URDFModel = ({
   onWheelLocomotionIntent,
   onStudioBaseDragStart,
   onStudioBaseDragEnd,
+  onLoadStart,
   onFrameChange,
   onPlaybackEnd,
   jointLimits,
@@ -393,6 +394,7 @@ const URDFModel = ({
   onWheelLocomotionIntent?: () => void;
   onStudioBaseDragStart?: () => void;
   onStudioBaseDragEnd?: () => void;
+  onLoadStart?: () => void;
   onFrameChange?: (frameIndex: number, totalFrames?: number) => void;
   onPlaybackEnd?: (frameIndex: number) => void;
   jointLimits?: JointLimits;
@@ -485,6 +487,16 @@ const URDFModel = ({
     startPoint: THREE.Vector3;
     startPosition: THREE.Vector3;
   } | null>(null);
+  const draggingJointRef = useRef<string | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{
+    x: number;
+    y: number;
+    angle: number;
+    lower: number;
+    upper: number;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const wheelDriveClampDiagnosticsRef = useRef<{
     nonPlanarClampCount: number;
     lastClampReason: "y" | "roll" | "pitch" | "mixed" | null;
@@ -556,6 +568,20 @@ const URDFModel = ({
     assemblyRobotsRef.current = [];
     setRobotReady(false);
   }, []);
+
+  const clearActiveDragState = useCallback(() => {
+    if (draggingStudioBaseRef.current) {
+      draggingStudioBaseRef.current.robot.userData.__studioBaseDragging = false;
+    }
+    draggingAssemblyRef.current = null;
+    draggingStudioBaseRef.current = null;
+    draggingJointRef.current = null;
+    lastPointerRef.current = null;
+    dragStartRef.current = null;
+    setIsDragging(false);
+    animationController.setManualDragActive(false);
+    onDragActiveChange?.(false);
+  }, [animationController, onDragActiveChange]);
 
   const collectAssemblyMeshProxies = useCallback((robot: URDFRobot): AssemblyMeshProxy[] => {
     const proxies: AssemblyMeshProxy[] = [];
@@ -897,6 +923,8 @@ const URDFModel = ({
     const abortController = new AbortController();
     meshAbortRef.current?.abort();
     meshAbortRef.current = abortController;
+    clearActiveDragState();
+    onLoadStart?.();
     clearGroup();
     onRobotLoaded(null);
     onRobotReadyChange?.(false);
@@ -1155,11 +1183,13 @@ const URDFModel = ({
     };
   }, [
     assemblyPrimaryModel?.id,
+    clearActiveDragState,
     clearGroup,
     file,
     isAssemblyWorkspace,
     meshFiles,
     onRobotLoaded,
+    onLoadStart,
     isUrdfValid,
     urdfValidationError,
     urdfBasePath,
@@ -1528,12 +1558,6 @@ const URDFModel = ({
     }
     return clampResult;
   }, [enforceStudioPlanarPose]);
-
-  // Drag state - using world/floor reference frame
-  const draggingJointRef = useRef<string | null>(null);
-  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
-  const dragStartRef = useRef<{ x: number; y: number; angle: number; lower: number; upper: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
 
   // Highlight when external selection changes
   useEffect(() => {
@@ -4489,6 +4513,17 @@ export const Viewer3D = ({
     onFrameChange,
     animationController,
   });
+  const handleRobotLoadStart = useCallback(() => {
+    resetRobotLoadMotionState({
+      animationController,
+      clearPlayback: handleClearAnimation,
+      clearPlaybackWheelSynthesis: () => {
+        playbackWheelSynthesisStateRef.current = null;
+      },
+      disarmWheelLocomotion,
+      setDraggingJoint: setIsDraggingJoint,
+    });
+  }, [animationController, disarmWheelLocomotion, handleClearAnimation]);
   const {
     cameras,
     selectedCameraId,
@@ -4868,7 +4903,7 @@ export const Viewer3D = ({
     handleSetFrame,
   });
   useResetPlaybackOnRobotFileChange({
-    resetPlayback: viewerPlayback.clearAnimation,
+    resetPlayback: handleClearAnimation,
     robotFile: urdfFile,
   });
 
@@ -5068,6 +5103,7 @@ export const Viewer3D = ({
                 onWheelLocomotionIntent={armWheelLocomotion}
                 onStudioBaseDragStart={handleStudioBaseDragStart}
                 onStudioBaseDragEnd={handleStudioBaseDragEnd}
+                onLoadStart={handleRobotLoadStart}
                 onFrameChange={setCurrentFrame}
                 onPlaybackEnd={handlePlaybackEnd}
               />

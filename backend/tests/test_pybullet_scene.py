@@ -288,6 +288,12 @@ def test_pybullet_default_gui_workspace_does_not_step_static_debug_view() -> Non
         camera_screenshot_dir=None,
         report_path=None,
     ) is True
+    assert should_step_pybullet_workspace_once(
+        no_viewer=False,
+        free_base=False,
+        camera_screenshot_dir=None,
+        report_path=__file__,
+    ) is False
 
 
 def test_pybullet_gui_loop_steps_only_for_dynamic_free_base_view() -> None:

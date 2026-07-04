@@ -90,4 +90,33 @@ describe("useResetPlaybackOnRobotFileChange", () => {
 
     await harness.unmount();
   });
+
+  it("does not reset when only the reset callback identity changes", async () => {
+    const firstResetPlayback = vi.fn();
+    const secondResetPlayback = vi.fn();
+    const robotFile = new File(["<robot name='a' />"], "a.urdf", {
+      type: "application/xml",
+    });
+
+    const harness = await renderResetPlaybackHook({
+      resetPlayback: firstResetPlayback,
+      robotFile,
+    });
+
+    expect(firstResetPlayback).toHaveBeenCalledTimes(1);
+
+    await harness.rerender({ resetPlayback: secondResetPlayback });
+
+    expect(firstResetPlayback).toHaveBeenCalledTimes(1);
+    expect(secondResetPlayback).not.toHaveBeenCalled();
+
+    const nextRobotFile = new File(["<robot name='b' />"], "b.urdf", {
+      type: "application/xml",
+    });
+    await harness.rerender({ robotFile: nextRobotFile });
+
+    expect(secondResetPlayback).toHaveBeenCalledTimes(1);
+
+    await harness.unmount();
+  });
 });
