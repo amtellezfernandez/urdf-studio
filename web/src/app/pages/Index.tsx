@@ -65,17 +65,16 @@ import {
 import { useLoadReviewPanelController } from "@/app/pages/index/useLoadReviewPanelController";
 import { useSimulationPrepViewerHighlights } from "@/app/pages/index/useSimulationPrepViewerHighlights";
 import { useSimulationPrepPreflight } from "@/app/pages/index/useSimulationPrepPreflight";
+import { useSimulationPrepPhysicsActions } from "@/app/pages/index/useSimulationPrepPhysicsActions";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
-  collectSynthesizedPhysicsLinkNames,
   formatSignedAxisLabel,
   useInitialCollaborationSession,
   useRepeatedInertiaSymmetryLinkCentersLocal,
   useStudioIssueReportUrl,
   type CanonicalSynthesisPreviewSession,
   type InertialSynthesisSession,
-  type PhysicsActionRequest,
   type RepeatedInertiaGroupActionState,
   type RepeatedInertiaGroupOutcome,
   type RepeatedInertiaSymmetryOutcome,
@@ -119,18 +118,8 @@ import {
   buildInertialAuditSummary,
   buildInertialMassDeltaSummary,
   buildInertialSynthesisSummary,
-  type InertialAuditSummary,
   type InertialMassDeltaSummary,
-  type InertialRepairMode,
-  type InertialSynthesisResult,
 } from "@/features/urdf/inertia/inertialSynthesis";
-import {
-  INERTIAL_SYNTHESIS_DEFAULT_DENSITY_PRESET_ID,
-  type InertialDensityPresetId,
-} from "@/features/urdf/inertia/inertialSynthesisParams";
-import {
-  generatePhysicsDraftViaBackend,
-} from "@/features/urdf/inertia/robotMasteringApi";
 import {
   applyRepeatedInertiaGroupManualFix,
   REPEATED_INERTIA_MANUAL_FIX_DIFFERS_TOO_MUCH_ERROR,
@@ -140,13 +129,10 @@ import {
 } from "@/features/urdf/inertia/repeatedInertiaManualFix";
 import {
   buildSimulationPrepUpdateToastPlan,
-  buildSimulationPrepPhysicsActionStatusMap,
   buildPhysicsDraftSummaryText,
   buildPhysicsIssueSummary,
   buildSimulationPrepStatus,
-  canQueueSimulationPrepPhysicsAction,
   resolveSimulationPrepPhysicsSourceContent,
-  type SimulationPrepPhysicsActionKey,
 } from "@/features/layout/page/simulationPrepState";
 import { buildRepeatedInertiaDiagnostics } from "@/features/layout/page/repeatedInertiaDiagnostics";
 import {
@@ -469,22 +455,15 @@ const Index = () => {
   } = useLayout();
   const [showUrdfEditor, setShowUrdfEditor] = useState(false);
   const [urdfViewMode, setUrdfViewMode] = useState<UrdfViewMode>("split");
-  const [runningPhysicsActionKey, setRunningPhysicsActionKey] =
-    useState<SimulationPrepPhysicsActionKey | null>(null);
-  const [queuedPhysicsActions, setQueuedPhysicsActions] = useState<PhysicsActionRequest[]>([]);
-  const hasSimulationPrepFixActionInFlight = useMemo(
+  const hasExternalSimulationPrepFixActionInFlight = useMemo(
     () =>
-      runningPhysicsActionKey !== null ||
-      queuedPhysicsActions.length > 0 ||
       repeatedInertiaGroupAction !== null ||
       repeatedInertiaSymmetryActingChainKey !== null ||
       isRobotMirrorActing,
     [
       isRobotMirrorActing,
-      queuedPhysicsActions.length,
       repeatedInertiaGroupAction,
       repeatedInertiaSymmetryActingChainKey,
-      runningPhysicsActionKey,
     ]
   );
   const [rotationAxis, setRotationAxis] = useState<RotationAxis>("z");
@@ -846,18 +825,29 @@ const Index = () => {
   const canAlignOrientation = orientationReviewState.canAlignOrientation;
   const canPreviewBakeVisualTransforms =
     orientationReviewState.canPreviewBakeVisualTransforms;
-  const queuedPhysicsActionKeys = useMemo(
-    () => queuedPhysicsActions.map((request) => request.key),
-    [queuedPhysicsActions]
-  );
-  const physicsActionStatusByKey = useMemo(
-    () =>
-      buildSimulationPrepPhysicsActionStatusMap({
-        runningActionKey: runningPhysicsActionKey,
-        queuedActionKeys: queuedPhysicsActionKeys,
-      }),
-    [queuedPhysicsActionKeys, runningPhysicsActionKey]
-  );
+  const {
+    handleGenerateInertialDraft,
+    handleGeneratePhysicsDraft,
+    handleGenerateRegularizedPhysicsDraft,
+    handleGenerateVoxelPhysicsDraft,
+    isPhysicsActionInFlight,
+    physicsActionStatusByKey,
+  } = useSimulationPrepPhysicsActions({
+    externalActionInFlight: hasExternalSimulationPrepFixActionInFlight,
+    inertialDraftBaseContent,
+    loadPhysicsPreflight,
+    meshFiles,
+    packageRoots,
+    physicsGenerationSourceContent,
+    physicsPreflightSession,
+    setInertialSynthesisSession,
+    setUrdfViewMode,
+    showUrdfEditor,
+    urdfBasePath,
+    vizUrdfContent,
+  });
+  const hasSimulationPrepFixActionInFlight =
+    isPhysicsActionInFlight || hasExternalSimulationPrepFixActionInFlight;
   const inertialSynthesisSummary = useMemo(
     () =>
       inertialSynthesisSession ? buildInertialSynthesisSummary(inertialSynthesisSession.synthesis) : null,
@@ -888,34 +878,6 @@ const Index = () => {
     setUrdfViewMode,
     vizUrdfContent,
   });
-  const stageGeneratedPhysicsDraft = useCallback(
-    ({
-      jobId,
-      auditSummary,
-      synthesisResult,
-      draftUrdfContent,
-    }: {
-      jobId?: string | null;
-      auditSummary: InertialAuditSummary | null;
-      synthesisResult: InertialSynthesisResult;
-      draftUrdfContent: string;
-    }): string[] => {
-      const synthesizedNames = collectSynthesizedPhysicsLinkNames(synthesisResult);
-      setInertialSynthesisSession({
-        jobId: jobId ?? null,
-        sourceContent: vizUrdfContent,
-        baseContent: inertialDraftBaseContent,
-        audit: auditSummary,
-        synthesis: synthesisResult,
-        draftContent: draftUrdfContent,
-      });
-      if (showUrdfEditor) {
-        setUrdfViewMode("modified");
-      }
-      return synthesizedNames;
-    },
-    [inertialDraftBaseContent, setUrdfViewMode, showUrdfEditor, vizUrdfContent]
-  );
   const handleClearInertialSynthesisSession = useCallback(() => {
     setInertialSynthesisSession(null);
   }, []);
@@ -987,235 +949,6 @@ const Index = () => {
       updateUrdfFileWithCollaboration,
     ]
   );
-  const handleGenerateInertialDraft = useCallback(
-    async (linkName: string, densityPresetId: InertialDensityPresetId) => {
-      try {
-        const result = await generatePhysicsDraftViaBackend({
-          sourceUrdf: physicsGenerationSourceContent,
-          meshFiles,
-          urdfBasePath,
-          packageRoots,
-          densityPresetId,
-          repairMode: "replace-all",
-          linkNames: [linkName],
-          canonicalizeRepeatedMeshes: true,
-        });
-        const synthesizedNames = stageGeneratedPhysicsDraft({
-          jobId: result.jobId,
-          auditSummary: result.auditSummary,
-          synthesisResult: result.synthesisResult,
-          draftUrdfContent: result.draftUrdfContent,
-        });
-        await loadPhysicsPreflight({ sourceUrdf: result.draftUrdfContent });
-        toast.success(`Generated inertial draft for ${synthesizedNames.join(", ")}.`);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to generate an inertial draft.");
-      }
-    },
-    [
-      loadPhysicsPreflight,
-      meshFiles,
-      packageRoots,
-      physicsGenerationSourceContent,
-      stageGeneratedPhysicsDraft,
-      urdfBasePath,
-    ]
-  );
-  const executePhysicsAction = useCallback(
-    async (request: PhysicsActionRequest) => {
-      try {
-        if (request.key === "repair-missing-invalid" || request.key === "replace-all") {
-          const result = await generatePhysicsDraftViaBackend({
-            sourceUrdf: physicsGenerationSourceContent,
-            meshFiles,
-            urdfBasePath,
-            packageRoots,
-            densityPresetId: request.densityPresetId,
-            repairMode: request.repairMode,
-            canonicalizeRepeatedMeshes: true,
-          });
-          const synthesizedNames = stageGeneratedPhysicsDraft({
-            jobId: result.jobId,
-            auditSummary: result.auditSummary,
-            synthesisResult: result.synthesisResult,
-            draftUrdfContent: result.draftUrdfContent,
-          });
-          await loadPhysicsPreflight({ sourceUrdf: result.draftUrdfContent });
-          toast.success(
-            `Physics generated for ${synthesizedNames.length} link${synthesizedNames.length === 1 ? "" : "s"}. Review in Modified view when ready.`
-          );
-          return;
-        }
-
-        if (request.key === "voxel-recovery") {
-          const voxelRecoveryLinkNames =
-            physicsPreflightSession?.plausibilitySummary.excludedLinks
-              .filter((entry) => entry.recoveryDisposition === "recover")
-              .map((entry) => entry.linkName) ?? [];
-          if (voxelRecoveryLinkNames.length === 0) {
-            toast.error("No links currently need volumetric voxel recovery.");
-            return;
-          }
-          const result = await generatePhysicsDraftViaBackend({
-            sourceUrdf: physicsGenerationSourceContent,
-            meshFiles,
-            urdfBasePath,
-            packageRoots,
-            densityPresetId: request.densityPresetId,
-            repairMode: "replace-all",
-            linkNames: voxelRecoveryLinkNames,
-            meshSolveMode: "voxel-only",
-            canonicalizeRepeatedMeshes: true,
-          });
-          const synthesizedNames = stageGeneratedPhysicsDraft({
-            jobId: result.jobId,
-            auditSummary: result.auditSummary,
-            synthesisResult: result.synthesisResult,
-            draftUrdfContent: result.draftUrdfContent,
-          });
-          await loadPhysicsPreflight({ sourceUrdf: result.draftUrdfContent });
-          const skippedCount = physicsPreflightSession?.plausibilitySummary.excludedLinks.length ?? 0;
-          const targetedCount = result.synthesisResult.results.length;
-          const unresolvedCount = result.synthesisResult.results.filter((entry) => entry.status === "skipped").length;
-          toast.success(
-            `Voxel recovery targeted ${targetedCount} of ${skippedCount} skipped link${skippedCount === 1 ? "" : "s"}, synthesized ${synthesizedNames.length}, and left ${unresolvedCount} unresolved. Review in Modified view when ready.`
-          );
-          return;
-        }
-
-        const regularizableLinkNames =
-          physicsPreflightSession?.plausibilitySummary.excludedLinks
-            .filter((entry) => entry.recoveryDisposition === "regularize")
-            .map((entry) => entry.linkName) ?? [];
-        if (regularizableLinkNames.length === 0) {
-          toast.error("No near-miss links are currently available for PSD regularization.");
-          return;
-        }
-        const result = await generatePhysicsDraftViaBackend({
-          sourceUrdf: physicsGenerationSourceContent,
-          meshFiles,
-          urdfBasePath,
-          packageRoots,
-          densityPresetId: request.densityPresetId,
-          repairMode: "replace-all",
-          linkNames: regularizableLinkNames,
-          meshSolveMode: "voxel-only",
-          regularizeNearMissTensors: true,
-          canonicalizeRepeatedMeshes: true,
-        });
-        const synthesizedNames = stageGeneratedPhysicsDraft({
-          jobId: result.jobId,
-          auditSummary: result.auditSummary,
-          synthesisResult: result.synthesisResult,
-          draftUrdfContent: result.draftUrdfContent,
-        });
-        await loadPhysicsPreflight({ sourceUrdf: result.draftUrdfContent });
-        const targetedCount = result.synthesisResult.results.length;
-        const unresolvedCount = result.synthesisResult.results.filter((entry) => entry.status === "skipped").length;
-        toast.success(
-          `PSD regularization targeted ${targetedCount} near-miss link${targetedCount === 1 ? "" : "s"}, synthesized ${synthesizedNames.length}, and left ${unresolvedCount} unresolved. Review in Modified view when ready.`
-        );
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : request.key === "voxel-recovery"
-              ? "Failed to run volumetric voxelization."
-              : request.key === "psd-regularize"
-                ? "Failed to regularize near-miss inertials."
-                : "Failed to generate physics draft."
-        );
-      }
-    },
-    [
-      loadPhysicsPreflight,
-      meshFiles,
-      packageRoots,
-      physicsGenerationSourceContent,
-      physicsPreflightSession?.plausibilitySummary.excludedLinks,
-      stageGeneratedPhysicsDraft,
-      urdfBasePath,
-    ]
-  );
-  const startPhysicsAction = useCallback(
-    (request: PhysicsActionRequest) => {
-      setRunningPhysicsActionKey(request.key);
-      void executePhysicsAction(request).finally(() => {
-        setRunningPhysicsActionKey((current) => (current === request.key ? null : current));
-      });
-    },
-    [executePhysicsAction]
-  );
-  const queuePhysicsAction = useCallback(
-    (request: PhysicsActionRequest) => {
-      if (
-        repeatedInertiaGroupAction !== null ||
-        repeatedInertiaSymmetryActingChainKey !== null ||
-        isRobotMirrorActing
-      ) {
-        return;
-      }
-      if (runningPhysicsActionKey === null && queuedPhysicsActions.length === 0) {
-        startPhysicsAction(request);
-        return;
-      }
-      if (
-        !canQueueSimulationPrepPhysicsAction({
-          runningActionKey: runningPhysicsActionKey,
-          queuedActionKeys: queuedPhysicsActionKeys,
-          nextActionKey: request.key,
-        })
-      ) {
-        return;
-      }
-      setQueuedPhysicsActions((currentQueue) => {
-        if (
-          runningPhysicsActionKey === request.key ||
-          currentQueue.some((queuedRequest) => queuedRequest.key === request.key)
-        ) {
-          return currentQueue;
-        }
-        return [...currentQueue, request];
-      });
-    },
-    [
-      isRobotMirrorActing,
-      queuedPhysicsActionKeys,
-      queuedPhysicsActions.length,
-      repeatedInertiaGroupAction,
-      repeatedInertiaSymmetryActingChainKey,
-      runningPhysicsActionKey,
-      startPhysicsAction,
-    ]
-  );
-  const handleGeneratePhysicsDraft = useCallback(
-    (densityPresetId: InertialDensityPresetId, repairMode: InertialRepairMode) => {
-      queuePhysicsAction({
-        key: repairMode === "replace-all" ? "replace-all" : "repair-missing-invalid",
-        densityPresetId,
-        repairMode,
-      });
-    },
-    [queuePhysicsAction]
-  );
-  const handleGenerateVoxelPhysicsDraft = useCallback(
-    (densityPresetId: InertialDensityPresetId) => {
-      queuePhysicsAction({
-        key: "voxel-recovery",
-        densityPresetId,
-      });
-    },
-    [queuePhysicsAction]
-  );
-  const handleGenerateRegularizedPhysicsDraft = useCallback(
-    (densityPresetId: InertialDensityPresetId) => {
-      queuePhysicsAction({
-        key: "psd-regularize",
-        densityPresetId,
-      });
-    },
-    [queuePhysicsAction]
-  );
 
   useDraftSessionInvalidation({
     bakePreviewSession,
@@ -1227,15 +960,6 @@ const Index = () => {
     setInertialSynthesisSession,
     vizUrdfContent,
   });
-
-  useEffect(() => {
-    if (runningPhysicsActionKey !== null || queuedPhysicsActions.length === 0) {
-      return;
-    }
-    const [nextAction, ...remainingActions] = queuedPhysicsActions;
-    setQueuedPhysicsActions(remainingActions);
-    startPhysicsAction(nextAction);
-  }, [queuedPhysicsActions, runningPhysicsActionKey, startPhysicsAction]);
 
   const resetSimulationPrepReviewState = useCallback(() => {
     discardSimulationPrepViewerHighlightSnapshot();
