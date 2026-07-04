@@ -3,9 +3,10 @@ from __future__ import annotations
 import base64
 import json
 import re
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import TypeAlias
 
 from backend.core.paths import BASE_DIR
 from backend.models.simulator_runtime import (
@@ -32,6 +33,10 @@ from backend.services.world_scene_package_params import WORLD_SCENE_PACKAGE_SCHE
 from backend.services.world_scene_package_digest import (
     normalize_and_require_world_snapshot_artifact_digests,
 )
+
+
+JsonObject: TypeAlias = dict[str, object]
+JsonObjectRecord: TypeAlias = Mapping[str, object]
 
 
 def get_workspace_simulators() -> tuple[SimulatorId, ...]:
@@ -322,7 +327,7 @@ def build_workspace_request_from_files(
     )
 
 
-def _load_json(path: Path) -> dict:
+def _load_json(path: Path) -> JsonObject:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     if not isinstance(payload, dict):
@@ -360,7 +365,7 @@ def _load_demo_mesh_assets() -> list[SimulatorMeshAssetUpload]:
     return uploads
 
 
-def _load_demo_cameras() -> list[dict]:
+def _load_demo_cameras() -> list[JsonObject]:
     payload = _load_json(SO101_CAMERA_CONFIG_PATH)
     cameras = payload.get("cameras")
     if not isinstance(cameras, list):
@@ -372,7 +377,7 @@ def _load_demo_cameras() -> list[dict]:
     ]
 
 
-def _normalize_demo_camera(camera: dict, index: int) -> dict:
+def _normalize_demo_camera(camera: JsonObjectRecord, index: int) -> JsonObject:
     normalized = dict(camera)
     camera_name = normalized.get("name")
     normalized["id"] = (
@@ -394,7 +399,7 @@ def _camera_id_from_name(name: str, index: int) -> str:
     return normalized or f"camera_{index + 1}"
 
 
-def _load_demo_objects() -> list[dict]:
+def _load_demo_objects() -> list[JsonObject]:
     payload = _load_json(STATIC_WORLD_LAYOUT_PATH)
     world_layout = payload.get("world_layout")
     if not isinstance(world_layout, dict):
