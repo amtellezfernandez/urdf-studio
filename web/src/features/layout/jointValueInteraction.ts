@@ -8,16 +8,20 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DEG_TO_RAD } from "@/shared/lib/angleConversions";
+import {
+  isJointResetShortcut,
+  resolveJointDragCursor,
+  resolveJointDragDelta,
+  resolveJointDragDirection,
+  type DragDirection,
+} from "@/features/layout/jointValueInteractionHelpers";
 
 const JOINT_VALUE_INTERACTION_PARAMS = {
   drag: {
     defaultSensitivityRad: 0.005,
-    directionThresholdPx: 3,
     rangeSensitivityDivisor: 800,
     fineMultiplier: 0.2,
     initialCursor: "ns-resize",
-    horizontalCursor: "ew-resize",
-    verticalCursor: "ns-resize",
   },
   step: {
     fineDeg: 0.1,
@@ -28,8 +32,6 @@ const JOINT_VALUE_INTERACTION_PARAMS = {
     incrementDeg: 5,
   },
 } as const;
-
-type DragDirection = "vertical" | "horizontal" | "undecided";
 
 interface JointValueDragState {
   startX: number;
@@ -144,20 +146,23 @@ export const useJointValueInteraction = ({
       const deltaX = event.clientX - dragState.current.startX;
       const deltaY = dragState.current.startY - event.clientY;
 
-      if (dragDirection.current === "undecided") {
-        const passedThreshold =
-          Math.abs(deltaX) > JOINT_VALUE_INTERACTION_PARAMS.drag.directionThresholdPx ||
-          Math.abs(deltaY) > JOINT_VALUE_INTERACTION_PARAMS.drag.directionThresholdPx;
-        if (passedThreshold) {
-          dragDirection.current = Math.abs(deltaX) > Math.abs(deltaY) ? "horizontal" : "vertical";
-          document.body.style.cursor =
-            dragDirection.current === "horizontal"
-              ? JOINT_VALUE_INTERACTION_PARAMS.drag.horizontalCursor
-              : JOINT_VALUE_INTERACTION_PARAMS.drag.verticalCursor;
+      const nextDirection = resolveJointDragDirection({
+        deltaX,
+        deltaY,
+        previousDirection: dragDirection.current,
+      });
+      if (nextDirection !== dragDirection.current) {
+        dragDirection.current = nextDirection;
+        if (nextDirection !== "undecided") {
+          document.body.style.cursor = resolveJointDragCursor(nextDirection);
         }
       }
 
-      const dragDelta = dragDirection.current === "horizontal" ? deltaX : deltaY;
+      const dragDelta = resolveJointDragDelta({
+        deltaX,
+        deltaY,
+        direction: dragDirection.current,
+      });
       const sensitivity = getJointDragSensitivityRad(displayMin, displayMax, event.shiftKey);
       applyValueChange(dragState.current.startValue + dragDelta * sensitivity, {
         snap: event.ctrlKey,
@@ -260,10 +265,7 @@ export const useJointValueInteraction = ({
       } else if (event.key === "End" && Number.isFinite(clampUpper)) {
         event.preventDefault();
         applyValueChange(clampUpper, { snap: event.ctrlKey });
-      } else if (event.altKey && event.key.toLowerCase() === "r") {
-        event.preventDefault();
-        applyValueChange(0);
-      } else if (event.altKey && event.key === "0") {
+      } else if (isJointResetShortcut({ altKey: event.altKey, key: event.key })) {
         event.preventDefault();
         applyValueChange(0);
       }
