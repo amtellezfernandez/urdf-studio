@@ -41,7 +41,7 @@ import { useIndexPageParams } from "@/app/pages/index/useIndexPageParams";
 import { useAssemblyWorkspaceState } from "@/app/pages/index/useAssemblyWorkspaceState";
 import { useAssemblyActions } from "@/app/pages/index/useAssemblyActions";
 import { useDraftPreviewActions } from "@/app/pages/index/useDraftPreviewActions";
-import { useWorldSceneManager, downloadTextDocument } from "@/app/pages/index/useWorldSceneManager";
+import { useWorldSceneManager } from "@/app/pages/index/useWorldSceneManager";
 import { useCameraRuntimeOrchestration } from "@/app/pages/index/useCameraRuntimeOrchestration";
 import type { DemoManifestPreferencesLoad } from "@/app/pages/index/useDemoMotionFlow";
 import { useIluSessionBridge } from "@/app/pages/index/useIluSessionBridge";
@@ -51,6 +51,7 @@ import { useIndexViewerProps } from "@/app/pages/index/useIndexViewerProps";
 import { resolveViewerDraftPreview } from "@/app/pages/index/viewerDraftPreview";
 import { useWorkspaceTransferLauncher } from "@/app/pages/index/useWorkspaceTransferLauncher";
 import { useCameraExportActions } from "@/app/pages/index/useCameraExportActions";
+import { useUrdfExportActions } from "@/app/pages/index/useUrdfExportActions";
 import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
 import { IndexWorldDialogs } from "@/app/pages/index/IndexWorldDialogs";
 import { useIndexSourceLoaders } from "@/app/pages/index/useIndexSourceLoaders";
@@ -1474,30 +1475,13 @@ const Index = () => {
     resetSimulationPrepReviewState();
   }, [originalUrdfContent, resetSimulationPrepReviewState, urdfLoadRevision]);
 
-  const getResolvedExportUrdfContent = useCallback(() => {
-    if (inertialSynthesisSession?.draftContent) {
-      return inertialSynthesisSession.draftContent;
-    }
-    if (canonicalSynthesisPreview?.draftContent) {
-      return canonicalSynthesisPreview.draftContent;
-    }
-    return getExportUrdfContent();
-  }, [canonicalSynthesisPreview?.draftContent, getExportUrdfContent, inertialSynthesisSession?.draftContent]);
-  const handleExportCurrentUrdf = useCallback(() => {
-    const exportContent = getResolvedExportUrdfContent();
-    if (!exportContent) {
-      toast.error("No URDF content to export");
-      return;
-    }
-
-    const safeRobotName =
-      (robotName || resolvedRobotName || "robot")
-        .trim()
-        .replace(/[^a-zA-Z0-9._-]+/g, "_")
-        .replace(/^_+|_+$/g, "") || "robot";
-    downloadTextDocument(exportContent, `${safeRobotName}.urdf`, "application/xml");
-    toast.success("Exported URDF");
-  }, [getResolvedExportUrdfContent, resolvedRobotName, robotName]);
+  const { getResolvedExportUrdfContent, handleExportCurrentUrdf } = useUrdfExportActions({
+    canonicalDraftContent: canonicalSynthesisPreview?.draftContent,
+    getBaseExportContent: getExportUrdfContent,
+    inertialDraftContent: inertialSynthesisSession?.draftContent,
+    resolvedRobotName,
+    robotName,
+  });
   const canonicalSynthesisSupportLabel = useMemo(() => {
     const supportPlane = canonicalSynthesisPreview?.preview.supportPlane;
     if (!supportPlane?.success) {
