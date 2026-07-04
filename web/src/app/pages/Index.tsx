@@ -66,6 +66,7 @@ import { useLoadReviewPanelController } from "@/app/pages/index/useLoadReviewPan
 import { useSimulationPrepViewerHighlights } from "@/app/pages/index/useSimulationPrepViewerHighlights";
 import { useSimulationPrepPreflight } from "@/app/pages/index/useSimulationPrepPreflight";
 import { useSimulationPrepPhysicsActions } from "@/app/pages/index/useSimulationPrepPhysicsActions";
+import { useRobotMirrorSelectionController } from "@/app/pages/index/useRobotMirrorSelectionController";
 import {
   buildMeshFilesCacheKey,
   buildPackageRootsCacheKey,
@@ -87,19 +88,15 @@ import {
 } from "@/app/pages/index/simulationPrepDerivations";
 import {
   createDefaultInertialVisualizationSettings,
-  createEmptyRobotMirrorVisualizationState,
-  buildRobotMirrorSymmetryVisualizationScopeKey,
   buildRepeatedInertiaVisualizationScopeKey,
   buildRepeatedInertiaSymmetryFamilyOutcomeKey,
   buildRepeatedInertiaSymmetryVisualizationFamilyScopeKey,
   collectRepeatedInertiaSymmetryFamilyLinkNames,
   mergeDisplayedRepeatedInertiaSymmetryChains,
-  resolveRobotMirrorVisualizationState,
   resolveActiveSimulationPrepRobotMirrorVisualization,
   resolveActiveSimulationPrepSymmetryVisualization,
   resolveSimulationPrepVisualizationScope,
   syncSimulationPrepInertiaVisualizationScope,
-  type RobotMirrorVisualizationState,
   type SimulationPrepVisualizationPreview,
   SIMULATION_PREP_PSD_REGULARIZE_SCOPE_KEY,
   SIMULATION_PREP_VOXEL_RECOVERY_SCOPE_KEY,
@@ -144,13 +141,10 @@ import { buildRobotMirrorSymmetryCheck } from "@/features/layout/page/robotMirro
 import {
   applyRobotMirrorParallelFix,
   applyRobotMirrorSymmetryFix,
-  resolveRobotMirrorActionableSelection,
   type RobotMirrorFixMode,
-  type RobotMirrorFixAvailability,
   type RobotMirrorOutcome,
 } from "@/features/layout/page/robotMirrorSymmetryFix";
 import { buildRobotMirrorSelectionLinks } from "@/features/layout/page/robotMirrorSymmetrySelection";
-import { collectRobotMirrorPlaneTouchingLinkNamesFromRobot } from "@/features/layout/page/robotMirrorSymmetryVisualization";
 import {
   REPEATED_INERTIA_SYMMETRY_DEFAULT_CENTER_MODE,
   type RepeatedInertiaSymmetryCenterMode,
@@ -402,26 +396,12 @@ const Index = () => {
   const [repeatedInertiaResolvedGroupKeys, setRepeatedInertiaResolvedGroupKeys] = useState<string[]>(
     []
   );
-  const [selectedRobotMirrorLinkNames, setSelectedRobotMirrorLinkNames] = useState<string[]>([]);
+  const [simulationPrepReviewResetRevision, setSimulationPrepReviewResetRevision] = useState(0);
   const [isRobotMirrorActing, setIsRobotMirrorActing] = useState(false);
   const [activeRobotMirrorAction, setActiveRobotMirrorAction] = useState<RobotMirrorFixMode | null>(
     null
   );
   const [robotMirrorOutcome, setRobotMirrorOutcome] = useState<RobotMirrorOutcome | null>(null);
-  const [robotMirrorFixAvailability, setRobotMirrorFixAvailability] = useState<{
-    isLoading: boolean;
-    value: RobotMirrorFixAvailability;
-  }>({
-    isLoading: false,
-    value: {
-      centerOnlyActionableTargetCount: 0,
-      centerOnlyAvailable: false,
-      orientationOnlyActionableTargetCount: 0,
-      orientationOnlyAvailable: false,
-    },
-  });
-  const [robotMirrorVisualizationState, setRobotMirrorVisualizationState] =
-    useState<RobotMirrorVisualizationState>(createEmptyRobotMirrorVisualizationState());
   const [repeatedInertiaOutcomeByGroupKey, setRepeatedInertiaOutcomeByGroupKey] = useState<
     Record<string, RepeatedInertiaGroupOutcome>
   >({});
@@ -973,7 +953,7 @@ const Index = () => {
     setRepeatedInertiaSymmetryOutcomeByChainKey({});
     setRepeatedInertiaSymmetryActingChainKey(null);
     setRepeatedInertiaSymmetryActingProgress(null);
-    setSelectedRobotMirrorLinkNames([]);
+    setSimulationPrepReviewResetRevision((revision) => revision + 1);
     setRobotMirrorOutcome(null);
     setActiveRobotMirrorAction(null);
     setIsRobotMirrorActing(false);
@@ -1178,139 +1158,24 @@ const Index = () => {
       robotMirrorSymmetryCheck,
     ]
   );
-  const robotMirrorPlaneTouchingLinkNames = useMemo(
-    () =>
-      collectRobotMirrorPlaneTouchingLinkNamesFromRobot({
-        check: robotMirrorSymmetryCheck,
-        robot,
-      }),
-    [robot, robotMirrorSymmetryCheck]
-  );
-  useEffect(() => {
-    const nextValidLinkNames = new Set(
-      robotMirrorSelectionLinks.map((selectionLink) => selectionLink.linkName)
-    );
-    const planeTouchingSelectionLinkNameSet = new Set(
-      robotMirrorPlaneTouchingLinkNames.filter((linkName) => nextValidLinkNames.has(linkName))
-    );
-    const defaultSelectedLinkNames = robotMirrorSelectionLinks
-      .filter(
-        (selectionLink) =>
-          selectionLink.preselected || planeTouchingSelectionLinkNameSet.has(selectionLink.linkName)
-      )
-      .map((selectionLink) => selectionLink.linkName);
-    setSelectedRobotMirrorLinkNames((current) => {
-      const preservedLinkNames = current.filter((linkName) => nextValidLinkNames.has(linkName));
-      if (preservedLinkNames.length > 0) {
-        const mergedLinkNames = Array.from(
-          new Set([
-            ...defaultSelectedLinkNames.filter((linkName) => !current.includes(linkName)),
-            ...preservedLinkNames,
-          ])
-        );
-        return mergedLinkNames;
-      }
-      return defaultSelectedLinkNames;
-    });
-  }, [robotMirrorPlaneTouchingLinkNames, robotMirrorSelectionLinks]);
-  const handleToggleRobotMirrorSelectionLink = useCallback((linkName: string) => {
-    setSelectedRobotMirrorLinkNames((current) =>
-      current.includes(linkName)
-        ? current.filter((currentLinkName) => currentLinkName !== linkName)
-        : [...current, linkName].sort((left, right) => left.localeCompare(right))
-    );
-  }, []);
-  const robotMirrorScopeKey = useMemo(
-    () =>
-      robotMirrorSymmetryCheck
-        ? buildRobotMirrorSymmetryVisualizationScopeKey(robotMirrorSymmetryCheck)
-        : null,
-    [robotMirrorSymmetryCheck]
-  );
-  useEffect(() => {
-    if (!robotMirrorSymmetryCheck || selectedRobotMirrorLinkNames.length === 0) {
-      setRobotMirrorVisualizationState((current) =>
-        resolveRobotMirrorVisualizationState({
-          previousState: current,
-          reset: true,
-        })
-      );
-      setRobotMirrorFixAvailability({
-        isLoading: false,
-        value: {
-          centerOnlyActionableTargetCount: 0,
-          centerOnlyAvailable: false,
-          orientationOnlyActionableTargetCount: 0,
-          orientationOnlyAvailable: false,
-        },
-      });
-      return;
-    }
-
-    let cancelled = false;
-    setRobotMirrorFixAvailability((current) => ({
-      ...current,
-      isLoading: true,
-    }));
-
-    void resolveRobotMirrorActionableSelection({
-      alwaysIncludeVisualizationLinkNames: [
-        ...robotMirrorSymmetryCheck.centeredLinkNames,
-        ...robotMirrorPlaneTouchingLinkNames,
-      ],
-      linkCentersLocal: repeatedInertiaSymmetryLinkCentersLocal,
-      meshFiles,
-      packageRoots,
-      robotMirrorSymmetryCheck,
-      selectedLinkNames: selectedRobotMirrorLinkNames,
-      selectionLinks: robotMirrorSelectionLinks,
-      urdfBasePath,
-      urdfContent: vizUrdfContent,
-    })
-      .then((selection) => {
-        if (cancelled) {
-          return;
-        }
-        setRobotMirrorVisualizationState((current) =>
-          resolveRobotMirrorVisualizationState({
-            nextSelection: selection,
-            previousState: current,
-          })
-        );
-        setRobotMirrorFixAvailability({
-          isLoading: false,
-          value: selection.availability,
-        });
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setRobotMirrorFixAvailability({
-          isLoading: false,
-          value: {
-            centerOnlyActionableTargetCount: 0,
-            centerOnlyAvailable: false,
-            orientationOnlyActionableTargetCount: 0,
-            orientationOnlyAvailable: false,
-          },
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
+  const {
+    handleToggleRobotMirrorSelectionLink,
+    robotMirrorFixAvailability,
+    robotMirrorPlaneTouchingLinkNames,
+    robotMirrorScopeKey,
+    robotMirrorVisualizationState,
+    selectedRobotMirrorLinkNames,
+  } = useRobotMirrorSelectionController({
     meshFiles,
     packageRoots,
     repeatedInertiaSymmetryLinkCentersLocal,
-    robotMirrorPlaneTouchingLinkNames,
+    resetRevision: simulationPrepReviewResetRevision,
+    robot,
     robotMirrorSelectionLinks,
     robotMirrorSymmetryCheck,
-    selectedRobotMirrorLinkNames,
     urdfBasePath,
     vizUrdfContent,
-  ]);
+  });
   useEffect(() => {
     setRepeatedInertiaResolvedGroupKeys((current) =>
       current.filter((groupKey) => repeatedInertiaDiagnosticsByKey.has(groupKey))
