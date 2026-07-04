@@ -4,6 +4,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 from backend.services.simulator_adapters import simulator_acceleration
 
 
@@ -155,6 +157,24 @@ def test_workspace_env_can_disable_acceleration(monkeypatch, tmp_path: Path) -> 
 
     assert "URDF_STUDIO_GENESIS_BACKEND" not in env
     assert "URDF_STUDIO_GENESIS_PERFORMANCE_MODE" not in env
+    assert "CUDA_VISIBLE_DEVICES" not in env
+
+
+@pytest.mark.parametrize("disable_value", ["1", "true", "yes", " TRUE "])
+def test_workspace_env_disable_accepts_truthy_values(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    disable_value: str,
+) -> None:
+    monkeypatch.setattr(simulator_acceleration, "_has_nvidia_cuda_runtime", lambda: True)
+    monkeypatch.setenv(simulator_acceleration.SIMULATOR_ACCELERATION_DISABLE_ENV, disable_value)
+
+    env = simulator_acceleration.build_simulator_workspace_env(
+        tmp_path / "runtime-cache",
+        simulator_id="genesis",
+    )
+
+    assert "URDF_STUDIO_GENESIS_BACKEND" not in env
     assert "CUDA_VISIBLE_DEVICES" not in env
 
 

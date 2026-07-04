@@ -3,17 +3,19 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
+from typing import TypeAlias
 
 
 SIMULATOR_ACCELERATION_DISABLE_ENV = "URDF_STUDIO_DISABLE_SIMULATOR_ACCELERATION"
 SIMULATOR_GPU_DEVICE_ENV = "URDF_STUDIO_SIMULATOR_GPU_DEVICE"
 GENESIS_BACKEND_ENV = "URDF_STUDIO_GENESIS_BACKEND"
-GENESIS_PERFORMANCE_MODE_ENV = "URDF_STUDIO_GENESIS_PERFORMANCE_MODE"
 WSL_D3D12_DRI_DRIVER_PATH = Path("/usr/lib/x86_64-linux-gnu/dri/d3d12_dri.so")
 WSL_D3D12_LIBRARY_DIR = Path("/usr/lib/wsl/lib")
 WSL_DXG_DEVICE_PATH = Path("/dev/dxg")
+
+SimulatorEnvironment: TypeAlias = dict[str, str]
 
 
 def _truthy_env(value: str | None) -> bool:
@@ -100,7 +102,7 @@ def _has_nvidia_cuda_runtime() -> bool:
     return _has_nvidia_gpu() and _has_cuda_driver_library()
 
 
-def _prepend_env_path(env: dict[str, str], key: str, value: str) -> None:
+def _prepend_env_path_entry(env: SimulatorEnvironment, key: str, value: str) -> None:
     current = env.get(key, "")
     entries = [entry for entry in current.split(os.pathsep) if entry]
     if value in entries:
@@ -108,9 +110,9 @@ def _prepend_env_path(env: dict[str, str], key: str, value: str) -> None:
     env[key] = os.pathsep.join([value, *entries])
 
 
-def _apply_nvidia_cuda_runtime_env(env: dict[str, str]) -> None:
+def _apply_nvidia_cuda_runtime_env(env: SimulatorEnvironment) -> None:
     for library_dir in reversed(_cuda_driver_library_dirs()):
-        _prepend_env_path(env, "LD_LIBRARY_PATH", str(library_dir))
+        _prepend_env_path_entry(env, "LD_LIBRARY_PATH", str(library_dir))
 
 
 def _selected_gpu_device() -> str:
@@ -122,12 +124,15 @@ def _nvidia_d3d12_adapter_hint() -> str:
     return "NVIDIA"
 
 
-def _set_default(env: dict[str, str], key: str, value: str) -> None:
+def _set_env_default(env: SimulatorEnvironment, key: str, value: str) -> None:
     if not env.get(key):
         env[key] = value
 
 
-def apply_simulator_acceleration_env(env: dict[str, str], simulator_id: str | None) -> None:
+def apply_simulator_acceleration_env(
+    env: SimulatorEnvironment,
+    simulator_id: str | None,
+) -> None:
     if not simulator_id or _truthy_env(env.get(SIMULATOR_ACCELERATION_DISABLE_ENV)):
         return
 
@@ -139,37 +144,44 @@ def apply_simulator_acceleration_env(env: dict[str, str], simulator_id: str | No
 
     if normalized_id == "genesis":
         if has_nvidia_cuda:
-            _set_default(env, GENESIS_BACKEND_ENV, "gpu")
-            _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
-            _set_default(env, "QD_VISIBLE_DEVICE", gpu_device)
-            _set_default(env, "EGL_DEVICE_ID", gpu_device)
+            _set_env_default(env, GENESIS_BACKEND_ENV, "gpu")
+            _set_env_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+            _set_env_default(env, "QD_VISIBLE_DEVICE", gpu_device)
+            _set_env_default(env, "EGL_DEVICE_ID", gpu_device)
         return
 
     if normalized_id in {"mujoco", "mjlab"}:
         if sys.platform == "linux" and not _has_display_environment():
             if has_nvidia_cuda:
-                _set_default(env, "MUJOCO_GL", "egl")
-                _set_default(env, "PYOPENGL_PLATFORM", "egl")
-                _set_default(env, "EGL_DEVICE_ID", gpu_device)
+                _set_env_default(env, "MUJOCO_GL", "egl")
+                _set_env_default(env, "PYOPENGL_PLATFORM", "egl")
+                _set_env_default(env, "EGL_DEVICE_ID", gpu_device)
             else:
-                _set_default(env, "MUJOCO_GL", "osmesa")
+                _set_env_default(env, "MUJOCO_GL", "osmesa")
         if normalized_id == "mjlab" and has_nvidia_cuda:
-            _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+            _set_env_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
         return
 
     if normalized_id == "pybullet":
         if _has_wsl_d3d12_opengl_path():
-            _prepend_env_path(env, "LD_LIBRARY_PATH", str(WSL_D3D12_LIBRARY_DIR))
-            _set_default(env, "GALLIUM_DRIVER", "d3d12")
+            _prepend_env_path_entry(env, "LD_LIBRARY_PATH", str(WSL_D3D12_LIBRARY_DIR))
+            _set_env_default(env, "GALLIUM_DRIVER", "d3d12")
             if has_nvidia_cuda:
-                _set_default(env, "MESA_D3D12_DEFAULT_ADAPTER_NAME", _nvidia_d3d12_adapter_hint())
+                _set_env_default(
+                    env,
+                    "MESA_D3D12_DEFAULT_ADAPTER_NAME",
+                    _nvidia_d3d12_adapter_hint(),
+                )
         return
 
     if normalized_id == "mjx" and has_nvidia_cuda:
-        _set_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
+        _set_env_default(env, "CUDA_VISIBLE_DEVICES", gpu_device)
 
 
-def build_simulator_workspace_env(cache_root: Path, simulator_id: str | None = None) -> dict[str, str]:
+def build_simulator_workspace_env(
+    cache_root: Path,
+    simulator_id: str | None = None,
+) -> SimulatorEnvironment:
     cache_root.mkdir(parents=True, exist_ok=True)
     cache_dirs = {
         "XDG_CACHE_HOME": cache_root / "xdg",
