@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -37,7 +38,7 @@ def install_sample_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path
 
 def install_config(
     monkeypatch: pytest.MonkeyPatch,
-    items: dict[str, object],
+    items: Mapping[str, object],
     *,
     quickstart_id: str | None = TEST_SAMPLE_ID,
 ) -> None:

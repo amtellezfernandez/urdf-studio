@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import mimetypes
 import xml.etree.ElementTree as ET
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,19 +78,21 @@ def _is_safe_sample_definition(repo_path: object, urdf_path: object) -> tuple[st
     return normalized_repo_path, normalized_urdf_path
 
 
-def _normalize_sample_label(value: object, fallback: str) -> str:
-    return value.strip() if isinstance(value, str) and value.strip() else fallback
+def _normalize_sample_label(value: object, default_label: str) -> str:
+    return value.strip() if isinstance(value, str) and value.strip() else default_label
 
 
 def _load_samples_config() -> tuple[str | None, dict[str, SampleDefinition]]:
     config = read_app_config()
     quickstart_id = get_config_value(config, ["samples", "quickStartId"], None)
     raw_sample_configs = get_config_value(config, ["samples", "items"], {})
-    if not isinstance(raw_sample_configs, dict):
+    if not isinstance(raw_sample_configs, Mapping):
         raw_sample_configs = {}
     definitions: dict[str, SampleDefinition] = {}
     for sample_id, sample_config in raw_sample_configs.items():
-        if not isinstance(sample_config, dict):
+        if not isinstance(sample_id, str) or not sample_id:
+            continue
+        if not isinstance(sample_config, Mapping):
             continue
         label = _normalize_sample_label(sample_config.get("label"), sample_id)
         repo_path = sample_config.get("repoPath")
