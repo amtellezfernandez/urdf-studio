@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 from backend.services.simulator_adapters.blender_change_sets import (
     BLENDER_CHANGE_SET_SOURCE_SCHEMA,
@@ -132,7 +132,7 @@ def _validate_blender_edit_session_header(payload: BlenderEditSessionMapping) ->
     return _validate_non_empty_string(payload.get("blend_path"), "blend_path")
 
 
-def _validate_blender_edit_session_round_trip(value: Any) -> str | None:
+def _validate_blender_edit_session_round_trip(value: object) -> str | None:
     if not isinstance(value, Mapping):
         return "Blender edit-session field 'round_trip' must be an object"
     for field_name, expected_values in (
@@ -140,10 +140,10 @@ def _validate_blender_edit_session_round_trip(value: Any) -> str | None:
         ("review_only", BLENDER_REVIEW_ONLY_CHANGES),
         ("locked", BLENDER_LOCKED_DOMAINS),
     ):
-        error = _validate_contains_strings(value.get(field_name), f"round_trip.{field_name}")
-        if error:
-            return error
-        missing = sorted(expected_values - set(value[field_name]))
+        values = _validate_string_tuple(value.get(field_name), f"round_trip.{field_name}")
+        if isinstance(values, str):
+            return values
+        missing = sorted(expected_values - set(values))
         if missing:
             return (
                 f"Blender edit-session field 'round_trip.{field_name}' "
@@ -152,16 +152,22 @@ def _validate_blender_edit_session_round_trip(value: Any) -> str | None:
     error = _validate_non_empty_string(value.get("change_set_path"), "round_trip.change_set_path")
     if error:
         return error
-    error = _validate_non_empty_string(value.get("export_script_path"), "round_trip.export_script_path")
+    export_script_path_value = value.get("export_script_path")
+    error = _validate_non_empty_string(
+        export_script_path_value,
+        "round_trip.export_script_path",
+    )
     if error:
         return error
-    export_script_path = Path(value["export_script_path"])
+    if not isinstance(export_script_path_value, str):
+        return "Blender edit-session field 'round_trip.export_script_path' must be a non-empty string"
+    export_script_path = Path(export_script_path_value)
     if not export_script_path.is_file():
         return f"Blender edit-session export script is not a file: {export_script_path}"
     return None
 
 
-def _validate_blender_edit_session_robot(value: Any) -> str | None:
+def _validate_blender_edit_session_robot(value: object) -> str | None:
     if not isinstance(value, Mapping):
         return "Blender edit-session field 'robot' must be an object"
     if value.get("locked") is not True:
@@ -179,7 +185,7 @@ def _validate_blender_edit_session_robot(value: Any) -> str | None:
 
 
 def _validate_blender_edit_session_entries(
-    value: Any,
+    value: object,
     field_name: str,
     *,
     expected_count: int | None,
@@ -286,11 +292,10 @@ def _validate_blender_edit_session_source(
     )
 
 
-def _validate_source_id_list(value: Any, path_name: str) -> tuple[str, ...] | str:
-    error = _validate_contains_strings(value, path_name)
-    if error:
-        return error
-    values = tuple(str(item).strip() for item in value)
+def _validate_source_id_list(value: object, path_name: str) -> tuple[str, ...] | str:
+    values = _validate_string_tuple(value, path_name)
+    if isinstance(values, str):
+        return values
     duplicate_ids = _duplicate_ids(values)
     if duplicate_ids:
         return (
@@ -300,7 +305,7 @@ def _validate_source_id_list(value: Any, path_name: str) -> tuple[str, ...] | st
     return values
 
 
-def _entry_stable_ids(value: Any, field_name: str) -> tuple[str, ...] | str:
+def _entry_stable_ids(value: object, field_name: str) -> tuple[str, ...] | str:
     if not isinstance(value, Sequence) or isinstance(value, str):
         return f"Blender edit-session field '{field_name}' must be a list"
     stable_ids = tuple(
@@ -365,7 +370,7 @@ def _validate_blender_edit_session_entry_numbers(
 
 
 def _validate_vector(
-    value: Any,
+    value: object,
     path_name: str,
     *,
     expected_length: int,
@@ -380,12 +385,12 @@ def _validate_vector(
     return tuple(float(item) for item in value)
 
 
-def _validate_vector3(value: Any, path_name: str) -> str | None:
+def _validate_vector3(value: object, path_name: str) -> str | None:
     result = _validate_vector(value, path_name, expected_length=3)
     return result if isinstance(result, str) else None
 
 
-def _validate_positive_vector3(value: Any, path_name: str) -> str | None:
+def _validate_positive_vector3(value: object, path_name: str) -> str | None:
     result = _validate_vector(value, path_name, expected_length=3)
     if isinstance(result, str):
         return result
@@ -394,7 +399,7 @@ def _validate_positive_vector3(value: Any, path_name: str) -> str | None:
     return None
 
 
-def _validate_quat_wxyz(value: Any, path_name: str) -> str | None:
+def _validate_quat_wxyz(value: object, path_name: str) -> str | None:
     result = _validate_vector(value, path_name, expected_length=4)
     if isinstance(result, str):
         return result
@@ -403,7 +408,7 @@ def _validate_quat_wxyz(value: Any, path_name: str) -> str | None:
     return None
 
 
-def _validate_rgba(value: Any, path_name: str) -> str | None:
+def _validate_rgba(value: object, path_name: str) -> str | None:
     result = _validate_vector(value, path_name, expected_length=4)
     if isinstance(result, str):
         return result
@@ -412,37 +417,39 @@ def _validate_rgba(value: Any, path_name: str) -> str | None:
     return None
 
 
-def _validate_positive_int(value: Any, path_name: str) -> str | None:
+def _validate_positive_int(value: object, path_name: str) -> str | None:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         return f"Blender edit-session field '{path_name}' must be a positive integer"
     return None
 
 
-def _validate_fov_deg(value: Any, path_name: str) -> str | None:
+def _validate_fov_deg(value: object, path_name: str) -> str | None:
     if not is_finite_number(value) or float(value) <= 0.0 or float(value) >= 180.0:
         return f"Blender edit-session field '{path_name}' must be between 0 and 180 degrees"
     return None
 
 
-def _validate_existing_file_string(value: Any, path_name: str) -> str | None:
+def _validate_existing_file_string(value: object, path_name: str) -> str | None:
     error = _validate_non_empty_string(value, path_name)
     if error:
         return error
+    if not isinstance(value, str):
+        return f"Blender edit-session field '{path_name}' must be a non-empty string"
     path = Path(value)
     if not path.is_file():
         return f"Blender edit-session field '{path_name}' is not a file: {path}"
     return None
 
 
-def _validate_contains_strings(value: Any, path_name: str) -> str | None:
+def _validate_string_tuple(value: object, path_name: str) -> tuple[str, ...] | str:
     if not isinstance(value, Sequence) or isinstance(value, str):
         return f"Blender edit-session field '{path_name}' must be a list"
     if any(not isinstance(item, str) or not item.strip() for item in value):
         return f"Blender edit-session field '{path_name}' must contain only non-empty strings"
-    return None
+    return tuple(item.strip() for item in value)
 
 
-def _validate_non_empty_string(value: Any, path_name: str) -> str | None:
+def _validate_non_empty_string(value: object, path_name: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return f"Blender edit-session field '{path_name}' must be a non-empty string"
     return None
