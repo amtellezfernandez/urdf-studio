@@ -72,12 +72,43 @@ describe("world scene manager helper conversions", () => {
           mesh: { uri: "mesh-demo/collider.glb" },
         }),
       ],
-      "https://example.test/world-layouts/mesh-demo.world-layout.json"
+      { baseUrl: "https://example.test/world-layouts/mesh-demo.world-layout.json" }
     );
 
     expect(importedObject?.meshUri).toBe(
       "https://example.test/world-layouts/mesh-demo/collider.glb"
     );
+  });
+
+  it("resolves mesh URIs against a local folder asset map, ignoring baseUrl", () => {
+    const [importedObject] = toImportedCreatedObjects(
+      [
+        createSerializableWorldObject({
+          asset_ref: undefined,
+          mesh: { uri: "mesh-demo/collider.glb" },
+        }),
+      ],
+      {
+        baseUrl: "https://example.test/world-layouts/mesh-demo.world-layout.json",
+        assetMap: { "mesh-demo/collider.glb": "blob:http://localhost/abc-123" },
+      }
+    );
+
+    expect(importedObject?.meshUri).toBe("blob:http://localhost/abc-123");
+  });
+
+  it("falls back to a basename match in the asset map when the full relative path differs", () => {
+    const [importedObject] = toImportedCreatedObjects(
+      [
+        createSerializableWorldObject({
+          asset_ref: undefined,
+          mesh: { uri: "mesh-demo/collider.glb" },
+        }),
+      ],
+      { assetMap: { "collider.glb": "blob:http://localhost/def-456" } }
+    );
+
+    expect(importedObject?.meshUri).toBe("blob:http://localhost/def-456");
   });
 
   it("maps package cameras into camera inputs without persisted ids", () => {

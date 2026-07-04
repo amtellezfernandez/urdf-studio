@@ -6,6 +6,10 @@ export type SourceEntryGitHubParams = {
   token?: string;
 };
 
+export type SourceEntryWorldLayoutImportOptions = {
+  meshUriAssetMap?: Record<string, string>;
+};
+
 export type SourceEntryActions = {
   onFolderSelected: (
     fileList: UrdfFileInput,
@@ -14,6 +18,9 @@ export type SourceEntryActions = {
   onGitHubSelected: (params: SourceEntryGitHubParams) => Promise<void>;
   onUrlSelected: (url: string) => Promise<void>;
   onPlayDemoMotion: () => void | Promise<void>;
-  onImportWorldLayout: (worldLayoutUrl: string) => Promise<void>;
+  onImportWorldLayout: (
+    worldLayoutUrl: string,
+    options?: SourceEntryWorldLayoutImportOptions
+  ) => Promise<void>;
   onOpenWorldOnlyWorkspace: () => void;
 };

@@ -80,11 +80,34 @@ export async function waitForWorldRolloutJob(jobId: string) {
   return latest;
 }
 
-const resolveMeshUriAgainstBase = (
+export type MeshUriResolutionContext = {
+  baseUrl?: string;
+  assetMap?: Readonly<Record<string, string>>;
+};
+
+const resolveMeshUriFromAssetMap = (
+  meshUri: string,
+  assetMap: Readonly<Record<string, string>>
+): string | undefined => {
+  const normalized = meshUri.replace(/^\/+/, "");
+  const candidates = [meshUri, normalized, `/${normalized}`];
+  for (const candidate of candidates) {
+    if (assetMap[candidate]) return assetMap[candidate];
+  }
+  const basename = normalized.split("/").pop();
+  return basename ? assetMap[basename] : undefined;
+};
+
+const resolveMeshUri = (
   meshUri: string | undefined,
-  baseUrl: string | undefined
+  context: MeshUriResolutionContext = {}
 ): string | undefined => {
   if (!meshUri) return undefined;
+  if (context.assetMap) {
+    const resolved = resolveMeshUriFromAssetMap(meshUri, context.assetMap);
+    if (resolved) return resolved;
+  }
+  const { baseUrl } = context;
   if (!baseUrl) return meshUri;
   try {
     const documentUrl =
@@ -100,7 +123,7 @@ const resolveMeshUriAgainstBase = (
 
 function toImportedObjectParams(
   object: WorldScenePackageManifest["world_snapshot"]["objects"][number],
-  baseUrl?: string
+  meshUriContext: MeshUriResolutionContext = {}
 ): Omit<CreatedObject, "id"> {
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
     object.ik_target_type === "orbit" ? "orbit" : "punctual";
@@ -131,7 +154,7 @@ function toImportedObjectParams(
           object.asset_scale_xyz[2]
         )
       : undefined,
-    meshUri: resolveMeshUriAgainstBase(object.mesh?.uri, baseUrl),
+    meshUri: resolveMeshUri(object.mesh?.uri, meshUriContext),
     isHidden: object.is_hidden === true,
     source: object.source ?? "user",
     trackedJointName: object.tracked_joint_name ?? null,
@@ -150,11 +173,11 @@ function toImportedObjectParams(
 
 export function toImportedCreatedObjects(
   sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"],
-  baseUrl?: string
+  meshUriContext: MeshUriResolutionContext = {}
 ): CreatedObject[] {
   return sceneObjects.map((sceneObject) => ({
     id: sceneObject.id,
-    ...toImportedObjectParams(sceneObject, baseUrl),
+    ...toImportedObjectParams(sceneObject, meshUriContext),
   }));
 }
 

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CoreFolderUploadScreen } from "@/app/pages/index/CoreFolderUploadScreen";
 import type { SourceEntryActions } from "@/app/pages/index/sourceEntryTypes";
@@ -28,6 +28,8 @@ type RenderedScreen = {
 };
 
 const CORE_FOLDER_UPLOAD_SCREEN_TEST_FIXTURES = {
+  localLayoutFileName: "demo-world-layout.json",
+  localMeshFileName: "crate.glb",
   worldLayoutUrl: "https://example.test/world-layout.json",
 } as const;
 
@@ -54,6 +56,27 @@ const setInputValue = (input: HTMLInputElement, value: string): void => {
 
 const clickButton = (button: HTMLButtonElement): void => {
   button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+};
+
+const createFile = ({
+  content = "asset",
+  name,
+  relativePath,
+}: {
+  content?: string;
+  name: string;
+  relativePath?: string;
+}): File => {
+  const file = new File([content], name);
+  if (relativePath) {
+    Object.defineProperty(file, "webkitRelativePath", {
+      configurable: true,
+      enumerable: true,
+      value: relativePath,
+      writable: false,
+    });
+  }
+  return file;
 };
 
 const getButtonByText = (container: HTMLElement, label: string): HTMLButtonElement => {
@@ -95,6 +118,8 @@ const renderCoreFolderUploadScreen = async (): Promise<RenderedScreen> => {
 };
 
 describe("CoreFolderUploadScreen", () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+
   beforeEach(() => {
     (
       globalThis as typeof globalThis & {
@@ -105,6 +130,15 @@ describe("CoreFolderUploadScreen", () => {
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
     useCameraStore.getState().clearCameras();
+    let objectUrlIndex = 0;
+    URL.createObjectURL = vi.fn(() => {
+      objectUrlIndex += 1;
+      return `blob:entry-world-layout-${objectUrlIndex}`;
+    });
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectUrl;
   });
 
   it("opens the workspace after loading only a world layout", async () => {
@@ -148,6 +182,47 @@ describe("CoreFolderUploadScreen", () => {
     expect(screen.actions.onGitHubSelected).not.toHaveBeenCalled();
     expect(screen.actions.onUrlSelected).not.toHaveBeenCalled();
     expect(toastSuccessMock).toHaveBeenCalledWith("Setup loaded.");
+
+    await screen.unmount();
+  });
+
+  it("passes local world layout asset files as mesh URI asset maps", async () => {
+    const screen = await renderCoreFolderUploadScreen();
+    const worldFileInput = screen.container.querySelector(
+      'input[aria-label="Select world layout JSON file and assets"]'
+    );
+    if (!(worldFileInput instanceof HTMLInputElement)) {
+      throw new Error("World layout file input was not rendered.");
+    }
+
+    Object.defineProperty(worldFileInput, "files", {
+      configurable: true,
+      value: [
+        createFile({
+          content: "{}",
+          name: CORE_FOLDER_UPLOAD_SCREEN_TEST_FIXTURES.localLayoutFileName,
+        }),
+        createFile({
+          name: CORE_FOLDER_UPLOAD_SCREEN_TEST_FIXTURES.localMeshFileName,
+          relativePath: "worlds/demo/meshes/crate.glb",
+        }),
+      ],
+    });
+
+    await act(async () => {
+      worldFileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await flushAsyncWork();
+    });
+
+    expect(screen.actions.onImportWorldLayout).toHaveBeenCalledWith(
+      "blob:entry-world-layout-1",
+      {
+        meshUriAssetMap: expect.objectContaining({
+          "meshes/crate.glb": "blob:entry-world-layout-2",
+        }),
+      }
+    );
+    expect(getButtonByText(screen.container, "Load Setup").disabled).toBe(false);
 
     await screen.unmount();
   });

@@ -69,6 +69,7 @@ import {
   toImportedCreatedObjects,
   toImportedWorldSceneCameras,
   waitForWorldRolloutJob,
+  type MeshUriResolutionContext,
 } from "@/app/pages/index/worldSceneManagerHelpers";
 
 type UseWorldSceneManagerParams = {
@@ -396,16 +397,16 @@ export const useWorldSceneManager = ({
   const applyWorldSceneObjects = useCallback(
     (
       sceneObjects: WorldScenePackageManifest["world_snapshot"]["objects"],
-      baseUrl?: string
+      meshUriContext?: MeshUriResolutionContext
     ) => {
-      applyCreatedObjects(toImportedCreatedObjects(sceneObjects, baseUrl));
+      applyCreatedObjects(toImportedCreatedObjects(sceneObjects, meshUriContext));
     },
     [applyCreatedObjects]
   );
 
   const applyImportedWorldSceneLayer = useCallback(
-    (worldLayout: WorldSceneLayerSnapshot, baseUrl?: string) => {
-      applyWorldSceneObjects(worldLayout.objects, baseUrl);
+    (worldLayout: WorldSceneLayerSnapshot, meshUriContext?: MeshUriResolutionContext) => {
+      applyWorldSceneObjects(worldLayout.objects, meshUriContext);
       setActiveWorldSnapshotRef(null);
     },
     [applyWorldSceneObjects, setActiveWorldSnapshotRef]
@@ -537,7 +538,10 @@ export const useWorldSceneManager = ({
     async (
       worldLayoutUrl: string,
       contextLabel: string,
-      options: { sourceOverride?: NonNullable<CreatedObject["source"]> } = {}
+      options: {
+        meshUriAssetMap?: Record<string, string>;
+        sourceOverride?: NonNullable<CreatedObject["source"]>;
+      } = {}
     ) => {
       const { worldLayout, embeddedCameras, baseUrl } = await readWorldSceneLayerFromUrl(
         worldLayoutUrl,
@@ -545,7 +549,10 @@ export const useWorldSceneManager = ({
       );
       applyImportedWorldSceneLayer(
         applyWorldSceneLayerObjectSourceOverride(worldLayout, options.sourceOverride),
-        baseUrl
+        {
+          assetMap: options.meshUriAssetMap,
+          baseUrl,
+        }
       );
       if (embeddedCameras > 0) {
         toast.info("World layout includes cameras, but camera state is preserved in world-layout mode.");
@@ -587,8 +594,8 @@ export const useWorldSceneManager = ({
   }, [importWorldLayoutFromUrl]);
 
   const handleImportWorldLayoutFromEntry = useCallback(
-    async (worldLayoutUrl: string) => {
-      await importWorldLayoutFromUrl(worldLayoutUrl, "World layout import link");
+    async (worldLayoutUrl: string, options?: { meshUriAssetMap?: Record<string, string> }) => {
+      await importWorldLayoutFromUrl(worldLayoutUrl, "World layout import link", options);
     },
     [importWorldLayoutFromUrl]
   );

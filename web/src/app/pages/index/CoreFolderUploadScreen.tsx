@@ -35,6 +35,10 @@ import {
   RecentLinkPanel,
 } from "@/app/pages/index/coreFolderUploadScreenParts";
 import {
+  buildWorldLayoutFolderAssetMap,
+  splitWorldLayoutFolderFiles,
+} from "@/app/pages/index/worldLayoutFolderImport";
+import {
   addRecentValue,
   CORE_FOLDER_UPLOAD_SCREEN_PARAMS,
   deriveLocalSourceLabel,
@@ -66,6 +70,7 @@ export const CoreFolderUploadScreen = ({
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const localFilesInputRef = useRef<HTMLInputElement | null>(null);
   const worldLayoutFileInputRef = useRef<HTMLInputElement | null>(null);
+  const worldLayoutFolderInputRef = useRef<HTMLInputElement | null>(null);
   const cameraConfigFileInputRef = useRef<HTMLInputElement | null>(null);
   const stagedRobotRef = useRef<StagedRobotSource | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
@@ -259,17 +264,29 @@ export const CoreFolderUploadScreen = ({
     [onImportWorldLayout]
   );
 
-  const processWorldLayoutFile = useCallback(
-    async (file: File): Promise<void> => {
-      const objectUrl = URL.createObjectURL(file);
-      objectUrlsRef.current.push(objectUrl);
+  const processWorldLayoutFiles = useCallback(
+    async (files: File[]): Promise<void> => {
+      const { assetFiles, layoutFile } = splitWorldLayoutFolderFiles(files);
+      if (!layoutFile) {
+        toast.error("Select a world layout JSON file.");
+        return;
+      }
+      const layoutObjectUrl = URL.createObjectURL(layoutFile);
+      objectUrlsRef.current.push(layoutObjectUrl);
       setIsLoadingWorldLayout(true);
       try {
-        await onImportWorldLayout(objectUrl);
-        setLastLocalWorldLayout(file.name);
-        writeStoredString(CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey, file.name);
-        setLoadedWorldLayoutName(file.name);
-        toast.success(`Loaded world layout from ${file.name}.`);
+        const assetMapResult = await buildWorldLayoutFolderAssetMap(assetFiles);
+        objectUrlsRef.current.push(...assetMapResult.objectUrls);
+        await onImportWorldLayout(layoutObjectUrl, {
+          meshUriAssetMap: assetMapResult.assetMap,
+        });
+        setLastLocalWorldLayout(layoutFile.name);
+        writeStoredString(
+          CORE_FOLDER_UPLOAD_SCREEN_PARAMS.lastLocalWorldLayoutStorageKey,
+          layoutFile.name
+        );
+        setLoadedWorldLayoutName(layoutFile.name);
+        toast.success(`Loaded world layout from ${layoutFile.name}.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to import world layout.";
         toast.error(message);
@@ -282,11 +299,11 @@ export const CoreFolderUploadScreen = ({
 
   const handleWorldLayoutFileSelect = useCallback(
     (event: ChangeEvent<HTMLInputElement>): void => {
-      const file = event.currentTarget.files?.[0];
-      if (file) void processWorldLayoutFile(file);
+      const files = fileListToArray(event.currentTarget.files);
+      if (files.length > 0) void processWorldLayoutFiles(files);
       event.currentTarget.value = "";
     },
-    [processWorldLayoutFile]
+    [processWorldLayoutFiles]
   );
 
   const handleWorldSourceDrop = useCallback(
@@ -294,14 +311,14 @@ export const CoreFolderUploadScreen = ({
       event.preventDefault();
       event.stopPropagation();
       setWorldSourceDropActive(false);
-      const file = event.dataTransfer.files?.[0];
-      if (!file) {
+      const files = fileListToArray(event.dataTransfer.files);
+      if (files.length === 0) {
         toast.error("No local file was dropped.");
         return;
       }
-      void processWorldLayoutFile(file);
+      void processWorldLayoutFiles(files);
     },
-    [processWorldLayoutFile]
+    [processWorldLayoutFiles]
   );
 
   const applyCameraConfig = useCallback(
@@ -699,12 +716,35 @@ export const CoreFolderUploadScreen = ({
       </div>
       <div className="flex items-start gap-2 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-        <p>Paste a world link or browse local JSON. Public and GitHub file links are supported.</p>
+        <p>
+          Paste a world link, or load a folder containing the world layout JSON plus any mesh,
+          splat, or texture assets it references. Public and GitHub file links are supported.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => worldLayoutFolderInputRef.current?.click()}
+          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+        >
+          <Upload className="mr-1.5 h-3.5 w-3.5" />
+          Local Folder
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => worldLayoutFileInputRef.current?.click()}
+          className={CORE_FOLDER_UPLOAD_SCREEN_PARAMS.sourceButtonClass}
+        >
+          <FileUp className="mr-1.5 h-3.5 w-3.5" />
+          Local Files
+        </Button>
       </div>
       <CompactSourceIntake
         isDropActive={worldSourceDropActive}
         isPreparing={isLoadingWorldLayout}
-        localLabel="Drag world JSON"
+        localLabel="Drag world JSON/assets"
         onBrowseLocal={() => worldLayoutFileInputRef.current?.click()}
         inputPlaceholder="https://.../world-layout.json"
         inputValue={worldLayoutUrl}
@@ -778,10 +818,20 @@ export const CoreFolderUploadScreen = ({
         <input
           ref={worldLayoutFileInputRef}
           type="file"
-          accept=".json,application/json"
+          multiple
+          accept=".json,application/json,.stl,.dae,.obj,.glb,.gltf,.mtl,.ply,.splat,.png,.jpg,.jpeg"
           onChange={handleWorldLayoutFileSelect}
           className="hidden"
-          aria-label="Select world layout JSON file"
+          aria-label="Select world layout JSON file and assets"
+        />
+        <input
+          ref={worldLayoutFolderInputRef}
+          type="file"
+          {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+          multiple
+          onChange={handleWorldLayoutFileSelect}
+          className="hidden"
+          aria-label="Select world layout folder"
         />
         <input
           ref={cameraConfigFileInputRef}
