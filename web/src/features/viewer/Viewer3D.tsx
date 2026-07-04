@@ -97,6 +97,8 @@ import { usePlaybackHandlers } from "@/features/viewer/usePlaybackHandlers";
 import { useViewerCameraControls } from "@/features/viewer/useViewerCameraControls";
 import { usePlaybackNotifications } from "@/features/viewer/usePlaybackNotifications";
 import { useViewerWindowBindings } from "@/features/viewer/useViewerWindowBindings";
+import { viewerPlayback } from "@/features/viewer/playback/viewerPlayback";
+import { useResetPlaybackOnRobotFileChange } from "@/features/viewer/useResetPlaybackOnRobotFileChange";
 import { useMeshFilesState } from "@/features/viewer/useMeshFilesState";
 import { useRobotBoundingBoxSync } from "@/features/viewer/useRobotBoundingBoxSync";
 import { useRobotCameraCentering } from "@/features/viewer/useRobotCameraCentering";
@@ -4864,6 +4866,10 @@ export const Viewer3D = ({
     handleStopAnimation,
     handleClearAnimation,
     handleSetFrame,
+  });
+  useResetPlaybackOnRobotFileChange({
+    resetPlayback: viewerPlayback.clearAnimation,
+    robotFile: urdfFile,
   });
 
   useDragModeEffects({

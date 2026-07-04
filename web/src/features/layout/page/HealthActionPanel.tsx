@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -27,7 +27,6 @@ import {
   collectRepeatedInertiaSymmetryFamilyLinkNames,
 } from "@/features/layout/page/simulationPrepViewerState";
 import { hasSimulationPrepPhysicsActionPending } from "@/features/layout/page/simulationPrepState";
-import type { InertialDensityPresetId } from "@/features/urdf/inertia/inertialSynthesisParams";
 import type { RobotMirrorSelectionLink } from "@/features/layout/page/robotMirrorSymmetrySelection";
 import { resolveRobotMirrorSimulationPrepViewState } from "@/features/layout/page/robotMirrorSimulationPrepViewState";
 import { REPEATED_INERTIA_SYMMETRY_CENTER_MODE_OPTIONS } from "@/features/layout/page/repeatedInertiaSymmetryCenterMode";
@@ -48,8 +47,6 @@ import {
   buildOverviewExtraNotes,
   buildOverviewLabelValueRows,
   buildPanelSubtitle,
-  buildPhysicsActionLabel,
-  buildPhysicsActionSummary,
 } from "@/features/layout/page/healthActionPanelOverview";
 import {
   buildGeometryDiagnosisViewState,
@@ -59,15 +56,6 @@ import {
   PhysicsMaterialPicker,
   PhysicsQuickActionCard,
 } from "@/features/layout/page/HealthActionPanelPhysicsActions";
-import {
-  buildPhysicsPanelActionLookup,
-  buildPhysicsPanelActionRowViewStates,
-  buildPhysicsPanelActions,
-  findPhysicsPanelActionRowViewState,
-  type PhysicsActionMaterialSelection,
-  type PhysicsPanelAction,
-  type PhysicsPanelActionKey,
-} from "@/features/layout/page/healthActionPanelPhysicsActions";
 import {
   buildCompatibilityRobotMirrorSelectionState,
   buildRepeatedInertiaSymmetryChainViewState,
@@ -85,6 +73,7 @@ import {
   shouldIgnoreVisualizationCardClick,
 } from "@/features/layout/page/healthActionPanelSymmetry";
 import { useSimulationPrepPanelDrag } from "@/features/layout/page/useSimulationPrepPanelDrag";
+import { useHealthActionPanelPhysicsController } from "@/features/layout/page/useHealthActionPanelPhysicsController";
 
 type RecommendedAction = {
   kind: "frame";
@@ -241,10 +230,7 @@ export const HealthActionPanel = ({
   onClearStagedAction,
   onClearPhysicsDraft,
 }: HealthActionPanelProps) => {
-  const [isPhysicsPanelVisible, setIsPhysicsPanelVisible] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(advancedOpenByDefault);
-  const [armedPhysicsActionKey, setArmedPhysicsActionKey] = useState<PhysicsPanelActionKey | null>(null);
-  const [selectedPhysicsMaterials, setSelectedPhysicsMaterials] = useState<PhysicsActionMaterialSelection>({});
   const [expandedDiagnosisGroups, setExpandedDiagnosisGroups] = useState<Record<string, boolean>>({});
   const [robotMirrorExpanded, setRobotMirrorExpanded] = useState(false);
   const [radialSymmetryExpanded, setRadialSymmetryExpanded] = useState(false);
@@ -255,14 +241,6 @@ export const HealthActionPanel = ({
     panelPosition,
     panelRef,
   } = useSimulationPrepPanelDrag(open);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    setArmedPhysicsActionKey(null);
-    setSelectedPhysicsMaterials({});
-  }, [open]);
 
   const compatibilityRobotMirrorSelectionState = useMemo(
     () =>
@@ -300,6 +278,46 @@ export const HealthActionPanel = ({
     selectedRobotMirrorLinkNames.length > 0
       ? [...selectedRobotMirrorLinkNames]
       : compatibilityRobotMirrorSelectionState.selectedLinkNames;
+  const excludedLinks = physicsPlausibilitySummary?.excludedLinks ?? [];
+  const voxelRecoveryLinkNames = excludedLinks
+    .filter((entry) => entry.recoveryDisposition === "recover")
+    .map((entry) => entry.linkName);
+  const nearMissLinkNames = excludedLinks
+    .filter((entry) => entry.recoveryDisposition === "regularize")
+    .map((entry) => entry.linkName);
+  const hasPendingPhysicsAction = hasSimulationPrepPhysicsActionPending(physicsActionStatusByKey ?? {});
+  const isSimulationPrepActionBlocked =
+    isSimulationPrepFixBusy ||
+    hasPendingPhysicsAction ||
+    repeatedInertiaActingGroupKey !== null ||
+    repeatedInertiaSymmetryActingChainKey !== null ||
+    isRobotMirrorActing;
+  const {
+    handleRunPhysicsAction,
+    handleSelectPhysicsMaterial,
+    isPhysicsPanelVisible,
+    openPhysicsPanel,
+    physicsAction,
+    physicsActionLabel,
+    physicsPanelActionRows,
+    regularizeActionRow,
+    setIsPhysicsPanelVisible,
+    shouldShowInlinePhysicsActions,
+    shouldShowPhysicsActionButton,
+    voxelRecoveryActionRow,
+  } = useHealthActionPanelPhysicsController({
+    isSimulationPrepActionBlocked,
+    nearMissCount: nearMissLinkNames.length,
+    onGeneratePhysics,
+    onGenerateRegularizedPhysics,
+    onGenerateVoxelPhysics,
+    onOpenGeneratePhysicsDialog,
+    open,
+    physicsActionStatusByKey,
+    physicsAuditSummary,
+    physicsPreflightLoading,
+    voxelRecoveryCount: voxelRecoveryLinkNames.length,
+  });
 
   if (!open) {
     return null;
@@ -311,17 +329,10 @@ export const HealthActionPanel = ({
     Boolean(advancedSecondaryActionLabel && onRunAdvancedSecondaryAction) ||
     stagedEntryCount > 0 ||
     Boolean(synthesisRootLinkName);
-  const excludedLinks = physicsPlausibilitySummary?.excludedLinks ?? [];
   const geometryDiagnosis = buildGeometryDiagnosisViewState({
     activeInertiaVisualizationScopeKey,
     excludedLinks,
   });
-  const voxelRecoveryLinkNames = excludedLinks
-    .filter((entry) => entry.recoveryDisposition === "recover")
-    .map((entry) => entry.linkName);
-  const nearMissLinkNames = excludedLinks
-    .filter((entry) => entry.recoveryDisposition === "regularize")
-    .map((entry) => entry.linkName);
   const panelSubtitle = buildPanelSubtitle({
     audit: physicsAuditSummary,
     excludedCount: excludedLinks.length,
@@ -344,102 +355,12 @@ export const HealthActionPanel = ({
     physicsPlausibilityWarning: physicsPlausibilitySummary?.warning ?? null,
     overviewRowValues: overviewRows.map((row) => row.value),
   });
-  const openPhysicsPanel = () => {
-    if (!physicsAuditSummary) {
-      void onOpenGeneratePhysicsDialog?.();
-    }
-    setArmedPhysicsActionKey(null);
-    setSelectedPhysicsMaterials({});
-    setIsPhysicsPanelVisible(true);
-  };
-  const physicsAction = buildPhysicsActionSummary({
-    onOpenGeneratePhysicsDialog,
-    physicsPreflightLoading,
-    physicsAuditSummary,
-    voxelRecoveryCount: voxelRecoveryLinkNames.length,
-    nearMissCount: nearMissLinkNames.length,
-  });
-  const physicsActionLabel = buildPhysicsActionLabel({
-    physicsPreflightLoading,
-    physicsAuditSummary,
-    voxelRecoveryCount: voxelRecoveryLinkNames.length,
-    nearMissCount: nearMissLinkNames.length,
-  });
   const recommendedAction = buildRecommendedAction({
     onRepairOrientation,
     repairOrientationLabel,
     repairOrientationSummary,
     repairOrientationDisabled,
   });
-  const physicsPanelActions = buildPhysicsPanelActions({
-    audit: physicsAuditSummary,
-    voxelRecoveryCount: voxelRecoveryLinkNames.length,
-    nearMissCount: nearMissLinkNames.length,
-    onGeneratePhysics,
-    onGenerateVoxelPhysics,
-    onGenerateRegularizedPhysics,
-  });
-  const shouldShowPhysicsActionButton =
-    !physicsAuditSummary || physicsPanelActions.length > 0;
-  const shouldShowInlinePhysicsActions = Boolean(physicsAuditSummary) && physicsPanelActions.length > 0;
-  const hasPendingPhysicsAction = hasSimulationPrepPhysicsActionPending(physicsActionStatusByKey ?? {});
-  const isSimulationPrepActionBlocked =
-    isSimulationPrepFixBusy ||
-    hasPendingPhysicsAction ||
-    repeatedInertiaActingGroupKey !== null ||
-    repeatedInertiaSymmetryActingChainKey !== null ||
-    isRobotMirrorActing;
-  const physicsActionByKey = buildPhysicsPanelActionLookup(physicsPanelActions);
-  const physicsPanelActionRows = buildPhysicsPanelActionRowViewStates({
-    actions: physicsPanelActions,
-    armedActionKey: armedPhysicsActionKey,
-    isBlockedBySimulationPrep: isSimulationPrepActionBlocked,
-    selectedMaterials: selectedPhysicsMaterials,
-    statusByKey: physicsActionStatusByKey,
-  });
-  const voxelRecoveryActionRow = findPhysicsPanelActionRowViewState(
-    physicsPanelActionRows,
-    "voxel-recovery"
-  );
-  const regularizeActionRow = findPhysicsPanelActionRowViewState(
-    physicsPanelActionRows,
-    "psd-regularize"
-  );
-  const handleSelectPhysicsMaterial = (
-    actionKey: PhysicsPanelActionKey,
-    materialId: InertialDensityPresetId
-  ) => {
-    setSelectedPhysicsMaterials((current) => ({
-      ...current,
-      [actionKey]: materialId,
-    }));
-    setArmedPhysicsActionKey(actionKey);
-
-    const action = physicsActionByKey[actionKey];
-    const actionStatus =
-      findPhysicsPanelActionRowViewState(physicsPanelActionRows, actionKey)?.status ?? "idle";
-    if (!action || actionStatus !== "idle") {
-      return;
-    }
-    action.onClick(materialId);
-  };
-  const handleRunPhysicsAction = ({
-    action,
-    isDisabled,
-  }: {
-    action: PhysicsPanelAction;
-    isDisabled: boolean;
-  }) => {
-    if (isDisabled) {
-      return;
-    }
-    const selectedMaterial = selectedPhysicsMaterials[action.key] ?? null;
-    if (armedPhysicsActionKey !== action.key || !selectedMaterial) {
-      setArmedPhysicsActionKey(action.key);
-      return;
-    }
-    action.onClick(selectedMaterial);
-  };
   const toggleDiagnosisGroup = (groupKey: string) => {
     setExpandedDiagnosisGroups((current) => ({
       ...current,
