@@ -5,6 +5,7 @@ import {
   resolvePlanarProjectedObstacleRadiusM,
   type RoverApproachPlanarObstacle,
 } from "./approachDetour";
+import { resolveApproachObjectPrimitiveType } from "./approachObjectDistance";
 
 export type WorldObjectObstacleSource = {
   id: string;
@@ -31,7 +32,7 @@ export const buildRoverApproachPlanarObstacles = ({
       const geometry = resolveWorldObjectGeometry(object);
       return {
         id: object.id,
-        primitiveType: object.type,
+        primitiveType: resolveApproachObjectPrimitiveType(object.type),
         centerWorld: geometry.position,
         radiusM: resolvePlanarProjectedObstacleRadiusM({
           halfExtentsWorld: geometry.size.clone().multiplyScalar(0.5),

@@ -43,7 +43,7 @@ describe("world scene manager helper conversions", () => {
 
     expect(importedObject).toMatchObject({
       id: "crate",
-      type: "cube",
+      type: "mesh",
       color: "#336699",
       assetRef: "meshes/crate.stl",
       source: "user",

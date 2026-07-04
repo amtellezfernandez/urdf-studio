@@ -85,14 +85,13 @@ function toImportedObjectParams(
 ): Omit<CreatedObject, "id"> {
   const ikTargetType: NonNullable<CreatedObject["ikTargetType"]> =
     object.ik_target_type === "orbit" ? "orbit" : "punctual";
-  const editableObjectType = object.type === "mesh" ? "cube" : object.type;
   const geometry = resolveWorldObjectGeometry({
-    type: editableObjectType,
+    type: object.type,
     position: { x: object.position_xyz[0], y: object.position_xyz[1], z: object.position_xyz[2] },
     size: { x: object.size_xyz[0], y: object.size_xyz[1], z: object.size_xyz[2] },
   });
   const importedObject: Omit<CreatedObject, "id"> = {
-    type: editableObjectType,
+    type: object.type,
     position: geometry.position,
     rotation: normalizeWorldObjectRotationEuler(
       object.rotation_rpy_rad
@@ -105,7 +104,7 @@ function toImportedObjectParams(
     ),
     size: geometry.size,
     color: object.color,
-    assetRef: object.asset_ref,
+    assetRef: object.asset_ref ?? object.mesh?.asset_ref,
     assetScale: object.asset_scale_xyz
       ? new Vector3(
           object.asset_scale_xyz[0],
@@ -113,6 +112,7 @@ function toImportedObjectParams(
           object.asset_scale_xyz[2]
         )
       : undefined,
+    meshUri: object.mesh?.uri,
     isHidden: object.is_hidden === true,
     source: object.source ?? "user",
     trackedJointName: object.tracked_joint_name ?? null,

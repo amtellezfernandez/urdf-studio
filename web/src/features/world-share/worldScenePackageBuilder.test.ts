@@ -106,6 +106,7 @@ const TEST_INVALID_GEOMETRY_OBJECT: CreatedObject = {
 const TEST_MESH_OBJECT: CreatedObject = {
   ...TEST_OBJECT,
   id: "mesh-crate",
+  type: "mesh",
   position: new THREE.Vector3(0.1, 0.2, 0.3),
   size: new THREE.Vector3(0.4, 0.5, 0.6),
   assetRef: "assets/crate.obj",

@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { normalizeDirection, projectVectorOntoPlane } from "@/shared/lib/axisFrame";
 import { ROVER_APPROACH_DETOUR_CONFIG } from "./approachDetourParams";
+import type { ApproachObjectPrimitiveType } from "./approachObjectDistance";
 
 const DEFAULT_UP_AXIS = new THREE.Vector3(0, 0, 1);
 
 export type RoverApproachPlanarObstacle = {
   id: string;
-  primitiveType?: "cube" | "point" | "sphere" | "cylinder";
+  primitiveType?: ApproachObjectPrimitiveType;
   centerWorld: THREE.Vector3;
   radiusM: number;
   rotationWorld?: THREE.Euler | null;

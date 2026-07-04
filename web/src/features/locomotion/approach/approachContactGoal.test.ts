@@ -7,7 +7,10 @@ import {
   buildRoverApproachWorldNavigationContext,
 } from "./approachWorldNavigation";
 import { resolveRoverApproachFootprintSupportRadiusM } from "./approachNavigation";
-import { resolveRoverPlanarObjectApproachDistance } from "./approachObjectDistance";
+import {
+  resolveApproachObjectPrimitiveType,
+  resolveRoverPlanarObjectApproachDistance,
+} from "./approachObjectDistance";
 import {
   buildPlayDemoInitialBasePositionWorld,
   buildPlayDemoWorldObjects,
@@ -70,7 +73,7 @@ const resolveExpectedContactCorridorTargetWorld = ({
   }
   const approachDistance = resolveRoverPlanarObjectApproachDistance({
     object: {
-      type: object.type,
+      type: resolveApproachObjectPrimitiveType(object.type),
       size: object.size,
       rotation: object.rotation,
     },

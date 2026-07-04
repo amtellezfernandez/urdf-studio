@@ -270,7 +270,7 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
   const serializable: SerializableWorldObject = {
     id: object.id,
     name: object.id,
-    type: object.assetRef ? "mesh" : object.type,
+    type: object.type,
     position_xyz: [geometry.position.x, geometry.position.y, geometry.position.z],
     size_xyz: size,
     color: object.color,
@@ -293,6 +293,9 @@ export const toSerializableWorldObject = (object: CreatedObject): SerializableWo
     if (assetScale) {
       serializable.asset_scale_xyz = assetScale;
     }
+  }
+  if (object.meshUri) {
+    serializable.mesh = { ...serializable.mesh, uri: object.meshUri };
   }
   if (object.isHidden === true) {
     serializable.is_hidden = true;

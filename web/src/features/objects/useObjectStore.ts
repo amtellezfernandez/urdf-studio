@@ -19,6 +19,7 @@ export interface CreatedObject {
   color: string;
   assetRef?: string;
   assetScale?: THREE.Vector3;
+  meshUri?: string;
   isHidden?: boolean;
   source?: WorldObjectSource;
   trackedJointName: string | null;
@@ -171,6 +172,7 @@ const snapshotsEqual = (
       leftObject.color === rightObject.color &&
       leftObject.assetRef === rightObject.assetRef &&
       optionalVectorEquals(leftObject.assetScale, rightObject.assetScale) &&
+      leftObject.meshUri === rightObject.meshUri &&
       leftObject.isHidden === rightObject.isHidden &&
       leftObject.source === rightObject.source &&
       leftObject.trackedJointName === rightObject.trackedJointName &&
@@ -236,6 +238,7 @@ const normalizeCreatedObject = (
   label: object.label,
   assetRef: object.assetRef,
   assetScale: object.assetScale?.clone(),
+  meshUri: object.meshUri,
 });
 
 const updateObjectById = (

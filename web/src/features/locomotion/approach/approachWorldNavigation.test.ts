@@ -4,7 +4,10 @@ import * as THREE from "three";
 import type { WorldObjectPrimitiveType } from "@/features/objects";
 import { ROVER_APPROACH_DETOUR_CONFIG } from "./approachDetourParams";
 import { resolveRoverApproachObjectContactGoal } from "./approachContactGoal";
-import { resolveRoverPlanarObjectApproachDistance } from "./approachObjectDistance";
+import {
+  resolveApproachObjectPrimitiveType,
+  resolveRoverPlanarObjectApproachDistance,
+} from "./approachObjectDistance";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import { ROVER_APPROACH_NAVIGATION_CONFIG } from "./approachNavigationParams";
 import {
@@ -85,7 +88,7 @@ const resolveDemoContactGoalWorld = (targetObject: ReturnType<typeof createWorld
   const targetDirectionWorld = targetObject.position.clone().sub(DEMO_START_WORLD).setZ(0);
   const approachDistance = resolveRoverPlanarObjectApproachDistance({
     object: {
-      type: targetObject.type,
+      type: resolveApproachObjectPrimitiveType(targetObject.type),
       size: {
         x: targetObject.size.x,
         y: targetObject.size.y,

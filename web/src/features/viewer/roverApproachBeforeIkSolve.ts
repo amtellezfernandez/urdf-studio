@@ -52,6 +52,7 @@ import {
   resolveRoverApproachObjectContactGoalAsync,
   resolveRoverApproachWaypointLegTarget,
   resolveRoverApproachWorldRouteAsync,
+  resolveApproachObjectPrimitiveType,
   resolveRoverPlanarObjectApproachDistance,
   shouldExecuteRoverApproachPlan,
   toRoverApproachNavigationDisplayMetrics,
@@ -745,7 +746,7 @@ export const resolveRoverApproachRetreatWaypoint = ({
         : baseOffsetPlanarWorld;
     const approachDistance = resolveRoverPlanarObjectApproachDistance({
       object: {
-        type: worldObject.type,
+        type: resolveApproachObjectPrimitiveType(worldObject.type),
         size: objectGeometry.size,
         rotation: worldObject.rotation,
       },
@@ -1034,7 +1035,7 @@ export const executeRoverApproachBeforeIkSolve = async ({
       const approachDistance = applyObjectSupportRadiusForTarget
         ? resolveRoverPlanarObjectApproachDistance({
             object: {
-              type: object.type,
+              type: resolveApproachObjectPrimitiveType(object.type),
               size: targetObjectGeometry.size,
               rotation: object.rotation,
             },

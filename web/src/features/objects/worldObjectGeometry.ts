@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { WORLD_OBJECT_GEOMETRY_PARAMS } from "./worldObjectGeometryParams";
 
-export type WorldObjectPrimitiveType = "cube" | "point" | "sphere" | "cylinder";
+export type WorldObjectPrimitiveType = "cube" | "point" | "sphere" | "cylinder" | "mesh";
 
 type WorldObjectVectorLike = {
   x: number;

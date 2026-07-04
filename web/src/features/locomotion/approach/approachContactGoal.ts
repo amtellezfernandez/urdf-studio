@@ -2,7 +2,10 @@ import * as THREE from "three";
 
 import { resolveWorldObjectGeometry } from "@/features/objects";
 import type { WorldObjectObstacleSource } from "./approachObstacleProjection";
-import { resolveRoverPlanarObjectApproachDistance } from "./approachObjectDistance";
+import {
+  resolveApproachObjectPrimitiveType,
+  resolveRoverPlanarObjectApproachDistance,
+} from "./approachObjectDistance";
 import { ROVER_APPROACH_CONFIG } from "./approachParams";
 import { ROVER_APPROACH_CONTACT_GOAL_PARAMS } from "./approachContactGoalParams";
 import {
@@ -280,7 +283,7 @@ const resolveContactCorridorTargetWorld = ({
   }
   const approachDistance = resolveRoverPlanarObjectApproachDistance({
     object: {
-      type: object.type,
+      type: resolveApproachObjectPrimitiveType(object.type),
       size: objectGeometry.size,
       rotation: object.rotation,
     },
@@ -317,7 +320,7 @@ const resolveContactGoalOffsetM = ({
   }
   const approachDistance = resolveRoverPlanarObjectApproachDistance({
     object: {
-      type: object.type,
+      type: resolveApproachObjectPrimitiveType(object.type),
       size: objectGeometry.size,
       rotation: object.rotation,
     },
