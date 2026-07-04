@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Dict, List, Sequence
+from typing import Sequence
 
 from pydantic import ValidationError
 
@@ -77,11 +77,11 @@ def _extract_owner(manifest: WorldScenePackageManifest) -> str | None:
 
 
 def _extract_tags(manifest: WorldScenePackageManifest) -> list[str]:
-    raw = manifest.provenance.get("tags")
-    if not isinstance(raw, list):
+    raw_tags = manifest.provenance.get("tags")
+    if not isinstance(raw_tags, list):
         return []
     tags: list[str] = []
-    for value in raw:
+    for value in raw_tags:
         normalized = _normalize_optional_string(value)
         if normalized:
             tags.append(normalized.lower())
@@ -144,9 +144,9 @@ def _validate_world_snapshot_timing(manifest: WorldScenePackageManifest) -> list
 
 def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> list[str]:
     errors: list[str] = []
-    for index, item in enumerate(manifest.world_snapshot.objects):
-        object_type = item.get("type")
-        asset_ref_entry = read_world_object_asset_ref(item)
+    for index, world_object in enumerate(manifest.world_snapshot.objects):
+        object_type = world_object.get("type")
+        asset_ref_entry = read_world_object_asset_ref(world_object)
         if object_type == "mesh" and asset_ref_entry is None:
             errors.append(
                 f"world_snapshot.objects[{index}].mesh asset reference is required for mesh objects."
@@ -158,14 +158,15 @@ def _validate_world_snapshot_asset_refs(manifest: WorldScenePackageManifest) -> 
             normalize_portable_world_asset_ref(asset_ref_entry.value)
         except ValueError:
             errors.append(
-                f"world_snapshot.objects[{index}].{asset_ref_entry.field_path} must be a portable relative asset reference."
+                f"world_snapshot.objects[{index}].{asset_ref_entry.field_path} "
+                "must be a portable relative asset reference."
             )
     return errors
 
 
 @dataclass
 class _RegistryState:
-    packages: Dict[str, Dict[str, WorldScenePackageVersionRecord]]
+    packages: dict[str, dict[str, WorldScenePackageVersionRecord]]
 
 
 class WorldRegistryService:
@@ -174,8 +175,8 @@ class WorldRegistryService:
         self._lock = Lock()
 
     def validate(self, manifest: WorldScenePackageManifest) -> WorldScenePackageValidationResponse:
-        errors: List[str] = []
-        warnings: List[str] = []
+        errors: list[str] = []
+        warnings: list[str] = []
         digest = world_scene_package_digest(manifest)
 
         if manifest.schema_version != WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1:
@@ -242,12 +243,12 @@ class WorldRegistryService:
         tags: Sequence[str] | None = None,
         limit: int = 200,
         offset: int = 0,
-    ) -> List[WorldScenePackageListEntry]:
+    ) -> list[WorldScenePackageListEntry]:
         with self._lock:
             state = self._load_locked()
-            entries: List[WorldScenePackageListEntry] = []
-            for package_id, versions in state.packages.items():
-                latest_record = self._latest_record(versions)
+            entries: list[WorldScenePackageListEntry] = []
+            for package_id, version_records in state.packages.items():
+                latest_record = self._latest_record(version_records)
                 if latest_record is None:
                     continue
                 entries.append(
@@ -291,21 +292,21 @@ class WorldRegistryService:
     def get_version(self, package_id: str, version: str) -> WorldScenePackageVersionRecord:
         with self._lock:
             state = self._load_locked()
-            versions = state.packages.get(package_id)
-            if not versions:
+            package_versions = state.packages.get(package_id)
+            if not package_versions:
                 raise KeyError(f"Package {package_id} was not found.")
-            record = versions.get(version)
+            record = package_versions.get(version)
             if not record:
                 raise KeyError(f"Version {version} was not found for package {package_id}.")
             return record
 
     def _latest_record(
-        self, versions: Dict[str, WorldScenePackageVersionRecord]
+        self, version_records: dict[str, WorldScenePackageVersionRecord]
     ) -> WorldScenePackageVersionRecord | None:
-        if not versions:
+        if not version_records:
             return None
         return sorted(
-            versions.values(),
+            version_records.values(),
             key=lambda record: record.published_at,
             reverse=True,
         )[0]
@@ -319,40 +320,45 @@ class WorldRegistryService:
             logger.warning("Failed to read world registry file %s: %s", self._path, exc)
             return _RegistryState(packages={})
         try:
-            raw = json.loads(raw_text)
+            registry_payload = json.loads(raw_text)
         except json.JSONDecodeError as exc:
             logger.error("Invalid world registry JSON in %s: %s", self._path, exc)
             return _RegistryState(packages={})
-        if not isinstance(raw, dict):
+        if not isinstance(registry_payload, dict):
             logger.error(
                 "Invalid world registry payload in %s: root is not an object",
                 self._path,
             )
             return _RegistryState(packages={})
-        file_version = raw.get("registry_file_version")
+        file_version = registry_payload.get("registry_file_version")
         if file_version not in (None, REGISTRY_FILE_VERSION):
             logger.warning(
                 "Unexpected world registry file version in %s: %r",
                 self._path,
                 file_version,
             )
-        packages_raw = raw.get("packages", {})
-        if not isinstance(packages_raw, dict):
-            logger.error("Invalid world registry payload in %s: packages is not an object", self._path)
+        raw_packages = registry_payload.get("packages", {})
+        if not isinstance(raw_packages, dict):
+            logger.error(
+                "Invalid world registry payload in %s: packages is not an object",
+                self._path,
+            )
             return _RegistryState(packages={})
-        packages: Dict[str, Dict[str, WorldScenePackageVersionRecord]] = {}
-        for package_id, version_map in packages_raw.items():
-            if not isinstance(version_map, dict):
+        packages: dict[str, dict[str, WorldScenePackageVersionRecord]] = {}
+        for package_id, version_payloads in raw_packages.items():
+            if not isinstance(version_payloads, dict):
                 logger.warning(
                     "Skipping invalid package entry for %s in %s: expected object",
                     package_id,
                     self._path,
                 )
                 continue
-            package_versions: Dict[str, WorldScenePackageVersionRecord] = {}
-            for version, payload in version_map.items():
+            package_versions: dict[str, WorldScenePackageVersionRecord] = {}
+            for version, version_payload in version_payloads.items():
                 try:
-                    package_versions[version] = WorldScenePackageVersionRecord.model_validate(payload)
+                    package_versions[version] = WorldScenePackageVersionRecord.model_validate(
+                        version_payload
+                    )
                 except ValidationError as exc:
                     logger.warning(
                         "Skipping invalid package version %s@%s in %s: %s",
@@ -366,18 +372,18 @@ class WorldRegistryService:
 
     def _save_locked(self, state: _RegistryState) -> None:
         _ensure_parent(self._path)
-        payload = {
+        registry_payload = {
             "registry_file_version": REGISTRY_FILE_VERSION,
             "updated_at": _now_utc().isoformat(),
             "packages": {
                 package_id: {
                     version: _world_scene_package_version_record_json_payload(record)
-                    for version, record in version_map.items()
+                    for version, record in package_versions.items()
                 }
-                for package_id, version_map in state.packages.items()
+                for package_id, package_versions in state.packages.items()
             },
         }
-        serialized = json.dumps(payload, indent=2, sort_keys=True)
+        serialized = json.dumps(registry_payload, indent=2, sort_keys=True)
         temp_path = self._path.with_suffix(f"{self._path.suffix}.tmp")
         temp_path.write_text(serialized, encoding="utf-8")
         temp_path.replace(self._path)
