@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -26,13 +26,15 @@ from backend.services.world_scene_package_params import (
     WORLD_SCENE_PACKAGE_SCHEMA_VERSION_V1,
 )
 
+WorldScenePayload: TypeAlias = dict[str, Any]
+
 
 class WorldRuntimeTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1)
     mode: Literal["native", "python", "container"]
-    min_version: Optional[str] = None
+    min_version: str | None = None
 
     @field_validator("min_version", mode="before")
     @classmethod
@@ -45,7 +47,7 @@ class WorldRuntimeTarget(BaseModel):
 class WorldInterfaceSpec(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    observation_modalities: List[str] = Field(..., max_length=MAX_INTERFACE_MODALITIES)
+    observation_modalities: list[str] = Field(..., max_length=MAX_INTERFACE_MODALITIES)
     action_semantics: str = Field(..., min_length=1)
     timestep_ms: int = Field(..., ge=1)
     frame_convention: str = Field(..., min_length=1)
@@ -67,18 +69,18 @@ class WorldArtifactRef(BaseModel):
 class WorldSecuritySpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    signature_ref: Optional[str] = None
-    attestation_refs: List[str]
-    sbom_ref: Optional[str] = None
+    signature_ref: str | None = None
+    attestation_refs: list[str]
+    sbom_ref: str | None = None
 
 
 class WorldSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     urdf_xml: str = Field(..., min_length=1, max_length=MAX_WORLD_SNAPSHOT_URDF_CHARS)
-    joint_positions: Dict[str, float] = Field(..., max_length=MAX_JOINTS_PER_WORLD)
-    cameras: List[Dict[str, Any]] = Field(..., max_length=MAX_CAMERAS_PER_WORLD)
-    objects: List[Dict[str, Any]] = Field(..., max_length=MAX_OBJECTS_PER_WORLD)
+    joint_positions: dict[str, float] = Field(..., max_length=MAX_JOINTS_PER_WORLD)
+    cameras: list[WorldScenePayload] = Field(..., max_length=MAX_CAMERAS_PER_WORLD)
+    objects: list[WorldScenePayload] = Field(..., max_length=MAX_OBJECTS_PER_WORLD)
     scenario_time_ms: int = Field(..., ge=MIN_SCENARIO_TIME_MS)
     scenario_duration_ms: int = Field(
         ...,
@@ -98,7 +100,7 @@ class WorldSnapshot(BaseModel):
 
     @field_validator("joint_positions")
     @classmethod
-    def _validate_finite_joint_positions(cls, value: Dict[str, float]) -> Dict[str, float]:
+    def _validate_finite_joint_positions(cls, value: dict[str, float]) -> dict[str, float]:
         for joint_name, joint_position in value.items():
             if not math.isfinite(joint_position):
                 raise ValueError(f"joint_positions[{joint_name!r}] must be finite.")
@@ -113,19 +115,21 @@ class WorldSnapshot(BaseModel):
 
     @field_validator("cameras", "objects")
     @classmethod
-    def _validate_finite_payload_numbers(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _validate_finite_payload_numbers(
+        cls, value: list[WorldScenePayload]
+    ) -> list[WorldScenePayload]:
         _raise_for_non_finite_payload_numbers(value)
         return value
 
     @field_validator("cameras")
     @classmethod
-    def _validate_camera_payloads(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _validate_camera_payloads(cls, value: list[WorldScenePayload]) -> list[WorldScenePayload]:
         _raise_for_invalid_camera_payloads(value)
         return value
 
     @field_validator("objects")
     @classmethod
-    def _validate_object_payloads(cls, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _validate_object_payloads(cls, value: list[WorldScenePayload]) -> list[WorldScenePayload]:
         _raise_for_invalid_object_payloads(value)
         return value
 
@@ -174,12 +178,12 @@ def _is_boolean(value: Any) -> bool:
     return isinstance(value, bool)
 
 
-def _raise_for_invalid_camera_payloads(cameras: List[Dict[str, Any]]) -> None:
+def _raise_for_invalid_camera_payloads(cameras: list[WorldScenePayload]) -> None:
     for index, camera in enumerate(cameras):
         _raise_for_invalid_camera_payload(camera, index)
 
 
-def _raise_for_invalid_camera_payload(camera: Dict[str, Any], index: int) -> None:
+def _raise_for_invalid_camera_payload(camera: WorldScenePayload, index: int) -> None:
     camera_path = f"cameras[{index}]"
     if not _is_record(camera):
         raise ValueError(f"{camera_path} must be an object.")
@@ -258,12 +262,12 @@ WORLD_OBJECT_MESH_FIELDS = {
 }
 
 
-def _raise_for_invalid_object_payloads(objects: List[Dict[str, Any]]) -> None:
+def _raise_for_invalid_object_payloads(objects: list[WorldScenePayload]) -> None:
     for index, world_object in enumerate(objects):
         _raise_for_invalid_object_payload(world_object, index)
 
 
-def _raise_for_invalid_object_payload(world_object: Dict[str, Any], index: int) -> None:
+def _raise_for_invalid_object_payload(world_object: WorldScenePayload, index: int) -> None:
     object_path = f"objects[{index}]"
     if not _is_record(world_object):
         raise ValueError(f"{object_path} must be an object.")
@@ -286,7 +290,9 @@ def _raise_for_invalid_object_payload(world_object: Dict[str, Any], index: int) 
     _raise_for_invalid_object_mesh_metadata(world_object, object_path)
 
 
-def _raise_for_invalid_object_optional_fields(world_object: Dict[str, Any], object_path: str) -> None:
+def _raise_for_invalid_object_optional_fields(
+    world_object: WorldScenePayload, object_path: str
+) -> None:
     if "source" in world_object and world_object.get("source") not in WORLD_OBJECT_SOURCES:
         allowed = ", ".join(sorted(WORLD_OBJECT_SOURCES))
         raise ValueError(f"{object_path}.source must be one of: {allowed}.")
@@ -342,7 +348,9 @@ def _raise_for_invalid_object_simulation(value: Any, object_path: str) -> None:
             raise ValueError(f"{object_path}.simulation.semantic_role must be a string or null.")
 
 
-def _raise_for_invalid_object_mesh_metadata(world_object: Dict[str, Any], object_path: str) -> None:
+def _raise_for_invalid_object_mesh_metadata(
+    world_object: WorldScenePayload, object_path: str
+) -> None:
     if "asset_ref" in world_object:
         _raise_for_portable_asset_ref(world_object.get("asset_ref"), f"{object_path}.asset_ref")
     if "asset_scale_xyz" in world_object:
@@ -367,7 +375,7 @@ def _raise_for_invalid_object_mesh_metadata(world_object: Dict[str, Any], object
         raise ValueError(f"{object_path}.mesh asset reference is required for mesh objects.")
 
 
-def _has_wsp_mesh_asset_ref(world_object: Dict[str, Any]) -> bool:
+def _has_wsp_mesh_asset_ref(world_object: WorldScenePayload) -> bool:
     if _is_non_empty_string(world_object.get("asset_ref")):
         return _is_portable_asset_ref(world_object.get("asset_ref"))
     mesh = world_object.get("mesh")
@@ -426,7 +434,7 @@ def _raise_for_optional_finite_number(
         raise ValueError(f"{path} must be <= {maximum:g}.")
 
 
-def _raise_for_extra_fields(value: Dict[str, Any], allowed_fields: set[str], path: str) -> None:
+def _raise_for_extra_fields(value: WorldScenePayload, allowed_fields: set[str], path: str) -> None:
     extra_fields = sorted(set(value) - allowed_fields)
     if extra_fields:
         joined = ", ".join(extra_fields)
@@ -440,13 +448,13 @@ class WorldScenePackageManifest(BaseModel):
     package_id: str = Field(..., min_length=1)
     version: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1)
-    description: Optional[str] = None
+    description: str | None = None
     created_at: datetime
-    runtime_targets: List[WorldRuntimeTarget] = Field(..., max_length=MAX_RUNTIME_TARGETS)
+    runtime_targets: list[WorldRuntimeTarget] = Field(..., max_length=MAX_RUNTIME_TARGETS)
     interface: WorldInterfaceSpec
-    artifacts: List[WorldArtifactRef] = Field(..., max_length=MAX_ARTIFACT_REFS)
+    artifacts: list[WorldArtifactRef] = Field(..., max_length=MAX_ARTIFACT_REFS)
     world_snapshot: WorldSnapshot
-    provenance: Dict[str, Any]
+    provenance: WorldScenePayload
     security: WorldSecuritySpec
 
     @field_validator("description", mode="before")
@@ -460,8 +468,8 @@ class WorldScenePackageManifest(BaseModel):
 class WorldScenePackageValidationResponse(BaseModel):
     valid: bool
     digest_sha256: str
-    warnings: List[str] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 class WorldScenePackagePublishResponse(BaseModel):
@@ -477,17 +485,17 @@ class WorldScenePackageListEntry(BaseModel):
     latest_digest_sha256: str
     updated_at: datetime
     title: str
-    description: Optional[str] = None
-    owner: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
-    preview_image_url: Optional[str] = None
-    source_registry: Optional[str] = None
+    description: str | None = None
+    owner: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    preview_image_url: str | None = None
+    source_registry: str | None = None
     trust_level: Literal[
         WORLD_SCENE_PACKAGE_TRUST_METADATA_ONLY,
         WORLD_SCENE_PACKAGE_TRUST_SIGNED_METADATA,
         WORLD_SCENE_PACKAGE_TRUST_METADATA_COMPLETE,
     ]
-    runtime_targets: List[str] = Field(default_factory=list)
+    runtime_targets: list[str] = Field(default_factory=list)
 
 
 class WorldScenePackageVersionRecord(BaseModel):
@@ -502,13 +510,13 @@ class WorldRegistryBackendStatus(BaseModel):
     backend_id: str
     label: str
     status: Literal["available", "unavailable"]
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class WorldRegistryCapabilitiesResponse(BaseModel):
     source: str
     available: bool
-    unavailable_backends: List[WorldRegistryBackendStatus] = Field(default_factory=list)
+    unavailable_backends: list[WorldRegistryBackendStatus] = Field(default_factory=list)
     can_list: bool
     can_get_version: bool
     can_publish: bool
